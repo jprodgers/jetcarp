@@ -1,5 +1,7 @@
 //! Priority-table rules: the rule family of Edmond's glider search (arXiv:2609.22579, the
-//! `evolve_table` genome of `monotile-ca`), reimplemented here.
+//! `evolve_table` genome of `monotile-ca`), reimplemented here. [`PriorityRule::notation`] is
+//! adapted from `monotile-ca` (MIT licence, Copyright (c) 2026 James Edmond; see
+//! THIRD_PARTY_NOTICES.md).
 //!
 //! A rule is an ordered list of rows `own | conditions -> next`. `own` is a state or `*` (any);
 //! a condition `nS>=m` holds when at least `m` neighbours are in state `S` (state 0 included, so

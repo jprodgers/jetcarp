@@ -1,7 +1,8 @@
 //! Evolutionary rule search for gliders, after James Edmond's "Gliders on Aperiodic Monotilings"
 //! (arXiv:2609.22579) and its code (`monotile-ca`, MIT OR Apache-2.0). The method is
-//! reimplemented here from the paper and the repository's description, generalised from the hat,
-//! Spectre and Penrose patches to every JETCARP tiling.
+//! reimplemented here from the paper and the repository, generalised from the hat, Spectre and
+//! Penrose patches to every JETCARP tiling. [`mutate`] is adapted from `monotile-ca`'s mutation
+//! operator (MIT licence, Copyright (c) 2026 James Edmond; see THIRD_PARTY_NOTICES.md).
 //!
 //! - **Genome**: a priority table ([`priority`]): up to 8 ordered rows `own | conditions -> next`,
 //!   at most 2 conditions `nS>=m` (m = 1..3) per row, first match wins, default 0.
@@ -297,7 +298,8 @@ pub fn random_genome(rng: &mut XorShift, k: u8) -> PriorityRule {
     }
 }
 
-/// One mutation: insert, delete or swap rows, or edit one field of a row.
+/// One mutation: insert, delete or swap rows, or edit one field of a row. Adapted from
+/// `monotile-ca` (MIT licence, Copyright (c) 2026 James Edmond).
 pub fn mutate(g: &mut PriorityRule, rng: &mut XorShift) {
     let k = g.states;
     let len = g.rows.len();

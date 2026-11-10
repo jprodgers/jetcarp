@@ -503,9 +503,12 @@ def main():
     doc = {
         "source": "tools/gen_kuniform.py from tools/data/JSON_Galebach.json "
                   f"(sha256 {sha}), https://chequesoto.info/tiling/JSON_Galebach.json",
-        "license": "CC BY 4.0. Tilings: B. Galebach, n-uniform tilings, probabilitysports.com/tilings.html. "
-                   "Integer encoding: J. E. Soto Sanchez, T. Weyrich, A. Medeiros e Sa, L. H. de Figueiredo, "
-                   "Computers & Graphics 95 (2021) 69-80; collection CC BY 4.0 at chequesoto.info/tiling.",
+        "license": ("CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Source: J. E. Soto Sanchez, Gale"
+                    "bach collection, https://chequesoto.info/tiling/ (CC BY 4.0), encoding B. Galebach's catal"
+                    "ogue of n-uniform tilings, http://www.probabilitysports.com/tilings.html, in the integer r"
+                    "epresentation of J. E. Soto Sanchez, T. Weyrich, A. Medeiros e Sa and L. H. de Figueiredo,"
+                    " Computers & Graphics 95 (2021) 69-80. Changed: converted by JETCARP (tools/gen_kuniform.p"
+                    "y) to exact geometry, lattices, symmetry groups and vertex orbits in JETCARP's format."),
         "tilings": out,
     }
     s = json.dumps(doc, separators=(",", ":"))
