@@ -499,12 +499,7 @@ pub fn evolve(
     spec: &EvolveSpec,
     progress: &(dyn Fn(&GenStats) -> bool + Sync),
 ) -> Result<EvolveReport, String> {
-    if !(2..=priority::MAX_STATES).contains(&spec.states) {
-        return Err(format!("states must be 2 to {}", priority::MAX_STATES));
-    }
-    if spec.pop < 4 {
-        return Err("population must be at least 4".into());
-    }
+    check(spec)?;
     match spec.threads {
         Some(t) => rayon::ThreadPoolBuilder::new()
             .num_threads(t.max(1))
@@ -515,37 +510,198 @@ pub fn evolve(
     }
 }
 
+fn check(spec: &EvolveSpec) -> Result<(), String> {
+    if !(2..=priority::MAX_STATES).contains(&spec.states) {
+        return Err(format!("states must be 2 to {}", priority::MAX_STATES));
+    }
+    if spec.pop < 4 {
+        return Err("population must be at least 4".into());
+    }
+    Ok(())
+}
+
 fn run(
     spec: &EvolveSpec,
     progress: &(dyn Fn(&GenStats) -> bool + Sync),
 ) -> Result<EvolveReport, String> {
-    use rayon::prelude::*;
-    let t0 = Instant::now();
-    let mut arenas = Arenas::new(spec)?;
-    let k = spec.states;
-    let mut rng = XorShift::new(spec.seed);
-    let mut pop: Vec<PriorityRule> = (0..spec.pop).map(|_| random_genome(&mut rng, k)).collect();
-    let mut cache: HashMap<PriorityRule, Arc<Eval>> = HashMap::new();
-    let mut hof: BTreeMap<String, Champion> = BTreeMap::new();
-    let mut checked: HashMap<String, CrossCheck> = HashMap::new();
-    let mut gens = Vec::new();
-    let mut best_ever = 0.0f64;
-    let mut evaluations = 0u64;
-    let elite = (spec.pop / 16).max(2);
-    let ceiling = 0.9 * arenas.base.boundary as f64;
-    let hof_min = 0.75 * arenas.base.boundary as f64;
-    let mut stopped_early = false;
-    let mut gliders: Vec<Champion> = Vec::new();
-    for g in 0..spec.gens {
+    let mut e = Evolution::new(spec)?;
+    while e.generation(progress)? {}
+    e.finish()
+}
+
+/// What a search needs to carry on after its last finished generation (see
+/// [`Evolution::checkpoint`]): the bred population, the RNG, the hall of fame, the cross-radius
+/// checks so far, every generation's numbers, and the gliders found.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EvolveCheckpoint {
+    /// The next generation to evaluate.
+    pub next: usize,
+    pub pop: Vec<PriorityRule>,
+    pub rng: u64,
+    pub hof: BTreeMap<String, Champion>,
+    pub checked: BTreeMap<String, CrossCheck>,
+    pub generations: Vec<GenStats>,
+    pub best_ever: f64,
+    pub evaluations: u64,
+    pub gliders: Vec<Champion>,
+    pub stopped_early: bool,
+    /// No generation left to run (the champions are verified next).
+    pub over: bool,
+    pub elapsed_s: f64,
+}
+
+/// A search in progress, one generation at a time: what [`evolve`] runs, and what an evolve job
+/// (`crate::jobs::evolve`) saves after every generation and resumes from. A resumed search ends
+/// exactly as an uninterrupted one; only the memo of evaluated rules starts empty again, so
+/// `unique_evaluations` (which counts it) and the timings differ.
+pub struct Evolution {
+    spec: EvolveSpec,
+    arenas: Arenas,
+    rng: XorShift,
+    pop: Vec<PriorityRule>,
+    cache: HashMap<PriorityRule, Arc<Eval>>,
+    hof: BTreeMap<String, Champion>,
+    checked: HashMap<String, CrossCheck>,
+    gens: Vec<GenStats>,
+    best_ever: f64,
+    evaluations: u64,
+    stopped_early: bool,
+    gliders: Vec<Champion>,
+    next: usize,
+    over: bool,
+    t0: Instant,
+    base_elapsed: f64,
+}
+
+impl Evolution {
+    /// A new search: the arenas and the first, random population. Runs on the current rayon
+    /// pool (`spec.threads` is [`evolve`]'s to apply).
+    pub fn new(spec: &EvolveSpec) -> Result<Evolution, String> {
+        check(spec)?;
+        let t0 = Instant::now();
+        let arenas = Arenas::new(spec)?;
+        let k = spec.states;
+        let mut rng = XorShift::new(spec.seed);
+        let pop: Vec<PriorityRule> = (0..spec.pop).map(|_| random_genome(&mut rng, k)).collect();
+        Ok(Evolution {
+            spec: spec.clone(),
+            arenas,
+            rng,
+            pop,
+            cache: HashMap::new(),
+            hof: BTreeMap::new(),
+            checked: HashMap::new(),
+            gens: Vec::new(),
+            best_ever: 0.0,
+            evaluations: 0,
+            stopped_early: false,
+            gliders: Vec::new(),
+            next: 0,
+            over: spec.gens == 0,
+            t0,
+            base_elapsed: 0.0,
+        })
+    }
+
+    /// Carry on from a checkpoint of a search with this spec.
+    pub fn resume(spec: &EvolveSpec, cp: &EvolveCheckpoint) -> Result<Evolution, String> {
+        check(spec)?;
+        if cp.pop.len() != spec.pop {
+            return Err(format!(
+                "the checkpoint's population ({}) does not match the spec's ({})",
+                cp.pop.len(),
+                spec.pop
+            ));
+        }
+        Ok(Evolution {
+            spec: spec.clone(),
+            arenas: Arenas::new(spec)?,
+            rng: XorShift(cp.rng),
+            pop: cp.pop.clone(),
+            cache: HashMap::new(),
+            hof: cp.hof.clone(),
+            checked: cp.checked.clone().into_iter().collect(),
+            gens: cp.generations.clone(),
+            best_ever: cp.best_ever,
+            evaluations: cp.evaluations,
+            stopped_early: cp.stopped_early,
+            gliders: cp.gliders.clone(),
+            next: cp.next,
+            over: cp.over,
+            t0: Instant::now(),
+            base_elapsed: cp.elapsed_s,
+        })
+    }
+
+    /// The state after the last finished generation.
+    pub fn checkpoint(&self) -> EvolveCheckpoint {
+        EvolveCheckpoint {
+            next: self.next,
+            pop: self.pop.clone(),
+            rng: self.rng.0,
+            hof: self.hof.clone(),
+            checked: self
+                .checked
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            generations: self.gens.clone(),
+            best_ever: self.best_ever,
+            evaluations: self.evaluations,
+            gliders: self.gliders.clone(),
+            stopped_early: self.stopped_early,
+            over: self.over,
+            elapsed_s: self.elapsed_s(),
+        }
+    }
+
+    pub fn spec(&self) -> &EvolveSpec {
+        &self.spec
+    }
+    /// Every finished generation's numbers.
+    pub fn generations(&self) -> &[GenStats] {
+        &self.gens
+    }
+    /// No generation left: [`finish`](Self::finish) is next.
+    pub fn is_over(&self) -> bool {
+        self.over
+    }
+    /// Gliders verified so far (with `stop_on_glider`; the rest are found by `finish`).
+    pub fn gliders(&self) -> &[Champion] {
+        &self.gliders
+    }
+    /// Seconds run, over every session.
+    pub fn elapsed_s(&self) -> f64 {
+        self.base_elapsed + self.t0.elapsed().as_secs_f64()
+    }
+
+    /// Run the next generation: evaluate, rank, record, and breed the next population.
+    /// `progress` sees the generation's numbers and returns false to stop the search there
+    /// (stopped early). Returns whether there is another generation to run.
+    pub fn generation(
+        &mut self,
+        progress: &(dyn Fn(&GenStats) -> bool + Sync),
+    ) -> Result<bool, String> {
+        use rayon::prelude::*;
+        if self.over {
+            return Ok(false);
+        }
+        let spec = &self.spec;
+        let g = self.next;
+        let k = spec.states;
+        let elite = (spec.pop / 16).max(2);
+        let ceiling = 0.9 * self.arenas.base.boundary as f64;
+        let hof_min = 0.75 * self.arenas.base.boundary as f64;
+        let pop = &self.pop;
         // Evaluate (distinct behaviours only, in parallel, gathered in order).
         let simple: Vec<PriorityRule> = pop.iter().map(|r| r.simplified()).collect();
         let mut todo: Vec<PriorityRule> = Vec::new();
         for s in &simple {
-            if !cache.contains_key(s) && !todo.contains(s) {
+            if !self.cache.contains_key(s) && !todo.contains(s) {
                 todo.push(s.clone());
             }
         }
-        let base = &arenas.base;
+        let base = &self.arenas.base;
         let done: Vec<Eval> = todo
             .par_iter()
             .map(|r| {
@@ -558,18 +714,18 @@ fn run(
             })
             .collect();
         for (r, e) in todo.into_iter().zip(done) {
-            cache.insert(r, Arc::new(e));
+            self.cache.insert(r, Arc::new(e));
         }
-        evaluations += pop.len() as u64;
-        let evals: Vec<Arc<Eval>> = simple.iter().map(|s| cache[s].clone()).collect();
+        self.evaluations += pop.len() as u64;
+        let evals: Vec<Arc<Eval>> = simple.iter().map(|s| self.cache[s].clone()).collect();
         // Hall of fame.
         let mut fresh = Vec::new();
         for (i, e) in evals.iter().enumerate() {
             if e.fitness >= hof_min {
                 let key = simple[i].notation();
-                if !hof.contains_key(&key) {
+                if !self.hof.contains_key(&key) {
                     let seed = base.seeds(k)[e.seed].clone();
-                    hof.insert(
+                    self.hof.insert(
                         key.clone(),
                         Champion {
                             rule: key.clone(),
@@ -588,15 +744,15 @@ fn run(
                 }
             }
         }
-        if cache.len() > 200_000 {
-            cache.clear();
+        if self.cache.len() > 200_000 {
+            self.cache.clear();
         }
         // Order by fitness (stable: ties keep their order).
         let mut idx: Vec<usize> = (0..pop.len()).collect();
         idx.sort_by(|&a, &b| evals[b].fitness.total_cmp(&evals[a].fitness));
         let pop_sorted: Vec<PriorityRule> = idx.iter().map(|&i| pop[i].clone()).collect();
         let fit: Vec<f64> = idx.iter().map(|&i| evals[i].fitness).collect();
-        best_ever = best_ever.max(fit[0]);
+        self.best_ever = self.best_ever.max(fit[0]);
         let mut sorted = fit.clone();
         sorted.sort_by(f64::total_cmp);
         let median = if sorted.len() % 2 == 1 {
@@ -612,92 +768,105 @@ fn run(
             best: fit[0],
             median,
             mean: fit.iter().sum::<f64>() / fit.len() as f64,
-            best_ever,
+            best_ever: self.best_ever,
             at_ceiling: fit.iter().filter(|&&f| f >= ceiling).count(),
             distinct: distinct.len(),
-            evaluations,
-            unique_evaluations: cache.len() as u64,
-            elapsed_s: t0.elapsed().as_secs_f64(),
+            evaluations: self.evaluations,
+            unique_evaluations: self.cache.len() as u64,
+            elapsed_s: self.base_elapsed + self.t0.elapsed().as_secs_f64(),
         };
         let go_on = progress(&st);
-        gens.push(st);
+        self.gens.push(st);
         if spec.stop_on_glider {
             for (rule, key) in fresh.into_iter().take(8) {
-                let seed = hof[&key].seed_index;
-                let cc = cross_check(&mut arenas, &rule, seed, &spec.verify_factors)?;
+                let seed = self.hof[&key].seed_index;
+                let cc = cross_check(&mut self.arenas, &rule, seed, &spec.verify_factors)?;
                 let passed = cc.passed;
-                checked.insert(key.clone(), cc.clone());
+                self.checked.insert(key.clone(), cc.clone());
                 if passed {
-                    let mut c = hof[&key].clone();
+                    let mut c = self.hof[&key].clone();
                     c.verify = Some(cc);
-                    gliders.push(c);
+                    self.gliders.push(c);
                 }
             }
-            if !gliders.is_empty() {
-                stopped_early = g + 1 < spec.gens;
-                break;
+            if !self.gliders.is_empty() {
+                self.stopped_early = g + 1 < spec.gens;
+                self.over = true;
+                return Ok(false);
             }
         }
         if !go_on {
-            stopped_early = true;
-            break;
+            self.stopped_early = true;
+            self.over = true;
+            return Ok(false);
         }
         if g + 1 == spec.gens {
-            break;
+            self.over = true;
+            return Ok(false);
         }
         // Breed.
+        let rng = &mut self.rng;
         let mut next: Vec<PriorityRule> = pop_sorted[..elite.min(pop_sorted.len())].to_vec();
         while next.len() < spec.pop {
-            let a = &pop_sorted[tournament(&fit, &mut rng, 3)];
-            let b = &pop_sorted[tournament(&fit, &mut rng, 3)];
-            let mut child = crossover(a, b, &mut rng);
+            let a = &pop_sorted[tournament(&fit, rng, 3)];
+            let b = &pop_sorted[tournament(&fit, rng, 3)];
+            let mut child = crossover(a, b, rng);
             if rng.below(2) == 0 {
-                mutate(&mut child, &mut rng);
+                mutate(&mut child, rng);
             }
             if rng.below(2) == 0 {
-                mutate(&mut child, &mut rng);
+                mutate(&mut child, rng);
             }
             next.push(child);
         }
-        pop = next;
+        self.pop = next;
+        self.next = g + 1;
+        Ok(true)
     }
-    // Champions: distinct top genomes, best first (earliest on ties), verified.
-    let mut champs: Vec<Champion> = hof.into_values().collect();
-    champs.sort_by(|a, b| {
-        b.fitness
-            .total_cmp(&a.fitness)
-            .then(a.first_generation.cmp(&b.first_generation))
-            .then(a.rule.cmp(&b.rule))
-    });
-    champs.truncate(spec.champions);
-    for c in &mut champs {
-        if let Some(cc) = checked.get(&c.rule) {
-            c.verify = Some(cc.clone());
-            continue;
+
+    /// Verify the champions (distinct top genomes, best first, earliest on ties) and make the
+    /// report.
+    pub fn finish(mut self) -> Result<EvolveReport, String> {
+        let spec = &self.spec;
+        let mut champs: Vec<Champion> = std::mem::take(&mut self.hof).into_values().collect();
+        champs.sort_by(|a, b| {
+            b.fitness
+                .total_cmp(&a.fitness)
+                .then(a.first_generation.cmp(&b.first_generation))
+                .then(a.rule.cmp(&b.rule))
+        });
+        champs.truncate(spec.champions);
+        for c in &mut champs {
+            if let Some(cc) = self.checked.get(&c.rule) {
+                c.verify = Some(cc.clone());
+                continue;
+            }
+            let rule = PriorityRule::parse(&c.rule).unwrap()?;
+            let cc = cross_check(&mut self.arenas, &rule, c.seed_index, &spec.verify_factors)?;
+            c.verify = Some(cc);
         }
-        let rule = PriorityRule::parse(&c.rule).unwrap()?;
-        let cc = cross_check(&mut arenas, &rule, c.seed_index, &spec.verify_factors)?;
-        c.verify = Some(cc);
-    }
-    for c in &champs {
-        if c.verify.as_ref().is_some_and(|v| v.passed) && !gliders.iter().any(|g| g.rule == c.rule)
-        {
-            gliders.push(c.clone());
+        let mut gliders = std::mem::take(&mut self.gliders);
+        for c in &champs {
+            if c.verify.as_ref().is_some_and(|v| v.passed)
+                && !gliders.iter().any(|g| g.rule == c.rule)
+            {
+                gliders.push(c.clone());
+            }
         }
+        Ok(EvolveReport {
+            spec: spec.clone(),
+            jetcarp_version: crate::VERSION.into(),
+            arena_tiles: self.arenas.base.len(),
+            arena_tiling: self.arenas.base.tiling.clone(),
+            margin: self.arenas.base.margin,
+            boundary: self.arenas.base.boundary,
+            generations: std::mem::take(&mut self.gens),
+            champions: champs,
+            gliders,
+            stopped_early: self.stopped_early,
+            elapsed_s: self.elapsed_s(),
+        })
     }
-    Ok(EvolveReport {
-        spec: spec.clone(),
-        jetcarp_version: crate::VERSION.into(),
-        arena_tiles: arenas.base.len(),
-        arena_tiling: arenas.base.tiling.clone(),
-        margin: arenas.base.margin,
-        boundary: arenas.base.boundary,
-        generations: gens,
-        champions: champs,
-        gliders,
-        stopped_early,
-        elapsed_s: t0.elapsed().as_secs_f64(),
-    })
 }
 
 #[cfg(test)]
