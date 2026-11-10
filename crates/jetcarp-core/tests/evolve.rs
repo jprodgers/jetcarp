@@ -1,9 +1,11 @@
-//! Evolutionary glider search (`jetcarp_core::evolve`): determinism, the anti-gaming filters, and
-//! small searches that find gliders.
+//! Evolutionary glider search (`jetcarp_core::evolve`): determinism, the anti-gaming filters,
+//! small searches that find gliders, and a search checkpointed and resumed (as a job, too).
 
 use jetcarp_core::evolve::arena::{Arena, Outcome};
 use jetcarp_core::evolve::priority::{PriorityRule, spectre_glider};
-use jetcarp_core::evolve::{Arenas, EvolveSpec, catalog, cross_check, evolve};
+use jetcarp_core::evolve::{
+    Arenas, Evolution, EvolveCheckpoint, EvolveSpec, catalog, cross_check, evolve,
+};
 use jetcarp_core::library::{Library, PatternClass};
 use jetcarp_core::topology::{Nb, TilingSpec};
 
@@ -173,4 +175,109 @@ fn hat_search_finds_a_mover() {
     assert_eq!(rec.class, PatternClass::Mover);
     assert!(rec.mover.as_ref().unwrap().distance_rings >= 100);
     let _ = std::fs::remove_dir_all(&lib_dir);
+}
+
+#[test]
+fn a_search_checkpointed_and_resumed_equals_one_run() {
+    // One generation at a time, saved as JSON after the fourth and carried on from there.
+    let spec = small("square", 48, 10, 5);
+    let whole = evolve(&spec, &|_| true).unwrap();
+    let mut e = Evolution::new(&spec).unwrap();
+    for _ in 0..4 {
+        assert!(e.generation(&|_| true).unwrap());
+    }
+    let saved = serde_json::to_string(&e.checkpoint()).unwrap();
+    drop(e);
+    let cp: EvolveCheckpoint = serde_json::from_str(&saved).unwrap();
+    assert_eq!((cp.next, cp.generations.len(), cp.over), (4, 4, false));
+    let mut e = Evolution::resume(&spec, &cp).unwrap();
+    while e.generation(&|_| true).unwrap() {}
+    assert!(e.is_over());
+    let resumed = e.finish().unwrap();
+    assert_eq!(resumed.fingerprint(), whole.fingerprint());
+    assert_eq!(resumed.generations.len(), 10);
+    let rules = |r: &jetcarp_core::evolve::EvolveReport| {
+        r.champions
+            .iter()
+            .map(|c| (c.rule.clone(), c.genome.clone(), c.seed_index))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(rules(&resumed), rules(&whole));
+    // A checkpoint of another population size is refused.
+    assert!(Evolution::resume(&small("square", 32, 10, 5), &cp).is_err());
+}
+
+#[test]
+fn evolve_job_resumed_equals_uninterrupted() {
+    use jetcarp_core::jobs::evolve::{self as job, EvolveJobSpec};
+    use jetcarp_core::jobs::{Budget, RunOptions, Stopped};
+    use jetcarp_core::library::JobStatus;
+    use std::sync::{Arc, Mutex};
+    let spec = small("square", 48, 10, 5);
+    let whole = evolve(&spec, &|_| true).unwrap();
+    let dir = std::env::temp_dir().join(format!("jetcarp-evolve-job-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let lib = Library::open(dir.join("catalog"));
+    let js = EvolveJobSpec {
+        folder: Some(dir.join("run")),
+        ..EvolveJobSpec::new(spec.clone())
+    };
+    let j = job::start(&lib, &js).unwrap();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let s2 = seen.clone();
+    let hook: job::GenHook = Arc::new(move |g| s2.lock().unwrap().push(g.generation));
+    // Three generations, then four more from a new catalog handle (as another process would),
+    // then the rest.
+    for (n, upto) in [(3, 2), (4, 6)] {
+        let (out, res) = job::run(
+            &Library::open(lib.path()),
+            j,
+            Some(hook.clone()),
+            &RunOptions {
+                budget: Budget::items(n),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(res.is_none());
+        assert_eq!(
+            (out.status, out.stopped),
+            (JobStatus::Paused, Some(Stopped::Budget))
+        );
+        assert_eq!(out.progress["generation"].as_u64(), Some(upto));
+        assert!(lib.job_checkpoint(j).unwrap().is_some());
+        let s = &jetcarp_core::dashboard::summaries(
+            &[lib.job(j).unwrap()],
+            jetcarp_core::dashboard::now_seconds(),
+        )[0];
+        assert!(s.can_resume() && s.done == upto && s.total == Some(10));
+    }
+    let (out, res) = job::run(&lib, j, Some(hook), &RunOptions::default()).unwrap();
+    assert_eq!((out.status, out.stopped), (JobStatus::Done, None));
+    assert_eq!(*seen.lock().unwrap(), (0..10).collect::<Vec<usize>>());
+    let res = res.unwrap();
+    assert_eq!(res.report.fingerprint(), whole.fingerprint());
+    assert_eq!(res.report.gliders.len(), whole.gliders.len());
+    assert_eq!(out.progress["generation"].as_u64(), Some(10));
+    assert_eq!(
+        out.progress["gliders"].as_u64(),
+        Some(whole.gliders.len() as u64)
+    );
+    let names: Vec<String> = res
+        .files
+        .iter()
+        .map(|f| f.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "fitness.csv",
+            "champions.json",
+            "gliders.json",
+            "run.json",
+            "movers.json"
+        ]
+    );
+    assert!(res.files.iter().all(|f| f.exists()));
+    let _ = std::fs::remove_dir_all(&dir);
 }
