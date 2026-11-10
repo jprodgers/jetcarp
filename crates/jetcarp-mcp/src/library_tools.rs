@@ -5,21 +5,21 @@
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
 //! it once. Listing, reading, curation, and promotion are the operations `library.*` and
-//! `quickstart.*`; the soup search and collisions move to the job operations in step 5.
+//! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`).
 
 use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool};
-use jetcarp_api::op::{self, Op, Quiet, Report, WorldOp};
+use jetcarp_api::op::{self, Callbacks, Op, Quiet, Report, WorldOp};
 use jetcarp_api::ops::library::{
     GetIn, LibraryGet, LibraryQuery, LibraryUpdate, QueryIn, UpdateIn,
 };
 use jetcarp_api::ops::quickstart::{
     AddIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartUpdate, StatusIn,
 };
+use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
-use jetcarp_core::library::search::SearchSpec;
+use jetcarp_core::jobs::search::SearchResult;
 use jetcarp_core::library::{self, Library, PatternRecord};
-use jetcarp_core::{Boundary, SizeSpec};
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &[
@@ -409,8 +409,32 @@ fn get(args: &Value) -> Res {
     Ok(out)
 }
 
+/// Progress and cancellation of a call, for an operation.
+fn callbacks(
+    progress: Option<crate::tools::ProgressFn>,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> Callbacks {
+    Callbacks {
+        on_report: progress.map(|f| {
+            std::sync::Arc::new(move |d: u64, t: Option<u64>, m: &str| {
+                f(d as f64, t.map(|t| t as f64), m.to_string())
+            }) as std::sync::Arc<dyn Fn(u64, Option<u64>, &str) + Send + Sync>
+        }),
+        cancel,
+    }
+}
+
+/// Run a search or collision here, as a job (`search.start`), until it ends or is cancelled.
+fn run_here(strategy: &str, spec: Value, p: &Callbacks) -> Result<SearchStarted, String> {
+    let a = SearchStartIn {
+        strategy: Some(strategy.into()),
+        spec,
+        ..Default::default()
+    };
+    SearchStart::run(ctx(), a, p).map_err(err)
+}
+
 fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res {
-    use jetcarp_core::library::collide::{CollideSpec, collide};
     check_unknown(
         args,
         &[
@@ -449,61 +473,50 @@ fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res
             .collect(),
         _ => vec![],
     };
-    let spec = CollideSpec {
-        dx: range("dx")?,
-        dy: range("dy")?,
-        phases,
-        orientation_a: int(args, "orientation_a")?.unwrap_or(0).max(0) as u32,
-        orientation_b: int(args, "orientation_b")?.unwrap_or(0).max(0) as u32,
-        gens: int(args, "gens")?.unwrap_or(1024).clamp(16, 4096) as u64,
-        rule: string(args, "rule")?.map(String::from),
-        ..Default::default()
-    };
-    let places = (spec.dx[1] - spec.dx[0] + 1).max(0) as u64
-        * (spec.dy[1] - spec.dy[0] + 1).max(0) as u64
-        * if spec.phases.is_empty() {
+    let (dx, dy) = (range("dx")?, range("dy")?);
+    let places = (dx[1] - dx[0] + 1).max(0) as u64
+        * (dy[1] - dy[0] + 1).max(0) as u64
+        * if phases.is_empty() {
             b.period.max(1)
         } else {
-            spec.phases.len() as u64
+            phases.len() as u64
         };
     if places > 5000 {
         return Err(format!(
             "{places} placements is more than 5,000: use smaller offsets or fewer phases"
         ));
     }
-    let report = |d: usize, t: usize| {
-        if let Some(f) = &progress
-            && (d == t || d.is_multiple_of((t / 20).max(1)))
-        {
-            f(d as f64, Some(t as f64), format!("{d} of {t} placements"));
-        }
+    let spec = CollideIn {
+        a: a.id,
+        b: b.id,
+        dx: Some(json!(dx)),
+        dy: Some(json!(dy)),
+        phases: Some(json!(phases)),
+        orientation_a: Some(int(args, "orientation_a")?.unwrap_or(0).max(0) as u32),
+        orientation_b: Some(int(args, "orientation_b")?.unwrap_or(0).max(0) as u32),
+        gens: Some(int(args, "gens")?.unwrap_or(1024).clamp(16, 4096) as u64),
+        rule: string(args, "rule")?.map(String::from),
+        store: Some(args.get("store").and_then(|v| v.as_bool()).unwrap_or(true)),
+        ..Default::default()
     };
-    let out = collide(&a, &b, &spec, 0, Some(&report))?;
-    let store = args.get("store").and_then(|v| v.as_bool()).unwrap_or(true);
-    let mut new_ids = Vec::new();
-    if store && !out.records.is_empty() {
-        let job = l.create_job(
-            "collide",
-            &serde_json::to_value(&out.report.spec).unwrap_or_default(),
-        )?;
-        let res = l.add_many(out.records.clone(), Some(job))?;
-        for (rec, o) in out.records.iter().zip(res) {
-            if o? == library::AddOutcome::Added {
-                new_ids.push(rec.id.clone());
-            }
-        }
-        l.update_job(job, Some(library::JobStatus::Done), None, None)?;
-    }
-    let r = &out.report;
+    let out = run_here("collide", op::to_value(&spec), &callbacks(progress, None))?;
+    let r = out
+        .result
+        .ok_or_else(|| format!("collision {} did not finish ({})", out.job, out.status))?;
+    let rep = &r["report"];
+    let runs: Vec<Value> = rep["runs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|x| x["outcome"] == "new_objects")
+        .take(40)
+        .map(|x| json!({"dx": x["dx"], "dy": x["dy"], "phase": x["phase"], "result": x["result"]}))
+        .collect();
     Ok(ToolOutput::json(&json!({
-        "a": r.a_label, "b": r.b_label, "rule": r.rule, "tiling": r.tiling,
-        "outcomes": r.counts,
-        "products": out.records.iter().map(|x| json!({
-            "id": x.id, "label": x.label(), "runs": x.seen, "new": new_ids.contains(&x.id),
-        })).collect::<Vec<_>>(),
-        "new_object_runs": r.runs.iter().filter(|x| x.outcome.name() == "new_objects").take(40).map(|x| json!({
-            "dx": x.dx, "dy": x.dy, "phase": x.phase, "result": x.result,
-        })).collect::<Vec<_>>(),
+        "a": rep["a_label"], "b": rep["b_label"], "rule": rep["rule"], "tiling": rep["tiling"],
+        "outcomes": rep["counts"],
+        "products": r["products"],
+        "new_object_runs": runs,
     })))
 }
 
@@ -547,52 +560,35 @@ fn search_tool(
             "that search is too large for one call; use smaller grids or fewer generations".into(),
         );
     }
-    let spec = SearchSpec {
-        rules,
-        tilings,
-        size: SizeSpec::Rect { w, h },
-        boundary: Boundary::Wrap,
-        soups,
-        gens,
-        density: args
-            .get("density")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.37)
-            .clamp(0.0, 1.0),
-        seed: int(args, "seed")?.unwrap_or(1).max(0) as u64,
-        ..Default::default()
-    };
     let store = args
         .get("store")
         .map(|_| boolean(args, "store"))
         .transpose()?
         .unwrap_or(true);
-    // Progress (soups done) at most once a second, and at the end.
-    let last = std::sync::Mutex::new(None::<std::time::Instant>);
-    let report = |done: usize, total: usize| {
-        if let Some(f) = &progress {
-            let mut l = last.lock().unwrap();
-            if done >= total || l.is_none_or(|t| t.elapsed().as_secs_f64() >= 1.0) {
-                *l = Some(std::time::Instant::now());
-                f(
-                    done as f64,
-                    Some(total as f64),
-                    format!("{done} of {total} soups"),
-                );
-            }
-        }
+    let spec = BoundedIn {
+        rules: Some(json!(rules)),
+        tilings: Some(json!(tl.join(","))),
+        width: Some(w),
+        height: Some(h),
+        boundary: Some("wrap".into()),
+        soups: Some(soups),
+        gens: Some(gens),
+        density: Some(
+            args.get("density")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.37)
+                .clamp(0.0, 1.0),
+        ),
+        seed: Some(int(args, "seed")?.unwrap_or(1).max(0) as u64),
+        store: Some(store),
+        ..Default::default()
     };
-    let out =
-        jetcarp_core::library::search::search_cancellable(&spec, Some(&report), cancel.as_deref())?;
-    let l = lib();
-    let (mut new_ids, mut new_rules, mut job) = (Vec::new(), Vec::new(), None);
-    if store {
-        let st = l.store_search(&out)?;
-        new_ids = st.added;
-        new_rules = st.new_rules;
-        job = Some(st.job);
-    }
-    let groups: Vec<Value> = out
+    let out = run_here("search", op::to_value(&spec), &callbacks(progress, cancel))?;
+    let r: SearchResult = out
+        .result
+        .and_then(|r| serde_json::from_value(r).ok())
+        .ok_or_else(|| format!("search {} stopped before its end ({})", out.job, out.status))?;
+    let groups: Vec<Value> = r
         .report
         .groups
         .iter()
@@ -605,17 +601,17 @@ fn search_tool(
                 "patterns": g.found.iter().take(25).map(|f| json!({
                     "id": f.id, "label": f.label, "class": f.class, "period": f.period, "speed": f.speed,
                     "cells": f.cells, "count": f.count, "verified": f.verified,
-                    "new": new_ids.contains(&f.id),
+                    "new": f.new,
                 })).collect::<Vec<_>>(),
             })
         })
         .collect();
     Ok(ToolOutput::json(&json!({
         "stored": store,
-        "catalog": l.path().display().to_string(),
-        "job": job,
-        "new_patterns": new_ids.len(),
-        "known_patterns_in_new_rules": new_rules.iter().map(|(id, r)| json!({"id": id, "rule": r})).collect::<Vec<_>>(),
+        "catalog": out.catalog,
+        "job": out.job,
+        "new_patterns": r.added.len(),
+        "known_patterns_in_new_rules": r.new_rules.iter().map(|(id, r)| json!({"id": id, "rule": r})).collect::<Vec<_>>(),
         "groups": groups,
         "next": "library_get an id to see it; paste_pattern to put it in a world; library_update to curate.",
     })))

@@ -119,8 +119,8 @@ pub const NAMES: &[&str] = &[
     "library_update",
     "library_promote",
     "library_collide",
-    // Background jobs: one start tool per kind (`hunt_tools.rs`, `job_tools.rs`), one status
-    // and one stop tool for all of them.
+    // Background jobs (`job_tools.rs`): one start tool per kind, one status and one stop tool for
+    // all of them.
     "hunt_start",
     "ants_start",
     "pile_start",
@@ -353,7 +353,6 @@ pub fn definitions() -> Vec<Value> {
     ]
     .into_iter()
     .chain(crate::library_tools::definitions())
-    .chain(crate::hunt_tools::definitions())
     .chain(crate::job_tools::definitions())
     .chain(crate::media_tools::definitions())
     .chain(crate::files_tools::definitions())
@@ -405,7 +404,6 @@ pub fn call_ctx(
             crate::library_tools::call(host, n, args, progress, cancel)
         }
         n if crate::explore_tools::handles(n) => crate::explore_tools::call(n, args),
-        n if crate::hunt_tools::handles(n) => crate::hunt_tools::call(n, args),
         "job_status" => crate::job_tools::status_wait(args, cancel.as_deref()),
         n if crate::job_tools::handles(n) => crate::job_tools::call(n, args),
         n if crate::media_tools::handles(n) => crate::media_tools::call(n, args),

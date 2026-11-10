@@ -10,7 +10,6 @@ pub mod app_tools;
 pub mod display_tools;
 pub mod explore_tools;
 pub mod files_tools;
-pub mod hunt_tools;
 pub mod job_tools;
 pub mod library_tools;
 pub mod link;

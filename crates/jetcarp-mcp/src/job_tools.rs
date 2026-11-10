@@ -1,28 +1,32 @@
-//! Background jobs over MCP: `ants_start`, `pile_start`, and `evolve_start` start an ant search,
-//! a large sandpile, or an evolutionary glider search, and `job_status` / `job_stop` watch and
-//! stop any catalog job (hunts, ant searches, piles, evolve searches, mover verifications, and the
-//! finished soup searches, collisions, and census jobs), wherever it was started. One status and one stop tool for every kind keeps the list short for
-//! small models; `kind` filters the listing.
+//! Background jobs over MCP: `hunt_start`, `ants_start`, `pile_start`, `evolve_start`, and
+//! `mover_start` start (or carry on) a hunt, an ant search, a large sandpile, an evolutionary
+//! glider search, or a mover verification in the background, and `job_status` / `job_stop` watch
+//! and stop any catalog job (those, and soup searches, collisions, and censuses), wherever it was
+//! started. One status and one stop tool for every kind keeps the list short for small models;
+//! `kind` filters the listing.
 //!
-//! Ant searches, piles, and mover verifications run on the job runner (`jetcarp_core::jobs`),
-//! their handles in the process's registry; evolve searches still run on a thread of their own
-//! here, without a checkpoint.
+//! Each tool reads its arguments as it always has and calls the operations `search.start`
+//! (`background`: the job runs on a thread of this process, in the context's registry, with its
+//! lease and checkpoints), `jobs.status`, `jobs.list`, and `jobs.stop`.
 
-use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
+use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool};
 use jetcarp_api::args;
-use jetcarp_core::ants::job::{self as ants, AntProgress, AntSpec, Soups};
-use jetcarp_core::ants::search::{Strings, Tables};
-use jetcarp_core::jobs::{RunOptions, registry};
-use jetcarp_core::library::{self, JobStatus, Library};
-use jetcarp_core::pile::job::{self as pilejob, PileJobSpec, PileProgress};
-use jetcarp_core::window::job as moverjob;
+use jetcarp_api::op::{self, Op, Progress, Quiet};
+use jetcarp_api::ops::jobs::{
+    JobIn, JobView, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut,
+};
+use jetcarp_api::ops::search::{
+    AntsIn, EvolveIn, HuntIn, MoverIn, PileIn, SearchStart, SearchStartIn, SearchStarted,
+};
+use jetcarp_core::ants::job::AntProgress;
+use jetcarp_core::hunt::job::HuntProgress;
+use jetcarp_core::pile::job::PileProgress;
+use jetcarp_core::window::job::MoverProgress;
 use serde_json::{Value, json};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
+use std::sync::atomic::Ordering;
 
 pub const NAMES: &[&str] = &[
+    "hunt_start",
     "ants_start",
     "pile_start",
     "evolve_start",
@@ -35,20 +39,28 @@ pub fn handles(name: &str) -> bool {
     NAMES.contains(&name)
 }
 
-fn lib() -> Library {
-    Library::open_default()
-}
-
-/// Evolve jobs running here: their stop flags and live progress.
-type EvolveRun = (Arc<AtomicBool>, Arc<Mutex<Value>>);
-
-fn evolve_running() -> &'static Mutex<HashMap<i64, EvolveRun>> {
-    static R: OnceLock<Mutex<HashMap<i64, EvolveRun>>> = OnceLock::new();
-    R.get_or_init(Default::default)
-}
-
 pub fn definitions() -> Vec<Value> {
     vec![
+        tool(
+            "hunt_start",
+            "Start a soup hunt",
+            false,
+            "Starts a fast soup hunt in the background and returns at once with its job id (poll job_status, stop with job_stop). Small random soups (default 16x16 unit cells at density 0.5) run on an unbounded plane, bit-parallel, until they settle; ships that fly away are cut out and counted; every object is classified, and new patterns are verified and stored in the catalog (library_list shows them; class gun for stationary guns). Thousands of soups per second for Life on squares. Results do not depend on threads. The hunt is a resumable catalog job: {\"resume\": 3} continues job 3. Rules: B/S and Generations rules without B0 (a V suffix means edge neighbours); tilings: any periodic tiling (family id, catalog id, or a set such as \"archimedean\"). Examples: {\"rules\": [\"B3/S23\"], \"soups\": 100000}, {\"rules\": [\"B2/S34\", \"B24/S35\"], \"tilings\": \"hex\", \"soups\": 0} (0 = until stopped).",
+            json!({"type": "object", "properties": {
+                    "rules": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Rules (default [\"B3/S23\"])."},
+                    "tilings": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Tilings (default \"square\")."},
+                    "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Neighbourhood for every rule (default: the notation decides)."},
+                    "soups": {"type": "integer", "minimum": 0, "description": "Soups per rule and tiling (default 10000; 0 = until stopped)."},
+                    "size": {"type": "string", "description": "Soup size WxH in unit cells (default \"16x16\")."},
+                    "density": {"type": "number", "minimum": 0, "maximum": 1, "description": "Default 0.5."},
+                    "shape": {"type": "string", "enum": ["rect", "disc"], "description": "Soup shape (default rect)."},
+                    "seed": {"type": "integer", "minimum": 0, "description": "Default 1; soup i uses an RNG state from (seed, i)."},
+                    "gens": {"type": "integer", "minimum": 1, "description": "Generations before an unsettled soup is censused as it is (default 20000)."},
+                    "max_period": {"type": "integer", "minimum": 1, "maximum": 1024, "description": "Longest period looked for (default 64)."},
+                    "threads": {"type": "integer", "minimum": 0, "description": "Worker threads (default 0 = all cores)."},
+                    "resume": {"type": "integer", "minimum": 1, "description": "Continue this hunt job instead of starting a new one."},
+                }, "additionalProperties": false}),
+        ),
         tool(
             "ants_start",
             "Start an ant search",
@@ -92,7 +104,7 @@ pub fn definitions() -> Vec<Value> {
             "evolve_start",
             "Start an evolutionary glider search",
             false,
-            "Starts Edmond's evolutionary glider search in the background and returns its job id at once (poll job_status, stop with job_stop): a population of multi-state priority rules evolves on a tiling (default the aperiodic Spectre) towards rules whose seeds travel far; the best are verified (exactly on lattices, to growing distances on aperiodic patches) and the movers stored in the catalog (library_list {\"class\": \"mover\"}). Deterministic for a seed; a stopped search starts again from generation 0 (resume repeats it). The published settings (population 256, 800 generations, radius 48) take a long time; small ones (pop 32, gens 40, radius 16) take a minute. Example: {\"tiling\": \"spectre\", \"pop\": 32, \"gens\": 40, \"radius\": 16}.",
+            "Starts Edmond's evolutionary glider search in the background and returns its job id at once (poll job_status, stop with job_stop): a population of multi-state priority rules evolves on a tiling (default the aperiodic Spectre) towards rules whose seeds travel far; the best are verified (exactly on lattices, to growing distances on aperiodic patches) and the movers stored in the catalog (library_list {\"class\": \"mover\"}). Deterministic for a seed; checkpointed every generation, so a stopped search resumes from its last generation ({\"resume\": job}) and ends as an uninterrupted one. Its files (fitness.csv, champions.json, gliders.json, run.json, movers.json) go to its folder under <Pictures>/JETCARP. The published settings (population 256, 800 generations, radius 48) take a long time; small ones (pop 32, gens 40, radius 16) take a minute. Example: {\"tiling\": \"spectre\", \"pop\": 32, \"gens\": 40, \"radius\": 16}.",
             json!({"type": "object", "properties": {
                 "tiling": {"type": "string", "description": "Tiling id (default \"spectre\")."},
                 "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Default touch."},
@@ -104,7 +116,7 @@ pub fn definitions() -> Vec<Value> {
                 "seed": {"type": "integer", "minimum": 0, "description": "Default 1."},
                 "stop_on_glider": {"type": "boolean", "description": "Stop at the first verified glider."},
                 "threads": {"type": "integer", "minimum": 0, "description": "Worker threads (default all)."},
-                "resume": {"type": "integer", "minimum": 1, "description": "Run this evolve job's spec again."},
+                "resume": {"type": "integer", "minimum": 1, "description": "Continue this evolve job from its last generation."},
             }, "additionalProperties": false}),
         ),
         tool(
@@ -144,7 +156,7 @@ pub fn definitions() -> Vec<Value> {
             "job_stop",
             "Stop a job",
             false,
-            "Stops a running hunt, ant search, pile, evolve search, or mover verification at its next checkpoint (a few seconds; a pile cancels the step in flight). It stays resumable: hunt_start, ants_start, pile_start, or mover_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
+            "Stops a running job at its next checkpoint (a few seconds; a pile cancels the step in flight): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, or census. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, or mover_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id."},
             }, "required": ["job"], "additionalProperties": false}),
@@ -154,21 +166,23 @@ pub fn definitions() -> Vec<Value> {
 
 pub fn call(name: &str, args: &Value) -> Res {
     match name {
+        "hunt_start" => hunt_start(args),
         "ants_start" => ants_start(args),
         "pile_start" => pile_start(args),
         "evolve_start" => evolve_start(args),
         "mover_start" => mover_start(args),
-        "job_status" => status(args),
+        "job_status" => status_wait(args, None),
         "job_stop" => stop(args),
         _ => Err(format!("unknown tool {name}")),
     }
 }
 
-fn list(args: &Value, key: &str) -> Result<Vec<String>, String> {
+/// Text items: a list, or text split at any of `seps`.
+fn list(args: &Value, key: &str, seps: &[char]) -> Result<Vec<String>, String> {
     Ok(match args.get(key) {
         None | Some(Value::Null) => vec![],
         Some(Value::String(s)) => s
-            .split([',', ';', ' '])
+            .split(seps)
             .map(str::trim)
             .filter(|x| !x.is_empty())
             .map(String::from)
@@ -202,10 +216,84 @@ fn pair(args: &Value, key: &str) -> Result<Option<(u64, u64)>, String> {
     })
 }
 
-fn ant_summary(p: &ants::AntProgress) -> Value {
-    let mut v = serde_json::to_value(p).unwrap_or_default();
-    v["line"] = json!(p.line());
+fn num(args: &Value, key: &str) -> Option<f64> {
+    args.get(key).and_then(|v| v.as_f64())
+}
+
+/// Start (or carry on) a job of this strategy in the background, through `search.start`.
+fn start_in_background(
+    strategy: &str,
+    spec: Value,
+    resume: Option<i64>,
+    threads: usize,
+) -> Result<SearchStarted, String> {
+    let a = SearchStartIn {
+        strategy: Some(strategy.into()),
+        spec,
+        resume,
+        threads: Some(threads),
+        background: true,
+        ..Default::default()
+    };
+    SearchStart::run(ctx(), a, &Quiet).map_err(err)
+}
+
+fn with_line(v: Value, line: String) -> Value {
+    let mut v = v;
+    if v.is_object() {
+        v["line"] = json!(line);
+    }
     v
+}
+
+fn hunt_start(args: &Value) -> Res {
+    check_unknown(
+        args,
+        &[
+            "rules",
+            "tilings",
+            "nb",
+            "soups",
+            "size",
+            "density",
+            "shape",
+            "seed",
+            "gens",
+            "max_period",
+            "threads",
+            "resume",
+        ],
+    )?;
+    let rules = list(args, "rules", &[',', ';'])?;
+    let spec = HuntIn {
+        rules: (!rules.is_empty()).then(|| json!(rules)),
+        tilings: Some(json!(list(args, "tilings", &[',', ';'])?.join(","))),
+        nb: string(args, "nb")?.map(String::from),
+        soups: Some(int(args, "soups")?.unwrap_or(10_000).max(0) as u64),
+        size: string(args, "size")?
+            .map(|s| {
+                args::size_pair(s)
+                    .map(|(w, h)| json!([w, h]))
+                    .map_err(|_| format!("bad size '{s}'"))
+            })
+            .transpose()?,
+        density: num(args, "density"),
+        shape: string(args, "shape")?.map(String::from),
+        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        gens: int(args, "gens")?.map(|x| x.max(1) as u64),
+        max_period: int(args, "max_period")?.map(|x| x.clamp(1, 1024) as u64),
+        ..Default::default()
+    };
+    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
+    let out = start_in_background("hunt", op::to_value(&spec), int(args, "resume")?, threads)?;
+    let p: HuntProgress = serde_json::from_value(out.progress).unwrap_or_default();
+    Ok(ToolOutput::json(&json!({
+        "job": out.job,
+        "status": "running",
+        "catalog": out.catalog,
+        "progress": with_line(serde_json::to_value(&p).unwrap_or_default(), p.line()),
+        "note": "The hunt runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with hunt_start {\"resume\": job}).",
+    })))
 }
 
 fn ants_start(args: &Value) -> Res {
@@ -227,84 +315,29 @@ fn ants_start(args: &Value) -> Res {
             "resume",
         ],
     )?;
-    let l = lib();
-    let jid = match int(args, "resume")? {
-        Some(j) => {
-            if registry().is_running(&l, j) {
-                return Err(format!("ant search {j} is already running here"));
-            }
-            ants::status(&l, j)?;
-            j
-        }
-        None => {
-            let alphabet = string(args, "alphabet")?.map(String::from);
-            let strings = pair(args, "strings")?.map(|(a, b)| Strings {
-                min: a as usize,
-                max: b as usize,
-                alphabet: alphabet.clone(),
-            });
-            let tables = pair(args, "tables")?.map(|(n, k)| Tables {
-                states: n as u8,
-                colors: k as u8,
-                alphabet: alphabet.clone(),
-                all_max: 1_000_000,
-                sample: 10_000,
-                seed: int(args, "seed").ok().flatten().unwrap_or(1).max(0) as u64,
-            });
-            let rules = list(args, "rules")?;
-            let d = AntSpec::default();
-            let (strings, tables) = if strings.is_none() && tables.is_none() && rules.is_empty() {
-                (d.strings.clone(), None)
-            } else {
-                (strings, tables)
-            };
-            let t = list(args, "tilings")?.join(",");
-            let soup = match int(args, "soups")? {
-                None | Some(0) => None,
-                Some(n) => {
-                    let s = int(args, "size")?.unwrap_or(8).clamp(1, 64) as u32;
-                    Some(Soups {
-                        w: s,
-                        h: s,
-                        density: args.get("density").and_then(|v| v.as_f64()).unwrap_or(0.5),
-                        soups: n.max(1) as u64,
-                        seed: int(args, "seed")?.unwrap_or(1).max(0) as u64,
-                    })
-                }
-            };
-            let spec = AntSpec {
-                tilings: args::tilings_or_square(&t)?,
-                rules,
-                strings,
-                tables,
-                soup,
-                steps: int(args, "steps")?
-                    .map(|x| x.max(1) as u64)
-                    .unwrap_or(d.steps),
-                max_period: int(args, "max_period")?
-                    .map(|x| x.max(1) as u64)
-                    .unwrap_or(d.max_period),
-                symmetry: true,
-            };
-            ants::start(&l, &spec)?
-        }
+    let rules = list(args, "rules", &[',', ';', ' '])?;
+    let spec = AntsIn {
+        tilings: Some(json!(list(args, "tilings", &[',', ';', ' '])?.join(","))),
+        strings: pair(args, "strings")?.map(|(a, b)| json!([a, b])),
+        tables: pair(args, "tables")?.map(|(a, b)| json!([a, b])),
+        alphabet: string(args, "alphabet")?.map(String::from),
+        rules: (!rules.is_empty()).then(|| json!(rules)),
+        soups: int(args, "soups")?.map(|n| n.max(0) as u64),
+        size: Some(json!(int(args, "size")?.unwrap_or(8).clamp(1, 64))),
+        density: num(args, "density"),
+        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        steps: int(args, "steps")?.map(|x| x.max(1) as u64),
+        max_period: int(args, "max_period")?.map(|x| x.max(1) as u64),
+        ..Default::default()
     };
-    registry().start(
-        l.clone(),
-        jid,
-        RunOptions {
-            threads: int(args, "threads")?.unwrap_or(0).max(0) as usize,
-            ..Default::default()
-        },
-    )?;
-    let p: AntProgress = registry()
-        .with(&l, jid, |h| h.progress_as())
-        .unwrap_or_default();
+    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
+    let out = start_in_background("ants", op::to_value(&spec), int(args, "resume")?, threads)?;
+    let p: AntProgress = serde_json::from_value(out.progress).unwrap_or_default();
     Ok(ToolOutput::json(&json!({
-        "job": jid,
+        "job": out.job,
         "status": "running",
-        "catalog": l.path().display().to_string(),
-        "progress": ant_summary(&p),
+        "catalog": out.catalog,
+        "progress": with_line(serde_json::to_value(&p).unwrap_or_default(), p.line()),
         "note": "The search runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with ants_start {\"resume\": job}). Results: library_list {\"kind\": \"ant\"}.",
     })))
 }
@@ -317,75 +350,41 @@ fn pile_start(args: &Value) -> Res {
             "resume",
         ],
     )?;
-    let l = lib();
-    let jid = match int(args, "resume")? {
-        Some(j) => {
-            if registry().is_running(&l, j) {
-                return Err(format!("pile {j} is already running here"));
-            }
-            pilejob::status(&l, j)?;
-            j
-        }
-        None => {
-            let tid = string(args, "tiling")?.unwrap_or("square");
-            let mut tiling = args::tiling_by_id(tid)?;
-            if let Some(lv) = int(args, "level")? {
-                tiling.size = Some(jetcarp_core::SizeSpec::Level(lv.clamp(1, 8) as u32));
-            }
-            let grains = match args.get("grains") {
-                Some(Value::Number(n)) => n.as_u64().ok_or("`grains` must be a whole number")?,
-                Some(Value::String(s)) => jetcarp_core::pile::parse_grains(s)?,
-                _ => return Err("give `grains`, e.g. 1000000 or \"1e7\"".into()),
-            };
-            let pile = jetcarp_core::pile::PileSpec {
-                tiling,
-                nb: args::parse_pile_nb(string(args, "nb")?.unwrap_or("edge"))?,
-                grains,
-                centre: jetcarp_core::pile::Centre::parse(string(args, "centre")?.unwrap_or("cell"))?,
-            };
-            let root = jetcarp_api::out::out_root(None).join("piles");
-            std::fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
-            let folder = jetcarp_api::out::make_out_dir(&root, &format!("{tid}-{grains}"))?;
-            let spec = PileJobSpec {
-                pile,
-                folder,
-                px_per_cell: args.get("px").and_then(|v| v.as_f64()).unwrap_or(2.0),
-                margin: 4.0,
-                palette: {
-                    let p = string(args, "palette")?.unwrap_or("Ember");
-                    jetcarp_core::render::builtin_palette(p)?;
-                    p.to_string()
-                },
-                reverse: args
-                    .get("reverse")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false),
-                preview_side: 1024,
-                png: true,
-                gpu: args.get("gpu").and_then(|v| v.as_bool()).unwrap_or(false),
-                extra: serde_json::Value::Null,
-            };
-            pilejob::start(&l, &spec)?
-        }
+    let resume = int(args, "resume")?;
+    let spec = if resume.is_some() {
+        Value::Null
+    } else {
+        let grains = match args.get("grains") {
+            Some(g @ (Value::Number(_) | Value::String(_))) => g.clone(),
+            _ => return Err("give `grains`, e.g. 1000000 or \"1e7\"".into()),
+        };
+        op::to_value(&PileIn {
+            tiling: Some(string(args, "tiling")?.unwrap_or("square").to_string()),
+            grains: Some(grains),
+            nb: string(args, "nb")?.map(String::from),
+            centre: string(args, "centre")?.map(String::from),
+            level: int(args, "level")?.map(|l| l.clamp(1, 8) as u32),
+            px: num(args, "px"),
+            palette: string(args, "palette")?.map(String::from),
+            reverse: args.get("reverse").and_then(|v| v.as_bool()),
+            gpu: args.get("gpu").and_then(|v| v.as_bool()),
+            ..Default::default()
+        })
     };
-    let (spec, _) = pilejob::status(&l, jid)?;
     // Topples on the GPU when the job asks for it and the host registered a GPU toppler.
-    registry().start(l.clone(), jid, RunOptions::default())?;
-    let p: PileProgress = registry()
-        .with(&l, jid, |h| h.progress_as())
-        .unwrap_or_default();
+    let out = start_in_background("pile", spec, resume, 0)?;
+    let p: PileProgress = serde_json::from_value(out.progress).unwrap_or_default();
     Ok(ToolOutput::json(&json!({
-        "job": jid,
+        "job": out.job,
         "status": "running",
-        "folder": spec.folder.display().to_string(),
-        "progress": p,
+        "folder": p.folder,
         "line": p.line(),
+        "progress": p,
         "note": "The pile builds in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with pile_start {\"resume\": job}).",
     })))
 }
 
 fn evolve_start(args: &Value) -> Res {
-    use jetcarp_core::evolve::{EvolveSpec, evolve};
     check_unknown(
         args,
         &[
@@ -402,138 +401,34 @@ fn evolve_start(args: &Value) -> Res {
             "resume",
         ],
     )?;
-    let l = lib();
-    let (jid, spec) = match int(args, "resume")? {
-        Some(j) => {
-            let row = l.job(j)?;
-            if row.kind != "evolve" {
-                return Err(format!(
-                    "job {j} is a {} job, not an evolve search",
-                    row.kind
-                ));
+    let spec = EvolveIn {
+        tiling: Some(string(args, "tiling")?.unwrap_or("spectre").to_string()),
+        nb: Some(
+            match string(args, "nb")? {
+                Some("edge") => "edge",
+                _ => "touch",
             }
-            if evolve_running().lock().unwrap().contains_key(&j) {
-                return Err(format!("evolve job {j} is already running here"));
-            }
-            let spec: EvolveSpec =
-                serde_json::from_value(row.spec.clone()).map_err(|e| format!("job {j}: {e}"))?;
-            (j, spec)
-        }
-        None => {
-            let d = EvolveSpec::default();
-            let spec = EvolveSpec {
-                tiling: library::tiling_from_key(string(args, "tiling")?.unwrap_or("spectre"))?,
-                nb: match string(args, "nb")? {
-                    Some("edge") => jetcarp_core::Nb::Edge,
-                    _ => jetcarp_core::Nb::Touch,
-                },
-                states: int(args, "states")?.map(|x| x as u8).unwrap_or(d.states),
-                pop: int(args, "pop")?
-                    .map(|x| x.max(4) as usize)
-                    .unwrap_or(d.pop),
-                gens: int(args, "gens")?
-                    .map(|x| x.max(1) as usize)
-                    .unwrap_or(d.gens),
-                seed: int(args, "seed")?
-                    .map(|x| x.max(0) as u64)
-                    .unwrap_or(d.seed),
-                radius: int(args, "radius")?
-                    .map(|x| x.max(4) as u32)
-                    .unwrap_or(d.radius),
-                horizon: int(args, "horizon")?
-                    .map(|x| x.max(10) as u64)
-                    .unwrap_or(d.horizon),
-                stop_on_glider: args
-                    .get("stop_on_glider")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false),
-                threads: int(args, "threads")?.filter(|&t| t > 0).map(|t| t as usize),
-                ..d
-            };
-            let v = serde_json::to_value(&spec).map_err(|e| e.to_string())?;
-            let j = l.create_job("evolve", &v)?;
-            (j, spec)
-        }
+            .into(),
+        ),
+        states: int(args, "states")?.map(|x| x as u8),
+        pop: int(args, "pop")?.map(|x| x.max(4) as usize),
+        gens: int(args, "gens")?.map(|x| x.max(1) as usize),
+        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        radius: int(args, "radius")?.map(|x| x.max(4) as u32),
+        horizon: int(args, "horizon")?.map(|x| x.max(10) as u64),
+        stop_on_glider: args
+            .get("stop_on_glider")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        threads: int(args, "threads")?.filter(|&t| t > 0).map(|t| t as usize),
+        ..Default::default()
     };
-    l.update_job(jid, Some(JobStatus::Running), None, None)?;
-    let stop = Arc::new(AtomicBool::new(false));
-    let live = Arc::new(Mutex::new(json!({"status": "running", "generation": 0})));
-    evolve_running()
-        .lock()
-        .unwrap()
-        .insert(jid, (stop.clone(), live.clone()));
-    let total = spec.gens;
-    std::thread::Builder::new()
-        .name(format!("evolve-{jid}"))
-        .spawn(move || {
-            let l = lib();
-            let last = Mutex::new(Instant::now());
-            let r = evolve(&spec, &|g| {
-                let v = json!({
-                    "status": "running", "generation": g.generation, "generations": total,
-                    "best": g.best, "best_ever": g.best_ever, "median": g.median,
-                    "at_ceiling": g.at_ceiling, "distinct": g.distinct, "elapsed_s": g.elapsed_s,
-                    "line": format!("evolve {jid}: generation {}/{total}, best {:.2}, best ever {:.2}, {:.0} s",
-                        g.generation, g.best, g.best_ever, g.elapsed_s),
-                });
-                *live.lock().unwrap() = v.clone();
-                let mut t = last.lock().unwrap();
-                if t.elapsed().as_secs_f64() >= 2.0 {
-                    *t = Instant::now();
-                    let _ = l.update_job(jid, None, Some(&v), None);
-                    if l.job(jid).map(|j| j.status) == Ok(JobStatus::Paused) {
-                        stop.store(true, Ordering::SeqCst);
-                    }
-                }
-                !stop.load(Ordering::SeqCst)
-            });
-            let (status, v) = match r {
-                Ok(rep) => {
-                    let found = jetcarp_core::evolve::catalog::catalog_gliders(&rep, Some(&l), 20_000);
-                    let dir = jetcarp_api::out::make_out_dir(
-                        &jetcarp_api::out::out_root(None),
-                        &format!("evolve-{}", rep.spec.tiling.family),
-                    );
-                    if let Ok(d) = &dir {
-                        let _ = std::fs::write(
-                            d.join("report.json"),
-                            serde_json::to_string_pretty(&rep).unwrap_or_default(),
-                        );
-                    }
-                    let stopped = stop.load(Ordering::SeqCst) && rep.generations.len() < total;
-                    (
-                        if stopped { JobStatus::Paused } else { JobStatus::Done },
-                        json!({
-                            "status": if stopped { "paused" } else { "done" },
-                            "generation": rep.generations.len(), "generations": total,
-                            "best_ever": rep.generations.last().map(|g| g.best_ever),
-                            "champions": rep.champions.iter().take(8).map(|c| json!({
-                                "rule": c.rule, "fitness": c.fitness,
-                            })).collect::<Vec<_>>(),
-                            "gliders": rep.gliders.len(),
-                            "movers": found.as_ref().map(|f| f.iter().map(|m| json!({
-                                "kind": m.kind, "ids": m.ids, "added": m.added, "summary": m.summary,
-                            })).collect::<Vec<_>>()).unwrap_or_default(),
-                            "folder": dir.map(|d| d.display().to_string()).unwrap_or_default(),
-                            "line": format!("evolve {jid}: {} generations, {} verified glider(s)",
-                                rep.generations.len(), rep.gliders.len()),
-                        }),
-                    )
-                }
-                Err(e) => (
-                    JobStatus::Failed,
-                    json!({"status": "failed", "error": e, "line": format!("evolve {jid} failed")}),
-                ),
-            };
-            let _ = l.update_job(jid, Some(status), Some(&v), None);
-            *live.lock().unwrap() = v;
-            evolve_running().lock().unwrap().remove(&jid);
-        })
-        .map_err(|e| e.to_string())?;
+    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
+    let out = start_in_background("evolve", op::to_value(&spec), int(args, "resume")?, threads)?;
     Ok(ToolOutput::json(&json!({
-        "job": jid,
+        "job": out.job,
         "status": "running",
-        "note": "The search runs in the background: poll job_status {\"job\": ...}; job_stop stops it. Verified movers go to the catalog.",
+        "note": "The search runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with evolve_start {\"resume\": job}). Verified movers go to the catalog.",
     })))
 }
 
@@ -545,240 +440,142 @@ fn mover_start(args: &Value) -> Res {
             "margin", "store", "resume",
         ],
     )?;
-    let l = lib();
-    let jid = match int(args, "resume")? {
-        Some(j) => {
-            if registry().is_running(&l, j) {
-                return Err(format!("mover job {j} is already running here"));
+    let spec = MoverIn {
+        tiling: string(args, "tiling")?.map(String::from),
+        rule: string(args, "rule")?.map(String::from),
+        level: Some(int(args, "level")?.unwrap_or(4).clamp(1, 8) as u32),
+        nb: Some(
+            match string(args, "nb")? {
+                Some("edge") => "edge",
+                _ => "touch",
             }
-            moverjob::status(&l, j)?;
-            j
-        }
-        None => {
-            let family = string(args, "tiling")?.unwrap_or("spectre");
-            let level = int(args, "level")?.unwrap_or(4).clamp(1, 8) as u32;
-            let patch = jetcarp_core::topology::TilingSpec::new(family)
-                .with_size(jetcarp_core::SizeSpec::Level(level));
-            let rule = string(args, "rule")?.unwrap_or("SpectreGlider").to_string();
-            let nb = match string(args, "nb")? {
-                Some("edge") => jetcarp_core::Nb::Edge,
-                _ => jetcarp_core::Nb::Touch,
-            };
-            let d = jetcarp_core::window::track::WindowOpts::default();
-            let rings = int(args, "rings")?.unwrap_or(10_000).max(1) as u32;
-            let opts = jetcarp_core::window::track::WindowOpts {
-                margin: args
-                    .get("margin")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(d.margin),
-                fixed_levels: d.fixed_levels,
-                target_rings: Some(rings),
-            };
-            let num = |v: &Value| v.as_u64().ok_or("cells are [[tile, state], ...]");
-            let cells: Vec<(u32, u8)> = match args.get("cells") {
-                Some(Value::Array(a)) => a
-                    .iter()
-                    .map(|c| {
-                        let c = c
-                            .as_array()
-                            .filter(|c| c.len() == 2)
-                            .ok_or("cells are [[tile, state], ...]")?;
-                        Ok((num(&c[0])? as u32, num(&c[1])? as u8))
-                    })
-                    .collect::<Result<_, &str>>()?,
-                _ => {
-                    let states: Vec<u8> = match args.get("states") {
-                        Some(Value::Array(a)) => a
-                            .iter()
-                            .map(|x| x.as_u64().map(|x| x as u8).ok_or("states are numbers"))
-                            .collect::<Result<_, _>>()?,
-                        _ => vec![1, 3],
-                    };
-                    let at = int(args, "at")?.map(|x| x.max(0) as u32);
-                    moverjob::travelling_start(&rule, nb, &patch, &states, at, &opts)?
-                }
-            };
-            let mut track = jetcarp_core::library::movers::TrackSpec::new(&rule, nb, patch, cells);
-            track.max_gens = int(args, "gens")?
-                .map(|x| x.max(1) as u64)
-                .unwrap_or(rings as u64 * 100 + 20_000);
-            if let Some(p) = int(args, "max_pop")? {
-                track.max_pop = p.max(1) as usize;
-            }
-            let spec = moverjob::MoverJobSpec {
-                track,
-                window: opts,
-                store: args.get("store").and_then(|v| v.as_bool()).unwrap_or(true),
-                source: "MCP mover_start".into(),
-            };
-            moverjob::start(&l, &spec)?
-        }
+            .into(),
+        ),
+        cells: args.get("cells").filter(|c| c.is_array()).cloned(),
+        states: args.get("states").filter(|c| c.is_array()).cloned(),
+        at: int(args, "at")?.map(|x| x.max(0) as u32),
+        rings: Some(int(args, "rings")?.unwrap_or(10_000).max(1) as u32),
+        gens: int(args, "gens")?.map(|x| x.max(1) as u64),
+        max_pop: int(args, "max_pop")?.map(|p| p.max(1) as usize),
+        margin: num(args, "margin"),
+        store: Some(args.get("store").and_then(|v| v.as_bool()).unwrap_or(true)),
+        source: Some("MCP mover_start".into()),
+        ..Default::default()
     };
-    registry().start(l.clone(), jid, RunOptions::default())?;
-    let p: moverjob::MoverProgress = registry()
-        .with(&l, jid, |h| h.progress_as())
-        .unwrap_or_default();
-    let (spec, _) = moverjob::status(&l, jid)?;
+    let out = start_in_background("mover", op::to_value(&spec), int(args, "resume")?, 0)?;
+    let p: MoverProgress = serde_json::from_value(out.progress).unwrap_or_default();
+    let start = ctx()
+        .library()
+        .job(out.job)
+        .ok()
+        .and_then(|j| j.spec.get("track").and_then(|t| t.get("cells")).cloned())
+        .unwrap_or(Value::Null);
     Ok(ToolOutput::json(&json!({
-        "job": jid,
+        "job": out.job,
         "status": "running",
-        "start": spec.track.cells,
-        "progress": p,
+        "start": start,
         "line": p.line(),
+        "progress": p,
         "note": "The run continues in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with mover_start {\"resume\": job}). A verified mover goes to the catalog.",
     })))
 }
 
-/// One job's progress, live when it runs in this process.
-fn job_json(l: &Library, jid: i64) -> Result<Value, String> {
-    let j = l.job(jid)?;
-    let v = match j.kind.as_str() {
-        "hunt" => crate::hunt_tools::status_json(l, jid)?,
-        ants::KIND => {
-            let here = registry()
-                .with(l, jid, |h| {
-                    (!h.is_finished()).then(|| h.progress_as::<AntProgress>())
-                })
-                .flatten();
-            let p = match here {
-                Some(p) => p,
-                None => ants::status(l, jid)?.1,
-            };
-            ant_summary(&p)
+/// One job's progress as `job_status` has always shown it: the kind's progress (live when it
+/// runs here) with its line, or for kinds without a start tool the job's spec and progress.
+fn job_json(v: &JobView) -> Value {
+    let mut out = match v.kind.as_str() {
+        "hunt" => {
+            let p: HuntProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
+            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
         }
-        "evolve" => {
-            let here = evolve_running()
-                .lock()
-                .unwrap()
-                .get(&jid)
-                .map(|r| r.1.lock().unwrap().clone());
-            here.unwrap_or_else(|| j.progress.clone())
+        "ants" => {
+            let p: AntProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
+            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
         }
-        moverjob::KIND => {
-            let here = registry()
-                .with(l, jid, |h| {
-                    (!h.is_finished()).then(|| h.progress_as::<moverjob::MoverProgress>())
-                })
-                .flatten();
-            let p = match here {
-                Some(p) => p,
-                None => moverjob::status(l, jid)?.1,
-            };
-            let mut v = serde_json::to_value(&p).unwrap_or_default();
-            v["line"] = json!(p.line());
-            v
+        "mover" => {
+            let p: MoverProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
+            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
         }
-        pilejob::KIND => {
-            let here = registry()
-                .with(l, jid, |h| {
-                    (!h.is_finished()).then(|| h.progress_as::<PileProgress>())
-                })
-                .flatten();
-            let p = match here {
-                Some(p) => p,
-                None => pilejob::status(l, jid)?.1,
-            };
-            let mut v = serde_json::to_value(&p).unwrap_or_default();
-            v["line"] = json!(p.line());
-            v
+        "pile" => {
+            let p: PileProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
+            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
         }
-        _ => json!({
-            "job": jid, "kind": j.kind, "spec": j.spec, "progress": j.progress,
-        }),
+        "evolve" => v.progress.clone(),
+        _ => json!({"job": v.job, "kind": v.kind, "spec": v.spec, "progress": v.progress}),
     };
-    let mut v = v;
-    v["kind"] = json!(j.kind);
-    v["job"] = json!(jid);
-    v["status"] = v
-        .get("status")
-        .cloned()
-        .unwrap_or(json!(format!("{:?}", j.status).to_lowercase()));
-    Ok(v)
+    if !out.is_object() {
+        out = json!({});
+    }
+    out["kind"] = json!(v.kind);
+    out["job"] = json!(v.job);
+    out["status"] = json!(v.status);
+    out
 }
 
-/// `job_status` with `wait_s`: poll the catalog once a second until the job is no longer running,
+/// `job_status`, with `wait_s` waiting (polling the catalog) until the job is no longer running,
 /// the wait runs out, or the client cancels the call.
 pub fn status_wait(args: &Value, cancel: Option<&std::sync::atomic::AtomicBool>) -> Res {
-    let wait = int(args, "wait_s")?.unwrap_or(0).clamp(0, 600) as u64;
-    let Some(j) = int(args, "job")?.filter(|_| wait > 0) else {
-        return status(args);
-    };
-    let t0 = std::time::Instant::now();
-    loop {
-        let v = job_json(&lib(), j)?;
-        let running = v["status"].as_str() == Some("running");
-        let cancelled = cancel.is_some_and(|c| c.load(Ordering::Relaxed));
-        if !running || cancelled || t0.elapsed().as_secs() >= wait {
-            let mut v = v;
-            v["waited_s"] = json!(t0.elapsed().as_secs());
-            return Ok(ToolOutput::json(&v));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-    }
-}
-
-fn status(args: &Value) -> Res {
     check_unknown(args, &["job", "kind", "limit", "wait_s"])?;
-    let l = lib();
-    if let Some(j) = int(args, "job")? {
-        return Ok(ToolOutput::json(&job_json(&l, j)?));
-    }
-    let kind = string(args, "kind")?;
-    let limit = int(args, "limit")?.unwrap_or(30).clamp(1, 200) as usize;
-    let mut out = Vec::new();
-    for j in l.jobs()?.into_iter().rev().filter(|j| j.id != 0) {
-        if kind.is_some_and(|k| k != j.kind) {
-            continue;
+    let wait = int(args, "wait_s")?.unwrap_or(0).clamp(0, 600) as u64;
+    struct Cancel<'a>(Option<&'a std::sync::atomic::AtomicBool>);
+    impl Progress for Cancel<'_> {
+        fn cancelled(&self) -> bool {
+            self.0.is_some_and(|c| c.load(Ordering::Relaxed))
         }
-        if out.len() >= limit {
-            break;
-        }
-        let v = job_json(&l, j.id).unwrap_or_else(|e| json!({"job": j.id, "error": e}));
-        out.push(json!({
-            "job": j.id, "kind": j.kind, "status": v["status"],
-            "line": v.get("line").cloned().unwrap_or(Value::Null),
-            "created": j.created, "updated": j.updated,
-        }));
     }
+    if let Some(job) = int(args, "job")? {
+        let a = StatusIn {
+            job: Some(job),
+            wait_s: (wait > 0).then_some(wait as f64),
+            ..Default::default()
+        };
+        let StatusOut::One(v) = JobsStatus::run(ctx(), a, &Cancel(cancel)).map_err(err)? else {
+            return Err(format!("no job {job}"));
+        };
+        let mut out = job_json(&v);
+        if let Some(w) = v.waited_s {
+            out["waited_s"] = json!(w as u64);
+        }
+        return Ok(ToolOutput::json(&out));
+    }
+    let a = ListIn {
+        kind: string(args, "kind")?.map(String::from),
+        limit: Some(int(args, "limit")?.unwrap_or(30).clamp(1, 200) as usize),
+        ..Default::default()
+    };
+    let l = JobsList::run(ctx(), a, &Quiet).map_err(err)?;
+    let jobs: Vec<Value> = l
+        .jobs
+        .iter()
+        .map(|j| {
+            json!({
+                "job": j.job, "kind": j.kind, "status": j.status, "line": j.line,
+                "created": j.created, "updated": j.updated,
+            })
+        })
+        .collect();
     Ok(ToolOutput::json(&json!({
-        "catalog": l.path().display().to_string(),
-        "jobs": out,
+        "catalog": l.catalog,
+        "jobs": jobs,
     })))
 }
 
 fn stop(args: &Value) -> Res {
     check_unknown(args, &["job"])?;
-    let jid = int(args, "job")?.ok_or("give `job`")?;
-    let l = lib();
-    let j = l.job(jid)?;
-    let here = match j.kind.as_str() {
-        "hunt" => crate::hunt_tools::stop_here(jid),
-        ants::KIND | pilejob::KIND => registry().stop(&l, jid),
-        "evolve" => match evolve_running().lock().unwrap().get(&jid) {
-            Some(r) => {
-                r.0.store(true, Ordering::SeqCst);
-                true
-            }
-            None => false,
-        },
-        moverjob::KIND => registry().stop(&l, jid),
-        k => return Err(format!("job {jid} is a {k} job, which runs to its end")),
-    };
-    if !here && j.status == JobStatus::Running {
-        // Another process: it sees `paused` at its next checkpoint.
-        l.update_job(jid, Some(JobStatus::Paused), None, None)?;
-    }
-    let resume = match j.kind.as_str() {
-        "hunt" => "hunt_start",
-        ants::KIND => "ants_start",
-        "evolve" => "evolve_start",
-        moverjob::KIND => "mover_start",
-        _ => "pile_start",
+    let job = int(args, "job")?.ok_or("give `job`")?;
+    let s = JobsStop::run(ctx(), JobIn { job }, &Quiet).map_err(err)?;
+    let resume = match s.kind.as_str() {
+        "hunt" => format!("hunt_start {{\"resume\": {job}}}"),
+        "ants" => format!("ants_start {{\"resume\": {job}}}"),
+        "evolve" => format!("evolve_start {{\"resume\": {job}}}"),
+        "mover" => format!("mover_start {{\"resume\": {job}}}"),
+        "pile" => format!("pile_start {{\"resume\": {job}}}"),
+        _ => format!("`jetcarp jobs resume {job}`"),
     };
     Ok(ToolOutput::json(&json!({
-        "job": jid,
-        "kind": j.kind,
-        "stopping": true,
-        "note": format!("It stops at its next checkpoint and stays resumable with {resume} {{\"resume\": {jid}}}."),
+        "job": job,
+        "kind": s.kind,
+        "stopping": s.stopping,
+        "note": format!("It stops at its next checkpoint and stays resumable with {resume}."),
     })))
 }
