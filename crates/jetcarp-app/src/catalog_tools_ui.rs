@@ -2,11 +2,11 @@
 //! (Phase 3 reachability gaps). Collide two patterns, export and import JSON records, remove a
 //! record, and run the evolutionary glider search, each on a background thread.
 
+use eframe::egui::{self, Color32, RichText};
 use jetcarp_core::evolve::{EvolveSpec, GenStats, evolve};
 use jetcarp_core::library::collide::{CollideSpec, collide};
 use jetcarp_core::library::{self, AddOutcome, JobStatus, Library};
 use jetcarp_core::world::Scene;
-use eframe::egui::{self, Color32, RichText};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -243,7 +243,8 @@ impl CatalogTools {
                 !stop.load(Ordering::SeqCst)
             })
             .and_then(|rep| {
-                let found = jetcarp_core::evolve::catalog::catalog_gliders(&rep, Some(&lib), 20_000)?;
+                let found =
+                    jetcarp_core::evolve::catalog::catalog_gliders(&rep, Some(&lib), 20_000)?;
                 let mut lines: Vec<String> = rep
                     .champions
                     .iter()
@@ -650,5 +651,46 @@ impl CatalogTools {
             }
             None => {}
         }
+    }
+}
+
+#[cfg(test)]
+impl CatalogTools {
+    /// Start an evolve search from the Evolve tab, as *Evolve* does (offscreen checks).
+    pub fn test_evolve(&mut self, tiling: &str, pop: usize, gens: usize, radius: u32) {
+        self.open = true;
+        self.tab = Tab::Evolve;
+        self.ev_tiling = tiling.into();
+        (self.ev_pop, self.ev_gens, self.ev_radius) = (pop, gens, radius);
+        self.start_evolve();
+    }
+    /// An evolve search started here still runs.
+    pub fn evolve_running(&self) -> bool {
+        self.evolve.is_some()
+    }
+    /// *Stop* on the Evolve tab.
+    pub fn test_stop_evolve(&mut self) {
+        if let Some(r) = &self.evolve {
+            r.stop.store(true, Ordering::SeqCst);
+        }
+    }
+    /// The evolve search has stopped (the old window ends a stopped search).
+    pub fn test_evolve_stopped(&self) -> bool {
+        self.evolve.is_none()
+    }
+    /// *Resume* a stopped evolve search; false when the window cannot.
+    pub fn test_resume_evolve(&mut self) -> bool {
+        false
+    }
+    /// Start a collision from the Collide tab, as *Collide* does.
+    pub fn test_collide(&mut self, a: &str, b: &str, offsets: i32) {
+        self.open = true;
+        self.tab = Tab::Collide;
+        (self.a, self.b, self.offsets) = (a.into(), b.into(), offsets);
+        self.start_collide();
+    }
+    /// A collision started here still runs.
+    pub fn collide_running(&self) -> bool {
+        self.collide_job.is_some()
     }
 }

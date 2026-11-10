@@ -14,6 +14,7 @@
 //! Everything kind-specific is in `jetcarp_core::jobs::StrategyKind`.
 
 use crate::thumbs;
+use eframe::egui::{self, Color32, ColorImage, Rect, RichText, Sense, TextureHandle};
 use jetcarp_core::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
 use jetcarp_core::hunt::job::{HuntSpec, SoupBatcher};
 use jetcarp_core::hunt::soup::SoupSpec;
@@ -22,7 +23,6 @@ use jetcarp_core::library::{HeatRow, JobStatus, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
-use eframe::egui::{self, Color32, ColorImage, Rect, RichText, Sense, TextureHandle};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -286,13 +286,15 @@ impl Worker {
                     self.sel_dirty = true;
                 }
             }
-            Cmd::Start(spec, gpu, threads) => match jetcarp_core::hunt::job::start(&self.lib, &spec) {
-                Ok(job) => {
-                    self.resume(job, gpu, threads);
-                    self.shared.lock().unwrap().started = Some(job);
+            Cmd::Start(spec, gpu, threads) => {
+                match jetcarp_core::hunt::job::start(&self.lib, &spec) {
+                    Ok(job) => {
+                        self.resume(job, gpu, threads);
+                        self.shared.lock().unwrap().started = Some(job);
+                    }
+                    Err(e) => self.msg(e, true),
                 }
-                Err(e) => self.msg(e, true),
-            },
+            }
             Cmd::Pause(job) => {
                 if !registry().stop(&self.lib, job)
                     && let Ok(row) = self.lib.job(job)
@@ -1672,6 +1674,30 @@ fn bars(ui: &mut egui::Ui, b: &[(String, u64)]) {
             resp.on_hover_text(format!("{k}: {} (log scale)", dashboard::digits(*v)));
         }
     });
+}
+
+#[cfg(test)]
+impl DashWindow {
+    /// Start a hunt from the form, as *Start hunt* does (offscreen checks).
+    pub fn test_start(&mut self, rules: &str, tilings: &str, soups: u64) {
+        self.open = true;
+        self.form.rules = rules.into();
+        self.form.tilings = tilings.into();
+        self.form.soups = soups;
+        self.start_hunt();
+    }
+    /// The jobs as the window last read them.
+    pub fn test_jobs(&self) -> Vec<JobSummary> {
+        self.shared.lock().unwrap().jobs.clone()
+    }
+    /// *Pause* on a job's row.
+    pub fn test_pause(&mut self, job: i64) {
+        self.send(Cmd::Pause(job));
+    }
+    /// *Resume here* on a job's row.
+    pub fn test_resume(&mut self, job: i64) {
+        self.send(Cmd::Resume(job, false, 0));
+    }
 }
 
 #[cfg(test)]

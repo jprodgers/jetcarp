@@ -274,6 +274,136 @@ mod tests {
         eprintln!("wrote {}", p.display());
     }
 
+    /// Frames of `w`'s window until `done(w)` or `secs`; whether `done` came.
+    fn frames_until<W>(
+        o: &mut Offscreen,
+        secs: f64,
+        w: &mut W,
+        mut ui: impl FnMut(&mut W, &egui::Context),
+        mut done: impl FnMut(&W) -> bool,
+    ) -> bool {
+        let t = Instant::now();
+        while t.elapsed().as_secs_f64() < secs {
+            o.frame(0.1, |ctx| ui(w, ctx));
+            if done(w) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
+    /// A settled frame of `w`'s window saved as `<dir>/<name>.png`.
+    fn shot<W>(
+        o: &mut Offscreen,
+        w: &mut W,
+        mut ui: impl FnMut(&mut W, &egui::Context),
+        dir: &std::path::Path,
+        name: &str,
+    ) {
+        let px = settle(o, 0.0, |ctx| ui(w, ctx), || true);
+        let p = dir.join(format!("{name}.png"));
+        o.save(&px, &p).unwrap();
+        eprintln!("wrote {}", p.display());
+    }
+
+    /// The Hunts dashboard (the scratch catalog `JETCARP_LIBRARY`): a hunt started from its
+    /// form, seen running, paused, resumed, and done with its heat map and finds.
+    #[test]
+    #[ignore]
+    fn offscreen_dashboard_window() {
+        use crate::dash_ui::DashWindow;
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(1300, 900) else {
+            return;
+        };
+        let show = |w: &mut DashWindow, ctx: &egui::Context| w.show(ctx);
+        let status = |w: &DashWindow| {
+            w.test_jobs()
+                .first()
+                .map(|j| (j.id, j.status.clone(), j.here, j.done))
+        };
+        let mut w = DashWindow::default();
+        w.test_start("B3/S23, B36/S23", "square", 20000);
+        let ok = frames_until(&mut o, 30.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.1 == "running" && s.3 > 0)
+        });
+        assert!(ok, "the hunt never showed as running: {:?}", status(&w));
+        shot(&mut o, &mut w, show, &dir, "dashboard-running");
+        let job = status(&w).unwrap().0;
+        w.test_pause(job);
+        let ok = frames_until(&mut o, 30.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.1 == "paused" && !s.2)
+        });
+        assert!(ok, "the hunt never showed as paused: {:?}", status(&w));
+        shot(&mut o, &mut w, show, &dir, "dashboard-paused");
+        w.test_resume(job);
+        let ok = frames_until(&mut o, 30.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.1 == "running" && s.2)
+        });
+        assert!(ok, "the hunt never showed as resumed: {:?}", status(&w));
+        shot(&mut o, &mut w, show, &dir, "dashboard-resumed");
+        let ok = frames_until(&mut o, 240.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.1 == "done")
+        });
+        assert!(ok, "the hunt never finished: {:?}", status(&w));
+        // Time for the heat map, the finds, and their animations.
+        frames_until(&mut o, 15.0, &mut w, show, |_| false);
+        shot(&mut o, &mut w, show, &dir, "dashboard-done");
+        w.shutdown(Duration::from_secs(20));
+    }
+
+    /// The Catalog tools window (the scratch catalog `JETCARP_LIBRARY`, where a small soup search
+    /// first stores a block and a glider): a collision, then an evolve search seen running,
+    /// stopped, and (where it can be) resumed to its end.
+    #[test]
+    #[ignore]
+    fn offscreen_catalog_tools_window() {
+        use crate::catalog_tools_ui::CatalogTools;
+        use jetcarp_api::op::{Op, Quiet};
+        use jetcarp_api::ops::search::{SearchStart, SearchStartIn};
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        assert!(std::env::var_os("JETCARP_OUT").is_some(), "set JETCARP_OUT");
+        let seed = SearchStartIn {
+            strategy: Some("search".into()),
+            spec: serde_json::json!({"rules": ["B3/S23"], "soups": 24, "gens": 1500}),
+            ..Default::default()
+        };
+        SearchStart::run(&jetcarp_api::Ctx::new(), seed, &Quiet).unwrap();
+        let Some(mut o) = Offscreen::new(760, 900) else {
+            return;
+        };
+        let show = |w: &mut CatalogTools, ctx: &egui::Context| {
+            w.show(ctx, None);
+        };
+        let mut w = CatalogTools::default();
+        w.test_collide("block", "glider", 8);
+        let ok = frames_until(&mut o, 120.0, &mut w, show, |w| !w.collide_running());
+        assert!(ok, "the collision never finished");
+        shot(&mut o, &mut w, show, &dir, "catalog-tools-collide");
+        w.test_evolve("spectre", 48, 2000, 16);
+        frames_until(&mut o, 1.5, &mut w, show, |_| false);
+        shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-running");
+        w.test_stop_evolve();
+        frames_until(&mut o, 60.0, &mut w, show, |w| w.test_evolve_stopped());
+        shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-stopped");
+        if w.test_resume_evolve() {
+            frames_until(&mut o, 4.0, &mut w, show, |_| false);
+            shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-resumed");
+            let ok = frames_until(&mut o, 300.0, &mut w, show, |w| !w.evolve_running());
+            assert!(ok, "the evolve search never finished");
+        }
+        shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-done");
+    }
+
     /// The HashLife view of the Life NOT gate after 2^10 generations, in Synthwave and Paper.
     #[test]
     #[ignore]
@@ -284,7 +414,8 @@ mod tests {
         };
         let sc = jetcarp_core::Scene::from_json(
             &std::fs::read_to_string(
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../jetcarp-core/data/scenes/life-not.json"),
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../jetcarp-core/data/scenes/life-not.json"),
             )
             .unwrap(),
         )
