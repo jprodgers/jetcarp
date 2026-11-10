@@ -512,6 +512,50 @@ fn a_runner_that_lost_its_job_writes_nothing_more() {
 }
 
 #[test]
+fn bounded_searches_resumed_store_what_one_whole_search_stores() {
+    use jetcarp_core::library::search::{SearchSpec, search};
+    let spec = SearchSpec {
+        rules: vec!["B3/S23".into(), "B36/S23".into()],
+        tilings: vec![TilingSpec::new("square"), TilingSpec::new("hex")],
+        size: SizeSpec::Rect { w: 24, h: 24 },
+        soups: 7,
+        gens: 500,
+        ..Default::default()
+    };
+    let a = temp_lib("search-whole");
+    let st = a.store_search(&search(&spec, None).unwrap()).unwrap();
+    // Five soups a session, each from a new catalog handle (as another process would), then
+    // the verification and the store.
+    let b = temp_lib("search-sessions");
+    let job = jobs::search::start(&b, &spec).unwrap();
+    let mut sessions = 0;
+    loop {
+        let out = Runner::new(Library::open(b.path()))
+            .run(
+                job,
+                &RunOptions {
+                    threads: 3,
+                    budget: Budget::items(5),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        sessions += 1;
+        if out.status == JobStatus::Done {
+            break;
+        }
+        assert_eq!(out.stopped, Some(Stopped::Budget));
+        let done = out.progress["soups_done"].as_u64().unwrap();
+        assert_eq!(done, (5 * sessions).min(28), "{}", out.progress);
+        assert!(b.job_checkpoint(job).unwrap().is_some());
+    }
+    assert_eq!(sessions, 6);
+    let (ra, rb) = (a.job(st.job).unwrap(), b.job(job).unwrap());
+    assert_eq!(ra.progress, rb.progress);
+    assert_eq!(snapshot(&a, st.job), snapshot(&b, job));
+}
+
+#[test]
 fn bounded_searches_and_collisions_store_what_their_calls_store() {
     use jetcarp_core::library::collide::{CollideSpec, collide};
     use jetcarp_core::library::search::{SearchSpec, search};

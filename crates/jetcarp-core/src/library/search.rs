@@ -2,7 +2,9 @@
 //! `objects::find_objects`, verify each distinct one, and return library records.
 //!
 //! Every (rule, tiling, soup) run is a pure function of its inputs and results are gathered in
-//! job order, so the report and the records are identical at any thread count.
+//! run order ([`Gathered`]), so the report and the records are identical at any thread count and
+//! in any batches: [`search`] runs them all at once; a search job (`crate::jobs::search`) runs
+//! them a batch per step, its checkpoint the gathered state.
 
 use super::split::records_from_object;
 use super::{
@@ -125,7 +127,8 @@ pub struct SearchOutput {
     pub soups: Vec<u32>,
 }
 
-struct JobOut {
+/// What one soup run left.
+pub struct SoupOut {
     ended: u8, // 0 settled, 1 active, 2 exploded
     objects: Vec<(String, Option<PatternRecord>)>,
     error: Option<String>,
@@ -145,96 +148,204 @@ pub fn search_cancellable(
     progress: Option<&(dyn Fn(usize, usize) + Sync)>,
     cancel: Option<&std::sync::atomic::AtomicBool>,
 ) -> Result<SearchOutput, String> {
-    if spec.soups == 0 || spec.gens == 0 {
-        return Err("a search needs at least one soup and one generation".into());
-    }
-    if spec.rules.is_empty() || spec.tilings.is_empty() {
-        return Err("a search needs at least one rule and one tiling".into());
-    }
-    if !(0.0..=1.0).contains(&spec.density) {
-        return Err("density must be between 0 and 1".into());
-    }
-    let date = now_utc();
-    // Topologies, one per tiling.
-    let topos: Vec<Result<Arc<Topology>, String>> = spec
-        .tilings
-        .par_iter()
-        .map(|t| {
-            let mut s = t.clone();
-            s.size = Some(spec.size);
-            s.boundary = spec.boundary;
-            if crate::families::family(&s.family)
-                .is_some_and(|f| f.kind == crate::families::FamilyKind::Aperiodic)
-            {
-                // Aperiodic patches: a size given as a level is used; otherwise their default.
-                s.size = Some(match spec.size {
-                    SizeSpec::Level(l) => SizeSpec::Level(l),
-                    _ => SizeSpec::Level(crate::aperiodic::default_level(&s.family) + 1),
-                });
-                s.boundary = Boundary::Dead;
-            }
-            Topology::build(&s).map(Arc::new)
-        })
-        .collect();
-    let groups: Vec<(usize, usize)> = (0..spec.tilings.len())
-        .flat_map(|t| (0..spec.rules.len()).map(move |r| (t, r)))
-        .collect();
-    let jobs: Vec<(usize, u32)> = (0..groups.len())
-        .flat_map(|g| (0..spec.soups).map(move |s| (g, s)))
-        .collect();
-    let total = jobs.len();
-    let done = AtomicUsize::new(0);
-    let outs: Vec<JobOut> = jobs
-        .par_iter()
-        .map(|&(gi, soup)| {
-            let (t, r) = groups[gi];
-            if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-                return JobOut {
-                    ended: 0,
-                    objects: vec![],
-                    error: Some("cancelled".into()),
-                };
-            }
-            let out = match &topos[t] {
-                Ok(topo) => run_soup(spec, topo, &spec.rules[r], soup, &date),
-                Err(e) => JobOut {
-                    ended: 0,
-                    objects: vec![],
-                    error: Some(e.clone()),
-                },
-            };
-            let d = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if let Some(p) = progress {
-                p(d, total);
-            }
-            out
-        })
-        .collect();
+    let s = SoupSearch::new(spec)?;
+    let mut g = Gathered::new(&s, now_utc());
+    let outs = s.run(&g.date, 0..s.runs(), progress, cancel);
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err("search cancelled".into());
     }
+    g.add(&s, outs);
+    g.verify(g.distinct());
+    Ok(g.output(spec))
+}
 
-    // Gather per group in job order: the first soup that found a pattern supplies its record.
-    let mut reports = Vec::new();
-    let mut unique: Vec<PatternRecord> = Vec::new();
-    let mut where_: Vec<(usize, usize)> = Vec::new(); // (group, found index) per unique record
-    let mut it = outs.into_iter();
-    for (gi, &(t, r)) in groups.iter().enumerate() {
-        let mut g = GroupReport {
-            rule: spec.rules[r].clone(),
-            tiling: super::tiling_display_name(&spec.tilings[t]),
-            tiling_spec: spec.tilings[t].clone(),
-            error: None,
-            soups: spec.soups,
-            settled: 0,
-            active: 0,
-            exploded: 0,
-            objects: BTreeMap::new(),
-            found: vec![],
-        };
-        let mut idx: HashMap<String, usize> = HashMap::new();
-        for _ in 0..spec.soups {
-            let o = it.next().unwrap();
+/// A bounded search ready to run: its spec checked, a topology per tiling, and its soup runs,
+/// numbered (tiling, rule) group by group (tilings outer), soups inner. Run `k` is a pure
+/// function of the spec, `k`, and the search's date (in the records' provenance).
+pub struct SoupSearch {
+    spec: SearchSpec,
+    topos: Vec<Result<Arc<Topology>, String>>,
+    /// (tiling, rule) per group.
+    groups: Vec<(usize, usize)>,
+}
+
+impl SoupSearch {
+    pub fn new(spec: &SearchSpec) -> Result<SoupSearch, String> {
+        if spec.soups == 0 || spec.gens == 0 {
+            return Err("a search needs at least one soup and one generation".into());
+        }
+        if spec.rules.is_empty() || spec.tilings.is_empty() {
+            return Err("a search needs at least one rule and one tiling".into());
+        }
+        if !(0.0..=1.0).contains(&spec.density) {
+            return Err("density must be between 0 and 1".into());
+        }
+        // Topologies, one per tiling.
+        let topos: Vec<Result<Arc<Topology>, String>> = spec
+            .tilings
+            .par_iter()
+            .map(|t| {
+                let mut s = t.clone();
+                s.size = Some(spec.size);
+                s.boundary = spec.boundary;
+                if crate::families::family(&s.family)
+                    .is_some_and(|f| f.kind == crate::families::FamilyKind::Aperiodic)
+                {
+                    // Aperiodic patches: a size given as a level is used; otherwise their default.
+                    s.size = Some(match spec.size {
+                        SizeSpec::Level(l) => SizeSpec::Level(l),
+                        _ => SizeSpec::Level(crate::aperiodic::default_level(&s.family) + 1),
+                    });
+                    s.boundary = Boundary::Dead;
+                }
+                Topology::build(&s).map(Arc::new)
+            })
+            .collect();
+        let groups: Vec<(usize, usize)> = (0..spec.tilings.len())
+            .flat_map(|t| (0..spec.rules.len()).map(move |r| (t, r)))
+            .collect();
+        Ok(SoupSearch {
+            spec: spec.clone(),
+            topos,
+            groups,
+        })
+    }
+
+    /// Soup runs in all (groups x soups).
+    pub fn runs(&self) -> usize {
+        self.groups.len() * self.spec.soups as usize
+    }
+
+    /// Runs `range`, in parallel on the current rayon pool, in order. `progress(done, total)`
+    /// is called as they finish; once `cancel` is set the rest are skipped (and the results
+    /// are not to be used).
+    pub fn run(
+        &self,
+        date: &str,
+        range: std::ops::Range<usize>,
+        progress: Option<&(dyn Fn(usize, usize) + Sync)>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Vec<SoupOut> {
+        let spec = &self.spec;
+        let total = self.runs();
+        let done = AtomicUsize::new(range.start);
+        range
+            .collect::<Vec<usize>>()
+            .par_iter()
+            .map(|&k| {
+                let (gi, soup) = (k / spec.soups as usize, (k % spec.soups as usize) as u32);
+                let (t, r) = self.groups[gi];
+                if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+                    return SoupOut {
+                        ended: 0,
+                        objects: vec![],
+                        error: Some("cancelled".into()),
+                    };
+                }
+                let out = match &self.topos[t] {
+                    Ok(topo) => run_soup(spec, topo, &spec.rules[r], soup, date),
+                    Err(e) => SoupOut {
+                        ended: 0,
+                        objects: vec![],
+                        error: Some(e.clone()),
+                    },
+                };
+                let d = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(p) = progress {
+                    p(d, total);
+                }
+                out
+            })
+            .collect()
+    }
+}
+
+/// What a search has found so far, gathered run by run in run order, whatever the batches
+/// (a search job's checkpoint): per group its report, and each distinct pattern's record from
+/// the first soup that found it. Once every run is in, the distinct patterns are verified (in
+/// any batches) and [`output`](Self::output) gives exactly what one whole run gives.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Gathered {
+    /// When the search started (its records' provenance date).
+    pub date: String,
+    /// Runs gathered.
+    pub next: usize,
+    reports: Vec<GroupReport>,
+    /// The first find of each distinct pattern of a group, and where its report lists it
+    /// (group, found index).
+    unique: Vec<PatternRecord>,
+    at: Vec<(usize, usize)>,
+    /// Distinct patterns verified (once every run is in), and those that failed.
+    verified: usize,
+    failed: Vec<(usize, String)>,
+    /// Per group: a pattern id's found index.
+    #[serde(skip)]
+    index: Vec<HashMap<String, usize>>,
+}
+
+impl Gathered {
+    pub fn new(s: &SoupSearch, date: String) -> Gathered {
+        let spec = &s.spec;
+        let reports: Vec<GroupReport> = s
+            .groups
+            .iter()
+            .map(|&(t, r)| GroupReport {
+                rule: spec.rules[r].clone(),
+                tiling: super::tiling_display_name(&spec.tilings[t]),
+                tiling_spec: spec.tilings[t].clone(),
+                error: None,
+                soups: spec.soups,
+                settled: 0,
+                active: 0,
+                exploded: 0,
+                objects: BTreeMap::new(),
+                found: vec![],
+            })
+            .collect();
+        Gathered {
+            date,
+            index: vec![HashMap::new(); reports.len()],
+            reports,
+            ..Default::default()
+        }
+    }
+
+    /// One read back from a checkpoint (its index rebuilt); it must be of this search.
+    pub fn restored(mut self, s: &SoupSearch) -> Result<Gathered, String> {
+        if self.reports.len() != s.groups.len() || self.next > s.runs() {
+            return Err("the checkpoint does not match the search".into());
+        }
+        self.index = self
+            .reports
+            .iter()
+            .map(|g| {
+                g.found
+                    .iter()
+                    .enumerate()
+                    .map(|(k, f)| (f.id.clone(), k))
+                    .collect()
+            })
+            .collect();
+        Ok(self)
+    }
+
+    /// Distinct patterns (over all groups).
+    pub fn distinct(&self) -> usize {
+        self.unique.len()
+    }
+    /// Distinct patterns verified so far.
+    pub fn verified(&self) -> usize {
+        self.verified
+    }
+
+    /// Gather the next runs (the outputs of runs `next..`, in order). When the last run is in,
+    /// each distinct pattern's record gets its copies as `seen`.
+    pub fn add(&mut self, s: &SoupSearch, outs: Vec<SoupOut>) {
+        let soups = s.spec.soups as usize;
+        for o in outs {
+            let gi = self.next / soups;
+            self.next += 1;
+            let g = &mut self.reports[gi];
             if let Some(e) = o.error {
                 g.error.get_or_insert(e);
                 continue;
@@ -244,6 +355,7 @@ pub fn search_cancellable(
                 1 => g.active += 1,
                 _ => g.exploded += 1,
             }
+            let idx = &mut self.index[gi];
             let mut in_soup: Vec<String> = Vec::new();
             for (cls, rec) in o.objects {
                 *g.objects.entry(cls).or_default() += 1;
@@ -262,8 +374,8 @@ pub fn search_cancellable(
                         error: None,
                         new: false,
                     });
-                    unique.push(rec.clone());
-                    where_.push((gi, g.found.len() - 1));
+                    self.unique.push(rec.clone());
+                    self.at.push((gi, g.found.len() - 1));
                     g.found.len() - 1
                 });
                 g.found[k].count += 1;
@@ -273,47 +385,64 @@ pub fn search_cancellable(
                 }
             }
         }
-        reports.push(g);
-    }
-    // Seen counts, then verification of each distinct pattern.
-    for (u, &(gi, k)) in where_.iter().enumerate() {
-        unique[u].seen = reports[gi].found[k].count;
-        unique[u].rescore();
-    }
-    let checked: Vec<Result<PatternRecord, String>> = unique
-        .into_par_iter()
-        .map(|mut rec| {
-            rec.verified = verify(&rec, default_periods(rec.period))?;
-            Ok(rec)
-        })
-        .collect();
-    let mut records = Vec::new();
-    let mut soups = Vec::new();
-    for (u, res) in checked.into_iter().enumerate() {
-        let (gi, k) = where_[u];
-        let f = &mut reports[gi].found[k];
-        match res {
-            Ok(rec) => {
-                f.verified = true;
-                soups.push(f.soups);
-                records.push(rec);
+        if self.next == s.runs() {
+            // Seen counts, before verification.
+            for (u, &(gi, k)) in self.at.iter().enumerate() {
+                self.unique[u].seen = self.reports[gi].found[k].count;
+                self.unique[u].rescore();
             }
-            Err(e) => f.error = Some(e),
         }
     }
-    for g in &mut reports {
-        g.found
-            .sort_by(|a, b| b.count.cmp(&a.count).then(a.label.cmp(&b.label)));
+
+    /// Verify the next `n` distinct patterns (in parallel on the current rayon pool); every
+    /// run must be in.
+    pub fn verify(&mut self, n: usize) {
+        let (a, b) = (self.verified, (self.verified + n).min(self.unique.len()));
+        let checked: Vec<Result<crate::library::Verification, String>> = self.unique[a..b]
+            .par_iter()
+            .map(|rec| verify(rec, default_periods(rec.period)))
+            .collect();
+        for (u, r) in (a..b).zip(checked) {
+            match r {
+                Ok(v) => self.unique[u].verified = v,
+                Err(e) => self.failed.push((u, e)),
+            }
+        }
+        self.verified = b;
     }
-    Ok(SearchOutput {
-        report: SearchReport {
-            jetcarp_version: crate::VERSION.into(),
-            spec: spec.clone(),
-            groups: reports,
-        },
-        records,
-        soups,
-    })
+
+    /// The search's report and verified records, once every run is in and every distinct
+    /// pattern verified.
+    pub fn output(mut self, spec: &SearchSpec) -> SearchOutput {
+        let failed: HashMap<usize, String> = std::mem::take(&mut self.failed).into_iter().collect();
+        let mut records = Vec::new();
+        let mut soups = Vec::new();
+        for (u, rec) in self.unique.into_iter().enumerate() {
+            let (gi, k) = self.at[u];
+            let f = &mut self.reports[gi].found[k];
+            match failed.get(&u) {
+                None => {
+                    f.verified = true;
+                    soups.push(f.soups);
+                    records.push(rec);
+                }
+                Some(e) => f.error = Some(e.clone()),
+            }
+        }
+        for g in &mut self.reports {
+            g.found
+                .sort_by(|a, b| b.count.cmp(&a.count).then(a.label.cmp(&b.label)));
+        }
+        SearchOutput {
+            report: SearchReport {
+                jetcarp_version: crate::VERSION.into(),
+                spec: spec.clone(),
+                groups: self.reports,
+            },
+            records,
+            soups,
+        }
+    }
 }
 
 fn class_key(c: &ObjClass) -> String {
@@ -323,7 +452,7 @@ fn class_key(c: &ObjClass) -> String {
     }
 }
 
-fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date: &str) -> JobOut {
+fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date: &str) -> SoupOut {
     let cs = CensusSpec {
         tiling: topo.spec.clone(),
         neighborhood: spec.neighborhood,
@@ -335,7 +464,7 @@ fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date
         explode_fraction: spec.explode_fraction,
         activity_window: 10,
     };
-    let fail = |e: String| JobOut {
+    let fail = |e: String| SoupOut {
         ended: 0,
         objects: vec![],
         error: Some(e),
@@ -395,7 +524,7 @@ fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date
         }
     }
     if ended == 2 {
-        return JobOut {
+        return SoupOut {
             ended,
             objects,
             error: None,
@@ -427,7 +556,7 @@ fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date
             },
         }
     }
-    JobOut {
+    SoupOut {
         ended,
         objects,
         error: None,
