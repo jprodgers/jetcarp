@@ -15,6 +15,9 @@
 //! A hunt stops at the next batch when its stop flag is set (Ctrl-C in `jetcarp hunt`), when another
 //! process marks the job `paused` ([`request_stop`]), or when a session limit is reached; the batch
 //! in flight is dropped and the job is left `paused` at its last checkpoint.
+//!
+//! The job runner (`crate::jobs::hunt`) runs [`run`] as it is, under its lease, in this process
+//! or on a thread of it.
 
 use super::separate::{Cache, Census, Found};
 use super::soup::{End, Layout, Limits, SoupOut, SoupSpec, run_soup, soup_state};
@@ -216,7 +219,7 @@ pub struct Find {
 }
 
 /// Progress of a hunt, written to the job's `progress` at every flush and kept live in memory
-/// for a dashboard ([`HuntHandle::progress`]).
+/// for a dashboard (`HuntOptions::live`; the job runner's `crate::jobs::JobHandle::progress`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct HuntProgress {
     pub job: i64,
@@ -1102,72 +1105,5 @@ fn ship_record(c: &Census, info: &crate::library::GunInfo) -> Option<Arc<Found>>
             Some(c.intern(&mut cache, rec))
         }
         _ => None,
-    }
-}
-
-/// A hunt running on a background thread.
-pub struct HuntHandle {
-    pub job: i64,
-    pub stop: Arc<AtomicBool>,
-    pub live: Arc<Mutex<HuntProgress>>,
-    thread: Option<std::thread::JoinHandle<Result<HuntProgress, String>>>,
-}
-
-impl HuntHandle {
-    /// Run (or resume) a hunt job on a new thread.
-    pub fn spawn(lib: Library, job: i64, mut opts: HuntOptions) -> HuntHandle {
-        let stop = opts.stop.clone();
-        let live = opts
-            .live
-            .get_or_insert_with(|| Arc::new(Mutex::new(HuntProgress::default())))
-            .clone();
-        {
-            let mut l = live.lock().unwrap();
-            if let Ok((_, p)) = status(&lib, job) {
-                *l = p;
-            }
-            l.job = job;
-            l.status = "running".into();
-        }
-        let thread = std::thread::Builder::new()
-            .name(format!("hunt-{job}"))
-            .spawn(move || {
-                let r = run(&lib, job, &opts);
-                if let Err(e) = &r
-                    && let Some(live) = &opts.live
-                {
-                    let mut l = live.lock().unwrap();
-                    l.status = "failed".into();
-                    l.error = Some(e.clone());
-                }
-                r
-            })
-            .ok();
-        HuntHandle {
-            job,
-            stop,
-            live,
-            thread,
-        }
-    }
-    /// The latest progress (updated after every batch).
-    pub fn progress(&self) -> HuntProgress {
-        self.live.lock().unwrap().clone()
-    }
-    pub fn is_finished(&self) -> bool {
-        self.thread.as_ref().is_none_or(|t| t.is_finished())
-    }
-    /// Stop at the next batch (the job is left paused at its checkpoint).
-    pub fn stop(&self) {
-        self.stop.store(true, Ordering::SeqCst);
-    }
-    /// Wait for the hunt to end.
-    pub fn join(mut self) -> Result<HuntProgress, String> {
-        match self.thread.take() {
-            Some(t) => t
-                .join()
-                .map_err(|_| "the hunt thread panicked".to_string())?,
-            None => Err("the hunt thread could not start".into()),
-        }
     }
 }

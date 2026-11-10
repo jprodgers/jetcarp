@@ -6,6 +6,9 @@
 //!
 //! A run stops at its next window when its stop flag is set or another process marks the job
 //! `paused` ([`request_stop`]).
+//!
+//! The job runner (`crate::jobs::mover`) runs [`run_job`] as it is, under its lease, in this
+//! process or on a thread of it.
 
 use super::track::{Tracker, WindowCheckpoint, WindowOpts};
 use crate::library::movers::{MoverReport, Stop, TrackSpec, mover_record};
@@ -334,64 +337,6 @@ pub fn run_job(
             lib.update_job(job, Some(JobStatus::Done), Some(&pj), None)?;
             publish(&p);
             Ok(p)
-        }
-    }
-}
-
-/// A run on a background thread.
-pub struct MoverHandle {
-    pub job: i64,
-    pub stop: Arc<AtomicBool>,
-    pub live: Arc<Mutex<MoverProgress>>,
-    thread: Option<std::thread::JoinHandle<Result<MoverProgress, String>>>,
-}
-
-impl MoverHandle {
-    pub fn spawn(lib: Library, job: i64) -> MoverHandle {
-        let stop = Arc::new(AtomicBool::new(false));
-        let live = Arc::new(Mutex::new(
-            status(&lib, job).map(|x| x.1).unwrap_or_default(),
-        ));
-        {
-            let mut l = live.lock().unwrap();
-            l.job = job;
-            l.status = "running".into();
-        }
-        let (s2, l2) = (stop.clone(), live.clone());
-        let thread = std::thread::Builder::new()
-            .name(format!("mover-{job}"))
-            .spawn(move || {
-                let r = run_job(&lib, job, s2, Some(l2.clone()));
-                if let Err(e) = &r {
-                    let mut l = l2.lock().unwrap();
-                    l.status = "failed".into();
-                    l.error = Some(e.clone());
-                }
-                r
-            })
-            .ok();
-        MoverHandle {
-            job,
-            stop,
-            live,
-            thread,
-        }
-    }
-    pub fn progress(&self) -> MoverProgress {
-        self.live.lock().unwrap().clone()
-    }
-    pub fn is_finished(&self) -> bool {
-        self.thread.as_ref().is_none_or(|t| t.is_finished())
-    }
-    pub fn stop(&self) {
-        self.stop.store(true, Ordering::SeqCst);
-    }
-    pub fn join(mut self) -> Result<MoverProgress, String> {
-        match self.thread.take() {
-            Some(t) => t
-                .join()
-                .map_err(|_| "the mover thread panicked".to_string())?,
-            None => Err("the mover thread could not start".into()),
         }
     }
 }

@@ -3,11 +3,16 @@
 //! stop any catalog job (hunts, ant searches, piles, evolve searches, mover verifications, and the
 //! finished soup searches, collisions, and census jobs), wherever it was started. One status and one stop tool for every kind keeps the list short for
 //! small models; `kind` filters the listing.
+//!
+//! Ant searches, piles, and mover verifications run on the job runner (`jetcarp_core::jobs`),
+//! their handles in the process's registry; evolve searches still run on a thread of their own
+//! here, without a checkpoint.
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
 use jetcarp_api::args;
-use jetcarp_core::ants::job::{self as ants, AntHandle, AntOptions, AntSpec, Soups};
+use jetcarp_core::ants::job::{self as ants, AntProgress, AntSpec, Soups};
 use jetcarp_core::ants::search::{Strings, Tables};
+use jetcarp_core::jobs::{RunOptions, registry};
 use jetcarp_core::library::{self, JobStatus, Library};
 use jetcarp_core::pile::job::{self as pilejob, PileJobSpec, PileProgress};
 use jetcarp_core::window::job as moverjob;
@@ -34,32 +39,11 @@ fn lib() -> Library {
     Library::open_default()
 }
 
-fn ants_running() -> &'static Mutex<HashMap<i64, AntHandle>> {
-    static R: OnceLock<Mutex<HashMap<i64, AntHandle>>> = OnceLock::new();
-    R.get_or_init(Default::default)
-}
-
-struct PileRun {
-    stop: Arc<AtomicBool>,
-    live: Arc<Mutex<PileProgress>>,
-    thread: std::thread::JoinHandle<()>,
-}
-
-fn piles_running() -> &'static Mutex<HashMap<i64, PileRun>> {
-    static R: OnceLock<Mutex<HashMap<i64, PileRun>>> = OnceLock::new();
-    R.get_or_init(Default::default)
-}
-
 /// Evolve jobs running here: their stop flags and live progress.
 type EvolveRun = (Arc<AtomicBool>, Arc<Mutex<Value>>);
 
 fn evolve_running() -> &'static Mutex<HashMap<i64, EvolveRun>> {
     static R: OnceLock<Mutex<HashMap<i64, EvolveRun>>> = OnceLock::new();
-    R.get_or_init(Default::default)
-}
-
-fn movers_running() -> &'static Mutex<HashMap<i64, moverjob::MoverHandle>> {
-    static R: OnceLock<Mutex<HashMap<i64, moverjob::MoverHandle>>> = OnceLock::new();
     R.get_or_init(Default::default)
 }
 
@@ -246,12 +230,7 @@ fn ants_start(args: &Value) -> Res {
     let l = lib();
     let jid = match int(args, "resume")? {
         Some(j) => {
-            if ants_running()
-                .lock()
-                .unwrap()
-                .get(&j)
-                .is_some_and(|h| !h.is_finished())
-            {
+            if registry().is_running(&l, j) {
                 return Err(format!("ant search {j} is already running here"));
             }
             ants::status(&l, j)?;
@@ -310,16 +289,17 @@ fn ants_start(args: &Value) -> Res {
             ants::start(&l, &spec)?
         }
     };
-    let h = AntHandle::spawn(
+    registry().start(
         l.clone(),
         jid,
-        AntOptions {
+        RunOptions {
             threads: int(args, "threads")?.unwrap_or(0).max(0) as usize,
             ..Default::default()
         },
-    );
-    let p = h.progress();
-    ants_running().lock().unwrap().insert(jid, h);
+    )?;
+    let p: AntProgress = registry()
+        .with(&l, jid, |h| h.progress_as())
+        .unwrap_or_default();
     Ok(ToolOutput::json(&json!({
         "job": jid,
         "status": "running",
@@ -340,12 +320,7 @@ fn pile_start(args: &Value) -> Res {
     let l = lib();
     let jid = match int(args, "resume")? {
         Some(j) => {
-            if piles_running()
-                .lock()
-                .unwrap()
-                .get(&j)
-                .is_some_and(|r| !r.thread.is_finished())
-            {
+            if registry().is_running(&l, j) {
                 return Err(format!("pile {j} is already running here"));
             }
             pilejob::status(&l, j)?;
@@ -393,37 +368,12 @@ fn pile_start(args: &Value) -> Res {
             pilejob::start(&l, &spec)?
         }
     };
-    let (spec, p0) = pilejob::status(&l, jid)?;
-    let stop = Arc::new(AtomicBool::new(false));
-    let live = Arc::new(Mutex::new(p0));
-    let thread = {
-        let (l, stop, live) = (l.clone(), stop.clone(), live.clone());
-        let gpu = spec.gpu && !jetcarp_core::pile::is_patch(&spec.pile.tiling);
-        std::thread::Builder::new()
-            .name(format!("pile-{jid}"))
-            .spawn(move || {
-                let toppler = if gpu {
-                    jetcarp_core::pile::gpu_toppler().and_then(|r| r.ok())
-                } else {
-                    None
-                };
-                if let Err(e) = pilejob::run_job(&l, jid, stop, toppler, Some(live.clone())) {
-                    let mut x = live.lock().unwrap();
-                    x.status = "failed".into();
-                    x.error = Some(e);
-                }
-            })
-            .map_err(|e| e.to_string())?
-    };
-    piles_running().lock().unwrap().insert(
-        jid,
-        PileRun {
-            stop,
-            live: live.clone(),
-            thread,
-        },
-    );
-    let p = live.lock().unwrap().clone();
+    let (spec, _) = pilejob::status(&l, jid)?;
+    // Topples on the GPU when the job asks for it and the host registered a GPU toppler.
+    registry().start(l.clone(), jid, RunOptions::default())?;
+    let p: PileProgress = registry()
+        .with(&l, jid, |h| h.progress_as())
+        .unwrap_or_default();
     Ok(ToolOutput::json(&json!({
         "job": jid,
         "status": "running",
@@ -598,12 +548,7 @@ fn mover_start(args: &Value) -> Res {
     let l = lib();
     let jid = match int(args, "resume")? {
         Some(j) => {
-            if movers_running()
-                .lock()
-                .unwrap()
-                .get(&j)
-                .is_some_and(|h| !h.is_finished())
-            {
+            if registry().is_running(&l, j) {
                 return Err(format!("mover job {j} is already running here"));
             }
             moverjob::status(&l, j)?;
@@ -669,9 +614,10 @@ fn mover_start(args: &Value) -> Res {
             moverjob::start(&l, &spec)?
         }
     };
-    let h = moverjob::MoverHandle::spawn(l.clone(), jid);
-    let p = h.progress();
-    movers_running().lock().unwrap().insert(jid, h);
+    registry().start(l.clone(), jid, RunOptions::default())?;
+    let p: moverjob::MoverProgress = registry()
+        .with(&l, jid, |h| h.progress_as())
+        .unwrap_or_default();
     let (spec, _) = moverjob::status(&l, jid)?;
     Ok(ToolOutput::json(&json!({
         "job": jid,
@@ -689,12 +635,11 @@ fn job_json(l: &Library, jid: i64) -> Result<Value, String> {
     let v = match j.kind.as_str() {
         "hunt" => crate::hunt_tools::status_json(l, jid)?,
         ants::KIND => {
-            let here = ants_running()
-                .lock()
-                .unwrap()
-                .get(&jid)
-                .filter(|h| !h.is_finished())
-                .map(|h| h.progress());
+            let here = registry()
+                .with(l, jid, |h| {
+                    (!h.is_finished()).then(|| h.progress_as::<AntProgress>())
+                })
+                .flatten();
             let p = match here {
                 Some(p) => p,
                 None => ants::status(l, jid)?.1,
@@ -710,12 +655,11 @@ fn job_json(l: &Library, jid: i64) -> Result<Value, String> {
             here.unwrap_or_else(|| j.progress.clone())
         }
         moverjob::KIND => {
-            let here = movers_running()
-                .lock()
-                .unwrap()
-                .get(&jid)
-                .filter(|h| !h.is_finished())
-                .map(|h| h.progress());
+            let here = registry()
+                .with(l, jid, |h| {
+                    (!h.is_finished()).then(|| h.progress_as::<moverjob::MoverProgress>())
+                })
+                .flatten();
             let p = match here {
                 Some(p) => p,
                 None => moverjob::status(l, jid)?.1,
@@ -725,12 +669,11 @@ fn job_json(l: &Library, jid: i64) -> Result<Value, String> {
             v
         }
         pilejob::KIND => {
-            let here = piles_running()
-                .lock()
-                .unwrap()
-                .get(&jid)
-                .filter(|r| !r.thread.is_finished())
-                .map(|r| r.live.lock().unwrap().clone());
+            let here = registry()
+                .with(l, jid, |h| {
+                    (!h.is_finished()).then(|| h.progress_as::<PileProgress>())
+                })
+                .flatten();
             let p = match here {
                 Some(p) => p,
                 None => pilejob::status(l, jid)?.1,
@@ -810,20 +753,7 @@ fn stop(args: &Value) -> Res {
     let j = l.job(jid)?;
     let here = match j.kind.as_str() {
         "hunt" => crate::hunt_tools::stop_here(jid),
-        ants::KIND => match ants_running().lock().unwrap().get(&jid) {
-            Some(h) => {
-                h.stop();
-                true
-            }
-            None => false,
-        },
-        pilejob::KIND => match piles_running().lock().unwrap().get(&jid) {
-            Some(r) => {
-                r.stop.store(true, Ordering::SeqCst);
-                true
-            }
-            None => false,
-        },
+        ants::KIND | pilejob::KIND => registry().stop(&l, jid),
         "evolve" => match evolve_running().lock().unwrap().get(&jid) {
             Some(r) => {
                 r.0.store(true, Ordering::SeqCst);
@@ -831,13 +761,7 @@ fn stop(args: &Value) -> Res {
             }
             None => false,
         },
-        moverjob::KIND => match movers_running().lock().unwrap().get(&jid) {
-            Some(h) => {
-                h.stop();
-                true
-            }
-            None => false,
-        },
+        moverjob::KIND => registry().stop(&l, jid),
         k => return Err(format!("job {jid} is a {k} job, which runs to its end")),
     };
     if !here && j.status == JobStatus::Running {

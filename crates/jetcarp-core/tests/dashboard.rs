@@ -1,9 +1,11 @@
 //! The hunt dashboard's and the Quick Start menu's logic (Phase 4, deliverables 7 and 8): job
-//! summaries, stop and resume across catalog handles, the heat map's binning, finds, ratings,
-//! the opening rows, search and filters, and an entry's ratings and opens.
+//! summaries, stop and resume across catalog handles (through the job runner's kinds and
+//! handles), the heat map's binning, finds, ratings, the opening rows, search and filters, and an
+//! entry's ratings and opens.
 
 use jetcarp_core::dashboard::{self, HeatColour, Target};
 use jetcarp_core::hunt::job::{self as hunt, HuntOptions, HuntSpec};
+use jetcarp_core::jobs::{self, RunOptions, Runner};
 use jetcarp_core::library::{
     CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
 };
@@ -143,7 +145,7 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     assert!(st[0].stale && st[0].can_resume() && !st[0].is_running());
 
     // Heat map: both rules on squares.
-    let k = dashboard::kind("hunt");
+    let k = jobs::kind("hunt");
     let row = lib.job(job).unwrap();
     let spaces = k.heat_spaces(&row);
     assert_eq!(spaces.len(), 1);
@@ -209,15 +211,16 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
         ..Default::default()
     };
     let forever = hunt::start(&lib, &spec).unwrap();
-    let run = k
-        .resume(lib.clone(), forever, &dashboard::RunOptions::default())
+    let run = Runner::new(lib.clone())
+        .spawn(forever, RunOptions::default())
         .unwrap();
+    assert!(run.summary().here && run.summary().resumable);
     let t0 = std::time::Instant::now();
     while lib2.job(forever).unwrap().status != JobStatus::Running && t0.elapsed().as_secs() < 30 {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     k.request_stop(&lib2, forever).unwrap();
-    run.join().unwrap();
+    run.wait().unwrap();
     let j = lib2.job(forever).unwrap();
     assert_eq!(j.status, JobStatus::Paused);
     let s = dashboard::summaries(&[j], dashboard::now_seconds());
@@ -400,12 +403,12 @@ fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
         ..Default::default()
     };
     let job = antjob::start(&lib, &spec).unwrap();
-    let k = dashboard::kind(antjob::KIND);
-    assert!(k.resumable());
-    let run = k
-        .resume(lib.clone(), job, &dashboard::RunOptions::default())
+    let k = jobs::kind(antjob::KIND);
+    assert!(k.runnable(&lib.job(job).unwrap()) && k.deterministic());
+    let run = Runner::new(lib.clone())
+        .spawn(job, RunOptions::default())
         .unwrap();
-    run.join().unwrap();
+    run.wait().unwrap();
     let s = &dashboard::summaries(&[lib.job(job).unwrap()], now)[0];
     assert_eq!(s.kind_label, "Ant search");
     assert_eq!((s.unit.as_str(), s.done, s.total), ("runs", 2, Some(2)));
@@ -437,11 +440,10 @@ fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
         extra: serde_json::Value::Null,
     };
     let pj = pilejob::start(&lib, &pspec).unwrap();
-    let k = dashboard::kind(pilejob::KIND);
-    let run = k
-        .resume(lib.clone(), pj, &dashboard::RunOptions::default())
+    let run = Runner::new(lib.clone())
+        .spawn(pj, RunOptions::default())
         .unwrap();
-    run.join().unwrap();
+    run.wait().unwrap();
     let s = &dashboard::summaries(&[lib.job(pj).unwrap()], now)[0];
     assert_eq!(s.kind_label, "Sandpile");
     assert_eq!(s.status, "done");
@@ -502,8 +504,9 @@ fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
             .iter()
             .any(|c| c.0 == "best ever" && c.1 == "4.25")
     );
-    assert!(!s.resumable);
-    dashboard::kind("evolve").request_stop(&lib, ej).unwrap();
+    // Evolve searches are a strategy now: resumable from their last generation.
+    assert!(s.resumable);
+    jobs::kind("evolve").request_stop(&lib, ej).unwrap();
     assert_eq!(lib.job(ej).unwrap().status, JobStatus::Paused);
     let _ = std::fs::remove_dir_all(&dir);
 }

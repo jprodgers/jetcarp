@@ -211,14 +211,17 @@ fn run_window(spec: &TrackSpec, opts: &WindowOpts) -> Result<MoverReport> {
 }
 
 fn run_mover_job(lib: &Library, job: i64) -> Result<()> {
-    use jetcarp_core::window::job as mj;
+    use jetcarp_core::jobs::{RunOptions, Runner};
+    use jetcarp_core::window::job::MoverProgress;
     println!("mover job {job} in {}", lib.path().display());
-    let h = mj::MoverHandle::spawn(lib.clone(), job);
+    let h = Runner::new(lib.clone())
+        .spawn(job, RunOptions::default())
+        .map_err(|e| anyhow!(e))?;
     while !h.is_finished() {
         std::thread::sleep(std::time::Duration::from_secs(5));
-        eprintln!("  {}", h.progress().line());
+        eprintln!("  {}", h.progress_as::<MoverProgress>().line());
     }
-    let p = h.join().map_err(|e| anyhow!(e))?;
+    let p: MoverProgress = h.wait().map_err(|e| anyhow!(e))?.progress_as();
     println!("{}", p.line());
     if let Some(r) = &p.record {
         println!("library: {r}");

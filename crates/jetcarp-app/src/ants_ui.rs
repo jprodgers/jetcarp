@@ -10,9 +10,10 @@
 //! memory for this window, so the catalog's media stay in the house style).
 //! `JETCARP_ANTS_SELECT=<k>` selects row k (headless checks).
 
-use jetcarp_core::ants::job::{self, AntHandle, AntOptions, AntProgress, AntSpec};
+use jetcarp_core::ants::job::{self, AntProgress, AntSpec};
 use jetcarp_core::ants::run::Outcome;
 use jetcarp_core::ants::search::Strings;
+use jetcarp_core::jobs::{JobHandle, RunOptions, Runner};
 use jetcarp_core::library::{AntCensus, AntQuery, AntRow, AntUpdate, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle, MediaTarget};
 use jetcarp_core::render::Image;
@@ -52,7 +53,7 @@ pub struct AntsWindow {
     min_len: usize,
     max_len: usize,
     steps: u64,
-    handle: Option<AntHandle>,
+    handle: Option<JobHandle>,
     last: Option<AntProgress>,
     outcome: Option<Outcome>,
     tiling_filter: String,
@@ -135,13 +136,10 @@ impl AntsWindow {
             ..Default::default()
         };
         match job::start(&self.lib, &spec) {
-            Ok(jid) => {
-                self.handle = Some(AntHandle::spawn(
-                    self.lib.clone(),
-                    jid,
-                    AntOptions::default(),
-                ));
-            }
+            Ok(jid) => match Runner::new(self.lib.clone()).spawn(jid, RunOptions::default()) {
+                Ok(h) => self.handle = Some(h),
+                Err(e) => self.error = Some(e),
+            },
             Err(e) => self.error = Some(e),
         }
     }
@@ -365,7 +363,7 @@ impl AntsWindow {
             self.select(&r);
         }
         if let Some(h) = &self.handle {
-            self.last = Some(h.progress());
+            self.last = Some(h.progress_as::<AntProgress>());
             if h.is_finished() {
                 self.handle = None;
                 self.reload();

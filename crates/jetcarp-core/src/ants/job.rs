@@ -13,6 +13,8 @@
 //!
 //! A search stops at the next batch when its stop flag is set, when another process marks the
 //! job `paused` ([`request_stop`]), or when a session limit is reached.
+//!
+//! The job runner (`crate::jobs::ants`) runs [`run_job`] as it is, under its lease.
 
 use super::plane::Lattice;
 use super::run::{Limits, Outcome, Start, run};
@@ -251,7 +253,8 @@ pub struct AntFind {
 }
 
 /// Progress of a search, written to the job's `progress` at every flush and kept live in
-/// memory for a dashboard ([`AntHandle::progress`]).
+/// memory for a dashboard (`AntOptions::live`; the job runner's
+/// `crate::jobs::JobHandle::progress`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct AntProgress {
     pub job: i64,
@@ -648,68 +651,4 @@ fn make_progress(
         }
     }
     p
-}
-
-/// A search running on a background thread.
-pub struct AntHandle {
-    pub job: i64,
-    pub stop: Arc<AtomicBool>,
-    pub live: Arc<Mutex<AntProgress>>,
-    thread: Option<std::thread::JoinHandle<Result<AntProgress, String>>>,
-}
-
-impl AntHandle {
-    /// Run (or resume) a search job on a new thread.
-    pub fn spawn(lib: Library, job: i64, mut opts: AntOptions) -> AntHandle {
-        let stop = opts.stop.clone();
-        let live = opts
-            .live
-            .get_or_insert_with(|| Arc::new(Mutex::new(AntProgress::default())))
-            .clone();
-        {
-            let mut l = live.lock().unwrap();
-            if let Ok((_, p)) = status(&lib, job) {
-                *l = p;
-            }
-            l.job = job;
-            l.status = "running".into();
-        }
-        let thread = std::thread::Builder::new()
-            .name(format!("ants-{job}"))
-            .spawn(move || {
-                let r = run_job(&lib, job, &opts);
-                if let Err(e) = &r
-                    && let Some(live) = &opts.live
-                {
-                    let mut l = live.lock().unwrap();
-                    l.status = "failed".into();
-                    l.error = Some(e.clone());
-                }
-                r
-            })
-            .ok();
-        AntHandle {
-            job,
-            stop,
-            live,
-            thread,
-        }
-    }
-    pub fn progress(&self) -> AntProgress {
-        self.live.lock().unwrap().clone()
-    }
-    pub fn is_finished(&self) -> bool {
-        self.thread.as_ref().is_none_or(|t| t.is_finished())
-    }
-    pub fn stop(&self) {
-        self.stop.store(true, Ordering::SeqCst);
-    }
-    pub fn join(mut self) -> Result<AntProgress, String> {
-        match self.thread.take() {
-            Some(t) => t
-                .join()
-                .map_err(|_| "the ant search thread panicked".to_string())?,
-            None => Err("the ant search thread could not start".into()),
-        }
-    }
 }

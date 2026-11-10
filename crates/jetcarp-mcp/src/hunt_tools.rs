@@ -1,27 +1,21 @@
 //! MCP tool for the fast soup hunter (`jetcarp_core::hunt`): `hunt_start` runs a hunt in the
-//! background. Hunts are catalog jobs, so one started here, by `jetcarp hunt`, or by a script is
+//! background, on the job runner (`jetcarp_core::jobs`; its handle is in the process's
+//! registry). Hunts are catalog jobs, so one started here, by `jetcarp hunt`, or by a script is
 //! watched and stopped with `job_status` and `job_stop` (`job_tools.rs`) from any of them
 //! (stopping one in another process takes effect at its next checkpoint).
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
 use jetcarp_api::args;
-use jetcarp_core::hunt::job::{self, HuntHandle, HuntOptions, HuntProgress, HuntSpec};
+use jetcarp_core::hunt::job::{self, HuntProgress, HuntSpec};
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
+use jetcarp_core::jobs::{RunOptions, registry};
 use jetcarp_core::library::Library;
 use serde_json::{Value, json};
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
 
 pub const NAMES: &[&str] = &["hunt_start"];
 
 pub fn handles(name: &str) -> bool {
     NAMES.contains(&name)
-}
-
-/// Hunts running in this server process.
-fn running() -> &'static Mutex<HashMap<i64, HuntHandle>> {
-    static R: OnceLock<Mutex<HashMap<i64, HuntHandle>>> = OnceLock::new();
-    R.get_or_init(Default::default)
 }
 
 fn lib() -> Library {
@@ -106,12 +100,7 @@ fn start(args: &Value) -> Res {
     let l = lib();
     let jid = match int(args, "resume")? {
         Some(j) => {
-            if running()
-                .lock()
-                .unwrap()
-                .get(&j)
-                .is_some_and(|h| !h.is_finished())
-            {
+            if registry().is_running(&l, j) {
                 return Err(format!("hunt {j} is already running here"));
             }
             job::status(&l, j)?;
@@ -168,13 +157,14 @@ fn start(args: &Value) -> Res {
             job::start(&l, &spec)?
         }
     };
-    let opts = HuntOptions {
+    let opts = RunOptions {
         threads: int(args, "threads")?.unwrap_or(0).max(0) as usize,
         ..Default::default()
     };
-    let h = HuntHandle::spawn(l.clone(), jid, opts);
-    let p = h.progress();
-    running().lock().unwrap().insert(jid, h);
+    registry().start(l.clone(), jid, opts)?;
+    let p: HuntProgress = registry()
+        .with(&l, jid, |h| h.progress_as())
+        .unwrap_or_default();
     Ok(ToolOutput::json(&json!({
         "job": jid,
         "status": "running",
@@ -186,13 +176,7 @@ fn start(args: &Value) -> Res {
 
 /// Stop a hunt running in this process; false when it is not running here.
 pub(crate) fn stop_here(jid: i64) -> bool {
-    match running().lock().unwrap().get(&jid) {
-        Some(h) => {
-            h.stop();
-            true
-        }
-        None => false,
-    }
+    registry().stop(&lib(), jid)
 }
 
 /// The progress as `job_status` shows it.
@@ -201,11 +185,11 @@ pub(crate) fn status_json(l: &Library, jid: i64) -> Result<Value, String> {
 }
 
 fn progress_of(l: &Library, jid: i64) -> Result<HuntProgress, String> {
-    if let Some(h) = running().lock().unwrap().get(&jid) {
-        let p = h.progress();
-        if !h.is_finished() || p.status != "running" {
-            return Ok(p);
-        }
+    if let Some((finished, p)) = registry().with(l, jid, |h| {
+        (h.is_finished(), h.progress_as::<HuntProgress>())
+    }) && (!finished || p.status != "running")
+    {
+        return Ok(p);
     }
     job::status(l, jid).map(|x| x.1)
 }

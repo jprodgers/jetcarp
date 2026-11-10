@@ -6,18 +6,18 @@
 //! The UI thread never touches SQLite: a worker thread with its own catalog connection reads
 //! the `jobs` table every [`JOBS_EVERY`] (WAL lets it read while hunts write), recomputes the
 //! selected job's heat map and finds at most every [`DETAIL_EVERY`] and only when the job wrote
-//! new progress, runs the commands (start, pause, resume, stop, rate, reject), and owns the jobs
-//! running in this process. Animations are made on two more threads
-//! (`media::pattern_animation`) only for the finds on screen, in the
+//! new progress, and runs the commands (start, pause, resume, stop, rate, reject); the jobs it
+//! runs here are on the job runner, their handles in the process's registry
+//! (`jetcarp_core::jobs::registry`, shared with anything else this process runs). Animations are
+//! made on two more threads (`media::pattern_animation`) only for the finds on screen, in the
 //! house style or the palette picked under *Colours* (which *Render media* uses too).
-//! Everything kind-specific is in `jetcarp_core::dashboard::JobKind`.
+//! Everything kind-specific is in `jetcarp_core::jobs::StrategyKind`.
 
 use crate::thumbs;
-use jetcarp_core::dashboard::{
-    self, FindItem, Finds, HeatColour, HeatMap, JobSummary, RunOptions, RunningJob, Target,
-};
+use jetcarp_core::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
 use jetcarp_core::hunt::job::{HuntSpec, SoupBatcher};
 use jetcarp_core::hunt::soup::SoupSpec;
+use jetcarp_core::jobs::{self, RunOptions, registry};
 use jetcarp_core::library::{HeatRow, JobStatus, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
@@ -233,7 +233,6 @@ struct Worker {
     lib: Library,
     path: PathBuf,
     shared: Arc<Mutex<Shared>>,
-    running: HashMap<i64, Box<dyn RunningJob>>,
     /// Jobs to mark done once they have paused.
     finishing: HashSet<i64>,
     sel: Option<Selection>,
@@ -259,11 +258,12 @@ impl Worker {
         RunOptions {
             threads,
             gpu: if gpu { self.gpu.clone() } else { None },
+            ..Default::default()
         }
     }
 
     fn resume(&mut self, job: i64, gpu: bool, threads: usize) {
-        if self.running.contains_key(&job) {
+        if registry().is_running(&self.lib, job) {
             return;
         }
         let row = match self.lib.job(job) {
@@ -272,11 +272,8 @@ impl Worker {
         };
         let o = self.opts(gpu && row.kind == "hunt", threads);
         // Each job here gets its own connection, so its writes never wait on the worker's reads.
-        match dashboard::kind(&row.kind).resume(Library::open(&self.path), job, &o) {
-            Ok(r) => {
-                self.running.insert(job, r);
-                self.msg(format!("Job {job} is running here."), false);
-            }
+        match registry().start(Library::open(&self.path), job, o) {
+            Ok(()) => self.msg(format!("Job {job} is running here."), false),
             Err(e) => self.msg(e, true),
         }
     }
@@ -297,10 +294,9 @@ impl Worker {
                 Err(e) => self.msg(e, true),
             },
             Cmd::Pause(job) => {
-                if let Some(r) = self.running.get(&job) {
-                    r.stop();
-                } else if let Ok(row) = self.lib.job(job)
-                    && let Err(e) = dashboard::kind(&row.kind).request_stop(&self.lib, job)
+                if !registry().stop(&self.lib, job)
+                    && let Ok(row) = self.lib.job(job)
+                    && let Err(e) = jobs::kind(&row.kind).request_stop(&self.lib, job)
                 {
                     self.msg(e, true);
                 }
@@ -360,16 +356,8 @@ impl Worker {
 
     fn refresh_jobs(&mut self) {
         // Reap jobs that ended here.
-        let ended: Vec<i64> = self
-            .running
-            .iter()
-            .filter(|(_, r)| r.is_finished())
-            .map(|(k, _)| *k)
-            .collect();
-        for job in ended {
-            if let Some(r) = self.running.remove(&job)
-                && let Err(e) = r.join()
-            {
+        for (job, r) in registry().reap(&self.lib) {
+            if let Err(e) = r {
                 self.msg(format!("Job {job}: {e}"), true);
             }
         }
@@ -382,7 +370,7 @@ impl Worker {
         };
         // Finish jobs that have paused.
         for job in self.finishing.clone() {
-            if self.running.contains_key(&job) {
+            if registry().contains(&self.lib, job) {
                 continue;
             }
             if let Some(r) = rows.iter().find(|r| r.id == job) {
@@ -401,8 +389,7 @@ impl Worker {
         }
         let mut sums = dashboard::summaries(&rows, dashboard::now_seconds());
         for s in &mut sums {
-            if let Some(r) = self.running.get(&s.id) {
-                let live = r.summary();
+            if let Some(live) = registry().summary(&self.lib, s.id) {
                 s.here = true;
                 s.stale = false;
                 if !live.status.is_empty() {
@@ -441,7 +428,7 @@ impl Worker {
         self.sel_dirty = false;
         self.last_detail = Some(Instant::now());
         self.detail_updated = row.updated.clone();
-        let kind = dashboard::kind(&row.kind);
+        let kind = jobs::kind(&row.kind);
         let spaces = kind.heat_spaces(&row);
         let space = sel.space.min(spaces.len().saturating_sub(1));
         let mut error = None;
@@ -498,11 +485,12 @@ impl Worker {
             let wait = next_jobs.saturating_duration_since(Instant::now());
             match rx.recv_timeout(wait) {
                 Ok(Cmd::Shutdown(ack)) => {
-                    for r in self.running.values() {
-                        r.stop();
+                    let here = registry().jobs(&self.lib);
+                    for &j in &here {
+                        registry().stop(&self.lib, j);
                     }
-                    for (_, r) in self.running.drain() {
-                        let _ = r.join();
+                    for j in here {
+                        let _ = registry().wait(&self.lib, j);
                     }
                     let _ = ack.send(());
                     return;
@@ -520,8 +508,8 @@ impl Worker {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
-                    for r in self.running.values() {
-                        r.stop();
+                    for j in registry().jobs(&self.lib) {
+                        registry().stop(&self.lib, j);
                     }
                     return;
                 }
@@ -807,7 +795,6 @@ impl DashWindow {
                 lib: Library::open(&self.path),
                 path: self.path.clone(),
                 shared: self.shared.clone(),
-                running: HashMap::new(),
                 finishing: HashSet::new(),
                 sel: None,
                 sel_dirty: false,

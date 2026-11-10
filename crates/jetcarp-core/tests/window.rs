@@ -318,8 +318,9 @@ fn window_runs_resume_exactly() {
     );
     assert_eq!(rb.stop, Stop::GenLimit);
 
-    // As a catalog job, stopped by request on the way and resumed.
-    use jetcarp_core::window::job::{MoverHandle, MoverJobSpec, start};
+    // As a catalog job on the job runner, stopped by request on the way and resumed.
+    use jetcarp_core::jobs::{RunOptions, Runner};
+    use jetcarp_core::window::job::{MoverJobSpec, MoverProgress, start};
     let d = std::env::temp_dir().join(format!("jetcarp-window-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     let lib = jetcarp_core::library::Library::open(&d);
@@ -330,14 +331,21 @@ fn window_runs_resume_exactly() {
         source: "test".into(),
     };
     let job = start(&lib, &js).unwrap();
-    let h = MoverHandle::spawn(lib.clone(), job);
+    let h = Runner::new(lib.clone())
+        .spawn(job, RunOptions::default())
+        .unwrap();
     // Stopped at once, it runs on to its first checkpoint (past the repeat check's 4,096
     // generations, at the next window) and pauses there.
     h.stop();
-    let p = h.join().unwrap();
+    let p: MoverProgress = h.wait().unwrap().progress_as();
     assert_eq!(p.status, "paused", "{p:?}");
     assert!(lib.job_checkpoint(job).unwrap().is_some());
-    let p = MoverHandle::spawn(lib.clone(), job).join().unwrap();
+    let p: MoverProgress = Runner::new(lib.clone())
+        .spawn(job, RunOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap()
+        .progress_as();
     assert_eq!(p.status, "done");
     let rep = p.report.unwrap();
     assert_eq!(rep.generations, 9_000);

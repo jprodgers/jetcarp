@@ -21,6 +21,7 @@ pub mod hat;
 pub mod hunt;
 pub mod isohedral;
 pub mod jaca;
+pub mod jobs;
 pub mod lenia;
 pub mod library;
 pub mod looks;
