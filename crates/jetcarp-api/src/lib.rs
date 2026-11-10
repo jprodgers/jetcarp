@@ -11,8 +11,9 @@
 //! - [`error`]: [`ApiError`].
 //!
 //! And what the front ends shared or had copied between them: the argument parsers ([`args`]),
-//! output folders and PNG files ([`out`]), the world a front end acts on ([`world`]), and cell
-//! coordinates and text patterns ([`cells`]).
+//! output folders and PNG files ([`out`]), the world a front end acts on ([`world`]), cell
+//! coordinates and text patterns ([`cells`]), and sweep folders ([`sweeps`]: manifests,
+//! favourites, promotion of a run, contact sheets, and the start of any run).
 
 pub mod args;
 pub mod cells;
@@ -21,6 +22,7 @@ pub mod error;
 pub mod op;
 pub mod ops;
 pub mod out;
+pub mod sweeps;
 pub mod world;
 
 pub use ctx::{Ctx, FsPolicy, Limits, Paths, Platform};

@@ -33,7 +33,8 @@ pub mod sweep;
 /// without depending on jetcarp-api themselves.
 pub use jetcarp_api::args;
 pub use jetcarp_api::args::Screen;
-pub use sweep::{Estimate, estimate, run_world, sweep_to_script};
+pub use jetcarp_api::sweeps::run_world;
+pub use sweep::{Estimate, estimate, sweep_to_script};
 
 use jetcarp_api::out::{self, Guard};
 use rhai::{AST, Dynamic, EvalAltResult, Position, Scope};

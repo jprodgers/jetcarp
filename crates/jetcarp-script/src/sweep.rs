@@ -11,6 +11,7 @@ use crate::sim::{self, ImageSpec, Shared};
 use crate::{Ctx, Progress};
 use jetcarp_api::args::{self, Screen, Until, get, get_bool, get_str, get_u64};
 use jetcarp_api::out;
+use jetcarp_api::sweeps::{Base, parse_base, start_world, sweep_screen};
 use jetcarp_core::*;
 use rayon::prelude::*;
 use serde_json::{Map, Value, json};
@@ -125,193 +126,8 @@ struct Plan {
     skip: Vec<String>,
 }
 
-/// What every run starts from.
-enum Base {
-    /// An empty world with one CA (the run's rule with the sweep's CA options).
-    Plain { ca: Value },
-    /// A scene's start: its CAs, seeds, and the edits made before its first step (drawn cells),
-    /// with one CA running the run's rule (plus the sweep's CA options).
-    Scene {
-        scene: Box<Scene>,
-        /// The `ca` option: a position in the start world's CA list (from 0) or a name.
-        select: Value,
-        ca: Value,
-        /// The varied CA, counted in creation order (the scene's CAs, then its `add_ca`
-        /// commands); set by [`Base::resolve`].
-        vary: usize,
-    },
-}
-
 /// Results a sweep can leave out (no image; the manifest row stays, with `skipped`).
 pub const SKIP_KINDS: &[&str] = &["empty", "full", "uniform"];
-
-fn ca_options(v: &Value) -> Value {
-    let mut ca = Map::new();
-    for k in args::CA_KEYS {
-        if let Some(x) = get(v, k) {
-            ca.insert(k.to_string(), x.clone());
-        }
-    }
-    Value::Object(ca)
-}
-
-/// The base of every run, and the RNG seed (the scene's unless `rng_seed` is given).
-fn parse_base(v: &Value) -> Result<(Base, u64), String> {
-    let ca = ca_options(v);
-    let rng = get_u64(v, "rng_seed")?;
-    let Some(sc) = get(v, "scene") else {
-        if get(v, "ca").is_some() {
-            return Err("`ca` (which CA to sweep) needs a `scene`".into());
-        }
-        return Ok((Base::Plain { ca }, rng.unwrap_or(1)));
-    };
-    let scene: Scene = match sc {
-        Value::String(t) => Scene::from_json(t)?,
-        x => serde_json::from_value(x.clone()).map_err(|e| format!("bad scene: {e}"))?,
-    };
-    let rng = rng.unwrap_or(scene.rng_state);
-    Ok((
-        Base::Scene {
-            scene: Box::new(scene),
-            select: get(v, "ca").cloned().unwrap_or(json!(0)),
-            ca,
-            vary: 0,
-        },
-        rng,
-    ))
-}
-
-impl Base {
-    /// Find the varied CA of a scene base (replays the scene's start once).
-    fn resolve(&mut self, topo: &Arc<Topology>, rng: u64) -> Result<(), String> {
-        let Base::Scene {
-            scene,
-            select,
-            vary,
-            ..
-        } = self
-        else {
-            return Ok(());
-        };
-        let (w, created) = replay_start(topo, rng, scene, None)?;
-        if w.cas.is_empty() {
-            return Err("the sweep's scene has no CA".into());
-        }
-        let pos = match select {
-            Value::String(name) => w
-                .cas
-                .iter()
-                .position(|c| c.name.eq_ignore_ascii_case(name) || c.notation() == *name)
-                .ok_or_else(|| format!("the scene has no CA named \"{name}\""))?,
-            x => {
-                let i = x
-                    .as_u64()
-                    .ok_or_else(|| format!("`ca` should be a number (from 0) or a name, got {x}"))?
-                    as usize;
-                if i >= w.cas.len() {
-                    return Err(format!(
-                        "`ca` is {i}, but the scene has {} CAs (counting from 0)",
-                        w.cas.len()
-                    ));
-                }
-                i
-            }
-        };
-        let id = w.cas[pos].id;
-        *vary = created
-            .iter()
-            .position(|&c| c == id)
-            .ok_or("the scene's CA ids are not consistent")?;
-        Ok(())
-    }
-}
-
-/// A scene's start on `topo`: its CAs, then its commands up to the first step (scripted
-/// sequences are left out). With `vary` = (k, rule, options), the k-th CA created runs `rule`
-/// and later rule changes to it are ignored. Returns the world and the ids of the CAs created,
-/// in order.
-fn replay_start(
-    topo: &Arc<Topology>,
-    rng: u64,
-    scene: &Scene,
-    vary: Option<(usize, &str, &Value)>,
-) -> Result<(World, Vec<u32>), String> {
-    let mut w = World::on_topology(topo.clone(), rng);
-    for t in &scene.tables {
-        w.apply(Command::AddTable { table: t.clone() })?;
-    }
-    for p in &scene.palettes {
-        w.apply(Command::SetPalette { palette: p.clone() })?;
-    }
-    let mut created = vec![];
-    let fix = |k: usize, mut s: CaSpec| -> Result<CaSpec, String> {
-        if let Some((kv, rule, opts)) = vary
-            && kv == k
-        {
-            let r = args::resolve_rule(rule);
-            if s.rule != r {
-                // A name like "Rule 30" would be wrong for the new rule.
-                s.name = None;
-                s.rule = r;
-            }
-            args::apply_ca_options(&mut s, opts)?;
-        }
-        Ok(s)
-    };
-    for s in &scene.cas {
-        let s = fix(created.len(), s.clone())?;
-        created.push(w.apply(Command::AddCa { ca: s })?.new_id.unwrap_or(0));
-    }
-    for c in &scene.commands {
-        let vary_id = vary.and_then(|(k, _, _)| created.get(k).copied());
-        match c {
-            Command::Step { .. } => break,
-            Command::SetScript { .. } | Command::ScriptGoto { .. } => {}
-            Command::AddCa { ca } => {
-                let s = fix(created.len(), ca.clone())?;
-                let id = w.apply(Command::AddCa { ca: s })?.new_id.unwrap_or(0);
-                created.push(id);
-            }
-            Command::UpdateCa { id, change } if Some(*id) == vary_id && change.rule.is_some() => {
-                let mut change = change.clone();
-                change.rule = None;
-                w.apply(Command::UpdateCa { id: *id, change })?;
-            }
-            c => {
-                w.apply(c.clone())?;
-            }
-        }
-    }
-    Ok((w, created))
-}
-
-/// A run's world at generation 0, and the id of the CA whose rule the sweep varies.
-fn start_world(
-    topo: &Arc<Topology>,
-    rng: u64,
-    base: &Base,
-    rule: &str,
-) -> Result<(World, u32), String> {
-    match base {
-        Base::Plain { ca } => {
-            let mut w = World::on_topology(topo.clone(), rng);
-            // Through a command, so the world's scene (Save scene, Quick Start) includes the CA.
-            let id = w
-                .apply(Command::AddCa {
-                    ca: args::ca_spec(rule, ca)?,
-                })?
-                .new_id
-                .unwrap_or(0);
-            Ok((w, id))
-        }
-        Base::Scene {
-            scene, ca, vary, ..
-        } => {
-            let (w, created) = replay_start(topo, rng, scene, Some((*vary, rule, ca)))?;
-            Ok((w, created[*vary]))
-        }
-    }
-}
 
 fn parse_skip(v: &Value) -> Result<Vec<String>, String> {
     let list: Vec<String> = match get(v, "skip") {
@@ -368,18 +184,6 @@ pub fn skip_reason(skip: &[String], d: &Map<String, Value>) -> Option<String> {
             _ => false,
         })
         .cloned()
-}
-
-/// The screen a sweep fills: the host's, changed by `screen` and `cell_px`.
-fn sweep_screen(v: &Value, mut screen: Screen) -> Result<Screen, String> {
-    if let Some(s) = get_str(v, "screen")? {
-        let (w, h) = Screen::parse_size(s)?;
-        (screen.width, screen.height) = (w, h);
-    }
-    if let Some(px) = args::get_f64(v, "cell_px")? {
-        screen.cell_px = px.clamp(0.5, 4096.0);
-    }
-    Ok(screen)
 }
 
 struct Prepared {
@@ -952,31 +756,6 @@ pub fn estimate(
         bytes_per_image: (!bytes.is_empty())
             .then(|| bytes.iter().sum::<usize>() as f64 / bytes.len() as f64),
     })
-}
-
-/// One run of a finished sweep at generation 0, rebuilt from the folder's `run.json` and the
-/// run's rule (a manifest row): for hosts that open a sweep result to watch it live. Running it
-/// for the row's `generations` reproduces the row's hash.
-pub fn run_world(run_json: &Value, rule: &str) -> Result<World, String> {
-    let settings = run_json
-        .get("sweep")
-        .ok_or("run.json has no sweep settings (is this a sweep folder?)")?;
-    let (mut base, rng) = parse_base(settings)?;
-    let tiling: TilingSpec = match settings.get("resolved_tiling") {
-        Some(t) if !t.is_null() => {
-            serde_json::from_value(t.clone()).map_err(|e| format!("run.json tiling: {e}"))?
-        }
-        _ => {
-            let screen = run_json
-                .get("screen")
-                .and_then(|s| serde_json::from_value::<Screen>(s.clone()).ok())
-                .unwrap_or_default();
-            args::tiling_spec(settings, &sweep_screen(settings, screen)?)?
-        }
-    };
-    let topo = Arc::new(Topology::build(&tiling)?);
-    base.resolve(&topo, rng)?;
-    start_world(&topo, rng, &base, rule).map(|(w, _)| w)
 }
 
 /// A `sweep(#{...})` script for a sweep given as JSON (for hosts that build sweeps from a form:
