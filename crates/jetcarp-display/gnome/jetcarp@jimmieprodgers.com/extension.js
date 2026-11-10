@@ -177,7 +177,11 @@ class JetcarpIndicator extends PanelMenu.Button {
         try {
             const file = GLib.build_filenamev([GLib.get_user_config_dir(), 'jetcarp', 'host-program']);
             const [, bytes] = GLib.file_get_contents(file);
-            Util.spawn([new TextDecoder().decode(bytes).trim()]);
+            // The program on the first line, then one argument per line (`jetcarp host serve`).
+            const argv = new TextDecoder().decode(bytes).split('\n').map(l => l.trimEnd()).filter(l => l.length > 0);
+            if (argv.length === 0)
+                throw new Error(`${file} is empty`);
+            Util.spawn(argv);
         } catch (e) {
             Main.notifyError('JETCARP', `Could not start the host: ${e.message}`);
         }

@@ -1,4 +1,6 @@
-//! `jetcarp`: run JETCARP scenes headless, print state hashes, export PNGs.
+//! `jetcarp`: JETCARP's one program. With no subcommand it opens the app; the subcommands are
+//! the command line (run scenes headless, print state hashes, export PNGs, search, catalogue),
+//! the background host (`jetcarp host serve`), and the MCP server (`jetcarp mcp`).
 
 use anyhow::{Context, Result, bail};
 use jetcarp_core::render::{RenderOptions, png_metadata, write_png};
@@ -28,11 +30,17 @@ mod wallpaper_cmd;
 #[command(
     name = "jetcarp",
     version,
-    about = "JETCARP cellular automata research tool (command line)"
+    about = "JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program",
+    long_about = "JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program.\n\n\
+                  With no subcommand, `jetcarp` opens the app (the app options below apply). \
+                  The subcommands run JETCARP from the command line.",
+    args_conflicts_with_subcommands = true
 )]
 struct Cli {
+    #[command(flatten)]
+    app: jetcarp_app::LaunchArgs,
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
@@ -192,7 +200,7 @@ enum Cmd {
     Rules,
     /// Run a Rhai script: worlds, runs, images, parallel rule sweeps (see README "Scripting").
     Script(script_cmd::ScriptArgs),
-    /// Control the running JETCARP app (AI control on, or `jetcarp-app --control`): `status`,
+    /// Control the running JETCARP app (AI control on, or `jetcarp --control`): `status`,
     /// `screensaver on|off [--profile NAME]`, `profiles`, `display ...`, `play`, `pause`,
     /// `speed N`, `next`, `previous`,
     /// `call <tool> <json>`.
@@ -242,12 +250,15 @@ enum Cmd {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let Some(cmd) = cli.cmd else {
+        return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
+    };
     // Scripts may ask for GPU toppling of large sandpiles.
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()
             .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
     });
-    match cli.cmd {
+    match cmd {
         Cmd::Run {
             scene,
             gens,

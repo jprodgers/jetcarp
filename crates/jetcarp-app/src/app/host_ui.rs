@@ -366,8 +366,7 @@ impl JetcarpApp {
         }
         let mut login = *h.login.get_or_insert_with(autostart::enabled);
         if ui.checkbox(&mut login, "Start at login").changed() {
-            let result =
-                autostart::sibling("jetcarp-host").and_then(|exe| autostart::set(login, &exe));
+            let result = autostart::host_command().and_then(|cmd| autostart::set(login, &cmd));
             match result {
                 Ok(()) => h.login = Some(login),
                 Err(e) => h.note = Some(e),
@@ -401,9 +400,7 @@ impl JetcarpApp {
             ask = ask.or(Some(json!({"action": "reload"})));
         }
         if start {
-            let args: [&str; 0] = [];
-            let result =
-                autostart::sibling("jetcarp-host").and_then(|p| autostart::spawn_detached(&p, &args));
+            let result = autostart::host_command().and_then(|cmd| cmd.spawn_detached());
             match result {
                 Ok(()) => h.note = None,
                 Err(e) => h.note = Some(e),

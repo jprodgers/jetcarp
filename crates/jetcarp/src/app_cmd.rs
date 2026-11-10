@@ -1,5 +1,5 @@
 //! `jetcarp app`: control the running JETCARP app through its local endpoint (the app's AI control,
-//! `jetcarp-app --control`): its displays and screensaver (`app_display`), running, and any other
+//! `jetcarp --control`): its displays and screensaver (`app_display`), running, and any other
 //! tool (`jetcarp app call <tool> <json>`).
 
 use anyhow::{Result, bail};

@@ -1,43 +1,126 @@
-//! Starting the background host at login, and finding JETCARP's other programs.
+//! Starting the background host at login, and the commands that start JETCARP's parts.
 //!
-//! Each platform's own per-user mechanism: a `.desktop` file in `~/.config/autostart` on Linux, a
-//! LaunchAgent on macOS (a login item needs a signed app bundle), and the `Run` registry key on
-//! Windows. None needs administrator rights.
+//! JETCARP is one program: `jetcarp` opens the app, `jetcarp host serve` runs the background host.
+//! On Windows a small windowless launcher, `jetcarpw.exe`, sits beside `jetcarp.exe` so that
+//! shortcuts, login and the `.scr` screen saver start it without a console window.
+//!
+//! Login uses each platform's own per-user mechanism: a `.desktop` file in `~/.config/autostart`
+//! on Linux, a LaunchAgent on macOS (a login item needs a signed app bundle), and the `Run`
+//! registry key on Windows. None needs administrator rights.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// JETCARP's program `name` beside this one.
-pub fn sibling(name: &str) -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let path = exe
-        .parent()
-        .ok_or("this program has no folder")?
-        .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-    if path.exists() {
-        Ok(path)
-    } else {
-        Err(format!(
-            "{} was not found. Build it with `cargo build --release -p {name}`.",
-            path.display()
-        ))
+/// A program and its arguments.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProgramCommand {
+    pub program: PathBuf,
+    pub args: Vec<String>,
+}
+
+impl ProgramCommand {
+    /// Starts it so it outlives this program.
+    pub fn spawn_detached(&self) -> Result<(), String> {
+        let args: Vec<&str> = self.args.iter().map(String::as_str).collect();
+        spawn_detached(&self.program, &args)
+    }
+
+    /// The command as one Windows command line (each part quoted when it needs it).
+    pub fn command_line(&self) -> String {
+        let quote = |s: &str| {
+            if s.is_empty() || s.contains([' ', '\t', '"']) {
+                format!("\"{}\"", s.replace('"', "\\\""))
+            } else {
+                s.to_string()
+            }
+        };
+        let mut parts = vec![format!("\"{}\"", self.program.display())];
+        parts.extend(self.args.iter().map(|a| quote(a)));
+        parts.join(" ")
     }
 }
 
-/// Records where the host program is, for the things that start it or its siblings from
-/// elsewhere: GNOME's menu, and the screen saver's copy of it.
-pub fn record_host_program(exe: &Path) -> Result<(), String> {
+/// The `jetcarp` executable: this program, or the `jetcarp` beside it when this is the Windows
+/// launcher or a `.scr` copy of it.
+pub fn jetcarp_exe() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let is_launcher = stem.eq_ignore_ascii_case("jetcarpw")
+        || exe
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("scr"));
+    if !is_launcher {
+        return Ok(exe);
+    }
+    let main = exe.with_file_name(format!("jetcarp{}", std::env::consts::EXE_SUFFIX));
+    if main.exists() {
+        Ok(main)
+    } else {
+        Err(format!("{} was not found", main.display()))
+    }
+}
+
+/// The windowless launcher `jetcarpw.exe` beside `jetcarp.exe` (Windows only; `None` elsewhere or
+/// when it is not installed, as after a plain `cargo install`).
+pub fn windows_launcher() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let p = jetcarp_exe().ok()?.with_file_name("jetcarpw.exe");
+    p.exists().then_some(p)
+}
+
+/// `jetcarp <args>`, through the windowless launcher on Windows when it is installed.
+pub fn self_command(args: &[&str]) -> Result<ProgramCommand, String> {
+    let program = match windows_launcher() {
+        Some(l) => l,
+        None => jetcarp_exe()?,
+    };
+    Ok(ProgramCommand {
+        program,
+        args: args.iter().map(|a| a.to_string()).collect(),
+    })
+}
+
+/// The command that starts the background host: `jetcarp host serve`.
+pub fn host_command() -> Result<ProgramCommand, String> {
+    self_command(&["host", "serve"])
+}
+
+/// The command that opens the app: `jetcarp` with no arguments.
+pub fn app_command() -> Result<ProgramCommand, String> {
+    self_command(&[])
+}
+
+/// Records how to start the host, for the things that start it from elsewhere: GNOME's menu and
+/// the Windows screen saver. The file holds the program on its first line and one argument per
+/// line after it.
+pub fn record_host_program(cmd: &ProgramCommand) -> Result<(), String> {
     let dir = crate::host_settings::config_dir().ok_or("no configuration folder")?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let file = dir.join("host-program");
-    std::fs::write(&file, exe.display().to_string()).map_err(|e| format!("{}: {e}", file.display()))
+    let mut text = cmd.program.display().to_string();
+    for a in &cmd.args {
+        text.push('\n');
+        text.push_str(a);
+    }
+    text.push('\n');
+    std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))
 }
 
-/// The host program last recorded.
-pub fn host_program() -> Option<PathBuf> {
+/// The host command last recorded.
+pub fn host_program() -> Option<ProgramCommand> {
     let file = crate::host_settings::config_dir()?.join("host-program");
-    let text = std::fs::read_to_string(file).ok()?;
-    Some(PathBuf::from(text.trim()))
+    parse_host_program(&std::fs::read_to_string(file).ok()?)
+}
+
+fn parse_host_program(text: &str) -> Option<ProgramCommand> {
+    let mut lines = text.lines().map(str::trim_end).filter(|l| !l.is_empty());
+    let program = PathBuf::from(lines.next()?);
+    Some(ProgramCommand {
+        program,
+        args: lines.map(str::to_string).collect(),
+    })
 }
 
 #[cfg(windows)]
@@ -63,22 +146,33 @@ pub fn spawn_detached(path: &Path, args: &[&str]) -> Result<(), String> {
         .map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// The contents of a Linux autostart entry for `exe`.
-pub fn desktop_entry(exe: &Path) -> String {
-    // The Desktop Entry spec: inside quotes these four take a backslash, and % is doubled.
-    let mut path = String::new();
-    for c in exe.display().to_string().chars() {
+/// One `Exec` argument of a desktop entry, quoted as the Desktop Entry spec asks: inside quotes
+/// these four take a backslash, and `%` is doubled.
+fn desktop_quote(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
         match c {
             '"' | '`' | '$' | '\\' => {
-                path.push('\\');
-                path.push(c);
+                out.push('\\');
+                out.push(c);
             }
-            '%' => path.push_str("%%"),
-            _ => path.push(c),
+            '%' => out.push_str("%%"),
+            _ => out.push(c),
         }
     }
+    out.push('"');
+    out
+}
+
+/// The contents of a Linux autostart entry for `cmd`.
+pub fn desktop_entry(cmd: &ProgramCommand) -> String {
+    let mut exec = desktop_quote(&cmd.program.display().to_string());
+    for a in &cmd.args {
+        exec.push(' ');
+        exec.push_str(&desktop_quote(a));
+    }
     format!(
-        "[Desktop Entry]\nType=Application\nName=JETCARP background host\nComment=Live cellular automata on the desktop\nExec=\"{path}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
+        "[Desktop Entry]\nType=Application\nName=JETCARP background host\nComment=Live cellular automata on the desktop\nExec={exec}\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
     )
 }
 
@@ -88,8 +182,15 @@ fn xml_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// The contents of a macOS LaunchAgent for `exe`.
-pub fn launch_agent(exe: &Path) -> String {
+/// The contents of a macOS LaunchAgent for `cmd`.
+pub fn launch_agent(cmd: &ProgramCommand) -> String {
+    let mut args = format!(
+        "        <string>{}</string>\n",
+        xml_escape(&cmd.program.display().to_string())
+    );
+    for a in &cmd.args {
+        args.push_str(&format!("        <string>{}</string>\n", xml_escape(a)));
+    }
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -99,16 +200,14 @@ pub fn launch_agent(exe: &Path) -> String {
     <string>{LAUNCH_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{}</string>
-    </array>
+{args}    </array>
     <key>RunAtLoad</key>
     <true/>
     <key>ProcessType</key>
     <string>Interactive</string>
 </dict>
 </plist>
-"#,
-        xml_escape(&exe.display().to_string())
+"#
     )
 }
 
@@ -145,8 +244,8 @@ mod registry {
         reg(&["query", KEY, "/v", NAME]).is_ok_and(|o| o.status.success())
     }
 
-    pub fn set(on: bool, exe: &std::path::Path) -> Result<(), String> {
-        let quoted = format!("\"{}\"", exe.display());
+    pub fn set(on: bool, cmd: &super::ProgramCommand) -> Result<(), String> {
+        let quoted = cmd.command_line();
         let out = if on {
             reg(&["add", KEY, "/v", NAME, "/t", "REG_SZ", "/d", &quoted, "/f"])
         } else if enabled() {
@@ -175,11 +274,11 @@ pub fn enabled() -> bool {
     }
 }
 
-/// Makes `exe` start at login, or stops that. A host already running is left alone.
-pub fn set(on: bool, exe: &Path) -> Result<(), String> {
+/// Makes `cmd` start at login, or stops that. A host already running is left alone.
+pub fn set(on: bool, cmd: &ProgramCommand) -> Result<(), String> {
     #[cfg(windows)]
     {
-        registry::set(on, exe)
+        registry::set(on, cmd)
     }
     #[cfg(not(windows))]
     {
@@ -195,9 +294,9 @@ pub fn set(on: bool, exe: &Path) -> Result<(), String> {
         let dir = path.parent().expect("a folder");
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         let text = if cfg!(target_os = "macos") {
-            launch_agent(exe)
+            launch_agent(cmd)
         } else {
-            desktop_entry(exe)
+            desktop_entry(cmd)
         };
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
     }
@@ -207,16 +306,45 @@ pub fn set(on: bool, exe: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    fn cmd(program: &str) -> ProgramCommand {
+        ProgramCommand {
+            program: PathBuf::from(program),
+            args: vec!["host".into(), "serve".into()],
+        }
+    }
+
     #[test]
     fn entries_quote_their_paths() {
-        let d = desktop_entry(Path::new("/opt/my \"jetcarp\"/jetcarp-host"));
-        assert!(d.contains(r#"Exec="/opt/my \"jetcarp\"/jetcarp-host""#), "{d}");
-        assert!(d.starts_with("[Desktop Entry]\n"));
-        let p = launch_agent(Path::new("/Users/a&b/jetcarp-host"));
+        let d = desktop_entry(&cmd("/opt/my \"jetcarp\"/jetcarp"));
         assert!(
-            p.contains("<string>/Users/a&amp;b/jetcarp-host</string>"),
-            "{p}"
+            d.contains(r#"Exec="/opt/my \"jetcarp\"/jetcarp" "host" "serve""#),
+            "{d}"
         );
+        assert!(d.starts_with("[Desktop Entry]\n"));
+        let p = launch_agent(&cmd("/Users/a&b/jetcarp"));
+        assert!(p.contains("<string>/Users/a&amp;b/jetcarp</string>"), "{p}");
+        assert!(p.contains("<string>host</string>\n        <string>serve</string>"), "{p}");
         assert!(p.contains("<key>RunAtLoad</key>"));
+    }
+
+    #[test]
+    fn windows_command_lines_quote_what_needs_it() {
+        let mut c = cmd(r"C:\Program Files\JETCARP\jetcarpw.exe");
+        assert_eq!(
+            c.command_line(),
+            r#""C:\Program Files\JETCARP\jetcarpw.exe" host serve"#
+        );
+        c.args.push("a b".into());
+        assert!(c.command_line().ends_with(r#" "a b""#));
+    }
+
+    #[test]
+    fn host_program_files_round_trip() {
+        let c = cmd("/usr/bin/jetcarp");
+        let text = "/usr/bin/jetcarp\nhost\nserve\n";
+        assert_eq!(parse_host_program(text), Some(c));
+        // A file from before the arguments were recorded: the program alone.
+        let old = parse_host_program("/usr/bin/jetcarp-host\n").unwrap();
+        assert!(old.args.is_empty());
     }
 }

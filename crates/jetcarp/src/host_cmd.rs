@@ -73,6 +73,14 @@ pub enum SaverAction {
 
 #[derive(Subcommand, Debug)]
 pub enum HostCmd {
+    /// Run the host in this process (what `start`, login and the GNOME menu run).
+    Serve(jetcarp_host::HostArgs),
+    /// Run as the Windows screen saver (what `JETCARP.scr` runs, with Windows' arguments).
+    #[command(hide = true)]
+    Scr {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Start the host (it keeps running after this command ends).
     Start {
         /// Run this rotation, for this run only.
@@ -235,15 +243,14 @@ fn start(rotation: Option<&str>, headless: bool, json: bool) -> Result<()> {
     if host_call(&serde_json::json!({"action": "status"})).is_ok() {
         bail!("the host is already running");
     }
-    let exe = autostart::sibling("jetcarp-host").map_err(|e| anyhow!(e))?;
-    let mut args = vec![];
+    let mut cmd = autostart::host_command().map_err(|e| anyhow!(e))?;
     if let Some(r) = rotation {
-        args.extend(["--rotation", r]);
+        cmd.args.extend(["--rotation".to_string(), r.to_string()]);
     }
     if headless {
-        args.push("--headless");
+        cmd.args.push("--headless".to_string());
     }
-    autostart::spawn_detached(&exe, &args).map_err(|e| anyhow!(e))?;
+    cmd.spawn_detached().map_err(|e| anyhow!(e))?;
     let t0 = Instant::now();
     loop {
         std::thread::sleep(Duration::from_millis(100));
@@ -289,6 +296,21 @@ fn gone_soon() -> bool {
 pub fn run(a: HostArgs) -> Result<()> {
     let j = a.json;
     match a.cmd {
+        HostCmd::Serve(args) => {
+            jetcarp_host::run(args);
+            Ok(())
+        }
+        HostCmd::Scr { args } => {
+            #[cfg(windows)]
+            {
+                jetcarp_host::run_scr(&args);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                bail!("`.scr` screen savers exist only on Windows ({} arguments)", args.len())
+            }
+        }
         HostCmd::Start { rotation, headless } => start(rotation.as_deref(), headless, j),
         HostCmd::Stop => {
             if let Err(e) = host_call(&json!({"action": "quit"})) {
@@ -397,12 +419,12 @@ pub fn run(a: HostArgs) -> Result<()> {
             Ok(())
         }
         HostCmd::Login { state } => {
-            let exe = autostart::sibling("jetcarp-host").map_err(|e| anyhow!(e))?;
-            autostart::set(state.b(), &exe).map_err(|e| anyhow!(e))?;
+            let cmd = autostart::host_command().map_err(|e| anyhow!(e))?;
+            autostart::set(state.b(), &cmd).map_err(|e| anyhow!(e))?;
             println!(
                 "{}",
                 if state.b() {
-                    format!("{} starts at login", exe.display())
+                    format!("{} starts at login", cmd.command_line())
                 } else {
                     "the host no longer starts at login".to_string()
                 }
@@ -490,8 +512,8 @@ pub fn run(a: HostArgs) -> Result<()> {
             match action {
                 GnomeAction::Install => {
                     gnome::install().map_err(|e| anyhow!(e))?;
-                    if let Ok(exe) = autostart::sibling("jetcarp-host") {
-                        autostart::record_host_program(&exe).map_err(|e| anyhow!(e))?;
+                    if let Ok(cmd) = autostart::host_command() {
+                        autostart::record_host_program(&cmd).map_err(|e| anyhow!(e))?;
                     }
                 }
                 GnomeAction::Remove => gnome::remove().map_err(|e| anyhow!(e))?,

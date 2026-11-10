@@ -1,0 +1,41 @@
+[package]
+name = "jetcarp"
+description = "JETCARP (Jimmie's Euclidean Tilings and Cellular Automata Research Program): cellular automata on square, hexagonal, Archimedean, k-uniform, isohedral and aperiodic tilings. One program: the app, the command line, the background host and the MCP server."
+readme = "../../README.md"
+keywords.workspace = true
+categories.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "jetcarp"
+path = "src/main.rs"
+
+# Windows only: a console-free launcher for shortcuts, login and the .scr screen saver.
+[[bin]]
+name = "jetcarpw"
+path = "src/bin/jetcarpw.rs"
+required-features = ["windows-launcher"]
+
+[features]
+windows-launcher = []
+
+[dependencies]
+jetcarp-core.workspace = true
+jetcarp-gpu.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+jetcarp-mcp.workspace = true
+jetcarp-display.workspace = true
+jetcarp-script.workspace = true
+jetcarp-app.workspace = true
+jetcarp-host.workspace = true
+rayon.workspace = true
+ctrlc = "3.5.2"

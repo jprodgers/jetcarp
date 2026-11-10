@@ -22,9 +22,18 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     if cfg!(target_os = "macos") {
         return crate::macsaver::install();
     }
-    let exe = crate::autostart::sibling("jetcarp-host")?;
-    crate::autostart::record_host_program(&exe)?;
-    crate::winsaver::install(&exe).map(|p| (p, vec![]))
+    if !cfg!(windows) {
+        return Err("`.scr` screen savers exist only on Windows".into());
+    }
+    // The `.scr` is a copy of the windowless launcher; it starts `jetcarp host scr` through the
+    // recorded host command.
+    let launcher = crate::autostart::windows_launcher().ok_or(
+        "jetcarpw.exe, JETCARP's windowless launcher, was not found beside jetcarp.exe. Install \
+         JETCARP from a release, or build it with `cargo build --release -p jetcarp --features \
+         windows-launcher`.",
+    )?;
+    crate::autostart::record_host_program(&crate::autostart::host_command()?)?;
+    crate::winsaver::install(&launcher).map(|p| (p, vec![]))
 }
 
 pub fn remove() -> Result<(), String> {

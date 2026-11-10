@@ -32,8 +32,8 @@ fn with_env(c: &mut Command, home: &Path) {
 }
 
 fn spawn(home: &Path, extra: &[&str]) -> Child {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp-host"));
-    c.args(["--headless", "--canvas", "160x120"])
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args(["host", "serve", "--headless", "--canvas", "160x120"])
         .args(extra)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

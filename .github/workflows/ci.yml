@@ -22,9 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Linux x86_64, os: ubuntu-24.04 }
-          - { name: Windows x86_64, os: windows-latest }
-          - { name: macOS arm64, os: macos-latest }
+          - { name: Linux x86_64, os: ubuntu-24.04, features: "" }
+          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher" }
+          - { name: macOS arm64, os: macos-latest, features: "" }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -37,9 +37,9 @@ jobs:
             pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
             libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
       - name: Build
-        run: cargo build --workspace --release --all-targets
+        run: cargo build --workspace --release --all-targets ${{ matrix.features }}
       - name: Test
-        run: cargo test --workspace --release --no-fail-fast
+        run: cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
 
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.

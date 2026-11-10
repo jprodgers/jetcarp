@@ -69,7 +69,7 @@
       "args": [
         "--release",
         "-p",
-        "jetcarp-app"
+        "jetcarp"
       ],
       "problemMatcher": [
         "$rustc"
@@ -81,7 +81,7 @@
       "command": "run",
       "args": [
         "-p",
-        "jetcarp-app"
+        "jetcarp"
       ],
       "problemMatcher": [
         "$rustc"
@@ -94,7 +94,7 @@
       "args": [
         "--release",
         "-p",
-        "jetcarp-cli",
+        "jetcarp",
         "--",
         "run",
         "${input:scene}",
@@ -114,7 +114,7 @@
       "args": [
         "--release",
         "-p",
-        "jetcarp-cli",
+        "jetcarp",
         "--",
         "sheet",
         "--kind",
@@ -136,7 +136,7 @@
       "command": "run",
       "args": [
         "-p",
-        "jetcarp-cli",
+        "jetcarp",
         "--",
         "tilings"
       ],

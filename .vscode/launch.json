@@ -21,21 +21,21 @@
       "name": "JETCARP app",
       "type": "lldb",
       "request": "launch",
-      "cargo": { "args": ["build", "-p", "jetcarp-app", "--bin", "jetcarp-app"], "filter": { "name": "jetcarp-app", "kind": "bin" } },
+      "cargo": { "args": ["build", "-p", "jetcarp", "--bin", "jetcarp"], "filter": { "name": "jetcarp", "kind": "bin" } },
       "cwd": "${workspaceFolder}"
     },
     {
       "name": "JETCARP app (release)",
       "type": "lldb",
       "request": "launch",
-      "cargo": { "args": ["build", "--release", "-p", "jetcarp-app", "--bin", "jetcarp-app"], "filter": { "name": "jetcarp-app", "kind": "bin" } },
+      "cargo": { "args": ["build", "--release", "-p", "jetcarp", "--bin", "jetcarp"], "filter": { "name": "jetcarp", "kind": "bin" } },
       "cwd": "${workspaceFolder}"
     },
     {
       "name": "jetcarp CLI: run scene to out/debug.png",
       "type": "lldb",
       "request": "launch",
-      "cargo": { "args": ["build", "-p", "jetcarp-cli", "--bin", "jetcarp"], "filter": { "name": "jetcarp", "kind": "bin" } },
+      "cargo": { "args": ["build", "-p", "jetcarp", "--bin", "jetcarp"], "filter": { "name": "jetcarp", "kind": "bin" } },
       "args": ["run", "${input:scene}", "--gens", "200", "--png", "out/debug.png"],
       "cwd": "${workspaceFolder}"
     },

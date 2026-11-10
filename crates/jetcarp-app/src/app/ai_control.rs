@@ -19,7 +19,7 @@ pub struct AiControl {
     listener: Option<Listener>,
     server: jetcarp_mcp::Server,
     pub window_open: bool,
-    /// `jetcarp-app --control`: switch on at launch (not saved).
+    /// `jetcarp --control`: switch on at launch (not saved).
     pub start_at_launch: bool,
     error: Option<String>,
     served: u64,

@@ -506,7 +506,7 @@ impl JetcarpApp {
         });
         ui.label(
             RichText::new(
-                "`jetcarp-app --screensaver --profile NAME` starts in it; `jetcarp app screensaver on|off`, `jetcarp app profiles`, and the MCP tool app_display control it.",
+                "`jetcarp --screensaver --profile NAME` starts in it; `jetcarp app screensaver on|off`, `jetcarp app profiles`, and the MCP tool app_display control it.",
             )
             .small()
             .weak(),

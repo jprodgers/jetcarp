@@ -428,12 +428,11 @@ impl Core {
     }
 
     pub fn open_app(&self) -> Result<(), String> {
-        autostart::sibling("jetcarp-app").and_then(|p| autostart::spawn_detached(&p, &[]))
+        autostart::app_command().and_then(|c| c.spawn_detached())
     }
 
     pub fn set_login(&self, on: bool) -> Result<(), String> {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        autostart::set(on, &exe)
+        autostart::set(on, &autostart::host_command()?)
     }
 
     /// Shows every screen as a wallpaper, or back in a window (saved).

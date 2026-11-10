@@ -2028,6 +2028,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jetcarp"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "jetcarp-app",
+ "jetcarp-core",
+ "jetcarp-display",
+ "jetcarp-gpu",
+ "jetcarp-host",
+ "jetcarp-mcp",
+ "jetcarp-script",
+ "rayon",
+ "serde_json",
+]
+
+[[package]]
 name = "jetcarp-app"
 version = "0.4.0"
 dependencies = [
@@ -2050,22 +2068,6 @@ dependencies = [
  "serde_json",
  "winit",
  "zbus",
-]
-
-[[package]]
-name = "jetcarp-cli"
-version = "0.4.0"
-dependencies = [
- "anyhow",
- "clap",
- "ctrlc",
- "jetcarp-core",
- "jetcarp-display",
- "jetcarp-gpu",
- "jetcarp-mcp",
- "jetcarp-script",
- "rayon",
- "serde_json",
 ]
 
 [[package]]

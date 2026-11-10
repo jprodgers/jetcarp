@@ -1,4 +1,5 @@
-//! JETCARP desktop app: egui UI over the jetcarp-core engine, tiles drawn with wgpu.
+//! JETCARP desktop app: egui UI over the jetcarp-core engine, tiles drawn with wgpu. The `jetcarp`
+//! program opens it with [`run`] when no subcommand is given.
 
 mod ants_ui;
 mod app;
@@ -32,8 +33,10 @@ mod start;
 mod sweep_form;
 mod thumbs;
 
-fn main() -> eframe::Result {
-    let launch = cli::LaunchArgs::from_env();
+pub use cli::LaunchArgs;
+
+/// Opens the app window and runs until it closes.
+pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // Scripts run from the app may ask for GPU toppling of large sandpiles.
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()
@@ -90,4 +93,5 @@ fn main() -> eframe::Result {
         opts,
         Box::new(move |cc| Ok(Box::new(app::JetcarpApp::new(cc, launch)))),
     )
+    .map_err(|e| e.to_string())
 }

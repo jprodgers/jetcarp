@@ -1,16 +1,12 @@
-//! `jetcarp-app` command-line flags. The environment hooks (`JETCARP_SCREENSHOT`, `JETCARP_SCENE`, ...)
+//! The app's command-line flags: `jetcarp [flags]` with no subcommand opens the app. The environment hooks (`JETCARP_SCREENSHOT`, `JETCARP_SCENE`, ...)
 //! keep working alongside them. Display flags change the display settings as the Display pane
 //! would (and are saved with them).
 
-use clap::Parser;
+use clap::Args;
 use std::path::PathBuf;
 
-#[derive(Parser, Debug, Default, Clone)]
-#[command(
-    name = "jetcarp-app",
-    version,
-    about = "JETCARP desktop app: cellular automata on many tilings"
-)]
+#[derive(Args, Debug, Default, Clone)]
+#[command(next_help_heading = "App options (with no subcommand)")]
 pub struct LaunchArgs {
     /// Start in screensaver mode (Esc leaves it).
     #[arg(long)]
@@ -69,21 +65,21 @@ fn parse_cell_px(s: &str) -> Result<f32, String> {
     }
 }
 
-impl LaunchArgs {
-    /// Parse the process arguments (exits with a message on bad flags, as clap does).
-    pub fn from_env() -> LaunchArgs {
-        LaunchArgs::parse()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Top {
+        #[command(flatten)]
+        app: LaunchArgs,
+    }
 
     fn p(args: &[&str]) -> Result<LaunchArgs, clap::Error> {
-        let mut v = vec!["jetcarp-app"];
+        let mut v = vec!["jetcarp"];
         v.extend_from_slice(args);
-        LaunchArgs::try_parse_from(v)
+        Top::try_parse_from(v).map(|t| t.app)
     }
 
     #[test]

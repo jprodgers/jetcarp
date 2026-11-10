@@ -15,7 +15,7 @@ pub fn handles(name: &str) -> bool {
 }
 
 /// The error a host without a display gives.
-pub const APP_ONLY: &str = "app_display is only available in the JETCARP app: start the app with AI control on (or `jetcarp-app --control`), then use `jetcarp mcp --app` or call use_app with attach=true";
+pub const APP_ONLY: &str = "app_display is only available in the JETCARP app: start the app with AI control on (or `jetcarp --control`), then use `jetcarp mcp --app` or call use_app with attach=true";
 
 pub fn definitions() -> Vec<Value> {
     vec![tool(

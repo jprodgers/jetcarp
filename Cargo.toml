@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp-cli", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
-default-members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp-cli", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
+members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
+default-members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
 
 [workspace.package]
 version = "0.4.0"
@@ -22,6 +22,8 @@ jetcarp-gpu = { path = "crates/jetcarp-gpu" }
 jetcarp-mcp = { path = "crates/jetcarp-mcp" }
 jetcarp-script = { path = "crates/jetcarp-script" }
 jetcarp-display = { path = "crates/jetcarp-display" }
+jetcarp-app = { path = "crates/jetcarp-app" }
+jetcarp-host = { path = "crates/jetcarp-host" }
 rayon = "1.12"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

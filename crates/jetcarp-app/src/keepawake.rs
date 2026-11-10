@@ -15,10 +15,13 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
     /// `org.freedesktop.portal.Inhibit` (XDG desktop portal).
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Portal,
     /// `org.freedesktop.ScreenSaver`.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     ScreenSaver,
     /// `org.gnome.SessionManager`.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     GnomeSession,
     /// `SetThreadExecutionState` (Windows).
     #[cfg_attr(not(windows), allow(dead_code))]
