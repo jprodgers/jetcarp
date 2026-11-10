@@ -1,6 +1,7 @@
 //! `jetcarp hashlife`: jump a pattern or a wrap-edge world far ahead with HashLife.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use jetcarp_api::args;
 use jetcarp_core::hashlife::{self, Options, Plane};
 use jetcarp_core::render::{RenderOptions, png_metadata, write_png};
 use jetcarp_core::*;
@@ -76,12 +77,7 @@ fn parse_region(s: &str) -> Result<(i64, i64, u64, u64)> {
 }
 
 fn boundary(s: &str) -> Result<Boundary> {
-    Ok(match s {
-        "dead" => Boundary::Dead,
-        "wrap" => Boundary::Wrap,
-        "live" => Boundary::Live,
-        _ => bail!("--boundary is dead, wrap, or live"),
-    })
+    args::parse_boundary(s).map_err(|_| anyhow!("--boundary is dead, wrap, or live"))
 }
 
 /// Run the ordinary engine on `w` for `gens`, returning (seconds, backend).

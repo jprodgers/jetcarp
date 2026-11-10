@@ -1,6 +1,7 @@
 //! `jetcarp evolve`: evolutionary glider search (`jetcarp_core::evolve`), after Edmond's method.
 
 use anyhow::{Result, anyhow};
+use jetcarp_api::args;
 use jetcarp_core::evolve::{EvolveSpec, evolve, write_outputs};
 use jetcarp_core::library::{self, Library};
 use jetcarp_core::topology::Nb;
@@ -66,12 +67,14 @@ pub struct EvolveArgs {
     quiet: bool,
 }
 
+/// `--nb` for evolve and track.
 pub fn parse_nb(s: &str) -> Result<Nb> {
-    match s.trim().to_ascii_lowercase().as_str() {
-        "touch" | "vertex" | "moore" => Ok(Nb::Touch),
-        "edge" | "vonneumann" | "von-neumann" => Ok(Nb::Edge),
-        o => Err(anyhow!("neighbourhood '{o}' is not touch or edge")),
-    }
+    args::nb_word(s).ok_or_else(|| {
+        anyhow!(
+            "neighbourhood '{}' is not touch or edge",
+            s.trim().to_ascii_lowercase()
+        )
+    })
 }
 
 pub fn run(a: EvolveArgs) -> Result<()> {

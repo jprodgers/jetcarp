@@ -176,24 +176,8 @@ pub(crate) fn search_into(lib: &Library, v: &Value, ctx: &crate::Ctx) -> Result<
         return Err("give `rules`, e.g. [\"B3/S23\"]".into());
     }
     let t = list("tilings")?.replace(';', ",");
-    let tilings = jetcarp_core::library::tiling_list(if t.trim().is_empty() { "square" } else { &t })?;
-    let (w, h) = match v.get("size") {
-        None | Some(Value::Null) => (64, 64),
-        Some(Value::Number(n)) => {
-            let n = n.as_u64().ok_or("`size` must be a whole number")? as u32;
-            (n, n)
-        }
-        Some(Value::String(s)) => crate::Screen::parse_size(s)?,
-        Some(Value::Array(a)) if a.len() == 2 => (
-            a[0].as_u64().ok_or("`size` must be [w, h]")? as u32,
-            a[1].as_u64().ok_or("`size` must be [w, h]")? as u32,
-        ),
-        Some(x) => {
-            return Err(format!(
-                "`size` must be [w, h], \"WxH\", or a number, got {x}"
-            ));
-        }
-    };
+    let tilings = args::tilings_or_square(&t)?;
+    let (w, h) = args::get_pair(v, "size", (64, 64), ("w", "h"))?;
     ctx.check_cells(w as usize * h as usize)?;
     let d = SearchSpec::default();
     let spec = SearchSpec {
@@ -342,41 +326,19 @@ pub(crate) fn hunt_into(
                     .iter()
                     .map(crate::jobs::one_tiling)
                     .collect::<Result<Vec<_>, _>>()?,
-                _ => {
-                    let t = list("tilings")?.join(",");
-                    jetcarp_core::library::tiling_list(if t.trim().is_empty() {
-                        "square"
-                    } else {
-                        &t
-                    })?
-                }
+                _ => args::tilings_or_square(&list("tilings")?.join(","))?,
             };
-            let (w, h) = match v.get("size") {
-                None | Some(Value::Null) => (d.soup.w, d.soup.h),
-                Some(Value::Number(n)) => {
-                    let n = n.as_u64().ok_or("`size` must be a whole number")? as u32;
-                    (n, n)
-                }
-                Some(Value::String(s)) => crate::Screen::parse_size(s)?,
-                Some(Value::Array(a)) if a.len() == 2 => (
-                    a[0].as_u64().ok_or("`size` must be [w, h]")? as u32,
-                    a[1].as_u64().ok_or("`size` must be [w, h]")? as u32,
-                ),
-                Some(x) => {
-                    return Err(format!(
-                        "`size` must be [w, h], \"WxH\", or a number, got {x}"
-                    ));
-                }
-            };
+            let (w, h) = args::get_pair(v, "size", (d.soup.w, d.soup.h), ("w", "h"))?;
             let soups = args::get_u64(v, "soups")?.unwrap_or(10_000);
             let spec = HuntSpec {
                 rules,
                 tilings,
                 neighborhood: match args::get_str(v, "nb")? {
                     None => None,
-                    Some("touch") => Some(jetcarp_core::Nb::Touch),
-                    Some("edge") => Some(jetcarp_core::Nb::Edge),
-                    Some(x) => return Err(format!("`nb` is \"touch\" or \"edge\", not {x}")),
+                    Some(x) => Some(
+                        args::nb_word(x)
+                            .ok_or_else(|| format!("`nb` is \"touch\" or \"edge\", not {x}"))?,
+                    ),
                 },
                 soups: (soups > 0).then_some(soups),
                 soup: SoupSpec {

@@ -3,6 +3,7 @@
 //! resumable job.
 
 use anyhow::{Context, Result, bail};
+use jetcarp_api::args;
 use jetcarp_core::hunt::job::{self, HuntOptions, HuntProgress, HuntSpec};
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
 use jetcarp_core::library::{self, JobStatus, Library};
@@ -104,17 +105,6 @@ fn msg<T>(r: Result<T, String>) -> Result<T> {
     r.map_err(anyhow::Error::msg)
 }
 
-fn parse_size(s: &str) -> Result<(u32, u32)> {
-    let (w, h) = s
-        .split_once(['x', 'X'])
-        .map(|(a, b)| (a.trim(), b.trim()))
-        .unwrap_or((s.trim(), s.trim()));
-    Ok((
-        w.parse().context("soup width")?,
-        h.parse().context("soup height")?,
-    ))
-}
-
 fn show(p: &HuntProgress, json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(p).unwrap());
@@ -214,15 +204,16 @@ pub fn run(a: HuntArgs) -> Result<()> {
                     .with_context(|| format!("reading {}", p.display()))?;
                 rules.extend(census::parse_rule_list(&text));
             }
-            let (w, h) = parse_size(&a.size)?;
+            let (w, h) = args::size_pair(&a.size).map_err(|e| anyhow::anyhow!("soup {e}"))?;
             let spec = HuntSpec {
                 rules,
                 tilings: msg(library::tiling_list(&a.tilings))?,
                 neighborhood: match a.nb.as_deref() {
                     None => None,
-                    Some("touch") | Some("t") => Some(Nb::Touch),
-                    Some("edge") | Some("e") => Some(Nb::Edge),
-                    Some(x) => bail!("--nb is touch or edge, not {x}"),
+                    Some(x) => match args::nb_word(x) {
+                        Some(nb) => Some(nb),
+                        None => bail!("--nb is touch or edge, not {x}"),
+                    },
                 },
                 soups: (!a.forever).then_some(a.soups),
                 soup: SoupSpec {

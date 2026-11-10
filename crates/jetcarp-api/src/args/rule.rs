@@ -7,12 +7,13 @@ use jetcarp_core::{Nb, rules};
 use serde_json::Value;
 
 /// Letters and digits only, lowercased: how rule names are compared, so "Brian's Brain",
-/// "brians-brain", and "BRIANS BRAIN" are one name.
-pub(crate) fn squash(s: &str) -> String {
+/// "brians-brain", and "BRIANS BRAIN" are one name (the MCP tools compare CA and family names
+/// the same way).
+pub fn squash(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric())
-        .collect::<String>()
-        .to_ascii_lowercase()
+        .flat_map(|c| c.to_lowercase())
+        .collect()
 }
 
 /// The notation of the catalog rule whose [`squash`]ed name is `key`.
@@ -36,19 +37,34 @@ pub fn resolve_rule(text: &str) -> String {
         .unwrap_or_else(|| t.to_string())
 }
 
-/// A neighbourhood by name: `touch` (also `touching`, `moore`, `corner`) or `edge`
-/// (`von_neumann`, `vonneumann`). Any case; `-` and spaces count as `_`.
-pub fn parse_nb(s: &str) -> Result<Nb, String> {
+/// A neighbourhood by name: `touch` (also `touching`, `moore`, `corner`, `vertex`, `t`, `8`) or
+/// `edge` (`von_neumann`, `vonneumann`, `vn`, `e`, `4`). Any case; `-` and spaces count as `_`,
+/// so `von-neumann` and `von Neumann` work too. `None` for anything else, so each caller can
+/// say what it expected.
+pub fn nb_word(s: &str) -> Option<Nb> {
     match s
         .trim()
         .to_ascii_lowercase()
         .replace(['-', ' '], "_")
         .as_str()
     {
-        "touch" | "touching" | "moore" | "corner" => Ok(Nb::Touch),
-        "edge" | "von_neumann" | "vonneumann" => Ok(Nb::Edge),
-        _ => Err(format!("neighborhood must be touch or edge, got '{s}'")),
+        "touch" | "touching" | "moore" | "corner" | "vertex" | "t" | "8" => Some(Nb::Touch),
+        "edge" | "von_neumann" | "vonneumann" | "vn" | "e" | "4" => Some(Nb::Edge),
+        _ => None,
     }
+}
+
+/// A neighbourhood ([`nb_word`]), as a CA's `neighborhood` option.
+pub fn parse_nb(s: &str) -> Result<Nb, String> {
+    nb_word(s).ok_or_else(|| format!("neighborhood must be touch or edge, got '{s}'"))
+}
+
+/// A sandpile's neighbourhood ([`nb_word`]); the message puts `edge`, the sandpile default,
+/// first.
+pub fn parse_pile_nb(s: &str) -> Result<Nb, String> {
+    nb_word(s).ok_or_else(|| {
+        format!("neighborhood must be edge (von Neumann) or touch (Moore), got '{s}'")
+    })
 }
 
 /// Keys accepted by [`ca_spec`].
@@ -137,9 +153,9 @@ mod tests {
     }
 
     #[test]
-    fn neighbourhoods() {
-        for s in ["touch", "Touching", "moore", "corner"] {
-            assert_eq!(parse_nb(s), Ok(Nb::Touch), "{s}");
+    fn neighbourhoods_by_every_name() {
+        for s in ["touch", "Touching", "moore", "corner", "vertex", "t", "8"] {
+            assert_eq!(nb_word(s), Some(Nb::Touch), "{s}");
         }
         for s in [
             "edge",
@@ -147,12 +163,21 @@ mod tests {
             "von-neumann",
             "Von Neumann",
             "vonneumann",
+            "vn",
         ] {
-            assert_eq!(parse_nb(s), Ok(Nb::Edge), "{s}");
+            assert_eq!(nb_word(s), Some(Nb::Edge), "{s}");
         }
+        assert_eq!(nb_word(" e "), Some(Nb::Edge));
+        assert_eq!(nb_word("4"), Some(Nb::Edge));
+        assert_eq!(nb_word("hex"), None);
         assert_eq!(
             parse_nb("hex").unwrap_err(),
             "neighborhood must be touch or edge, got 'hex'"
+        );
+        assert!(
+            parse_pile_nb("hex")
+                .unwrap_err()
+                .contains("edge (von Neumann)")
         );
     }
 

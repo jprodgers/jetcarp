@@ -656,22 +656,6 @@ pub fn parse_grains(s: &str) -> Result<u64, String> {
     Err(bad())
 }
 
-/// `edge` (von Neumann on squares) or `touch` (Moore).
-pub fn parse_nb(s: &str) -> Result<Nb, String> {
-    match s
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['-', ' '], "_")
-        .as_str()
-    {
-        "edge" | "von_neumann" | "vonneumann" | "vn" | "4" => Ok(Nb::Edge),
-        "touch" | "moore" | "corner" | "8" => Ok(Nb::Touch),
-        _ => Err(format!(
-            "neighborhood must be edge (von Neumann) or touch (Moore), got '{s}'"
-        )),
-    }
-}
-
 /// Seconds left: the running step is predicted from the previous step's time times the ratio of
 /// the last two step times (clamped to 1–8), and each later step the same ratio again.
 /// `elapsed` is the time spent in the running step so far.

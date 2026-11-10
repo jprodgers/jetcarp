@@ -3,7 +3,7 @@
 
 use crate::api::{from_json, to_json};
 use crate::{Ctx, Progress};
-use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64};
+use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64, nb_word};
 use jetcarp_core::evolve::catalog::catalog_gliders;
 use jetcarp_core::evolve::{EvolveSpec, evolve, write_outputs};
 use jetcarp_core::library::movers::{TrackSpec, mover_record, track};
@@ -17,9 +17,8 @@ type R<T> = Result<T, Box<EvalAltResult>>;
 
 fn nb_of(v: &Value) -> Result<Nb, String> {
     match get_str(v, "nb")? {
-        None | Some("touch") | Some("vertex") => Ok(Nb::Touch),
-        Some("edge") => Ok(Nb::Edge),
-        Some(o) => Err(format!("nb '{o}' is not touch or edge")),
+        None => Ok(Nb::Touch),
+        Some(o) => nb_word(o).ok_or_else(|| format!("nb '{o}' is not touch or edge")),
     }
 }
 

@@ -1,6 +1,7 @@
 //! `jetcarp census` and `jetcarp objects`.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use jetcarp_api::args;
 use jetcarp_core::census::{self, CensusOptions, CensusReport, CensusSpec, RunClass};
 use jetcarp_core::objects::{ObjectOptions, find_objects};
 use jetcarp_core::render::{RenderOptions, png_metadata, render_with_colors, write_png};
@@ -149,30 +150,8 @@ fn set_threads(t: Option<usize>) -> Result<()> {
     Ok(())
 }
 
-fn parse_size(s: &str) -> Result<SizeSpec> {
-    let l = s.to_ascii_lowercase();
-    if let Some((w, h)) = l.split_once('x') {
-        return Ok(SizeSpec::Rect {
-            w: w.trim().parse().context("width")?,
-            h: h.trim().parse().context("height")?,
-        });
-    }
-    if let Some(n) = l.strip_prefix("level").or_else(|| l.strip_prefix('l')) {
-        return Ok(SizeSpec::Level(n.trim().parse().context("level")?));
-    }
-    Ok(SizeSpec::Cells(
-        l.trim()
-            .parse()
-            .context("size is WxH, a cell count, or L<level>")?,
-    ))
-}
-
 fn parse_nb(s: &str) -> Result<Nb> {
-    match s.to_ascii_lowercase().as_str() {
-        "touch" | "moore" | "t" => Ok(Nb::Touch),
-        "edge" | "vonneumann" | "von_neumann" | "e" => Ok(Nb::Edge),
-        _ => bail!("--nb is touch or edge"),
-    }
+    args::nb_word(s).ok_or_else(|| anyhow!("--nb is touch or edge"))
 }
 
 fn tiling_from(a: &CensusArgs) -> Result<TilingSpec> {
@@ -183,14 +162,10 @@ fn tiling_from(a: &CensusArgs) -> Result<TilingSpec> {
         let t = v.get("tiling").cloned().unwrap_or(v);
         return serde_json::from_value(t).context("tiling JSON");
     }
-    let boundary = match a.boundary.to_ascii_lowercase().as_str() {
-        "wrap" | "torus" => Boundary::Wrap,
-        "dead" => Boundary::Dead,
-        "live" => Boundary::Live,
-        _ => bail!("--boundary is wrap, dead, or live"),
-    };
+    let boundary = args::parse_boundary(&a.boundary)
+        .map_err(|_| anyhow!("--boundary is wrap, dead, or live"))?;
     Ok(TilingSpec::new(&a.family)
-        .with_size(parse_size(&a.size)?)
+        .with_size(args::size_spec(&a.size).map_err(anyhow::Error::msg)?)
         .with_boundary(boundary))
 }
 

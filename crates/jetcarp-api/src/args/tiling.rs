@@ -1,10 +1,10 @@
-//! Tilings by id or as maps, boundaries, and the scripts' tiling options.
+//! Tilings by id or as maps, tiling lists, boundaries, and the scripts' tiling options.
 
 use super::json::{get, get_str, get_u64};
 use super::size::Screen;
 use jetcarp_core::families::{self, FamilyKind};
 use jetcarp_core::topology::fill_size;
-use jetcarp_core::{Boundary, SizeSpec, TilingSpec, aperiodic, catalog};
+use jetcarp_core::{Boundary, SizeSpec, TilingSpec, aperiodic, catalog, library};
 use serde_json::{Value, json};
 
 /// Tiling id → spec: a family id (`square`, `hex`, `cairo`, `spectre`, `ih41`, ...), a catalog id
@@ -30,6 +30,17 @@ pub fn tiling_by_id(id: &str) -> Result<TilingSpec, String> {
         }
     };
     Ok(TilingSpec::new(alias))
+}
+
+/// A tiling list as searches take it ([`library::tiling_list`]: keys separated by commas or
+/// spaces, plus sets such as `all-periodic` and `kuniform:2`), with an empty list meaning the
+/// square grid.
+pub fn tilings_or_square(text: &str) -> Result<Vec<TilingSpec>, String> {
+    library::tiling_list(if text.trim().is_empty() {
+        "square"
+    } else {
+        text
+    })
 }
 
 /// Whether the tiling is an aperiodic patch (spectre, hat, Penrose): sized by level, never
@@ -211,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn tiling_ids_any_case() {
+    fn tiling_ids_any_case_and_lists() {
         assert_eq!(tiling_by_id(" HEX ").unwrap().family, "hex");
         let k = tiling_by_id("K2-005").unwrap();
         assert_eq!(k.params, Some(json!({"catalog": "k2-005"})));
@@ -220,6 +231,10 @@ mod tests {
                 .unwrap_err()
                 .starts_with("unknown tiling 'nope'")
         );
+        let sq = tilings_or_square("  ").unwrap();
+        assert_eq!(sq.len(), 1);
+        assert_eq!(sq[0].family, "square");
+        assert_eq!(tilings_or_square("square, hex").unwrap().len(), 2);
     }
 
     #[test]

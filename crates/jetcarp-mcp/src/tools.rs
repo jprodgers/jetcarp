@@ -4,6 +4,8 @@
 //! give a minimal example, and name the tool to call next.
 
 use crate::util;
+use jetcarp_api::args::mcp::{parse_ca, parse_seed, resolve_rule};
+use jetcarp_api::args::{self, rule::squash};
 use jetcarp_api::cells::{self, Grid};
 use jetcarp_api::world::Host;
 use jetcarp_core::render::{self, RenderOptions};
@@ -454,122 +456,9 @@ pub(crate) fn check_unknown(args: &Value, allowed: &[&str]) -> Result<(), String
     Ok(())
 }
 
-fn squash(s: &str) -> String {
-    s.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(|c| c.to_lowercase())
-        .collect()
-}
-
 /// Every named rule. (Once main's `rules::catalog()` is merged, return that: the full list.)
 fn rule_catalog() -> &'static [CatalogEntry] {
     jetcarp_core::rules::catalog()
-}
-
-/// A catalog rule name ("Brian's Brain", "life") becomes its notation; anything else is kept.
-pub fn resolve_rule(text: &str) -> String {
-    let k = squash(text);
-    let aliases = [
-        ("gameoflife", "Life"),
-        ("conway", "Life"),
-        ("conwayslife", "Life"),
-    ];
-    let k = aliases
-        .iter()
-        .find(|a| a.0 == k)
-        .map(|a| squash(a.1))
-        .unwrap_or(k);
-    rule_catalog()
-        .iter()
-        .find(|e| squash(e.name) == k)
-        .map(|e| e.notation.to_string())
-        .unwrap_or_else(|| text.to_string())
-}
-
-/// Seed shorthands: "random", "random:0.2", "ants:3", "pile:5000", {"random": 0.2}.
-pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
-    let bad = |e: String| {
-        format!(
-            "bad seed {v}: {e}. Use \"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"random_states\", \"ants:3\", \"pile:10000\", JACA \"signed:0.3:0.5\" (density, share of -1) or \"halves:0.3\" (+1 left, -1 right), \"pattern:blobs:0.4:by_region\", {{\"shape\": \"blobs\", \"count\": 3, \"density\": 0.4}}, or {{\"random\": {{\"density\": 0.2}}}}."
-        )
-    };
-    if let Some(s) = v.as_str() {
-        let s = s.trim().to_ascii_lowercase();
-        let (head, arg) = match s.split_once([':', '=', ' ']) {
-            Some((h, a)) => (h.trim().to_string(), Some(a.trim().to_string())),
-            None => (s.clone(), None),
-        };
-        let num = |d: f64| -> Result<f64, String> {
-            arg.as_deref()
-                .map(|a| {
-                    a.trim_end_matches('%')
-                        .parse::<f64>()
-                        .map_err(|e| e.to_string())
-                })
-                .transpose()
-                .map(|x| x.unwrap_or(d))
-        };
-        return match head.as_str() {
-            "random" => {
-                let mut d = num(0.3).map_err(bad)?;
-                if d > 1.0 {
-                    d /= 100.0;
-                }
-                if !(0.0..=1.0).contains(&d) {
-                    return Err(bad("density must be between 0 and 1".into()));
-                }
-                Ok(SeedSpec::Random { density: d })
-            }
-            "ants" => Ok(SeedSpec::Ants {
-                count: num(1.0).map_err(bad)?.clamp(1.0, 10_000.0) as u32,
-            }),
-            "pile" => Ok(SeedSpec::Pile {
-                grains: num(10_000.0).map_err(bad)?.clamp(1.0, 1e12) as u64,
-            }),
-            // Lenia: a built-in creature at the centre ("lenia:orbium"), or Gaussian bumps.
-            "lenia" => Ok(SeedSpec::Lenia {
-                name: arg.unwrap_or_else(|| "orbium".into()),
-                scale: 1.0,
-            }),
-            "gauss" | "gaussian" => Ok(SeedSpec::Gaussian {
-                count: num(1.0).map_err(bad)?.clamp(1.0, 10_000.0) as u32,
-                radius: 8.0,
-                peak: 1.0,
-            }),
-            "signed" | "mixed" | "halves" | "half" | "pattern" => jetcarp_api::args::parse_seed(v),
-            _ => serde_json::from_value(Value::String(head)).map_err(|e| bad(e.to_string())),
-        };
-    }
-    if v.get("shape").is_some() || v.get("pattern").is_some() {
-        return jetcarp_api::args::parse_seed(v);
-    }
-    if let Some(d) = v.get("random").and_then(|d| d.as_f64()) {
-        return parse_seed(&json!(format!("random:{d}")));
-    }
-    serde_json::from_value(v.clone()).map_err(|e| bad(e.to_string()))
-}
-
-/// A CA item from new_world or add_ca: a rule string or a CaSpec-like object.
-fn parse_ca(v: &Value) -> Result<CaSpec, String> {
-    if let Some(s) = v.as_str() {
-        return Ok(CaSpec::new(&resolve_rule(s)));
-    }
-    let mut o = v
-        .as_object()
-        .cloned()
-        .ok_or_else(|| format!("a CA must be a rule string or an object, got {v}"))?;
-    let rule = o
-        .get("rule")
-        .and_then(|r| r.as_str())
-        .ok_or("a CA object needs \"rule\", e.g. {\"rule\": \"Life\"}")?;
-    o.insert("rule".into(), json!(resolve_rule(rule)));
-    let seed = o.remove("seed").map(|s| parse_seed(&s)).transpose()?;
-    let mut spec: CaSpec =
-        serde_json::from_value(Value::Object(o)).map_err(|e| format!("bad CA {v}: {e}"))?;
-    if seed.is_some() {
-        spec.seed = seed;
-    }
-    Ok(spec)
 }
 
 fn check_tiling_size(spec: &TilingSpec) -> Result<(), String> {
@@ -612,26 +501,13 @@ fn max_level(family: &str) -> u32 {
 
 fn tiling_from_args(args: &Value) -> Result<TilingSpec, String> {
     let id = string(args, "tiling")?.unwrap_or("square").trim();
-    let low = id.to_ascii_lowercase();
-    let mut spec = if families::family(&low).is_some() {
-        TilingSpec::new(&low)
-    } else if catalog::get(&low).is_some() {
-        let mut s = TilingSpec::new("periodic");
-        s.params = Some(json!({"catalog": low}));
-        s
-    } else {
-        let alias = families::alias(&low);
-        match alias {
-            Some(a) => TilingSpec::new(a),
-            None => {
-                let ids: Vec<&str> = families::FAMILIES.iter().map(|f| f.id).collect();
-                return Err(format!(
-                    "unknown tiling '{id}'. Tiling ids: {}. See list_tilings.",
-                    ids.join(", ")
-                ));
-            }
-        }
-    };
+    let mut spec = args::tiling_by_id(id).map_err(|_| {
+        let ids: Vec<&str> = families::FAMILIES.iter().map(|f| f.id).collect();
+        format!(
+            "unknown tiling '{id}'. Tiling ids: {}. See list_tilings.",
+            ids.join(", ")
+        )
+    })?;
     let fam = families::family(&spec.family).unwrap();
     let aperiodic = fam.kind == families::FamilyKind::Aperiodic;
     let (w, h, cells, level) = (
@@ -685,12 +561,8 @@ fn tiling_from_args(args: &Value) -> Result<TilingSpec, String> {
     };
     spec.boundary = match string(args, "boundary")?.map(|s| s.to_ascii_lowercase()) {
         None => Boundary::Wrap,
-        Some(b) => match b.as_str() {
-            "wrap" | "torus" | "wrapped" | "periodic" => Boundary::Wrap,
-            "dead" | "none" | "empty" => Boundary::Dead,
-            "live" | "alive" => Boundary::Live,
-            _ => return Err(format!("boundary must be wrap, dead, or live, got '{b}'")),
-        },
+        Some(b) => args::parse_boundary(&b)
+            .map_err(|_| format!("boundary must be wrap, dead, or live, got '{b}'"))?,
     };
     if aperiodic {
         spec.boundary = Boundary::Dead;

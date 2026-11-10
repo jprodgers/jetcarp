@@ -110,12 +110,12 @@ pub fn one_tiling(v: &Value) -> Result<TilingSpec, String> {
 }
 
 fn nb_of(v: &Value) -> Result<Option<Nb>, String> {
-    Ok(match get_str(v, "nb")? {
-        None => None,
-        Some("touch") => Some(Nb::Touch),
-        Some("edge") => Some(Nb::Edge),
-        Some(x) => return Err(format!("`nb` is \"touch\" or \"edge\", not {x}")),
-    })
+    let Some(x) = get_str(v, "nb")? else {
+        return Ok(None);
+    };
+    args::nb_word(x)
+        .map(Some)
+        .ok_or_else(|| format!("`nb` is \"touch\" or \"edge\", not {x}"))
 }
 
 fn digit_list(v: &Value, key: &str, max: u32, from: u32) -> Result<Vec<u32>, String> {

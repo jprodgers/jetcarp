@@ -2,7 +2,8 @@
 //! on unbounded periodic tilings; highways are proved exactly; every run is classed and stored
 //! in the catalog's `ants` table by a resumable job.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
+use jetcarp_api::args;
 use jetcarp_core::ants::job::{self, AntOptions, AntProgress, AntSpec, Soups, parse_rule};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};
@@ -171,24 +172,6 @@ pub struct ListArgs {
 
 fn msg<T>(r: Result<T, String>) -> Result<T> {
     r.map_err(anyhow::Error::msg)
-}
-
-fn parse_size(s: &str) -> Result<(u32, u32)> {
-    let (w, h) = s
-        .split_once(['x', 'X'])
-        .map(|(a, b)| (a.trim(), b.trim()))
-        .unwrap_or((s.trim(), s.trim()));
-    Ok((w.parse().context("width")?, h.parse().context("height")?))
-}
-
-fn parse_range(s: &str) -> Result<(usize, usize)> {
-    match s.split_once('-') {
-        Some((a, b)) => Ok((a.trim().parse()?, b.trim().parse()?)),
-        None => {
-            let n = s.trim().parse()?;
-            Ok((n, n))
-        }
-    }
 }
 
 fn show_progress(p: &AntProgress, json: bool) {
@@ -432,7 +415,7 @@ fn run_one(lib: &Library, r: RunArgs, json: bool) -> Result<()> {
             if p.len() != 3 {
                 bail!("--soup is WxH:density:seed, e.g. 8x8:0.5:1");
             }
-            let (w, h) = parse_size(p[0])?;
+            let (w, h) = msg(args::size_pair(p[0]))?;
             Start::Soup {
                 w,
                 h,
@@ -477,7 +460,7 @@ fn search(lib: &Library, a: SearchArgs, json: bool) -> Result<()> {
         None => {
             let strings = match &a.strings {
                 Some(s) => {
-                    let (min, max) = parse_range(s)?;
+                    let (min, max) = msg(args::count_range(s))?;
                     Some(Strings {
                         min,
                         max,
@@ -488,7 +471,7 @@ fn search(lib: &Library, a: SearchArgs, json: bool) -> Result<()> {
             };
             let tables = match &a.tables {
                 Some(s) => {
-                    let (n, k) = parse_size(s)?;
+                    let (n, k) = msg(args::size_pair(s))?;
                     Some(Tables {
                         states: n as u8,
                         colors: k as u8,
@@ -515,7 +498,7 @@ fn search(lib: &Library, a: SearchArgs, json: bool) -> Result<()> {
             let soup = match a.soups {
                 None => None,
                 Some(n) => {
-                    let (w, h) = parse_size(&a.size)?;
+                    let (w, h) = msg(args::size_pair(&a.size))?;
                     Some(Soups {
                         w,
                         h,

@@ -4,6 +4,7 @@
 //! resumes by job id (or by its folder).
 
 use anyhow::{Result, bail};
+use jetcarp_api::args;
 use jetcarp_core::library::Library;
 use jetcarp_core::pile::job::{self as pilejob, PileJobSpec};
 use jetcarp_core::pile::{self, Centre, PileSpec, Toppler};
@@ -93,13 +94,13 @@ pub fn run(a: PileArgs) -> Result<()> {
             Err(_) => job_for_folder(&lib, &PathBuf::from(r), &a)?,
         },
         None => {
-            let mut tiling = jetcarp_api::args::tiling_by_id(&a.tiling).map_err(msg)?;
+            let mut tiling = args::tiling_by_id(&a.tiling).map_err(msg)?;
             if let Some(l) = a.level {
                 tiling.size = Some(SizeSpec::Level(l));
             }
             let spec = PileSpec {
                 tiling,
-                nb: pile::parse_nb(&a.nb).map_err(msg)?,
+                nb: args::parse_pile_nb(&a.nb).map_err(msg)?,
                 grains: pile::parse_grains(&a.grains).map_err(msg)?,
                 centre: Centre::parse(&a.centre).map_err(msg)?,
             };

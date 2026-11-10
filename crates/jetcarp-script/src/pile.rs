@@ -3,7 +3,7 @@
 //! contact sheet of their previews.
 
 use crate::{Ctx, Progress};
-use jetcarp_api::out;
+use jetcarp_api::{args, out};
 use jetcarp_core::SizeSpec;
 use jetcarp_core::pile::{self, Centre, Ctl, Pile, PileSpec, RunOptions, export::ExportOptions};
 use jetcarp_core::render::Image;
@@ -91,7 +91,7 @@ fn run_pile(ctx: &Arc<Ctx>, m: &Map, parent: Option<&PathBuf>) -> R<Map> {
         }
     }
     let tiling_id = text(m, &["tiling"]).unwrap_or_else(|| "square".into());
-    let mut tiling = jetcarp_api::args::tiling_by_id(&tiling_id)?;
+    let mut tiling = args::tiling_by_id(&tiling_id)?;
     if let Some(l) = num(m, "level")? {
         tiling.size = Some(SizeSpec::Level(l as u32));
     }
@@ -99,7 +99,8 @@ fn run_pile(ctx: &Arc<Ctx>, m: &Map, parent: Option<&PathBuf>) -> R<Map> {
         Some(v) => grains_of(v)?,
         None => 10_000,
     };
-    let nb = pile::parse_nb(&text(m, &["neighborhood", "nb"]).unwrap_or_else(|| "edge".into()))?;
+    let nb =
+        args::parse_pile_nb(&text(m, &["neighborhood", "nb"]).unwrap_or_else(|| "edge".into()))?;
     let centre = Centre::parse(&text(m, &["centre", "center"]).unwrap_or_default())?;
     let spec = PileSpec {
         tiling,

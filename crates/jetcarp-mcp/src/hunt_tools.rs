@@ -4,9 +4,10 @@
 //! (stopping one in another process takes effect at its next checkpoint).
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
+use jetcarp_api::args;
 use jetcarp_core::hunt::job::{self, HuntHandle, HuntOptions, HuntProgress, HuntSpec};
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
-use jetcarp_core::library::{self, Library};
+use jetcarp_core::library::Library;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -125,23 +126,18 @@ fn start(args: &Value) -> Res {
             let t = list(args, "tilings")?.join(",");
             let (w, h) = match string(args, "size")? {
                 None => (d.soup.w, d.soup.h),
-                Some(s) => {
-                    let (a, b) = s.split_once(['x', 'X']).unwrap_or((s, s));
-                    (
-                        a.trim().parse().map_err(|_| format!("bad size '{s}'"))?,
-                        b.trim().parse().map_err(|_| format!("bad size '{s}'"))?,
-                    )
-                }
+                Some(s) => args::size_pair(s).map_err(|_| format!("bad size '{s}'"))?,
             };
             let soups = int(args, "soups")?.unwrap_or(10_000).max(0) as u64;
             let spec = HuntSpec {
                 rules,
-                tilings: library::tiling_list(if t.trim().is_empty() { "square" } else { &t })?,
+                tilings: args::tilings_or_square(&t)?,
                 neighborhood: match string(args, "nb")? {
                     None => None,
-                    Some("touch") => Some(jetcarp_core::Nb::Touch),
-                    Some("edge") => Some(jetcarp_core::Nb::Edge),
-                    Some(x) => return Err(format!("`nb` is touch or edge, not {x}")),
+                    Some(x) => Some(
+                        args::nb_word(x)
+                            .ok_or_else(|| format!("`nb` is touch or edge, not {x}"))?,
+                    ),
                 },
                 soups: (soups > 0).then_some(soups),
                 soup: SoupSpec {

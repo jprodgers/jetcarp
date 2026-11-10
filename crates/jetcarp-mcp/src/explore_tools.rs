@@ -6,6 +6,7 @@
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
 use crate::util;
+use jetcarp_api::args;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::job::{feat_from_blob, try_one};
 use jetcarp_core::explore::sheet::{self, RunRow};
@@ -330,9 +331,7 @@ fn try_tool(args: &Value) -> Res {
     let (rule, nb0) = Rule::parse(text)?;
     let fam = Fam::of(&rule);
     let nb = match string(args, "nb")? {
-        Some("edge") => Nb::Edge,
-        Some("touch") => Nb::Touch,
-        Some(o) => return Err(format!("nb must be touch or edge, got {o}")),
+        Some(o) => args::nb_word(o).ok_or_else(|| format!("nb must be touch or edge, got {o}"))?,
         None => nb0.unwrap_or(Nb::Touch),
     };
     let cells = int(args, "cells")?.unwrap_or(16000).clamp(100, 100_000) as u32;
@@ -340,7 +339,7 @@ fn try_tool(args: &Value) -> Res {
     let rng = int(args, "rng")?.unwrap_or(1) as u64;
     let (spec, topo) = sized_spec(tiling, cells)?;
     let seed = match args.get("seed") {
-        Some(v) if !v.is_null() => jetcarp_api::args::parse_seed(v)?,
+        Some(v) if !v.is_null() => args::parse_seed(v)?,
         _ => jetcarp_core::world::default_seed(&rule, topo.len()),
     };
     let cand = Cand {

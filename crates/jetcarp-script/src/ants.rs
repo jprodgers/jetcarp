@@ -5,7 +5,7 @@
 
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
-use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64};
+use jetcarp_api::args::{self, check_keys, get_bool, get_f64, get_pair, get_str, get_u64};
 use jetcarp_core::ants::job::{self, AntOptions, AntSpec, Soups, parse_rule};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};
@@ -66,26 +66,9 @@ fn list(v: &Value, key: &str) -> Result<Vec<String>, String> {
     })
 }
 
+/// A pair of whole numbers (`n`, `"AxB"`, or `[a, b]`) under `key`.
 fn size(v: &Value, key: &str, d: (u32, u32)) -> Result<(u32, u32), String> {
-    Ok(match v.get(key) {
-        None | Some(Value::Null) => d,
-        Some(Value::Number(n)) => {
-            let n = n
-                .as_u64()
-                .ok_or(format!("`{key}` must be a whole number"))? as u32;
-            (n, n)
-        }
-        Some(Value::String(s)) => crate::Screen::parse_size(s)?,
-        Some(Value::Array(a)) if a.len() == 2 => (
-            a[0].as_u64().ok_or(format!("`{key}` must be [a, b]"))? as u32,
-            a[1].as_u64().ok_or(format!("`{key}` must be [a, b]"))? as u32,
-        ),
-        Some(x) => {
-            return Err(format!(
-                "`{key}` must be [a, b], \"AxB\", or a number, got {x}"
-            ));
-        }
-    })
+    get_pair(v, key, d, ("a", "b"))
 }
 
 /// The search spec from a script map.
@@ -141,7 +124,7 @@ pub(crate) fn spec_of(v: &Value) -> Result<AntSpec, String> {
         }
     };
     Ok(AntSpec {
-        tilings: jetcarp_core::library::tiling_list(if t.trim().is_empty() { "square" } else { &t })?,
+        tilings: args::tilings_or_square(&t)?,
         rules,
         strings,
         tables,

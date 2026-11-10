@@ -1,6 +1,7 @@
 //! Reading options out of a JSON map. Missing keys and `null` both mean "not given"; a value of
 //! the wrong type is an error that names the key.
 
+use super::Screen;
 use serde_json::Value;
 
 /// The value under `key`, unless it is missing or `null`.
@@ -78,6 +79,40 @@ pub fn check_keys(v: &Value, allowed: &[&str], what: &str) -> Result<(), String>
     Ok(())
 }
 
+/// A pair of whole numbers under `key`: one number `n` (both parts `n`), text such as `"64x48"`
+/// (read as [`Screen::parse_size`]), or `[a, b]`; `default` when the key is not given. `names`
+/// are what error messages call the two parts: `("w", "h")` gives "`size` must be [w, h], "WxH",
+/// or a number".
+pub fn get_pair(
+    v: &Value,
+    key: &str,
+    default: (u32, u32),
+    names: (&str, &str),
+) -> Result<(u32, u32), String> {
+    let (a, b) = names;
+    Ok(match get(v, key) {
+        None => default,
+        Some(Value::Number(n)) => {
+            let n = n
+                .as_u64()
+                .ok_or(format!("`{key}` must be a whole number"))? as u32;
+            (n, n)
+        }
+        Some(Value::String(s)) => Screen::parse_size(s)?,
+        Some(Value::Array(x)) if x.len() == 2 => (
+            x[0].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))? as u32,
+            x[1].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))? as u32,
+        ),
+        Some(x) => {
+            return Err(format!(
+                "`{key}` must be [{a}, {b}], \"{}x{}\", or a number, got {x}",
+                a.to_uppercase(),
+                b.to_uppercase()
+            ));
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +139,19 @@ mod tests {
         assert_eq!(e, "unknown world option `sise`; options are: tiling, size");
         assert!(check_keys(&Value::Null, &[], "world").is_ok());
         assert!(check_keys(&json!(3), &[], "world").is_err());
+    }
+
+    #[test]
+    fn pairs_from_numbers_text_and_lists() {
+        let v = json!({"a": 8, "b": "64x32", "c": [3, 4], "d": "x"});
+        assert_eq!(get_pair(&v, "a", (1, 1), ("w", "h")).unwrap(), (8, 8));
+        assert_eq!(get_pair(&v, "b", (1, 1), ("w", "h")).unwrap(), (64, 32));
+        assert_eq!(get_pair(&v, "c", (1, 1), ("w", "h")).unwrap(), (3, 4));
+        assert_eq!(get_pair(&v, "e", (5, 6), ("w", "h")).unwrap(), (5, 6));
+        let e = get_pair(&json!({"size": true}), "size", (1, 1), ("w", "h")).unwrap_err();
+        assert_eq!(e, "`size` must be [w, h], \"WxH\", or a number, got true");
+        let e = get_pair(&json!({"k": [1, "x"]}), "k", (1, 1), ("a", "b")).unwrap_err();
+        assert_eq!(e, "`k` must be [a, b]");
+        assert!(get_pair(&v, "d", (1, 1), ("w", "h")).is_err());
     }
 }

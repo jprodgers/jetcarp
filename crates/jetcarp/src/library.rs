@@ -2,6 +2,7 @@
 //! update, export, import, remove, quickstart, jobs, info). The work is in `jetcarp_core::library`.
 
 use anyhow::{Context, Result, bail};
+use jetcarp_api::args;
 use jetcarp_core::library::collide::{CollideSpec, collide};
 use jetcarp_core::library::search::{SearchSpec, search};
 use jetcarp_core::library::{
@@ -371,40 +372,12 @@ fn set_threads(t: Option<usize>) -> Result<()> {
     Ok(())
 }
 
-fn parse_size(s: &str) -> Result<SizeSpec> {
-    let l = s.to_ascii_lowercase();
-    if let Some((w, h)) = l.split_once('x') {
-        return Ok(SizeSpec::Rect {
-            w: w.trim().parse().context("width")?,
-            h: h.trim().parse().context("height")?,
-        });
-    }
-    if let Some(n) = l.strip_prefix("level").or_else(|| l.strip_prefix('l')) {
-        return Ok(SizeSpec::Level(n.trim().parse().context("level")?));
-    }
-    Ok(SizeSpec::Cells(
-        l.trim()
-            .parse()
-            .context("size is WxH, a cell count, or L<level>")?,
-    ))
-}
-
+/// `--boundary` for searches and pastes: wrap or dead (no live edges).
 fn parse_boundary(s: &str) -> Result<Boundary> {
-    Ok(match s.to_ascii_lowercase().as_str() {
-        "wrap" | "torus" => Boundary::Wrap,
-        "dead" => Boundary::Dead,
+    match args::parse_boundary(s) {
+        Ok(b @ (Boundary::Wrap | Boundary::Dead)) => Ok(b),
         _ => bail!("--boundary is wrap or dead"),
-    })
-}
-
-fn parse_range(s: &str) -> Result<[i32; 2]> {
-    let (a, b) = s
-        .split_once("..")
-        .map(|(a, b)| (a.trim(), b.trim().trim_start_matches('=')))
-        .unwrap_or((s.trim(), s.trim()));
-    let a: i32 = a.parse().with_context(|| format!("range '{s}'"))?;
-    let b: i32 = b.parse().with_context(|| format!("range '{s}'"))?;
-    Ok([a.min(b), a.max(b)])
+    }
 }
 
 pub fn run(a: LibraryArgs) -> Result<()> {
@@ -888,13 +861,14 @@ fn search_cmd(lib: &Library, a: SearchArgs) -> Result<()> {
     let spec = SearchSpec {
         rules,
         tilings: msg(library::tiling_list(&a.tilings))?,
-        size: parse_size(&a.size)?,
+        size: msg(args::size_spec(&a.size))?,
         boundary: parse_boundary(&a.boundary)?,
         neighborhood: match a.nb.as_deref() {
             None => None,
-            Some("touch") | Some("t") => Some(Nb::Touch),
-            Some("edge") | Some("e") => Some(Nb::Edge),
-            Some(x) => bail!("--nb is touch or edge, not {x}"),
+            Some(x) => match args::nb_word(x) {
+                Some(nb) => Some(nb),
+                None => bail!("--nb is touch or edge, not {x}"),
+            },
         },
         soups: a.soups,
         density: a.density,
@@ -1048,7 +1022,7 @@ fn collide_cmd(lib: &Library, c: CollideArgs) -> Result<()> {
     set_threads(c.threads)?;
     let a = msg(lib.get(&c.a))?;
     let b = msg(lib.get(&c.b))?;
-    let both = parse_range(&c.offsets)?;
+    let both = msg(args::offset_range(&c.offsets))?;
     let phases = if c.phases.eq_ignore_ascii_case("all") {
         vec![]
     } else {
@@ -1062,13 +1036,13 @@ fn collide_cmd(lib: &Library, c: CollideArgs) -> Result<()> {
         dx: c
             .dx
             .as_deref()
-            .map(parse_range)
+            .map(|r| msg(args::offset_range(r)))
             .transpose()?
             .unwrap_or(both),
         dy: c
             .dy
             .as_deref()
-            .map(parse_range)
+            .map(|r| msg(args::offset_range(r)))
             .transpose()?
             .unwrap_or(both),
         phases,
@@ -1264,7 +1238,7 @@ fn paste_cmd(lib: &Library, p: PasteArgs) -> Result<()> {
         None => library::tiling_identity(&first.tiling),
     };
     if first.site.is_none() {
-        tiling.size = Some(parse_size(&p.size)?);
+        tiling.size = Some(msg(args::size_spec(&p.size))?);
         tiling.boundary = parse_boundary(&p.boundary)?;
     }
     let mut sc = Scene::new(tiling);

@@ -5,6 +5,7 @@
 //! small models; `kind` filters the listing.
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
+use jetcarp_api::args;
 use jetcarp_core::ants::job::{self as ants, AntHandle, AntOptions, AntSpec, Soups};
 use jetcarp_core::ants::search::{Strings, Tables};
 use jetcarp_core::library::{self, JobStatus, Library};
@@ -293,7 +294,7 @@ fn ants_start(args: &Value) -> Res {
                 }
             };
             let spec = AntSpec {
-                tilings: library::tiling_list(if t.trim().is_empty() { "square" } else { &t })?,
+                tilings: args::tilings_or_square(&t)?,
                 rules,
                 strings,
                 tables,
@@ -352,7 +353,7 @@ fn pile_start(args: &Value) -> Res {
         }
         None => {
             let tid = string(args, "tiling")?.unwrap_or("square");
-            let mut tiling = jetcarp_api::args::tiling_by_id(tid)?;
+            let mut tiling = args::tiling_by_id(tid)?;
             if let Some(lv) = int(args, "level")? {
                 tiling.size = Some(jetcarp_core::SizeSpec::Level(lv.clamp(1, 8) as u32));
             }
@@ -363,7 +364,7 @@ fn pile_start(args: &Value) -> Res {
             };
             let pile = jetcarp_core::pile::PileSpec {
                 tiling,
-                nb: jetcarp_core::pile::parse_nb(string(args, "nb")?.unwrap_or("edge"))?,
+                nb: args::parse_pile_nb(string(args, "nb")?.unwrap_or("edge"))?,
                 grains,
                 centre: jetcarp_core::pile::Centre::parse(string(args, "centre")?.unwrap_or("cell"))?,
             };
