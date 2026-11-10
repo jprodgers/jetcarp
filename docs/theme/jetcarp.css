@@ -47,3 +47,16 @@ code.wrap {
 .generated-note {
   font-size: 0.9em;
 }
+.checked {
+  border: 1px solid var(--quote-border);
+  border-left: 4px solid var(--links);
+  background: var(--quote-bg);
+  border-radius: 4px;
+  padding: 0.4em 1.2em;
+  margin: 1.5em 0;
+}
+figure picture img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}

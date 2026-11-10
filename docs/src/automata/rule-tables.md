@@ -7,13 +7,19 @@ including rules that depend on direction, which is how classic constructions suc
 automaton and Langton's loops are usually written down.
 
 <figure class="pair">
-<div><img src="../images/automata/ruletable-parity.png" alt="Four checkerboard diamonds on squares" width="420"></div>
+<div><picture>
+  <source srcset="../images/automata/ruletable-parity-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/ruletable-parity.webp" alt="The parity rule copying a single cell into four, then sixteen, then a filled diamond" width="400" loading="lazy">
+</picture></div>
 <div><img src="../images/automata/ruletable-hex.png" alt="Six hexagons of concentric rings on a hexagon grid" width="420"></div>
 <figcaption>Left: the built-in table <code>parity</code>, in which each cell becomes the exclusive or of its
-four edge neighbours, 47 generations from one live cell; the pattern copies itself. Scene
+four edge neighbours, from one live cell for 63 generations. Watch the pattern copy itself: the rule is
+linear, so at generation 2<sup>k</sup> the pattern is four copies of the starting cell, 2<sup>k</sup>
+cells away, and each copy then replays the history so far; at generation 63, just before the next
+doubling, the copies fill a diamond. Scene
 <code>docs/scenes/automata/ruletable-parity.json</code>. Right: the same idea on hexagons, as a table
-of 128 transitions written into the scene itself. Scene
-<code>docs/scenes/automata/ruletable-hex.json</code>. Both 47 generations.</figcaption>
+of 128 transitions written into the scene itself, 47 generations. Scene
+<code>docs/scenes/automata/ruletable-hex.json</code>.</figcaption>
 </figure>
 
 ## What it is

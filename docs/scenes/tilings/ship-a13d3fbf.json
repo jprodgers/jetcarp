@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship a13d3fbf on 3.3.3.4.4",
+ "description": "A period-8 spaceship on the elongated triangular tiling 3.3.3.4.4 (touching neighbours), 13 to 17 cells, moving 2 lattice steps along the rows every 8 generations (c/4). It runs the same way in the 1,024 rules from B46/S3458 to B4,6,9,10,11,12/S0,1,3,4,5,8,9,10,11,12, and unchanged in corridors of the 3-uniform tilings k3-051 and k3-052. Found by JETCARP's soup search (seen twice). To our knowledge not reported before.",
+ "tiling": {
+  "family": "elongtri",
+  "size": {
+   "rect": {
+    "w": 48,
+    "h": 32
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B4,6,9,10/S3,4,5,8,10,11",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 1,0,0,1 1,0,1,1 1,0,2,1 2,0,0,1 2,0,1,1 2,0,2,1 3,0,0,1 4,0,0,1 4,0,1,1 4,0,2,1 1,1,0,1 2,1,0,1 3,1,0,1 4,1,0,1",
+    "tiling": {
+     "family": "elongtri",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

@@ -7,10 +7,14 @@ microorganisms: soft, round creatures that glide, rotate and divide. Bert Wang-C
 created it, catalogued hundreds of them and named them like biological species.
 
 <figure>
-<img src="../images/automata/lenia-orbium.png" alt="Orbium: a glowing crescent-shaped creature on a square grid" width="480">
-<figcaption><em>Orbium unicaudatus</em>, Lenia's best-known glider, 20 generations after it is placed
-in the middle of a wrapped 64 × 48 grid. Colour shows each cell's value, from dark (near 0) to pale
-yellow (near 1). Scene <code>docs/scenes/automata/lenia-orbium.json</code>, 20 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/lenia-orbium-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/lenia-orbium.webp" alt="Orbium: a glowing crescent-shaped creature gliding across a wrapped square grid" width="384" loading="lazy">
+</picture>
+<figcaption><em>Orbium unicaudatus</em>, Lenia's best-known glider, for 600 generations from the middle
+of a wrapped 64 × 48 grid. Watch it glide diagonally, keeping its shape, and come back in through the
+opposite edges. Colour shows each cell's value, from dark (near 0) to pale yellow (near 1). Scene
+<code>docs/scenes/automata/lenia-orbium.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -51,6 +55,10 @@ Chan later extended Lenia to more dimensions, kernels and channels
 ([Chan 2020](../research/bibliography.md#chan2020expanded)), and Flow-Lenia made it conserve mass
 ([Plantec et al. 2022](../research/bibliography.md#plantec2022flowlenia)). Chan's reference code, in
 several languages, is open source under the MIT licence ([Chan, Lenia code](../research/bibliography.md#chakazulnd_lenia)).
+Lenia has also become a test bed for automated discovery: intrinsically motivated goal exploration
+with learned goal spaces ([Reinke, Etcheverry and Oudeyer 2020](../research/bibliography.md#reinke2020intrinsically)),
+quality-diversity search with MAP-Elites ([Faldor and Cully 2024](../research/bibliography.md#faldor2024toward))
+and search guided by foundation models ([Kumar et al. 2025](../research/bibliography.md#kumar2025automating)).
 
 ## How JETCARP runs it
 
@@ -82,10 +90,14 @@ geometric distance instead of steps in the neighbour graph (see
 [How JETCARP generalises automata](generalising.md)).
 
 <figure>
-<img src="../images/automata/lenia-hat.png" alt="Worm-like and dot-like glowing structures on a round patch of the hat tiling" width="480">
-<figcaption>Orbium's rule on a patch of about 35,000 hat tiles, 300 generations after a dense random
-blob: the blob breaks up into worms and dots. Scene <code>docs/scenes/automata/lenia-hat.json</code>,
-300 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/lenia-hat-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/lenia-hat.webp" alt="Lenia on the hat tiling: a dense random start breaking up into worm-like loops" width="360" loading="lazy">
+</picture>
+<figcaption>Orbium's rule on the middle of a patch of about 35,000 hat tiles, 300 generations after a
+dense random blob: watch the blob break up into worms and loops that settle into slowly shifting
+shapes. Lenia measures distances between tile centres, so the hats' geometry, not just their
+neighbour graph, shapes the result. Scene <code>docs/scenes/automata/lenia-hat.json</code>.</figcaption>
 </figure>
 
 ### Reproducible to the last bit
@@ -115,6 +127,9 @@ and we make no novelty claim for it.
   [Chan 2020](../research/bibliography.md#chan2020expanded);
   [Plantec et al. 2022](../research/bibliography.md#plantec2022flowlenia);
   [Chan, Lenia code](../research/bibliography.md#chakazulnd_lenia)
+- [Reinke, Etcheverry and Oudeyer 2020](../research/bibliography.md#reinke2020intrinsically);
+  [Faldor and Cully 2024](../research/bibliography.md#faldor2024toward);
+  [Kumar et al. 2025](../research/bibliography.md#kumar2025automating)
 - [Rafler 2011](../research/bibliography.md#rafler2011generalization);
   [Pivato 2007](../research/bibliography.md#pivato2007reallife);
   [Evans 2001](../research/bibliography.md#evans2001larger);

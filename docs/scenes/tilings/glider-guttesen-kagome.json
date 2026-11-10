@@ -1,0 +1,39 @@
+{
+ "name": "Guttesen's kagome glider in Life",
+ "description": "H. S. Guttesen's small glider g (arXiv:2608.27622, Fig. 4) on the trihexagonal (kagome) tiling 3.6.3.6 in Conway's Life, B3/S23: 4 or 5 cells, period 4, one lattice step every 4 generations. JETCARP's soup searches found it independently; the object is Guttesen's.",
+ "tiling": {
+  "family": "trihex",
+  "size": {
+   "rect": {
+    "w": 48,
+    "h": 32
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 1,0,1,1 0,1,0,1",
+    "tiling": {
+     "family": "trihex",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship acd0fa8b on 3.3.3.3.6",
+ "description": "A period-27 spaceship on the snub hexagonal tiling 3.3.3.3.6 (touching neighbours), 4 to 18 cells, moving one lattice step along a row every 27 generations (c/27). It runs the same way in about a million rules, from B37/S2,5,6,10 up. Found by JETCARP's soup search (seen 30 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "snubhex",
+  "size": {
+   "rect": {
+    "w": 32,
+    "h": 21
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3,7,11,12,17/S2,5,6,8,10,12,15,16,18",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 0,0,3,1 0,0,6,1 0,0,8,1 0,1,0,1 0,1,1,1",
+    "tiling": {
+     "family": "snubhex",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

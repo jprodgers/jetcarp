@@ -157,8 +157,10 @@ arbitrary rules on meshes, HatLife and Edmond's work run several families on the
 and many single families have been run on hexagons, triangles or Penrose tilings. What JETCARP
 adds, to our knowledge, is breadth: one engine that runs every family listed here on every class of
 tiling it supports (lattices, the 1,248 k-uniform tilings, 81 isohedral types, drawn tiles, and the
-Penrose, hat and spectre tilings), with the same neighbour model throughout and tests that check
-results agree across thread counts and, where available, between CPU and GPU.
+Penrose, hat and spectre tilings), with the same neighbour model throughout. Not all of these are
+different graphs: the 81 isohedral types have only the eleven graphs of the Laves tilings, and several
+drawn families copy the square or hexagonal grid (see [Isohedral tilings](../tilings/isohedral.md)).
+Tests check that results agree across thread counts and, where available, between CPU and GPU.
 
 Our prior-art search found no earlier version of the cyclic, Greenberg–Hastings,
 rock-paper-scissors, Hodgepodge or forest-fire rules on aperiodic tilings, or of turmites on the hat

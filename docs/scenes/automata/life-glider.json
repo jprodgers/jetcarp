@@ -1,0 +1,12 @@
+{
+  "name": "Life's glider and lightweight spaceship",
+  "description": "Conway's Life (B3/S23) on a wrapped square grid: the glider (5 cells, period 4, one diagonal step every 4 generations, c/4) and the lightweight spaceship (9 cells, period 4, two steps every 4 generations, c/2), both found in 1970.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 60, "h": 36}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "B3/S23", "neighborhood": "touch", "seed": "empty", "palette": "Tide"}],
+  "commands": [
+    {"op": "paste_pattern", "id": 1, "at": "center", "pattern": {
+      "cells": "1,0,0,1 2,1,0,1 0,2,0,1 1,2,0,1 2,2,0,1 31,20,0,1 34,20,0,1 30,21,0,1 30,22,0,1 34,22,0,1 30,23,0,1 31,23,0,1 32,23,0,1 33,23,0,1",
+      "tiling": {"family": "square", "boundary": "dead"}}}
+  ]
+}

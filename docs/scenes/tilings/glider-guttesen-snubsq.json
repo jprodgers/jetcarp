@@ -1,0 +1,39 @@
+{
+ "name": "Guttesen's snub-square glider in Life",
+ "description": "H. S. Guttesen's period-8 glider (arXiv:2608.27622, Fig. 5) on the snub square tiling 3.3.4.3.4 in Conway's Life, B3/S23: 8 to 15 cells, moving 2 lattice steps every 8 generations (c/4). JETCARP's soup searches found it independently (77,361 times); the identification with Guttesen's figure is by eye, since his configurations are not yet published.",
+ "tiling": {
+  "family": "snubsq",
+  "size": {
+   "rect": {
+    "w": 30,
+    "h": 40
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,1,1 0,0,2,1 0,0,4,1 0,0,5,1 1,0,2,1 0,1,0,1 0,1,1,1 0,1,3,1 0,1,4,1 1,1,1,1 1,1,2,1 1,2,0,1",
+    "tiling": {
+     "family": "snubsq",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

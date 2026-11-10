@@ -36,9 +36,15 @@ Many tilings that look different have the same graph. A brick wall in running bo
 neighbour graph as the hexagon tiling, and so does a herringbone pattern: each tile meets six others
 in the same arrangement. Escher's lizards, on the three-fold hexagon tile, are hexagons as far as a
 rule is concerned. Any rule that only counts neighbours behaves *identically* on tilings whose graphs
-are the same, so a pattern found on one is a pattern on the other. This matters for honest claims: two
-of JETCARP's isohedral tilings turned out to have exactly the square grid's touch graph, so spaceships
-found on them were Conway's glider in a different drawing.
+are the same, so a pattern found on one is a pattern on the other. This matters for honest claims.
+Every isohedral tiling has the graph of one of the eleven Laves tilings, so JETCARP's 81 isohedral types
+are only eleven worlds for a rule: 30 of them are the square grid, 19 the hexagonal grid, 8 the
+triangular grid and 3 the Cairo tiling (see [Isohedral tilings](isohedral.md)). Spaceships first found
+on isohedral tilings were Conway's glider and its relatives in a different drawing. Likewise the quadrilateral,
+glide and four-fold families are squares and the Pythagorean tiling is 4.8.8. JETCARP compared all 362
+combinations of its tiling families, isohedral types and 2- and 3-uniform tilings with both
+neighbourhoods and found 196 distinct graphs
+([Findings](../research/findings.md#isohedral-tilings-are-eleven-neighbour-graphs)).
 
 Rules that turn, such as [Langton's ant](../automata/turmites.md), also need the *order* of a tile's
 neighbours around it, so JETCARP keeps each tile's neighbours in clockwise order. And one family,

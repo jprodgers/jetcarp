@@ -7,11 +7,15 @@ arrangement, the *Margolus neighbourhood*, makes it easy to build rules that are
 conserve particles, which is why it was invented: to make physics-like models of computation.
 
 <figure>
-<img src="../images/automata/margolus-tron.png" alt="A rectilinear pattern of coloured stripes spreading from a small seed" width="800">
-<figcaption>Tron (<code>Margolus Tron</code>) 101 generations after a small random blob: a block whose four
-cells agree is complemented, so the background flashes every step and the blob grows into nested
-rectangles and stripes. Colour shows age. Scene <code>docs/scenes/automata/margolus-tron.json</code>,
-101 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/margolus-tron-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/margolus-tron.webp" alt="Tron: nested rectangles of coloured stripes spreading from a small seed" width="400" loading="lazy">
+</picture>
+<figcaption>Tron (<code>Margolus Tron</code>) for 100 generations after a small random blob, two
+generations a frame. A block whose four cells agree is complemented, so the background flashes every
+step (only even generations are drawn, to spare the eyes), and the blob grows into nested rectangles
+that fill the grid with stripes. Colour shows age. Scene
+<code>docs/scenes/automata/margolus-tron.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -41,9 +45,13 @@ Some well-known block rules:
   A remarkably simple reversible rule with many spaceships.
 
 <figure>
-<img src="../images/automata/margolus-rotation.png" alt="Small groups of cells flying away from a central cloud" width="480">
-<figcaption>Single Rotation (<code>Margolus SingleRotation</code>) 400 generations after a small random
-blob: spaceships leave the cloud in several directions. Scene
+<picture>
+  <source srcset="../images/automata/margolus-rotation-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/margolus-rotation.webp" alt="Single Rotation: a small cloud of cells spreading out as particles fly away" width="400" loading="lazy">
+</picture>
+<figcaption>Single Rotation (<code>Margolus SingleRotation</code>) for 400 generations after a small
+random blob: the blob loosens into a gas, and spaceships leave the cloud in several directions. The rule
+is reversible, so the cloud never settles. Scene
 <code>docs/scenes/automata/margolus-rotation.json</code>.</figcaption>
 </figure>
 

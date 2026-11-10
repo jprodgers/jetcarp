@@ -45,6 +45,18 @@ has 12 neighbours, a hexagon 6; in 3.3.3.3.6 each hexagon touches 18 tiles and e
 tiles meet at a corner only. Rules that count neighbours respond to all of this.
 
 <figure>
+<picture>
+  <source srcset="../images/tilings/osc-trihex-p42-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/osc-trihex-p42.webp" alt="A row of hexagons and triangles on the trihexagonal tiling flickering through a long cycle" width="306" loading="lazy">
+</picture>
+<figcaption>A 20-cell oscillator with period 42 on the trihexagonal tiling 3.6.3.6, in the rule
+<code>B4,5,7,8,10,11/S0,2,3,4,6,7,9,10</code>, one generation per frame. Hexagons here touch 12 tiles and
+triangles 6, which is why the rule lists counts up to 11; watch the activity run back and forth along
+the row of hexagons. Found by JETCARP's soup search. Scene
+<code>docs/scenes/tilings/osc-trihex-p42.json</code>.</figcaption>
+</figure>
+
+<figure>
 <img src="../images/tilings/archimedean-rhombitrihex.png" alt="Pale clusters of triangles, squares and hexagons scattered over the 3.4.6.4 tiling" width="720">
 <figcaption>B2/S34 on the rhombitrihexagonal tiling 3.4.6.4, 200 generations after a random start.
 Triangles touch 6 tiles, squares 8 and hexagons 12, so births and deaths happen at different rates on
@@ -72,9 +84,27 @@ include the GomJau-Hogg notation ([Gomez-Jauregui et al. 2021](../research/bibli
 Cellular automata on these tilings have their own history. Carter Bays studied Life-like rules on the
 triangular tiling ([Bays 1994](../research/bibliography.md#bays1994cellular)) and on hexagons and Cairo
 pentagons ([Bays 2005](../research/bibliography.md#bays2005note)), and wrote an overview
-([Bays 2009](../research/bibliography.md#bays2009cellular)). Hans Guttesen ran Life on six of the mixed
+([Bays 2009](../research/bibliography.md#bays2009cellular)). H. S. Guttesen ran Life on six of the mixed
 Archimedean tilings and found gliders on 3.6.3.6 and 3.3.4.3.4 and a glider gun on 3.6.3.6
 ([Guttesen 2026](../research/bibliography.md#guttesen2026game)).
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/glider-guttesen-kagome-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-kagome.webp" alt="A five-cell glider of two hexagons and a triangle moving along the kagome tiling" width="420" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/glider-guttesen-snubsq-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="A ring of triangles and a square moving across the snub square tiling" width="240" loading="lazy">
+</picture></div>
+<figcaption>Guttesen's gliders in Life (<code>B3/S23</code>). Left: his glider g on the kagome tiling
+3.6.3.6, two hexagons and a trailing triangle, period 4, one lattice step every four generations.
+Right: his period-8 glider on the snub square tiling 3.3.4.3.4, a ring of triangles with one square,
+moving two lattice steps every eight generations. JETCARP's soup searches found both independently;
+watch how each tile kind takes its turn. Scenes
+<code>docs/scenes/tilings/glider-guttesen-kagome.json</code> and
+<code>glider-guttesen-snubsq.json</code>.</figcaption>
+</figure>
 
 ## How JETCARP runs it
 
@@ -93,16 +123,58 @@ version of the hexagon tiling, `hex_flat`, exists for the three-parent
 ## What is new here
 
 The tilings are classical. On them, JETCARP's searches have found spaceships in Life-like rules on
-4.8.8, 3.12.12, 4.6.12, 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6, which to our knowledge have not been reported
-before; Guttesen's Life gliders on 3.6.3.6 and 3.3.4.3.4, which JETCARP also found, are his. See
-[Life-like rules](../automata/life-like.md#what-is-new-here) for the details and cautions, and
-[What is new in JETCARP](../research/contributions.md).
+4.8.8, 3.12.12, 4.6.12, 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6, and on 3.6.3.6 in rules other than Life. After
+the checks described in [What is new in JETCARP](../research/contributions.md#how-we-checked), seven
+single ships with no flag remain on these tilings, two on 4.8.8, two on 3.12.12 and one each on 3.4.6.4,
+3.3.3.4.4 and 3.3.3.3.6, and to our knowledge they have not been reported before. Four of them are
+below.
+
+The others on these tilings are described rather than claimed. On 4.8.8, 3.12.12, 4.6.12 and 3.6.3.6
+the rest are small ships that turn up often in soups, ships in well-known rules such as HighLife or
+`B2/S34`, or a smaller ship with a passenger, and others may well have seen them. Guttesen's Life
+gliders on 3.6.3.6 and 3.3.4.3.4, which JETCARP also found, are his, and so are the pairs of them that
+JETCARP's catalogue first listed as separate ships. In Life on 3.3.4.3.4, JETCARP also found two larger
+ships built around his glider, of periods 16 and 24; we found no earlier report of them. Every ship is
+listed in [Findings](../research/findings.md#the-62-objects).
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-aa7e7357.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/ship-acd0fa8b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-acd0fa8b.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
+</picture></div>
+<figcaption>Left: <code>aa7e7357</code> on 3.4.6.4, period 42, moving 3 lattice steps per period, in
+the 1,024 rules from <code>B3/S235</code> up. Right: <code>acd0fa8b</code> on 3.3.3.3.6, period 27, one
+lattice step along a row per period, in about a million rules from <code>B37/S2,5,6,10</code> up. Watch
+each ship pass through shapes that look nothing alike before it repeats one place further on. Scenes
+<code>docs/scenes/tilings/ship-aa7e7357.json</code> and <code>ship-acd0fa8b.json</code>.</figcaption>
+</figure>
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/ship-a13d3fbf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-a13d3fbf.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/ship-9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-9cee5c6a.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
+</picture></div>
+<figcaption>Left: <code>a13d3fbf</code> on 3.3.3.4.4, period 8, two lattice steps along the rows per
+period, in the 1,024 rules from <code>B46/S3458</code> up. Right: <code>9cee5c6a</code> on 4.8.8,
+period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code> up. Scenes
+<code>docs/scenes/tilings/ship-a13d3fbf.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
+</figure>
 
 ## Try it
 
 - Quick Start, family *Tiling showcase*: a lively rule and a sandpile on each of the eleven.
 - `jetcarp run docs/scenes/tilings/archimedean-rhombitrihex.json --gens 200 --png 3464.png`
 - Run Life (`B3/S23`) on `trihex` from a random start and look for small gliders, as Guttesen did.
+- `jetcarp run docs/scenes/tilings/ship-aa7e7357.json --gens 126 --png ship.png` runs the period-42
+  ship for three periods.
 
 ## References
 

@@ -45,7 +45,15 @@ as its partner follows it. The families JETCARP offers:
 Two fixed patterns sit beside them. **Herringbone** (`herring`) lays rectangles in two orientations and
 **Pythagorean squares** (`pyth`) mixes two sizes of square; neither is edge to edge, so JETCARP measures
 which tiles touch from the geometry. Herringbone has the hexagon grid's neighbour graph; in the
-Pythagorean tiling, large squares touch eight tiles and small squares four.
+Pythagorean tiling, large squares touch eight tiles and small squares four, exactly as the octagons
+and squares of 4.8.8 do, and its neighbour graph is that of 4.8.8.
+
+So, for any rule that only counts neighbours, several of these families are familiar grids in
+disguise: the brick, herringbone and three-fold (lizard) tilings behave exactly as hexagons, the
+quadrilateral, glide and four-fold tilings as squares, and the Pythagorean tiling as 4.8.8. JETCARP's
+survey of neighbour graphs confirmed this for both neighbourhoods
+([Findings](../research/findings.md#isohedral-tilings-are-eleven-neighbour-graphs)). A pattern found on
+one of them is a pattern of the grid it copies, and is presented as such.
 
 The neighbour graph depends on the family, not on the exact shape, so reshaping a tile changes how the
 world looks but not how a rule behaves. That makes these families a way to draw: run a rule, then bend
@@ -54,7 +62,8 @@ the tiles into fish or lizards.
 <figure>
 <img src="../images/tilings/editable-lizard.png" alt="Pale green lizard-shaped tiles in small clusters" width="640">
 <figcaption>B2/S34 on the three-fold hexagon family in the shape of Escher's lizards, 30 generations
-after a random start. Each lizard has six neighbours, so the rule behaves as on hexagons. Scene
+after a random start. Each lizard has six neighbours arranged as a hexagon's, so this is Hexagonal
+Life (<code>B2/S34H</code>) in another drawing. Scene
 <code>docs/scenes/tilings/editable-lizard.json</code>.</figcaption>
 </figure>
 
@@ -110,7 +119,9 @@ cell, which the app's unit-cell editor can draw; contact between them is measure
 ## What is new here
 
 Nothing. These are classical tilings and well-known tile families, presented so that any rule can run
-on them and the tiles can be reshaped while it runs.
+on them and the tiles can be reshaped while it runs. Results on the brick, herringbone, lizard,
+quadrilateral, glide, four-fold and Pythagorean tilings are results on the hexagonal, square or 4.8.8
+tiling they copy.
 
 ## Try it
 

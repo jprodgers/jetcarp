@@ -7,10 +7,14 @@ example of *self-organised criticality*: a system that tunes itself, without out
 a state where events of every size happen.
 
 <figure>
-<img src="../images/automata/hodgepodge-square.png" alt="Blue and white spiral waves filling a square grid" width="800">
+<picture>
+  <source srcset="../images/automata/hodgepodge-square-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/hodgepodge-square.webp" alt="The hodgepodge machine: noise turning into bands of blue and white waves" width="320" loading="lazy">
+</picture>
 <figcaption>The hodgepodge machine <code>Hodgepodge 200/3/3/28</code>, 500 generations after a random
-start: rotating spirals like those of the Belousov–Zhabotinsky reaction. Scene
-<code>docs/scenes/automata/hodgepodge-square.json</code>, 500 generations.</figcaption>
+start, in part of a wrapped 180 × 120 grid. Watch the noise light up and burn out in patches until
+travelling waves and rotating spirals take over, like those of the Belousov–Zhabotinsky reaction. Scene
+<code>docs/scenes/automata/hodgepodge-square.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -40,13 +44,20 @@ lightning is much rarer than growth, trees build up into large forests, and a si
 burn a forest of any size. The sizes of the fires then follow a power law, with no typical scale.
 
 <figure class="pair">
-<div><img src="../images/automata/hodgepodge-penrose.png" alt="Spiral waves on a round patch of Penrose kites and darts" width="400"></div>
-<div><img src="../images/automata/forestfire-square.png" alt="A green forest with dark burned patches" width="400"></div>
-<figcaption>Left: the same hodgepodge rule on a patch of Penrose kites and darts, 500 generations; spirals
-form in part of the patch while the rest is still disordered. Scene
+<div><picture>
+  <source srcset="../images/automata/hodgepodge-penrose-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/hodgepodge-penrose.webp" alt="Hodgepodge waves sweeping across Penrose kites and darts" width="304" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/automata/forestfire-square-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/forestfire-square.webp" alt="A green forest in which fires burn dark patches that slowly grow back" width="360" loading="lazy">
+</picture></div>
+<figcaption>Left: the same hodgepodge rule on Penrose kites and darts, 500 generations; watch broad waves
+sweep across the kites and darts, whose outlines stay visible underneath. Scene
 <code>docs/scenes/automata/hodgepodge-penrose.json</code>. Right: the forest fire
-<code>ForestFire 0.002/0.00001</code> after 3,000 generations, coloured by age: dark patches are recently
-burned, bright trees are new growth. Scene <code>docs/scenes/automata/forestfire-square.json</code>.</figcaption>
+<code>ForestFire 0.002/0.00001</code> from generation 2,000 to 2,120, coloured by age, two generations a
+frame: watch a fire front eat into the forest and leave a dark burned patch, while bright new trees
+sprout everywhere. Scene <code>docs/scenes/automata/forestfire-square.json</code>.</figcaption>
 </figure>
 
 ## Where it came from

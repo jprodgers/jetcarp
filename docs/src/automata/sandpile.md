@@ -110,10 +110,15 @@ a long run can be resumed. See the guide [Large sandpiles](../guides/large-sandp
 ## What is new here
 
 Sandpile identities have been computed before on triangular, hexagonal and Penrose grids (see above),
-and single-source piles on the square grid have a long literature. To our knowledge, JETCARP is the
-first to show sandpile identities and large single-source piles on the hat and spectre monotiles, and
-across the catalogues of k-uniform tilings (beyond the regular and Archimedean ones already studied)
-and isohedral tilings. Our search found no published sandpile work on the hat or spectre at all. The
+and on hexagonal and 4.8.8 grids in Eli T. Johnson's master's thesis
+([Johnson 2019](../research/bibliography.md#johnson2019sandpile)); single-source piles on the square
+grid have a long literature. To our knowledge, JETCARP is the first to show sandpile identities and
+large single-source piles on the hat and spectre monotiles, on the k-uniform tilings with k of 2 or
+more, and on the Laves tilings other than the regular grids. The last are what the isohedral tilings
+amount to: a sandpile sees only the neighbour graph, and the 81 isohedral types have only the eleven
+graphs of the Laves tilings (see [Isohedral tilings](../tilings/isohedral.md)), so an identity on an
+isohedral type is an identity on its Laves tiling. Our search found no published sandpile work on the
+hat or spectre at all. The
 doubling method follows directly from the abelian property and is presumably known, so we do not
 claim it. The search is described in [What is new in JETCARP](../research/contributions.md).
 

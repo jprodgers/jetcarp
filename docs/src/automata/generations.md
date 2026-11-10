@@ -6,10 +6,15 @@ place. That one change turns static Life-like worlds into restless ones full of 
 fast-moving gliders.
 
 <figure>
-<img src="../images/automata/generations-brain.png" alt="Brian's Brain on a square grid: pairs of firing and refractory cells moving as gliders" width="800">
-<figcaption>Brian's Brain (<code>B2/S/C3</code>) 200 generations after a random start. Each glider is a
-front of firing cells (orange) followed by refractory ones (blue). Scene
-<code>docs/scenes/automata/generations-brain.json</code>, 200 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/generations-brain-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/generations-brain.webp" alt="Brian's Brain on a square grid: pairs of firing and refractory cells streaming away as gliders" width="400" loading="lazy">
+</picture>
+<figcaption>Brian's Brain (<code>B2/S/C3</code>), the first 80 generations after a random start, one
+generation per frame, in part of a wrapped 160 × 100 grid. Watch the soup sort itself within a few
+dozen generations into gliders: each is a front of firing cells (orange) followed by refractory ones
+(blue), and they travel in straight lines until they collide. Scene
+<code>docs/scenes/automata/generations-brain.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -64,9 +69,14 @@ Generations in version 2.0 in December 2008
 [Golly: Generations](../research/bibliography.md#gollynd_generations)).
 
 <figure>
-<img src="../images/automata/generations-starwars.png" alt="Star Wars: four-state Generations rule with small ships and decaying debris" width="800">
-<figcaption>Mirek Wójtowicz's Star Wars (<code>B2/S345/C4</code>), 40 generations after a random start.
-Scene <code>docs/scenes/automata/generations-starwars.json</code>.</figcaption>
+<picture>
+  <source srcset="../images/automata/generations-starwars-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/generations-starwars.webp" alt="Star Wars: small ships and decaying debris in a four-state Generations rule" width="400" loading="lazy">
+</picture>
+<figcaption>Mirek Wójtowicz's Star Wars (<code>B2/S345/C4</code>) from generation 40 to 120 after a random
+start, one generation per frame. Live cells survive with three to five neighbours and fade through two
+dying states; watch small ships fly off while the debris decays behind them. Scene
+<code>docs/scenes/automata/generations-starwars.json</code>.</figcaption>
 </figure>
 
 ## How JETCARP runs it
@@ -94,10 +104,15 @@ neighbour graph with touch neighbours by default, or edge neighbours with the `V
 its waves going across a tiling with no repeating pattern at all.
 
 <figure>
-<img src="../images/automata/generations-penrose.png" alt="Brian's Brain on a patch of the Penrose rhomb tiling" width="640">
-<figcaption>Brian's Brain on a patch of about 4,000 Penrose rhombs, 200 generations after a random
-start. Each rhomb touches between 7 and 11 others. Scene
-<code>docs/scenes/automata/generations-penrose.json</code>, 200 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/generations-penrose-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/generations-penrose.webp" alt="Brian's Brain on Penrose rhombs: chains of firing and refractory rhombs crawling over the tiling" width="360" loading="lazy">
+</picture>
+<figcaption>Brian's Brain on the middle of a patch of about 4,000 Penrose rhombs, the first 80
+generations after a random start. Each rhomb touches between 7 and 11 others, so the square grid's
+gliders cannot exist here; watch the firing rhombs (orange) and their refractory wakes (blue) form
+ragged chains that wander instead of flying straight. Scene
+<code>docs/scenes/automata/generations-penrose.json</code>.</figcaption>
 </figure>
 
 ### Colours, speed and long runs

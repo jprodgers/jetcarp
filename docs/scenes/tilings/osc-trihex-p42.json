@@ -1,0 +1,39 @@
+{
+ "name": "A period-42 oscillator on 3.6.3.6",
+ "description": "A 20-cell period-42 oscillator on the trihexagonal tiling 3.6.3.6 (touching neighbours) in B4,5,7,8,10,11/S0,2,3,4,6,7,9,10, found by JETCARP's soup search.",
+ "tiling": {
+  "family": "trihex",
+  "size": {
+   "rect": {
+    "w": 24,
+    "h": 12
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B4,5,7,8,10,11/S0,2,3,4,6,7,9,10",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Ember",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 1,0,1,1 1,0,2,1 2,0,0,1 2,0,1,1 2,0,2,1 3,0,0,1 3,0,1,1 3,0,2,1 4,0,1,1 4,0,2,1 5,0,0,1 5,0,1,1 5,0,2,1 6,0,0,1 6,0,1,1 0,1,0,1 1,1,0,1 2,1,0,1",
+    "tiling": {
+     "family": "trihex",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

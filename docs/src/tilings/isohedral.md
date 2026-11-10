@@ -22,15 +22,18 @@ can change shape freely as long as those relations hold. Twelve of the types are
 motif drawn inside the tile to cut its symmetry down, so as bare shapes they coincide with other
 types. That leaves 81 types that can be told apart by shape alone.
 
-For an automaton, a type and its parameters fix the neighbour graph. Many types give the hexagonal
-graph (six neighbours each); others give the square grid's or something else entirely. The same rule
-can behave very differently on two tilings that look alike, and identically on two that look
-different; the [tiling catalogue](catalogue.md#isohedral-types) lists each type's degrees.
+For an automaton, the type fixes the neighbour graph, whatever the parameters: reshaping a tile
+changes the picture but not which tiles touch. Many types give the hexagonal graph (six neighbours
+each); others give the square grid's or something else. The same rule can behave very differently on
+two tilings that look alike, and identically on two that look different; the
+[tiling catalogue](catalogue.md#isohedral-types) lists each type's degrees, and the next sections show
+that there are only eleven graphs in all.
 
 <figure>
 <img src="../images/tilings/isohedral-ih28.png" alt="Green clusters on a pentagon tiling" width="640">
-<figcaption>B2/S34 on type IH28, a pentagon tiling of the same kind as the Cairo tiling, with Tactile's
-default shape, 200 generations after a random start. Scene
+<figcaption>B2/S34 on type IH28, a pentagon tiling with the Cairo tiling's neighbour graph, with
+Tactile's default shape, 200 generations after a random start. As far as the rule is concerned this is
+the Cairo tiling. Scene
 <code>docs/scenes/tilings/isohedral-ih28.json</code>.</figcaption>
 </figure>
 
@@ -79,23 +82,56 @@ In the app, pick *Isohedral IH01–IH93* in the family list, then the type and i
 `jetcarp isohedral` lists the types with their symmetry groups and neighbour counts, and
 `jetcarp isohedral --png sheet.png` draws them all, as above.
 
+## Eleven graphs: the Laves tilings
+
+Every isohedral tiling is combinatorially one of the eleven **Laves tilings**, the duals of the eleven
+uniform tilings: count the tiles meeting at each corner of a tile, and the sequence (written in
+brackets, such as [3<sup>2</sup>.4.3.4] for the Cairo tiling) is one of eleven
+([Grünbaum and Shephard 1987](../research/bibliography.md#grunbaum1987tilings)). An isohedral tiling
+and its Laves tiling are the same tiling topologically, with the same edge and touch neighbour graphs,
+so a rule that only counts neighbours behaves on the one exactly as on the other. JETCARP's survey of neighbour graphs sorted the
+81 types as follows ([Findings](../research/findings.md#isohedral-tilings-are-eleven-neighbour-graphs)):
+
+| Laves tiling | Types | A rule sees |
+| --- | --- | --- |
+| [3<sup>6</sup>] | IH01–IH18, IH20 | the hexagonal grid |
+| [4<sup>4</sup>] | 30 types from IH41 to IH76 | the square grid |
+| [6<sup>3</sup>] | IH83–IH86, IH88, IH90, IH91, IH93 | the triangular grid |
+| [3<sup>2</sup>.4.3.4] | IH27–IH29 | the Cairo tiling |
+| [3<sup>3</sup>.4<sup>2</sup>] | IH22–IH26 | the prismatic pentagonal tiling |
+| [3<sup>4</sup>.6] | IH21 | the floret pentagonal tiling |
+| [3.6.3.6] | IH33, IH34, IH36, IH37 | the rhombille tiling |
+| [3.4.6.4] | IH30–IH32 | the deltoidal trihexagonal tiling |
+| [3.12<sup>2</sup>] | IH38–IH40 | the triakis triangular tiling |
+| [4.8<sup>2</sup>] | IH78, IH79, IH81, IH82 | the tetrakis square tiling |
+| [4.6.12] | IH77 | the kisrhombille tiling |
+
+So 57 of the 81 types are the three regular grids in another drawing and three more are the Cairo
+tiling. The shapes still matter for pictures, and for [Lenia](../automata/lenia.md), which measures
+distances between tile centres; for every other rule family the eleven rows above are all there is.
+
 ## What is new here
 
 The classification is Grünbaum and Shephard's and the tables are Kaplan's. Cellular automata on a few
 isohedral tilings are not new either: Matej Kerekrety ran Life-like rules on the rhombille and Cairo
 tilings ([Kerekrety 2020](../research/bibliography.md#kerekrety2020game)). JETCARP runs every rule on all
-81 types and computes sandpile identities on them; to our knowledge sandpiles on these tilings have not
-been studied before ([The Abelian sandpile](../automata/sandpile.md#what-is-new-here)).
+81 types and lets their tiles be reshaped while a rule runs.
 
-One caution, learned the hard way: an isohedral tiling can have exactly the neighbour graph of a
-familiar lattice. Types IH46 and IH54, at their default parameters, have the square grid's touch graph,
-so the "spaceships" JETCARP's searches found on them were Conway's glider. We therefore make no claim for
-spaceships on isohedral tilings until each has been checked against the regular lattices.
+For the rules, though, 81 types are not 81 worlds. As the section above explains, they have only the
+eleven neighbour graphs of the Laves tilings, so we present every result on an isohedral type as a
+result on its Laves tiling. Sandpile identities on the Laves tilings other than the square, hexagonal
+and triangular grids have not, to our knowledge, been shown before
+([The Abelian sandpile](../automata/sandpile.md#what-is-new-here)). No spaceship is claimed on an
+isohedral tiling: every "spaceship" JETCARP's searches found on one (on IH46, IH54, IH62, IH72 and IH84)
+is a known ship of the square or triangular grid, Conway's glider and the lightweight and middleweight
+spaceships among them.
 
 ## Try it
 
 - Quick Start, family *Tiling showcase*: entries on IH01, IH07, IH21, IH28, IH41, IH55, IH74, IH81 and
-  IH90, and JACA presets on IH28 and IH41.
+  IH90, and JACA presets on IH28 and IH41. As far as the rules are concerned, IH01 and IH07 are
+  hexagons, IH41, IH55 and IH74 squares, IH90 triangles, IH28 the Cairo tiling, IH21 the floret
+  pentagonal tiling and IH81 the tetrakis square tiling.
 - `jetcarp isohedral` lists all 81 types; open one in the app and drag its sliders while a rule runs.
 
 ## References

@@ -6,11 +6,17 @@ depends only on whether it is alive now and how many of its neighbours are. JETC
 of this family on every tiling it supports, with either of two neighbourhoods.
 
 <figure>
-<img src="../images/automata/life-square.png" alt="Life on a square grid after 500 generations: still lifes, blinkers and active debris" width="800">
-<figcaption>Conway's Life (<code>B3/S23</code>) 500 generations after a random start on a wrapped
-128 × 80 grid. Colour shows how long a cell has been alive: pale cells are new, deep blue ones have
-not changed for a long time (still lifes such as blocks and beehives). Scene
-<code>docs/scenes/automata/life-square.json</code>, 500 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/life-square-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/life-square.webp" alt="Life on a square grid: a random soup boiling down to still lifes, blinkers and drifting debris" width="480" loading="lazy">
+</picture>
+<figcaption>Conway's Life (<code>B3/S23</code>) for 500 generations after a random start on a wrapped
+128 × 80 grid (the first generations are shown more slowly). Watch the soup thin out within a few
+dozen generations into islands of activity that settle one by one. Colour shows how long a cell has
+been alive, as in LifeViewer's age colouring
+([LifeWiki: LifeViewer](../research/bibliography.md#lifewikind_lifeviewer)): pale cells are new, deep
+blue ones have not changed for a long time (still lifes such as blocks and beehives). Scene
+<code>docs/scenes/automata/life-square.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -25,6 +31,17 @@ Life itself is `B3/S23`: a dead cell with exactly three live neighbours is born,
 with two or three survives. From these two lines come gliders that travel across the grid, guns that
 fire them, and, as Conway sketched and later builders made explicit, machines that can compute
 anything a computer can.
+
+<figure>
+<picture>
+  <source srcset="../images/automata/life-glider-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/life-glider.webp" alt="Life's glider moving diagonally and the lightweight spaceship moving sideways across a wrapped grid" width="420" loading="lazy">
+</picture>
+<figcaption>Life's two smallest spaceships, one generation per frame. The glider (top) takes four
+generations to shift one cell diagonally (speed c/4); the lightweight spaceship (bottom) takes four to
+shift two cells sideways (c/2) and wraps round the edge of the grid. Both flip through their phases as
+they go. Scene <code>docs/scenes/automata/life-glider.json</code>, 80 generations.</figcaption>
+</figure>
 
 Rules of this kind are called *outer totalistic*: the new state depends on the cell itself and the
 *total* of its neighbours, not on which neighbours are alive. On the square grid with the eight
@@ -87,8 +104,10 @@ easy to explore and fast to run ([Golly credits](../research/bibliography.md#gol
 [Golly changes](../research/bibliography.md#gollynd_changes)). Before it came the CAM-6 hardware of
 Toffoli and Margolus ([1987](../research/bibliography.md#toffoli1987cellular)), Rudy Rucker and John
 Walker's CelLab ([1989](../research/bibliography.md#rucker1989cellab)) and Wójtowicz's MCell. Chris
-Rowett's LifeViewer now shows patterns in the browser on LifeWiki and the forums
-([Rowett 2019](../research/bibliography.md#rowett2019lifeviewer)).
+Rowett's LifeViewer now shows patterns in the browser on LifeWiki and the forums, colouring cells
+by age if asked ([Rowett: LifeViewer](../research/bibliography.md#rowettnd_lifeviewer);
+[LifeWiki: LifeViewer](../research/bibliography.md#lifewikind_lifeviewer);
+[Rowett 2019](../research/bibliography.md#rowett2019lifeviewer)).
 
 ## How JETCARP runs it
 
@@ -100,7 +119,7 @@ JETCARP reads the birth/survival form, in upper or lower case:
 | --- | --- |
 | `B3/S23` | Life: born on 3, survives on 2 or 3, touch neighbours |
 | `B36/S23` | HighLife |
-| `B2/S34H` | Hexagonal Life: the `H` records that the rule is meant for hexagons |
+| `B2/S34H` | Hexagonal Life: the `H` records that the rule is meant for hexagons ([forum thread, 2016](../research/bibliography.md#drc2016b2s34h)) |
 | `B1/S0V` | Gnarl on edge neighbours: born with one live neighbour, survives with none |
 | `B3,10/S2,3` | Counts of 10 or more are separated by commas |
 | `B014/S2` | Oils, a rule with birth on 0 (see below) |
@@ -128,7 +147,9 @@ usually a different creature on another.
 <div><img src="../images/automata/life-hex.png" alt="B2/S34 on hexagons after 60 generations" width="400"></div>
 <div><img src="../images/automata/life-triangle.png" alt="B3/S23 on triangles after 300 generations" width="400"></div>
 <figcaption>Left: Hexagonal Life (<code>B2/S34H</code>), 60 generations from a random start; every
-hexagon has six neighbours. Scene <code>docs/scenes/automata/life-hex.json</code>. Right: Life's own
+hexagon has six neighbours. It has spaceships of its own, which wildmyron posted in the forum thread
+that named the rule ([drc, Hickerson and wildmyron 2016](../research/bibliography.md#drc2016b2s34h)).
+Scene <code>docs/scenes/automata/life-hex.json</code>. Right: Life's own
 rule <code>B3/S23</code> on triangles with touch neighbours, where each cell has twelve neighbours,
 300 generations. Scene <code>docs/scenes/automata/life-triangle.json</code>.</figcaption>
 </figure>
@@ -156,24 +177,40 @@ pentagons ([Bays 1994](../research/bibliography.md#bays1994cellular);
 [Bays 2005](../research/bibliography.md#bays2005note)), Life has been run on Penrose tilings
 ([Hill, Stepney and Wan 2005](../research/bibliography.md#hill2005penrose);
 [Owens and Stepney 2010](../research/bibliography.md#owens2010game)) and on the hat
-([Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)), and Hans Guttesen studied Life
+([Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)), and H. S. Guttesen studied Life
 on the Archimedean tilings ([Guttesen 2026](../research/bibliography.md#guttesen2026game)).
 
 What JETCARP adds is a search for **spaceships** (patterns that move) across many tilings and rules
 at once. Some of what it found was already known. Guttesen reported a period-4 glider and a glider
 gun for Life on the kagome tiling (3.6.3.6) and a period-8 glider on the snub square tiling; JETCARP's
-soup searches found what appear to be the same small kagome and snub-square ships independently, and
-the credit for them is Guttesen's.
+soup searches found the same kagome glider (cell for cell, in one of its phases) and, by comparison
+with his figure, the same snub-square glider independently, and the credit for them is Guttesen's.
 
 Beyond those, JETCARP's catalogue holds spaceships in Life-like rules on the 4.8.8, 3.12.12, 4.6.12,
-3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 tilings and on several 2- and 3-uniform tilings. Guttesen found no
-gliders for Life itself on 4.8.8, 4.6.12, 3.12.12 or 3.3.3.3.6; JETCARP's ships there are in other
-rules. To our knowledge, Life-like spaceships on these tilings have not been reported before. Two
-cautions apply. These ships are being re-verified on the release version of the engine. And a ship
-on an unusual tiling is only new if the tiling's neighbour graph is really different: two isohedral
-tilings turned out to have exactly the square grid's touch graph, so their "new" ships were
-Conway's glider in disguise. For that reason no isohedral ships are claimed here, and each
-remaining claim is being checked for this. The search behind these statements is described in
+3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 tilings, on 3.6.3.6 in rules other than Life, and on several 2- and
+3-uniform tilings. Each ship was checked in three ways before it was claimed:
+
+- Against every Archimedean, 2-uniform, 3-uniform and isohedral tiling, with both neighbourhoods. A
+  ship that sees exactly the same neighbour counts in a corridor of a simpler tiling belongs to that
+  tiling.
+- For being two smaller ships flying together.
+- On large patches, with wrapped edges and with dead edges.
+
+Ten catalogue entries turned out to be pairs of smaller ships flying side by side, eight of them two
+of Guttesen's kagome gliders, and they are not claimed; every Life candidate on the kagome tiling was
+such a pair. Eight ships found on 3-uniform tilings run unchanged on a simpler tiling, and they are
+listed there. That leaves 62 distinct objects. Thirteen are a smaller ship with a passenger, or a
+bound pair, and are listed with the smaller ship. Twenty-two, six of those thirteen among them, carry a
+flag: they are small and turn up often in soups, run in a well-known rule, or are built on Guttesen's
+gliders, so others may well have seen them, although we found no report. To our knowledge, the remaining 33 single ships, on 4.8.8, 3.12.12, 3.4.6.4, 3.3.3.4.4,
+3.3.3.3.6 and on 2- and 3-uniform tilings, have not been reported before. Only two of the 62 run in
+Life itself: both are on the snub square tiling, both are built around Guttesen's glider, and both are
+flagged. The rest are in other rules.
+
+Ships found on isohedral tilings are not claimed at all. Each isohedral tiling has the neighbour graph
+of one of the eleven Laves tilings, and every "ship" JETCARP found on one is a known ship of the square
+or triangular grid in another drawing, Conway's glider among them. The full list, with every check, is
+in [Findings](../research/findings.md); the claims are on
 [What is new in JETCARP](../research/contributions.md).
 
 ## Try it

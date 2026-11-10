@@ -6,11 +6,15 @@ travelling waves and rotating spirals, the same patterns seen in chemical oscill
 and competing species. JETCARP runs all three on any tiling.
 
 <figure>
-<img src="../images/automata/cyclic-hat.png" alt="Rainbow spirals on a round patch of the hat tiling" width="480">
-<figcaption>The cyclic cellular automaton <code>Cyclic 14/1</code> with edge neighbours on a patch of
-about 35,000 hat tiles, 600 generations after a random start. Each spiral is a self-sustaining
-core that sends out waves of colour. Scene <code>docs/scenes/automata/cyclic-hat.json</code>,
-600 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/cyclic-hat-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/cyclic-hat.webp" alt="Rainbow spiral waves forming out of noise on the hat tiling" width="320" loading="lazy">
+</picture>
+<figcaption>The cyclic cellular automaton <code>Cyclic 14/1</code> with edge neighbours on the middle of a
+patch of about 35,000 hat tiles, 480 generations after a random start. Watch the noise organise itself
+into patches that cycle in step, and then into spirals: each spiral is a self-sustaining core that
+sends out waves of colour, here bent by the irregular hats. Scene
+<code>docs/scenes/automata/cyclic-hat.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -35,12 +39,30 @@ when *more than* a threshold number of its neighbours are that predator. This is
 automaton with a strict threshold: `RPS n/t` behaves like `Cyclic n/(t+1)`.
 
 <figure class="pair">
-<div><img src="../images/automata/cyclic-square.png" alt="A large square spiral of rainbow bands on squares" width="400"></div>
-<div><img src="../images/automata/cyclic-gh.png" alt="Blue excitation waves spreading from many small cores on Cairo pentagons" width="400"></div>
-<figcaption>Left: <code>Cyclic 16/1</code> on squares with edge neighbours, 400 generations; on the square
-grid the spirals are square. Scene <code>docs/scenes/automata/cyclic-square.json</code>. Right:
-Greenberg–Hastings <code>GH 10/1</code> on Cairo pentagons, 400 generations: bright excited fronts with
-darker refractory wakes. Scene <code>docs/scenes/automata/cyclic-gh.json</code>.</figcaption>
+<div><picture>
+  <source srcset="../images/automata/cyclic-square-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/cyclic-square.webp" alt="Cyclic automaton on squares: noise turning into patches and then a large square spiral" width="420" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/automata/cyclic-gh-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/cyclic-gh.webp" alt="Greenberg-Hastings waves on Cairo pentagons spreading from small cores" width="342" loading="lazy">
+</picture></div>
+<figcaption>Left: <code>Cyclic 16/1</code> on squares with edge neighbours, 400 generations; watch one
+spiral take over most of the grid. On the square grid the spirals are square. Scene
+<code>docs/scenes/automata/cyclic-square.json</code>. Right: Greenberg–Hastings <code>GH 10/1</code> on
+Cairo pentagons, 400 generations: bright excited fronts with darker refractory wakes, curling into
+spirals where they break. Scene <code>docs/scenes/automata/cyclic-gh.json</code>.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source srcset="../images/automata/cyclic-rps-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/cyclic-rps.webp" alt="Rock-paper-scissors on squares: three colours chasing each other until the pattern freezes" width="480" loading="lazy">
+</picture>
+<figcaption>Rock-paper-scissors <code>RPS 3/3</code> on squares from a random start: each colour is eaten by
+the next when more than three of its neighbours have it. Watch the colours chase each other into blobs; with
+this threshold the chase dies out after about 120 generations and the pattern freezes. Scene
+<code>docs/scenes/automata/cyclic-rps.json</code>.</figcaption>
 </figure>
 
 ## Where it came from
@@ -106,7 +128,9 @@ Greenberg–Hastings worlds on lattice tilings can be jumped far ahead with Hash
 
 ## What is new here
 
-Cyclic automata have been run on general networks before. Our prior-art search found no earlier
+Cyclic automata have been run on general networks before: Yiqing Cai and Robert Ghrist studied cyclic
+automata on sensor networks and the waves they carry
+([Cai and Ghrist 2014](../research/bibliography.md#cai2014cyclic)). Our prior-art search found no earlier
 version of these three families on aperiodic tilings such as Penrose, hat or spectre, but that is a
 direct application of known rules to known graphs, so we do not count it as a discovery.
 
@@ -130,7 +154,8 @@ direct application of known rules to known graphs, so we do not count it as a di
   [Fisch 1990b](../research/bibliography.md#fisch1990cyclic);
   [Dewdney 1989](../research/bibliography.md#dewdney1989cellular);
   [Fisch, Gravner and Griffeath 1991](../research/bibliography.md#fisch1991threshold);
-  [MCell families](../research/bibliography.md#mcellnd_families)
+  [MCell families](../research/bibliography.md#mcellnd_families);
+  [Cai and Ghrist 2014](../research/bibliography.md#cai2014cyclic)
 - [Tainaka 1988](../research/bibliography.md#tainaka1988lattice);
   [Tainaka 1989](../research/bibliography.md#tainaka1989stationary);
   [Frean and Abraham 2001](../research/bibliography.md#frean2001rock);

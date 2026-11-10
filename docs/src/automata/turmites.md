@@ -7,10 +7,14 @@ about ten thousand steps in what looks like chaos, then suddenly starts building
 JETCARP runs them on any tiling.
 
 <figure>
-<img src="../images/automata/turmite-langton.png" alt="Langton's ant: an irregular blob with a diagonal highway leading away from it" width="640">
-<figcaption>Langton's ant (<code>Ant RL</code>) after 12,000 steps on an empty grid: the irregular blob
-of the first ten thousand steps, and the diagonal highway it builds after that. The red cell is the
-ant. Scene <code>docs/scenes/automata/turmite-langton.json</code>, 120 generations of 100 steps.</figcaption>
+<picture>
+  <source srcset="../images/automata/turmite-langton-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/turmite-langton.webp" alt="Langton's ant: an irregular blob growing for ten thousand steps, then a diagonal highway leading away from it" width="400" loading="lazy">
+</picture>
+<figcaption>Langton's ant (<code>Ant RL</code>) on an empty grid, about 12,000 steps at 150 steps a frame. For
+about ten thousand steps it builds an irregular, roughly symmetric blob; then, quite suddenly, it
+starts the diagonal highway that repeats every 104 steps and leaves the blob for good. The red cell is
+the ant. Scene <code>docs/scenes/automata/turmite-langton.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -30,11 +34,30 @@ that keep returning to perfect mirror symmetry; others fill squares or triangles
 A single ant can compute: its path can be made to evaluate any logical circuit.
 
 <figure class="pair">
-<div><img src="../images/automata/turmite-llrr.png" alt="A four-colour, roughly symmetric blob on squares" width="480"></div>
-<div><img src="../images/automata/turmite-cairo.png" alt="An irregular cloud of visited pentagons on the Cairo tiling" width="480"></div>
-<figcaption>Left: the four-colour turmite <code>LLRR</code> after 120,000 steps; its blob keeps returning to
-mirror symmetry. Scene <code>docs/scenes/automata/turmite-llrr.json</code>. Right: Langton's ant on Cairo
-pentagons after 30,000 steps. Scene <code>docs/scenes/automata/turmite-cairo.json</code>.</figcaption>
+<div><picture>
+  <source srcset="../images/automata/turmite-llrr-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/turmite-llrr.webp" alt="A four-colour turmite building a blob that keeps returning to mirror symmetry" width="360" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/automata/turmite-cairo-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/turmite-cairo.webp" alt="Langton's ant on Cairo pentagons spreading an irregular cloud of visited tiles" width="400" loading="lazy">
+</picture></div>
+<figcaption>Left: the four-colour turmite <code>LLRR</code> over 120,000 steps; watch its blob grow and
+keep returning to mirror symmetry. Scene <code>docs/scenes/automata/turmite-llrr.json</code>. Right:
+Langton's ant on Cairo pentagons over 30,000 steps, here without a highway; the pentagons' outlines
+show the tiling under the cloud. Scene <code>docs/scenes/automata/turmite-cairo.json</code>.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source srcset="../images/automata/turmite-trihex-highway-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/turmite-trihex-highway.webp" alt="A three-colour turmite on the trihexagonal tiling: a tangle of coloured tiles, then a straight highway" width="440" loading="lazy">
+</picture>
+<figcaption>The three-colour turmite <code>RNL</code> (turn right, go on, or turn left, by the colour of the
+tile) on the trihexagonal tiling 3.6.3.6, about 3,000 steps. After roughly 2,600 steps of disorder it
+builds a highway that repeats every 36 steps and runs straight out of the picture. One of 39,744
+highways on non-square tilings in JETCARP's catalogue, all re-verified on the release engine. Scene
+<code>docs/scenes/automata/turmite-trihex-highway.json</code>.</figcaption>
 </figure>
 
 ## Where it came from

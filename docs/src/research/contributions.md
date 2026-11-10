@@ -1,9 +1,11 @@
 # What is new in JETCARP
 
 > **Draft.** This page is a first draft of JETCARP's contributions, written for the v0.4.0 release
-> and the paper that will follow. Each claim below is limited to what our prior-art search supports,
-> and several are still being checked; see *Checks still to do* at the end. If you know of earlier
-> work that we have missed, please open an issue. We will correct the page and credit it.
+> and the paper that will follow. Each claim below is limited to what our prior-art search supports.
+> The spaceship claims have been through the checks described in [How we checked](#how-we-checked),
+> but not yet past the ConwayLife community, whom we will ask; see *Checks still to do* at the end.
+> If you know of earlier work that we have missed, please open an issue. We will correct the page and
+> credit it.
 
 JETCARP stands on a great deal of earlier work, credited on every page of this encyclopedia and
 collected in the [bibliography](bibliography.md). This page lists the few things that, as far as we can
@@ -86,41 +88,164 @@ family as hexagon rules.
 
 ### 4. Spaceships on non-square tilings
 
-**Claim (to our knowledge, pending checks).** JETCARP's soup searches have found spaceships in
-Life-like rules on the 4.8.8 tiling (in rules other than Life), on 3.12.12, 4.6.12, 3.4.6.4, 3.3.3.4.4
-and 3.3.3.3.6, and on several 2- and 3-uniform tilings. We found no earlier report of Life-like
-spaceships on these tilings in the rules found.
+**Claim (to our knowledge).** JETCARP's soup searches have found spaceships in Life-like rules on
+Archimedean and k-uniform tilings that we have not found reported before. Of 72 candidates, 62
+distinct objects survived the checks in the box below. We claim, to our knowledge, only the 33 of
+them that are single ships and carry no flag: seven on Archimedean tilings (4.8.8, 3.12.12, 3.4.6.4,
+3.3.3.4.4 and 3.3.3.3.6), fourteen on 2-uniform tilings and twelve on 3-uniform tilings. Every one is
+listed, with its rule range, in [Findings](findings.md#the-62-objects). Each runs the same way in a
+whole range of rules; none runs in Life itself.
+
+The other 29 are described, not claimed:
+
+- **Flagged, 22.** Nine are flagged as most likely already known: six small ships that turn up often
+  in soups and run in many rules on an Archimedean tiling (on 4.8.8, 3.12.12, 4.6.12 and 3.6.3.6), and
+  three built on Guttesen's gliders. Thirteen are flagged to check before claiming: they run in a
+  well-known rule (HighLife, Pedestrian Life, or `B2/S34` on 4.8.8), contain a phase of one of
+  Guttesen's gliders, or were very common in their search. We found no earlier report
+  of any of them, but others may well have seen them.
+- **Derivative, 13, six of them also flagged.** A smaller ship that pulls a passenger along
+  unchanged, or a bound pair of gliders. They are kept as distinct objects with the core named, as
+  Life catalogues keep tag-alongs, but they are not counted as discoveries.
+
+The five strongest candidates, single ships with no flag that the checks confirmed on every count:
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-aa7e7357.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/ship-a13d3fbf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-a13d3fbf.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
+</picture></div>
+<figcaption>Left: <code>aa7e7357</code> on the rhombitrihexagonal tiling 3.4.6.4, period 42, 7 to 15
+cells; watch it change shape through its long period while it moves 3 lattice steps (c/14). It runs
+in the 1,024 rules from <code>B3/S235</code> up and only on its own tiling. Right: <code>a13d3fbf</code>
+on the elongated triangular tiling 3.3.3.4.4, period 8, 13 to 17 cells, moving 2 lattice steps along
+the rows every period (c/4), in the 1,024 rules from <code>B46/S3458</code> up; it also runs unchanged
+in corridors of the 3-uniform tilings k3-051 and k3-052. Scenes
+<code>docs/scenes/tilings/ship-aa7e7357.json</code> and <code>ship-a13d3fbf.json</code>.</figcaption>
+</figure>
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/ship-acd0fa8b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-acd0fa8b.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/ship-9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-9cee5c6a.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
+</picture></div>
+<figcaption>Left: <code>acd0fa8b</code> on the snub hexagonal tiling 3.3.3.3.6, period 27, 4 to 18
+cells, one lattice step along a row per period (c/27), in about a million rules from
+<code>B37/S2,5,6,10</code> up. Right: <code>9cee5c6a</code> on 4.8.8, period 6, 7 to 13 cells, 2 lattice
+steps per period (c/3), in the 128 rules from <code>B2/S2</code> up: the only surviving 4.8.8 candidate
+that does not move at c/2, and it contains no smaller ship. Scenes
+<code>docs/scenes/tilings/ship-acd0fa8b.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-7860a67a.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
+</picture>
+<figcaption><code>7860a67a</code>, one 7-cell period-4 ship that runs on four tilings: here on the
+2-uniform tiling k2-003, and unchanged on k2-004 and in corridors of the 3-uniform tilings k3-010 and
+k3-016, where the search first found it. It moves one lattice step every 4 generations (c/4) in the
+256 rules from <code>B45/S34</code> up. Scene <code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
+</figure>
 
 **Evidence.** Gliders on triangles, hexagons and Cairo pentagons go back to Carter Bays
 ([Bays 1994](bibliography.md#bays1994cellular); [Bays 2005](bibliography.md#bays2005note);
-[Kerekrety 2020](bibliography.md#kerekrety2020game)). Guttesen studied Life (B3/S23) on six Archimedean
-lattices and found no gliders on 4.8.8, 4.6.12, 3.12.12 or 3.3.3.3.6
+[Kerekrety 2020](bibliography.md#kerekrety2020game)), and hexagonal Life (`B2/S34H`) has known
+spaceships ([drc, Hickerson and wildmyron 2016](bibliography.md#drc2016b2s34h)). H. S. Guttesen studied
+Life (`B3/S23`) on six Archimedean lattices and found no gliders on 4.8.8, 4.6.12, 3.12.12 or 3.3.3.3.6
 ([Guttesen 2026](bibliography.md#guttesen2026game)); JETCARP's ships there are in other rules. No
 Life-like spaceship on a k-uniform tiling with k of 2 or more was found in the literature.
 
-**Not claimed.** The small Life gliders on the kagome (3.6.3.6) and snub square tilings: Guttesen
-reported them, with a kagome glider gun ([Guttesen 2026](bibliography.md#guttesen2026game)), and JETCARP
-found what appear to be the same objects independently. Spaceships on isohedral tilings are also not
-claimed: two isohedral types (IH46 and IH54) turned out to have the square grid's touch graph, so their
-ships were Conway's glider.
+**Not claimed.**
 
-**Pending.** Each remaining ship is being re-verified on the release engine and checked for whether
-its tiling's neighbour graph is the same as the square, hexagonal or triangular lattice's. The details,
-with scenes, will be published in [Findings](findings.md) once the checks are done. See also
-[Life-like rules](../automata/life-like.md#what-is-new-here).
+- **Guttesen's gliders.** The small Life gliders on the kagome (3.6.3.6) and snub square tilings are
+  Guttesen's, who also built a kagome glider gun ([Guttesen 2026](bibliography.md#guttesen2026game)).
+  JETCARP's searches found both independently: its kagome ship is exactly his glider g, and its
+  snub-square ship matches his figure. Ten catalogue entries turned out to be pairs of ships flying side
+  by side without touching: eight pairs of his glider g, one pair of his snub-square glider and one
+  pair of a 3.6.3.6 ship. All Life candidates on 3.6.3.6 were such pairs. In Life on 3.3.4.3.4,
+  JETCARP also found two larger ships built around his glider, of periods 16 and 24; we found no
+  earlier report of them, but they are his glider's relatives and flagged as such.
+- **Ships on isohedral tilings.** The 81 isohedral types have only 11 neighbour graphs, those of the
+  Laves tilings (see [Findings](findings.md#isohedral-tilings-are-eleven-neighbour-graphs)): 57 types
+  are the square, hexagonal or triangular grid in another drawing, and IH27–IH29 are the Cairo tiling.
+  Among the drawn families, the brick, herringbone and lizard tilings likewise behave as hexagons, the
+  quadrilateral, glide and four-fold tilings as squares, and the Pythagorean tiling as 4.8.8. Every
+  ship JETCARP found on an isohedral type is a known ship of the square or triangular grid, such as
+  Conway's glider, and results on an isohedral type are presented as results on its Laves tiling.
+- **Ships of simpler tilings.** Eight ships found on 3-uniform tilings run unchanged on a 2-uniform
+  tiling or on 3.6.3.6, and are claimed only there.
+
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/tilings/glider-guttesen-kagome-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-kagome.webp" alt="A five-cell glider of two hexagons and a triangle moving along the kagome tiling" width="420" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/glider-guttesen-snubsq-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="A ring of triangles and a square moving across the snub square tiling" width="240" loading="lazy">
+</picture></div>
+<figcaption>Guttesen's gliders in Life (<code>B3/S23</code>), as JETCARP's searches found them
+independently. Left: his glider g on the kagome tiling 3.6.3.6, period 4. Right: his period-8 glider on
+the snub square tiling 3.3.4.3.4. Both are credited to
+<a href="bibliography.md#guttesen2026game">Guttesen 2026</a>. Scenes
+<code>docs/scenes/tilings/glider-guttesen-kagome.json</code> and
+<code>glider-guttesen-snubsq.json</code>.</figcaption>
+</figure>
+
+<div class="checked" id="how-we-checked">
+
+**How we checked**
+
+- **Re-verification on the current engine.** All 103 spaceship records, the 739 longest-period
+  oscillators and 39,744 turmite highways on non-square tilings were run again on JETCARP 0.4.0, and
+  every one gave the same period, displacement and speed. Each ship was also pasted alone on a fresh
+  patch and named again by JETCARP's object finder.
+- **Lattice equivalence.** Each candidate's one-period trajectory and its rim were mapped into 196
+  distinct neighbour graphs: the 362 combinations of 19 tiling families, the 81 isohedral types and the
+  81 catalogued 2- and 3-uniform tilings with touching and with edge neighbours. The map must keep every
+  live-neighbour count, so a hit means the ship runs on that tiling too; JETCARP then ran each hit to
+  confirm it. No candidate is a ship of the square, hexagonal or triangular grid, of Cairo, or of any
+  Laves tiling; 16 run on several tilings, and 8 belong to a simpler one.
+- **Compound and same-object checks.** Every phase of every ship was split into groups and each
+  group run alone: 10 candidates were two ships flying together, and 13 carry a smaller ship inside
+  unchanged. Every candidate was compared with all 137 ship records: no two are the same object.
+- **Robustness.** Each ship ran 40 periods on a wrapped patch of about 30,000 cells, on a smaller
+  patch and with dead edges, with identical results.
+- **Not yet searched.** The ConwayLife.com forums, where hobbyists report most new patterns, refuse
+  automated reading, so our prior-art search could not cover them. We will ask the community when the
+  results are posted there.
+
+</div>
+
+The full list is in [Findings](findings.md). See also
+[Life-like rules](../automata/life-like.md#what-is-new-here) and
+[Regular and Archimedean tilings](../tilings/regular-archimedean.md#what-is-new-here).
 
 ### 5. Sandpiles on the monotiles and across the tiling catalogues
 
 **Claim (to our knowledge).** JETCARP is the first to show sandpile identities and large single-source
-sandpiles on the hat and spectre monotiles, and across the k-uniform catalogue (beyond the regular and
-Archimedean tilings already studied) and the isohedral types.
+sandpiles on the hat and spectre monotiles, on the k-uniform tilings with k of 2 or more, and on the
+eight Laves tilings that are not regular grids. The last are what JETCARP's 81 isohedral types amount
+to: a sandpile sees only the neighbour graph, and the isohedral types have only the 11 graphs of the
+Laves tilings (see [Findings](findings.md#isohedral-tilings-are-eleven-neighbour-graphs)), so a result
+on, say, IH21 is a result on the floret pentagonal tiling.
 
 **Evidence.** Identities have been computed on triangular, hexagonal and Penrose grids
 ([Fersula, Noûs and Perrot 2020](bibliography.md#fersula2020sandpile)); single-source piles have a long
 literature on the square grid ([Ostojic 2003](bibliography.md#ostojic2003patterns);
 [Pegden and Smart 2013](bibliography.md#pegden2013convergence)). No sandpile work on the hat or spectre
-was found at all. Identities on the hexagonal and 4.8.8 grids also appear in E. T. Johnson's 2019
-master's thesis at the University of Washington, so 4.8.8 is excluded.
+was found at all. Identities on the hexagonal and 4.8.8 grids also appear in Eli T. Johnson's 2019
+master's thesis at the University of Washington ([Johnson 2019](bibliography.md#johnson2019sandpile)),
+so 4.8.8 is excluded.
 
 **Not claimed.** The doubling method JETCARP uses for very large piles, which follows directly from the
 abelian property and is presumably known. See [The Abelian sandpile](../automata/sandpile.md).
@@ -129,17 +254,27 @@ abelian property and is presumably known. See [The Abelian sandpile](../automata
 
 **Claim (to our knowledge).** JETCARP's exploratory search is the first to treat the tiling itself as a
 search dimension: it explores tiling, rule family, rule and starting pattern together, over about 1,200
-periodic and aperiodic tilings and 21 rule families in one archive. Its first full run covered about 15
-million runs.
+periodic and aperiodic tilings and 21 rule families in one archive. (Fewer of the tilings are distinct
+as neighbour graphs: the 81 isohedral types among them have only 11.) Its first full run covered about
+15 million runs.
 
-**Evidence.** The method's parts are established: the archive keeps the best few runs per niche, in
-the manner of MAP-Elites quality-diversity search, which has been applied to Lenia; and its score is a
-small model fitted to human keep/maybe/drop ratings of animated clips, a general technique for learning
-from human preferences. Most of the clips were rated by Emily Teich, whose eye for what is beautiful is
-built into the score. Earlier cellular automaton searches of this kind work on one substrate, such as
-Lenia ([Chan 2019](bibliography.md#chan2019lenia)); searches over several tilings had fixed goals, such as
-gliders on three aperiodic tilings ([Edmond 2026](bibliography.md#edmond2026gliders)) or Life on six
-Archimedean lattices ([Guttesen 2026](bibliography.md#guttesen2026game)).
+**Evidence.** The method's parts are established. The archive keeps the best few runs per niche, in
+the manner of MAP-Elites quality-diversity search
+([Mouret and Clune 2015](bibliography.md#mouret2015illuminating)), which Faldor and Cully applied to
+Lenia ([Faldor and Cully 2024](bibliography.md#faldor2024toward)). Its score is a small model fitted to
+human keep/maybe/drop ratings of animated clips, the general technique of learning from human
+preferences ([Christiano et al. 2017](bibliography.md#christiano2017deep)); in Picbreeder people chose
+directly, with no model in between
+([Secretan et al. 2008](bibliography.md#secretan2008picbreeder);
+[2011](bibliography.md#secretan2011picbreeder)). Most of the clips were rated by Emily Teich, whose eye
+for what is beautiful is built into the score. Other automated discovery in artificial life uses
+learned goal spaces ([Reinke, Etcheverry and Oudeyer 2020](bibliography.md#reinke2020intrinsically))
+or foundation models in place of human judgement
+([Kumar et al. 2025](bibliography.md#kumar2025automating)). Earlier cellular automaton searches of
+this kind work on one substrate, such as Lenia ([Chan 2019](bibliography.md#chan2019lenia)); searches
+over several tilings had fixed goals, such as gliders on three aperiodic tilings
+([Edmond 2026](bibliography.md#edmond2026gliders)) or Life on six Archimedean lattices
+([Guttesen 2026](bibliography.md#guttesen2026game)).
 
 The search will be described in full in [Search methods](search-methods.md).
 
@@ -148,8 +283,8 @@ The search will be described in full in [Search methods](search-methods.md).
 **Claim (to our knowledge).** No earlier program runs as many cellular automaton families (Life-like,
 Generations, Larger than Life, JACA, layered, turmites, WireWorld, cyclic, Greenberg–Hastings,
 rock-paper-scissors, Hodgepodge, forest fire, Lenia, sandpiles, priority tables and rule tables) on as
-many classes of tiling (lattices, 1,248 k-uniform tilings, 81 isohedral types, drawn tiles, and the
-Penrose, hat and spectre tilings) with one neighbour model, tested for agreement across thread counts
+many classes of tiling (lattices, 1,248 k-uniform tilings, 81 isohedral types with their 11 Laves
+neighbour graphs, drawn tiles, and the Penrose, hat and spectre tilings) with one neighbour model, tested for agreement across thread counts
 and between CPU and GPU.
 
 **Evidence.** Breadth is the contribution, not any one family on any one tiling: Ready runs arbitrary
@@ -165,26 +300,36 @@ of known rules to known graphs, and we do not count them as discoveries. See
 ## What we do not claim
 
 - **Age colouring**, including colouring cells by how long they have been alive and fading destroyed
-  cells: Chris Rowett's LifeViewer and other programs did this first.
+  cells: Chris Rowett's LifeViewer and other programs did this first
+  ([LifeWiki: LifeViewer](bibliography.md#lifewikind_lifeviewer);
+  [Rowett: LifeViewer](bibliography.md#rowettnd_lifeviewer)).
 - **The two-parent hexagon rules** (`HexW`, `HexW3`): Wolfram's ([Wolfram 2002](bibliography.md#wolfram2002new)).
-- **Life gliders on the kagome and snub square tilings**: Guttesen's ([Guttesen 2026](bibliography.md#guttesen2026game)).
-- **Hat gliders as a new kind of object**: Edmond's. The hat glider JETCARP's search found is closest to
-  his "hat glider B" after relabelling its states, and probably the same mechanism
-  ([Edmond 2026](bibliography.md#edmond2026gliders); see [Priority rules](../automata/priority-rules.md)).
+- **Life gliders on the kagome and snub square tilings**, and the pairs of them that JETCARP's
+  catalogue first listed as ships: Guttesen's ([Guttesen 2026](bibliography.md#guttesen2026game)).
+- **Spaceships on isohedral tilings**: all are known ships of the square or triangular grid.
+- **The hat glider**: it is James Edmond's hat glider B in another table. With B's states renamed, the
+  two tables give the same evolution cell for cell; JETCARP's search found it again, and JETCARP's
+  only addition is a check that it travels a million rings of tiles on a sliding window, where
+  Edmond's certificates already prove it immortal
+  ([Edmond 2026](bibliography.md#edmond2026gliders); see [Priority rules](../automata/priority-rules.md)
+  and [Findings](findings.md#the-hat-glider-is-edmonds-glider-b)).
 - **"The first cellular automata on aperiodic tilings"**: Life on Penrose tilings was studied from 2005,
   and Goucher found the first aperiodic glider in 2012 ([Goucher 2012](bibliography.md#goucher2012gliders)).
 - **"The first matter–antimatter Life"**: see JACA above.
 
 ## Checks still to do
 
-Before the claims above are final, and before the paper:
+Done in November 2026: the re-verification on the release engine, the lattice-equivalence,
+compound and cross-tiling checks, the comparison of JETCARP's kagome and snub-square ships with
+Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glider B (see
+[Findings](findings.md)). Before the claims above are final, and before the paper:
 
-- Compare JETCARP's kagome 5-cell and snub-square 12-cell ships with Guttesen's figures cell for cell.
-- Run JETCARP's hat glider beside Edmond's glider B.
-- Re-verify every claimed spaceship on the release engine, and check each tiling's neighbour graph
-  against the regular lattices.
-- Re-run the key searches just before publication, and ask on the ConwayLife forums when the results
-  are posted there.
+- Ask on the ConwayLife forums, when the results are posted there, whether any of the spaceship
+  candidates have been seen before.
+- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once he
+  publishes them.
+- Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.
+- Re-run the key searches just before publication.
 
 ## Credits
 

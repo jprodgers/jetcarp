@@ -6,11 +6,15 @@ falls in a range of values. With a large enough neighbourhood, Life's small, jag
 way to big, smooth, almost organic ones.
 
 <figure>
-<img src="../images/automata/ltl-bosco.png" alt="Bosco's Rule: large hollow blobs drifting on a dark background" width="800">
-<figcaption>Bosco's Rule (<code>R5,C2,S33-57,B34-45</code>), 300 generations after a random start. Each
-cell counts the live cells in the 11 × 11 box around it. The hollow blobs are the moving "bugs"
-the rule is known for. Scene <code>docs/scenes/automata/ltl-bosco.json</code>, 300
-generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/ltl-bosco-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/ltl-bosco.webp" alt="Bosco's Rule: a random soup collapsing into hollow blobs that drift and merge" width="480" loading="lazy">
+</picture>
+<figcaption>Bosco's Rule (<code>R5,C2,S33-57,B34-45</code>), 300 generations after a random start on a
+wrapped 200 × 125 grid. Each cell counts the live cells in the 11 × 11 box around it. Watch the soup
+die back within a few generations, leaving hollow blobs that wobble, merge and break up; the small
+ones that keep their shape and travel are the "bugs" the rule is known for. Scene
+<code>docs/scenes/automata/ltl-bosco.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -102,10 +106,14 @@ moves. On the hat, below, Bosco's thresholds are scaled down by a quarter, and b
 blobs appear on an aperiodic tiling.
 
 <figure>
-<img src="../images/automata/ltl-hat.png" alt="Hollow blobs on a patch of the hat tiling" width="640">
+<picture>
+  <source srcset="../images/automata/ltl-hat-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/ltl-hat.webp" alt="A Bosco-like rule on the hat tiling: a random start clumping into drifting blobs" width="360" loading="lazy">
+</picture>
 <figcaption>A Bosco-like rule on the hat (<code>R5,C2,S25-43,B26-34</code>): the neighbourhood is every
-tile within five steps of the touch neighbour graph. 300 generations from a random start on a patch
-of about 4,000 hats. Scene <code>docs/scenes/automata/ltl-hat.json</code>.</figcaption>
+tile within five steps of the touch neighbour graph. The middle of a patch of about 4,000 hats, 300
+generations from a random start; watch the soup clump into blobs whose edges shift and smooth
+themselves over the irregular tiles. Scene <code>docs/scenes/automata/ltl-hat.json</code>.</figcaption>
 </figure>
 
 ## What is new here

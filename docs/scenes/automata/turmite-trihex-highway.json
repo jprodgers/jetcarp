@@ -1,0 +1,31 @@
+{
+ "name": "Turmite RNL on 3.6.3.6",
+ "description": "The three-colour turmite RNL (turn right, go straight or turn left by the colour of the tile it stands on) on the trihexagonal tiling 3.6.3.6, from an empty field: about 2,600 steps of disorder, then a highway that repeats every 36 steps.",
+ "tiling": {
+  "family": "trihex",
+  "size": {
+   "rect": {
+    "w": 129,
+    "h": 84
+   }
+  },
+  "boundary": "dead"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "id": 1,
+   "rule": "Turmite RNL",
+   "enabled": true,
+   "steps_per_gen": 19,
+   "palette": "Prism",
+   "seed": {
+    "ant_at": {
+     "cell": 16881,
+     "heading": 0
+    }
+   },
+   "agent_edge": "fall_off"
+  }
+ ]
+}

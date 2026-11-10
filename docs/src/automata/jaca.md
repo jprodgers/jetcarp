@@ -7,12 +7,16 @@ shifting fronts, and the fight between them can last thousands of generations. J
 Rodgers's idea and is introduced in JETCARP.
 
 <figure>
-<img src="../images/automata/jaca-cairo-rainbow.png" alt="Two dark territories on Cairo pentagons separated from a purple field by fronts coloured in rainbow bands" width="800">
-<figcaption><code>JACA B27/S03456</code> on Cairo pentagons, 1,500 generations after a mixed start. The
-territories inside are still, so cells there grow old and take the last colour of their palette,
-while the fronts keep changing, so age colouring turns each front into a rainbow. Scene
+<picture>
+  <source srcset="../images/automata/jaca-cairo-rainbow-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/jaca-cairo-rainbow.webp" alt="JACA on Cairo pentagons: a mixed start separating into still territories with rainbow-coloured fronts" width="360" loading="lazy">
+</picture>
+<figcaption><code>JACA B27/S03456</code> on Cairo pentagons, 1,500 generations after a mixed start (the
+early generations are shown more slowly). Watch the two signs sort themselves into territories: inside
+them nothing changes, so cells grow old and take the last colour of their palette, while along the
+fronts cells keep being destroyed and reborn, so age colouring turns each front into a rainbow. Scene
 <code>docs/scenes/automata/jaca-cairo-rainbow.json</code> (Quick Start preset <em>JACA rainbow fronts
-(Cairo)</em>), 1,500 generations.</figcaption>
+(Cairo)</em>).</figcaption>
 </figure>
 
 ## What it is
@@ -49,13 +53,20 @@ far:
   against noise, with either side winning.
 
 <figure class="pair">
-<div><img src="../images/automata/jaca-hat-war.png" alt="Green and orange territories on a round patch of the hat tiling" width="480"></div>
-<div><img src="../images/automata/jaca-square-beads.png" alt="A green island ringed by pale beads in an orange field on squares" width="480"></div>
-<figcaption>Left: a territory war on the hat tiling (<code>JACA B27/S013</code>), 1,500 generations; scene
-<code>docs/scenes/automata/jaca-hat-war.json</code>. Right: blast radius 1 on squares
-(<code>JACA B16/S1378 blast 1</code>): the island's border is a ring of destroyed, glowing cells, and the
-island shrinks until one sign holds the grid; scene <code>docs/scenes/automata/jaca-square-beads.json</code>,
-1,500 generations. Both are Quick Start presets.</figcaption>
+<div><picture>
+  <source srcset="../images/automata/jaca-hat-war-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/jaca-hat-war.webp" alt="JACA on the hat: green and orange armies meeting along a glowing front" width="304" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/automata/jaca-square-beads-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/jaca-square-beads.webp" alt="JACA with blast radius 1 on squares: territories separated by bands of glowing destroyed cells" width="400" loading="lazy">
+</picture></div>
+<figcaption>Left: a territory war on the hat tiling (<code>JACA B27/S013</code>), 1,500 generations, seen
+where two armies meet; watch the front, marked by grey and pale destroyed tiles, push back and forth.
+Scene <code>docs/scenes/automata/jaca-hat-war.json</code>. Right: blast radius 1 on squares
+(<code>JACA B16/S1378 blast 1</code>), 1,500 generations: the borders between the signs are bands of
+destroyed, glowing cells; watch them straighten and the territories trade ground. Scene
+<code>docs/scenes/automata/jaca-square-beads.json</code>. Both are Quick Start presets.</figcaption>
 </figure>
 
 ## Where it came from
@@ -120,7 +131,9 @@ also reports cancelled births.
 The Quick Start's JACA family has 5 named rules and 71 presets. Each preset is a whole scene: tiling,
 neighbourhood, a rule per sign, blast radius, start and palette pair. Together they cover 24
 tilings, from squares and hexagons through the Archimedean and k-uniform tilings to two isohedral
-tilings, both Penrose tilings, the hat and the spectre. They came from a six-hour search over about
+tilings, both Penrose tilings, the hat and the spectre. (For a rule, the isohedral IH28 is the Cairo
+tiling and IH41 the square grid, and the brick, herringbone and Pythagorean presets play on the
+hexagonal, hexagonal and 4.8.8 graphs; see [Isohedral tilings](../tilings/isohedral.md).) They came from a six-hour search over about
 130,000 configurations: random rule pairs, mutations and crossovers of the best, and transplants of
 good pairs to other tilings, scored on balance between the signs, contact along fronts, territory
 changing hands and activity, then reviewed by eye as contact sheets.

@@ -7,12 +7,15 @@ rules to *priority tables* and searching it with an evolutionary algorithm. JETC
 and reimplements his search on every tiling.
 
 <figure>
-<img src="../images/automata/priority-spectre-trail.png" alt="Two pale trails leaving the centre of a spectre patch at 120 degrees, each ending in a small red glider" width="640">
-<figcaption>Edmond's Spectre glider. A two-tile seed at the centre of a patch of about 4,000 spectres
-launches a pair of gliders on lanes 120° apart; the pale tiles are the trail of every tile they have
-occupied in 70 generations (older parts darker), and the small red and yellow groups at the ends are
-the gliders. Scene <code>docs/scenes/automata/priority-spectre-glider.json</code>, drawn with the trail
-script <code>docs/scenes/automata/glider-trail.rhai</code>.</figcaption>
+<picture>
+  <source srcset="../images/automata/priority-spectre-glider-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/priority-spectre-glider.webp" alt="Two small gliders leaving a seed at the centre of a spectre patch on lanes 120 degrees apart" width="240" loading="lazy">
+</picture>
+<figcaption>Edmond's Spectre glider, one generation per frame. A two-tile seed at the centre of a patch
+of about 4,000 spectres launches a pair of gliders on lanes 120° apart. Watch each glider, a head and
+a few wing tiles, change shape from step to step, since no two places on the tiling look alike, and
+still hold a straight course at one ring of tiles every two generations. Scene
+<code>docs/scenes/automata/priority-spectre-glider.json</code>, 64 generations.</figcaption>
 </figure>
 
 ## What it is
@@ -61,7 +64,7 @@ the paper's second version), found with no known rule planted in the search
 | --- | --- |
 | `SpectreGlider` | Edmond's Spectre glider rule |
 | `Priority 4: 0\|n0>=3&n1>=1->3; 3\|n3>=3->0; 3\|n1>=1->1` | The same rule written as a table |
-| `Priority 4: 3\|n2>=1->2; 0\|n3>=2->0; 0\|n2>=1->3; 0\|n1>=1->2` | A hat glider rule found by JETCARP's search (below) |
+| `Priority 4: 3\|n2>=1->2; 0\|n3>=2->0; 0\|n2>=1->3; 0\|n1>=1->2` | Edmond's hat glider B in another table, as JETCARP's search found it (below) |
 
 `Priority <states>:` is followed by rows separated by semicolons. Each row is
 `<own state>|<conditions>-><next state>`, where the own state is a number or `*` for any state, and the
@@ -87,23 +90,31 @@ the mover as it goes, and recorded as *verified to a distance*: the number of ri
 was followed without changing.
 
 <figure>
-<img src="../images/automata/priority-hat-trail.png" alt="A pale trail from the centre of a hat patch, bending and then running straight to a small glider" width="640">
-<figcaption>A glider on the hat found by JETCARP's reimplementation of Edmond's search, with its trail
-over 60 generations: after a short start it settles onto a straight course. After relabelling its
-states, the rule differs from Edmond's hat glider B on about 561 of some 12,000 combinations of
-state and neighbour counts, and it is very probably the same mechanism. Scene
-<code>docs/scenes/automata/priority-hat-glider.json</code>, trail script
-<code>docs/scenes/automata/glider-trail.rhai</code>.</figcaption>
+<picture>
+  <source srcset="../images/automata/priority-hat-glider-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/priority-hat-glider.webp" alt="A small glider of a head and a few wing tiles crossing a patch of hats on a straight course" width="286" loading="lazy">
+</picture>
+<figcaption>Edmond's hat glider B, as JETCARP's reimplementation of his search found it, one
+generation per frame. The table JETCARP's search returned looks different from Edmond's, but with B's
+states renamed (1 as 3, 2 as 1, 3 as 2) the two give the same evolution cell for cell: it is his glider.
+Watch the head (cyan) lead four to six wing tiles; after a short start the glider settles onto a
+straight course at one ring of tiles every two generations. Scene
+<code>docs/scenes/automata/priority-hat-glider.json</code>, 64 generations.</figcaption>
 </figure>
 
 ## What is new here
 
 Priority tables, the evolutionary method, the Spectre glider and the hat gliders are Edmond's. The
-hat glider JETCARP found is not a new kind of object: compared rule by rule with all of Edmond's
-published tables, it is closest to his hat glider B after relabelling the states, and probably the
-same mechanism in a different table. JETCARP's own part is running the search on every tiling and
-verifying movers to a distance; we make no novelty claim for this family. The comparison is
-described in [What is new in JETCARP](../research/contributions.md).
+hat glider JETCARP's search found is Edmond's hat glider B in another table: with B's states renamed,
+the two tables agree on every configuration the glider meets, and run side by side they give the same
+states every generation (checked for 1,467 generations on a level-7 patch). JETCARP's table has one
+extra row, and its seed launches the glider on a different lane, which is why it first looked like a
+different glider. Credit for it is Edmond's.
+
+JETCARP's own part is running the search on every tiling and verifying movers to a distance. For this
+glider that meant following it on a sliding window for 1,000,000 rings of tiles, at a steady 2.14
+units per generation; Edmond's certificates already prove it immortal. We make no novelty claim for
+this family. The comparison is described in [Findings](../research/findings.md#the-hat-glider-is-edmonds-glider-b).
 
 ## Try it
 

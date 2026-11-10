@@ -2,16 +2,20 @@
 
 WireWorld is a cellular automaton for building circuits. You draw wires, and "electrons" run along
 them, split at junctions, and are stopped or passed by small arrangements of wire that act as
-diodes and logic gates. With enough wire it can compute anything; people have built a complete
-programmable computer in it.
+diodes and logic gates. With enough wire it can compute anything; David Moore and Mark Owen, with
+help from others, built a complete programmable computer in it
+([Moore and Owen: The Wireworld computer](../research/bibliography.md#quinapalusnd_wireworld)).
 
 <figure>
-<img src="../images/automata/wireworld-adder.png" alt="A WireWorld circuit: four input loops on the left, branching wires through gates, three output wires on the right" width="900">
-<figcaption>JETCARP's two-bit adder computing 2 + 3. The loops on the left hold the input bits
-(A0, B0, A1, B1, low bit first); electrons (blue heads, red tails) travel right along the copper
-wire through XOR and OR junctions. After about 220 generations the output wires S0 and S2 carry
-electrons and S1 stays dark: 101 in binary, which is 5. Scene
-<code>docs/scenes/automata/wireworld-adder.json</code>, 240 generations.</figcaption>
+<picture>
+  <source srcset="../images/automata/wireworld-adder-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/wireworld-adder.webp" alt="A WireWorld circuit: electrons leave four input loops on the left, pass through gates, and reach three output wires on the right" width="720" loading="lazy">
+</picture>
+<figcaption>JETCARP's two-bit adder computing 2 + 3, 240 generations at three a frame. The loops on the
+left hold the input bits (A0, B0, A1, B1, low bit first); watch the electrons (blue heads, red tails)
+leave them and travel right along the copper wire through XOR and OR junctions. After about 220
+generations the output wires S0 and S2 carry electrons and S1 stays dark: 101 in binary, which is 5.
+Scene <code>docs/scenes/automata/wireworld-adder.json</code>.</figcaption>
 </figure>
 
 ## What it is
@@ -43,10 +47,12 @@ may be older than the program; we have not been able to settle this.
 
 A. K. Dewdney described WireWorld in his *Scientific American* column in January 1990, which made it
 widely known ([Dewdney 1990](../research/bibliography.md#dewdney1990cellular);
-[LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)). LifeWiki records that David
-Moore and Mark Owen, with the help of many others, designed a complete programmable computer in
-WireWorld between 1990 and 1992 and released it in 2004; a copy that computes prime numbers ships
-with Golly ([LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)). WireWorld has
+[LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)). David Moore and Mark Owen,
+"with the help of many others", designed a complete programmable computer in WireWorld between 1990
+and 1992 and wrote it up in September 2004
+([Moore and Owen: The Wireworld computer](../research/bibliography.md#quinapalusnd_wireworld)); a copy
+that computes prime numbers ships with Golly
+([LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)). WireWorld has
 long been built into MCell and Golly, and Andrew Trevorrow's HatLife ran it on the hat tiling in
 2023 ([Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)).
 
@@ -97,4 +103,5 @@ designed by many people. Running WireWorld on other tilings has been done before
 - [Silverman 1987](../research/bibliography.md#silverman1987phantom);
   [daneelsan 2025](../research/bibliography.md#daneelsan2025wireworld)
 - [Dewdney 1990](../research/bibliography.md#dewdney1990cellular)
+- [Moore and Owen: The Wireworld computer](../research/bibliography.md#quinapalusnd_wireworld)
 - [Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)

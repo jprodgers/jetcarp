@@ -134,7 +134,7 @@ def fmt(etype, key, f):
     parts.append(f"{who} ({year})." if who else f"({year}).")
     title = delatex(f.get("title", ""))
     if title:
-        if etype in ("book", "phdthesis"):
+        if etype in ("book", "phdthesis", "mastersthesis"):
             parts.append(f"*{title}*.")
         else:
             parts.append(f"“{title}”.")
@@ -178,6 +178,8 @@ def fmt(etype, key, f):
             venue.append(pub)
     elif etype == "phdthesis":
         venue.append("Thesis" + (", " + delatex(f["school"]) if f.get("school") else ""))
+    elif etype == "mastersthesis":
+        venue.append("Master's thesis" + (", " + delatex(f["school"]) if f.get("school") else ""))
     else:  # misc
         if f.get("howpublished"):
             venue.append(delatex(f["howpublished"]))

@@ -95,12 +95,34 @@ group.
 
 The catalogue is Galebach's, and the data and its representation are Soto Sánchez and colleagues'.
 What JETCARP adds is running cellular automata on all of it. Our prior-art search found no published
-cellular automaton work on k-uniform tilings with k of 2 or more, and JETCARP's searches have found
-Life-like spaceships on several 2- and 3-uniform tilings and computed sandpile identities and piles
-across the catalogue; see [Life-like rules](../automata/life-like.md#what-is-new-here),
-[The Abelian sandpile](../automata/sandpile.md#what-is-new-here) and
-[What is new in JETCARP](../research/contributions.md). Treating the tiling as a dimension of an
-exploratory search also depends on having this catalogue.
+cellular automaton work on k-uniform tilings with k of 2 or more. JETCARP has computed sandpile
+identities and piles across the catalogue, and its searches have found Life-like spaceships on 2- and
+3-uniform tilings. No 2- or 3-uniform tiling has the neighbour graph of a lattice, of Cairo or of an
+Archimedean tiling (the k-uniform tilings with k from 4 to 6 have not been surveyed), so a ship found on
+one is not a lattice ship in disguise.
+
+A k-uniform tiling can still contain a corridor of a simpler tiling, and a ship that runs in such a
+corridor belongs to the simpler tiling. JETCARP's skeptical pass checked every ship against all the
+2- and 3-uniform tilings: eight ships found on 3-uniform tilings run unchanged on a 2-uniform tiling or
+on 3.6.3.6, and are claimed there, and others run on several tilings of the same k. After those checks,
+14 single ships with no flag on 2-uniform tilings and 12 on 3-uniform tilings are, to our knowledge, new;
+a few more are flagged because they were very common in their search or run in HighLife. All are listed
+in [Findings](../research/findings.md#the-62-objects); see also
+[What is new in JETCARP](../research/contributions.md).
+
+<figure>
+<picture>
+  <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-7860a67a.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
+</picture>
+<figcaption>A 7-cell period-4 spaceship on the 2-uniform tiling k2-003, moving one lattice step every
+four generations in the 256 rules from <code>B45/S34</code> up. The same ship runs unchanged on k2-004
+and in corridors of the 3-uniform tilings k3-010 and k3-016, where the search first found it, so it is
+claimed on the 2-uniform tilings. Watch the triangles at its front and back take turns. Scene
+<code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
+</figure>
+
+Treating the tiling as a dimension of an exploratory search also depends on having this catalogue.
 
 ## Try it
 

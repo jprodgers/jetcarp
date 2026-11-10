@@ -7,13 +7,18 @@ neighbours. Conway's Life began as a simplification of its ideas. JETCARP runs i
 grid, from the rule as published.
 
 <figure>
-<img src="../images/automata/vonneumann-channels.png" alt="Three small loops of blue transmission cells, each feeding a growing line of cells" width="960">
-<figcaption>Storage loops growing channels, after Burks's Fig. 12. Each four-cell loop with one
+<picture>
+  <source srcset="../images/automata/vonneumann-channels-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/vonneumann-channels.webp" alt="Three small loops of transmission cells, each feeding a channel that grows one cell at a time" width="576" loading="lazy">
+</picture>
+<figcaption>Storage loops growing channels, after Burks's Fig. 12, over 120 generations, two a frame:
+watch the signals (pale cells) circle each loop and each channel grow by one cell per pass. Each
+four-cell loop with one
 confluent cell (green) stores five bits and feeds them into the ground forever; the pattern 10000
 builds an ordinary transmission cell pointing east on each pass, so the top channel grows to the
 right, and 10100 builds cells pointing south, so the lower two grow downward. Blue cells are ordinary
-transmission states, pale ones carry a signal, and the arrows show each cell's direction. Scene
-<code>docs/scenes/automata/vonneumann-channels.json</code>, 120 generations.</figcaption>
+transmission states and pale ones carry a signal. Scene
+<code>docs/scenes/automata/vonneumann-channels.json</code>.</figcaption>
 </figure>
 
 ## What it is

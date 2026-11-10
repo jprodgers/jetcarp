@@ -37,6 +37,23 @@ neighbours and 6 or 7 touch neighbours; each spectre 4 to 7 edge neighbours and 
 The irregularity is mild, which is why rules made for hexagons often feel at home on the hat, yet
 movers face a different neighbourhood at every step.
 
+<figure class="pair">
+<div><picture>
+  <source srcset="../images/automata/priority-hat-glider-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/automata/priority-hat-glider.webp" alt="A small glider crossing a patch of hats on a straight course" width="286" loading="lazy">
+</picture></div>
+<div><picture>
+  <source srcset="../images/tilings/osc-hat-p6-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/osc-hat-p6.webp" alt="Four hat tiles switching on and off in a cycle of six generations" width="228" loading="lazy">
+</picture></div>
+<figcaption>Left: James Edmond's hat glider B, as JETCARP's search found it again (see
+<a href="../automata/priority-rules.md">Priority rules</a>); watch the head and wing tiles reshape at
+every step as the neighbourhood changes under them. Scene
+<code>docs/scenes/automata/priority-hat-glider.json</code>. Right: a 4-cell oscillator with period 6
+in <code>B2567/S456</code>, found by JETCARP's soup search. On an aperiodic tiling an oscillator is tied
+to the cluster of tiles it sits on. Scene <code>docs/scenes/tilings/osc-hat-p6.json</code>.</figcaption>
+</figure>
+
 ## Where it came from
 
 Earlier aperiodic sets needed more than one tile: Robert Berger's first used thousands of Wang tiles,
@@ -89,8 +106,10 @@ rock-paper-scissors, Hodgepodge, forest fire) for which our search found no earl
 though we count those only as direct applications; and it computes sandpile identities and large
 single-source sandpiles on both monotiles, where our search found no earlier sandpile work at all (see
 [The Abelian sandpile](../automata/sandpile.md#what-is-new-here) and
-[What is new in JETCARP](../research/contributions.md)). Hat gliders found by JETCARP's search are not a
-new kind of object; see [Priority rules](../automata/priority-rules.md#what-is-new-here).
+[What is new in JETCARP](../research/contributions.md)). The hat glider found by JETCARP's search is
+James Edmond's hat glider B with its states renamed, and the credit is his; JETCARP adds only a check
+that it runs for a million rings of tiles on a sliding window (see
+[Priority rules](../automata/priority-rules.md#what-is-new-here)).
 
 ## Try it
 

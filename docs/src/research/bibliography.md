@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 244 works cited across the JETCARP documentation. Every entry was
+These are the 257 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -44,6 +44,8 @@ BibTeX key, so you can link to it directly.
 
 ## C
 
+<span id="cai2014cyclic"></span>Cai, Yiqing and Robert Ghrist (2014). “Cyclic Network Automata and Cohomological Waves”. In *IPSN-14 Proceedings of the 13th International Symposium on Information Processing in Sensor Networks*, pp. 215–224. IEEE. doi:[10.1109/ipsn.2014.6846754](https://doi.org/10.1109/ipsn.2014.6846754); [arXiv:1210.5232](https://arxiv.org/abs/1210.5232). <small>`cai2014cyclic`</small>
+
 <span id="caracciolo2008explicit"></span>Caracciolo, Sergio, Guglielmo Paoletti and Andrea Sportiello (2008). “Explicit characterization of the identity configuration in an Abelian sandpile model”. *Journal of Physics A: Mathematical and Theoretical* 41(49): 495003. doi:[10.1088/1751-8113/41/49/495003](https://doi.org/10.1088/1751-8113/41/49/495003); [arXiv:0809.3416](https://arxiv.org/abs/0809.3416). <small>`caracciolo2008explicit`</small>
 
 <span id="chakazulnd_lenia"></span>Chan, Bert Wang-Chak (n.d.). “Lenia (source code)”. GitHub repository Chakazul/Lenia. <https://github.com/Chakazul/Lenia>; accessed 2026-11-10. <small>`chakazulnd_lenia`</small>
@@ -59,6 +61,8 @@ BibTeX key, so you can link to it directly.
 <span id="chen1990deterministic"></span>Chen, Kan, Per Bak and Mogens H. Jensen (1990). “A deterministic critical forest fire model”. *Physics Letters A* 149(4): 207–210. doi:[10.1016/0375-9601(90)90328-L](https://doi.org/10.1016/0375-9601(90)90328-L). <small>`chen1990deterministic`</small>
 
 <span id="chopard1998cellular"></span>Chopard, Bastien and Michel Droz (1998). *Cellular Automata Modeling of Physical Systems*. Cambridge: Cambridge University Press. doi:[10.1017/CBO9780511549755](https://doi.org/10.1017/CBO9780511549755). <small>`chopard1998cellular`</small>
+
+<span id="christiano2017deep"></span>Christiano, Paul F., Jan Leike, Tom Brown, Miljan Martic, Shane Legg and Dario Amodei (2017). “Deep Reinforcement Learning from Human Preferences”. In Guyon, I., U. von Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan and R. Garnett (ed.), *Advances in Neural Information Processing Systems 30 (NIPS 2017)*. Curran Associates, Inc.. [arXiv:1706.03741](https://arxiv.org/abs/1706.03741); <https://proceedings.neurips.cc/paper_files/paper/2017/file/d5e2c0adad503c91f91df240d0cd4e49-Paper.pdf>. <small>`christiano2017deep`</small>
 
 <span id="clar1996forest"></span>Clar, Siegfried, Barbara Drossel and Franz Schwabl (1996). “Forest fires and other examples of self-organized criticality”. *Journal of Physics: Condensed Matter* 8: 6803. doi:[10.1088/0953-8984/8/37/004](https://doi.org/10.1088/0953-8984/8/37/004); [arXiv:cond-mat/9610201](https://arxiv.org/abs/cond-mat/9610201). <small>`clar1996forest`</small>
 
@@ -96,6 +100,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="dmishin2013single"></span>dmishin (2013). “The Single Rotation rule: remarkably simple and rich reversible cellular automaton”. Blog *Random thoughts and fancy math*. <https://dmishin.blogspot.com/2013/11/the-single-rotation-rule-remarkably.html>; accessed 2026-11-10. <small>`dmishin2013single`</small>
 
+<span id="drc2016b2s34h"></span>drc, Dean Hickerson and wildmyron (2016). “B2/S34H (Hexagonal Life)”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?p=26870>; accessed 2026-11-10. <small>`drc2016b2s34h`</small>
+
 <span id="drossel1992selforganized"></span>Drossel, B. and F. Schwabl (1992). “Self-organized critical forest-fire model”. *Physical Review Letters* 69(11): 1629–1632. doi:[10.1103/PhysRevLett.69.1629](https://doi.org/10.1103/PhysRevLett.69.1629). <small>`drossel1992selforganized`</small>
 
 <span id="dunn1971tessellations"></span>Dunn, J. A. (1971). “Tessellations with Pentagons”. *The Mathematical Gazette* 55(394): 366–369. doi:[10.2307/3612359](https://doi.org/10.2307/3612359). <small>`dunn1971tessellations`</small>
@@ -125,6 +131,8 @@ BibTeX key, so you can link to it directly.
 <span id="evans2016larger"></span>Evans, Kellie Michele (2016). “Larger Than Life”. In Adamatzky, Andrew and Genaro J. Martínez (ed.), *Designing Beauty: The Art of Cellular Automata*, pp. 27–34. Springer. doi:[10.1007/978-3-319-27270-2_3](https://doi.org/10.1007/978-3-319-27270-2_3). <small>`evans2016larger`</small>
 
 ## F
+
+<span id="faldor2024toward"></span>Faldor, Maxence and Antoine Cully (2024). “Toward Artificial Open-Ended Evolution within Lenia using Quality-Diversity”. In *The 2024 Conference on Artificial Life*. MIT Press. doi:[10.1162/isal_a_00827](https://doi.org/10.1162/isal_a_00827); [arXiv:2406.04235](https://arxiv.org/abs/2406.04235). <small>`faldor2024toward`</small>
 
 <span id="fersula2020sandpile"></span>Fersula, Jérémy, Camille Noûs and Kévin Perrot (2020). “Sandpile toppling on Penrose tilings: identity and isotropic dynamics”. [arXiv:2006.06254](https://arxiv.org/abs/2006.06254). <small>`fersula2020sandpile`</small>
 
@@ -250,6 +258,10 @@ BibTeX key, so you can link to it directly.
 
 <span id="huttonnd_ruletablerepository"></span>Hutton, Tim and others (n.d.). “Rule Table Repository: The Rules”. GitHub wiki, GollyGang/ruletablerepository. <https://github.com/GollyGang/ruletablerepository/wiki/TheRules>; accessed 2026-11-10. <small>`huttonnd_ruletablerepository`</small>
 
+## J
+
+<span id="johnson2019sandpile"></span>Johnson, Eli Timothy (2019). *The Sandpile Group on a Hexagonal Grid*. Master's thesis, University of Washington. <http://hdl.handle.net/1773/44375>. <small>`johnson2019sandpile`</small>
+
 ## K
 
 <span id="kaplan2000escherization"></span>Kaplan, Craig S. and David H. Salesin (2000). “Escherization”. In *Proceedings of the 27th Annual Conference on Computer Graphics and Interactive Techniques (SIGGRAPH '00)*, pp. 499–510. ACM Press. doi:[10.1145/344779.345022](https://doi.org/10.1145/344779.345022). <small>`kaplan2000escherization`</small>
@@ -294,6 +306,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="krug1988universality"></span>Krug, J. and H. Spohn (1988). “Universality Classes for Deterministic Surface Growth”. *Physical Review A* 38(8): 4271–4283. doi:[10.1103/PhysRevA.38.4271](https://doi.org/10.1103/PhysRevA.38.4271). <small>`krug1988universality`</small>
 
+<span id="kumar2025automating"></span>Kumar, Akarsh, Chris Lu, Louis Kirsch, Yujin Tang, Kenneth O. Stanley, Phillip Isola and David Ha (2025). “Automating the Search for Artificial Life With Foundation Models”. *Artificial Life* 31(3): 368–396. doi:[10.1162/artl.a.8](https://doi.org/10.1162/artl.a.8); [arXiv:2412.17799](https://arxiv.org/abs/2412.17799). <small>`kumar2025automating`</small>
+
 ## L
 
 <span id="langton1984selfreproduction"></span>Langton, Christopher G. (1984). “Self-reproduction in cellular automata”. *Physica D: Nonlinear Phenomena* 10(1–2): 135–144. doi:[10.1016/0167-2789(84)90256-2](https://doi.org/10.1016/0167-2789(84)90256-2). <small>`langton1984selfreproduction`</small>
@@ -333,6 +347,8 @@ BibTeX key, so you can link to it directly.
 <span id="lifewikind_lifelike"></span>LifeWiki contributors (2026). “List of Life-like rules”. LifeWiki. <https://conwaylife.com/wiki/List_of_Life-like_rules>; accessed 2026-11-10. <small>`lifewikind_lifelike`</small>
 
 <span id="lifewikind_lifelikeca"></span>LifeWiki contributors (n.d.). “Life-like cellular automaton”. LifeWiki. <https://conwaylife.com/wiki/Life-like_cellular_automaton>; accessed 2026-11-10. <small>`lifewikind_lifelikeca`</small>
+
+<span id="lifewikind_lifeviewer"></span>LifeWiki contributors (2025). “LifeViewer”. LifeWiki. <https://conwaylife.com/wiki/LifeViewer>; accessed 2026-11-10. <small>`lifewikind_lifeviewer`</small>
 
 <span id="lifewikind_lifewithoutdeath"></span>LifeWiki contributors (2026). “OCA:Life without death”. LifeWiki. <https://conwaylife.com/wiki/OCA:Life_without_death>; accessed 2026-11-10. <small>`lifewikind_lifewithoutdeath`</small>
 
@@ -392,6 +408,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="morgan2019undercover"></span>Morgan, Frank (2019). “My Undercover Mission to Find Cairo Tilings”. *The Mathematical Intelligencer* 41(3): 19–22. doi:[10.1007/s00283-019-09906-7](https://doi.org/10.1007/s00283-019-09906-7). <small>`morgan2019undercover`</small>
 
+<span id="mouret2015illuminating"></span>Mouret, Jean-Baptiste and Jeff Clune (2015). “Illuminating search spaces by mapping elites”. [arXiv:1504.04909](https://arxiv.org/abs/1504.04909). <small>`mouret2015illuminating`</small>
+
 ## N
 
 <span id="neary2006pcompleteness"></span>Neary, Turlough and Damien Woods (2006). “P-completeness of cellular automaton Rule 110”. In *Automata, Languages and Programming (ICALP 2006), Part I*, pp. 132–143. Springer. doi:[10.1007/11786986_13](https://doi.org/10.1007/11786986_13). <small>`neary2006pcompleteness`</small>
@@ -430,6 +448,10 @@ BibTeX key, so you can link to it directly.
 
 <span id="ptilesnd_ant"></span>ptiles (n.d.). “ant: Running Langton's ant on Penrose tiling”. GitHub repository. <https://github.com/ptiles/ant>; accessed 2026-11-10. <small>`ptilesnd_ant`</small>
 
+## Q
+
+<span id="quinapalusnd_wireworld"></span>Moore, David and Mark Owen (n.d.). “The Wireworld computer”. Quinapalus. <https://www.quinapalus.com/wi-index.html>; accessed 2026-11-10. <small>`quinapalusnd_wireworld`</small>
+
 ## R
 
 <span id="rafler2011generalization"></span>Rafler, Stephan (2011). “Generalization of Conway's ``Game of Life'' to a continuous domain – SmoothLife”. [arXiv:1111.1567](https://arxiv.org/abs/1111.1567). <small>`rafler2011generalization`</small>
@@ -437,6 +459,8 @@ BibTeX key, so you can link to it directly.
 <span id="reichenbach2007mobility"></span>Reichenbach, Tobias, Mauro Mobilia and Erwin Frey (2007). “Mobility promotes and jeopardizes biodiversity in rock-paper-scissors games”. *Nature* 448(7157): 1046–1049. doi:[10.1038/nature06095](https://doi.org/10.1038/nature06095). <small>`reichenbach2007mobility`</small>
 
 <span id="reichenberger2023elli"></span>Reichenberger, Andrea (2023). “Elli Heesch, Heinrich Heesch and Hilbert's eighteenth problem: collaborative research between philosophy, mathematics and application”. *British Journal for the History of Mathematics* 38(3): 208–228. doi:[10.1080/26375451.2023.2297522](https://doi.org/10.1080/26375451.2023.2297522). <small>`reichenberger2023elli`</small>
+
+<span id="reinke2020intrinsically"></span>Reinke, Chris, Mayalen Etcheverry and Pierre-Yves Oudeyer (2020). “Intrinsically Motivated Discovery of Diverse Patterns in Self-Organizing Systems”. In *International Conference on Learning Representations (ICLR 2020)*. [arXiv:1908.06663](https://arxiv.org/abs/1908.06663); <https://openreview.net/forum?id=rkg6sJHYDr>. <small>`reinke2020intrinsically`</small>
 
 <span id="rendell2002turing"></span>Rendell, Paul (2002). “Turing universality of the Game of Life”. In Adamatzky, Andrew (ed.), *Collision-Based Computing*, pp. 513–539. Springer. doi:[10.1007/978-1-4471-0129-1_18](https://doi.org/10.1007/978-1-4471-0129-1_18). <small>`rendell2002turing`</small>
 
@@ -446,6 +470,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="rowett2019lifeviewer"></span>Rowett, Chris (2019). “Re: Pattern viewer for forum threads (LifeViewer build 264)”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?p=67127#p67127>; accessed 2026-11-10. <small>`rowett2019lifeviewer`</small>
 
+<span id="rowettnd_lifeviewer"></span>Rowett, Chris (n.d.). “LifeViewer: scriptable pattern editor and viewer for many families of cellular automata”. GitHub repository rowett/lifeviewer. <https://github.com/rowett/lifeviewer>; accessed 2026-11-10. <small>`rowettnd_lifeviewer`</small>
+
 <span id="rucker1989cellab"></span>Rucker, Rudy and John Walker (1989). “CelLab (originally Rudy Rucker's Cellular Automata Laboratory)”. First edition: Rudy Rucker's Cellular Automata Laboratory, Autodesk, June 1989; Web edition 1995; WebCA 2017. Autodesk. <https://www.fourmilab.ch/cellab/>; accessed 2026-11-10. <small>`rucker1989cellab`</small>
 
 ## S
@@ -453,6 +479,10 @@ BibTeX key, so you can link to it directly.
 <span id="schattschneider1978tiling"></span>Schattschneider, Doris (1978). “Tiling the Plane with Congruent Pentagons”. *Mathematics Magazine* 51(1): 29–44. doi:[10.1080/0025570X.1978.11976672](https://doi.org/10.1080/0025570X.1978.11976672). <small>`schattschneider1978tiling`</small>
 
 <span id="schattschneider1990visions"></span>Schattschneider, Doris (1990). *Visions of Symmetry: Notebooks, Periodic Drawings, and Related Work of M. C. Escher*. New York: W. H. Freeman. <small>`schattschneider1990visions`</small>
+
+<span id="secretan2008picbreeder"></span>Secretan, Jimmy, Nicholas Beato, David B. D'Ambrosio, Adelein Rodriguez, Adam Campbell and Kenneth O. Stanley (2008). “Picbreeder: Evolving Pictures Collaboratively Online”. In *Proceedings of the SIGCHI Conference on Human Factors in Computing Systems (CHI '08)*, pp. 1759–1768. ACM. doi:[10.1145/1357054.1357328](https://doi.org/10.1145/1357054.1357328). <small>`secretan2008picbreeder`</small>
+
+<span id="secretan2011picbreeder"></span>Secretan, Jimmy, Nicholas Beato, David B. D'Ambrosio, Adelein Rodriguez, Adam Campbell, Jeremiah T. Folsom-Kovarik and Kenneth O. Stanley (2011). “Picbreeder: A Case Study in Collaborative Evolutionary Exploration of Design Space”. *Evolutionary Computation* 19(3): 373–403. doi:[10.1162/EVCO_a_00030](https://doi.org/10.1162/EVCO_a_00030). <small>`secretan2011picbreeder`</small>
 
 <span id="silverman1987phantom"></span>Silverman, Brian (1987). “The Phantom Fishtank”. Software, Logo Computer Systems, Montreal. <small>`silverman1987phantom`</small>
 
