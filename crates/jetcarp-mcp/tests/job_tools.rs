@@ -204,6 +204,19 @@ fn jobs_ants_piles_files_and_cancel_over_mcp() {
     assert!(rec.to_string().contains("sliding"), "{rec}");
     let r = call(&mut s, &mut h, "mover_start", json!({"rings": 10000000}));
     let mv = r["job"].as_i64().unwrap();
+    // Once under way (a step written), a stop runs on to the next window and checkpoints there.
+    let t0 = Instant::now();
+    while call(&mut s, &mut h, "job_status", json!({"job": mv}))["generation"]
+        .as_u64()
+        .unwrap_or(0)
+        == 0
+    {
+        assert!(
+            t0.elapsed() < Duration::from_secs(60),
+            "mover {mv} never started"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
     call(&mut s, &mut h, "job_stop", json!({"job": mv}));
     let st = wait(&mut s, &mut h, mv, "paused");
     let g = st["generation"].as_u64().unwrap();
