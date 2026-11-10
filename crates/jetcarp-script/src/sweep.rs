@@ -6,11 +6,11 @@
 //! (pass the same `folder`) without redoing finished runs.
 
 use crate::describe::describe;
-use jetcarp_api::out;
 use crate::series::{self, Item};
 use crate::sim::{self, ImageSpec, Shared};
-use crate::spec::{self, Screen, Until, get, get_bool, get_str, get_u64};
 use crate::{Ctx, Progress};
+use jetcarp_api::args::{self, Screen, Until, get, get_bool, get_str, get_u64};
+use jetcarp_api::out;
 use jetcarp_core::*;
 use rayon::prelude::*;
 use serde_json::{Map, Value, json};
@@ -147,7 +147,7 @@ pub const SKIP_KINDS: &[&str] = &["empty", "full", "uniform"];
 
 fn ca_options(v: &Value) -> Value {
     let mut ca = Map::new();
-    for k in spec::CA_KEYS {
+    for k in args::CA_KEYS {
         if let Some(x) = get(v, k) {
             ca.insert(k.to_string(), x.clone());
         }
@@ -248,13 +248,13 @@ fn replay_start(
         if let Some((kv, rule, opts)) = vary
             && kv == k
         {
-            let r = spec::resolve_rule(rule);
+            let r = args::resolve_rule(rule);
             if s.rule != r {
                 // A name like "Rule 30" would be wrong for the new rule.
                 s.name = None;
                 s.rule = r;
             }
-            spec::apply_ca_options(&mut s, opts)?;
+            args::apply_ca_options(&mut s, opts)?;
         }
         Ok(s)
     };
@@ -298,7 +298,7 @@ fn start_world(
             // Through a command, so the world's scene (Save scene, Quick Start) includes the CA.
             let id = w
                 .apply(Command::AddCa {
-                    ca: spec::ca_spec(rule, ca)?,
+                    ca: args::ca_spec(rule, ca)?,
                 })?
                 .new_id
                 .unwrap_or(0);
@@ -376,7 +376,7 @@ fn sweep_screen(v: &Value, mut screen: Screen) -> Result<Screen, String> {
         let (w, h) = Screen::parse_size(s)?;
         (screen.width, screen.height) = (w, h);
     }
-    if let Some(px) = spec::get_f64(v, "cell_px")? {
+    if let Some(px) = args::get_f64(v, "cell_px")? {
         screen.cell_px = px.clamp(0.5, 4096.0);
     }
     Ok(screen)
@@ -394,7 +394,7 @@ fn prepare(
     host_screen: Screen,
     check: &dyn Fn(&TilingSpec) -> Result<(), String>,
 ) -> Result<Prepared, String> {
-    spec::check_keys(v, SWEEP_KEYS, "sweep")?;
+    args::check_keys(v, SWEEP_KEYS, "sweep")?;
     let screen = sweep_screen(v, host_screen)?;
     let items = series::expand(v)?;
     let (mut base, rng_seed) = parse_base(v)?;
@@ -427,13 +427,13 @@ fn prepare(
                     _ => {}
                 }
             }
-            spec::tiling_spec(&v, &screen)?
+            args::tiling_spec(&v, &screen)?
         }
     };
     check(&tiling)?;
     let topo = Arc::new(Topology::build(&tiling)?);
     base.resolve(&topo, rng_seed)?;
-    let until = spec::parse_until(&v, 10_000)?;
+    let until = args::parse_until(&v, 10_000)?;
     let image = match get(&v, "png") {
         Some(Value::Bool(false)) => None,
         None | Some(Value::Bool(true)) => Some(sim::image_spec(&Value::Null, &screen)?),
@@ -971,7 +971,7 @@ pub fn run_world(run_json: &Value, rule: &str) -> Result<World, String> {
                 .get("screen")
                 .and_then(|s| serde_json::from_value::<Screen>(s.clone()).ok())
                 .unwrap_or_default();
-            spec::tiling_spec(settings, &sweep_screen(settings, screen)?)?
+            args::tiling_spec(settings, &sweep_screen(settings, screen)?)?
         }
     };
     let topo = Arc::new(Topology::build(&tiling)?);

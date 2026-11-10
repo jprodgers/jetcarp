@@ -3,10 +3,10 @@
 //! <Pictures>/JETCARP/wallpapers). Both act through the host's commands, so they work on the headless
 //! session and, through `use_app`, on the world in the app.
 
-use jetcarp_api::world::Host;
 use crate::tools::{
     MAX_CELLS, Res, ToolOutput, boolean, ca_index, check_unknown, int, string, tool,
 };
+use jetcarp_api::world::Host;
 use jetcarp_core::reseed::{AutoReseed, ReseedMode};
 use jetcarp_core::wallpaper::{self, Fit};
 use jetcarp_core::{CaChange, Command, World};

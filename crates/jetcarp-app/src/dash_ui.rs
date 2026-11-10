@@ -100,7 +100,7 @@ impl HuntForm {
             .collect::<Result<_, _>>()?;
         let tilings = split_list(&self.tilings)
             .iter()
-            .map(|t| jetcarp_script::spec::tiling_by_id(t).map_err(|e| format!("tiling '{t}': {e}")))
+            .map(|t| jetcarp_api::args::tiling_by_id(t).map_err(|e| format!("tiling '{t}': {e}")))
             .collect::<Result<Vec<_>, _>>()?;
         let spec = HuntSpec {
             rules,

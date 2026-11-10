@@ -91,7 +91,7 @@ fn run_pile(ctx: &Arc<Ctx>, m: &Map, parent: Option<&PathBuf>) -> R<Map> {
         }
     }
     let tiling_id = text(m, &["tiling"]).unwrap_or_else(|| "square".into());
-    let mut tiling = crate::spec::tiling_by_id(&tiling_id)?;
+    let mut tiling = jetcarp_api::args::tiling_by_id(&tiling_id)?;
     if let Some(l) = num(m, "level")? {
         tiling.size = Some(SizeSpec::Level(l as u32));
     }

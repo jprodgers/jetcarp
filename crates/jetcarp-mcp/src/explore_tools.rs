@@ -340,7 +340,7 @@ fn try_tool(args: &Value) -> Res {
     let rng = int(args, "rng")?.unwrap_or(1) as u64;
     let (spec, topo) = sized_spec(tiling, cells)?;
     let seed = match args.get("seed") {
-        Some(v) if !v.is_null() => jetcarp_script::spec::parse_seed(v)?,
+        Some(v) if !v.is_null() => jetcarp_api::args::parse_seed(v)?,
         _ => jetcarp_core::world::default_seed(&rule, topo.len()),
     };
     let cand = Cand {

@@ -1146,7 +1146,7 @@ fn tiling_ui(ui: &mut egui::Ui, f: &mut SweepForm) {
                 .desired_width(130.0),
         );
         if r.lost_focus() && !text.trim().is_empty() {
-            match jetcarp_script::spec::tiling_by_id(text.trim()) {
+            match jetcarp_api::args::tiling_by_id(text.trim()) {
                 Ok(_) => {
                     f.tiling = TilingChoice::Id(text.trim().to_ascii_lowercase());
                     text.clear();

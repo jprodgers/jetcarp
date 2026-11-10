@@ -7,7 +7,7 @@
 //! a new one being started. That is what makes a script of labelled jobs resumable after a
 //! reboot.
 
-use crate::spec::{check_keys, get_f64, get_str, get_u64};
+use jetcarp_api::args::{self, check_keys, get_f64, get_str, get_u64};
 use jetcarp_core::Nb;
 use jetcarp_core::census::{self, CensusJobOptions, CensusProgress, CensusSpec};
 use jetcarp_core::library::{JobStatus, Library, tiling_list};
@@ -141,7 +141,7 @@ pub fn census_spec(v: &Value) -> Result<CensusSpec, String> {
         tiling.size = Some(SizeSpec::Level(l as u32));
     } else if let Some(n) = get_u64(v, "cells")? {
         tiling.size = Some(SizeSpec::Cells(n as u32));
-    } else if tiling.size.is_none() && crate::spec::is_aperiodic(&tiling) {
+    } else if tiling.size.is_none() && args::is_aperiodic(&tiling) {
         tiling.size = Some(SizeSpec::Level(jetcarp_core::aperiodic::default_level(
             &tiling.family,
         )));
@@ -283,7 +283,7 @@ pub fn rule_neighbours(rule: &str, v: &Value) -> Result<Value, String> {
     };
     let (r, hint) = Rule::parse(rule)?;
     let nb = nb_of(v)?.or(hint).unwrap_or_default();
-    if tiling.size.is_none() && !crate::spec::is_aperiodic(&tiling) {
+    if tiling.size.is_none() && !args::is_aperiodic(&tiling) {
         tiling.size = Some(SizeSpec::Rect { w: 8, h: 8 });
     }
     let topo = Topology::build(&tiling)?;

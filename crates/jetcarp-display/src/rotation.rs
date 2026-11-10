@@ -593,7 +593,7 @@ fn series_scenes(source: &Source) -> Result<Vec<(String, Option<u64>, Scene)>, S
             let mut scene = Scene::new(TilingSpec::rect(family, 200, 140, *boundary));
             scene
                 .cas
-                .push(jetcarp_script::spec::ca_spec(&i.rule, &options)?);
+                .push(jetcarp_script::args::ca_spec(&i.rule, &options)?);
             Ok((i.rule, i.n, scene))
         })
         .collect()

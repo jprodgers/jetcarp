@@ -5,10 +5,10 @@
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`.
 
-use jetcarp_api::world::Host;
 use crate::tools::{
     Res, ToolOutput, boolean, ca_index, check_unknown, int, short_status, string, tool,
 };
+use jetcarp_api::world::Host;
 use jetcarp_core::library::search::SearchSpec;
 use jetcarp_core::library::{
     self, CurationState, DiscoveredBy, Library, PasteAt, PatternClass, PatternRecord, QsStatus,

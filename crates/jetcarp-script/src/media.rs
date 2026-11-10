@@ -6,7 +6,7 @@
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
 use crate::sim::Shared;
-use crate::spec::{check_keys, get_bool, get_f64, get_str, get_u64};
+use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64};
 use jetcarp_core::library::{CurationState, Library, PatternClass, QsStatus};
 use jetcarp_core::media::{
     self, BatchReport, MediaFormat, MediaMode, MediaOptions, MediaRow, MediaStyle, MediaTarget,

@@ -195,7 +195,7 @@ impl PileWindow {
         self.error = None;
         let spec = (|| -> Result<PileSpec, String> {
             Ok(PileSpec {
-                tiling: jetcarp_script::spec::tiling_by_id(&self.tiling)?,
+                tiling: jetcarp_api::args::tiling_by_id(&self.tiling)?,
                 nb: if self.nb == 0 {
                     jetcarp_core::Nb::Edge
                 } else {

@@ -1,7 +1,7 @@
 //! A world as scripts see it, running until a trigger, and screen-sized images.
 
+use jetcarp_api::args::{self, Screen, Until, get, get_bool, get_f64, get_u64};
 use jetcarp_api::out;
-use crate::spec::{self, Screen, Until, get, get_bool, get_f64, get_u64};
 use jetcarp_core::render::{self, Image, RenderOptions};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::script::{self, Metrics, ScriptState, Trigger};
@@ -173,7 +173,7 @@ pub const IMAGE_KEYS: &[&str] = &[
 /// `size` (`"screen"` default, `[w, h]`, `"WxH"`, `"fit"`), `scale`, `max_side`, `outlines`
 /// (true, false, or a minimum tile size in pixels), `palette`.
 pub fn image_spec(v: &Value, screen: &Screen) -> Result<ImageSpec, String> {
-    spec::check_keys(v, IMAGE_KEYS, "image")?;
+    args::check_keys(v, IMAGE_KEYS, "image")?;
     let scale = get_f64(v, "scale")?;
     let max_side = get_u64(v, "max_side")?;
     let canvas = match get(v, "size") {
@@ -217,8 +217,8 @@ pub fn image_spec(v: &Value, screen: &Screen) -> Result<ImageSpec, String> {
         scale,
         max_side: max_side.unwrap_or(1600).clamp(16, 65536) as u32,
         outline_min_px,
-        palette: spec::get_str(v, "palette")?.map(String::from),
-        compression: match spec::get_str(v, "compression")?.unwrap_or("balanced") {
+        palette: args::get_str(v, "palette")?.map(String::from),
+        compression: match args::get_str(v, "compression")?.unwrap_or("balanced") {
             c @ ("fast" | "balanced" | "high") => c.to_string(),
             c => {
                 return Err(format!(

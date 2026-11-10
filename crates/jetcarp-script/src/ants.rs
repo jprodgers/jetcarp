@@ -5,7 +5,7 @@
 
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
-use crate::spec::{check_keys, get_bool, get_f64, get_str, get_u64};
+use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64};
 use jetcarp_core::ants::job::{self, AntOptions, AntSpec, Soups, parse_rule};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};

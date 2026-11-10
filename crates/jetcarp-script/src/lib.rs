@@ -27,10 +27,12 @@ mod pile;
 pub mod results;
 pub mod series;
 pub mod sim;
-pub mod spec;
 pub mod sweep;
 
-pub use spec::Screen;
+/// The argument parsers scripts use, for crates that run world-only scripts (jetcarp-display)
+/// without depending on jetcarp-api themselves.
+pub use jetcarp_api::args;
+pub use jetcarp_api::args::Screen;
 pub use sweep::{Estimate, estimate, run_world, sweep_to_script};
 
 use jetcarp_api::out::{self, Guard};

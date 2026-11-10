@@ -1,12 +1,12 @@
 //! The Rhai bindings: global functions and `World` methods. See `help.md` for the reference.
 
 use crate::describe;
-use jetcarp_api::out;
 use crate::series::{self, Item};
 use crate::sim::{self, Shared};
-use crate::spec::{self, Screen};
 use crate::sweep::{self, Verdict};
 use crate::{Ctx, Progress};
+use jetcarp_api::args::{self, Screen};
+use jetcarp_api::out;
 use jetcarp_core::objects::{self, ObjClass, ObjectOptions};
 use jetcarp_core::world::CaChange;
 use jetcarp_core::*;
@@ -258,10 +258,10 @@ fn objects_map(r: &objects::ObjectReport) -> Map {
 
 /// Census-style classification of a continued run.
 fn classify(w: &mut World, v: &Value, stop: &dyn Fn() -> bool) -> Result<Map, String> {
-    spec::check_keys(v, &["max_gens", "explode", "window"], "classify")?;
-    let max = spec::get_u64(v, "max_gens")?.unwrap_or(2000);
-    let explode = spec::get_f64(v, "explode")?.unwrap_or(0.5);
-    let window = spec::get_u64(v, "window")?
+    args::check_keys(v, &["max_gens", "explode", "window"], "classify")?;
+    let max = args::get_u64(v, "max_gens")?.unwrap_or(2000);
+    let explode = args::get_f64(v, "explode")?.unwrap_or(0.5);
+    let window = args::get_u64(v, "window")?
         .unwrap_or(10)
         .clamp(1, max.max(1));
     let n = w.topo.len() as f64;
@@ -335,29 +335,29 @@ fn outcome_map(o: &sim::RunOutcome, w: &World) -> Map {
 }
 
 fn new_world(ctx: &Ctx, v: &Value) -> R<Shared> {
-    let mut keys: Vec<&str> = spec::TILING_KEYS.to_vec();
+    let mut keys: Vec<&str> = args::TILING_KEYS.to_vec();
     keys.extend(["rng_seed", "screen", "cell_px", "cas"]);
-    spec::check_keys(v, &keys, "world").or_err()?;
+    args::check_keys(v, &keys, "world").or_err()?;
     let mut screen = ctx.opts.screen;
-    if let Some(s) = spec::get_str(v, "screen").or_err()? {
+    if let Some(s) = args::get_str(v, "screen").or_err()? {
         let (w, h) = Screen::parse_size(s).or_err()?;
         (screen.width, screen.height) = (w, h);
     }
-    if let Some(px) = spec::get_f64(v, "cell_px").or_err()? {
+    if let Some(px) = args::get_f64(v, "cell_px").or_err()? {
         screen.cell_px = px.clamp(0.5, 4096.0);
     }
-    let tiling = spec::tiling_spec(v, &screen).or_err()?;
+    let tiling = args::tiling_spec(v, &screen).or_err()?;
     ctx.check_tiling(&tiling).or_err()?;
-    let rng = spec::get_u64(v, "rng_seed").or_err()?.unwrap_or(1);
+    let rng = args::get_u64(v, "rng_seed").or_err()?.unwrap_or(1);
     let mut w = World::new(tiling, rng).or_err()?;
     ctx.check_cells(w.topo.len()).or_err()?;
-    if let Some(cas) = spec::get(v, "cas") {
+    if let Some(cas) = args::get(v, "cas") {
         for c in cas
             .as_array()
             .ok_or("`cas` should be a list of rules or [rule, options] pairs")?
         {
             let spec = match c {
-                Value::String(r) => spec::ca_spec(r, &Value::Null),
+                Value::String(r) => args::ca_spec(r, &Value::Null),
                 Value::Object(o) => {
                     let rule = o
                         .get("rule")
@@ -365,8 +365,8 @@ fn new_world(ctx: &Ctx, v: &Value) -> R<Shared> {
                         .ok_or("a CA map needs `rule`")?;
                     let mut rest = o.clone();
                     rest.remove("rule");
-                    spec::check_keys(&Value::Object(rest.clone()), spec::CA_KEYS, "CA").or_err()?;
-                    spec::ca_spec(rule, &Value::Object(rest))
+                    args::check_keys(&Value::Object(rest.clone()), args::CA_KEYS, "CA").or_err()?;
+                    args::ca_spec(rule, &Value::Object(rest))
                 }
                 x => Err(format!("bad CA {x}")),
             }
@@ -759,8 +759,8 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
 
     // CAs.
     let add = |s: &mut Shared, rule: &str, opts: &Value| -> R<INT> {
-        spec::check_keys(opts, spec::CA_KEYS, "add_ca").or_err()?;
-        let spec = spec::ca_spec(rule, opts).or_err()?;
+        args::check_keys(opts, args::CA_KEYS, "add_ca").or_err()?;
+        let spec = args::ca_spec(rule, opts).or_err()?;
         let mut g = s.lock();
         let a = g.world.apply(Command::AddCa { ca: spec }).or_err()?;
         Ok(a.new_id.unwrap_or(0) as INT)
@@ -773,27 +773,27 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     e.register_fn("update_ca", |s: &mut Shared, id: INT, m: Map| -> R<()> {
         let v = map_json(&m)?;
-        let mut keys = spec::CA_KEYS.to_vec();
+        let mut keys = args::CA_KEYS.to_vec();
         keys.push("rule");
-        spec::check_keys(&v, &keys, "update_ca").or_err()?;
+        args::check_keys(&v, &keys, "update_ca").or_err()?;
         let mut g = s.lock();
         let i = ca_index(&g.world, Some(id))?;
         let tmp =
-            spec::ca_spec(spec::get_str(&v, "rule").or_err()?.unwrap_or("B3/S23"), &v).or_err()?;
+            args::ca_spec(args::get_str(&v, "rule").or_err()?.unwrap_or("B3/S23"), &v).or_err()?;
         let change = CaChange {
             name: tmp.name,
-            rule: spec::get_str(&v, "rule").or_err()?.map(spec::resolve_rule),
+            rule: args::get_str(&v, "rule").or_err()?.map(args::resolve_rule),
             neighborhood: tmp.neighborhood,
-            enabled: spec::get_bool(&v, "enabled").or_err()?,
+            enabled: args::get_bool(&v, "enabled").or_err()?,
             affects_others: tmp.affects_others,
-            steps_per_gen: spec::get(&v, "steps_per_gen").map(|_| tmp.steps_per_gen),
+            steps_per_gen: args::get(&v, "steps_per_gen").map(|_| tmp.steps_per_gen),
             palette: tmp.palette,
-            drop_per_gen: spec::get(&v, "drop_per_gen").map(|_| tmp.drop_per_gen),
+            drop_per_gen: args::get(&v, "drop_per_gen").map(|_| tmp.drop_per_gen),
             seed: tmp.seed,
-            color_by: spec::get(&v, "color_by").map(|_| tmp.color_by),
-            agent_edge: spec::get(&v, "agent_edge").map(|_| tmp.agent_edge),
+            color_by: args::get(&v, "color_by").map(|_| tmp.color_by),
+            agent_edge: args::get(&v, "agent_edge").map(|_| tmp.agent_edge),
             palette_neg: tmp.palette_neg,
-            glow: spec::get(&v, "glow").map(|_| tmp.glow),
+            glow: args::get(&v, "glow").map(|_| tmp.glow),
         };
         let id = g.world.cas[i].id;
         g.world.apply(Command::UpdateCa { id, change }).or_err()?;
@@ -806,7 +806,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
         g.world.apply(Command::RemoveCa { id }).or_err().map(|_| ())
     });
     let seed = |s: &mut Shared, id: Option<INT>, seed: Dynamic| -> R<()> {
-        let spec = spec::parse_seed(&to_json(&seed)?).or_err()?;
+        let spec = args::parse_seed(&to_json(&seed)?).or_err()?;
         let mut g = s.lock();
         let i = ca_index(&g.world, id)?;
         let id = g.world.cas[i].id;
@@ -893,7 +893,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     let c = ctx.clone();
     e.register_fn("step", move |s: &mut Shared, n: INT| -> R<()> {
-        let u = spec::Until {
+        let u = args::Until {
             trigger: jetcarp_core::script::Trigger::Generations { n: n.max(0) as u64 },
             max_gens: n.max(0) as u64,
         };
@@ -907,8 +907,8 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     let c = ctx.clone();
     e.register_fn("run", move |s: &mut Shared, m: Map| -> R<Map> {
         let v = map_json(&m)?;
-        spec::check_keys(&v, spec::UNTIL_KEYS, "run").or_err()?;
-        let u = spec::parse_until(&v, 10_000).or_err()?;
+        args::check_keys(&v, args::UNTIL_KEYS, "run").or_err()?;
+        let u = args::parse_until(&v, 10_000).or_err()?;
         let mut g = s.lock();
         let o = sim::run_until(&mut g.world, &u, &|| c.stopped());
         if o.stopped == "cancelled" {
@@ -1076,7 +1076,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
 
     // Analysis.
     let objs = |s: &mut Shared, v: &Value| -> R<Map> {
-        spec::check_keys(
+        args::check_keys(
             v,
             &[
                 "ca",
@@ -1091,17 +1091,17 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
         let g = s.lock();
         let d = ObjectOptions::default();
         let o = ObjectOptions {
-            ca: spec::get_u64(v, "ca").or_err()?.map(|c| c as u32),
-            max_period: spec::get_u64(v, "max_period")
+            ca: args::get_u64(v, "ca").or_err()?.map(|c| c as u32),
+            max_period: args::get_u64(v, "max_period")
                 .or_err()?
                 .unwrap_or(d.max_period),
-            merge_distance: spec::get_u64(v, "merge_distance")
+            merge_distance: args::get_u64(v, "merge_distance")
                 .or_err()?
                 .map_or(d.merge_distance, |m| m as u32),
-            separate: spec::get_bool(v, "separate")
+            separate: args::get_bool(v, "separate")
                 .or_err()?
                 .unwrap_or(d.separate),
-            piece_distance: spec::get_u64(v, "piece_distance")
+            piece_distance: args::get_u64(v, "piece_distance")
                 .or_err()?
                 .map_or(d.piece_distance, |m| m as u32),
         };
@@ -1264,8 +1264,8 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     let c = ctx.clone();
     let catalog = move |l: &LibHandle, s: &Shared, v: &Value| -> R<Map> {
-        spec::check_keys(v, &["ca", "max_period", "source"], "catalog").or_err()?;
-        let source = spec::get_str(v, "source")
+        args::check_keys(v, &["ca", "max_period", "source"], "catalog").or_err()?;
+        let source = args::get_str(v, "source")
             .or_err()?
             .map(String::from)
             .unwrap_or_else(|| match &c.opts.script_path {
@@ -1276,8 +1276,8 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
         let rep = crate::library::catalog_world(
             &l.0,
             &g.world,
-            spec::get_u64(v, "ca").or_err()?.map(|x| x as u32),
-            spec::get_u64(v, "max_period").or_err()?,
+            args::get_u64(v, "ca").or_err()?.map(|x| x as u32),
+            args::get_u64(v, "max_period").or_err()?,
             &source,
             DiscoveredBy::Script,
         )
@@ -1394,14 +1394,14 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     // and lib.promote_run(folder, run, #{ title, note }).
     let c = ctx.clone();
     let prom_run = move |l: &LibHandle, folder: &str, run: &str, v: &Value| -> R<Map> {
-        spec::check_keys(v, &["title", "note"], "promote_run").or_err()?;
+        args::check_keys(v, &["title", "note"], "promote_run").or_err()?;
         let dir = c.readable(folder).or_err()?;
         let p = crate::results::promote_folder_run(
             &dir,
             run,
             &l.0,
-            spec::get_str(v, "title").or_err()?,
-            spec::get_str(v, "note").or_err()?,
+            args::get_str(v, "title").or_err()?,
+            args::get_str(v, "note").or_err()?,
         )
         .or_err()?;
         let mut m = Map::new();
@@ -1430,9 +1430,9 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     // `lib.rate(kind, id, rating)`, `lib.rate(kind, id, rating, #{ rater, note })`.
     let rate = |l: &LibHandle, kind: &str, id: &str, rating: f64, v: &Value| -> R<INT> {
-        spec::check_keys(v, &["rater", "note"], "rate").or_err()?;
-        let rater = spec::get_str(v, "rater").or_err()?.unwrap_or("user");
-        let note = spec::get_str(v, "note").or_err()?.unwrap_or("");
+        args::check_keys(v, &["rater", "note"], "rate").or_err()?;
+        let rater = args::get_str(v, "rater").or_err()?.unwrap_or("user");
+        let note = args::get_str(v, "note").or_err()?.unwrap_or("");
         l.0.rate(kind, id, rater, rating, note).or_err()
     };
     e.register_fn(

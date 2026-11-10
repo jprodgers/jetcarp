@@ -2,7 +2,7 @@
 //! `"HexW3"`, `"HexT"`, `"HexT3 sum"`, `"HexT3"`, `"B/S"`), random samples of any numbered
 //! series (`sample: n`, `sample_seed: s`), and plain lists.
 
-use crate::spec::{get, get_str, get_u64};
+use jetcarp_api::args::{get, get_str, get_u64};
 use jetcarp_core::census;
 use serde_json::Value;
 

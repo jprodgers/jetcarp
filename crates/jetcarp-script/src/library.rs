@@ -1,6 +1,7 @@
 //! Cataloging a world's objects into the pattern library (`jetcarp_core::library`), shared by the
 //! Rhai `library()` handle and the app (sweep favourites).
 
+use jetcarp_api::args;
 use jetcarp_core::World;
 use jetcarp_core::library::split::records_from_object;
 use jetcarp_core::library::{AddOutcome, DiscoveredBy, Library, PatternRecord, Provenance, now_utc};
@@ -119,7 +120,7 @@ pub fn record_json(r: &PatternRecord) -> Value {
 /// known_patterns, new_rules, job, ids, seconds }`. Stored searches are a catalog job (`job`).
 pub(crate) fn search_into(lib: &Library, v: &Value, ctx: &crate::Ctx) -> Result<Value, String> {
     use jetcarp_core::library::search::{SearchSpec, search};
-    crate::spec::check_keys(
+    args::check_keys(
         v,
         &[
             "rules",
@@ -142,7 +143,7 @@ pub(crate) fn search_into(lib: &Library, v: &Value, ctx: &crate::Ctx) -> Result<
     if let Some((job, _)) = crate::jobs::labelled(lib, "search", v)? {
         ctx.log(format!(
             "search job {job} ({}) already done",
-            crate::spec::get_str(v, "label")?.unwrap_or("")
+            args::get_str(v, "label")?.unwrap_or("")
         ));
         return Ok(
             json!({ "job": job, "skipped": true, "groups": [], "new_patterns": 0,
@@ -199,19 +200,19 @@ pub(crate) fn search_into(lib: &Library, v: &Value, ctx: &crate::Ctx) -> Result<
         rules,
         tilings,
         size: jetcarp_core::SizeSpec::Rect { w, h },
-        boundary: match crate::spec::get_str(v, "boundary")? {
-            Some(b) => crate::spec::parse_boundary(b)?,
+        boundary: match args::get_str(v, "boundary")? {
+            Some(b) => args::parse_boundary(b)?,
             None => d.boundary,
         },
-        soups: crate::spec::get_u64(v, "soups")?.unwrap_or(16) as u32,
-        gens: crate::spec::get_u64(v, "gens")?.unwrap_or(d.gens),
-        density: crate::spec::get_f64(v, "density")?.unwrap_or(d.density),
-        seed: crate::spec::get_u64(v, "seed")?.unwrap_or(d.seed),
-        max_period: crate::spec::get_u64(v, "max_period")?.unwrap_or(d.max_period),
-        soup_radius: crate::spec::get_f64(v, "soup_radius")?,
+        soups: args::get_u64(v, "soups")?.unwrap_or(16) as u32,
+        gens: args::get_u64(v, "gens")?.unwrap_or(d.gens),
+        density: args::get_f64(v, "density")?.unwrap_or(d.density),
+        seed: args::get_u64(v, "seed")?.unwrap_or(d.seed),
+        max_period: args::get_u64(v, "max_period")?.unwrap_or(d.max_period),
+        soup_radius: args::get_f64(v, "soup_radius")?,
         ..d
     };
-    let store = crate::spec::get_bool(v, "store")?.unwrap_or(true);
+    let store = args::get_bool(v, "store")?.unwrap_or(true);
     let t0 = std::time::Instant::now();
     let label = format!("search {}", spec.rules.join(" "));
     let report = |done: usize, total: usize| {
@@ -283,7 +284,7 @@ pub(crate) fn hunt_into(
     use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
-    crate::spec::check_keys(
+    args::check_keys(
         v,
         &[
             "rules",
@@ -327,10 +328,7 @@ pub(crate) fn hunt_into(
         })
     };
     let found = crate::jobs::labelled(lib, "hunt", v)?.map(|x| x.0);
-    let jid = match crate::spec::get_u64(v, "resume")?
-        .map(|j| j as i64)
-        .or(found)
-    {
+    let jid = match args::get_u64(v, "resume")?.map(|j| j as i64).or(found) {
         Some(j) => j,
         None => {
             let d = HuntSpec::default();
@@ -370,11 +368,11 @@ pub(crate) fn hunt_into(
                     ));
                 }
             };
-            let soups = crate::spec::get_u64(v, "soups")?.unwrap_or(10_000);
+            let soups = args::get_u64(v, "soups")?.unwrap_or(10_000);
             let spec = HuntSpec {
                 rules,
                 tilings,
-                neighborhood: match crate::spec::get_str(v, "nb")? {
+                neighborhood: match args::get_str(v, "nb")? {
                     None => None,
                     Some("touch") => Some(jetcarp_core::Nb::Touch),
                     Some("edge") => Some(jetcarp_core::Nb::Edge),
@@ -384,17 +382,17 @@ pub(crate) fn hunt_into(
                 soup: SoupSpec {
                     w,
                     h,
-                    density: crate::spec::get_f64(v, "density")?.unwrap_or(d.soup.density),
-                    shape: match crate::spec::get_str(v, "shape")? {
+                    density: args::get_f64(v, "density")?.unwrap_or(d.soup.density),
+                    shape: match args::get_str(v, "shape")? {
                         Some(s) => SoupShape::parse(s)?,
                         None => SoupShape::Rect,
                     },
                 },
-                seed: crate::spec::get_u64(v, "seed")?.unwrap_or(d.seed),
-                max_gens: crate::spec::get_u64(v, "gens")?.unwrap_or(d.max_gens),
-                max_period: crate::spec::get_u64(v, "max_period")?.unwrap_or(d.max_period),
-                pop_cap: crate::spec::get_u64(v, "pop_cap")?.unwrap_or(0),
-                margin: crate::spec::get_u64(v, "margin")?.unwrap_or(0) as u32,
+                seed: args::get_u64(v, "seed")?.unwrap_or(d.seed),
+                max_gens: args::get_u64(v, "gens")?.unwrap_or(d.max_gens),
+                max_period: args::get_u64(v, "max_period")?.unwrap_or(d.max_period),
+                pop_cap: args::get_u64(v, "pop_cap")?.unwrap_or(0),
+                margin: args::get_u64(v, "margin")?.unwrap_or(0) as u32,
                 store: store_policy(v)?,
             };
             let j = job::start(lib, &spec)?;
@@ -420,9 +418,9 @@ pub(crate) fn hunt_into(
     let c = ctx.clone();
     let t0 = std::time::Instant::now();
     let opts = HuntOptions {
-        threads: crate::spec::get_u64(v, "threads")?.unwrap_or(0) as usize,
+        threads: args::get_u64(v, "threads")?.unwrap_or(0) as usize,
         stop,
-        limit: crate::spec::get_u64(v, "limit")?,
+        limit: args::get_u64(v, "limit")?,
         on_progress: Some(Arc::new(move |p: &job::HuntProgress| {
             let total = p.soups_total.unwrap_or(0);
             let el = t0.elapsed().as_secs_f64();
@@ -468,11 +466,11 @@ fn store_policy(v: &Value) -> Result<jetcarp_core::hunt::job::StorePolicy, Strin
         None | Some(Value::Null) => d,
         Some(Value::String(s)) if s == "all" => StorePolicy::all(),
         Some(m @ Value::Object(_)) => {
-            crate::spec::check_keys(m, &["max_cells", "max_volume", "min_seen"], "store")?;
+            args::check_keys(m, &["max_cells", "max_volume", "min_seen"], "store")?;
             StorePolicy {
-                max_cells: crate::spec::get_u64(m, "max_cells")?.unwrap_or(d.max_cells),
-                max_volume: crate::spec::get_u64(m, "max_volume")?.unwrap_or(d.max_volume),
-                min_seen: crate::spec::get_u64(m, "min_seen")?.unwrap_or(d.min_seen),
+                max_cells: args::get_u64(m, "max_cells")?.unwrap_or(d.max_cells),
+                max_volume: args::get_u64(m, "max_volume")?.unwrap_or(d.max_volume),
+                min_seen: args::get_u64(m, "min_seen")?.unwrap_or(d.min_seen),
             }
         }
         Some(x) => return Err(format!("`store` is \"all\" or a map, not {x}")),

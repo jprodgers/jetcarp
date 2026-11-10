@@ -352,7 +352,7 @@ fn pile_start(args: &Value) -> Res {
         }
         None => {
             let tid = string(args, "tiling")?.unwrap_or("square");
-            let mut tiling = jetcarp_script::spec::tiling_by_id(tid)?;
+            let mut tiling = jetcarp_api::args::tiling_by_id(tid)?;
             if let Some(lv) = int(args, "level")? {
                 tiling.size = Some(jetcarp_core::SizeSpec::Level(lv.clamp(1, 8) as u32));
             }

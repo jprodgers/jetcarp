@@ -3,9 +3,9 @@
 //! Descriptions are written for a model that has never seen JETCARP: they say what the tool does,
 //! give a minimal example, and name the tool to call next.
 
+use crate::util;
 use jetcarp_api::cells::{self, Grid};
 use jetcarp_api::world::Host;
-use crate::util;
 use jetcarp_core::render::{self, RenderOptions};
 use jetcarp_core::rules::{CatalogEntry, FieldKind};
 use jetcarp_core::world::{CaInstance, CaSpec, Command};
@@ -536,12 +536,12 @@ pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
                 radius: 8.0,
                 peak: 1.0,
             }),
-            "signed" | "mixed" | "halves" | "half" | "pattern" => jetcarp_script::spec::parse_seed(v),
+            "signed" | "mixed" | "halves" | "half" | "pattern" => jetcarp_api::args::parse_seed(v),
             _ => serde_json::from_value(Value::String(head)).map_err(|e| bad(e.to_string())),
         };
     }
     if v.get("shape").is_some() || v.get("pattern").is_some() {
-        return jetcarp_script::spec::parse_seed(v);
+        return jetcarp_api::args::parse_seed(v);
     }
     if let Some(d) = v.get("random").and_then(|d| d.as_f64()) {
         return parse_seed(&json!(format!("random:{d}")));
@@ -1793,7 +1793,7 @@ fn run_script(args: &Value, progress: Option<ProgressFn>, cancel: Option<Cancel>
     }
     let mut opts = jetcarp_script::RunOptions::default();
     if let Some(s) = string(args, "screen")? {
-        let (w, h) = jetcarp_script::Screen::parse_size(s)?;
+        let (w, h) = jetcarp_api::args::Screen::parse_size(s)?;
         opts.screen.width = w;
         opts.screen.height = h;
     }

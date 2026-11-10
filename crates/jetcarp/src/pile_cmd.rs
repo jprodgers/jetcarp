@@ -93,7 +93,7 @@ pub fn run(a: PileArgs) -> Result<()> {
             Err(_) => job_for_folder(&lib, &PathBuf::from(r), &a)?,
         },
         None => {
-            let mut tiling = jetcarp_script::spec::tiling_by_id(&a.tiling).map_err(msg)?;
+            let mut tiling = jetcarp_api::args::tiling_by_id(&a.tiling).map_err(msg)?;
             if let Some(l) = a.level {
                 tiling.size = Some(SizeSpec::Level(l));
             }
