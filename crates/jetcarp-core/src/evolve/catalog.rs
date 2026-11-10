@@ -1,12 +1,16 @@
 //! Verified gliders from a search into the pattern library: exact spaceships on lattices (the
 //! object detector and the library's recurrence check), movers verified to a distance on
-//! aperiodic patches (the mover tracker).
+//! aperiodic patches (the mover tracker). [`glider_records`] classifies them and gives the
+//! records to store (an evolve job stores them through its sink, credited to the job);
+//! [`catalog_gliders`] stores them straight away, as manual finds.
 
 use super::arena::{Arena, is_aperiodic};
 use super::{Champion, EvolveReport};
 use crate::library::movers::{MoverReport, TrackSpec, mover_record, track};
 use crate::library::split::records_from_object;
-use crate::library::{AddOutcome, DiscoveredBy, Library, Provenance, now_utc};
+use crate::library::{
+    AddOutcome, DiscoveredBy, Library, PatternRecord, Provenance, now_utc, prepare,
+};
 use crate::objects::{ObjClass, ObjectOptions, find_objects};
 use crate::world::{CaSpec, Command, SeedSpec, World};
 use serde::{Deserialize, Serialize};
@@ -46,12 +50,56 @@ fn provenance(
     }
 }
 
-/// Catalog every verified glider of a search (`lib = None`: classify only, store nothing).
+/// Catalog every verified glider of a search (`lib = None`: classify only, store nothing). The
+/// records go in one at a time as manual finds (job 0); a glider whose records cannot all be
+/// stored is reported as not cataloged (those before the failure stay stored).
 pub fn catalog_gliders(
     report: &EvolveReport,
     lib: Option<&Library>,
     track_gens: u64,
 ) -> Result<Vec<FoundMover>, String> {
+    let mut out = Vec::new();
+    for (mut f, recs) in glider_records(report, track_gens, lib.is_some())? {
+        if let Some(l) = lib {
+            for r in recs {
+                let id = r.id.clone();
+                match l.add(r) {
+                    Ok(AddOutcome::Added) if f.ids.contains(&id) => f.added.push(id),
+                    Ok(_) => {}
+                    Err(e) => {
+                        f = not_cataloged(&f.rule, &e);
+                        break;
+                    }
+                }
+            }
+        }
+        out.push(f);
+    }
+    Ok(out)
+}
+
+/// A glider that could not be cataloged.
+pub fn not_cataloged(rule: &str, e: &str) -> FoundMover {
+    FoundMover {
+        rule: rule.to_string(),
+        kind: "none".into(),
+        ids: vec![],
+        added: vec![],
+        summary: format!("could not catalog: {e}"),
+        tracker: None,
+    }
+}
+
+/// Every verified glider of a search classified (an exact spaceship on a lattice, a mover
+/// verified to a distance on an aperiodic patch, or neither), with the records to store for
+/// it, in order (`added` left empty). With `ready`, the records are made ready to store
+/// (verified, their rule ranges computed: [`crate::library::prepare`]); a glider whose record
+/// cannot be is reported as not cataloged, with the records before it.
+pub fn glider_records(
+    report: &EvolveReport,
+    track_gens: u64,
+    ready: bool,
+) -> Result<Vec<(FoundMover, Vec<PatternRecord>)>, String> {
     let mut out = Vec::new();
     if report.gliders.is_empty() {
         return Ok(out);
@@ -70,32 +118,27 @@ pub fn catalog_gliders(
             .map(|&(x, s)| (arena.cell_of[x as usize], s))
             .collect();
         let tiling = arena.tiling.clone();
+        let mut recs = Vec::new();
         let f = if is_aperiodic(&spec.tiling.family) {
-            aperiodic_mover(report, c, &tiling, cells, lib, track_gens)
+            aperiodic_mover(report, c, &tiling, cells, track_gens, ready, &mut recs)
         } else {
-            lattice_ships(report, c, &arena, cells, lib)
+            lattice_ships(report, c, &arena, cells, ready, &mut recs)
         };
-        let f = f.unwrap_or_else(|e| FoundMover {
-            rule: c.rule.clone(),
-            kind: "none".into(),
-            ids: vec![],
-            added: vec![],
-            summary: format!("could not catalog: {e}"),
-            tracker: None,
-        });
-        out.push(f);
+        let f = f.unwrap_or_else(|e| not_cataloged(&c.rule, &e));
+        out.push((f, recs));
     }
     Ok(out)
 }
 
-/// Follow the seed with the mover tracker over growing patch levels; store it if verified.
+/// Follow the seed with the mover tracker over growing patch levels; its record if verified.
 fn aperiodic_mover(
     report: &EvolveReport,
     c: &Champion,
     tiling: &crate::topology::TilingSpec,
     cells: Vec<(u32, u8)>,
-    lib: Option<&Library>,
     track_gens: u64,
+    ready: bool,
+    recs: &mut Vec<PatternRecord>,
 ) -> Result<FoundMover, String> {
     let spec = &report.spec;
     let mut ts = TrackSpec::new(&c.rule, spec.nb, tiling.clone(), cells);
@@ -117,11 +160,7 @@ fn aperiodic_mover(
             DiscoveredBy::Search,
         )?;
         f.ids.push(rec.id.clone());
-        if let Some(l) = lib
-            && l.add(rec.clone())? == AddOutcome::Added
-        {
-            f.added.push(rec.id.clone());
-        }
+        recs.push(if ready { prepare(rec)? } else { rec });
     }
     f.tracker = Some(rep);
     Ok(f)
@@ -134,7 +173,8 @@ fn lattice_ships(
     c: &Champion,
     arena: &Arena,
     cells: Vec<(u32, u8)>,
-    lib: Option<&Library>,
+    ready: bool,
+    recs: &mut Vec<PatternRecord>,
 ) -> Result<FoundMover, String> {
     let mut w = World::on_topology(arena.topo.clone(), 1);
     w.apply(Command::AddCa {
@@ -184,11 +224,7 @@ fn lattice_ships(
                 r.period
             ));
             f.ids.push(r.id.clone());
-            if let Some(l) = lib
-                && l.add(r.clone())? == AddOutcome::Added
-            {
-                f.added.push(r.id.clone());
-            }
+            recs.push(if ready { prepare(r)? } else { r });
         }
     }
     if f.ids.is_empty() {

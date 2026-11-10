@@ -2,8 +2,9 @@
 //! generation each ([`crate::evolve::Evolution`]), checkpointed after each, so a stopped search
 //! resumes from its last generation and ends exactly as an uninterrupted one (and as
 //! [`crate::evolve::evolve`] with the same spec). At the end the champions are verified, the
-//! verified gliders go to the catalog (`evolve::catalog::catalog_gliders`, as `jetcarp evolve`
-//! stores them), and the run's files are written to its folder, when it has one.
+//! verified gliders' records (`evolve::catalog::glider_records`, the gliders `jetcarp evolve`
+//! stores) go to the catalog with the final write, credited to the job, and the run's files are
+//! written to its folder, when it has one.
 //!
 //! The progress is what the MCP tool `evolve_start` has always written: per generation
 //! `generation` (the last one run, from 0), `generations`, `best`, `best_ever`, `median`,
@@ -14,10 +15,10 @@
 use super::{Outcome, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind};
 use super::{base_summary, eta, short_list};
 use crate::dashboard::JobSummary;
-use crate::evolve::catalog::{FoundMover, catalog_gliders};
+use crate::evolve::catalog::{FoundMover, glider_records, not_cataloged};
 use crate::evolve::{Evolution, EvolveCheckpoint, EvolveReport, EvolveSpec, GenStats};
 use crate::library::store::JobRow;
-use crate::library::{JobStatus, Library, tiling_display_name};
+use crate::library::{AddOutcome, JobStatus, Library, tiling_display_name};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -180,7 +181,17 @@ pub struct EvolveRun {
     pool: Option<rayon::ThreadPool>,
     job: i64,
     session: u64,
-    done: Option<Value>,
+    done: Option<Finished>,
+}
+
+/// A finished search: its report, the verified gliders' fate, the files written, and the
+/// records in the sink (glider index, id) until they are stored.
+struct Finished {
+    report: EvolveReport,
+    found: Vec<FoundMover>,
+    files: Vec<PathBuf>,
+    owners: Vec<(usize, String)>,
+    stored: bool,
 }
 
 impl EvolveRun {
@@ -262,7 +273,7 @@ impl Strategy for EvolveRun {
 
     fn progress(&self, status: JobStatus) -> Value {
         if let Some(d) = &self.done {
-            return d.clone();
+            return done_progress(self.job, self.spec.as_ref(), d);
         }
         let status = super::status_name(status);
         let (Some(evo), Some(spec)) = (&self.evo, &self.spec) else {
@@ -288,8 +299,30 @@ impl Strategy for EvolveRun {
         let evo = self.evo.take().ok_or("the search was not restored")?;
         let spec = self.spec.clone().ok_or("the search was not restored")?;
         let report = self.in_pool(|| evo.finish())?;
-        let lib = spec.store.then_some(cx.lib);
-        let found = catalog_gliders(&report, lib, spec.track_gens)?;
+        // The verified gliders' records go in with the final write, credited to the job; the
+        // files report which are new to the catalog as it stands now (`stored` makes the
+        // progress and the result say what the write did).
+        let mut found = Vec::new();
+        let mut owners = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for (fi, (mut f, recs)) in glider_records(&report, spec.track_gens, spec.store)?
+            .into_iter()
+            .enumerate()
+        {
+            if spec.store {
+                for r in recs {
+                    if f.ids.contains(&r.id)
+                        && seen.insert(r.id.clone())
+                        && !cx.lib.contains(&r.id)?
+                    {
+                        f.added.push(r.id.clone());
+                    }
+                    owners.push((fi, r.id.clone()));
+                    sink.patterns.push((r, 0));
+                }
+            }
+            found.push(f);
+        }
         let mut files = Vec::new();
         if let Some(dir) = &spec.folder {
             files = crate::evolve::write_outputs(&report, dir)?;
@@ -302,32 +335,65 @@ impl Strategy for EvolveRun {
             files.push(fp);
         }
         sink.files.extend(files.iter().cloned());
-        let total = spec.search.gens;
-        self.done = Some(json!({
-            "status": "done",
-            "generation": report.generations.len(), "generations": total,
-            "best_ever": report.generations.last().map(|g| g.best_ever),
-            "elapsed_s": report.elapsed_s,
-            "champions": report.champions.iter().take(8).map(|c| json!({
-                "rule": c.rule, "fitness": c.fitness,
-            })).collect::<Vec<_>>(),
-            "gliders": report.gliders.len(),
-            "movers": found.iter().map(|m| json!({
-                "kind": m.kind, "ids": m.ids, "added": m.added, "summary": m.summary,
-            })).collect::<Vec<_>>(),
-            "folder": spec.folder.as_ref().map(|d| d.display().to_string()).unwrap_or_default(),
-            "line": format!("evolve {}: {} generations, {} verified glider(s)",
-                cx.job, report.generations.len(), report.gliders.len()),
-        }));
-        if let Some(slot) = &self.result {
-            *slot.lock().unwrap() = Some(EvolveResult {
-                report,
-                found,
-                files,
-            });
-        }
+        self.done = Some(Finished {
+            report,
+            found,
+            files,
+            owners,
+            stored: false,
+        });
         Ok(())
     }
+
+    fn stored(&mut self, outcomes: &[Result<AddOutcome, String>]) {
+        let Some(d) = self.done.as_mut().filter(|d| !d.stored) else {
+            return;
+        };
+        d.stored = true;
+        if !d.owners.is_empty() {
+            for f in &mut d.found {
+                f.added.clear();
+            }
+            for ((fi, id), o) in std::mem::take(&mut d.owners).into_iter().zip(outcomes) {
+                let f = &mut d.found[fi];
+                match o {
+                    Ok(AddOutcome::Added) if f.ids.contains(&id) => f.added.push(id),
+                    Ok(_) => {}
+                    Err(e) => *f = not_cataloged(&f.rule, e),
+                }
+            }
+        }
+        if let Some(slot) = &self.result {
+            *slot.lock().unwrap() = Some(EvolveResult {
+                report: d.report.clone(),
+                found: d.found.clone(),
+                files: d.files.clone(),
+            });
+        }
+    }
+}
+
+/// The progress of a finished search.
+fn done_progress(job: i64, spec: Option<&EvolveJobSpec>, d: &Finished) -> Value {
+    let (report, found) = (&d.report, &d.found);
+    let folder = spec.and_then(|s| s.folder.as_ref());
+    json!({
+        "status": "done",
+        "generation": report.generations.len(),
+        "generations": spec.map(|s| s.search.gens),
+        "best_ever": report.generations.last().map(|g| g.best_ever),
+        "elapsed_s": report.elapsed_s,
+        "champions": report.champions.iter().take(8).map(|c| json!({
+            "rule": c.rule, "fitness": c.fitness,
+        })).collect::<Vec<_>>(),
+        "gliders": report.gliders.len(),
+        "movers": found.iter().map(|m| json!({
+            "kind": m.kind, "ids": m.ids, "added": m.added, "summary": m.summary,
+        })).collect::<Vec<_>>(),
+        "folder": folder.map(|d| d.display().to_string()).unwrap_or_default(),
+        "line": format!("evolve {job}: {} generations, {} verified glider(s)",
+            report.generations.len(), report.gliders.len()),
+    })
 }
 
 /// Run (or resume) an evolve job here, on this thread, under the runner: a generation per

@@ -143,6 +143,44 @@ fn square_search_finds_an_exact_spaceship() {
         assert!(s.rule.starts_with("Priority"));
         assert!(s.verified.periods >= 4);
     }
+
+    // As a job: the same search, its gliders stored with the final write and credited to the
+    // job (not to manual finds, job 0), the progress saying which were new.
+    use jetcarp_core::jobs::RunOptions;
+    use jetcarp_core::jobs::evolve::{self as job, EvolveJobSpec};
+    let jlib = Library::open(lib_dir.join("job"));
+    let js = EvolveJobSpec {
+        track_gens: 1000,
+        ..EvolveJobSpec::new(spec.clone())
+    };
+    let j = job::start(&jlib, &js).unwrap();
+    let (out, res) = job::run(&jlib, j, None, &RunOptions::default()).unwrap();
+    let res = res.unwrap();
+    assert_eq!(res.report.fingerprint(), rep.fingerprint());
+    let ids = |found: &[catalog::FoundMover]| {
+        let mut v: Vec<String> = found.iter().flat_map(|f| f.ids.clone()).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    assert_eq!(ids(&res.found), ids(&found));
+    let mut credited: Vec<String> = jlib
+        .job_sightings(j)
+        .unwrap()
+        .into_iter()
+        .map(|s| s.0)
+        .collect();
+    credited.sort();
+    credited.dedup();
+    assert_eq!(credited, ids(&found));
+    assert!(jlib.job_sightings(0).unwrap().is_empty());
+    let added: usize = out.progress["movers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["added"].as_array().unwrap().len())
+        .sum();
+    assert_eq!(added, credited.len(), "{}", out.progress);
     let _ = std::fs::remove_dir_all(&lib_dir);
 }
 
