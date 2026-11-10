@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship 4b87931e on the 2-uniform tiling k2-013",
+ "description": "A period-17 spaceship on the 2-uniform tiling k2-013 (touching neighbours), 2 to 20 cells, moving (1, −1) lattice steps every 17 generations. It runs the same way in the 2,147,483,648 rules from B2,8,13/S1 to B2,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24/S1,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 275 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k2-013"
+  },
+  "size": {
+   "rect": {
+    "w": 10,
+    "h": 14
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B2,8,9,10,11,13,14,15,18,19,20,22,24/S1,10,11,12,13,14,15,19,20,22,24",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,2,1 0,0,10,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k2-013"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

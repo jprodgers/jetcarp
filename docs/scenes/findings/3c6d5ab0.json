@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship 3c6d5ab0 on 4.8.8",
+ "description": "A period-2 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 14 to 16 cells, moving one lattice step every 2 generations (c/2). It runs the same way in the 256 rules from B2/S2 to B2678/S245678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 8 times). A derivative ship (69c9912a with a tag-along): kept as a distinct object, not counted as a discovery.",
+ "tiling": {
+  "family": "oct",
+  "size": {
+   "rect": {
+    "w": 24,
+    "h": 54
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B27/S25",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 1,0,0,1 0,1,1,1 0,2,0,1 0,3,1,1 1,3,1,1 0,4,0,1 0,4,1,1 0,5,1,1 0,6,1,1 1,6,1,1 2,6,0,1 2,7,0,1 2,7,1,1 1,8,0,1",
+    "tiling": {
+     "family": "oct",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship c4c00098 on 4.8.8",
+ "description": "A period-4 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 7 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 512 rules from B2/S2 to B245678/S25678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 9 times). It contains a perturbed phase of the smaller ships 69c9912a and 938f9833. To our knowledge not reported before.",
+ "tiling": {
+  "family": "oct",
+  "size": {
+   "rect": {
+    "w": 22,
+    "h": 54
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B27/S25",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 1,0,0,1 1,1,1,1 0,2,1,1 1,2,1,1 0,3,0,1",
+    "tiling": {
+     "family": "oct",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

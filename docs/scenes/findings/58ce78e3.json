@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship 58ce78e3 on the 2-uniform tiling k2-006",
+ "description": "A period-10 spaceship on the 2-uniform tiling k2-006 (touching neighbours), 4 to 9 cells, moving one lattice step every 10 generations (c/10). It runs the same way in the 4,096 rules from B36/S23 to B3,6,7,8,9,10,11,12/S2,3,7,8,9,10,11,12; the scene uses the rule it was found in. The same object runs unchanged on k3-028, k3-029 and k3-030. JETCARP's soup search found it on k3-029 (seen 43 times). Flagged to check before claiming: runs in HighLife (B36/S23). We found no earlier report, but others may well have seen it, so it is not claimed.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k2-006"
+  },
+  "size": {
+   "rect": {
+    "w": 26,
+    "h": 10
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3,6,9,10,11/S2,3,7,10,12",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,2,1 0,1,3,1 1,0,2,1 1,0,3,1 1,0,4,1 1,1,3,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k2-006"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

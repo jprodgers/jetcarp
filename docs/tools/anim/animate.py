@@ -16,8 +16,9 @@ Kinds of entry:
           `start` + `gens`, `frames` frames spaced evenly (or eased with `ease` > 1, to spend more
           frames on the start). Labelled with the generation (or the step, for ants, with
           "label": "step").
-  mover   a spaceship or glider: a window that holds its whole path over `gens` generations, one frame
-          every `every` generations, at most `tile_px` pixels per tile.
+  mover   a spaceship or glider: a window that holds its whole path over `gens` generations from
+          generation `start` (0), one frame every `every` generations, at most `tile_px` pixels per
+          tile; the still is a trail of `trail` (4) positions.
   osc     an oscillator: one period, one frame per generation.
 
 Options common to all kinds: width (px), max_height (px), tile_px, ms (per frame), hold (ms on the
@@ -311,7 +312,8 @@ def window(a, scene, wd, gens_f, aspect):
 
 def do_mover(a, scene, wd, sc):
     e = a.get("every", 1)
-    gens_f = list(range(0, a["gens"] + 1, e))
+    s0 = a.get("start", 0)
+    gens_f = list(range(s0, s0 + a["gens"] + 1, e))
     frames, bg, meta = window(a, scene, wd, gens_f, a.get("aspect", 0.6))
     labels = [f"gen {g:,}" for g in gens_f] if a.get("label") else None
     du = [a.get("ms", 90)] * (len(frames) - 1) + [a.get("hold", 600)]

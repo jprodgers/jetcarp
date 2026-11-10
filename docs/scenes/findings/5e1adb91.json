@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship 5e1adb91 on 3.12.12",
+ "description": "A period-8 spaceship on the truncated hexagonal tiling 3.12.12 (touching neighbours), 12 to 23 cells, moving four lattice steps every 8 generations (c/2). It runs the same way in the 1,024 rules from B26/S26 to B2,6,8,9,10,11,12/S2,6,7,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen once). A derivative ship (852ea9ff with a tag-along): kept as a distinct object, not counted as a discovery.",
+ "tiling": {
+  "family": "trunchex",
+  "size": {
+   "rect": {
+    "w": 40,
+    "h": 20
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B2,6,11,12/S2,6,7,11",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 4,0,0,1 6,0,0,1 4,1,1,1 5,1,1,1 6,1,0,1 7,1,0,1 3,2,0,1 4,2,1,1 7,2,0,1 7,2,1,1 7,2,2,1",
+    "tiling": {
+     "family": "trunchex",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

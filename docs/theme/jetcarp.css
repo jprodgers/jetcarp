@@ -60,3 +60,61 @@ figure picture img {
   height: auto;
   border-radius: 4px;
 }
+/* Findings: the gallery of candidate spaceships, one card per object (two columns on a wide page,
+   one on a phone). */
+.ship-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 1em;
+  margin: 1em 0 2em;
+}
+.ship-card {
+  min-width: 0;
+  border: 1px solid var(--quote-border);
+  border-radius: 6px;
+  background: var(--quote-bg);
+  padding: 0.6em 0.75em 0.4em;
+  font-size: 0.85em;
+  line-height: 1.4;
+  scroll-margin-top: calc(var(--menu-bar-height, 50px) + 0.5em);
+}
+.ship-card:target {
+  outline: 2px solid var(--links);
+}
+.ship-card picture {
+  display: block;
+  text-align: center;
+}
+.ship-card img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.ship-card .ship-name {
+  margin: 0.4em 0 0.3em;
+  font-size: 1.1em;
+}
+.ship-card .ship-n {
+  float: right;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.ship-card dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15em 0.6em;
+  margin: 0;
+}
+.ship-card dt {
+  opacity: 0.7;
+}
+.ship-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ship-card .ship-clip {
+  margin: 0.4em 0 0;
+  font-size: 0.9em;
+  opacity: 0.7;
+}

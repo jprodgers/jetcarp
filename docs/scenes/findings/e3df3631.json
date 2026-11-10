@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship e3df3631 on the 3-uniform tiling k3-038",
+ "description": "A period-53 spaceship on the 3-uniform tiling k3-038 (touching neighbours), 4 to 24 cells, moving one lattice step every 53 generations (c/53). It runs the same way in the 2,048 rules from B3/S136 to B3,10,11,12,13,14/S1,3,6,9,10,11,12,13,14; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 4 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k3-038"
+  },
+  "size": {
+   "rect": {
+    "w": 22,
+    "h": 8
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3,10,12,14/S1,3,6,9,13",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 0,0,3,1 0,0,10,1 0,0,12,1 1,0,0,1 1,0,13,1 2,0,1,1 2,0,2,1 2,0,3,1 2,0,4,1 2,0,5,1 2,0,8,1 2,0,10,1 0,1,6,1 0,1,7,1 0,1,11,1 2,1,3,1 2,1,7,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k3-038"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

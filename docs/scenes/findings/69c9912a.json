@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship 69c9912a on 4.8.8",
+ "description": "A period-2 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 5 cells, moving one lattice step every 2 generations (c/2). It runs the same way in the 512 rules from B2/S2 to B25678/S245678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 8,034 times). Flagged as most likely already known: small (5 cells), common (seen 8,034 times) and wide-range (512 rules) on an Archimedean tiling. We found no earlier report, but others may well have seen it, so it is not claimed.",
+ "tiling": {
+  "family": "oct",
+  "size": {
+   "rect": {
+    "w": 22,
+    "h": 54
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B27/S25",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 1,0,0,1 0,1,1,1 0,2,0,1",
+    "tiling": {
+     "family": "oct",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

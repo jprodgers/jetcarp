@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship 47978a43 on the 2-uniform tiling k2-013",
+ "description": "A period-6 spaceship on the 2-uniform tiling k2-013 (touching neighbours), 9 to 20 cells, moving one lattice step every 6 generations (c/6). It runs the same way in the 4,294,967,296 rules from B2,10/S1 to B2,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24/S1,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 44 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k2-013"
+  },
+  "size": {
+   "rect": {
+    "w": 22,
+    "h": 10
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B2,8,9,10,11,13,14,15,18,19,20,22,24/S1,10,11,12,13,14,15,19,20,22,24",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,2,1 0,0,6,1 1,0,0,1 1,0,8,1 1,0,9,1 2,0,2,1 2,0,3,1 2,0,4,1 2,0,5,1 2,0,7,1 2,0,8,1 2,0,9,1 0,1,13,1 0,1,15,1 1,1,1,1 1,1,6,1 0,2,6,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k2-013"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

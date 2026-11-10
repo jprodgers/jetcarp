@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship 5b9c9e68 on the 3-uniform tiling k3-009",
+ "description": "A period-16 spaceship on the 3-uniform tiling k3-009 (touching neighbours), 4 to 10 cells, moving one lattice step every 16 generations (c/16). It runs the same way in the 134,217,728 rules from B3478/S23 to B3,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20/S2,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 466 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k3-009"
+  },
+  "size": {
+   "rect": {
+    "w": 18,
+    "h": 8
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3,4,7,8,11,13,16,18,19/S2,3,7,10,11,13,14,15,16,19",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,3,1 0,0,5,1 0,0,6,1 0,0,7,1 0,0,8,1 1,0,6,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k3-009"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

@@ -1,0 +1,45 @@
+{
+ "name": "Spaceship df78e126 on the 3-uniform tiling k3-045",
+ "description": "A period-37 spaceship on the 3-uniform tiling k3-045 (touching neighbours), 6 to 23 cells, moving one lattice step every 37 generations (c/37). It runs the same way in the 4,096 rules from B4,5,9,11/S2,3,5,8,9,14 to B4,5,9,10,11,13,14,15,16/S0,2,3,5,8,9,10,11,12,13,14,15,16; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 8 times). To our knowledge not reported before.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k3-045"
+  },
+  "size": {
+   "rect": {
+    "w": 24,
+    "h": 8
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B4,5,9,10,11,13,14/S2,3,5,8,9,10,11,14",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,5,1 0,0,8,1 0,0,9,1 0,0,11,1 0,0,12,1 1,0,0,1 1,0,11,1 1,0,12,1 1,0,13,1 0,1,3,1 0,1,4,1 0,1,5,1 0,1,7,1 1,1,2,1 1,1,4,1 1,1,6,1 1,1,7,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k3-045"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

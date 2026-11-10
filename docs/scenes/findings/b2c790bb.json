@@ -1,0 +1,39 @@
+{
+ "name": "Spaceship b2c790bb on 3.12.12",
+ "description": "A period-6 spaceship on the truncated hexagonal tiling 3.12.12 (touching neighbours), 5 to 8 cells, moving (−2, 4) lattice steps every 6 generations. It runs the same way in the 32,768 rules from B2/S2 to B2,5,6,8,9,10,11,12/S2,5,6,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 1,585 times). Flagged as most likely already known: small (5 to 8 cells), common (seen 1,585 times) and wide-range (32,768 rules) on an Archimedean tiling. We found no earlier report, but others may well have seen it, so it is not claimed.",
+ "tiling": {
+  "family": "trunchex",
+  "size": {
+   "rect": {
+    "w": 18,
+    "h": 50
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B2,6,11,12/S2,6,7,11",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 1,0,2,1 2,0,0,1 2,0,1,1",
+    "tiling": {
+     "family": "trunchex",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}
