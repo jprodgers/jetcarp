@@ -1,5 +1,33 @@
-//! Spectre tiling by substitution (Smith, Myers, Kaplan, Goodman-Strauss 2023; Kaplan's construction).
-//! Ported from `spectreMatrices` in `reference/core.js` and `reference/spectre.mjs`.
+//! Spectre tiling by substitution (Smith, Myers, Kaplan, Goodman-Strauss 2023, "A chiral aperiodic
+//! monotile").
+//!
+//! The substitution construction (the step table, the supertile table, the key-point quad and the
+//! Gamma placement) is ported, by way of JETCARP's JavaScript prototype, from Craig S. Kaplan's
+//! Spectre visualizer (`spectre.js`, <https://cs.uwaterloo.ca/~csk/spectre/>). Kaplan made it
+//! available to JETCARP under the BSD 3-Clause licence, the same terms as his hatviz, by email to
+//! Jimmie Rodgers on 2026-11-10 (see THIRD_PARTY_NOTICES.md). Copyright (c) 2023, Craig S. Kaplan:
+//!
+//! > Redistribution and use in source and binary forms, with or without modification, are
+//! > permitted provided that the following conditions are met: 1. Redistributions of source code
+//! > must retain the above copyright notice, this list of conditions and the following disclaimer.
+//! > 2. Redistributions in binary form must reproduce the above copyright notice, this list of
+//! > conditions and the following disclaimer in the documentation and/or other materials provided
+//! > with the distribution. 3. Neither the name of the copyright holder nor the names of its
+//! > contributors may be used to endorse or promote products derived from this software without
+//! > specific prior written permission.
+//! >
+//! > THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//! > OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+//! > MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+//! > COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+//! > EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+//! > GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+//! > AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//! > NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//! > OF THE POSSIBILITY OF SUCH DAMAGE.
+//!
+//! JETCARP's own additions here (level embeddings, patch sizing, the tracker support) are under
+//! JETCARP's licence.
 
 use crate::geom::*;
 use std::collections::HashMap;
