@@ -11,6 +11,7 @@ use std::path::PathBuf;
 mod ants_cmd;
 mod app_cmd;
 mod demo_cmd;
+mod doctor_cmd;
 mod evolve_cmd;
 mod explore_cmd;
 mod hashlife_cmd;
@@ -174,6 +175,12 @@ enum Cmd {
     Site(media_cmd::SiteArgs),
     /// List tiling families with their neighbour counts.
     Tilings,
+    /// What JETCARP sees on this machine: version, folders, graphics adapters, desktop
+    /// integration. Include it in bug reports.
+    Doctor(doctor_cmd::DoctorArgs),
+    /// Undo what JETCARP set up outside its folders (login entry, GNOME extension, screen
+    /// saver), and optionally delete its settings and data. Shows the plan unless --yes.
+    Uninstall(doctor_cmd::UninstallArgs),
     /// Print the settings, data, and output folders JETCARP uses (environment overrides
     /// included).
     Paths {
@@ -571,6 +578,8 @@ fn main() -> Result<()> {
         Cmd::Media(a) => media_cmd::run(a)?,
         Cmd::Site(a) => media_cmd::run_site(a)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(*a)?,
+        Cmd::Doctor(a) => doctor_cmd::doctor(a)?,
+        Cmd::Uninstall(a) => doctor_cmd::uninstall(a)?,
         Cmd::Paths { json } => {
             use jetcarp_core::paths;
             if json {

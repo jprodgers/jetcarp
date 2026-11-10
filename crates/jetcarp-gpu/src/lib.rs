@@ -1132,3 +1132,67 @@ pub fn describe(info: &wgpu::AdapterInfo) -> String {
     };
     format!("{}{drv}, {:?}", info.name, info.backend)
 }
+
+/// One graphics adapter as the system reports it (for `jetcarp doctor`).
+#[derive(Clone, Debug)]
+pub struct AdapterReport {
+    pub name: String,
+    /// Vulkan, Metal, Dx12, Gl.
+    pub backend: String,
+    /// DiscreteGpu, IntegratedGpu, VirtualGpu, Cpu, Other.
+    pub kind: String,
+    pub driver: String,
+    /// The adapter the GPU simulation would pick (high performance, not software).
+    pub chosen: bool,
+    /// Why the GPU simulation cannot use it, if it can't.
+    pub problem: Option<String>,
+}
+
+/// Every adapter on every backend, marking the one the GPU simulation would use. Identical
+/// entries (the same driver installed twice, as inside a Flatpak) are listed once.
+pub fn adapter_reports() -> Vec<AdapterReport> {
+    let mut seen = std::collections::HashSet::new();
+    adapter_list()
+        .into_iter()
+        .filter(|r| seen.insert((r.name.clone(), r.backend.clone(), r.driver.clone())))
+        .collect()
+}
+
+fn adapter_list() -> Vec<AdapterReport> {
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let chosen = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        ..Default::default()
+    }))
+    .ok()
+    .map(|a| a.get_info())
+    .filter(|i| i.device_type != wgpu::DeviceType::Cpu);
+    pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
+        .into_iter()
+        .map(|a| {
+            let info = a.get_info();
+            let problem = if info.device_type == wgpu::DeviceType::Cpu {
+                Some("software adapter: the GPU simulation does not use it".to_string())
+            } else {
+                check_adapter(&a).err()
+            };
+            let driver = [info.driver.as_str(), info.driver_info.as_str()]
+                .iter()
+                .filter(|s| !s.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" ");
+            AdapterReport {
+                chosen: chosen
+                    .as_ref()
+                    .is_some_and(|c| c.name == info.name && c.backend == info.backend),
+                name: info.name,
+                backend: format!("{:?}", info.backend),
+                kind: format!("{:?}", info.device_type),
+                driver,
+                problem,
+            }
+        })
+        .collect()
+}
