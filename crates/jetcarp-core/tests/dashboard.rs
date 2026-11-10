@@ -27,10 +27,10 @@ fn small_hunt(lib: &Library, soups: u64) -> i64 {
         ..Default::default()
     };
     let job = hunt::start(lib, &spec).unwrap();
-    hunt::run(
+    jetcarp_core::jobs::hunt::run(
         lib,
         job,
-        &HuntOptions {
+        HuntOptions {
             threads: 2,
             ..Default::default()
         },

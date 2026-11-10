@@ -1,13 +1,15 @@
-//! Hunts (`jobs.kind` `hunt`): soups on the plane engine, `crate::hunt::job`'s loop wrapped
-//! as it is. Results and stored rows are exactly those of `hunt::job::run`.
+//! Hunts (`jobs.kind` `hunt`): soups on the plane engine (`crate::hunt::job`), run in steps of
+//! one batch of soups each. The soups, their merge, and the stored rows are those of the hunt's
+//! loop before it ran in steps (and its checkpoints read as they were).
 
 use super::{
-    RunCx, RunOptions, Runner, Strategy, StrategyKind, base_summary, eta, short_list, typed,
+    RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list,
+    status_name, typed,
 };
 use crate::dashboard::{FindItem, Finds, HeatSpace, JobSummary, Target, digits};
 use crate::hunt::job::{self as hunt, HuntOptions, HuntProgress, HuntSpec, ProgressHook};
 use crate::library::store::JobRow;
-use crate::library::{HeatQuery, Library, tiling_display_name};
+use crate::library::{AddOutcome, HeatQuery, JobStatus, Library, tiling_display_name};
 use crate::rules::Rule;
 use crate::topology::Nb;
 use serde_json::Value;
@@ -181,55 +183,85 @@ impl StrategyKind for HuntKind {
     }
 }
 
-/// A hunt run: `hunt::job::run` with the runner's threads, GPU, stop flag, and item budget (as
-/// its session `limit`), and the caller's batch size and hooks.
-#[derive(Clone, Default)]
+/// A hunt run in steps ([`hunt::Hunt`]): one batch of soups merged and written per step, the
+/// next batch running meanwhile, on the runner's threads and GPU, stopping exactly at the item
+/// budget (soups per group in this session), with the caller's batch size and hooks.
+#[derive(Default)]
 pub struct HuntRun {
     /// Soups per batch (0: adapt).
     pub batch: u64,
+    /// Called with the progress after every write.
     pub on_progress: Option<ProgressHook>,
     /// The caller's live progress, kept up to date too.
     pub live: Option<Arc<Mutex<HuntProgress>>>,
+    hunt: Option<hunt::Hunt>,
 }
 
-impl Strategy for HuntRun {
-    fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
-        let live = self
-            .live
-            .clone()
-            .unwrap_or_else(|| Arc::new(Mutex::new(HuntProgress::default())));
-        {
-            let mut l = live.lock().unwrap();
-            if let Ok((_, p)) = hunt::status(cx.lib, cx.job) {
-                *l = p;
-            }
-            l.job = cx.job;
-            l.status = "running".into();
+impl HuntRun {
+    /// A run with this many soups per batch (0: adapt).
+    pub fn with_batch(batch: u64) -> HuntRun {
+        HuntRun {
+            batch,
+            ..Default::default()
         }
-        let l2 = live.clone();
-        cx.live
-            .follow(move || serde_json::to_value(&*l2.lock().unwrap()).unwrap_or_default());
-        let opts = HuntOptions {
-            threads: cx.threads,
-            stop: cx.stop.clone(),
-            limit: cx.items,
-            gpu: cx.gpu.clone(),
-            live: Some(live),
-            on_progress: self.on_progress.clone(),
-            batch: self.batch,
-        };
-        hunt::run(cx.lib, cx.job, &opts)
-            .and_then(|p| serde_json::to_value(p).map_err(|e| e.to_string()))
     }
 }
 
-/// Run (or resume) a hunt here, on this thread, under the runner (its lease and heartbeat):
-/// `hunt::job::run` with these options, as before.
+const NOT_OPEN: &str = "the hunt was not restored";
+
+impl Strategy for HuntRun {
+    fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
+        if self.on_progress.is_some() || self.live.is_some() {
+            let (hook, live) = (self.on_progress.clone(), self.live.clone());
+            cx.live.observe(move |v| {
+                let p: HuntProgress = typed(v);
+                if let Some(l) = &live {
+                    *l.lock().unwrap() = p.clone();
+                }
+                if let Some(h) = &hook {
+                    h(&p);
+                }
+            });
+        }
+        self.hunt = Some(hunt::Hunt::open(cx, checkpoint, self.batch)?);
+        Ok(())
+    }
+    fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<Step, String> {
+        let h = self.hunt.as_mut().ok_or(NOT_OPEN)?;
+        Ok(if h.step(cx, sink)? {
+            Step::Done
+        } else {
+            Step::More
+        })
+    }
+    fn stored(&mut self, outcomes: &[Result<AddOutcome, String>]) {
+        if let Some(h) = &mut self.hunt {
+            h.stored(outcomes);
+        }
+    }
+    fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {
+        self.hunt.as_ref().map(|h| h.checkpoint()).transpose()
+    }
+    fn progress(&self, status: JobStatus) -> Value {
+        match &self.hunt {
+            Some(h) => serde_json::to_value(h.progress(status_name(status))).unwrap_or_default(),
+            None => Value::Null,
+        }
+    }
+    fn items(&self) -> u64 {
+        self.hunt.as_ref().map_or(0, |h| h.soups_run())
+    }
+}
+
+/// Run (or resume) a hunt here, on this thread, under the runner (its lease and heartbeat),
+/// with these options: its threads, GPU, stop flag, session limit (the item budget), batch
+/// size, and hooks.
 pub fn run(lib: &Library, job: i64, opts: HuntOptions) -> Result<HuntProgress, String> {
     let mut s = HuntRun {
         batch: opts.batch,
         on_progress: opts.on_progress.clone(),
         live: opts.live.clone(),
+        hunt: None,
     };
     let o = RunOptions {
         threads: opts.threads,

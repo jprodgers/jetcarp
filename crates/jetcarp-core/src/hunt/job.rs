@@ -16,19 +16,21 @@
 //! process marks the job `paused` ([`request_stop`]), or when a session limit is reached; the batch
 //! in flight is dropped and the job is left `paused` at its last checkpoint.
 //!
-//! The job runner (`crate::jobs::hunt`) runs [`run`] as it is, under its lease, in this process
-//! or on a thread of it.
+//! The job runner (`crate::jobs::hunt`) runs a hunt in steps, one batch each ([`Hunt`]), under
+//! its lease, in this process or on a thread of it; it writes each batch's rows with the
+//! progress and checkpoint.
 
 use super::separate::{Cache, Census, Found};
 use super::soup::{End, Layout, Limits, SoupOut, SoupSpec, run_soup, soup_state};
+use crate::jobs::{RunCx, Sink};
 use crate::library::{
-    JobStatus, Library, PatternClass, PatternRecord, Provenance, Sighting, UnstoredFlush,
-    UnstoredRow, default_periods, now_utc, tiling_display_name, tiling_key, verify,
+    AddOutcome, JobStatus, Library, PatternClass, PatternRecord, Provenance, Sighting,
+    UnstoredFlush, UnstoredRow, default_periods, now_utc, tiling_display_name, tiling_key, verify,
 };
 use crate::topology::{Nb, SizeSpec, TilingSpec};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -469,282 +471,356 @@ impl Drop for Lease<'_> {
     }
 }
 
-/// Run (or resume) a hunt job until it is done or stopped. Returns its final progress.
-pub fn run(lib: &Library, job: i64, opts: &HuntOptions) -> Result<HuntProgress, String> {
-    let j = lib.job(job)?;
-    if j.kind != "hunt" {
-        return Err(format!("job {job} is a {} job, not a hunt", j.kind));
-    }
-    if j.status == JobStatus::Done {
-        return status(lib, job).map(|x| x.1);
-    }
-    let spec: HuntSpec =
-        serde_json::from_value(j.spec.clone()).map_err(|e| format!("job {job} spec: {e}"))?;
-    spec.check()?;
-    let mut cp: Checkpoint = match lib.job_checkpoint(job)? {
-        Some(b) => serde_json::from_slice(&b).map_err(|e| format!("job {job} checkpoint: {e}"))?,
-        None => Checkpoint::default(),
-    };
-    // Groups: every tiling x rule.
-    let mut groups: Vec<Option<Group>> = Vec::new();
-    let fresh = cp.groups.is_empty();
-    if !fresh && cp.groups.len() != spec.tilings.len() * spec.rules.len() {
-        return Err(format!("job {job}: the checkpoint does not match its spec"));
-    }
-    for (ti, t) in spec.tilings.iter().enumerate() {
-        for (ri, r) in spec.rules.iter().enumerate() {
-            let gi = ti * spec.rules.len() + ri;
-            let made = (|| -> Result<Group, String> {
-                let census = Census::new(r, t, spec.neighborhood, spec.max_period)?;
-                let layout = Layout::new(&census.topo, spec.soup, spec.margin())?;
-                let limits = spec.limits(layout.cells.len());
-                let rule_id = lib.rule_id(&census.notation, census.nb, 1)?;
-                let known: HashSet<String> = lib.rule_patterns(rule_id)?.into_iter().collect();
-                let pending: HashMap<String, UnstoredRow> = if fresh {
-                    HashMap::new()
-                } else {
-                    lib.unstored(job, rule_id)?
-                        .into_iter()
-                        .map(|r| (r.pattern_id.clone(), r))
-                        .collect()
-                };
-                let mut seen: HashSet<String> = if fresh {
-                    HashSet::new()
-                } else {
-                    lib.job_sightings(job)?
-                        .into_iter()
-                        .filter(|x| x.1 == census.notation)
-                        .map(|x| x.0)
-                        .collect()
-                };
-                seen.extend(pending.keys().cloned());
-                let mut tiling = crate::library::tiling_identity(t);
-                tiling.size = Some(SizeSpec::Rect {
-                    w: spec.soup.w,
-                    h: spec.soup.h,
-                });
-                Ok(Group {
-                    run: Arc::new(Runner {
-                        census: Arc::new(census),
-                        layout,
-                        limits,
-                    }),
-                    bad: cp
-                        .bad
-                        .get(gi)
-                        .map(|v| v.iter().cloned().collect())
-                        .unwrap_or_default(),
-                    rule_id,
-                    tiling,
-                    known,
-                    seen,
-                    pending,
-                })
-            })();
-            if fresh {
-                cp.groups.push(GroupTotals {
-                    rule: r.clone(),
-                    tiling: tiling_display_name(t),
-                    tiling_key: tiling_key(t),
-                    ..Default::default()
-                });
-                cp.bad.push(vec![]);
-            }
-            match made {
-                Ok(g) => {
-                    if fresh {
-                        cp.groups[gi].rule = g.run.census.notation.clone();
-                    }
-                    groups.push(Some(g));
-                }
-                Err(e) => {
-                    cp.groups[gi].error = Some(e);
-                    groups.push(None);
-                }
-            }
+/// A batch of soups running on a thread of its own.
+struct Flight {
+    a: u64,
+    b: u64,
+    t0: Instant,
+    handle: std::thread::JoinHandle<Option<Vec<Vec<SoupOut>>>>,
+}
+
+/// A hunt run in steps by the job runner (`crate::jobs::hunt`): each step merges one batch of
+/// soups (all groups, consecutive indices) into the totals and puts its records, sightings, and
+/// unstored objects in the sink, which the runner writes with the progress and checkpoint in
+/// one transaction. Two batches are in flight: the next one runs while the current one's
+/// slowest soups finish, while it is merged and written, and (with a GPU) while its prefixes
+/// overlap the CPU work. A stop sets the run's stop flag, which every soup checks: the batches
+/// in flight are dropped (the job resumes from its last checkpoint).
+pub struct Hunt {
+    job: i64,
+    spec: Arc<HuntSpec>,
+    cp: Checkpoint,
+    groups: Vec<Option<Group>>,
+    runners: Arc<Vec<Option<Arc<Runner>>>>,
+    pool: Arc<rayon::ThreadPool>,
+    caches: Arc<CachePool>,
+    threads: usize,
+    gpu: Option<Arc<dyn SoupBatcher>>,
+    gpu_name: Option<String>,
+    /// Soups per batch, and whether it adapts (to about three seconds a batch).
+    batch: u64,
+    adapt: bool,
+    session: Instant,
+    session_start: u64,
+    base_elapsed: f64,
+    ngroups: u64,
+    date: String,
+    /// The first soup index not launched yet.
+    next: u64,
+    inflight: VecDeque<Flight>,
+    /// Set when the hunt is dropped, so the batches in flight end at once.
+    cancel: Arc<AtomicBool>,
+    /// (group, id) per record of the batch being written.
+    owners: Vec<(usize, String)>,
+}
+
+impl Hunt {
+    /// Open the run's hunt job (on its threads and GPU; `batch` soups per batch, 0: adapt)
+    /// from its checkpoint, if it has one (its format is unchanged since hunts became jobs).
+    pub fn open(cx: &RunCx<'_>, checkpoint: Option<&[u8]>, batch: u64) -> Result<Hunt, String> {
+        let (lib, row, job, gpu) = (cx.lib, cx.row, cx.job, cx.gpu.clone());
+        if row.kind != "hunt" {
+            return Err(format!("job {job} is a {} job, not a hunt", row.kind));
         }
-    }
-    if groups.iter().all(|g| g.is_none()) {
-        let msg = cp
-            .groups
-            .iter()
-            .filter_map(|g| g.error.clone())
-            .next()
-            .unwrap_or_default();
-        lib.update_job(job, Some(JobStatus::Failed), None, None)?;
-        return Err(format!("hunt {job}: no group can run: {msg}"));
-    }
-    let threads = if opts.threads == 0 {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
-    } else {
-        opts.threads
-    };
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build()
-        .map_err(|e| e.to_string())?;
-    lib.update_job(job, Some(JobStatus::Running), None, None)?;
-    // Two batches in flight, each with a cache per thread and group.
-    let per_cache = (cache_budget() / (2 * threads * groups.len()).max(1)).clamp(1 << 20, 64 << 20);
-    let caches = CachePool(Mutex::new(Vec::new()), groups.len(), per_cache);
-    let session = Instant::now();
-    let session_start = cp.next;
-    let base_elapsed = cp.elapsed_s;
-    let gpu_name = opts.gpu.as_ref().map(|g| g.name());
-    let mut batch = if opts.batch > 0 {
-        opts.batch
-    } else {
-        (threads as u64 * 8).max(64)
-    };
-    let date = now_utc();
-    let runners: Vec<Option<Arc<Runner>>> = groups
-        .iter()
-        .map(|g| g.as_ref().map(|g| g.run.clone()))
-        .collect();
-    let ngroups = runners.iter().flatten().count() as u64;
-    let mut status = JobStatus::Running;
-    let mut failure: Option<String> = None;
-    // Two batches in flight: the next one starts while the current one's slowest soups finish
-    // (and while its results are merged), and with a GPU its prefixes overlap the CPU work.
-    std::thread::scope(|sc| {
-        type Flight<'a> = (
-            u64,
-            u64,
-            Instant,
-            std::thread::ScopedJoinHandle<'a, Option<Vec<Vec<SoupOut>>>>,
-        );
-        let mut inflight: std::collections::VecDeque<Flight> = Default::default();
-        let mut next = cp.next;
-        let mut halted = false;
-        loop {
-            // Launch while there is room and nothing says stop.
-            while !halted && inflight.len() < 2 {
-                let total = spec.soups;
-                if total.is_some_and(|t| next >= t) {
-                    break;
-                }
-                if opts.stop.load(Ordering::SeqCst)
-                    || opts.limit.is_some_and(|l| next >= session_start + l)
-                    || lib.job(job).map(|j| j.status) == Ok(JobStatus::Paused)
-                {
-                    halted = true;
-                    break;
-                }
-                let a = next;
-                let mut b = a + batch;
-                if let Some(t) = total {
-                    b = b.min(t);
-                }
-                if let Some(l) = opts.limit {
-                    b = b.min(session_start + l);
-                }
-                next = b;
-                let (runners, spec, pool, caches) = (&runners, &spec, &pool, &caches);
-                let h = sc.spawn(move || run_batch(runners, a, b, spec, opts, caches, pool));
-                inflight.push_back((a, b, Instant::now(), h));
+        let spec: HuntSpec =
+            serde_json::from_value(row.spec.clone()).map_err(|e| format!("job {job} spec: {e}"))?;
+        spec.check()?;
+        let mut cp: Checkpoint = match checkpoint {
+            Some(b) => {
+                serde_json::from_slice(b).map_err(|e| format!("job {job} checkpoint: {e}"))?
             }
-            let Some((a, b, t0, h)) = inflight.pop_front() else {
-                status = if spec.soups.is_some_and(|t| cp.next >= t) {
-                    JobStatus::Done
-                } else {
-                    JobStatus::Paused
-                };
-                break;
-            };
-            let outs = h.join().unwrap_or(None);
-            let Some(outs) = outs else {
-                // Stopped part way: drop this batch and every later one.
-                for f in inflight.drain(..) {
-                    let _ = f.3.join();
+            None => Checkpoint::default(),
+        };
+        // Groups: every tiling x rule.
+        let mut groups: Vec<Option<Group>> = Vec::new();
+        let fresh = cp.groups.is_empty();
+        if !fresh && cp.groups.len() != spec.tilings.len() * spec.rules.len() {
+            return Err(format!("job {job}: the checkpoint does not match its spec"));
+        }
+        for (ti, t) in spec.tilings.iter().enumerate() {
+            for (ri, r) in spec.rules.iter().enumerate() {
+                let gi = ti * spec.rules.len() + ri;
+                let made = (|| -> Result<Group, String> {
+                    let census = Census::new(r, t, spec.neighborhood, spec.max_period)?;
+                    let layout = Layout::new(&census.topo, spec.soup, spec.margin())?;
+                    let limits = spec.limits(layout.cells.len());
+                    let rule_id = lib.rule_id(&census.notation, census.nb, 1)?;
+                    let known: HashSet<String> = lib.rule_patterns(rule_id)?.into_iter().collect();
+                    let pending: HashMap<String, UnstoredRow> = if fresh {
+                        HashMap::new()
+                    } else {
+                        lib.unstored(job, rule_id)?
+                            .into_iter()
+                            .map(|r| (r.pattern_id.clone(), r))
+                            .collect()
+                    };
+                    let mut seen: HashSet<String> = if fresh {
+                        HashSet::new()
+                    } else {
+                        lib.job_sightings(job)?
+                            .into_iter()
+                            .filter(|x| x.1 == census.notation)
+                            .map(|x| x.0)
+                            .collect()
+                    };
+                    seen.extend(pending.keys().cloned());
+                    let mut tiling = crate::library::tiling_identity(t);
+                    tiling.size = Some(SizeSpec::Rect {
+                        w: spec.soup.w,
+                        h: spec.soup.h,
+                    });
+                    Ok(Group {
+                        run: Arc::new(Runner {
+                            census: Arc::new(census),
+                            layout,
+                            limits,
+                        }),
+                        bad: cp
+                            .bad
+                            .get(gi)
+                            .map(|v| v.iter().cloned().collect())
+                            .unwrap_or_default(),
+                        rule_id,
+                        tiling,
+                        known,
+                        seen,
+                        pending,
+                    })
+                })();
+                if fresh {
+                    cp.groups.push(GroupTotals {
+                        rule: r.clone(),
+                        tiling: tiling_display_name(t),
+                        tiling_key: tiling_key(t),
+                        ..Default::default()
+                    });
+                    cp.bad.push(vec![]);
                 }
-                status = JobStatus::Paused;
-                break;
-            };
-            let dt = t0.elapsed().as_secs_f64();
-            let flush = pool.install(|| merge(&mut groups, &mut cp, outs, &spec, &date));
-            cp.next = b;
-            cp.elapsed_s = base_elapsed + session.elapsed().as_secs_f64();
-            let rate = ((cp.next - session_start) * ngroups) as f64
-                / session.elapsed().as_secs_f64().max(1e-9);
-            let progress = make_progress(job, &spec, &cp, threads, &gpu_name, rate, "running");
-            let pj = serde_json::to_value(&progress).unwrap_or_default();
-            let cj = serde_json::to_vec(&cp).unwrap_or_default();
-            match lib.hunt_flush(
-                job,
-                flush.records,
-                &flush.sightings,
-                &flush.unstored,
-                &pj,
-                &cj,
-            ) {
-                Ok(res) => {
-                    for ((gi, id), r) in flush.owners.into_iter().zip(res) {
-                        if let Err(e) = r {
-                            cp.groups[gi].error.get_or_insert(e);
-                        } else if let Some(g) = groups[gi].as_mut() {
-                            g.known.insert(id);
+                match made {
+                    Ok(g) => {
+                        if fresh {
+                            cp.groups[gi].rule = g.run.census.notation.clone();
                         }
+                        groups.push(Some(g));
+                    }
+                    Err(e) => {
+                        cp.groups[gi].error = Some(e);
+                        groups.push(None);
                     }
                 }
-                Err(e) => {
-                    failure = Some(e);
-                    opts.stop.store(true, Ordering::SeqCst);
-                    for f in inflight.drain(..) {
-                        let _ = f.3.join();
-                    }
-                    status = JobStatus::Failed;
-                    break;
-                }
-            }
-            if let Some(live) = &opts.live {
-                *live.lock().unwrap() = progress.clone();
-            }
-            if let Some(f) = &opts.on_progress {
-                f(&progress);
-            }
-            if opts.batch == 0 {
-                // Aim for a few seconds per batch (two run at once).
-                let per = dt / (b - a).max(1) as f64;
-                let want = (3.0 / per.max(1e-6)) as u64;
-                batch = want.clamp(16, (batch * 4).max(16)).min(1 << 20);
             }
         }
-    });
-    if let Some(e) = failure {
-        let _ = lib.update_job(job, Some(JobStatus::Failed), None, None);
-        return Err(e);
+        if groups.iter().all(|g| g.is_none()) {
+            let msg = cp
+                .groups
+                .iter()
+                .filter_map(|g| g.error.clone())
+                .next()
+                .unwrap_or_default();
+            return Err(format!("hunt {job}: no group can run: {msg}"));
+        }
+        let threads = if cx.threads == 0 {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        } else {
+            cx.threads
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .map_err(|e| e.to_string())?;
+        // Two batches in flight, each with a cache per thread and group.
+        let per_cache =
+            (cache_budget() / (2 * threads * groups.len()).max(1)).clamp(1 << 20, 64 << 20);
+        let caches = CachePool(Mutex::new(Vec::new()), groups.len(), per_cache);
+        let runners: Vec<Option<Arc<Runner>>> = groups
+            .iter()
+            .map(|g| g.as_ref().map(|g| g.run.clone()))
+            .collect();
+        let ngroups = runners.iter().flatten().count() as u64;
+        Ok(Hunt {
+            job,
+            spec: Arc::new(spec),
+            session_start: cp.next,
+            base_elapsed: cp.elapsed_s,
+            next: cp.next,
+            cp,
+            groups,
+            runners: Arc::new(runners),
+            pool: Arc::new(pool),
+            caches: Arc::new(caches),
+            threads,
+            gpu_name: gpu.as_ref().map(|g| g.name()),
+            gpu,
+            batch: if batch > 0 {
+                batch
+            } else {
+                (threads as u64 * 8).max(64)
+            },
+            adapt: batch == 0,
+            session: Instant::now(),
+            ngroups,
+            date: now_utc(),
+            inflight: VecDeque::new(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            owners: Vec::new(),
+        })
     }
-    cp.elapsed_s = base_elapsed + session.elapsed().as_secs_f64();
-    let rate =
-        ((cp.next - session_start) * ngroups) as f64 / session.elapsed().as_secs_f64().max(1e-9);
-    let progress = make_progress(
-        job,
-        &spec,
-        &cp,
-        threads,
-        &gpu_name,
-        rate,
-        name_of_status(status),
-    );
-    let pj = serde_json::to_value(&progress).map_err(|e| e.to_string())?;
-    lib.update_job(job, Some(status), Some(&pj), None)?;
-    if let Some(live) = &opts.live {
-        *live.lock().unwrap() = progress.clone();
+
+    /// One step: launch batches while fewer than two are in flight (none past the end, past
+    /// the run's item budget, or once it is stopped or paused elsewhere), then merge the
+    /// oldest into the totals and put its rows in the sink. `Ok(true)`: the hunt has run its
+    /// last soup. A batch cut short by the stop flag is dropped with every later one, and
+    /// nothing is merged.
+    pub fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<bool, String> {
+        let (total, limit, stop) = (self.spec.soups, cx.items, &cx.stop);
+        while self.inflight.len() < 2 {
+            if total.is_some_and(|t| self.next >= t) {
+                break;
+            }
+            if cx.stopped()
+                || limit.is_some_and(|l| self.next >= self.session_start + l)
+                || cx.paused_elsewhere()
+            {
+                break;
+            }
+            let a = self.next;
+            let mut b = a + self.batch;
+            if let Some(t) = total {
+                b = b.min(t);
+            }
+            if let Some(l) = limit {
+                b = b.min(self.session_start + l);
+            }
+            self.launch(a, b, stop.clone())?;
+            self.next = b;
+        }
+        let Some(f) = self.inflight.pop_front() else {
+            return Ok(total.is_some_and(|t| self.cp.next >= t));
+        };
+        let (a, b) = (f.a, f.b);
+        let outs = f
+            .handle
+            .join()
+            .map_err(|_| format!("hunt {}: the batch of soups {a}..{b} panicked", self.job))?;
+        let Some(outs) = outs else {
+            // Stopped part way: drop this batch and every later one.
+            for f in self.inflight.drain(..) {
+                let _ = f.handle.join();
+            }
+            self.next = self.cp.next;
+            return Ok(false);
+        };
+        let dt = f.t0.elapsed().as_secs_f64();
+        let (groups, cp, spec, date) = (&mut self.groups, &mut self.cp, &self.spec, &self.date);
+        let flush = self.pool.install(|| merge(groups, cp, outs, spec, date));
+        self.cp.next = b;
+        self.cp.elapsed_s = self.base_elapsed + self.session.elapsed().as_secs_f64();
+        sink.verified.extend(flush.records);
+        sink.sightings.extend(flush.sightings);
+        sink.unstored.add.extend(flush.unstored.add);
+        sink.unstored.remove.extend(flush.unstored.remove);
+        self.owners = flush.owners;
+        if self.adapt {
+            // Aim for a few seconds per batch (two run at once).
+            let per = dt / (b - a).max(1) as f64;
+            let want = (3.0 / per.max(1e-6)) as u64;
+            self.batch = want.clamp(16, (self.batch * 4).max(16)).min(1 << 20);
+        }
+        Ok(total.is_some_and(|t| self.cp.next >= t))
     }
-    if let Some(f) = &opts.on_progress {
-        f(&progress);
+
+    fn launch(&mut self, a: u64, b: u64, stop: Arc<AtomicBool>) -> Result<(), String> {
+        let (runners, spec, pool, caches) = (
+            self.runners.clone(),
+            self.spec.clone(),
+            self.pool.clone(),
+            self.caches.clone(),
+        );
+        let (gpu, cancel) = (self.gpu.clone(), self.cancel.clone());
+        let handle = std::thread::Builder::new()
+            .name(format!("hunt-{}-soups", self.job))
+            .spawn(move || {
+                run_batch(
+                    &runners,
+                    a,
+                    b,
+                    &spec,
+                    gpu.as_ref(),
+                    [&*stop, &*cancel],
+                    &caches,
+                    &pool,
+                )
+            })
+            .map_err(|e| format!("hunt {}: {e}", self.job))?;
+        self.inflight.push_back(Flight {
+            a,
+            b,
+            t0: Instant::now(),
+            handle,
+        });
+        Ok(())
     }
-    Ok(progress)
+
+    /// What became of the last batch's records: the stored ones are known now (sightings
+    /// only from here on), a failure is the group's error.
+    pub fn stored(&mut self, outcomes: &[Result<AddOutcome, String>]) {
+        for ((gi, id), r) in std::mem::take(&mut self.owners).into_iter().zip(outcomes) {
+            match r {
+                Err(e) => {
+                    self.cp.groups[gi].error.get_or_insert(e.clone());
+                }
+                Ok(_) => {
+                    if let Some(g) = self.groups[gi].as_mut() {
+                        g.known.insert(id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The progress with this status (`running`, `paused`, `done`, `failed`).
+    pub fn progress(&self, status: &str) -> HuntProgress {
+        let secs = self.session.elapsed().as_secs_f64();
+        let rate = ((self.cp.next - self.session_start) * self.ngroups) as f64 / secs.max(1e-9);
+        make_progress(
+            self.job,
+            &self.spec,
+            &self.cp,
+            self.base_elapsed + secs,
+            (self.threads, &self.gpu_name),
+            rate,
+            status,
+        )
+    }
+
+    /// The checkpoint after the last batch merged.
+    pub fn checkpoint(&self) -> Result<Vec<u8>, String> {
+        serde_json::to_vec(&self.cp).map_err(|e| e.to_string())
+    }
+
+    /// Soup indices merged in this session.
+    pub fn soups_run(&self) -> u64 {
+        self.cp.next - self.session_start
+    }
+}
+
+impl Drop for Hunt {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::SeqCst);
+        for f in self.inflight.drain(..) {
+            let _ = f.handle.join();
+        }
+    }
 }
 
 fn make_progress(
     job: i64,
     spec: &HuntSpec,
     cp: &Checkpoint,
-    threads: usize,
-    gpu: &Option<String>,
+    elapsed_s: f64,
+    (threads, gpu): (usize, &Option<String>),
     rate: f64,
     status: &str,
 ) -> HuntProgress {
@@ -754,7 +830,7 @@ fn make_progress(
         soups_done: cp.next,
         soups_total: spec.soups,
         soups_per_s: (rate * 10.0).round() / 10.0,
-        elapsed_s: (cp.elapsed_s * 10.0).round() / 10.0,
+        elapsed_s: (elapsed_s * 10.0).round() / 10.0,
         newest: cp.newest.clone(),
         groups: cp.groups.clone(),
         threads,
@@ -781,13 +857,15 @@ fn make_progress(
     p
 }
 
-/// Run soups `a..b` of every group; `None` if stopped part way.
+/// Run soups `a..b` of every group; `None` if stopped part way (either flag set).
+#[allow(clippy::too_many_arguments)]
 fn run_batch(
     groups: &[Option<Arc<Runner>>],
     a: u64,
     b: u64,
     spec: &HuntSpec,
-    opts: &HuntOptions,
+    gpu: Option<&Arc<dyn SoupBatcher>>,
+    stops: [&AtomicBool; 2],
     caches: &CachePool,
     pool: &rayon::ThreadPool,
 ) -> Option<Vec<Vec<SoupOut>>> {
@@ -799,7 +877,7 @@ fn run_batch(
             out.push(vec![]);
             continue;
         };
-        let prefixes = opts.gpu.as_ref().and_then(|gpu| {
+        let prefixes = gpu.and_then(|gpu| {
             if !gpu.supports(&g.census, g.layout.region) {
                 return None;
             }
@@ -810,7 +888,6 @@ fn run_batch(
             gpu.prefix(&g.census, g.layout.region, g.limits, &soups)
                 .ok()
         });
-        let stop = &opts.stop;
         let res: Vec<Option<SoupOut>> = pool.install(|| {
             (a..b)
                 .into_par_iter()
@@ -820,7 +897,7 @@ fn run_batch(
                         Lease(caches, Some(c))
                     },
                     |lease, i| {
-                        if stop.load(Ordering::Relaxed) {
+                        if stops.iter().any(|s| s.load(Ordering::Relaxed)) {
                             return None;
                         }
                         let cache = &mut lease.1.as_mut().unwrap()[gi];

@@ -70,10 +70,10 @@ fn hunt_is_independent_of_threads_and_batches() {
     for (name, threads, batch) in [("t1", 1, 7), ("tall", 0, 0), ("t3", 3, 64)] {
         let lib = temp_lib(name);
         let jid = job::start(&lib, &spec).unwrap();
-        let p = job::run(
+        let p = jetcarp_core::jobs::hunt::run(
             &lib,
             jid,
-            &HuntOptions {
+            HuntOptions {
                 threads,
                 batch,
                 ..Default::default()
@@ -106,13 +106,13 @@ fn hunt_resumed_equals_uninterrupted() {
     spec.soups = Some(400);
     let a = temp_lib("whole");
     let ja = job::start(&a, &spec).unwrap();
-    let pa = job::run(&a, ja, &HuntOptions::default()).unwrap();
+    let pa = jetcarp_core::jobs::hunt::run(&a, ja, HuntOptions::default()).unwrap();
     let b = temp_lib("halves");
     let jb = job::start(&b, &spec).unwrap();
-    let half = job::run(
+    let half = jetcarp_core::jobs::hunt::run(
         &b,
         jb,
-        &HuntOptions {
+        HuntOptions {
             limit: Some(200),
             batch: 50,
             ..Default::default()
@@ -124,7 +124,7 @@ fn hunt_resumed_equals_uninterrupted() {
     assert_eq!(b.job(jb).unwrap().status, JobStatus::Paused);
     // A new process would open the catalog afresh.
     let b2 = Library::open(b.path());
-    let pb = job::run(&b2, jb, &HuntOptions::default()).unwrap();
+    let pb = jetcarp_core::jobs::hunt::run(&b2, jb, HuntOptions::default()).unwrap();
     assert_eq!(pb.status, "done");
     assert_eq!(pa.groups, pb.groups);
     assert_eq!(pa.newest, pb.newest);

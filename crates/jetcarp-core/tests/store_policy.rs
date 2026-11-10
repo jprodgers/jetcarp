@@ -72,10 +72,10 @@ fn snapshot(lib: &Library, job: i64) -> Snap {
 
 fn run(lib: &Library, s: &HuntSpec, threads: usize, batch: u64) -> (i64, job::HuntProgress) {
     let jid = job::start(lib, s).unwrap();
-    let p = job::run(
+    let p = jetcarp_core::jobs::hunt::run(
         lib,
         jid,
-        &HuntOptions {
+        HuntOptions {
             threads,
             batch,
             ..Default::default()
@@ -170,10 +170,10 @@ fn policy_hunt_resumed_equals_uninterrupted() {
     let (ja, pa) = run(&a, &s, 0, 0);
     let b = temp_lib("r-halves");
     let jb = job::start(&b, &s).unwrap();
-    let half = job::run(
+    let half = jetcarp_core::jobs::hunt::run(
         &b,
         jb,
-        &HuntOptions {
+        HuntOptions {
             limit: Some(120),
             batch: 40,
             ..Default::default()
@@ -182,7 +182,7 @@ fn policy_hunt_resumed_equals_uninterrupted() {
     .unwrap();
     assert_eq!(half.status, "paused");
     let b2 = Library::open(b.path());
-    let pb = job::run(&b2, jb, &HuntOptions::default()).unwrap();
+    let pb = jetcarp_core::jobs::hunt::run(&b2, jb, HuntOptions::default()).unwrap();
     assert_eq!(pb.status, "done");
     assert_eq!(pa.groups, pb.groups);
     assert_eq!(pa.newest, pb.newest);

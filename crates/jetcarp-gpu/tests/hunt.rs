@@ -119,10 +119,10 @@ fn gpu_hunt_equals_cpu_hunt() {
         let _ = std::fs::remove_dir_all(&dir);
         let lib = Library::open(dir);
         let jid = job::start(&lib, &spec).unwrap();
-        let p = job::run(
+        let p = jetcarp_core::jobs::hunt::run(
             &lib,
             jid,
-            &HuntOptions {
+            HuntOptions {
                 gpu: use_gpu.then(|| g.clone() as Arc<dyn SoupBatcher>),
                 ..Default::default()
             },

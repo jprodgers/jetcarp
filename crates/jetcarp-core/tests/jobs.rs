@@ -158,10 +158,7 @@ fn hunt_stopped_and_resumed_on_the_runner_equals_uninterrupted() {
     // Stopped on the way (at whatever batch it is in), then resumed by a new catalog handle.
     let b = temp_lib("hunt-stopped");
     let jb = hunt::start(&b, &spec).unwrap();
-    let run = HuntRun {
-        batch: 40,
-        ..Default::default()
-    };
+    let run = HuntRun::with_batch(40);
     let h = Runner::new(Library::open(b.path()))
         .spawn_with(jb, Box::new(run), opts(2))
         .unwrap();

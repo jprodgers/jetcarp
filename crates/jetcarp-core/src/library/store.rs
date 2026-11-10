@@ -1310,44 +1310,6 @@ impl Library {
         self.write(|tx| sightings_in(tx, job, s, &now))
     }
 
-    /// One hunter flush, in one transaction so a crash never leaves counts without their
-    /// checkpoint: store verified records (with `seen` copies in `soups` soups, credited to the
-    /// job), credit sightings of patterns already stored, add and remove the job's unstored
-    /// objects, and save the job's progress and checkpoint. Records must already be verified (see [`Library::add_many`] otherwise).
-    pub fn hunt_flush(
-        &self,
-        job: i64,
-        records: Vec<(PatternRecord, u64)>,
-        sightings: &[Sighting],
-        unstored: &UnstoredFlush,
-        progress: &Value,
-        checkpoint: &[u8],
-    ) -> Result<Vec<Result<AddOutcome, String>>, String> {
-        let now = now_utc();
-        self.write(|tx| {
-            let mut out = Vec::with_capacity(records.len());
-            for (r, soups) in records {
-                out.push(if r.verified.periods == 0 {
-                    Err(format!("{}: not verified", r.id))
-                } else {
-                    Ok(add_in(tx, r, job, soups)?)
-                });
-            }
-            sightings_in(tx, job, sightings, &now)?;
-            unstored::flush_in(tx, job, unstored)?;
-            let n = tx
-                .execute(
-                    "UPDATE jobs SET updated = ?2, progress = ?3, checkpoint = ?4 WHERE id = ?1",
-                    params![job, now, progress.to_string(), checkpoint],
-                )
-                .map_err(e)?;
-            if n == 0 {
-                return Err(format!("no job {job}"));
-            }
-            Ok(out)
-        })
-    }
-
     /// Ids of the patterns verified in a rule (`pattern_rules`).
     pub fn rule_patterns(&self, rule_id: i64) -> Result<Vec<String>, String> {
         self.read(vec![], |c| {
