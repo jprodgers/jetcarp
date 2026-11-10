@@ -289,7 +289,7 @@ pub fn run(a: HuntArgs) -> Result<()> {
         on_progress: Some(on_progress),
         ..Default::default()
     };
-    let p = msg(job::run(&lib, jid, &opts))?;
+    let p = msg(jetcarp_core::jobs::hunt::run(&lib, jid, opts))?;
     if tty {
         eprintln!();
     }

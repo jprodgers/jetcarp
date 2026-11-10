@@ -200,7 +200,7 @@ pub fn run(a: PileArgs) -> Result<()> {
             }
         })
     };
-    let r = pilejob::run_job(&lib, job, stop.clone(), gpu, Some(live.clone()));
+    let r = jetcarp_core::jobs::pile::run(&lib, job, stop.clone(), gpu, Some(live.clone()));
     done.store(true, Ordering::SeqCst);
     let _ = printer.join();
     let p = r.map_err(msg)?;

@@ -248,7 +248,7 @@ pub(crate) fn census_into(
         })),
         ..Default::default()
     };
-    let res = census::run_job(lib, jid, &opts);
+    let res = jetcarp_core::jobs::census::run(lib, jid, opts);
     done.store(true, Ordering::Relaxed);
     let _ = watcher.join();
     let p = res?;

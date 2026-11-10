@@ -326,7 +326,7 @@ fn census_job(a: CensusArgs) -> Result<()> {
         })),
         ..Default::default()
     };
-    let p = msg(census::run_job(&lib, job, &o))?;
+    let p = msg(jetcarp_core::jobs::census::run(&lib, job, o))?;
     if !quiet {
         eprintln!();
     }

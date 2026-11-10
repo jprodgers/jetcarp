@@ -181,7 +181,7 @@ pub(crate) fn ants_into(lib: &Library, v: &Value, ctx: &Arc<Ctx>) -> Result<Valu
         })),
         ..Default::default()
     };
-    let res = job::run_job(lib, jid, &opts);
+    let res = jetcarp_core::jobs::ants::run(lib, jid, opts);
     done.store(true, Ordering::Relaxed);
     let _ = watcher.join();
     let p = res?;

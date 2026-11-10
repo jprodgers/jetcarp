@@ -549,7 +549,7 @@ fn search(lib: &Library, a: SearchArgs, json: bool) -> Result<()> {
         on_progress: Some(on_progress),
         ..Default::default()
     };
-    let p = msg(job::run_job(lib, jid, &opts))?;
+    let p = msg(jetcarp_core::jobs::ants::run(lib, jid, opts))?;
     if tty {
         eprintln!();
     }

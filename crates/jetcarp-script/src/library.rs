@@ -403,7 +403,7 @@ pub(crate) fn hunt_into(
         })),
         ..Default::default()
     };
-    let res = job::run(lib, jid, &opts);
+    let res = jetcarp_core::jobs::hunt::run(lib, jid, opts);
     done.store(true, Ordering::Relaxed);
     let _ = watcher.join();
     let p = res?;
