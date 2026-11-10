@@ -1,113 +1,55 @@
-//! The MCP tools' readings of rule names, seeds, and CA items, where they give different
-//! results from the shared parsers. Kept as the tools have always read them, so tool results do
-//! not change; settling on one reading is part of moving the tools onto operations.
+//! How the MCP tools read rule names, seeds, and CA items, where that differs from the shared
+//! parsers on purpose.
 //!
-//! How they differ:
+//! When the parsers were shared (refactor step 2) the tools kept their own readings so their
+//! results would not change; step 3 settled each difference:
 //!
-//! - [`resolve_rule`] also knows "Game of Life", "Conway", and "Conway's Life" as Life, looks
-//!   the text up in the catalog even when it is also notation JETCARP reads (a name the engine
-//!   knows, such as `wireworld`, becomes the catalog's notation for it), and returns text it does
-//!   not know unchanged (not trimmed). [`super::resolve_rule`] keeps readable notation as
-//!   written.
-//! - [`parse_seed`] splits a shorthand at its first `:`, `=`, or space (`"random 0.2"` works,
-//!   `"random:0.2:5"` does not), caps `ants:N` at 10,000 (not 100,000), reads `lenia:NAME`
-//!   without a scale and `lenia` alone as Orbium, reads `gauss:N` as a count only (radius 8,
-//!   peak 1), takes `{"random": d}` beside other keys, and does not know `soup`, `blob`,
-//!   `top_random`, `centre`, or `-` for `_`. JACA seeds, pattern seeds, and the scene format
-//!   go to [`super::parse_seed`].
-//! - [`parse_ca`] reads a CA object as the scene format's CA spec (any of its fields), where
-//!   [`super::ca_spec`] takes the scripts' option names.
+//! - **Merged into the shared parsers** (they only widened what is accepted): the nicknames
+//!   "Game of Life", "Conway", and "Conway's Life"; a space before a seed's first number
+//!   (`"random 0.2"`, `"random 20%"`, `"random: 0.2"`); `"lenia"` alone for Orbium. In turn the
+//!   tools now take every shorthand the scripts do (`soup`, `blob`, `top_random`, `centre`, `-`
+//!   for `_`, `gauss:N:R:P`, `lenia:NAME:SCALE`, `{"density": d}`). The scene format's
+//!   `{"random": {"density": d}}`, which the shared reader rejected, is read by both now.
+//! - **Kept for the tools** (clients may rely on them):
+//!   - [`resolve_rule`] looks a name up in the catalog first, even when it is also notation the
+//!     engine reads, so a client sees the catalog's notation (`wireworld` becomes `WireWorld`).
+//!   - [`parse_seed`] takes `{"random": d}` beside other keys, and lists its examples as JSON.
+//!   - [`parse_ca`] reads a CA object in the scene format (any `CaSpec` field, as `get_scene`
+//!     returns it), where the scripts' [`super::ca_spec`] takes their own option names.
+//! - **Moved to `Ctx::limits`**: at most 10,000 ants for an `ants:N` seed
+//!   ([`crate::Limits::max_ants`]; the shared reader allows 100,000), applied by the world
+//!   operations with the tools' other limits.
 
 use super::rule::{catalog_notation, squash};
 use jetcarp_core::SeedSpec;
 use jetcarp_core::world::CaSpec;
 use serde_json::{Value, json};
 
-/// Names for catalog rules that only the MCP tools take: (squashed nickname, catalog name).
-const NICKNAMES: &[(&str, &str)] = &[
-    ("gameoflife", "Life"),
-    ("conway", "Life"),
-    ("conwayslife", "Life"),
-];
+/// The examples the tools' error message lists.
+const TOOL_FORMS: &str = "\"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"random_states\", \"ants:3\", \"pile:10000\", JACA \"signed:0.3:0.5\" (density, share of -1) or \"halves:0.3\" (+1 left, -1 right), \"pattern:blobs:0.4:by_region\", {\"shape\": \"blobs\", \"count\": 3, \"density\": 0.4}, or {\"random\": {\"density\": 0.2}}.";
 
-/// A catalog rule name ("Brian's Brain", "life", "Conway") becomes its notation; anything else
-/// is kept as given.
+/// A catalog rule name or nickname ("Brian's Brain", "life", "Conway") becomes its catalog
+/// notation, even where the text is notation too; anything else is read as the scripts read it.
 pub fn resolve_rule(text: &str) -> String {
-    let k = squash(text);
-    let k = NICKNAMES
-        .iter()
-        .find(|a| a.0 == k)
-        .map(|a| squash(a.1))
-        .unwrap_or(k);
-    catalog_notation(&k)
+    let t = text.trim();
+    catalog_notation(&squash(t))
         .map(String::from)
-        .unwrap_or_else(|| text.to_string())
+        .unwrap_or_else(|| super::resolve_rule(t))
 }
 
-/// Seed shorthands: "random", "random:0.2", "ants:3", "pile:5000", {"random": 0.2}.
+/// Seed shorthands as the scripts read them ([`super::parse_seed`]), plus `{"random": d}` beside
+/// other keys; errors list JSON examples.
 pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
-    let bad = |e: String| {
-        format!(
-            "bad seed {v}: {e}. Use \"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"random_states\", \"ants:3\", \"pile:10000\", JACA \"signed:0.3:0.5\" (density, share of -1) or \"halves:0.3\" (+1 left, -1 right), \"pattern:blobs:0.4:by_region\", {{\"shape\": \"blobs\", \"count\": 3, \"density\": 0.4}}, or {{\"random\": {{\"density\": 0.2}}}}."
-        )
-    };
-    if let Some(s) = v.as_str() {
-        let s = s.trim().to_ascii_lowercase();
-        let (head, arg) = match s.split_once([':', '=', ' ']) {
-            Some((h, a)) => (h.trim().to_string(), Some(a.trim().to_string())),
-            None => (s.clone(), None),
-        };
-        let num = |d: f64| -> Result<f64, String> {
-            arg.as_deref()
-                .map(|a| {
-                    a.trim_end_matches('%')
-                        .parse::<f64>()
-                        .map_err(|e| e.to_string())
-                })
-                .transpose()
-                .map(|x| x.unwrap_or(d))
-        };
-        return match head.as_str() {
-            "random" => {
-                let mut d = num(0.3).map_err(bad)?;
-                if d > 1.0 {
-                    d /= 100.0;
-                }
-                if !(0.0..=1.0).contains(&d) {
-                    return Err(bad("density must be between 0 and 1".into()));
-                }
-                Ok(SeedSpec::Random { density: d })
-            }
-            "ants" => Ok(SeedSpec::Ants {
-                count: num(1.0).map_err(bad)?.clamp(1.0, 10_000.0) as u32,
-            }),
-            "pile" => Ok(SeedSpec::Pile {
-                grains: num(10_000.0).map_err(bad)?.clamp(1.0, 1e12) as u64,
-            }),
-            // Lenia: a built-in creature at the centre ("lenia:orbium"), or Gaussian bumps.
-            "lenia" => Ok(SeedSpec::Lenia {
-                name: arg.unwrap_or_else(|| "orbium".into()),
-                scale: 1.0,
-            }),
-            "gauss" | "gaussian" => Ok(SeedSpec::Gaussian {
-                count: num(1.0).map_err(bad)?.clamp(1.0, 10_000.0) as u32,
-                radius: 8.0,
-                peak: 1.0,
-            }),
-            "signed" | "mixed" | "halves" | "half" | "pattern" => super::parse_seed(v),
-            _ => serde_json::from_value(Value::String(head)).map_err(|e| bad(e.to_string())),
-        };
+    if let Some(d) = v.get("random").and_then(|d| d.as_f64())
+        && v.get("shape").is_none()
+        && v.get("pattern").is_none()
+    {
+        return super::seed::parse_seed_with(&json!(format!("random:{d}")), TOOL_FORMS);
     }
-    if v.get("shape").is_some() || v.get("pattern").is_some() {
-        return super::parse_seed(v);
-    }
-    if let Some(d) = v.get("random").and_then(|d| d.as_f64()) {
-        return parse_seed(&json!(format!("random:{d}")));
-    }
-    serde_json::from_value(v.clone()).map_err(|e| bad(e.to_string()))
+    super::seed::parse_seed_with(v, TOOL_FORMS)
 }
 
-/// A CA item from `new_world` or `add_ca`: a rule string or a CaSpec-like object.
+/// A CA item from `new_world` or `add_ca`: a rule string or a CA object in the scene format.
 pub fn parse_ca(v: &Value) -> Result<CaSpec, String> {
     if let Some(s) = v.as_str() {
         return Ok(CaSpec::new(&resolve_rule(s)));
@@ -135,11 +77,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rule_nicknames_and_text_kept() {
+    fn rule_nicknames_and_catalog_first() {
         assert_eq!(resolve_rule("Game of Life"), resolve_rule("Life"));
         assert_eq!(resolve_rule("conway"), super::super::resolve_rule("Life"));
-        assert_eq!(resolve_rule(" no such rule "), " no such rule ");
+        assert_eq!(resolve_rule(" no such rule "), "no such rule");
         assert_eq!(resolve_rule("Brian's Brain"), "B2/S/C3");
+        assert_eq!(resolve_rule(" B36/S23 "), "B36/S23");
     }
 
     #[test]
@@ -148,9 +91,10 @@ mod tests {
             parse_seed(&json!("random 20%")).unwrap(),
             SeedSpec::Random { density: 0.2 }
         );
+        // The ants cap is a limit of the tools now (`Limits::max_ants`), not of the reader.
         assert_eq!(
             parse_seed(&json!("ants:50000")).unwrap(),
-            SeedSpec::Ants { count: 10_000 }
+            SeedSpec::Ants { count: 50_000 }
         );
         assert_eq!(
             parse_seed(&json!("lenia")).unwrap(),
@@ -163,12 +107,21 @@ mod tests {
             parse_seed(&json!({"random": 0.4, "note": "x"})).unwrap(),
             SeedSpec::Random { density: 0.4 }
         );
-        // Delegated to the shared reader.
+        assert_eq!(
+            parse_seed(&json!({"random": {"density": 0.3}})).unwrap(),
+            SeedSpec::Random { density: 0.3 }
+        );
+        // Shared forms.
         assert_eq!(
             parse_seed(&json!("halves:0.3")).unwrap(),
             super::super::parse_seed(&json!("halves:0.3")).unwrap()
         );
-        assert!(parse_seed(&json!("random:0.2:5")).is_err());
+        assert_eq!(
+            parse_seed(&json!("soup:0.1")).unwrap(),
+            SeedSpec::Random { density: 0.1 }
+        );
+        let e = parse_seed(&json!("hail")).unwrap_err();
+        assert!(e.contains("{\"shape\": \"blobs\""), "{e}");
     }
 
     #[test]

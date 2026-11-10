@@ -16,8 +16,21 @@ pub fn squash(s: &str) -> String {
         .collect()
 }
 
-/// The notation of the catalog rule whose [`squash`]ed name is `key`.
+/// Other names for catalog rules: (squashed nickname, catalog name).
+const NICKNAMES: &[(&str, &str)] = &[
+    ("gameoflife", "Life"),
+    ("conway", "Life"),
+    ("conwayslife", "Life"),
+];
+
+/// The notation of the catalog rule whose [`squash`]ed name (or nickname: "Game of Life",
+/// "Conway") is `key`.
 pub(crate) fn catalog_notation(key: &str) -> Option<&'static str> {
+    let key = NICKNAMES
+        .iter()
+        .find(|a| a.0 == key)
+        .map(|a| squash(a.1))
+        .unwrap_or_else(|| key.to_string());
     rules::catalog()
         .iter()
         .find(|e| squash(e.name) == key)
@@ -25,8 +38,9 @@ pub(crate) fn catalog_notation(key: &str) -> Option<&'static str> {
 }
 
 /// A rule as the scripts take it: notation JETCARP reads is kept as written (trimmed); otherwise
-/// a catalog name (any case, ignoring spaces and punctuation) becomes its notation; anything
-/// else is returned trimmed, for the engine to reject or read.
+/// a catalog name or nickname (any case, ignoring spaces and punctuation: "Brian's Brain",
+/// "Game of Life") becomes its notation; anything else is returned trimmed, for the engine to
+/// reject or read.
 pub fn resolve_rule(text: &str) -> String {
     let t = text.trim();
     if rules::Rule::parse(t).is_ok() {
@@ -150,6 +164,9 @@ mod tests {
         assert_eq!(resolve_rule(" B3/S23 "), "B3/S23");
         assert_eq!(resolve_rule("no such rule"), "no such rule");
         assert_eq!(squash("Day & Night"), "daynight");
+        for n in ["Game of Life", "Conway", "conway's life", "life"] {
+            assert_eq!(resolve_rule(n), "B3/S23", "{n}");
+        }
     }
 
     #[test]

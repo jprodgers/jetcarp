@@ -1,33 +1,61 @@
 //! Seed shorthands: how a CA's cells start.
 
-use super::json::get_f64;
 use jetcarp_core::SeedSpec;
 use serde_json::{Value, json};
 
-/// Seed shorthands: `"empty"`, `"random"` (30%), `"random:0.2"`, `"center"`, `"top_center"`,
-/// `"top_random:0.5"`, `"random_states"`, `"ants:3"`, `"pile:10000"`, `"blob:0.3:0.5"`
-/// (radius, density), `"glider_pair"`, `"wire_demo"`; maps `#{random: 0.2}`,
+/// The examples the scripts' error message lists.
+const SCRIPT_FORMS: &str = "\"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"top_random:0.5\", \"random_states\", \"ants:3\", \"pile:10000\", \"blob:0.3:0.5\", \"gauss:3:8:1\", \"lenia:orbium\", \"signed:0.3:0.5\" (JACA: density, share of -1), \"halves:0.3\" (JACA: +1 left, -1 right), \"pattern:blobs:0.4:by_region\", #{shape: \"blobs\", count: 3, density: 0.4}, or #{random: 0.2}";
+
+/// Seed shorthands: `"empty"`, `"random"` (30%), `"random:0.2"` (also `"random 0.2"`,
+/// `"random 20%"`), `"center"`, `"top_center"`, `"top_random:0.5"`, `"random_states"`,
+/// `"ants:3"`, `"pile:10000"`, `"blob:0.3:0.5"` (radius, density), `"gauss:3:8:1"`, `"lenia"`
+/// or `"lenia:orbium:2"` (scale), `"glider_pair"`, `"wire_demo"`; maps `#{random: 0.2}`,
 /// `#{density: 0.2}`, `#{cells: [[i, s], ...]}`, or the scene format's seed objects. Pattern
 /// seeds: `"pattern:blobs"`, `"pattern:blobs:0.4:by_region"` (shape, density, states), or
 /// `#{shape: "blobs", count: 3, density: 0.4, states: "by_region"}`.
 pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
-    let bad = |e: String| {
-        format!(
-            "bad seed {v}: {e}. Use \"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"top_random:0.5\", \"random_states\", \"ants:3\", \"pile:10000\", \"blob:0.3:0.5\", \"gauss:3:8:1\", \"lenia:orbium\", \"signed:0.3:0.5\" (JACA: density, share of -1), \"halves:0.3\" (JACA: +1 left, -1 right), \"pattern:blobs:0.4:by_region\", #{{shape: \"blobs\", count: 3, density: 0.4}}, or #{{random: 0.2}}"
-        )
-    };
+    parse_seed_with(v, SCRIPT_FORMS)
+}
+
+/// [`parse_seed`], listing `forms` (the examples a front end shows) when the seed is not
+/// understood: "bad seed V: WHY. Use FORMS".
+pub fn parse_seed_with(v: &Value, forms: &str) -> Result<SeedSpec, String> {
+    seed_core(v).map_err(|e| format!("bad seed {v}: {e}. Use {forms}"))
+}
+
+/// A number, or a number as text.
+fn number(v: &Value) -> Option<f64> {
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+}
+
+/// The seed, or why it is not one (without the list of forms).
+fn seed_core(v: &Value) -> Result<SeedSpec, String> {
     if let Some(pattern) = flat_pattern(v.get("pattern").unwrap_or(v)) {
-        return pattern.map_err(bad);
+        return pattern;
     }
     if let Some(s) = v.as_str() {
-        let s = s.trim().to_ascii_lowercase().replace(['-', ' '], "_");
+        let s = s.trim().to_ascii_lowercase();
+        // A space before the first number works like `:` ("random 0.2", "ants 3", "random: 0.2").
+        let s = match s.split_once(char::is_whitespace) {
+            Some((h, rest))
+                if rest
+                    .trim_start()
+                    .starts_with(|c: char| c.is_ascii_digit() || c == '.') =>
+            {
+                let sep = if h.ends_with([':', '=']) { "" } else { ":" };
+                format!("{h}{sep}{}", rest.trim_start())
+            }
+            _ => s,
+        };
+        let s = s.replace(['-', ' '], "_");
         if let Some(rest) = s.strip_prefix("pattern:") {
-            return pattern_text(rest).map_err(bad);
+            return pattern_text(rest);
         }
         // Lenia patterns by name: "lenia:orbium", "lenia:orbium:2" (scale).
         if let Some(rest) = s.strip_prefix("lenia:") {
             let (name, scale) = rest.split_once(':').unwrap_or((rest, "1"));
-            let scale = scale.parse::<f64>().map_err(|e| bad(e.to_string()))?;
+            let scale = scale.parse::<f64>().map_err(|e| e.to_string())?;
             return Ok(SeedSpec::Lenia {
                 name: name.to_string(),
                 scale,
@@ -40,7 +68,7 @@ pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
                 a.trim()
                     .trim_end_matches('%')
                     .parse::<f64>()
-                    .map_err(|e| bad(e.to_string()))
+                    .map_err(|e| e.to_string())
             })
             .collect::<Result<_, _>>()?;
         let arg = |k: usize, d: f64| args.get(k).copied().unwrap_or(d);
@@ -49,7 +77,7 @@ pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
             if (0.0..=1.0).contains(&d) {
                 Ok(d)
             } else {
-                Err(bad("density must be between 0 and 1".into()))
+                Err("density must be between 0 and 1".into())
             }
         };
         return match head.as_str() {
@@ -75,6 +103,11 @@ pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
                 radius: arg(1, 8.0).max(0.1),
                 peak: arg(2, 1.0).clamp(0.0, 1.0),
             }),
+            // Lenia's best-known creature.
+            "lenia" => Ok(SeedSpec::Lenia {
+                name: "orbium".into(),
+                scale: 1.0,
+            }),
             "signed" | "mixed" => Ok(SeedSpec::Signed {
                 density: density(arg(0, 0.3))?,
                 negative: density(arg(1, 0.5))?,
@@ -84,15 +117,18 @@ pub fn parse_seed(v: &Value) -> Result<SeedSpec, String> {
             }),
             "centre" => Ok(SeedSpec::Center),
             "top" | "top_centre" => Ok(SeedSpec::TopCenter),
-            _ => serde_json::from_value(Value::String(head)).map_err(|e| bad(e.to_string())),
+            _ => serde_json::from_value(Value::String(head)).map_err(|e| e.to_string()),
         };
     }
-    if let Some(d) = get_f64(v, "random")?.or(get_f64(v, "density")?)
-        && v.as_object().is_some_and(|o| o.len() == 1)
+    // `#{random: 0.2}` or `#{density: 0.2}` alone; `{"random": {"density": 0.2}}` (the scene
+    // format) goes to serde below.
+    if let Some(o) = v.as_object()
+        && o.len() == 1
+        && let Some(d) = o.get("random").or(o.get("density")).and_then(number)
     {
-        return parse_seed(&json!(format!("random:{d}")));
+        return seed_core(&json!(format!("random:{d}")));
     }
-    serde_json::from_value(v.clone()).map_err(|e| bad(e.to_string()))
+    serde_json::from_value(v.clone()).map_err(|e| e.to_string())
 }
 
 /// `shape[:density][:states]`, as in `blobs:0.4:by_region` or `voronoi:signed:0.7`. The shape
@@ -298,6 +334,55 @@ mod tests {
             parse_seed(&json!("nonsense"))
                 .unwrap_err()
                 .starts_with("bad seed")
+        );
+    }
+
+    #[test]
+    fn forms_the_mcp_tools_also_read() {
+        // A space (or ": ") before the first number, as the MCP tools always took it.
+        for s in ["random 0.2", "Random 20%", "random: 0.2", "random=0.2"] {
+            assert_eq!(
+                parse_seed(&json!(s)).unwrap(),
+                SeedSpec::Random { density: 0.2 },
+                "{s}"
+            );
+        }
+        assert_eq!(
+            parse_seed(&json!("ants 3")).unwrap(),
+            SeedSpec::Ants { count: 3 }
+        );
+        assert_eq!(
+            parse_seed(&json!("top center")).unwrap(),
+            SeedSpec::TopCenter
+        );
+        assert_eq!(
+            parse_seed(&json!("lenia")).unwrap(),
+            SeedSpec::Lenia {
+                name: "orbium".into(),
+                scale: 1.0
+            }
+        );
+        // The scene format's own seed objects, including Random's.
+        for s in [
+            SeedSpec::Random { density: 0.25 },
+            SeedSpec::Ants { count: 4 },
+            SeedSpec::Gaussian {
+                count: 2,
+                radius: 3.0,
+                peak: 0.5,
+            },
+        ] {
+            assert_eq!(parse_seed(&serde_json::to_value(&s).unwrap()).unwrap(), s);
+        }
+        assert_eq!(
+            parse_seed(&json!({"random": "0.4"})).unwrap(),
+            SeedSpec::Random { density: 0.4 }
+        );
+        // Each front end lists its own examples.
+        let e = parse_seed_with(&json!("hail"), "X or Y").unwrap_err();
+        assert!(
+            e.starts_with("bad seed \"hail\": ") && e.ends_with("Use X or Y"),
+            "{e}"
         );
     }
 }

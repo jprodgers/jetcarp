@@ -14,8 +14,9 @@
 //! - [`seed`]: seed shorthands (`"random:0.2"`, `"pattern:blobs"`, ...).
 //! - [`until`]: when a run stops.
 //! - [`reseed`]: reseed modes and automatic policies.
-//! - [`mcp`]: the MCP tools' own readings of rule names, seeds, and CA items, kept where they
-//!   give different results from the shared ones.
+//! - [`mcp`]: the MCP tools' own readings of rule names, seeds, and CA items, where they differ
+//!   from the shared ones on purpose (the module says which differences were merged and which
+//!   were kept).
 //!
 //! Where the front ends accepted different spellings for the same thing (`moore` or `vn` for a
 //! neighbourhood, `torus` for a wrapped boundary), the parsers here accept all of them; each
@@ -35,7 +36,7 @@ pub use reseed::{reseed_mode, reseed_policies, reseed_policy};
 pub use rule::{
     CA_KEYS, apply_ca_options, ca_spec, nb_word, parse_nb, parse_pile_nb, resolve_rule,
 };
-pub use seed::parse_seed;
+pub use seed::{parse_seed, parse_seed_with};
 pub use size::{Screen, count_range, offset_range, size_pair, size_spec};
 pub use tiling::{
     TILING_KEYS, is_aperiodic, parse_boundary, tiling_by_id, tiling_spec, tilings_or_square,
