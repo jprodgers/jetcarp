@@ -645,7 +645,7 @@ fn step_wireworld(topo: &Topology, nb: Nb, f: &mut Field) {
     std::mem::swap(&mut f.state, &mut f.back);
 }
 
-/// Edmond's Spectre glider rule (arXiv:2609.22579, Table 7), as replayed in `reference/glider.mjs`.
+/// Edmond's Spectre glider rule (arXiv:2609.22579, Table 7), as replayed by JETCARP's JavaScript prototype.
 fn step_glider(topo: &Topology, nb: Nb, f: &mut Field) {
     let a = &f.state;
     f.back

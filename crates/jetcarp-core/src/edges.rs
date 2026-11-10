@@ -1,5 +1,5 @@
 //! Edge model: each edge class stores one shape; partner edges derive theirs by the class's symmetry.
-//! Ported from `reference/core.js` (freshEdges, classOfEdge, nodesForEdge, flattenEdge, tileOutline,
+//! Ported from JETCARP's JavaScript prototype, the CART tiling editor (2026) (freshEdges, classOfEdge, nodesForEdge, flattenEdge, tileOutline,
 //! selfIntersects, glueMaps).
 
 use crate::geom::*;
@@ -272,7 +272,7 @@ pub fn glue_maps(classes: &[EdgeClass], corners: &[P]) -> Vec<Affine> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Editing (ported from the prototype's editor in `reference/ui.js`).
+// Editing (ported from the prototype's editor).
 
 pub fn world_to_edge(r: P, s: P, p: P) -> Node {
     let (dx, dy) = (s[0] - r[0], s[1] - r[1]);

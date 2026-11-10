@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep tests away from the runner's real settings, data and Pictures folders.
+  JETCARP_CONFIG_DIR: ${{ github.workspace }}/.ci/config
+  JETCARP_DATA_DIR: ${{ github.workspace }}/.ci/data
+  JETCARP_OUT: ${{ github.workspace }}/.ci/out
+  JETCARP_LIBRARY: ${{ github.workspace }}/.ci/library
+
+jobs:
+  test:
+    name: Test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux x86_64, os: ubuntu-24.04 }
+          - { name: Windows x86_64, os: windows-latest }
+          - { name: macOS arm64, os: macos-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: Build
+        run: cargo build --workspace --release --all-targets
+      - name: Test
+        run: cargo test --workspace --release --no-fail-fast
+
+  build-only:
+    # Targets nobody can test by hand yet: compile them so they don't rot.
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS x86_64, os: macos-latest, target: x86_64-apple-darwin }
+          - { name: Linux aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      - name: Build
+        run: cargo build --workspace --release --target ${{ matrix.target }}

@@ -38,7 +38,7 @@ const fn pal(name: &'static str, stops: &'static [u32], background: u32, stage: 
 const BG: u32 = 0x1d2029;
 const ST: u32 = 0x101217;
 
-/// Built-in palettes. The first five come from the prototype (`reference/ui.js`, plus Mono) on
+/// Built-in palettes. The first five come from JETCARP's JavaScript prototype (plus Mono) on
 /// JETCARP's dark slate background. Stop 0 is how new cells look under age colouring; later stops
 /// are older cells (still lifes end at the last stop), so every stop contrasts with the
 /// background. Candy, Glacier, Desert, and Paper are light-background palettes.

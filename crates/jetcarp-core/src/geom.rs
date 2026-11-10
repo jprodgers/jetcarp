@@ -1,5 +1,5 @@
 //! Plane geometry: points, affine maps, polygons.
-//! Ported from `reference/core.js` (the `mul`, `ap`, `inv`, `directMap`, `flipMap` helpers).
+//! Ported from JETCARP's JavaScript prototype, the CART tiling editor (2026) (the `mul`, `ap`, `inv`, `directMap`, `flipMap` helpers).
 
 use serde::{Deserialize, Serialize};
 

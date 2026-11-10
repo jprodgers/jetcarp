@@ -1,4 +1,4 @@
-//! Native tile editor, ported from the prototype's editor (`reference/ui.js`): drag corner handles
+//! Native tile editor, ported from the editor in JETCARP's JavaScript prototype (the CART tiling editor, 2026): drag corner handles
 //! and edge points, choose free / mirror / half-turn / straight edges, snap, curves, undo.
 //! The editing rules live in jetcarp-core (`edges.rs`, `families.rs`) and are tested there.
 
