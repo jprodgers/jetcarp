@@ -271,7 +271,7 @@ fn row_of(r: &rusqlite::Row) -> rusqlite::Result<AntRow> {
 
 /// Insert or update an ant row inside a transaction (see the module docs for which result
 /// wins). Returns whether the stored result changed.
-fn put_ant(tx: &Transaction, a: &AntRow, job: i64, now: &str) -> Result<bool, String> {
+pub(super) fn put_ant(tx: &Transaction, a: &AntRow, job: i64, now: &str) -> Result<bool, String> {
     let old: Option<(String, i64)> = tx
         .query_row(
             "SELECT outcome, steps FROM ants WHERE id = ?1",

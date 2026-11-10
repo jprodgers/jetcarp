@@ -78,6 +78,23 @@ pub fn absolute(p: &Path) -> PathBuf {
     }
 }
 
+/// This machine's name, for records and job owners (no extra dependency: `HOSTNAME` or
+/// `COMPUTERNAME`, then `/etc/hostname`, else `unknown`).
+pub fn host_name() -> String {
+    for k in ["HOSTNAME", "COMPUTERNAME"] {
+        if let Ok(h) = std::env::var(k)
+            && !h.trim().is_empty()
+        {
+            return h.trim().to_string();
+        }
+    }
+    std::fs::read_to_string("/etc/hostname")
+        .map(|s| s.trim().to_string())
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".into())
+}
+
 /// One line per folder, for `jetcarp paths` and bug reports.
 pub fn describe() -> String {
     let show = |p: Option<PathBuf>| {

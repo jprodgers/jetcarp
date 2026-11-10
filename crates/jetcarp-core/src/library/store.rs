@@ -18,7 +18,7 @@
 //! | `patterns` | rule-free pattern ([`super::range::identity`]) | `id`, `model`, `tiling` (identity JSON), `tiling_id` (family or catalog id), `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
 //! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `first_seen` |
 //! | `sightings` | (pattern, rule, job) | `count` (copies), `soups` (soups it appeared in), `first_seen`, `last_seen`; job 0 is "manual" (adds outside a job) |
-//! | `jobs` | search or hunt | `kind`, `spec` (JSON), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB) |
+//! | `jobs` | search or hunt | `kind`, `spec` (JSON), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB), `owner` (`host:pid` running it) and `heartbeat` (seconds since 1970; [`jobs`]) |
 //! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON) |
 //! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`) |
 //! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
@@ -55,10 +55,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 mod ants;
 mod census;
 mod dashboard;
+mod jobs;
 pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
 mod ratings;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
+pub use jobs::StepWrite;
 pub use ratings::RatingRow;
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 
@@ -73,6 +75,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_MEDIA,
     ants::MIGRATION_ANTS,
     unstored::MIGRATION_UNSTORED,
+    jobs::MIGRATION_JOB_LEASE,
 ];
 
 /// Version 3 (Phase 4 stage 1): versions of the settings score (`score_models`), census jobs'
@@ -478,6 +481,12 @@ pub struct JobRow {
     pub created: String,
     pub updated: String,
     pub finished: Option<String>,
+    /// Who runs it (`host:pid`), while a runner holds it (`crate::jobs`).
+    #[serde(skip)]
+    pub owner: Option<String>,
+    /// The runner's last heartbeat, seconds since 1970.
+    #[serde(skip)]
+    pub heartbeat: Option<i64>,
 }
 
 impl JobRow {
@@ -1132,45 +1141,7 @@ impl Library {
     pub fn store_search(&self, out: &super::search::SearchOutput) -> Result<StoredSearch, String> {
         let spec = serde_json::to_value(&out.report.spec).unwrap_or(Value::Null);
         let job = self.create_job("search", &spec)?;
-        let soups_total: u64 = out.report.groups.iter().map(|g| g.soups as u64).sum();
-        let items: Vec<(PatternRecord, u64)> = out
-            .records
-            .iter()
-            .cloned()
-            .zip(
-                out.soups
-                    .iter()
-                    .map(|&s| s as u64)
-                    .chain(std::iter::repeat(0)),
-            )
-            .collect();
-        let res = self.add_batch(items, job)?;
-        let mut st = StoredSearch {
-            job,
-            ..Default::default()
-        };
-        for (r, o) in out.records.iter().zip(res) {
-            match o {
-                Ok(AddOutcome::Added) => st.added.push(r.id.clone()),
-                Ok(AddOutcome::Merged { new_rule, .. }) => {
-                    if new_rule {
-                        st.new_rules.push((r.id.clone(), r.rule.clone()));
-                    }
-                    st.merged.push(r.id.clone())
-                }
-                Err(x) => st.failed.push((r.id.clone(), x)),
-            }
-        }
-        self.update_job(
-            job,
-            Some(JobStatus::Done),
-            Some(&serde_json::json!({
-                "soups": soups_total, "soups_done": soups_total,
-                "records": out.records.len(), "added": st.added.len(),
-            })),
-            None,
-        )?;
-        Ok(st)
+        self.store_search_in(job, out)
     }
 
     /// Is a pattern with this exact id stored?
@@ -1510,7 +1481,7 @@ impl Library {
             let mut st = c
                 .prepare(&format!(
                     "SELECT id, kind, spec, status, progress, checkpoint IS NOT NULL, created,
-                        updated, finished FROM jobs {filter} ORDER BY id"
+                        updated, finished, owner, heartbeat FROM jobs {filter} ORDER BY id"
                 ))
                 .map_err(e)?;
             let rows = st
@@ -1525,6 +1496,8 @@ impl Library {
                         r.get::<_, String>(6)?,
                         r.get::<_, String>(7)?,
                         r.get::<_, Option<String>>(8)?,
+                        r.get::<_, Option<String>>(9)?,
+                        r.get::<_, Option<i64>>(10)?,
                     ))
                 })
                 .map_err(e)?
@@ -1542,6 +1515,8 @@ impl Library {
                         created: x.6,
                         updated: x.7,
                         finished: x.8,
+                        owner: x.9,
+                        heartbeat: x.10,
                     })
                 })
                 .collect()

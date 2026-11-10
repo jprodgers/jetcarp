@@ -266,18 +266,7 @@ pub fn format_float(f: f64) -> String {
 
 /// Host name for records (no extra dependency: environment, then /etc/hostname).
 pub fn host_name() -> String {
-    for k in ["HOSTNAME", "COMPUTERNAME"] {
-        if let Ok(h) = std::env::var(k)
-            && !h.trim().is_empty()
-        {
-            return h.trim().to_string();
-        }
-    }
-    std::fs::read_to_string("/etc/hostname")
-        .map(|s| s.trim().to_string())
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "unknown".into())
+    jetcarp_core::paths::host_name()
 }
 
 #[cfg(test)]
