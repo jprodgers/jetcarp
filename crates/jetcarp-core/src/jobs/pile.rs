@@ -1,10 +1,14 @@
-//! Large sandpiles (`jobs.kind` `pile`): `crate::pile::job`'s loop wrapped as it is. Results
-//! and files are exactly those of `pile::job::run_job`.
+//! Large sandpiles (`jobs.kind` `pile`): `crate::pile::job`, run a doubling step at a time
+//! (its state is the folder's step files, as before), then exported. The pile and its files are
+//! those of the job's loop before it ran in steps.
 
-use super::{RunCx, RunOptions, Runner, Strategy, StrategyKind, base_summary, typed};
+use super::{
+    RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, drive,
+    status_name, typed,
+};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{Library, tiling_display_name};
+use crate::library::{JobStatus, Library, tiling_display_name};
 use crate::pile::Toppler;
 use crate::pile::job::{self as job, PileJobSpec, PileProgress};
 use serde_json::Value;
@@ -87,27 +91,65 @@ impl StrategyKind for PileKind {
     }
 }
 
-fn run_pile(
-    cx: &RunCx<'_>,
-    toppler: Option<Box<dyn Toppler>>,
-    live: Option<Arc<Mutex<PileProgress>>>,
-) -> Result<Value, String> {
-    let live = match live {
-        Some(l) => l,
-        None => Arc::new(Mutex::new(
-            job::status(cx.lib, cx.job).map(|x| x.1).unwrap_or_default(),
-        )),
-    };
-    let l2 = live.clone();
-    cx.live
-        .follow(move || serde_json::to_value(&*l2.lock().unwrap()).unwrap_or_default());
-    job::run_job(cx.lib, cx.job, cx.stop.clone(), toppler, Some(live))
-        .and_then(|p| serde_json::to_value(p).map_err(|e| e.to_string()))
+/// A pile run in steps ([`job::PileJob`]), on a toppler the caller made (`None`: the CPU), on
+/// this thread (a toppler need not be `Send`): a doubling step each, then the export.
+#[derive(Default)]
+pub struct PileRunOn {
+    pub toppler: Option<Box<dyn Toppler>>,
+    /// The caller's live progress, kept up to date too (in a step as well).
+    pub live: Option<Arc<Mutex<PileProgress>>>,
+    pile: Option<job::PileJob>,
 }
 
-/// A pile run: `pile::job::run_job` with the runner's stop flag (it cancels the step in
-/// flight), toppling on the GPU when the job asks for it and the host registered a GPU toppler
-/// (`crate::pile::gpu_toppler`), else on the CPU.
+impl PileRunOn {
+    pub fn new(
+        toppler: Option<Box<dyn Toppler>>,
+        live: Option<Arc<Mutex<PileProgress>>>,
+    ) -> PileRunOn {
+        PileRunOn {
+            toppler,
+            live,
+            pile: None,
+        }
+    }
+}
+
+const NOT_OPEN: &str = "the pile was not restored";
+
+impl Strategy for PileRunOn {
+    fn restore(&mut self, cx: &RunCx<'_>, _checkpoint: Option<&[u8]>) -> Result<(), String> {
+        if let Some(l) = self.live.clone() {
+            cx.live
+                .observe(move |v| *l.lock().unwrap() = typed::<PileProgress>(v));
+        }
+        self.pile = Some(job::PileJob::open(cx)?);
+        Ok(())
+    }
+    fn step(&mut self, cx: &RunCx<'_>, _sink: &mut Sink) -> Result<Step, String> {
+        let p = self.pile.as_mut().ok_or(NOT_OPEN)?;
+        let t = self.toppler.as_mut().map(|t| &mut **t as &mut dyn Toppler);
+        Ok(if p.step(cx, t)? {
+            Step::Done
+        } else {
+            Step::More
+        })
+    }
+    fn finish(&mut self, _cx: &RunCx<'_>, sink: &mut Sink) -> Result<(), String> {
+        let p = self.pile.as_mut().ok_or(NOT_OPEN)?;
+        sink.files.extend(p.finish()?);
+        Ok(())
+    }
+    fn progress(&self, status: JobStatus) -> Value {
+        match &self.pile {
+            Some(p) => serde_json::to_value(p.progress(status_name(status))).unwrap_or_default(),
+            None => Value::Null,
+        }
+    }
+}
+
+/// A pile run as the kind builds it: toppling on the GPU when the job asks for it and the host
+/// registered a GPU toppler (`crate::pile::gpu_toppler`), else on the CPU. The toppler is made
+/// on the run's thread, and the run is [`PileRunOn`]'s steps.
 #[derive(Clone, Default)]
 pub struct PileRun;
 
@@ -120,24 +162,13 @@ impl Strategy for PileRun {
         } else {
             None
         };
-        run_pile(cx, t, None)
-    }
-}
-
-/// A pile run on a toppler the caller made (on this thread: a toppler need not be `Send`).
-pub struct PileRunOn {
-    pub toppler: Option<Box<dyn Toppler>>,
-    pub live: Option<Arc<Mutex<PileProgress>>>,
-}
-
-impl Strategy for PileRunOn {
-    fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
-        run_pile(cx, self.toppler.take(), self.live.clone())
+        drive(&mut PileRunOn::new(t, None), cx)
     }
 }
 
 /// Run (or resume) a pile job here, on this thread, under the runner (its lease and
-/// heartbeat): `pile::job::run_job` with these arguments, as before.
+/// heartbeat): a doubling step at a time on this toppler (`None`: the CPU), stopping at the
+/// stop flag, with the caller's live progress kept up to date.
 pub fn run(
     lib: &Library,
     job: i64,
@@ -145,7 +176,7 @@ pub fn run(
     toppler: Option<Box<dyn Toppler>>,
     live: Option<Arc<Mutex<PileProgress>>>,
 ) -> Result<PileProgress, String> {
-    let mut s = PileRunOn { toppler, live };
+    let mut s = PileRunOn::new(toppler, live);
     let o = RunOptions {
         stop: Some(stop),
         ..Default::default()

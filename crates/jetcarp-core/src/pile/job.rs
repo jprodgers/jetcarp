@@ -3,9 +3,10 @@
 //!
 //! The pile itself already resumes from its folder: every finished doubling step is saved to
 //! `steps/step-KK.pile`. The job row holds the spec and folder, and its progress (the steps
-//! done, grains, topplings, the step in flight) is written after every step and every few seconds
+//! done, grains, topplings, the step in flight) is written after every step and every second
 //! inside one; a resumed job loads the folder's latest step file. A stop request (the job marked
-//! `paused`, or the stop flag) cancels the step in flight, which the next run repeats.
+//! `paused`, or the stop flag) cancels the step in flight, which the next run repeats. The job
+//! runner (`crate::jobs::pile`) runs a job a doubling step at a time ([`PileJob`]).
 
 use super::export::ExportOptions;
 use super::{Ctl, Pile, PileSpec, RunOptions, Toppler, file, latest_step_file, write_growth};
@@ -13,7 +14,6 @@ use crate::library::{JobStatus, Library, now_utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 pub const KIND: &str = "pile";
@@ -126,7 +126,7 @@ fn progress_of(job: i64, pile: &Pile, spec: &PileJobSpec, status: &str) -> PileP
     }
 }
 
-/// Create a pile job (paused until [`run_job`]). Returns the job id.
+/// Create a pile job (paused until a runner starts it). Returns the job id.
 pub fn start(lib: &Library, spec: &PileJobSpec) -> Result<i64, String> {
     crate::render::builtin_palette(&spec.palette)?;
     let pile = Pile::new(spec.pile.clone())?;
@@ -167,42 +167,56 @@ pub fn request_stop(lib: &Library, job: i64) -> Result<(), String> {
     Ok(())
 }
 
-/// Run (or resume) a pile job until the pile is finished and exported, or stopped.
-pub fn run_job(
-    lib: &Library,
+/// A pile job run in steps by the job runner (`crate::jobs::pile`): one doubling step each,
+/// saved to the folder (`steps/step-KK.pile`, `growth.csv`) when it finishes. A doubling step
+/// cannot be cut smaller, so while it runs it publishes its progress every second and is
+/// cancelled within about a second of a stop (the run's stop flag, or the job marked `paused`,
+/// checked every two seconds); the cancelled step is run again from the last step file. At the
+/// end the pile is exported (`pile.png`, `preview.png`, `pile.json`).
+pub struct PileJob {
     job: i64,
-    stop: Arc<AtomicBool>,
-    mut toppler: Option<Box<dyn Toppler>>,
-    live: Option<Arc<Mutex<PileProgress>>>,
-) -> Result<PileProgress, String> {
-    let (st, spec, _) = spec_of(lib, job)?;
-    if st == JobStatus::Done {
-        return status(lib, job).map(|x| x.1);
+    spec: PileJobSpec,
+    pile: Pile,
+    /// A step was cancelled part way: the pile is reloaded from its folder before the next.
+    stale: bool,
+    done: Option<PileProgress>,
+}
+
+impl PileJob {
+    /// Open the run's pile job from the latest step file in its folder (a fresh pile if none).
+    pub fn open(cx: &crate::jobs::RunCx<'_>) -> Result<PileJob, String> {
+        let (j, job) = (cx.row, cx.job);
+        if j.kind != KIND {
+            return Err(format!("job {job} is a {} job, not a pile", j.kind));
+        }
+        let spec: PileJobSpec =
+            serde_json::from_value(j.spec.clone()).map_err(|e| format!("job {job}: {e}"))?;
+        let pile = load(&spec)?;
+        Ok(PileJob {
+            job,
+            spec,
+            pile,
+            stale: false,
+            done: None,
+        })
     }
-    let mut pile = match latest_step_file(&spec.folder) {
-        Some(f) => file::load(&f)?,
-        None => Pile::new(spec.pile.clone())?,
-    };
-    lib.update_job(job, Some(JobStatus::Running), None, None)?;
-    let publish = |p: &PileProgress, status: Option<JobStatus>| {
-        let v = serde_json::to_value(p).unwrap_or_default();
-        let _ = lib.update_job(job, status, Some(&v), None);
-        if let Some(l) = &live {
-            *l.lock().unwrap() = p.clone();
+
+    /// One doubling step on `toppler` (the CPU when `None`). `Ok(true)`: the pile is finished.
+    pub fn step(
+        &mut self,
+        cx: &crate::jobs::RunCx<'_>,
+        toppler: Option<&mut dyn Toppler>,
+    ) -> Result<bool, String> {
+        if self.stale {
+            self.pile = load(&self.spec)?;
+            self.stale = false;
         }
-    };
-    let cancel = AtomicBool::new(false);
-    let mut last_check = Instant::now();
-    while !pile.finished() {
-        let base = progress_of(job, &pile, &spec, "running");
-        publish(&base, None);
-        if stop.load(Ordering::SeqCst) || lib.job(job).map(|j| j.status) == Ok(JobStatus::Paused) {
-            publish(
-                &progress_of(job, &pile, &spec, "paused"),
-                Some(JobStatus::Paused),
-            );
-            return Ok(progress_of(job, &pile, &spec, "paused"));
+        if self.pile.finished() {
+            return Ok(true);
         }
+        let base = progress_of(self.job, &self.pile, &self.spec, "running");
+        let cancel = AtomicBool::new(false);
+        let mut last_check = Instant::now();
         let r = {
             let mut ctl = Ctl {
                 cancel: Some(&cancel),
@@ -211,69 +225,82 @@ pub fn run_job(
                     let mut p = base.clone();
                     p.in_step = [t.sweeps as f64, t.topplings as f64, t.seconds];
                     p.updated = now_utc();
-                    publish(&p, None);
-                    if stop.load(Ordering::SeqCst)
-                        || (last_check.elapsed().as_secs_f64() >= 2.0
-                            && lib.job(job).map(|j| j.status) == Ok(JobStatus::Paused))
-                    {
+                    cx.publish(serde_json::to_value(&p).unwrap_or_default());
+                    let mut stop = cx.stopped();
+                    if !stop && last_check.elapsed().as_secs_f64() >= 2.0 {
+                        last_check = Instant::now();
+                        stop = cx.paused_elsewhere();
+                    }
+                    if stop {
                         cancel.store(true, Ordering::SeqCst);
                     }
-                    last_check = Instant::now();
                 })),
                 ..Default::default()
             };
-            match toppler.as_mut() {
-                Some(t) => pile.next_step(Some(&mut **t), &mut ctl),
-                None => pile.next_step(None, &mut ctl),
-            }
+            self.pile.next_step(toppler, &mut ctl)
         };
         match r {
             Ok(_) => {
-                file::save(
-                    &pile,
-                    &spec
-                        .folder
-                        .join(format!("steps/step-{:02}.pile", pile.done)),
-                )?;
-                write_growth(&pile, &spec.folder)?;
+                let f = self
+                    .spec
+                    .folder
+                    .join(format!("steps/step-{:02}.pile", self.pile.done));
+                file::save(&self.pile, &f)?;
+                write_growth(&self.pile, &self.spec.folder)?;
+                Ok(self.pile.finished())
             }
             Err(_) if cancel.load(Ordering::SeqCst) => {
-                let p = progress_of(job, &pile, &spec, "paused");
-                publish(&p, Some(JobStatus::Paused));
-                return Ok(p);
+                self.stale = true;
+                Ok(false)
             }
-            Err(e) => {
-                let mut p = progress_of(job, &pile, &spec, "failed");
-                p.error = Some(e.clone());
-                publish(&p, Some(JobStatus::Failed));
-                return Err(e);
-            }
+            Err(e) => Err(e),
         }
     }
-    let opts = RunOptions {
-        export: ExportOptions {
-            px_per_cell: spec.px_per_cell,
-            margin: spec.margin,
-            palette: spec.palette.clone(),
-            reverse: spec.reverse,
-            preview_side: spec.preview_side,
-            png: spec.png,
-        },
-        save_steps: false,
-        extra: {
-            let mut x = match &spec.extra {
-                serde_json::Value::Object(m) => m.clone(),
-                _ => serde_json::Map::new(),
-            };
-            x.insert("job".into(), serde_json::json!(job));
-            serde_json::Value::Object(x)
-        },
-    };
-    let mut quiet = Ctl::default();
-    let s = super::run_to_dir(&mut pile, &spec.folder, None, &mut quiet, &opts)?;
-    let mut p = progress_of(job, &pile, &spec, "done");
-    p.png = s.png.map(|x| x.display().to_string());
-    p.preview = s.preview.map(|x| x.display().to_string());
-    publish(&p, Some(JobStatus::Done));
-    Ok(p)
+
+    /// Export the finished pile (`pile.png`, `preview.png`, `pile.json`).
+    pub fn finish(&mut self) -> Result<Vec<PathBuf>, String> {
+        let spec = &self.spec;
+        let opts = RunOptions {
+            export: ExportOptions {
+                px_per_cell: spec.px_per_cell,
+                margin: spec.margin,
+                palette: spec.palette.clone(),
+                reverse: spec.reverse,
+                preview_side: spec.preview_side,
+                png: spec.png,
+            },
+            save_steps: false,
+            extra: {
+                let mut x = match &spec.extra {
+                    serde_json::Value::Object(m) => m.clone(),
+                    _ => serde_json::Map::new(),
+                };
+                x.insert("job".into(), serde_json::json!(self.job));
+                serde_json::Value::Object(x)
+            },
+        };
+        let mut quiet = Ctl::default();
+        let s = super::run_to_dir(&mut self.pile, &spec.folder, None, &mut quiet, &opts)?;
+        let mut p = progress_of(self.job, &self.pile, spec, "done");
+        p.png = s.png.as_ref().map(|x| x.display().to_string());
+        p.preview = s.preview.as_ref().map(|x| x.display().to_string());
+        self.done = Some(p);
+        Ok(s.png.into_iter().chain(s.preview).collect())
+    }
+
+    /// The progress with this status (once exported: the final one).
+    pub fn progress(&self, status: &str) -> PileProgress {
+        match &self.done {
+            Some(p) => p.clone(),
+            None => progress_of(self.job, &self.pile, &self.spec, status),
+        }
+    }
+}
+
+/// The pile as its folder has it: the latest step file, or a fresh pile.
+fn load(spec: &PileJobSpec) -> Result<Pile, String> {
+    match latest_step_file(&spec.folder) {
+        Some(f) => file::load(&f),
+        None => Pile::new(spec.pile.clone()),
+    }
 }

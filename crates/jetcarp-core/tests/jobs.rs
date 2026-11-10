@@ -645,3 +645,76 @@ fn bounded_searches_and_collisions_store_what_their_calls_store() {
         .unwrap();
     assert!(!jobs::kind("collide").runnable(&b.job(old).unwrap()));
 }
+
+/// A pile job's growth table without its timings and allocations (step, grains, topplings,
+/// sweeps, extent) and its picture's pixels.
+fn pile_result(dir: &std::path::Path) -> (Vec<String>, Vec<u8>) {
+    let csv = std::fs::read_to_string(dir.join("growth.csv")).unwrap();
+    let rows = csv
+        .lines()
+        .map(|l| {
+            let f: Vec<&str> = l.split(',').collect();
+            [&f[..4], &f[5..7]].concat().join(",")
+        })
+        .collect();
+    let png = std::fs::read(dir.join("pile.png")).unwrap();
+    let img = jetcarp_core::media::encode::decode_png(&png).unwrap();
+    (rows, img.rgba)
+}
+
+#[test]
+fn pile_jobs_stopped_part_way_and_resumed_equal_uninterrupted() {
+    use jetcarp_core::pile::job::{self as pilejob, PileJobSpec, PileProgress};
+    use jetcarp_core::pile::{Centre, PileSpec};
+    use jetcarp_core::topology::Nb;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    let dir = std::env::temp_dir().join(format!("jetcarp-jobs-test-pile-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let lib = Library::open(dir.join("catalog"));
+    let spec = |name: &str| PileJobSpec {
+        pile: PileSpec {
+            tiling: TilingSpec::new("square"),
+            nb: Nb::Edge,
+            grains: 300_000,
+            centre: Centre::Cell,
+        },
+        folder: dir.join(name),
+        px_per_cell: 1.0,
+        margin: 2.0,
+        palette: "Lava".into(),
+        reverse: false,
+        preview_side: 32,
+        png: true,
+        gpu: false,
+        extra: serde_json::Value::Null,
+    };
+    let ja = pilejob::start(&lib, &spec("whole")).unwrap();
+    let out = Runner::new(lib.clone())
+        .run(ja, &RunOptions::default())
+        .unwrap();
+    assert_eq!(out.status, JobStatus::Done);
+    let steps = out.progress_as::<PileProgress>().steps;
+    // Stopped once a few doubling steps are saved (the step in flight is cancelled), then
+    // resumed from the folder by a new catalog handle.
+    let jb = pilejob::start(&lib, &spec("stopped")).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let live = Arc::new(Mutex::new(PileProgress::default()));
+    let (l2, s2, live2) = (lib.clone(), stop.clone(), live.clone());
+    let t =
+        std::thread::spawn(move || jetcarp_core::jobs::pile::run(&l2, jb, s2, None, Some(live2)));
+    wait_for("four steps", || live.lock().unwrap().step >= 4);
+    stop.store(true, Ordering::SeqCst);
+    let p = t.join().unwrap().unwrap();
+    assert_eq!(p.status, "paused", "{p:?}");
+    assert!(p.step >= 4 && p.step < steps, "{} of {steps}", p.step);
+    let b2 = Library::open(lib.path());
+    let out = Runner::new(b2).run(jb, &RunOptions::default()).unwrap();
+    assert_eq!(out.status, JobStatus::Done);
+    assert_eq!(out.progress_as::<PileProgress>().step, steps);
+    assert_eq!(
+        pile_result(&dir.join("whole")),
+        pile_result(&dir.join("stopped"))
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -472,7 +472,7 @@ fn pile_export_and_jobs_keep_the_palette() {
     let mut old = serde_json::to_value(&spec).unwrap();
     old.as_object_mut().unwrap().remove("reverse");
     assert!(!serde_json::from_value::<PileJobSpec>(old).unwrap().reverse);
-    let done = pilejob::run_job(
+    let done = jetcarp_core::jobs::pile::run(
         &lib,
         job,
         std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
