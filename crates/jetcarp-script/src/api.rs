@@ -433,7 +433,7 @@ pub fn engine(ctx: Arc<Ctx>) -> Engine {
     register_globals(&mut e, &ctx);
     register_world(&mut e, &ctx);
     register_library(&mut e, &ctx);
-    crate::evolve::register(&mut e, &ctx);
+    crate::search::register(&mut e, &ctx);
     crate::hl::register(&mut e, &ctx);
     crate::pile::register(&mut e, &ctx);
     crate::ants::register(&mut e, &ctx);
@@ -1402,53 +1402,12 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
         "promote",
         move |l: &mut LibHandle, key: &str, title: &str| prom(l, key, Some(title)),
     );
-    // Soup search into this library: lib.search(#{ rules, tilings, soups, size, ... }).
-    let c = ctx.clone();
-    e.register_fn("search", move |l: &mut LibHandle, m: Map| -> R<Map> {
-        let v = map_json(&m)?;
-        let rep = crate::library::search_into(&l.0, &v, &c).or_err()?;
-        Ok(from_json(&rep).cast::<Map>())
-    });
-    // Fast hunter: lib.hunt(#{ rules, tilings, soups, size, density, ... }) runs a resumable hunt
-    // job here; hunt(#{ ... }) uses the default catalog.
-    let c = ctx.clone();
-    e.register_fn("hunt", move |l: &mut LibHandle, m: Map| -> R<Map> {
-        let v = map_json(&m)?;
-        let p = crate::library::hunt_into(&l.0, &v, &c).or_err()?;
-        Ok(from_json(&p).cast::<Map>())
-    });
-    let c = ctx.clone();
-    e.register_fn("hunt", move |m: Map| -> R<Map> {
-        let lib = match &c.opts.library {
-            Some(p) => Library::open(p.clone()),
-            None => Library::open_default(),
-        };
-        let v = map_json(&m)?;
-        let p = crate::library::hunt_into(&lib, &v, &c).or_err()?;
-        Ok(from_json(&p).cast::<Map>())
-    });
-    // Labelled jobs, censuses as jobs, rule-space neighbours (crate::jobs).
+    // Jobs and rule-space neighbours (crate::jobs); the searches themselves are crate::search.
     e.register_fn("jobs", |l: &mut LibHandle| -> R<Array> {
         Ok(from_json(&crate::jobs::jobs(&l.0, &Value::Null).or_err()?).cast::<Array>())
     });
     e.register_fn("jobs", |l: &mut LibHandle, m: Map| -> R<Array> {
         Ok(from_json(&crate::jobs::jobs(&l.0, &map_json(&m)?).or_err()?).cast::<Array>())
-    });
-    let c = ctx.clone();
-    e.register_fn("census", move |l: &mut LibHandle, m: Map| -> R<Map> {
-        let v = map_json(&m)?;
-        let p = crate::jobs::census_into(&l.0, &v, &c).or_err()?;
-        Ok(from_json(&p).cast::<Map>())
-    });
-    let c = ctx.clone();
-    e.register_fn("census", move |m: Map| -> R<Map> {
-        let lib = match &c.opts.library {
-            Some(p) => Library::open(p.clone()),
-            None => Library::open_default(),
-        };
-        let v = map_json(&m)?;
-        let p = crate::jobs::census_into(&lib, &v, &c).or_err()?;
-        Ok(from_json(&p).cast::<Map>())
     });
     e.register_fn("census_rows", |l: &mut LibHandle, job: INT| -> R<Array> {
         Ok(from_json(&crate::jobs::census_rows(&l.0, job).or_err()?).cast::<Array>())
@@ -1461,27 +1420,6 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
             from_json(&crate::jobs::rule_neighbours(rule, &map_json(&m)?).or_err()?)
                 .cast::<Array>(),
         )
-    });
-    e.register_fn("hunt_status", |l: &mut LibHandle, job: INT| -> R<Map> {
-        let p = crate::library::hunt_status(&l.0, job).or_err()?;
-        Ok(from_json(&p).cast::<Map>())
-    });
-    e.register_fn("hunt_stop", |l: &mut LibHandle, job: INT| -> R<()> {
-        jetcarp_core::hunt::job::request_stop(&l.0, job).or_err()
-    });
-    e.register_fn("hunts", |l: &mut LibHandle| -> R<Array> {
-        let mut out = Array::new();
-        for j in
-            l.0.jobs()
-                .or_err()?
-                .into_iter()
-                .filter(|j| j.kind == "hunt")
-        {
-            out.push(from_json(
-                &crate::library::hunt_status(&l.0, j.id).or_err()?,
-            ));
-        }
-        Ok(out)
     });
     // A sweep run to the Quick Start: lib.promote_run(folder, "HexT3 sum 588" | "#12" | "n=588")
     // and lib.promote_run(folder, run, #{ title, note }).

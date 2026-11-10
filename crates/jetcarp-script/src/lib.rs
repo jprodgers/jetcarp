@@ -18,13 +18,13 @@
 mod ants;
 mod api;
 pub mod describe;
-mod evolve;
 mod hl;
 pub mod jobs;
 pub mod library;
 pub mod media;
 mod pile;
 pub mod results;
+mod search;
 pub mod series;
 pub mod sim;
 pub mod sweep;
