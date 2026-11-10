@@ -288,8 +288,9 @@ pub struct SiteArgs {
 
 #[derive(clap::Subcommand)]
 enum SiteCmd {
-    /// Write the public part of the catalog (JSON and media, with manifest.json) to a folder;
-    /// only new or changed files are written, and items no longer public are deleted.
+    /// Write the public part of the catalog (JSON and media, with manifest.json, and a viewer
+    /// page, index.html) to a folder; only new or changed files are written, and items no longer
+    /// public are deleted.
     Export(Box<ExportArgs>),
 }
 
@@ -332,6 +333,9 @@ struct ExportArgs {
     /// Render missing media in this built-in palette instead of the house style.
     #[arg(long)]
     palette: Option<String>,
+    /// Do not write the viewer page (index.html, a grid of every item over manifest.json).
+    #[arg(long)]
+    no_page: bool,
     #[arg(long)]
     json: bool,
 }
@@ -387,7 +391,10 @@ pub fn run_site(a: SiteArgs) -> Result<()> {
                     ..Default::default()
                 },
             };
-            let r = website::export(&lib, &e.to, &o).map_err(err)?;
+            let mut r = website::export(&lib, &e.to, &o).map_err(err)?;
+            if !e.no_page && website::write_page(&e.to).map_err(err)? {
+                r.written.push("index.html".into());
+            }
             if e.json {
                 println!("{}", serde_json::to_string_pretty(&r)?);
             } else {

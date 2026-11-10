@@ -2,11 +2,11 @@
 <!--
   A minimal page over a JETCARP website export (`jetcarp site export --to DIR`): it reads
   manifest.json and shows every item's animation in a grid, with filters and a detail view.
-  Plain HTML and JavaScript, no build step. Copy it into the export folder (or point
-  DATA below at it) and serve the folder over HTTP, for example:
+  Plain HTML and JavaScript, no build step. `jetcarp site export` writes it into the export
+  folder as index.html (`--no-page` leaves it out; or point DATA below at the folder); serve
+  the folder over HTTP, for example:
 
       jetcarp site export --to ~/site/data
-      cp tools/site-example/index.html ~/site/data/
       python3 -m http.server -d ~/site/data 8000      # then open http://localhost:8000/
 
   Browsers do not let a page fetch files from file:// URLs, hence the small server.

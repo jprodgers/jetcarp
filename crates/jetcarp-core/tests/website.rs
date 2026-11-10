@@ -138,6 +138,11 @@ fn export_writes_public_items_then_only_changes() {
     assert_eq!((r2.unchanged, r2.rendered), (3, 0));
     assert_eq!(std::fs::read(dir.join("manifest.json")).unwrap(), before);
 
+    // The viewer page is written once, and exports leave it alone (it is not in the manifest).
+    assert!(website::write_page(&dir).unwrap());
+    assert!(!website::write_page(&dir).unwrap());
+    assert!(website::PAGE.contains("manifest.json"));
+
     // One rating: exactly that item and the index.
     lib.update(
         &ids[1],
@@ -169,6 +174,7 @@ fn export_writes_public_items_then_only_changes() {
     assert!(!dir.join(format!("patterns/{}.json", ids[1])).exists());
     assert!(!dir.join(format!("media/pattern/{}", ids[1])).exists());
     assert_eq!(Manifest::read(&dir).unwrap().items.len(), 2);
+    assert!(dir.join("index.html").exists());
 }
 
 fn media_hash(b: &[u8]) -> String {

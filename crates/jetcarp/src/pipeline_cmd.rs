@@ -26,7 +26,6 @@ use std::time::Instant;
 
 const STAGE1_SCRIPT: &str = include_str!("../../jetcarp-script/scripts/stage1-all.rhai");
 const STAGE2_SCRIPT: &str = include_str!("../../jetcarp-script/scripts/stage2-hunt.rhai");
-const SITE_INDEX: &str = include_str!("../../../tools/site-example/index.html");
 
 #[derive(clap::Args)]
 pub struct PipelineArgs {
@@ -1135,10 +1134,7 @@ fn site_step(cx: &Ctx) -> Result<Outcome> {
         ..Default::default()
     };
     let r = website::export(cx.lib, &dir, &o).map_err(err)?;
-    let index = dir.join("index.html");
-    if std::fs::read_to_string(&index).ok().as_deref() != Some(SITE_INDEX) {
-        std::fs::write(&index, SITE_INDEX)?;
-    }
+    website::write_page(&dir).map_err(err)?;
     let size = dir_size(&dir);
     println!(
         "site {}: {} patterns, {} Quick Start entries, {} files written, {} deleted, {} unchanged, {:.1} MB",
