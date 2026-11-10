@@ -269,3 +269,142 @@ fn library_media_and_picture_commands_as_json() {
     assert_eq!(q["examples"].as_array().unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn search_and_jobs_commands_as_json() {
+    let dir =
+        jetcarp_core::paths::output_dir().join(format!("cli-json-jobs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = dir.join("lib");
+    let l = lib.to_str().unwrap();
+    // A hunt to its budget, carried on to its end.
+    let h = json_of(&[
+        "search",
+        "hunt",
+        "--library",
+        l,
+        "--rules",
+        "B3/S23",
+        "--soups",
+        "60",
+        "--limit",
+        "20",
+        "--threads",
+        "2",
+        "--quiet",
+        "--json",
+    ]);
+    assert_eq!(
+        (&h["kind"], &h["status"], &h["stopped"]),
+        (&json!("hunt"), &json!("paused"), &json!("budget"))
+    );
+    assert_eq!(h["progress"]["soups_done"], 20);
+    let job = h["job"].to_string();
+    let r = json_of(&["jobs", "--library", l, "resume", &job, "--quiet", "--json"]);
+    assert_eq!(
+        (&r["status"], &r["progress"]["soups_done"]),
+        (&json!("done"), &json!(60))
+    );
+    // Listed, followed, and reported on.
+    let list = json_of(&["--json", "jobs", "--library", l, "list"]);
+    assert_eq!(list["jobs"][0]["job"].to_string(), job);
+    let st = json_of(&[
+        "jobs",
+        "--library",
+        l,
+        "status",
+        &job,
+        "--finds",
+        "2",
+        "--json",
+    ]);
+    assert_eq!(
+        (&st["status"], &st["kind"]),
+        (&json!("done"), &json!("hunt"))
+    );
+    assert!(st["finds"]["newest"].as_array().is_some(), "{st}");
+    let text =
+        String::from_utf8(jetcarp(&["jobs", "--library", l, "status", &job]).stdout).unwrap();
+    assert!(
+        text.starts_with(&format!("hunt {job}: 60/60 soups")),
+        "{text}"
+    );
+    let o = jetcarp(&["jobs", "--library", l, "report", &job]);
+    assert!(String::from_utf8_lossy(&o.stdout).starts_with("# Hunt "));
+    let md = dir.join("report.md");
+    let o = jetcarp(&[
+        "jobs",
+        "--library",
+        l,
+        "report",
+        &job,
+        "--md",
+        md.to_str().unwrap(),
+    ]);
+    assert!(o.status.success());
+    assert!(
+        std::fs::read_to_string(&md)
+            .unwrap()
+            .contains("## Hunts: per hunted rule")
+    );
+    // A census with its files; a collision of what the hunt found.
+    let csv = dir.join("census.csv");
+    let c = json_of(&[
+        "search",
+        "census",
+        "--library",
+        l,
+        "--family",
+        "hex",
+        "--size",
+        "16x16",
+        "--rules",
+        "B2/S34 B3/S23",
+        "--soups",
+        "2",
+        "--gens",
+        "50",
+        "--csv",
+        csv.to_str().unwrap(),
+        "--quiet",
+        "--json",
+    ]);
+    assert_eq!(c["result"]["rules"].as_array().unwrap().len(), 2);
+    assert_eq!(c["files"][0], csv.to_str().unwrap());
+    let k = json_of(&[
+        "search",
+        "collide",
+        "block",
+        "glider",
+        "--library",
+        l,
+        "--offsets=-2..2",
+        "--gens",
+        "128",
+        "--quiet",
+        "--json",
+    ]);
+    assert_eq!(k["kind"], "collide");
+    assert!(k["result"]["report"]["runs"].as_array().unwrap().len() > 4);
+    // Stopped (it is done), then removed.
+    let s = json_of(&["jobs", "--library", l, "stop", &job, "--json"]);
+    assert_eq!(s["stopping"], false);
+    let rm = json_of(&["jobs", "--library", l, "remove", &job, "--json"]);
+    assert_eq!(rm["job"].to_string(), job);
+    let list = json_of(&["jobs", "--library", l, "list", "--json"]);
+    assert_eq!(list["jobs"].as_array().unwrap().len(), 2);
+    // The commands that `search` and `jobs` replace are gone.
+    for old in [
+        &["hunt", "--list"][..],
+        &["evolve", "--help"],
+        &["census", "--help"],
+        &["movers", "list"],
+        &["ants", "list"],
+        &["library", "jobs"],
+        &["library", "search", "--rules", "B3/S23"],
+    ] {
+        assert!(!jetcarp(old).status.success(), "{old:?}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

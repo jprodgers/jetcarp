@@ -12,18 +12,17 @@ mod ants_cmd;
 mod api_cmd;
 mod app_cmd;
 mod demo_cmd;
-mod evolve_cmd;
 mod explore_cmd;
 mod hashlife_cmd;
 mod host_cmd;
-mod hunt_cmd;
+mod jobs_cmd;
 mod library;
 mod media_cmd;
 mod movers_cmd;
-mod pile_cmd;
 mod platform;
 mod research;
 mod script_cmd;
+mod search_cmd;
 mod wallpaper_cmd;
 
 #[derive(Parser)]
@@ -130,35 +129,29 @@ enum Cmd {
         #[arg(long, default_value_t = 2)]
         label_scale: u32,
     },
-    /// Rule census: run rules from seeded soups and classify each run (CSV, JSON, contact sheet).
-    Census(Box<research::CensusArgs>),
     /// Find still lifes, oscillators, and spaceships in a scene after running it.
     Objects(research::ObjectsArgs),
-    /// Pattern library: search soups, catalog, collide, paste, promote to Quick Start.
+    /// Pattern library: list, show, curate, paste, promote to Quick Start; its ant runs and
+    /// movers.
     Library(library::LibraryArgs),
+    /// Start or carry on a search as a resumable catalog job: `hunt` (soup), `bounded`, `ants`,
+    /// `census`, `mover`, `pile`, `collide`, `evolve`.
+    Search(search_cmd::SearchArgs),
+    /// The catalog's jobs, whatever started them: `list`, `status`, `stop`, `resume`, `report`,
+    /// `remove`.
+    Jobs(jobs_cmd::JobsArgs),
     /// Broad search over tilings, rules, seeds and palettes: a GPU+CPU search kept in SQLite,
     /// with contact sheets for reviewing the results.
     Explore(Box<explore_cmd::ExploreArgs>),
-    /// Fast soup hunter: small soups on an unbounded plane, bit-parallel, cataloged as a
-    /// resumable job (`--resume JOB`, `--status JOB`, `--stop JOB`, `--list`).
-    Hunt(Box<hunt_cmd::HuntArgs>),
-    /// Ant and turmite search: turn strings and turmite tables on unbounded periodic tilings,
-    /// highways proved exactly, every run classed and cataloged by a resumable job (`search`,
-    /// `status`, `stop`, `run`, `list`, `show`, `census`, `update`, `remove`, `scene`,
-    /// `promote`).
-    Ants(Box<ants_cmd::AntsArgs>),
-    /// Evolutionary glider search (Edmond's method) on any tiling; verified movers go to the library.
-    Evolve(Box<evolve_cmd::EvolveArgs>),
-    /// Movers on aperiodic tilings: track across growing patch levels, verified to a distance.
-    Movers(movers_cmd::MoversArgs),
     /// Jump a pattern (unbounded plane) or a wrap-edge world (power-of-two torus) far ahead
     /// with HashLife; export a region as a scene or PNG.
     Hashlife(Box<hashlife_cmd::HashlifeArgs>),
     /// Computing demos: a WireWorld adder and Life logic gates for any inputs.
     Demo(demo_cmd::DemoArgs),
     /// Large sandpile: N grains on one spot of an unbounded grid, built by doubling, with a
-    /// cropped PNG, a preview, metadata, and a resumable pile file per step.
-    Pile(Box<pile_cmd::PileArgs>),
+    /// cropped PNG, a preview, metadata, and a resumable pile file per step (the same as
+    /// `jetcarp search pile`).
+    Pile(Box<search_cmd::PileArgs>),
     /// Media for the catalog: per-step frames, a GIF or animated WebP, a poster, and a
     /// thumbnail for a pattern (alone), a Quick Start entry (from the seed), an ant run, or a
     /// scene; `--missing` renders everything missing or stale.
@@ -296,11 +289,8 @@ impl Progress for ProgressLine {
 /// Commands that print no result of their own, so `--json` means nothing to them.
 fn without_json(cmd: &Cmd) -> Option<&'static str> {
     Some(match cmd {
-        Cmd::Census(_) => "census",
         Cmd::Explore(_) => "explore",
-        Cmd::Evolve(_) => "evolve",
         Cmd::Demo(_) => "demo",
-        Cmd::Pile(_) => "pile",
         Cmd::Mcp { .. } => "mcp",
         _ => return None,
     })
@@ -314,7 +304,7 @@ fn main() -> Result<()> {
     let json = cli.json;
     if json && let Some(name) = without_json(&cmd) {
         bail!(
-            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, and the library, hunt, ants, media, host, and app commands that print records)"
+            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, search, jobs, pile, and the library, media, host, and app commands that print records)"
         );
     }
     // Scripts may ask for GPU toppling of large sandpiles.
@@ -431,18 +421,15 @@ fn main() -> Result<()> {
             };
             show(&sheet::SheetRules::run(&cx, a, &Quiet)?, json)?;
         }
-        Cmd::Census(a) => research::census(*a)?,
         Cmd::Script(a) => script_cmd::script(a)?,
         Cmd::Objects(a) => research::objects(a)?,
         Cmd::Library(a) => library::run(a, json)?,
         Cmd::Explore(a) => explore_cmd::run(*a)?,
-        Cmd::Hunt(a) => hunt_cmd::run(*a)?,
-        Cmd::Ants(a) => ants_cmd::run(*a)?,
-        Cmd::Evolve(a) => evolve_cmd::run(*a)?,
-        Cmd::Movers(a) => movers_cmd::run(a)?,
+        Cmd::Search(a) => search_cmd::run(a, json)?,
+        Cmd::Jobs(a) => jobs_cmd::run(a, json)?,
         Cmd::Hashlife(a) => hashlife_cmd::run(*a)?,
         Cmd::Demo(a) => demo_cmd::run(a)?,
-        Cmd::Pile(a) => pile_cmd::run(*a)?,
+        Cmd::Pile(a) => search_cmd::pile(*a, json)?,
         Cmd::Media(a) => media_cmd::run(a, json)?,
         Cmd::Site(a) => media_cmd::run_site(a, json)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(&cx, *a, json)?,

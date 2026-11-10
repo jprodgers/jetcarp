@@ -2,15 +2,18 @@
 //! graphics adapters and the GPU simulator (`jetcarp-gpu`), and the desktop integration (the
 //! background host, start at login, the GNOME Shell extension, the screen savers). The
 //! operations `system.doctor`, `system.uninstall`, and `scene.run` (with `gpu`) ask for them
-//! through [`jetcarp_api::Platform`].
+//! through [`jetcarp_api::Platform`]; so do `search.start` with `gpu` (the GPU soup hunter) and
+//! with `detach` (a job in a process of its own, `jetcarp jobs resume JOB`).
 
 use clap::Args;
 use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuStepper, GpuSteps, UndoStep};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
+use jetcarp_core::hunt::job::SoupBatcher;
 use jetcarp_display::{autostart, gnome, saver};
 use jetcarp_mcp::link::host_call;
 use serde_json::json;
+use std::path::Path;
 use std::sync::Arc;
 
 /// The machine as the `jetcarp` program sees it.
@@ -41,6 +44,24 @@ fn host_running() -> bool {
 }
 
 impl Platform for Machine {
+    fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
+        jetcarp_gpu::hunt::GpuHunter::headless().map(|g| Arc::new(g) as Arc<dyn SoupBatcher>)
+    }
+
+    fn spawn_job(&self, catalog: &Path, job: i64, args: &[String]) -> Result<(), String> {
+        let mut a = vec![
+            "jobs".to_string(),
+            "resume".into(),
+            job.to_string(),
+            "--library".into(),
+            catalog.display().to_string(),
+            "--quiet".into(),
+        ];
+        a.extend(args.iter().cloned());
+        let a: Vec<&str> = a.iter().map(String::as_str).collect();
+        autostart::self_command(&a)?.spawn_detached()
+    }
+
     fn gpu_adapters(&self) -> Vec<GpuAdapter> {
         jetcarp_gpu::adapter_reports()
             .into_iter()

@@ -1,40 +1,24 @@
-//! `jetcarp ants`: ant and turmite search (`jetcarp_core::ants`). Turn strings and turmite tables run
-//! on unbounded periodic tilings; highways are proved exactly; every run is classed and stored
-//! in the catalog's `ants` table by a resumable job.
+//! `jetcarp library ants`: the catalog's ant and turmite runs (`jetcarp_core::ants`): list, show,
+//! census, curate, remove, the build-up scene, promotion to the Quick Start, and one rule run by
+//! itself. Ant searches are jobs: `jetcarp search ants`, followed with `jetcarp jobs`.
 
 use anyhow::{Result, bail};
+use jetcarp_api::Ctx;
 use jetcarp_api::args;
-use jetcarp_core::ants::job::{self, AntOptions, AntProgress, AntSpec, Soups, parse_rule};
+use jetcarp_core::ants::job::{self, parse_rule};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
-use jetcarp_core::ants::search::{Strings, Tables};
-use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, JobStatus, Library};
-use std::io::{IsTerminal, Write};
+use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, Library};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Instant;
 
 #[derive(clap::Args)]
 pub struct AntsArgs {
-    /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <data>/catalog.sqlite).
-    #[arg(long, global = true)]
-    library: Option<PathBuf>,
-    /// Print JSON.
-    #[arg(long, global = true)]
-    json: bool,
     #[command(subcommand)]
     cmd: AntsCmd,
 }
 
 #[derive(clap::Subcommand)]
 enum AntsCmd {
-    /// Search turn strings and/or turmite tables on tilings, as a resumable catalog job.
-    Search(Box<SearchArgs>),
-    /// A search job's progress (no JOB: every ant search).
-    Status { job: Option<i64> },
-    /// Ask a running search (in any process) to stop at its next batch.
-    Stop { job: i64 },
     /// Run one rule (no catalog unless --store).
     Run(RunArgs),
     /// Stored runs, best first, with filters.
@@ -81,61 +65,6 @@ enum AntsCmd {
 }
 
 #[derive(clap::Args)]
-pub struct SearchArgs {
-    /// Tilings: family ids, catalog ids, vertex configurations, or sets (archimedean,
-    /// kuniform:2, isohedral, all-periodic).
-    #[arg(long, default_value = "square")]
-    tilings: String,
-    /// Turn string lengths, `2-6` or `4`.
-    #[arg(long)]
-    strings: Option<String>,
-    /// Turmite tables STATESxCOLORS, e.g. `2x2`.
-    #[arg(long)]
-    tables: Option<String>,
-    /// Turn letters to search (default: the tiling's: L R N U on squares, L R N U L2 R2 on
-    /// hexagons, L R N on triangles).
-    #[arg(long)]
-    alphabet: Option<String>,
-    /// Tables: enumerate every table up to this many, else sample --sample of them.
-    #[arg(long, default_value_t = 1_000_000)]
-    all_max: u64,
-    #[arg(long, default_value_t = 10_000)]
-    sample: u64,
-    /// Explicit rules, separated by spaces or semicolons (`RL`, `LLRR`, `RL2N`,
-    /// `1R1,1L0/1R1,0N0`).
-    #[arg(long)]
-    rules: Option<String>,
-    /// Soups per rule (default: an empty field).
-    #[arg(long)]
-    soups: Option<u64>,
-    /// Soup size in unit cells, WxH.
-    #[arg(long, default_value = "8x8")]
-    size: String,
-    #[arg(long, default_value_t = 0.5)]
-    density: f64,
-    #[arg(long, default_value_t = 1)]
-    seed: u64,
-    /// Steps before a run is classed as it is.
-    #[arg(long, default_value_t = 1_000_000)]
-    steps: u64,
-    /// Longest highway or orbit period looked for.
-    #[arg(long, default_value_t = 20_000)]
-    max_period: u64,
-    /// Skip the mirror-symmetry test.
-    #[arg(long)]
-    no_symmetry: bool,
-    /// Worker threads (0: all cores).
-    #[arg(long, default_value_t = 0)]
-    threads: usize,
-    /// Stop after this many runs in this session; the job stays resumable.
-    #[arg(long)]
-    limit: Option<u64>,
-    /// Continue a stopped or interrupted search (its spec is kept; other options ignored).
-    #[arg(long, value_name = "JOB")]
-    resume: Option<i64>,
-}
-
-#[derive(clap::Args)]
 pub struct RunArgs {
     rule: String,
     #[arg(long, default_value = "square")]
@@ -170,62 +99,13 @@ pub struct ListArgs {
     limit: usize,
 }
 
-fn msg<T>(r: Result<T, String>) -> Result<T> {
-    r.map_err(anyhow::Error::msg)
+struct Opts {
+    cmd: AntsCmd,
+    json: bool,
 }
 
-fn show_progress(p: &AntProgress, json: bool) {
-    if json {
-        println!("{}", serde_json::to_string_pretty(p).unwrap());
-        return;
-    }
-    println!("{}", p.line());
-    println!(
-        "  status {}, {:.0} s run, {} ant steps",
-        p.status, p.elapsed_s, p.steps
-    );
-    for g in &p.groups {
-        let outs: Vec<String> = g
-            .by_outcome
-            .iter()
-            .map(|(k, v)| format!("{k} {v}"))
-            .collect();
-        println!(
-            "  {}: {}/{} runs, {}{}{}{}",
-            g.tiling,
-            g.runs,
-            g.rules,
-            outs.join(", "),
-            g.latest_onset
-                .as_ref()
-                .map(|(r, o)| format!("; latest highway {r} from step {o}"))
-                .unwrap_or_default(),
-            g.longest_period
-                .as_ref()
-                .map(|(r, p)| format!("; longest period {r} p{p}"))
-                .unwrap_or_default(),
-            g.error
-                .as_ref()
-                .map(|e| format!(" [error: {e}]"))
-                .unwrap_or_default()
-        );
-    }
-    if !p.newest.is_empty() {
-        println!("  newest:");
-        for f in p.newest.iter().take(10) {
-            println!(
-                "    {}  {:<22} {:<10} {}{}{}",
-                f.id,
-                f.rule,
-                f.tiling,
-                f.outcome.name(),
-                f.period.map(|x| format!(" p{x}")).unwrap_or_default(),
-                f.onset
-                    .map(|x| format!(" from step {x}"))
-                    .unwrap_or_default()
-            );
-        }
-    }
+fn msg<T>(r: Result<T, String>) -> Result<T> {
+    r.map_err(anyhow::Error::msg)
 }
 
 fn show_rows(rows: &[AntRow], json: bool) {
@@ -238,34 +118,10 @@ fn show_rows(rows: &[AntRow], json: bool) {
     }
 }
 
-pub fn run(a: AntsArgs) -> Result<()> {
-    let lib = match &a.library {
-        Some(p) => Library::open(Library::file_for(p.clone())),
-        None => Library::open_default(),
-    };
+pub fn run(cx: &Ctx, a: AntsArgs, json: bool) -> Result<()> {
+    let lib = cx.library();
+    let a = Opts { cmd: a.cmd, json };
     match a.cmd {
-        AntsCmd::Search(s) => search(&lib, *s, a.json),
-        AntsCmd::Status { job: Some(j) } => {
-            let (_, p) = msg(job::status(&lib, j))?;
-            show_progress(&p, a.json);
-            Ok(())
-        }
-        AntsCmd::Status { job: None } => {
-            for j in msg(lib.jobs())?.into_iter().filter(|j| j.kind == job::KIND) {
-                let (_, p) = msg(job::status(&lib, j.id))?;
-                println!("{}", p.line());
-                println!(
-                    "  status {}, created {}, updated {}",
-                    p.status, j.created, j.updated
-                );
-            }
-            Ok(())
-        }
-        AntsCmd::Stop { job: j } => {
-            msg(job::request_stop(&lib, j))?;
-            eprintln!("asked ant search {j} to stop at its next batch");
-            Ok(())
-        }
         AntsCmd::Run(r) => run_one(&lib, r, a.json),
         AntsCmd::List(l) => {
             let q = AntQuery {
@@ -385,13 +241,12 @@ pub fn run(a: AntsArgs) -> Result<()> {
         AntsCmd::Promote { id, palette } => {
             use jetcarp_api::op::{Op, Quiet};
             use jetcarp_api::ops::quickstart::{AddIn, QuickstartAdd};
-            let cx = jetcarp_api::Ctx::new().with_store(lib);
             let add = AddIn {
                 ant: Some(id),
                 palette,
                 ..Default::default()
             };
-            crate::show(&QuickstartAdd::run(&cx, add, &Quiet)?, a.json)
+            crate::show(&QuickstartAdd::run(cx, add, &Quiet)?, a.json)
         }
     }
 }
@@ -434,130 +289,6 @@ fn run_one(lib: &Library, r: RunArgs, json: bool) -> Result<()> {
             row.steps,
             t0.elapsed().as_secs_f64(),
             if r.store { ", stored" } else { "" }
-        );
-    }
-    Ok(())
-}
-
-fn search(lib: &Library, a: SearchArgs, json: bool) -> Result<()> {
-    let jid = match a.resume {
-        Some(j) => {
-            let row = msg(lib.job(j))?;
-            if row.status == JobStatus::Done {
-                bail!("ant search {j} is already done");
-            }
-            j
-        }
-        None => {
-            let strings = match &a.strings {
-                Some(s) => {
-                    let (min, max) = msg(args::count_range(s))?;
-                    Some(Strings {
-                        min,
-                        max,
-                        alphabet: a.alphabet.clone(),
-                    })
-                }
-                None => None,
-            };
-            let tables = match &a.tables {
-                Some(s) => {
-                    let (n, k) = msg(args::size_pair(s))?;
-                    Some(Tables {
-                        states: n as u8,
-                        colors: k as u8,
-                        alphabet: a.alphabet.clone(),
-                        all_max: a.all_max,
-                        sample: a.sample,
-                        seed: a.seed,
-                    })
-                }
-                None => None,
-            };
-            let rules: Vec<String> = a
-                .rules
-                .as_deref()
-                .unwrap_or("")
-                .split([';', ' ', '\t', '\n'])
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .map(String::from)
-                .collect();
-            if strings.is_none() && tables.is_none() && rules.is_empty() {
-                bail!("give --strings 2-6, --tables 2x2, or --rules \"RL LLRR\"");
-            }
-            let soup = match a.soups {
-                None => None,
-                Some(n) => {
-                    let (w, h) = msg(args::size_pair(&a.size))?;
-                    Some(Soups {
-                        w,
-                        h,
-                        density: a.density,
-                        soups: n,
-                        seed: a.seed,
-                    })
-                }
-            };
-            let spec = AntSpec {
-                tilings: msg(library::tiling_list(&a.tilings))?,
-                rules,
-                strings,
-                tables,
-                soup,
-                steps: a.steps,
-                max_period: a.max_period,
-                symmetry: !a.no_symmetry,
-            };
-            msg(job::start(lib, &spec))?
-        }
-    };
-    eprintln!("ant search job {jid} in {}", lib.path().display());
-    let stop = Arc::new(AtomicBool::new(false));
-    let presses = Arc::new(AtomicU32::new(0));
-    {
-        let (stop, presses) = (stop.clone(), presses.clone());
-        let _ = ctrlc::set_handler(move || {
-            if presses.fetch_add(1, Ordering::SeqCst) == 0 {
-                stop.store(true, Ordering::SeqCst);
-                eprintln!(
-                    "\nCtrl-C: stopping at the next batch (again to quit now; `jetcarp ants search --resume {jid}` continues)"
-                );
-            } else {
-                std::process::exit(130);
-            }
-        });
-    }
-    let tty = std::io::stderr().is_terminal();
-    let last = std::sync::Mutex::new(Instant::now());
-    let on_progress = Arc::new(move |p: &AntProgress| {
-        if tty {
-            eprint!("\r\x1b[2K{}", p.line());
-            let _ = std::io::stderr().flush();
-        } else {
-            let mut l = last.lock().unwrap();
-            if l.elapsed().as_secs_f64() >= 5.0 || p.status != "running" {
-                eprintln!("{}", p.line());
-                *l = Instant::now();
-            }
-        }
-    });
-    let opts = AntOptions {
-        threads: a.threads,
-        stop,
-        limit: a.limit,
-        on_progress: Some(on_progress),
-        ..Default::default()
-    };
-    let p = msg(jetcarp_core::jobs::ants::run(lib, jid, opts))?;
-    if tty {
-        eprintln!();
-    }
-    show_progress(&p, json);
-    if p.status == "paused" {
-        eprintln!(
-            "ant search {jid} paused at run {}; `jetcarp ants search --resume {jid}` continues",
-            p.runs_done
         );
     }
     Ok(())

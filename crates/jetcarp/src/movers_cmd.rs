@@ -1,22 +1,19 @@
-//! `jetcarp movers`: follow a pattern across growing aperiodic patches and report how far it was
-//! verified (`jetcarp_core::library::movers`); store verified movers in the pattern library.
+//! `jetcarp library movers`: follow a pattern across growing aperiodic patches and report how far
+//! it was verified (`jetcarp_core::library::movers`), track a library mover again, and list the
+//! movers. Following one far on a sliding window is a job: `jetcarp search mover`.
 
-use crate::evolve_cmd::parse_nb;
 use anyhow::{Result, anyhow, bail};
-use jetcarp_core::library::movers::{MoverReport, TrackSpec, mover_record, retrack, track};
+use jetcarp_api::Ctx;
+use jetcarp_api::args;
+use jetcarp_core::library::movers::{TrackSpec, mover_record, retrack, track};
 use jetcarp_core::library::{
     DiscoveredBy, Library, PatternClass, Provenance, Query, now_utc, sort_records,
 };
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec};
-use jetcarp_core::window::track::{Tracker, WindowOpts};
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct MoversArgs {
-    /// Catalog: a .sqlite file or a folder (default: $JETCARP_LIBRARY, else
-    /// <data>/catalog.sqlite).
-    #[arg(long, global = true)]
-    library: Option<PathBuf>,
     #[command(subcommand)]
     cmd: MoversCmd,
 }
@@ -36,8 +33,6 @@ enum MoversCmd {
         #[arg(long)]
         json: bool,
     },
-    /// Continue a stopped sliding-window run (a catalog job of kind `mover`).
-    Resume { job: i64 },
 }
 
 #[derive(clap::Args)]
@@ -67,8 +62,7 @@ struct TrackArgs {
     /// The tile for --states.
     #[arg(long)]
     at: Option<u32>,
-    /// Generation limit over all levels (default 20000; with --window --rings, 100 per ring
-    /// more).
+    /// Generation limit over all levels (default 20000).
     #[arg(long)]
     gens: Option<u64>,
     /// Stop as grown above this many live cells.
@@ -80,33 +74,20 @@ struct TrackArgs {
     /// Write the full report as JSON.
     #[arg(long)]
     json_out: Option<PathBuf>,
-    /// Follow the pattern on a sliding window (supertiles generated around it) instead of fixed
-    /// patch levels, as far as --rings or --gens allow.
-    #[arg(long)]
-    window: bool,
-    /// With --window: stop, verified, at this many edge rings.
-    #[arg(long)]
-    rings: Option<u32>,
-    /// With --window: world units of tiles kept around the live cells.
-    #[arg(long, default_value_t = 24.0)]
-    margin: f64,
-    /// With --window (Spectre): follow the fixed patches' Delta chain up to this level.
-    #[arg(long, default_value_t = 8)]
-    fixed_levels: u32,
-    /// With --window: run as a resumable catalog job (kind `mover`; `jetcarp movers resume JOB`).
-    #[arg(long)]
-    job: bool,
 }
 
-fn open_lib(p: &Option<PathBuf>) -> Library {
-    match p {
-        Some(p) => Library::open(p),
-        None => Library::open_default(),
-    }
+/// `--nb`: touch or edge.
+fn parse_nb(s: &str) -> Result<Nb> {
+    args::nb_word(s).ok_or_else(|| {
+        anyhow!(
+            "neighbourhood '{}' is not touch or edge",
+            s.trim().to_ascii_lowercase()
+        )
+    })
 }
 
-pub fn run(a: MoversArgs) -> Result<()> {
-    let lib = open_lib(&a.library);
+pub fn run(cx: &Ctx, a: MoversArgs, json: bool) -> Result<()> {
+    let lib = cx.library();
     match a.cmd {
         MoversCmd::Track(t) => track_cmd(*t, &lib),
         MoversCmd::Verify { id, gens } => {
@@ -126,7 +107,8 @@ pub fn run(a: MoversArgs) -> Result<()> {
             }
             Ok(())
         }
-        MoversCmd::List { json } => {
+        MoversCmd::List { json: j } => {
+            let json = json || j;
             let mut v = lib
                 .query(&Query {
                     class: Some(PatternClass::Mover),
@@ -155,81 +137,11 @@ pub fn run(a: MoversArgs) -> Result<()> {
             println!("{} movers", v.len());
             Ok(())
         }
-        MoversCmd::Resume { job } => run_mover_job(&lib, job),
     }
 }
 
 fn gens_limit(a: &TrackArgs) -> u64 {
-    a.gens.unwrap_or(match (a.window, a.rings) {
-        (true, Some(r)) => r as u64 * 100 + 20_000,
-        _ => 20_000,
-    })
-}
-
-fn window_opts(a: &TrackArgs) -> WindowOpts {
-    WindowOpts {
-        margin: a.margin,
-        fixed_levels: a.fixed_levels,
-        target_rings: a.rings,
-    }
-}
-
-/// Does the start look like a mover on a window (it travels for a few hundred generations)?
-fn window_start_moves(spec: &TrackSpec, opts: &WindowOpts) -> bool {
-    let mut s = spec.clone();
-    s.max_gens = s.max_gens.min(600);
-    let Ok(mut t) = Tracker::new(&s, opts) else {
-        return false;
-    };
-    match t.run(None, None) {
-        Ok(Some(st)) => st.verifies() && t.rings() >= 2,
-        _ => false,
-    }
-}
-
-/// Follow a pattern on a sliding window in this process, printing progress.
-fn run_window(spec: &TrackSpec, opts: &WindowOpts) -> Result<MoverReport> {
-    let mut t = Tracker::new(spec, opts).map_err(|e| anyhow!(e))?;
-    let start = std::time::Instant::now();
-    loop {
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        let done = t.run(Some(until), None).map_err(|e| anyhow!(e))?;
-        let secs = start.elapsed().as_secs_f64().max(1e-9);
-        eprintln!(
-            "  generation {}: {} rings, level {}, {} tiles, {:.0} gens/s, {:.0} rings/s",
-            t.generation(),
-            t.rings(),
-            t.level(),
-            t.window().len(),
-            t.generation() as f64 / secs,
-            t.rings() as f64 / secs
-        );
-        if done.is_some() {
-            return Ok(t.report());
-        }
-    }
-}
-
-fn run_mover_job(lib: &Library, job: i64) -> Result<()> {
-    use jetcarp_core::jobs::{RunOptions, Runner};
-    use jetcarp_core::window::job::MoverProgress;
-    println!("mover job {job} in {}", lib.path().display());
-    let h = Runner::new(lib.clone())
-        .spawn(job, RunOptions::default())
-        .map_err(|e| anyhow!(e))?;
-    while !h.is_finished() {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        eprintln!("  {}", h.progress_as::<MoverProgress>().line());
-    }
-    let p: MoverProgress = h.wait().map_err(|e| anyhow!(e))?.progress_as();
-    println!("{}", p.line());
-    if let Some(r) = &p.record {
-        println!("library: {r}");
-    }
-    if let Some(e) = &p.error {
-        println!("error: {e}");
-    }
-    Ok(())
+    a.gens.unwrap_or(20_000)
 }
 
 fn print_levels(rep: &jetcarp_core::library::movers::MoverReport) {
@@ -317,40 +229,7 @@ fn track_cmd(a: TrackArgs, lib: &Library) -> Result<()> {
         v
     };
     let mut last = None;
-    if a.window {
-        let opts = window_opts(&a);
-        let pick = starts.iter().find(|cells| {
-            let spec = TrackSpec::new(&a.rule, nb, patch.clone(), (*cells).clone());
-            starts.len() == 1 || window_start_moves(&spec, &opts)
-        });
-        let cells = pick
-            .ok_or_else(|| anyhow!("no start travels on a window"))?
-            .clone();
-        let mut spec = TrackSpec::new(&a.rule, nb, patch.clone(), cells);
-        spec.max_gens = gens_limit(&a);
-        spec.max_pop = a.max_pop;
-        println!(
-            "start: {}",
-            spec.cells
-                .iter()
-                .map(|(c, s)| format!("{c}:{s}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        if a.job {
-            let js = jetcarp_core::window::job::MoverJobSpec {
-                track: spec,
-                window: opts,
-                store: a.store,
-                source: "jetcarp movers track --window --job".into(),
-            };
-            let job = jetcarp_core::window::job::start(lib, &js).map_err(|e| anyhow!(e))?;
-            return run_mover_job(lib, job);
-        }
-        let rep = run_window(&spec, &opts)?;
-        last = Some((spec, rep));
-    }
-    for cells in if a.window { vec![] } else { starts } {
+    for cells in starts {
         let mut spec = TrackSpec::new(&a.rule, nb, patch.clone(), cells);
         spec.max_level = a.max_level;
         spec.max_gens = gens_limit(&a);
@@ -369,16 +248,14 @@ fn track_cmd(a: TrackArgs, lib: &Library) -> Result<()> {
         }
     }
     let (spec, rep) = last.ok_or_else(|| anyhow!("no start could be tracked"))?;
-    if !a.window {
-        println!(
-            "start: {}",
-            spec.cells
-                .iter()
-                .map(|(c, s)| format!("{c}:{s}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-    }
+    println!(
+        "start: {}",
+        spec.cells
+            .iter()
+            .map(|(c, s)| format!("{c}:{s}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
     println!("{}", rep.summary);
     print_levels(&rep);
     println!("{}", rep.note);
@@ -388,7 +265,7 @@ fn track_cmd(a: TrackArgs, lib: &Library) -> Result<()> {
     }
     if a.store && rep.verified {
         let prov = Provenance {
-            source: "jetcarp movers track".into(),
+            source: "jetcarp library movers track".into(),
             tiling: Some(patch.clone()),
             jetcarp_version: jetcarp_core::VERSION.into(),
             date: now_utc(),

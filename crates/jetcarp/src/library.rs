@@ -1,10 +1,10 @@
-//! `jetcarp library`: the pattern catalog (list, show, search, collide, paste, promote, render,
-//! update, export, import, remove, quickstart, jobs, info). The work is in `jetcarp_core::library`.
+//! `jetcarp library`: the pattern catalog (list, show, paste, promote, render, update, export,
+//! import, remove, quickstart, info, verify, prune) and its ant runs (`library ants`) and movers
+//! (`library movers`). Searches that add to it are jobs: `jetcarp search`, `jetcarp jobs`.
 
 use crate::show;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use jetcarp_api::Ctx;
-use jetcarp_api::args;
 use jetcarp_api::op::{self, NoInput, Op, Quiet};
 use jetcarp_api::ops::library::{
     ExportIn, GetIn, ImportIn, LibraryExport, LibraryGet, LibraryImport, LibraryInfoOp,
@@ -15,11 +15,6 @@ use jetcarp_api::ops::quickstart::{
     AddIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
     StatusIn,
 };
-use jetcarp_core::library::collide::{CollideSpec, collide};
-use jetcarp_core::library::search::{SearchSpec, search};
-use jetcarp_core::library::{self, AddOutcome, JobStatus, Library, PatternClass};
-use jetcarp_core::render::write_png;
-use jetcarp_core::*;
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
@@ -46,10 +41,6 @@ enum LibCmd {
         #[arg(long, default_value_t = 1)]
         phases: u64,
     },
-    /// Run soups, catalog every verified still life, oscillator, and spaceship.
-    Search(Box<SearchArgs>),
-    /// Collide pattern B into pattern A at every offset and phase in a range.
-    Collide(Box<CollideArgs>),
     /// Make a scene from several library patterns placed on one grid.
     Paste(PasteArgs),
     /// Add a Quick Start entry for a pattern ("My finds") and mark it promoted.
@@ -108,11 +99,12 @@ enum LibCmd {
     Remove { id: String },
     /// List the Quick Start entries ("My finds"), or change or remove one.
     Quickstart(QuickstartArgs),
-    /// List search jobs.
-    Jobs {
-        #[arg(long)]
-        json: bool,
-    },
+    /// The catalog's ant and turmite runs: `list`, `show`, `census`, `update`, `remove`,
+    /// `scene`, `promote`, and `run` (one rule by itself).
+    Ants(crate::ants_cmd::AntsArgs),
+    /// Movers on aperiodic tilings: `track` (over growing patch levels), `verify` (a library
+    /// mover again), `list`.
+    Movers(crate::movers_cmd::MoversArgs),
     /// The catalog's file, schema version, and row counts.
     Info {
         #[arg(long)]
@@ -215,107 +207,6 @@ struct ListArgs {
 }
 
 #[derive(clap::Args)]
-struct SearchArgs {
-    /// Rules separated by spaces or semicolons ("B3/S23 B36/S23").
-    #[arg(long, alias = "rule")]
-    rules: Option<String>,
-    /// File with one rule per line (# comments).
-    #[arg(long)]
-    rules_file: Option<PathBuf>,
-    /// Tilings: family ids, catalog:<id>, or the sets all-periodic, archimedean, kuniform:<k>,
-    /// isohedral; comma separated.
-    #[arg(long, alias = "tiling", default_value = "square")]
-    tilings: String,
-    /// WxH unit cells (64x64), about N cells (4000), or L<level> for aperiodic patches.
-    #[arg(long, default_value = "64x64")]
-    size: String,
-    /// wrap or dead.
-    #[arg(long, default_value = "wrap")]
-    boundary: String,
-    /// Neighbourhood for every rule: touch or edge (default: per rule; V suffix = edge).
-    #[arg(long)]
-    nb: Option<String>,
-    #[arg(long, default_value_t = 16)]
-    soups: u32,
-    #[arg(long, default_value_t = 0.37)]
-    density: f64,
-    #[arg(long, default_value_t = 2000)]
-    gens: u64,
-    #[arg(long, default_value_t = 1)]
-    seed: u64,
-    #[arg(long, default_value_t = 64)]
-    max_period: u64,
-    /// Soup only a disc at the centre: radius as a fraction of half the shorter side (e.g. 0.15).
-    /// With --boundary dead, escaping spaceships are caught at the edge and cataloged.
-    #[arg(long)]
-    soup_radius: Option<f64>,
-    /// Write the full report as JSON.
-    #[arg(long)]
-    json_out: Option<PathBuf>,
-    /// Report only; do not add to the library.
-    #[arg(long)]
-    no_store: bool,
-    /// Worker threads (results do not depend on this).
-    #[arg(long)]
-    threads: Option<usize>,
-    #[arg(long)]
-    quiet: bool,
-    /// Rows per group in the printed report.
-    #[arg(long, default_value_t = 12)]
-    top: usize,
-}
-
-#[derive(clap::Args)]
-struct CollideArgs {
-    /// Pattern A (stays at the origin).
-    a: String,
-    /// Pattern B (placed at each offset).
-    b: String,
-    /// Offset range for both axes, like -6..6 (overridden by --dx/--dy).
-    #[arg(long, default_value = "-6..6", allow_hyphen_values = true)]
-    offsets: String,
-    #[arg(long, allow_hyphen_values = true)]
-    dx: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
-    dy: Option<String>,
-    /// B's phases: all, or a list like 0,1.
-    #[arg(long, default_value = "all")]
-    phases: String,
-    #[arg(long, default_value_t = 0)]
-    orientation_a: u32,
-    /// B's orientation (index into the tiling's symmetries; `jetcarp library show` lists the
-    /// direction each one moves a spaceship).
-    #[arg(long, default_value_t = 0)]
-    orientation_b: u32,
-    #[arg(long, default_value_t = 1024)]
-    gens: u64,
-    #[arg(long, default_value_t = 40)]
-    margin: i32,
-    /// Rule to run (both patterns must work in it; default: A's rule if B works in it, else
-    /// B's).
-    #[arg(long)]
-    rule: Option<String>,
-    #[arg(long)]
-    csv: Option<PathBuf>,
-    #[arg(long)]
-    json_out: Option<PathBuf>,
-    /// Labelled contact sheet of every run's final state, objects coloured by class.
-    #[arg(long)]
-    sheet: Option<PathBuf>,
-    #[arg(long, default_value_t = 96)]
-    thumb: u32,
-    #[arg(long, default_value_t = 13)]
-    cols: u32,
-    /// Do not catalog the products.
-    #[arg(long)]
-    no_store: bool,
-    #[arg(long)]
-    threads: Option<usize>,
-    #[arg(long)]
-    quiet: bool,
-}
-
-#[derive(clap::Args)]
 struct PasteArgs {
     /// Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), or `ID` alone for the centre.
     #[arg(required = true)]
@@ -367,28 +258,6 @@ struct UpdateArgs {
     json: bool,
 }
 
-fn msg<T>(r: Result<T, String>) -> Result<T> {
-    r.map_err(anyhow::Error::msg)
-}
-
-fn set_threads(t: Option<usize>) -> Result<()> {
-    if let Some(t) = t {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(t)
-            .build_global()
-            .context("thread pool")?;
-    }
-    Ok(())
-}
-
-/// `--boundary` for searches: wrap or dead (no live edges).
-fn parse_boundary(s: &str) -> Result<Boundary> {
-    match args::parse_boundary(s) {
-        Ok(b @ (Boundary::Wrap | Boundary::Dead)) => Ok(b),
-        _ => bail!("--boundary is wrap or dead"),
-    }
-}
-
 fn path(p: &std::path::Path) -> String {
     p.display().to_string()
 }
@@ -421,8 +290,6 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
             }
             show(&v, false)
         }
-        LibCmd::Search(s) => search_cmd(&cx.library(), *s),
-        LibCmd::Collide(c) => collide_cmd(&cx.library(), *c),
         LibCmd::Paste(p) => {
             let a = PasteSceneIn {
                 placements: p.placements,
@@ -499,37 +366,8 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
             show(&LibraryRemove::run(&cx, a, &Quiet)?, json)
         }
         LibCmd::Quickstart(q) => quickstart_cmd(&cx, q, json),
-        LibCmd::Jobs { json: j } => {
-            let lib = cx.library();
-            let v = msg(lib.jobs())?;
-            if json || j {
-                println!("{}", serde_json::to_string_pretty(&v)?);
-                return Ok(());
-            }
-            for j in &v {
-                println!(
-                    "{:>5}  {:<8} {:<8} {}  {}{}",
-                    j.id,
-                    j.kind,
-                    format!("{:?}", j.status).to_lowercase(),
-                    j.created,
-                    j.progress,
-                    if j.has_checkpoint {
-                        "  (checkpoint)"
-                    } else {
-                        ""
-                    }
-                );
-            }
-            println!(
-                "{} job(s); {} running",
-                v.len(),
-                v.iter()
-                    .filter(|j| j.id != 0 && j.status == JobStatus::Running)
-                    .count()
-            );
-            Ok(())
-        }
+        LibCmd::Ants(a) => crate::ants_cmd::run(&cx, a, json),
+        LibCmd::Movers(a) => crate::movers_cmd::run(&cx, a, json),
         LibCmd::Verify {
             all,
             sample,
@@ -629,342 +467,6 @@ fn list(cx: &Ctx, l: ListArgs, json: bool) -> Result<()> {
         return Ok(());
     }
     show(&v, false)
-}
-
-fn search_cmd(lib: &Library, a: SearchArgs) -> Result<()> {
-    set_threads(a.threads)?;
-    let mut rules = Vec::new();
-    if let Some(r) = &a.rules {
-        rules.extend(
-            r.split([';', ' ', '\t', '\n'])
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .map(String::from),
-        );
-    }
-    if let Some(p) = &a.rules_file {
-        let text =
-            std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
-        rules.extend(census::parse_rule_list(&text));
-    }
-    if rules.is_empty() {
-        bail!("no rules: use --rules or --rules-file");
-    }
-    let spec = SearchSpec {
-        rules,
-        tilings: msg(library::tiling_list(&a.tilings))?,
-        size: msg(args::size_spec(&a.size))?,
-        boundary: parse_boundary(&a.boundary)?,
-        neighborhood: match a.nb.as_deref() {
-            None => None,
-            Some(x) => match args::nb_word(x) {
-                Some(nb) => Some(nb),
-                None => bail!("--nb is touch or edge, not {x}"),
-            },
-        },
-        soups: a.soups,
-        density: a.density,
-        gens: a.gens,
-        seed: a.seed,
-        max_period: a.max_period,
-        explode_fraction: 0.5,
-        soup_radius: a.soup_radius,
-    };
-    let t0 = std::time::Instant::now();
-    let quiet = a.quiet;
-    let progress = move |d: usize, n: usize| {
-        if !quiet && (d.is_multiple_of((n / 100).max(1)) || d == n) {
-            eprint!("\r{d}/{n} soups");
-            if d == n {
-                eprintln!();
-            }
-        }
-    };
-    let mut out = msg(search(&spec, Some(&progress)))?;
-    let secs = t0.elapsed().as_secs_f64();
-    let mut stored = None;
-    if !a.no_store {
-        let st = msg(lib.store_search(&out))?;
-        if let Some((id, e)) = st.failed.first() {
-            bail!("storing {id}: {e}");
-        }
-        for g in &mut out.report.groups {
-            for f in &mut g.found {
-                f.new = st.added.contains(&f.id);
-            }
-        }
-        stored = Some(st);
-    }
-    if let Some(p) = &a.json_out {
-        std::fs::write(p, serde_json::to_string_pretty(&out.report)?)
-            .with_context(|| format!("writing {}", p.display()))?;
-    }
-    let r = &out.report;
-    println!(
-        "search: {} rule(s) x {} tiling(s) x {} soups, {:?} {:?}, density {}, up to {} generations, seeds {}..{}",
-        spec.rules.len(),
-        spec.tilings.len(),
-        spec.soups,
-        spec.size,
-        spec.boundary,
-        spec.density,
-        spec.gens,
-        spec.seed,
-        spec.seed + spec.soups as u64 - 1
-    );
-    let mut ships = Vec::new();
-    for g in &r.groups {
-        println!("\n== {} on {}", g.rule, g.tiling);
-        if let Some(e) = &g.error {
-            println!("   error: {e}");
-            continue;
-        }
-        println!(
-            "   soups: {} settled, {} still active, {} exploded; objects: {}",
-            g.settled,
-            g.active,
-            g.exploded,
-            g.objects
-                .iter()
-                .map(|(k, v)| format!("{k} {v}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        let (mut sl, mut osc, mut sh) = (0, 0, 0);
-        for f in &g.found {
-            match f.class {
-                PatternClass::StillLife => sl += 1,
-                PatternClass::Oscillator => osc += 1,
-                PatternClass::Spaceship => sh += 1,
-                _ => {}
-            }
-        }
-        println!(
-            "   distinct: {} still lifes, {} oscillators, {} spaceships",
-            sl, osc, sh
-        );
-        for f in g.found.iter().take(a.top) {
-            println!(
-                "   {:>6} x  {:<36} {:<11} p{:<3} {:>3}c  {}{}{}",
-                f.count,
-                f.label,
-                f.class.name(),
-                f.period,
-                f.cells,
-                &f.id[..8],
-                if f.new { "  NEW" } else { "" },
-                f.error
-                    .as_deref()
-                    .map(|e| format!("  UNVERIFIED: {e}"))
-                    .unwrap_or_default()
-            );
-        }
-        if g.found.len() > a.top {
-            println!("   ... {} more", g.found.len() - a.top);
-        }
-        for f in g
-            .found
-            .iter()
-            .filter(|f| f.class == PatternClass::Spaceship)
-        {
-            ships.push(format!(
-                "{} on {}: {} ({}, {} cells, seen {}){}",
-                g.rule,
-                g.tiling,
-                f.id,
-                f.speed.as_deref().unwrap_or("?"),
-                f.cells,
-                f.count,
-                if f.new { ", new" } else { "" }
-            ));
-        }
-    }
-    println!(
-        "\nspaceships: {}",
-        if ships.is_empty() {
-            "none".into()
-        } else {
-            ships.len().to_string()
-        }
-    );
-    for s in &ships {
-        println!("  {s}");
-    }
-    if let Some(st) = &stored {
-        println!(
-            "catalog: {} new pattern(s), {} already known ({} of them now verified in another rule); job {} in {}",
-            st.added.len(),
-            st.merged.len(),
-            st.new_rules.len(),
-            st.job,
-            lib.path().display()
-        );
-    }
-    println!(
-        "time: {secs:.1}s on {} threads",
-        rayon::current_num_threads()
-    );
-    if let Some(p) = &a.json_out {
-        println!("json: {}", p.display());
-    }
-    Ok(())
-}
-
-fn collide_cmd(lib: &Library, c: CollideArgs) -> Result<()> {
-    set_threads(c.threads)?;
-    let a = msg(lib.get(&c.a))?;
-    let b = msg(lib.get(&c.b))?;
-    let both = msg(args::offset_range(&c.offsets))?;
-    let phases = if c.phases.eq_ignore_ascii_case("all") {
-        vec![]
-    } else {
-        c.phases
-            .split(',')
-            .map(|x| x.trim().parse::<u32>())
-            .collect::<Result<_, _>>()
-            .context("--phases")?
-    };
-    let spec = CollideSpec {
-        dx: c
-            .dx
-            .as_deref()
-            .map(|r| msg(args::offset_range(r)))
-            .transpose()?
-            .unwrap_or(both),
-        dy: c
-            .dy
-            .as_deref()
-            .map(|r| msg(args::offset_range(r)))
-            .transpose()?
-            .unwrap_or(both),
-        phases,
-        orientation_a: c.orientation_a,
-        orientation_b: c.orientation_b,
-        gens: c.gens,
-        margin: c.margin,
-        rule: c.rule.clone(),
-        ..Default::default()
-    };
-    let quiet = c.quiet;
-    let progress = move |d: usize, n: usize| {
-        if !quiet && (d.is_multiple_of((n / 100).max(1)) || d == n) {
-            eprint!("\r{d}/{n} placements");
-            if d == n {
-                eprintln!();
-            }
-        }
-    };
-    let t0 = std::time::Instant::now();
-    let thumb = if c.sheet.is_some() { c.thumb } else { 0 };
-    let out = msg(collide(&a, &b, &spec, thumb, Some(&progress)))?;
-    let r = &out.report;
-    println!(
-        "collide: A = {} ({}), B = {} ({})",
-        r.a_label, r.a, r.b_label, r.b
-    );
-    println!(
-        "rule {} on {}; B offsets dx {:?} dy {:?}, phases {:?}",
-        r.rule,
-        r.tiling,
-        spec.dx,
-        spec.dy,
-        if spec.phases.is_empty() {
-            "all".to_string()
-        } else {
-            format!("{:?}", spec.phases)
-        }
-    );
-    println!(
-        "outcomes: {}",
-        r.counts
-            .iter()
-            .map(|(k, v)| format!("{k} {v}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    let mut new_ids = Vec::new();
-    if !c.no_store && !out.records.is_empty() {
-        let job = msg(lib.create_job("collide", &serde_json::to_value(&r.spec)?))?;
-        let res = msg(lib.add_many(out.records.clone(), Some(job)))?;
-        for (rec, o) in out.records.iter().zip(res) {
-            if msg(o)? == AddOutcome::Added {
-                new_ids.push(rec.id.clone());
-            }
-        }
-        msg(lib.update_job(job, Some(JobStatus::Done), None, None))?;
-    }
-    println!(
-        "products: {} distinct verified object(s){}",
-        out.records.len(),
-        if c.no_store {
-            String::new()
-        } else {
-            format!(", {} new to the library", new_ids.len())
-        }
-    );
-    for rec in &out.records {
-        println!(
-            "  {}  {} (from {} run(s)){}",
-            rec.id,
-            rec.label(),
-            rec.seen,
-            if new_ids.contains(&rec.id) {
-                "  NEW"
-            } else {
-                ""
-            }
-        );
-    }
-    if let Some(p) = &c.csv {
-        let mut s = String::from("dx,dy,phase,outcome,gens,result,products\n");
-        for x in &r.runs {
-            s.push_str(&format!(
-                "{},{},{},{},{},\"{}\",{}\n",
-                x.dx,
-                x.dy,
-                x.phase,
-                x.outcome.name(),
-                x.gens,
-                x.result.replace('"', "'"),
-                x.products.join(" ")
-            ));
-        }
-        std::fs::write(p, s).with_context(|| format!("writing {}", p.display()))?;
-        println!("csv:   {}", p.display());
-    }
-    if let Some(p) = &c.json_out {
-        std::fs::write(p, serde_json::to_string_pretty(r)?)
-            .with_context(|| format!("writing {}", p.display()))?;
-        println!("json:  {}", p.display());
-    }
-    if let Some(p) = &c.sheet {
-        let items: Vec<(sheet::Label, &render::Image)> = out
-            .thumbs
-            .iter()
-            .map(|(l, o, img)| {
-                (
-                    vec![
-                        (l.clone(), [0xd0, 0xd4, 0xdc, 0xff]),
-                        (o.name().to_string(), o.color()),
-                    ],
-                    img,
-                )
-            })
-            .collect();
-        let img = sheet::labelled_sheet(&items, c.cols);
-        let meta = vec![
-            ("jetcarp:version", VERSION.to_string()),
-            ("jetcarp:collide", serde_json::to_string(&r.spec)?),
-        ];
-        msg(write_png(p, &img, &meta))?;
-        println!("sheet: {} ({} runs)", p.display(), items.len());
-    }
-    println!(
-        "time: {:.1}s on {} threads",
-        t0.elapsed().as_secs_f64(),
-        rayon::current_num_threads()
-    );
-    Ok(())
 }
 
 fn update_cmd(cx: &Ctx, u: UpdateArgs, json: bool) -> Result<()> {
