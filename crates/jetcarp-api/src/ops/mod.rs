@@ -12,15 +12,17 @@
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
 //! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
-//!
-//! The search and job operations follow (refactor step 5).
+//! | [`search`] | `search.start` |
+//! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 
 pub mod files;
+pub mod jobs;
 pub mod library;
 pub mod media;
 pub mod quickstart;
 pub mod reference;
 pub mod scene;
+pub mod search;
 pub mod sheet;
 pub mod system;
 pub mod wallpaper;
@@ -79,4 +81,11 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<sheet::SheetRules>::NEW,
     &Plain::<sheet::SheetSweep>::NEW,
     &Plain::<sheet::SheetIsohedral>::NEW,
+    &Plain::<search::SearchStart>::NEW,
+    &Plain::<jobs::JobsList>::NEW,
+    &Plain::<jobs::JobsStatus>::NEW,
+    &Plain::<jobs::JobsStop>::NEW,
+    &Plain::<jobs::JobsResume>::NEW,
+    &Plain::<jobs::JobsRemove>::NEW,
+    &Plain::<jobs::JobsReport>::NEW,
 ];

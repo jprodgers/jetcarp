@@ -43,6 +43,9 @@ pub trait Progress: Sync {
     fn cancelled(&self) -> bool {
         false
     }
+    /// A line for the person watching, apart from the progress (`hunt job 3 in ...`, `GPU:
+    /// ...`): the command line prints it on its own line.
+    fn log(&self, _line: &str) {}
 }
 
 /// No progress reports, never cancelled.

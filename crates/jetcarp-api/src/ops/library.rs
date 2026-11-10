@@ -6,7 +6,7 @@
 //!
 //! Records are patterns (verified still lifes, oscillators, spaceships, guns, movers) and ant
 //! runs (ids `ant-...`). The catalog is the context's ([`Ctx::library`]). Searches that add to it
-//! are jobs (step 5 of the refactor); Quick Start entries are [`super::quickstart`].
+//! are jobs ([`super::search`]); Quick Start entries are [`super::quickstart`].
 
 use crate::args;
 use crate::ctx::Ctx;

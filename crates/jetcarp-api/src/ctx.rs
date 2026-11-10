@@ -1,12 +1,15 @@
 //! What an operation runs with: [`Ctx`] holds the folders, the limits of the front end that
-//! started it, the file-system policy, the pattern catalog (opened once, on first use), and what
-//! the program knows about the machine ([`Platform`]: graphics adapters, the GPU simulator,
-//! desktop integration). The job registry joins it in step 5 of the refactor.
+//! started it, the file-system policy, the pattern catalog (opened once, on first use), the jobs
+//! running in this process ([`Registry`]), and what the program knows about the machine
+//! ([`Platform`]: graphics adapters, the GPU simulator and soup hunter, desktop integration, and
+//! how to start a job in a process of its own).
 
 use crate::error::ApiError;
 use crate::out::{self, Guard};
 use crate::world::Session;
 use jetcarp_core::World;
+use jetcarp_core::hunt::job::SoupBatcher;
+use jetcarp_core::jobs::Registry;
 use jetcarp_core::library::Library;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -218,6 +221,16 @@ pub trait Platform: Send + Sync {
     fn undo_steps(&self) -> Vec<UndoStep> {
         Vec::new()
     }
+    /// GPU soup batches for hunts (`jetcarp_gpu::hunt::GpuHunter`).
+    fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
+        Err("this program was built without the GPU soup hunter".into())
+    }
+    /// Run (or resume) job `job` of `catalog` in a new process of its own that outlives this one
+    /// (`jetcarp jobs resume JOB`), with these extra arguments (`--threads 4`, `--gpu`,
+    /// `--minutes 30`).
+    fn spawn_job(&self, _catalog: &Path, _job: i64, _args: &[String]) -> Result<(), String> {
+        Err("this program cannot start a job in a process of its own".into())
+    }
 }
 
 /// No GPU, no desktop integration.
@@ -252,6 +265,9 @@ pub struct Ctx {
     store: OnceLock<Library>,
     /// The world that world operations act on when the caller has none (`call_json`).
     session: Mutex<Option<Session>>,
+    /// The jobs running in this process (default: the process's own registry, which the app's
+    /// dashboard and the MCP server share).
+    registry: &'static Registry,
 }
 
 impl Default for Ctx {
@@ -271,6 +287,7 @@ impl Ctx {
             library: None,
             store: OnceLock::new(),
             session: Mutex::new(None),
+            registry: jetcarp_core::jobs::registry(),
         }
     }
 
@@ -311,6 +328,17 @@ impl Ctx {
     pub fn with_out_root(mut self, root: Option<PathBuf>) -> Ctx {
         self.out_root = root;
         self
+    }
+    /// Keep the jobs this context runs in the background in this registry instead of the
+    /// process's own.
+    pub fn with_registry(mut self, r: &'static Registry) -> Ctx {
+        self.registry = r;
+        self
+    }
+
+    /// The jobs running in this process.
+    pub fn registry(&self) -> &'static Registry {
+        self.registry
     }
 
     /// The folders, as they are now.

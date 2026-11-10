@@ -12,7 +12,7 @@ use serde_json::{Map, Value, json};
 #[test]
 fn every_operation_is_named_once_and_found_by_name() {
     let mut names: Vec<&str> = OPS.iter().map(|o| o.name()).collect();
-    assert!(names.len() >= 49, "{names:?}");
+    assert!(names.len() >= 56, "{names:?}");
     for o in OPS {
         let n = o.name();
         let (group, rest) = n.split_once('.').expect(n);
@@ -28,7 +28,9 @@ fn every_operation_is_named_once_and_found_by_name() {
                 "media",
                 "site",
                 "wallpaper",
-                "sheet"
+                "sheet",
+                "search",
+                "jobs"
             ]
             .contains(&group),
             "{n}"
@@ -70,6 +72,11 @@ fn every_operation_is_named_once_and_found_by_name() {
         ("media.render", false),
         ("site.export", false),
         ("wallpaper.export", false),
+        ("search.start", false),
+        ("jobs.list", true),
+        ("jobs.status", true),
+        ("jobs.stop", false),
+        ("jobs.report", true),
     ] {
         assert_eq!(find(n).unwrap().read_only(), ro, "{n}");
     }
