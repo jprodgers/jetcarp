@@ -5,7 +5,7 @@
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`.
 
-use crate::host::Host;
+use jetcarp_api::world::Host;
 use crate::tools::{
     Res, ToolOutput, boolean, ca_index, check_unknown, int, short_status, string, tool,
 };

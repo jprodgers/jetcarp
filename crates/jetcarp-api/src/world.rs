@@ -1,14 +1,19 @@
-//! The world a server acts on. The CLI uses a headless [`Session`]; the app implements [`Host`]
-//! over its own state so tool calls go through its `exec(Command)` path.
+//! The world a front end acts on. A headless front end (`jetcarp mcp`, tests) keeps its own
+//! [`Session`]; the app implements [`Host`] over the world the user is watching, so every change
+//! goes through its `exec(Command)` path and shows up (and is logged) like a change made by hand.
 
 use jetcarp_core::world::Applied;
 use jetcarp_core::{Boundary, Command, Scene, TilingSpec, World};
 use serde_json::{Value, json};
 
+/// The error a host without a display gives for the app's display tool (`app_display`).
+pub const APP_ONLY: &str = "app_display is only available in the JETCARP app: start the app with AI control on (or `jetcarp --control`), then use `jetcarp mcp --app` or call use_app with attach=true";
+
+/// A world that can be read and changed through [`Command`]s.
 pub trait Host {
     /// The current world (read only).
     fn world(&self) -> &World;
-    /// Apply one command. This is the only way tools change an existing world.
+    /// Apply one command. This is the only way an existing world is changed.
     fn exec(&mut self, cmd: Command) -> Result<Applied, String>;
     /// Replace the whole world with a scene (new world, open scene).
     fn replace(&mut self, scene: Scene) -> Result<(), String>;
@@ -20,9 +25,9 @@ pub trait Host {
     fn info(&self) -> Value {
         json!({"kind": "headless"})
     }
-    /// The app's displays and screensaver (the `app_display` tool, `app_tools.rs`).
+    /// The app's displays and screensaver (the MCP `app_display` tool).
     fn display(&mut self, _args: &Value) -> Result<Value, String> {
-        Err(crate::app_tools::APP_ONLY.into())
+        Err(APP_ONLY.into())
     }
     /// Whether this host has [`display`](Self::display) (the app tools are listed only then).
     fn has_display(&self) -> bool {
@@ -30,7 +35,7 @@ pub trait Host {
     }
 }
 
-/// A headless world for `jetcarp mcp`.
+/// A headless world, with the name and description a saved scene carries.
 pub struct Session {
     pub world: World,
     pub name: String,
@@ -76,5 +81,24 @@ impl Host for Session {
     }
     fn info(&self) -> Value {
         json!({"kind": "headless", "note": "a private world inside this MCP server; the JETCARP app is not affected"})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_replaces_and_names_its_world() {
+        let mut s = Session::new();
+        assert_eq!(s.world().topo.len(), 64 * 64);
+        assert!(s.display(&json!({})).is_err());
+        assert!(!s.has_display());
+        let mut scene = s.scene();
+        scene.name = "test".into();
+        scene.description = "a scene".into();
+        s.replace(scene).unwrap();
+        assert_eq!(s.scene().name, "test");
+        assert_eq!(s.scene().description, "a scene");
     }
 }

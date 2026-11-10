@@ -544,7 +544,8 @@ mod tests {
     /// The command round trip over a real link, answered by a host with a display.
     #[test]
     fn round_trip_through_the_link() {
-        use jetcarp_mcp::{Host, Server, Session, link};
+        use jetcarp_api::world::{Host, Session};
+        use jetcarp_mcp::{Server, link};
         use std::sync::Arc;
         struct Fake {
             s: Session,

@@ -1,6 +1,6 @@
 //! A world as scripts see it, running until a trigger, and screen-sized images.
 
-use crate::out;
+use jetcarp_api::out;
 use crate::spec::{self, Screen, Until, get, get_bool, get_f64, get_u64};
 use jetcarp_core::render::{self, Image, RenderOptions};
 use jetcarp_core::rules::Rule;

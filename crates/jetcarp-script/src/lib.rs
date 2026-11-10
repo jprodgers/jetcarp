@@ -23,7 +23,6 @@ mod hl;
 pub mod jobs;
 pub mod library;
 pub mod media;
-pub mod out;
 mod pile;
 pub mod results;
 pub mod series;
@@ -34,7 +33,7 @@ pub mod sweep;
 pub use spec::Screen;
 pub use sweep::{Estimate, estimate, run_world, sweep_to_script};
 
-use out::Guard;
+use jetcarp_api::out::{self, Guard};
 use rhai::{AST, Dynamic, EvalAltResult, Position, Scope};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;

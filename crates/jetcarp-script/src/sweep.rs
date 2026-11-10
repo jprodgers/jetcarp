@@ -6,7 +6,7 @@
 //! (pass the same `folder`) without redoing finished runs.
 
 use crate::describe::describe;
-use crate::out;
+use jetcarp_api::out;
 use crate::series::{self, Item};
 use crate::sim::{self, ImageSpec, Shared};
 use crate::spec::{self, Screen, Until, get, get_bool, get_str, get_u64};

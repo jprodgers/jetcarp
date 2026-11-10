@@ -1,11 +1,11 @@
 //! App-only tools: listed and answered only when the host is the JETCARP app (its
-//! [`Host::has_display`](crate::Host::has_display) is true), or when `jetcarp mcp` forwards them
-//! to the app. `app_display` reads and changes where the grid shows (window, full screen,
-//! outputs spanning or mirroring monitors), screensaver mode and its playlist, keep-awake,
-//! the cell size, and the chrome (menu bar, panes).
+//! [`Host::has_display`] is true), or when `jetcarp mcp` forwards them to the app.
+//! `app_display` reads and changes where the grid shows (window, full screen, outputs spanning
+//! or mirroring monitors), screensaver mode and its playlist, keep-awake, the cell size, and the
+//! chrome (menu bar, panes).
 
-use crate::Host;
 use crate::tools::{Res, ToolOutput, tool};
+use jetcarp_api::world::Host;
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &["app_display"];
@@ -15,7 +15,7 @@ pub fn handles(name: &str) -> bool {
 }
 
 /// The error a host without a display gives.
-pub const APP_ONLY: &str = "app_display is only available in the JETCARP app: start the app with AI control on (or `jetcarp --control`), then use `jetcarp mcp --app` or call use_app with attach=true";
+pub use jetcarp_api::world::APP_ONLY;
 
 pub fn definitions() -> Vec<Value> {
     vec![tool(

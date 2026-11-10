@@ -1,7 +1,7 @@
 //! The Rhai bindings: global functions and `World` methods. See `help.md` for the reference.
 
 use crate::describe;
-use crate::out;
+use jetcarp_api::out;
 use crate::series::{self, Item};
 use crate::sim::{self, Shared};
 use crate::spec::{self, Screen};

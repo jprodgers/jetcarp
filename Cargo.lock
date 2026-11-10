@@ -2034,6 +2034,7 @@ dependencies = [
  "anyhow",
  "clap",
  "ctrlc",
+ "jetcarp-api",
  "jetcarp-app",
  "jetcarp-core",
  "jetcarp-display",
@@ -2042,6 +2043,17 @@ dependencies = [
  "jetcarp-mcp",
  "jetcarp-script",
  "rayon",
+ "serde_json",
+]
+
+[[package]]
+name = "jetcarp-api"
+version = "0.4.0"
+dependencies = [
+ "chrono",
+ "jetcarp-core",
+ "png",
+ "serde",
  "serde_json",
 ]
 
@@ -2056,6 +2068,7 @@ dependencies = [
  "eframe",
  "egui-wgpu",
  "egui_tiles",
+ "jetcarp-api",
  "jetcarp-core",
  "jetcarp-display",
  "jetcarp-gpu",
@@ -2142,6 +2155,7 @@ name = "jetcarp-mcp"
 version = "0.4.0"
 dependencies = [
  "dirs",
+ "jetcarp-api",
  "jetcarp-core",
  "jetcarp-script",
  "png",
@@ -2169,8 +2183,8 @@ dependencies = [
 name = "jetcarp-script"
 version = "0.4.0"
 dependencies = [
- "chrono",
  "dirs",
+ "jetcarp-api",
  "jetcarp-core",
  "png",
  "rayon",

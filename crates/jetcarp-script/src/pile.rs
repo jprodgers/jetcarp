@@ -2,7 +2,8 @@
 //! `<out>/piles/`, and `sandpile_piles(#{...})` grows the same N on several tilings and writes a
 //! contact sheet of their previews.
 
-use crate::{Ctx, Progress, out};
+use crate::{Ctx, Progress};
+use jetcarp_api::out;
 use jetcarp_core::SizeSpec;
 use jetcarp_core::pile::{self, Centre, Ctl, Pile, PileSpec, RunOptions, export::ExportOptions};
 use jetcarp_core::render::Image;

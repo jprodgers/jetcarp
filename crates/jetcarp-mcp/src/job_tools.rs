@@ -367,9 +367,9 @@ fn pile_start(args: &Value) -> Res {
                 grains,
                 centre: jetcarp_core::pile::Centre::parse(string(args, "centre")?.unwrap_or("cell"))?,
             };
-            let root = jetcarp_script::out::out_root(None).join("piles");
+            let root = jetcarp_api::out::out_root(None).join("piles");
             std::fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
-            let folder = jetcarp_script::out::make_out_dir(&root, &format!("{tid}-{grains}"))?;
+            let folder = jetcarp_api::out::make_out_dir(&root, &format!("{tid}-{grains}"))?;
             let spec = PileJobSpec {
                 pile,
                 folder,
@@ -539,8 +539,8 @@ fn evolve_start(args: &Value) -> Res {
             let (status, v) = match r {
                 Ok(rep) => {
                     let found = jetcarp_core::evolve::catalog::catalog_gliders(&rep, Some(&l), 20_000);
-                    let dir = jetcarp_script::out::make_out_dir(
-                        &jetcarp_script::out::out_root(None),
+                    let dir = jetcarp_api::out::make_out_dir(
+                        &jetcarp_api::out::out_root(None),
                         &format!("evolve-{}", rep.spec.tiling.family),
                     );
                     if let Ok(d) = &dir {

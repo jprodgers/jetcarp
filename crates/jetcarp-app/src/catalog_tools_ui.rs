@@ -94,7 +94,7 @@ pub struct CatalogTools {
 
 impl Default for CatalogTools {
     fn default() -> Self {
-        let out = jetcarp_script::out::out_root(None);
+        let out = jetcarp_api::out::out_root(None);
         CatalogTools {
             open: false,
             tab: Tab::Collide,

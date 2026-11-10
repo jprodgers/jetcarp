@@ -43,7 +43,7 @@ pub fn call(name: &str, args: &Value) -> Res {
 
 fn roots() -> Vec<(&'static str, PathBuf)> {
     vec![
-        ("out", jetcarp_script::out::out_root(None)),
+        ("out", jetcarp_api::out::out_root(None)),
         (
             "catalog",
             jetcarp_core::library::Library::open_default().folder(),

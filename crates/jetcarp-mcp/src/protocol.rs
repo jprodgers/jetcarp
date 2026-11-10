@@ -11,7 +11,7 @@
 //! rule errors) come back as tool results with `isError: true`; only malformed requests and
 //! unknown tools are JSON-RPC errors.
 
-use crate::host::Host;
+use jetcarp_api::world::Host;
 use crate::tools::{self, ToolOutput};
 use serde_json::{Value, json};
 

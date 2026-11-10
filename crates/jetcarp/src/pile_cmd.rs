@@ -106,10 +106,10 @@ pub fn run(a: PileArgs) -> Result<()> {
             let root = a
                 .out
                 .clone()
-                .unwrap_or_else(|| jetcarp_script::out::out_root(None).join("piles"));
+                .unwrap_or_else(|| jetcarp_api::out::out_root(None).join("piles"));
             std::fs::create_dir_all(&root)?;
             let label = format!("{}-{}", a.tiling, spec.grains);
-            let dir = jetcarp_script::out::make_out_dir(&root, &label).map_err(msg)?;
+            let dir = jetcarp_api::out::make_out_dir(&root, &label).map_err(msg)?;
             pilejob::start(&lib, &job_spec(spec, dir, &a)).map_err(msg)?
         }
     };
@@ -248,8 +248,8 @@ fn job_spec(pile: PileSpec, folder: PathBuf, a: &PileArgs) -> PileJobSpec {
         extra: serde_json::json!({
             "tiling_id": a.tiling,
             "threads": rayon::current_num_threads(),
-            "host": jetcarp_script::out::host_name(),
-            "started": jetcarp_script::out::now_rfc3339(),
+            "host": jetcarp_api::out::host_name(),
+            "started": jetcarp_api::out::now_rfc3339(),
         }),
     }
 }

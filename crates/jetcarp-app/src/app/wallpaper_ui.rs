@@ -454,12 +454,12 @@ pub(super) fn export(job: Job, progress: &Shared, cancel: &AtomicBool) -> Result
         "jetcarp:wallpaper",
         serde_json::to_string(&job.fit).unwrap_or_default(),
     ));
-    let base = jetcarp_script::out::sanitize(if job.name.is_empty() {
+    let base = jetcarp_api::out::sanitize(if job.name.is_empty() {
         "wallpaper"
     } else {
         &job.name
     });
-    let stamp = jetcarp_script::out::stamp();
+    let stamp = jetcarp_api::out::stamp();
     let mut files = vec![];
     let (combined, parts) = match (&job.monitors, job.images) {
         (Some(_), SpanImages::PerMonitor) => (false, true),

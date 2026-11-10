@@ -280,7 +280,7 @@ impl JetcarpApp {
             ai: Default::default(),
             scripts: Default::default(),
             results: Default::default(),
-            out_root: jetcarp_script::out::out_root(None),
+            out_root: jetcarp_api::out::out_root(None),
             library: Default::default(),
             pile: Default::default(),
             hlview: Default::default(),

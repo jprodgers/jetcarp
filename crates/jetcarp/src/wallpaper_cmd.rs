@@ -157,15 +157,15 @@ pub fn run(a: WallpaperArgs) -> Result<()> {
     } else {
         sc.name.clone()
     };
-    let base = jetcarp_script::out::sanitize(&name);
-    let stamp = jetcarp_script::out::stamp();
+    let base = jetcarp_api::out::sanitize(&name);
+    let stamp = jetcarp_api::out::stamp();
     let (dir, file) = match &a.out {
         Some(p) if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) => (
             p.parent().map(Path::to_path_buf).unwrap_or_default(),
             Some(p.file_stem().unwrap().to_string_lossy().to_string()),
         ),
         Some(p) => (p.clone(), None),
-        None => (jetcarp_script::out::out_root(None).join("wallpapers"), None),
+        None => (jetcarp_api::out::out_root(None).join("wallpapers"), None),
     };
     if !dir.as_os_str().is_empty() {
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;

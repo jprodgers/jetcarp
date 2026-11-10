@@ -3,8 +3,8 @@
 //! Descriptions are written for a model that has never seen JETCARP: they say what the tool does,
 //! give a minimal example, and name the tool to call next.
 
-use crate::cells::{self, Grid};
-use crate::host::Host;
+use jetcarp_api::cells::{self, Grid};
+use jetcarp_api::world::Host;
 use crate::util;
 use jetcarp_core::render::{self, RenderOptions};
 use jetcarp_core::rules::{CatalogEntry, FieldKind};

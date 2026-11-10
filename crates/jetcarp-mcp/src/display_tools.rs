@@ -3,7 +3,7 @@
 //! <Pictures>/JETCARP/wallpapers). Both act through the host's commands, so they work on the headless
 //! session and, through `use_app`, on the world in the app.
 
-use crate::host::Host;
+use jetcarp_api::world::Host;
 use crate::tools::{
     MAX_CELLS, Res, ToolOutput, boolean, ca_index, check_unknown, int, string, tool,
 };
@@ -236,19 +236,19 @@ fn export(host: &mut dyn Host, args: &Value) -> Res {
     let img = wallpaper::wallpaper(w, width, height, &fit, outline)?;
     let name = {
         let s = host.scene().name;
-        jetcarp_script::out::sanitize(if s.is_empty() { "wallpaper" } else { &s })
+        jetcarp_api::out::sanitize(if s.is_empty() { "wallpaper" } else { &s })
     };
-    let stamp = jetcarp_script::out::stamp();
+    let stamp = jetcarp_api::out::stamp();
     let (dir, stem) = match string(args, "path")? {
         Some(p) if p.to_ascii_lowercase().ends_with(".png") => {
-            let p = jetcarp_script::out::absolute(std::path::Path::new(p));
+            let p = jetcarp_api::out::absolute(std::path::Path::new(p));
             (
                 p.parent().map(|d| d.to_path_buf()).unwrap_or_default(),
                 Some(p.file_stem().unwrap().to_string_lossy().to_string()),
             )
         }
-        Some(p) => (jetcarp_script::out::absolute(std::path::Path::new(p)), None),
-        None => (jetcarp_script::out::out_root(None).join("wallpapers"), None),
+        Some(p) => (jetcarp_api::out::absolute(std::path::Path::new(p)), None),
+        None => (jetcarp_api::out::out_root(None).join("wallpapers"), None),
     };
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut meta = jetcarp_core::render::png_metadata(w);

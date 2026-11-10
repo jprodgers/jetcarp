@@ -100,8 +100,8 @@ pub fn run(a: EvolveArgs) -> Result<()> {
     };
     let quiet = a.quiet;
     let label = format!("evolve-{}", a.tiling.replace(':', "-"));
-    let root = jetcarp_script::out::out_root(a.out.as_deref());
-    let dir = jetcarp_script::out::make_out_dir(&root, &label).map_err(|e| anyhow!(e))?;
+    let root = jetcarp_api::out::out_root(a.out.as_deref());
+    let dir = jetcarp_api::out::make_out_dir(&root, &label).map_err(|e| anyhow!(e))?;
     eprintln!("output: {}", dir.display());
     let report = evolve(&spec, &|g| {
         if !quiet {

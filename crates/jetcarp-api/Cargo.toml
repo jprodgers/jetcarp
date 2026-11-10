@@ -1,0 +1,20 @@
+[package]
+name = "jetcarp-api"
+description = "JETCARP's operations layer: what the command line, the MCP server, Rhai scripts, and the app all call, with the argument parsers, output folders, and world host they share. No UI or GPU dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+# Everything here so far needs only the engine. jetcarp-display reaches these modules through
+# world-only Rhai, so anything heavier (the store, the job runner) goes behind a feature.
+[dependencies]
+jetcarp-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+png.workspace = true
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }

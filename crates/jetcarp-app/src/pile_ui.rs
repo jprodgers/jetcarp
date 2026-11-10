@@ -485,9 +485,9 @@ fn run(
     kept: &mut Option<Pile>,
 ) -> Result<String, String> {
     let p = kept.insert(Pile::new(spec.clone())?);
-    let root = jetcarp_script::out::out_root(None).join("piles");
+    let root = jetcarp_api::out::out_root(None).join("piles");
     std::fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
-    let dir = jetcarp_script::out::make_out_dir(&root, &format!("{tiling}-{}", spec.grains))?;
+    let dir = jetcarp_api::out::make_out_dir(&root, &format!("{tiling}-{}", spec.grains))?;
     {
         let mut s = sh.lock().unwrap();
         s.dir = Some(dir.clone());

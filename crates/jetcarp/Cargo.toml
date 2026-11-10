@@ -28,6 +28,7 @@ windows-launcher = []
 
 [dependencies]
 jetcarp-core.workspace = true
+jetcarp-api.workspace = true
 jetcarp-gpu.workspace = true
 clap.workspace = true
 anyhow.workspace = true

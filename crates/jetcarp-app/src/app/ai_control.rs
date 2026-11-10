@@ -27,7 +27,7 @@ pub struct AiControl {
     env_checked: bool,
 }
 
-impl jetcarp_mcp::Host for JetcarpApp {
+impl jetcarp_api::world::Host for JetcarpApp {
     fn world(&self) -> &World {
         &self.world
     }

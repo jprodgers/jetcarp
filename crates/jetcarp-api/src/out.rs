@@ -1,7 +1,9 @@
-//! Output folders, the write guard, and PNG encoding.
+//! Output folders, the write guard, PNG encoding, time stamps, and CSV.
 //!
-//! Scripts write only inside the output root (`<Pictures>/JETCARP`, `JETCARP_OUT`, or the host's
-//! override) and folders the user named (`--out`, [`crate::RunOptions::allow_dirs`]).
+//! Everything JETCARP writes for people goes under the output root (`<Pictures>/JETCARP`,
+//! `JETCARP_OUT`, or the host's override), in a folder per run ([`make_out_dir`]). Scripts write
+//! only inside that root and folders the user named (`--out`, `jetcarp_script::RunOptions`'s
+//! `allow_dirs`): [`Guard`] checks every path.
 
 use jetcarp_core::render::Image;
 use std::path::{Component, Path, PathBuf};
