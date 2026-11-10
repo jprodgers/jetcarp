@@ -45,3 +45,8 @@ research software: check the results that matter to you.
 Emily Teich rated hundreds of animated clips from JETCARP's exploratory search. Her ratings
 trained the score that decides which runs the search shows people, which brought her eye for
 what is beautiful into the search itself.
+
+Craig S. Kaplan answered within hours, and generously, when asked whether JETCARP could use the
+code from his Spectre visualizer, which he had never formally released: he made it available under
+the same BSD licence as his hatviz. JETCARP's hat, spectre and isohedral tilings all rest on his
+work.
