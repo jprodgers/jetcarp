@@ -1,6 +1,5 @@
 //! Bit-parallel stepping of B/S and Generations rules on a **bounded** lattice grid, with wrapped
-//! or dead edges: the hunter's engine ([`crate::hunt::bits`]) on the grids the app, the census,
-//! and stage 1 run.
+//! or dead edges: the hunter's engine ([`crate::hunt::bits`]) on the grids the census runs.
 //!
 //! The grid is stored as the world stores it: row `j` holds unit cells `u = 0 .. w` (lattice
 //! column `i = u + row_start[j]`), each tile type its own bit plane, 64 cells per word, with one
@@ -14,7 +13,7 @@
 //!
 //! Every step also counts the cells that changed state (the activity) and computes a state hash
 //! from the non-zero 32-cell chunks of every plane at their positions, as the hunter does.
-//! `tests/stage1.rs` checks that the board equals the world's own stepper, cell for cell, on
+//! `tests/census.rs` checks that the board equals the world's own stepper, cell for cell, on
 //! squares (both neighbourhoods), hexagons, triangles, and Archimedean tilings, with wrapped and
 //! dead edges, for B/S and Generations rules.
 

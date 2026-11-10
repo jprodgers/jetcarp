@@ -3,7 +3,7 @@
 
 use super::batch::WorldTrace;
 use super::space::Grid;
-use crate::stage1::looks::{compressed_bits, state_entropy};
+use crate::looks::{compressed_bits, state_entropy};
 use crate::topology::Nb;
 use serde::{Deserialize, Serialize};
 

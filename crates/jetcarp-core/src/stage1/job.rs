@@ -279,43 +279,7 @@ pub fn digits(sp: &Space) -> Result<(Vec<u32>, Vec<u32>), String> {
     Ok((birth, survive))
 }
 
-/// Rules one birth or survival count away (B0 excluded), in a fixed order.
-pub fn rule_neighbours(rule: &str, birth: &[u32], survive: &[u32]) -> Result<Vec<String>, String> {
-    let (r, _) = Rule::parse(rule)?;
-    let (b, s, states) = match r {
-        Rule::LifeLike { birth, survive } => (birth, survive, 2u8),
-        Rule::Generations {
-            birth,
-            survive,
-            states,
-        } => (birth, survive, states),
-        _ => return Err(format!("{rule} is not a B/S or Generations rule")),
-    };
-    let make = |b: u32, s: u32| -> String {
-        if states > 2 {
-            Rule::Generations {
-                birth: b,
-                survive: s,
-                states,
-            }
-            .notation()
-        } else {
-            Rule::LifeLike {
-                birth: b,
-                survive: s,
-            }
-            .notation()
-        }
-    };
-    let mut out = Vec::new();
-    for &d in birth.iter().filter(|&&d| d >= 1) {
-        out.push(make(b ^ (1 << d), s));
-    }
-    for &d in survive {
-        out.push(make(b, s ^ (1 << d)));
-    }
-    Ok(out)
-}
+pub use crate::rules::rule_neighbours;
 
 // ---------------------------------------------------------------------------------------------
 // Quick Start entries

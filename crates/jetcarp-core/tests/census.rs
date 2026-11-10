@@ -1,7 +1,10 @@
-//! Phase 2: rule census from the command line (engine checks).
+//! Phase 2: rule census from the command line (engine checks), and the bit-parallel board
+//! the census runs B/S and Generations rules on.
 
+use jetcarp_core::board::Board;
 use jetcarp_core::census::*;
 use jetcarp_core::*;
+use std::sync::Arc;
 
 fn spec(rules: &[&str], soups: u32, gens: u64) -> CensusSpec {
     CensusSpec {
@@ -257,4 +260,66 @@ fn census_jobs_resume_to_the_same_report() {
     b.jetcarp_version.clear();
     assert_eq!(a.to_json(), b.to_json());
     assert_eq!(job_status(&lib, job).unwrap().1.status, "done");
+}
+
+fn world_states(w: &World) -> Vec<u8> {
+    w.fields[w.cas[0].field].state.clone()
+}
+
+/// Step a world and a board side by side and compare every cell at every generation.
+fn same_as_world(family: &str, nb: Nb, rule: &str, size: (u32, u32), b: Boundary, gens: u64) {
+    let spec = TilingSpec::rect(family, size.0, size.1, b);
+    let topo = Arc::new(Topology::build(&spec).unwrap());
+    let mut w = World::on_topology(topo.clone(), 7);
+    let mut ca = CaSpec::new(rule);
+    ca.neighborhood = Some(nb);
+    ca.seed = Some(SeedSpec::Random { density: 0.4 });
+    w.apply(Command::AddCa { ca }).unwrap();
+    let (r, _) = jetcarp_core::rules::Rule::parse(rule).unwrap();
+    let mut board = Board::for_topology(&r, &topo, nb).unwrap();
+    board.load(&world_states(&w));
+    assert_eq!(board.states(), world_states(&w));
+    for g in 1..=gens {
+        let before = world_states(&w);
+        w.apply(Command::Step { gens: 1 }).unwrap();
+        board.step();
+        let now = world_states(&w);
+        assert_eq!(
+            board.states(),
+            now,
+            "{family} {nb:?} {rule} {size:?} {b:?}: differs at generation {g}"
+        );
+        let pop = now.iter().filter(|&&s| s != 0).count() as u64;
+        assert_eq!(board.population(), pop);
+        let changed = before.iter().zip(&now).filter(|(a, b)| a != b).count() as u64;
+        assert_eq!(
+            board.changed(),
+            changed,
+            "{family} {rule}: changed cells at {g}"
+        );
+    }
+}
+
+#[test]
+fn board_equals_the_world_on_every_family() {
+    for b in [Boundary::Wrap, Boundary::Dead] {
+        for size in [(37, 23), (70, 12)] {
+            same_as_world("square", Nb::Touch, "B3/S23", size, b, 60);
+            same_as_world("square", Nb::Edge, "B1/S1", size, b, 30);
+            same_as_world("square", Nb::Touch, "B2/S/C3", size, b, 40);
+            same_as_world("square", Nb::Touch, "B34/S34/C5", size, b, 40);
+            same_as_world("hex", Nb::Touch, "B2/S34", size, b, 60);
+            same_as_world("triangle", Nb::Touch, "B45/S34", size, b, 40);
+            same_as_world("triangle", Nb::Edge, "B1/S12", size, b, 40);
+            same_as_world("oct", Nb::Touch, "B3/S23", size, b, 40);
+            same_as_world("trihex", Nb::Touch, "B2/S34", size, b, 40);
+            same_as_world("snubsq", Nb::Touch, "B3/S23", size, b, 30);
+        }
+    }
+    // Narrow and tiny grids (the column wraps inside one word).
+    same_as_world("square", Nb::Touch, "B3/S23", (8, 8), Boundary::Wrap, 40);
+    same_as_world("hex", Nb::Touch, "B2/S34", (8, 9), Boundary::Wrap, 40);
+    same_as_world("triangle", Nb::Touch, "B4/S345", (9, 8), Boundary::Wrap, 40);
+    same_as_world("square", Nb::Touch, "B36/S23", (64, 20), Boundary::Wrap, 40);
+    same_as_world("hex", Nb::Touch, "B2/S34", (128, 9), Boundary::Dead, 40);
 }

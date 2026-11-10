@@ -290,7 +290,7 @@ pub fn rule_neighbours(rule: &str, v: &Value) -> Result<Value, String> {
     let max = census::max_degree(&topo, nb) as u32;
     let birth: Vec<u32> = (1..=max).collect();
     let survive: Vec<u32> = (0..=max).collect();
-    let out = jetcarp_core::stage1::job::rule_neighbours(&r.notation(), &birth, &survive)?;
+    let out = jetcarp_core::rules::rule_neighbours(&r.notation(), &birth, &survive)?;
     Ok(Value::Array(
         out.into_iter()
             .map(|n| {

@@ -52,14 +52,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 mod ants;
+mod census;
 mod dashboard;
 pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
+mod ratings;
 mod settings;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
+pub use ratings::RatingRow;
 pub use settings::{
-    FlushFinish, NewSetting, RatingRow, RescoreReport, SettingRow, SettingStatus, SettingsQuery,
-    Stage1Flush, ThinOptions, ThinReport, parse_setting_id,
+    FlushFinish, NewSetting, RescoreReport, SettingRow, SettingStatus, SettingsQuery, Stage1Flush,
+    ThinOptions, ThinReport, parse_setting_id,
 };
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 

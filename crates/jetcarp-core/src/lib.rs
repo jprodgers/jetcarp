@@ -2,6 +2,7 @@
 
 pub mod ants;
 pub mod aperiodic;
+pub mod board;
 pub mod catalog;
 pub mod cellcheck;
 pub mod census;
@@ -22,6 +23,7 @@ pub mod isohedral;
 pub mod jaca;
 pub mod lenia;
 pub mod library;
+pub mod looks;
 pub mod ltl;
 pub mod media;
 pub mod objects;

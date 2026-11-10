@@ -7,7 +7,7 @@
 //! tiling, score, status, behaviour, tags, the setting itself, and the main descriptors, so a
 //! script can map a model's picks back to settings and write them as ratings.
 
-use super::board::Board;
+use crate::board::Board;
 use crate::library::SettingRow;
 use crate::render::{Image, RenderOptions, render};
 use crate::sheet::{Label, labelled_sheet_scaled};

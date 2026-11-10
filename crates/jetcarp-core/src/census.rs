@@ -8,7 +8,7 @@
 //! identical at any thread count.
 //!
 //! **Engines.** B/S and Generations rules without B0 on periodic tilings with wrapped or dead
-//! edges run on the bit-parallel [`Board`](crate::stage1::board::Board) (the world still makes
+//! edges run on the bit-parallel [`Board`](crate::board::Board) (the world still makes
 //! each soup), which emulates the world's Brent watch generation for generation, so every result
 //! equals the world's (`tests/census.rs` compares both). Other rules and tilings run on the world.
 //! A run's `hash` is the FNV hash of its final cell states ([`World::states_hash`]).
@@ -652,12 +652,12 @@ fn run_one(
 }
 
 /// A bit-parallel board for the world's only CA, when its rule and tiling allow one.
-fn board_for(topo: &Topology, w: &World) -> Option<crate::stage1::board::Board> {
+fn board_for(topo: &Topology, w: &World) -> Option<crate::board::Board> {
     if w.cas.len() != 1 || w.cas[0].steps_per_gen != 1 {
         return None;
     }
     let c = &w.cas[0];
-    crate::stage1::board::Board::for_topology(&c.rule, topo, c.nb).ok()
+    crate::board::Board::for_topology(&c.rule, topo, c.nb).ok()
 }
 
 /// [`run_one`] on the bit-parallel board: the same classification, generation for generation
@@ -669,7 +669,7 @@ fn run_board(
     soup: u32,
     thumb: Option<u32>,
     mut w: World,
-    mut b: crate::stage1::board::Board,
+    mut b: crate::board::Board,
 ) -> Result<(RunResult, Option<Image>), String> {
     let rng_state = spec.seed.wrapping_add(soup as u64);
     let n = topo.len() as f64;
@@ -763,7 +763,7 @@ fn run_board(
 
 /// The first `t` with state(t) == state(t + p) on a board, checked by exact comparison.
 fn settle_board(
-    b: &crate::stage1::board::Board,
+    b: &crate::board::Board,
     start: &[u8],
     hashes: &[(u64, u64)],
     p: u64,

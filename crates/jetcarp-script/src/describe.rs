@@ -461,8 +461,7 @@ fn holes(l: &Lines, lo: usize) -> (usize, usize) {
     (largest, count)
 }
 
-/// Entropy-rate estimate of rows `lo..` ([`jetcarp_core::stage1::looks::block_entropy`], which
-/// stage 1 uses too).
+/// Entropy-rate estimate of rows `lo..` ([`jetcarp_core::looks::block_entropy`]).
 fn block_entropy(l: &Lines, lo: usize, states: usize) -> Option<f64> {
-    jetcarp_core::stage1::looks::block_entropy(&l.rows[lo..], l.stride, states)
+    jetcarp_core::looks::block_entropy(&l.rows[lo..], l.stride, states)
 }

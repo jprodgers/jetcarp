@@ -13,7 +13,7 @@
 //! `t` with hash(t) = hash(t + p)), or reaches the generation limit. Recorded per soup: the
 //! outcome, settle generation and period, the fraction of cells changing in each eighth of the
 //! run (activity), the density at 16 points, the looks of the frames at 1/8, 1/4, 1/2 and the end
-//! ([`super::looks`]), and an object census of the final frame (the hunter's
+//! ([`crate::looks`]), and an object census of the final frame (the hunter's
 //! [`Census`], when the frame holds at most a fifth of the cells and 4,000 live cells), plus the
 //! spaceships of the frame halfway (ships often meet debris before the end). A run
 //! that repeats keeps its last cycle's activity and population for the rest of the curves.
@@ -21,8 +21,8 @@
 //! [`Descriptors`] summarise all soups. Everything is a pure function of the setting, so results
 //! are the same at any thread count.
 
-use super::board::Board;
-use super::looks::{FrameLooks, frame_looks};
+use crate::board::Board;
+use crate::looks::{FrameLooks, frame_looks};
 use crate::hunt::separate::{Cache, Census, FastMap, Obj, normalize};
 use crate::hunt::soup::soup_state;
 use crate::library::{CellMap, PatternClass, canonical_symmetries, tiling_display_name};

@@ -1,14 +1,13 @@
 //! Stage 1 (Phase 4): the bounded bit-parallel board against the world, settings evaluation,
 //! the score and its refits, and the adaptive search as a resumable job.
 
+use jetcarp_core::board::Board;
 use jetcarp_core::library::{JobStatus, Library, NewSetting, QsStatus, SettingStatus, SettingsQuery};
-use jetcarp_core::stage1::board::Board;
 use jetcarp_core::stage1::eval::{Descriptors, GridKit, Setting, evaluate, soup_states};
 use jetcarp_core::stage1::job::{self, Base, Neighbours, Refine, Space, Stage1Options, Stage1Spec};
 use jetcarp_core::stage1::score::{self, ScoreModel};
-use jetcarp_core::topology::{Boundary, Nb, TilingSpec, Topology};
-use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
-use std::sync::Arc;
+use jetcarp_core::topology::{Boundary, Nb, TilingSpec};
+use jetcarp_core::world::World;
 
 fn temp_lib(name: &str) -> Library {
     let dir = std::env::temp_dir().join(format!("jetcarp-stage1-test-{name}-{}", std::process::id()));
@@ -374,64 +373,6 @@ fn world_states(w: &World) -> Vec<u8> {
     w.fields[w.cas[0].field].state.clone()
 }
 
-/// Step a world and a board side by side and compare every cell at every generation.
-fn same_as_world(family: &str, nb: Nb, rule: &str, size: (u32, u32), b: Boundary, gens: u64) {
-    let spec = TilingSpec::rect(family, size.0, size.1, b);
-    let topo = Arc::new(Topology::build(&spec).unwrap());
-    let mut w = World::on_topology(topo.clone(), 7);
-    let mut ca = CaSpec::new(rule);
-    ca.neighborhood = Some(nb);
-    ca.seed = Some(SeedSpec::Random { density: 0.4 });
-    w.apply(Command::AddCa { ca }).unwrap();
-    let (r, _) = jetcarp_core::rules::Rule::parse(rule).unwrap();
-    let mut board = Board::for_topology(&r, &topo, nb).unwrap();
-    board.load(&world_states(&w));
-    assert_eq!(board.states(), world_states(&w));
-    for g in 1..=gens {
-        let before = world_states(&w);
-        w.apply(Command::Step { gens: 1 }).unwrap();
-        board.step();
-        let now = world_states(&w);
-        assert_eq!(
-            board.states(),
-            now,
-            "{family} {nb:?} {rule} {size:?} {b:?}: differs at generation {g}"
-        );
-        let pop = now.iter().filter(|&&s| s != 0).count() as u64;
-        assert_eq!(board.population(), pop);
-        let changed = before.iter().zip(&now).filter(|(a, b)| a != b).count() as u64;
-        assert_eq!(
-            board.changed(),
-            changed,
-            "{family} {rule}: changed cells at {g}"
-        );
-    }
-}
-
-#[test]
-fn board_equals_the_world_on_every_family() {
-    for b in [Boundary::Wrap, Boundary::Dead] {
-        for size in [(37, 23), (70, 12)] {
-            same_as_world("square", Nb::Touch, "B3/S23", size, b, 60);
-            same_as_world("square", Nb::Edge, "B1/S1", size, b, 30);
-            same_as_world("square", Nb::Touch, "B2/S/C3", size, b, 40);
-            same_as_world("square", Nb::Touch, "B34/S34/C5", size, b, 40);
-            same_as_world("hex", Nb::Touch, "B2/S34", size, b, 60);
-            same_as_world("triangle", Nb::Touch, "B45/S34", size, b, 40);
-            same_as_world("triangle", Nb::Edge, "B1/S12", size, b, 40);
-            same_as_world("oct", Nb::Touch, "B3/S23", size, b, 40);
-            same_as_world("trihex", Nb::Touch, "B2/S34", size, b, 40);
-            same_as_world("snubsq", Nb::Touch, "B3/S23", size, b, 30);
-        }
-    }
-    // Narrow and tiny grids (the column wraps inside one word).
-    same_as_world("square", Nb::Touch, "B3/S23", (8, 8), Boundary::Wrap, 40);
-    same_as_world("hex", Nb::Touch, "B2/S34", (8, 9), Boundary::Wrap, 40);
-    same_as_world("triangle", Nb::Touch, "B4/S345", (9, 8), Boundary::Wrap, 40);
-    same_as_world("square", Nb::Touch, "B36/S23", (64, 20), Boundary::Wrap, 40);
-    same_as_world("hex", Nb::Touch, "B2/S34", (128, 9), Boundary::Dead, 40);
-}
-
 #[test]
 fn soups_match_the_settings_scene() {
     let s = Setting {
@@ -490,7 +431,7 @@ fn stage1_speed() {
         println!("soup: {:.1} us", t.elapsed().as_secs_f64() * 1e6 / 200.0);
         let t = std::time::Instant::now();
         for _ in 0..200 {
-            let _ = jetcarp_core::stage1::looks::frame_looks(&st, 64, 1, 2);
+            let _ = jetcarp_core::looks::frame_looks(&st, 64, 1, 2);
         }
         println!("looks: {:.1} us", t.elapsed().as_secs_f64() * 1e6 / 200.0);
         let t = std::time::Instant::now();

@@ -711,6 +711,46 @@ pub fn count_digits(m: u32) -> String {
     digits(m)
 }
 
+/// The B/S or Generations rules one birth or survival count away from `rule` (each count of
+/// `birth` and `survive` toggled in turn; birth 0 is never toggled), births first, in the order
+/// given. Generations rules keep their state count.
+pub fn rule_neighbours(rule: &str, birth: &[u32], survive: &[u32]) -> Result<Vec<String>, String> {
+    let (r, _) = Rule::parse(rule)?;
+    let (b, s, states) = match r {
+        Rule::LifeLike { birth, survive } => (birth, survive, 2u8),
+        Rule::Generations {
+            birth,
+            survive,
+            states,
+        } => (birth, survive, states),
+        _ => return Err(format!("{rule} is not a B/S or Generations rule")),
+    };
+    let make = |b: u32, s: u32| -> String {
+        if states > 2 {
+            Rule::Generations {
+                birth: b,
+                survive: s,
+                states,
+            }
+            .notation()
+        } else {
+            Rule::LifeLike {
+                birth: b,
+                survive: s,
+            }
+            .notation()
+        }
+    };
+    let mut out = Vec::new();
+    for &d in birth.iter().filter(|&&d| d >= 1) {
+        out.push(make(b ^ (1 << d), s));
+    }
+    for &d in survive {
+        out.push(make(b, s ^ (1 << d)));
+    }
+    Ok(out)
+}
+
 fn digits(m: u32) -> String {
     let list: Vec<u32> = (0..32).filter(|i| m >> i & 1 == 1).collect();
     if list.iter().all(|&x| x < 10) {
