@@ -121,7 +121,9 @@ this family. The comparison is described in [Findings](../research/findings.md#t
 - Quick Start: *Spectre glider* and *Spectre glider (Edmond 2026)*.
 - `jetcarp script docs/scenes/automata/glider-trail.rhai --out pictures --set scene=$PWD/docs/scenes/automata/priority-spectre-glider.json --set gens=70 --set png=trail.png`
   draws the trail picture above.
-- `jetcarp evolve --help` describes the search.
+- `jetcarp evolve --help` describes the search. Each search is a catalog job, saved after every
+  generation: `jetcarp evolve --resume JOB` carries on one that was stopped, ending exactly as an
+  uninterrupted run would, and the app's *Hunts…* window lists, stops, and resumes it.
 
 ## References
 
