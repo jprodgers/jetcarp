@@ -12,7 +12,7 @@
 //! the totals, the ids that failed verification, and the newest finds), so a crash loses at most
 //! the batch in flight and a resumed hunt ends with exactly the totals of an uninterrupted one.
 //!
-//! A hunt stops at the next batch when its stop flag is set (Ctrl-C in `jetcarp hunt`), when another
+//! A hunt stops at the next batch when its stop flag is set (Ctrl-C in `jetcarp search hunt`), when another
 //! process marks the job `paused` ([`request_stop`]), or when a session limit is reached; the batch
 //! in flight is dropped and the job is left `paused` at its last checkpoint.
 //!

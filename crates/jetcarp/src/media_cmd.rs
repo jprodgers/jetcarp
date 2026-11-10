@@ -43,7 +43,7 @@ struct RenderArgs {
     /// A Quick Start entry by id.
     #[arg(long)]
     quickstart: Option<String>,
-    /// An ant run by id (`jetcarp ants list`): a highway's moving loop alone, the build-up from the
+    /// An ant run by id (`jetcarp library ants list`): a highway's moving loop alone, the build-up from the
     /// seed.
     #[arg(long)]
     ant: Option<String>,

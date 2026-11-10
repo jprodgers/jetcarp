@@ -93,9 +93,9 @@ tiles, are built in exact integer coordinates, and every neighbour is found by a
 tests check for gaps and overlaps and that the hat to reflected-hat ratio tends to φ⁴.
 
 In a scene: `"tiling": {"family": "hat", "size": {"level": 4}}` (or `spectre`). Patch edges are dead,
-and the tile shapes are fixed. For movers that need more room than any patch, `jetcarp movers` can
-follow a pattern on a *sliding window* that builds supertiles around it as it goes; JETCARP has followed
-the Spectre glider pair this way for 10 million rings of tiles.
+and the tile shapes are fixed. For movers that need more room than any patch,
+`jetcarp search mover` can follow a pattern on a *sliding window* that builds supertiles around it
+as it goes; JETCARP has followed the Spectre glider pair this way for 10 million rings of tiles.
 
 ## What is new here
 

@@ -29,7 +29,7 @@ pub struct MoverJobSpec {
     /// Store the mover in the catalog when it ends verified.
     #[serde(default = "yes")]
     pub store: bool,
-    /// Who started it (`jetcarp movers`, a script, MCP), for the record's provenance.
+    /// Who started it (`jetcarp search mover`, a script, MCP), for the record's provenance.
     #[serde(default)]
     pub source: String,
 }

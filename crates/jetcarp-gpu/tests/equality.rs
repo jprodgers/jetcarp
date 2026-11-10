@@ -446,7 +446,7 @@ fn unsupported_rules_fall_back() {
     }
 }
 
-// Priority tables (`jetcarp evolve`'s rule family): Edmond's glider table, tables with `*` and
+// Priority tables (`jetcarp search evolve`'s rule family): Edmond's glider table, tables with `*` and
 // `always` rows, rows of three and five conditions (packed over several words), and the most
 // states, on lattices with every boundary and on Spectre patches. A table too long for the
 // parameter slot falls back to the CPU.

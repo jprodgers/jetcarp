@@ -1,6 +1,6 @@
 //! GPU simulation for JETCARP: `wgpu` compute shaders that step Life-like, Generations, WireWorld,
 //! cyclic, rock-paper-scissors, Greenberg–Hastings, hodgepodge, Spectre-glider, and priority-table
-//! (`jetcarp evolve`) CAs on lattice
+//! (`jetcarp search evolve`) CAs on lattice
 //! storage (square, hex, any periodic tiling) and explicit storage (aperiodic patches, via a CSR
 //! neighbour buffer), with dead, wrap, and live edges.
 //!

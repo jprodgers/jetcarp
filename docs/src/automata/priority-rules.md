@@ -81,13 +81,13 @@ the centre of a patch.
 
 ### Evolutionary search and verified movers
 
-`jetcarp evolve` reimplements Edmond's evolutionary search and runs it on any tiling, periodic or
-aperiodic. It is written from his paper and a reading of his repository; two small functions, the
-mutation step and the table notation, are adapted from his monotile-ca code under its MIT licence,
-as listed in JETCARP's third-party notices. Movers it finds on aperiodic tilings are followed by
-`jetcarp movers` across ever larger exact patches, or on a sliding window that generates tiles around
-the mover as it goes, and recorded as *verified to a distance*: the number of rings of tiles the mover
-was followed without changing.
+`jetcarp search evolve` reimplements Edmond's evolutionary search and runs it on any tiling,
+periodic or aperiodic. It is written from his paper and a reading of his repository; two small
+functions, the mutation step and the table notation, are adapted from his monotile-ca code under its
+MIT licence, as listed in JETCARP's third-party notices. Movers it finds on aperiodic tilings are followed
+across ever larger exact patches (`jetcarp library movers track`), or on a sliding window that
+generates tiles around the mover as it goes (`jetcarp search mover`), and recorded as *verified to
+a distance*: the number of rings of tiles the mover was followed without changing.
 
 <figure>
 <picture>
@@ -121,8 +121,8 @@ this family. The comparison is described in [Findings](../research/findings.md#t
 - Quick Start: *Spectre glider* and *Spectre glider (Edmond 2026)*.
 - `jetcarp script docs/scenes/automata/glider-trail.rhai --out pictures --set scene=$PWD/docs/scenes/automata/priority-spectre-glider.json --set gens=70 --set png=trail.png`
   draws the trail picture above.
-- `jetcarp evolve --help` describes the search. Each search is a catalog job, saved after every
-  generation: `jetcarp evolve --resume JOB` carries on one that was stopped, ending exactly as an
+- `jetcarp search evolve --help` describes the search. Each search is a catalog job, saved after
+  every generation: `jetcarp jobs resume JOB` carries on one that was stopped, ending exactly as an
   uninterrupted run would, and the app's *Hunts…* window lists, stops, and resumes it.
 
 ## References

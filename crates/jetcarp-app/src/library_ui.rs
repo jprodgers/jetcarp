@@ -460,7 +460,7 @@ impl LibraryWindow {
                 thumbs::empty_note(
                     ui,
                     if self.records.is_empty() {
-                        "The library is empty. Find patterns with `jetcarp library search`, the catalog-hunt script, or Add favourites to library in sweep results."
+                        "The library is empty. Find patterns with `jetcarp search hunt`, the catalog-hunt script, or Add favourites to library in sweep results."
                     } else {
                         "Nothing matches these filters."
                     },

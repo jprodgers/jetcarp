@@ -1009,7 +1009,7 @@ impl DashWindow {
         if jobs.is_empty() {
             thumbs::empty_note(
                 ui,
-                "No jobs yet. Start a hunt here, or run `jetcarp hunt` in a terminal.",
+                "No jobs yet. Start a hunt here, or run `jetcarp search hunt` in a terminal.",
             );
             return;
         }
@@ -1077,7 +1077,7 @@ impl DashWindow {
             }
             ui.label(
                 RichText::new(
-                    "Runs here on a background thread; pause it, close JETCARP, and resume it here or with `jetcarp hunt --resume JOB`.",
+                    "Runs here on a background thread; pause it, close JETCARP, and resume it here or with `jetcarp jobs resume JOB`.",
                 )
                 .small()
                 .weak(),

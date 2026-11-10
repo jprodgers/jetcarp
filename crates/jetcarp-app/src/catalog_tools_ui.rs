@@ -340,7 +340,7 @@ impl CatalogTools {
         ui.label(
             RichText::new(
                 "Collide pattern B into pattern A at every offset and every phase of B, in a rule \
-                 both work in; new objects are verified and stored (as `jetcarp library collide`).",
+                 both work in; new objects are verified and stored (as `jetcarp search collide`).",
             )
             .small()
             .weak(),
@@ -580,7 +580,7 @@ impl CatalogTools {
     fn evolve_ui(&mut self, ui: &mut egui::Ui) {
         ui.label(
             RichText::new(
-                "Edmond's evolutionary glider search (as `jetcarp evolve`): multi-state priority \
+                "Edmond's evolutionary glider search (as `jetcarp search evolve`): multi-state priority \
                  rules evolve towards seeds that travel far; the best are verified and the movers \
                  stored. The published settings are population 256, 800 generations, radius 48.",
             )

@@ -672,7 +672,7 @@ fn bounded_searches_and_collisions_store_what_their_calls_store() {
         gens: 600,
         ..Default::default()
     };
-    // Directly, as `jetcarp library search` stores it.
+    // Directly, as `Library::store_search` stores a whole run.
     let a = temp_lib("search-direct");
     let out = search(&spec, None).unwrap();
     let st = a.store_search(&out).unwrap();

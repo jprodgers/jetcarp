@@ -137,8 +137,8 @@ In a scene, an ant automaton takes `steps_per_gen` (how many ant steps make one 
 `ants` seed with a count; several ants can share a field, and on a field shared with other automata
 they interact with Life or an elementary rule. At a dead edge an ant either bounces or falls off.
 
-For research, `jetcarp ants` runs turn strings and turmite tables on an unbounded periodic tiling and
-classifies every run. When it reports a *highway*, it has proved one: it checks that the ant and
+For research, `jetcarp search ants` runs turn strings and turmite tables on an unbounded periodic
+tiling and classifies every run. When it reports a *highway*, it has proved one: it checks that the ant and
 every cell ahead of it recur, shifted, after a fixed number of steps, which by induction repeats
 forever. It reproduces the RL ant's published highway (period 104, onset 9,977) and finds, for
 example, a highway for `LNL` on hexagons with period 35 from step 161,093. This engine is tested to

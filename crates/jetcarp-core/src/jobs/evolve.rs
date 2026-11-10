@@ -2,7 +2,7 @@
 //! generation each ([`crate::evolve::Evolution`]), checkpointed after each, so a stopped search
 //! resumes from its last generation and ends exactly as an uninterrupted one (and as
 //! [`crate::evolve::evolve`] with the same spec). At the end the champions are verified, the
-//! verified gliders' records (`evolve::catalog::glider_records`, the gliders `jetcarp evolve`
+//! verified gliders' records (`evolve::catalog::glider_records`, the gliders `jetcarp search evolve`
 //! stores) go to the catalog with the final write, credited to the job, and the run's files are
 //! written to its folder, when it has one.
 //!
