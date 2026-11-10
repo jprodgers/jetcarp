@@ -1,12 +1,14 @@
 # Licence
 
-## JETCARP's own code and data
+## JETCARP's own code, data and documentation
 
 JETCARP is dual-licensed under the [Unlicense](https://github.com/jprodgers/jetcarp/blob/main/UNLICENSE)
 and the [MIT licence](https://github.com/jprodgers/jetcarp/blob/main/LICENSE-MIT): you may use its own
 code and data under either, at your option. The aim is public-domain research software. The Unlicense
 dedicates the work to the public domain; the MIT licence is offered as a fallback for places that do
-not recognise a public-domain dedication. The short explanation is in
+not recognise a public-domain dedication. The same dual licence covers this documentation: its
+text, its figures and the scenes that make them. Short passages it quotes from other works, with their
+sources cited, remain their authors'. The short explanation is in
 [`COPYING`](https://github.com/jprodgers/jetcarp/blob/main/COPYING).
 
 Contributions are accepted under the same dual licence (see [Contributing](contributing.md)).
