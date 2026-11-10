@@ -1,0 +1,7 @@
+{
+  "name": "Sandpile on Cairo pentagons",
+  "description": "The same sandpile on pentagons with five edge neighbours each.",
+  "tiling": {"family": "cairo", "size": {"cells": 16000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 20, "seed": {"pile": {"grains": 40000}}, "palette": "Ember"}]
+}

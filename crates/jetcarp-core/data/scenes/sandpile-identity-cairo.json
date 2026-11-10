@@ -1,0 +1,8 @@
+{
+  "name": "Sandpile identity on Cairo pentagons",
+  "description": "The identity element of the sandpile group: the one configuration that, added to any stable recurrent pile and toppled, changes nothing. Computed as stab(2δ − stab(2δ)). Use the Identity button on any tiling with dead edges.",
+  "tiling": {"family": "cairo", "size": {"cells": 8000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "seed": "empty", "palette": "Prism"}],
+  "commands": [{"op": "sandpile", "id": 1, "action": "identity"}]
+}

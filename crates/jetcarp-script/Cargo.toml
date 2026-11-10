@@ -1,0 +1,21 @@
+[package]
+name = "jetcarp-script"
+description = "JETCARP's scripting engine (Rhai): worlds, runs, renders, and parallel rule sweeps into output folders, with a host API for the CLI, the app, and the MCP server. No UI or GPU dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+jetcarp-core.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+png.workspace = true
+rhai = { version = "=1.27.0", features = ["sync", "serde"] }
+dirs.workspace = true
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }

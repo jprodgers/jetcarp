@@ -1,0 +1,7 @@
+{
+  "name": "Layered parity on the Spectre",
+  "description": "A Wolfram-style rule grown outward in layers from one tile: each tile is the XOR of its parents in the previous layer. Layers are distance from the seed, so this runs on any tiling, here the aperiodic Spectre.",
+  "tiling": {"family": "spectre", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Layer 2/01", "neighborhood": "touch", "seed": "center", "palette": "Prism", "color_by": "row"}]
+}

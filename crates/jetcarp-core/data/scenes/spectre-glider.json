@@ -1,0 +1,7 @@
+{
+  "name": "Spectre glider",
+  "description": "Edmond's four-state rule (arXiv:2609.22579) on touching neighbours. A two-tile seed launches a glider across the aperiodic tiling.",
+  "tiling": {"family": "spectre", "size": {"level": 5}},
+  "rng_state": 5,
+  "cas": [{"rule": "SpectreGlider", "seed": "glider_pair", "palette": "Ember"}]
+}

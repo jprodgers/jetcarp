@@ -1,0 +1,147 @@
+<!doctype html>
+<!--
+  A minimal page over a JETCARP website export (`jetcarp site export --to DIR`): it reads
+  manifest.json and shows every item's animation in a grid, with filters and a detail view.
+  Plain HTML and JavaScript, no build step. Copy it into the export folder (or point
+  DATA below at it) and serve the folder over HTTP, for example:
+
+      jetcarp site export --to ~/site/data
+      cp tools/site-example/index.html ~/site/data/
+      python3 -m http.server -d ~/site/data 8000      # then open http://localhost:8000/
+
+  Browsers do not let a page fetch files from file:// URLs, hence the small server.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JETCARP catalog</title>
+<style>
+  :root { --bg: #101217; --card: #1d2029; --line: #2c313c; --text: #e6e8ee; --dim: #9aa0ad; --accent: #ffd27a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+  header { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 20px; margin: 0 12px 0 0; }
+  select, input { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  #meta { color: var(--dim); font-size: 13px; margin-left: auto; }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; padding: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: pointer; }
+  .card:hover { border-color: var(--accent); }
+  .pic { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #1d2029; }
+  .pic img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  .cap { padding: 8px 10px; }
+  .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: var(--dim); font-size: 12px; }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px; max-width: min(720px, 94vw); }
+  dialog img { max-width: 100%; image-rendering: pixelated; display: block; margin: 0 auto 12px; }
+  dialog table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  dialog td { padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  dialog td:first-child { color: var(--dim); white-space: nowrap; }
+  #empty { padding: 40px; color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>JETCARP catalog</h1>
+  <select id="kind"><option value="">Everything</option><option value="pattern">Patterns</option><option value="quickstart">Quick Start</option></select>
+  <select id="class"><option value="">Any class</option></select>
+  <select id="sort"><option value="score">Highest score</option><option value="rating">Highest rating</option><option value="title">Name</option></select>
+  <input id="text" type="search" placeholder="Search names, rules, grids">
+  <span id="meta"></span>
+</header>
+<main id="grid"></main>
+<div id="empty" hidden>Nothing matches.</div>
+<dialog id="detail"><div id="body"></div><form method="dialog"><button>Close</button></form></dialog>
+<script>
+// Folder holding manifest.json (relative to this page).
+const DATA = ".";
+let items = [];
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+}
+
+function card(it) {
+  const m = it.media || {};
+  // Show the thumbnail first, then swap in the animation once it has loaded.
+  const still = m.thumb || m.poster;
+  const anim = m.anim;
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `<div class="pic">${still ? `<img alt="" loading="lazy" src="${DATA}/${esc(still.path)}?v=${esc(still.hash)}">` : ""}</div>
+    <div class="cap"><div class="title">${esc(it.title)}</div>
+    <div class="sub">${esc(it.class)} · ${esc(it.rule)} · ${esc(it.grid)}${it.score != null ? " · " + it.score.toFixed(1) : ""}${it.rating ? " · " + "★".repeat(it.rating) : ""}</div></div>`;
+  if (anim) {
+    const img = new Image();
+    img.onload = () => { const p = el.querySelector(".pic"); p.replaceChildren(img); };
+    img.src = `${DATA}/${anim.path}?v=${anim.hash}`;
+  }
+  el.onclick = () => show(it);
+  return el;
+}
+
+async function show(it) {
+  const r = await fetch(`${DATA}/${it.path}?v=${it.hash}`);
+  const d = await r.json();
+  const rows = [];
+  const add = (k, v) => { if (v !== undefined && v !== null && v !== "") rows.push(`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`); };
+  add("Class", d.class ?? d.behaviour);
+  add("Period", d.period);
+  add("Speed", d.speed);
+  add("Grid", d.tiling_name ?? d.grid);
+  add("Rule", d.rule);
+  if (d.range) add("Works in", `${d.range.min_rule} to ${d.range.max_rule}`);
+  if (d.rules) add("Verified in", d.rules.join(", "));
+  add("Cells", d.cells);
+  add("Seen", d.seen);
+  if (d.seen_by_rule) add("Seen per rule", Object.entries(d.seen_by_rule).map(([k, v]) => `${k}: ${v}`).join(", "));
+  add("Score", d.score);
+  add("Rating", d.rating);
+  if (d.tags && d.tags.length) add("Tags", d.tags.join(", "));
+  add("Description", d.description);
+  add("Found", d.discovered);
+  add("Id", d.id);
+  const a = it.media.anim || it.media.poster;
+  document.getElementById("body").innerHTML =
+    `<h2>${esc(it.title)}</h2>${a ? `<img alt="" src="${DATA}/${esc(a.path)}?v=${esc(a.hash)}">` : ""}<table>${rows.join("")}</table>`;
+  document.getElementById("detail").showModal();
+}
+
+function render() {
+  const kind = document.getElementById("kind").value;
+  const cls = document.getElementById("class").value;
+  const sort = document.getElementById("sort").value;
+  const text = document.getElementById("text").value.trim().toLowerCase();
+  let v = items.filter(it =>
+    (!kind || it.kind === kind) &&
+    (!cls || it.class === cls) &&
+    (!text || `${it.title} ${it.rule} ${it.grid}`.toLowerCase().includes(text)));
+  const by = {
+    score: (a, b) => (b.score ?? -1) - (a.score ?? -1),
+    rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.score ?? -1) - (a.score ?? -1),
+    title: (a, b) => a.title.localeCompare(b.title),
+  }[sort];
+  v.sort(by);
+  const grid = document.getElementById("grid");
+  grid.replaceChildren(...v.map(card));
+  document.getElementById("empty").hidden = v.length > 0;
+}
+
+async function main() {
+  const r = await fetch(`${DATA}/manifest.json`, { cache: "no-cache" });
+  if (!r.ok) { document.getElementById("empty").hidden = false; document.getElementById("empty").textContent = "No manifest.json here."; return; }
+  const m = await r.json();
+  if (m.format !== 1) console.warn("manifest format", m.format, "(this page knows format 1)");
+  items = m.items;
+  const classes = [...new Set(items.map(i => i.class).filter(Boolean))].sort();
+  const sel = document.getElementById("class");
+  for (const c of classes) sel.add(new Option(c, c));
+  document.getElementById("meta").textContent =
+    `${m.counts.patterns} patterns, ${m.counts.quickstart} Quick Start entries · exported ${m.exported} · ${m.generator}`;
+  for (const id of ["kind", "class", "sort", "text"]) document.getElementById(id).oninput = render;
+  render();
+}
+main();
+</script>
+</body>
+</html>

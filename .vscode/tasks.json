@@ -1,0 +1,160 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "scene",
+      "type": "pickString",
+      "description": "Scene to run",
+      "options": [
+        "scenes/rule30-life-ants.json",
+        "scenes/life.json",
+        "scenes/life-triangle.json",
+        "scenes/b2s34-lizard.json",
+        "scenes/brians-brain.json",
+        "scenes/langtons-ant.json",
+        "scenes/turmite-llrr.json",
+        "scenes/wireworld.json",
+        "scenes/sandpile-hex.json",
+        "scenes/sandpile-cairo.json",
+        "scenes/sandpile-spectre.json",
+        "scenes/spectre-glider.json",
+        "scenes/script-five.json",
+        "scenes/hex-wolfram.json",
+        "scenes/sandpile-identity-cairo.json"
+      ],
+      "default": "scenes/rule30-life-ants.json"
+    },
+    {
+      "id": "gens",
+      "type": "promptString",
+      "description": "Generations to run",
+      "default": "200"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "Build all",
+      "type": "cargo",
+      "command": "build",
+      "args": [
+        "--workspace"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Test all (Phase 0 checks)",
+      "type": "cargo",
+      "command": "test",
+      "args": [
+        "--workspace"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Run JETCARP app (release)",
+      "type": "cargo",
+      "command": "run",
+      "args": [
+        "--release",
+        "-p",
+        "jetcarp-app"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    },
+    {
+      "label": "Run JETCARP app (debug build)",
+      "type": "cargo",
+      "command": "run",
+      "args": [
+        "-p",
+        "jetcarp-app"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    },
+    {
+      "label": "CLI: run a scene and write out/scene.png",
+      "type": "cargo",
+      "command": "run",
+      "args": [
+        "--release",
+        "-p",
+        "jetcarp-cli",
+        "--",
+        "run",
+        "${input:scene}",
+        "--gens",
+        "${input:gens}",
+        "--png",
+        "out/scene.png"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    },
+    {
+      "label": "CLI: contact sheet of hexagon rules (out/sheet.png)",
+      "type": "cargo",
+      "command": "run",
+      "args": [
+        "--release",
+        "-p",
+        "jetcarp-cli",
+        "--",
+        "sheet",
+        "--kind",
+        "hexw3",
+        "--from",
+        "8200",
+        "--count",
+        "64",
+        "--png",
+        "out/sheet.png"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    },
+    {
+      "label": "CLI: list tilings",
+      "type": "cargo",
+      "command": "run",
+      "args": [
+        "-p",
+        "jetcarp-cli",
+        "--",
+        "tilings"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    },
+    {
+      "label": "Clippy",
+      "type": "cargo",
+      "command": "clippy",
+      "args": [
+        "--workspace",
+        "--all-targets"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ]
+    }
+  ]
+}

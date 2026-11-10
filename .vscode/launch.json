@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "scene",
+      "type": "pickString",
+      "description": "Scene to run",
+      "options": [
+        "scenes/rule30-life-ants.json",
+        "scenes/life.json",
+        "scenes/sandpile-hex.json",
+        "scenes/sandpile-spectre.json",
+        "scenes/spectre-glider.json",
+        "scenes/langtons-ant.json"
+      ],
+      "default": "scenes/rule30-life-ants.json"
+    }
+  ],
+  "configurations": [
+    {
+      "name": "JETCARP app",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": { "args": ["build", "-p", "jetcarp-app", "--bin", "jetcarp-app"], "filter": { "name": "jetcarp-app", "kind": "bin" } },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "JETCARP app (release)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": { "args": ["build", "--release", "-p", "jetcarp-app", "--bin", "jetcarp-app"], "filter": { "name": "jetcarp-app", "kind": "bin" } },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "jetcarp CLI: run scene to out/debug.png",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": { "args": ["build", "-p", "jetcarp-cli", "--bin", "jetcarp"], "filter": { "name": "jetcarp", "kind": "bin" } },
+      "args": ["run", "${input:scene}", "--gens", "200", "--png", "out/debug.png"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Phase 0 tests (jetcarp-core)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": { "args": ["test", "--no-run", "-p", "jetcarp-core", "--test", "phase0"], "filter": { "name": "phase0", "kind": "test" } },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "jetcarp-core unit tests",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": { "args": ["test", "--no-run", "-p", "jetcarp-core", "--lib"], "filter": { "name": "jetcarp_core", "kind": "lib" } },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Ternary hexagon rule 8229",
+  "description": "An elementary rule on hexagons with three states, where each cell reads the two cells touching it in the row above. Rule 8229 adds them mod 3: Pascal's triangle mod 3. Use < and > on the card to step through all 19,683 rules.",
+  "tiling": {"family": "hex", "size": {"rect": {"w": 161, "h": 81}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "HexW3 8229", "seed": "top_center", "palette": "Prism"}]
+}

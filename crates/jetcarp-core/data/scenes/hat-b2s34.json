@@ -1,0 +1,7 @@
+{
+  "name": "B2/S34 on the hat",
+  "description": "The hat monotile: every hat touches six or seven others, as a hexagon touches six. The hexagonal rule B2/S34 stays busy on it, with small clusters forming and breaking up for as long as you run it.",
+  "tiling": {"family": "hat", "size": {"level": 4}},
+  "rng_state": 5,
+  "cas": [{"rule": "B2/S34", "seed": {"random": {"density": 0.3}}, "palette": "Tide"}]
+}

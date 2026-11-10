@@ -1,0 +1,7 @@
+{
+  "name": "Life on the 12-neighbour triangle grid",
+  "description": "B3/S23 where each triangle touches twelve others. Runs settle about as slowly as on squares, and period-8 oscillators are common: a research lead from the plan.",
+  "tiling": {"family": "triangle", "size": {"cells": 12000}, "boundary": "wrap"},
+  "rng_state": 8,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.37}}, "palette": "Ember"}]
+}

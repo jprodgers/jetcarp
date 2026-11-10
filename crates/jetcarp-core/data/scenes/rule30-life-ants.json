@@ -1,0 +1,11 @@
+{
+  "name": "Rule 30 meets Life and ants",
+  "description": "Rule 30 grows from one cell, Life rewrites what it leaves behind, and three ants take 100 steps per generation. All three share one binary field, so they interact.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 240, "h": 160}}, "boundary": "dead"},
+  "rng_state": 30,
+  "cas": [
+    {"rule": "W30", "seed": "top_center"},
+    {"rule": "B3/S23", "seed": "empty"},
+    {"rule": "Ant RL", "steps_per_gen": 100, "seed": {"ants": {"count": 3}}}
+  ]
+}

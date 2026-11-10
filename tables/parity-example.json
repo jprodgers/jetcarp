@@ -1,0 +1,23 @@
+{
+ "name": "parity-example",
+ "description": "Example table: Fredkin's parity rule (XOR of the four edge neighbours), written with rotation symmetry. Load it with 'Load rule table\u2026'.",
+ "source": "Generated from the rule's definition.",
+ "states": 2,
+ "neighborhood": "edge",
+ "symmetry": "rotate",
+ "arity": 4,
+ "transitions": [
+  "0,0,0,0,0:0",
+  "0,0,0,0,1:1",
+  "0,0,0,1,1:0",
+  "0,0,1,0,1:0",
+  "0,0,1,1,1:1",
+  "0,1,1,1,1:0",
+  "1,0,0,0,0:0",
+  "1,0,0,0,1:1",
+  "1,0,0,1,1:0",
+  "1,0,1,0,1:0",
+  "1,0,1,1,1:1",
+  "1,1,1,1,1:0"
+ ]
+}

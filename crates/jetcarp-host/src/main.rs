@@ -1,0 +1,180 @@
+//! The background host: runs live scenes with no app window, so they keep going while the app
+//! opens and closes. It owns the simulation and the rotations, answers `jetcarp host` and the app over
+//! the same loopback link the app uses, and on Windows and macOS sits in the tray.
+
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+/// `eprintln!` that never panics. `eprintln!` panics when stderr is a pipe that was closed, which
+/// happens when a shell starts the host with its output piped and then moves on: the first line
+/// the host printed (such as a lost GPU's) panicked inside the event loop and hung the host.
+macro_rules! say {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), $($arg)*);
+    }};
+}
+
+mod core;
+#[cfg(target_os = "macos")]
+mod desktop_mac;
+#[cfg(windows)]
+mod desktop_win;
+mod power;
+#[cfg(any(windows, test))]
+mod saver_args;
+mod targets;
+#[cfg(any(windows, target_os = "macos"))]
+mod tray;
+mod window;
+
+use clap::Parser;
+use std::time::{Duration, Instant};
+
+#[derive(Parser, Debug)]
+#[command(name = "jetcarp-host", version, about = "JETCARP background host")]
+struct Args {
+    /// Run with no window or tray (scripts, and automated tests).
+    #[arg(long)]
+    headless: bool,
+    /// Canvas size with --headless, as WxH.
+    #[arg(long, value_parser = parse_canvas, default_value = "1280x720")]
+    canvas: [f64; 2],
+    /// Run this rotation on the first screen, for this run only.
+    #[arg(long)]
+    rotation: Option<String>,
+    /// Quit after this many seconds.
+    #[arg(long)]
+    seconds: Option<f64>,
+    /// Run as a screen saver: full screen on every monitor until there is input.
+    #[arg(long)]
+    saver: bool,
+}
+
+fn parse_canvas(s: &str) -> Result<[f64; 2], String> {
+    let bad = || format!("{s:?}: give WxH, such as 1920x1080");
+    let (w, h) = s.split_once('x').ok_or_else(bad)?;
+    let w: f64 = w.trim().parse().map_err(|_| bad())?;
+    let h: f64 = h.trim().parse().map_err(|_| bad())?;
+    if w >= 1.0 && h >= 1.0 {
+        Ok([w, h])
+    } else {
+        Err(bad())
+    }
+}
+
+/// Holds the single-instance lock for as long as the host runs. The OS drops it on any exit, so a
+/// crash cannot leave the host locked out.
+fn single_instance() -> Result<std::fs::File, String> {
+    let path = jetcarp_mcp::link::runtime_file("host.lock").ok_or("no runtime folder")?;
+    let dir = path.parent().expect("a folder");
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let f = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    match f.try_lock() {
+        Ok(()) => Ok(f),
+        Err(std::fs::TryLockError::WouldBlock) => {
+            Err("the JETCARP background host is already running".into())
+        }
+        Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
+fn run_headless(mut core: core::Core, seconds: Option<f64>) {
+    let gpu = core::SharedGpu::headless();
+    core.attach_gpu(gpu);
+    let started = Instant::now();
+    while !core.finished() && seconds.is_none_or(|s| started.elapsed().as_secs_f64() < s) {
+        let frame = core.frame_time();
+        let t0 = Instant::now();
+        core.tick();
+        if let Some(rest) = frame.checked_sub(t0.elapsed()) {
+            std::thread::sleep(rest.min(Duration::from_millis(250)));
+        }
+    }
+}
+
+fn gpu_setup() {
+    jetcarp_core::pile::set_gpu_factory(|| {
+        jetcarp_gpu::pile::PileGpu::headless()
+            .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
+    });
+}
+
+/// A screen saver or its preview, which nothing else controls and which may run beside a host.
+fn run_saver(mode: window::Mode, seconds: Option<f64>) {
+    gpu_setup();
+    let result = core::Core::for_saver().and_then(|c| window::run(c, mode, seconds));
+    if let Err(e) = result {
+        say!("jetcarp-host: {e}");
+        std::process::exit(1);
+    }
+}
+
+/// What to do when run as `JETCARP.scr`, which Windows starts with its own kind of arguments.
+#[cfg(windows)]
+fn scr_mode() -> Option<saver_args::ScrMode> {
+    let exe = std::env::current_exe().ok()?;
+    let is_scr = exe.extension()?.eq_ignore_ascii_case("scr");
+    is_scr.then(|| saver_args::parse(&std::env::args().skip(1).collect::<Vec<_>>()))
+}
+
+/// The screen saver's Settings button opens the app, where its choices are.
+#[cfg(windows)]
+fn open_settings() {
+    let app = jetcarp_display::autostart::host_program()
+        .map(|h| h.with_file_name("jetcarp-app.exe"))
+        .filter(|p| p.exists());
+    let opened = app.is_some_and(|p| std::process::Command::new(p).spawn().is_ok());
+    if !opened {
+        desktop_win::message(
+            "JETCARP's screen saver settings are in the JETCARP app: open the Screensaver pane, then Background host.",
+        );
+    }
+}
+
+fn main() {
+    #[cfg(windows)]
+    if let Some(mode) = scr_mode() {
+        use saver_args::ScrMode;
+        match mode {
+            ScrMode::Run => run_saver(window::Mode::Saver, None),
+            ScrMode::Preview(parent) => run_saver(window::Mode::Preview(parent), None),
+            ScrMode::Configure => open_settings(),
+        }
+        return;
+    }
+    let args = Args::parse();
+    if args.saver {
+        run_saver(window::Mode::Saver, args.seconds);
+        return;
+    }
+    gpu_setup();
+    let _lock = match single_instance() {
+        Ok(f) => f,
+        Err(e) => {
+            say!("jetcarp-host: {e}");
+            std::process::exit(3);
+        }
+    };
+    if let Ok(exe) = std::env::current_exe() {
+        // The GNOME menu starts the host from here.
+        let _ = jetcarp_display::autostart::record_host_program(&exe);
+    }
+    let core = match core::Core::new(args.rotation, args.headless.then_some(args.canvas)) {
+        Ok(c) => c,
+        Err(e) => {
+            say!("jetcarp-host: {e}");
+            std::process::exit(1);
+        }
+    };
+    if args.headless {
+        run_headless(core, args.seconds);
+    } else if let Err(e) = window::run(core, window::Mode::Host, args.seconds) {
+        say!("jetcarp-host: {e}");
+        std::process::exit(1);
+    }
+}

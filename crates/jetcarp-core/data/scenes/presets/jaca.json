@@ -1,0 +1,2476 @@
+[
+ {
+  "id": "seeds-war",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B2/S",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Seeds (B2/S) for both signs from a mixed soup: territories form, merge and push along glowing fronts until one sign holds the grid, usually after 3,000 to 5,000 generations.",
+   "format": 1,
+   "name": "JACA Seeds war",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "hat-war",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B27/S013",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA war on the hat tiling",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "dead",
+    "family": "hat",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "spectre-war",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B23/S036",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours only, on a spectre patch: territories form and trade ground across the aperiodic tiles. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA war on the spectre",
+   "rng_state": 24,
+   "tiling": {
+    "boundary": "dead",
+    "family": "spectre",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "herring-blobs",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B246/S1246",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "A mixed soup on herringbone tiles grows into fat, smooth-edged territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA fat blobs (herringbone)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "herring",
+    "size": {
+     "rect": {
+      "h": 63,
+      "w": 188
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trihex-streaks",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B246/S234",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "On the trihexagonal tiling the territories take a streaky, direction-dependent texture. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA streaky war (3.6.3.6)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trihex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trunchex-worms",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B18/S0,3,7,11 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on the truncated hexagonal tiling: annihilations leave glowing worm trails everywhere. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA lava worms (3.12.12)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trunchex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trunctrihex-busy",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B25/S2349",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "A busy, colourful war on the truncated trihexagonal tiling: the age colouring shows in every patch. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA busy aging war (4.6.12)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trunctrihex",
+    "size": {
+     "rect": {
+      "h": 56,
+      "w": 72
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-kd-bands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B1235/S0,3,6,7,10 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on Penrose kites and darts: smooth bands of each sign separated by glowing no-man's-land. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA glowing bands (Penrose kites)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-kd",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "ih28-bands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B1235/S1367 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on an isohedral pentagon tiling: clean diagonal bands with glowing trenches. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA diagonal trench bands (IH28)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "ih28",
+    "size": {
+     "rect": {
+      "h": 63,
+      "w": 95
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "hex-trenches",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B124/S25 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on hexagons: wiggly fronts lit by the explosions along them. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA wiggly trenches (hexagons)",
+   "rng_state": 32,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "hex",
+    "size": {
+     "rect": {
+      "h": 136,
+      "w": 177
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubhex-trenches",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B2,3,4,5,7,15/S0,1,2,3,4,10,13,14,17,18 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on the snub hexagonal tiling: territories straighten into bands with glowing trenches. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA straight trenches (3.3.3.3.6)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubhex",
+    "size": {
+     "rect": {
+      "h": 45,
+      "w": 59
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "k2-curly-trenches",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B1235/S0367 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on a 2-uniform tiling: curly fronts that keep exploding. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA curly trenches (2-uniform)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k2-001"
+    },
+    "size": {
+     "rect": {
+      "h": 39,
+      "w": 51
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "k2-edge-trenches",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA +B12/S2,9,10 -B1,2,10/S2,11 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours, blast 1, a different rule per sign: trenches through striped territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA striped trenches (edge, 2-uniform)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k2-001"
+    },
+    "size": {
+     "rect": {
+      "h": 39,
+      "w": 51
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-edge-islands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA +B1/S13 -B1/S1 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours on triangles, blast 1: rounded islands ringed with fire. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rounded islands (triangles, edge)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "hat-trenches",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA +B1/S7 -B1/S blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1 on the hat tiling: glowing trenches between the two signs' territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA trenches on the hat",
+   "rng_state": 22,
+   "tiling": {
+    "boundary": "dead",
+    "family": "hat",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "k2-ropes",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA +B123/S0,1,3,4,6,11 -B123/S01346 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B123 with blast 1: the fronts thicken into glowing ropes. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA thick glowing ropes (2-uniform)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k2-001"
+    },
+    "size": {
+     "rect": {
+      "h": 39,
+      "w": 51
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-blast2",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B2/S0139 blast 2",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 2 on triangles: a lasting band war with thick trenches full of explosions. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA explosive trenches (blast 2)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-heat",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA +B134/S25678 -B1347/S25678 blast 2",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 2 on squares, twin rules: a smooth war whose fronts glow with heat. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA heat war (blast 2)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-trench-conquest",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA +B12359/S0,1,4,8,10,11 -B12359/S1,8,9,10,11 blast 2",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 2 on triangles: one sign pushes the other back behind a wide trench until it is gone. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA wide trench conquest (blast 2)",
+   "rng_state": 22,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-beads",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B16/S1378 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1: islands ringed by glowing beads shrink until one sign holds the grid. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA bead borders (square, blast 1)",
+   "rng_state": 23,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B2/S12467",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Territories go still and age while the fronts stay active, so every front is a rainbow of ages. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (squares)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "pyth-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B2/S12467",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "The rainbow-front rule (B2/S12467) on the Pythagorean tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (Pythagorean)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "pyth",
+    "size": {
+     "rect": {
+      "h": 89,
+      "w": 134
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "cairo-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B27/S03456",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (Cairo)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "cairo",
+    "size": {
+     "rect": {
+      "h": 63,
+      "w": 95
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "oct-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B28/S13456",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Rainbow fronts on the truncated square tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (4.8.8)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "oct",
+    "size": {
+     "rect": {
+      "h": 89,
+      "w": 134
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B267/S1,3,4,6,7,8,9,10",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Still territories and rainbow fronts on Penrose rhombs. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (Penrose rhombs)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-rhomb",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-kd-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B267/S1,3,4,6,7,8,9,10",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "The same rule on kites and darts: vivid rainbow blobs. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow blobs (Penrose kites)",
+   "rng_state": 22,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-kd",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "trihex-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B29/S2,3,5,6,7,9,11,12",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Rainbow fronts on the trihexagonal tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (3.6.3.6)",
+   "rng_state": 22,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trihex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trihex-lines",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B239/S2,3,5,6,9,10",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Thin bright fronts crossing striped, still territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA line fronts over stripes (3.6.3.6)",
+   "rng_state": 24,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trihex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubhex-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B2,6,15/S1,2,3,4,13,15,18",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Rainbow fronts on the snub hexagonal tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (3.3.3.3.6)",
+   "rng_state": 31,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubhex",
+    "size": {
+     "rect": {
+      "h": 45,
+      "w": 59
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trunchex-twins",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA +B24/S123567 -B24/S1,2,5,6,7,10",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Nearly the same rule on each side (the -1 side lacks S3), rainbow fronts. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow twins (3.12.12)",
+   "rng_state": 32,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trunchex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "elongtri-stripes",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B2346/S0,2,3,4,5,6,10,12",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Rainbow fronts over striped still territories on the elongated triangular tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow over stripes (3.3.3.4.4)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "elongtri",
+    "size": {
+     "rect": {
+      "h": 54,
+      "w": 148
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "brick-diagonal",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B2/S0124",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "On bricks the still territories stretch into diagonal rainbow streaks. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA diagonal rainbow (brick)",
+   "rng_state": 32,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "brick",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "k2-rope-network",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B23/S01346",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Fronts become a network of bright ropes over dark, still territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA glowing rope network (2-uniform)",
+   "rng_state": 32,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k2-001"
+    },
+    "size": {
+     "rect": {
+      "h": 39,
+      "w": 51
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubsq-edge-colour",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B1/S123 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours, blast 1: colourful aging patches on the snub square tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA colourful aging (edge, snub square)",
+   "rng_state": 30,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubsq",
+    "size": {
+     "rect": {
+      "h": 52,
+      "w": 77
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubsq-starry",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B1/S1 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours, blast 1, B1/S1: rainbow fronts with sparkles inside the territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA starry rainbow (edge, snub square)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubsq",
+    "size": {
+     "rect": {
+      "h": 52,
+      "w": 77
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-kd-lines",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B1/S013 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours, blast 1: thin glowing lines that slowly straighten. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA glowing line network (edge, Penrose kites)",
+   "rng_state": 23,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-kd",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "square-plasma",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B13/S234",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours on squares: smooth plasma-like age gradients between the fronts. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA smooth plasma (edge, squares)",
+   "rng_state": 23,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-rainbow-vs-sparkle",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA +B2,6,7,8,10/S1,3,4,6,7,8,9,10 -B2679/S1,3,4,6,7,8,9,10",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "A still, rainbow side against a sparkling side. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow vs sparkle (Penrose rhombs)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-rhomb",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "oct-crystal",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA +B2/S13456 -B256/S135",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "The +1 rule grows still crystal that overruns the -1 noise. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA crystal overruns noise (4.8.8)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "oct",
+    "size": {
+     "rect": {
+      "h": 89,
+      "w": 134
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-crystal-falls",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA +B267/S1,3,4,6,7,8,9,10,11 -B267/S1,3,4,6,7,9,10,11",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Noise eats a still blue crystal, front by front. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA noise conquers crystal (Penrose rhombs)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-rhomb",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "square-island",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA +B23/S3 -B25/S1247 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "+B23/S3 against -B25/S1247 with blast 1: glowing islands shrink and vanish. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA shrinking island (squares, blast 1)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-pink-plasma",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA +B2/S12467 -B256/S0245678",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "+B2/S12467 against -B256/S0245678: still pink plasma blobs fight a cyan soup. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA pink plasma vs cyan (squares)",
+   "rng_state": 23,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubhex-halves-blobs",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B2/S1235",
+     "seed": {
+      "halves": {
+       "density": 0.45
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves; the front breaks into rainbow blobs. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves into rainbow blobs (3.3.3.3.6)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubhex",
+    "size": {
+     "rect": {
+      "h": 45,
+      "w": 59
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "k2-halves-bubbles",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B23/S0,1,2,3,4,8,12 blast 2",
+     "seed": {
+      "halves": {
+       "density": 0.45
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves; with blast 2 the front dissolves into exploding bubbles. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves into exploding bubbles (blast 2)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k2-001"
+    },
+    "size": {
+     "rect": {
+      "h": 39,
+      "w": 51
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trunctrihex-halves",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B25/S2,3,4,6,9,11",
+     "seed": {
+      "halves": {
+       "density": 0.3
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves that melt into a rainbow mix. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves melt into rainbow (4.6.12)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trunctrihex",
+    "size": {
+     "rect": {
+      "h": 56,
+      "w": 72
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-halves-blobs",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B23678/S1467",
+     "seed": {
+      "halves": {
+       "density": 0.3
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves; the front erupts into blobs. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves erupt (triangles)",
+   "rng_state": 22,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trunchex-halves-worms",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B18/S0,3,7,10,11 blast 1",
+     "seed": {
+      "halves": {
+       "density": 0.2
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves; blast 1 turns the front into glowing worms that spread. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves into worms (3.12.12, blast 1)",
+   "rng_state": 31,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trunchex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-halves-islands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B2,3,5,9,12/S0,1,2,5,8,11",
+     "seed": {
+      "halves": {
+       "density": 0.45
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Starts as two halves; the front buckles and pinches off islands. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves buckle into islands (triangles)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "elongtri-halves-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B14/S234",
+     "seed": {
+      "halves": {
+       "density": 0.45
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours: two halves whose front erupts into rainbow. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA halves into rainbow (edge, 3.3.3.4.4)",
+   "rng_state": 30,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "elongtri",
+    "size": {
+     "rect": {
+      "h": 54,
+      "w": 148
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "ih41-strip-eaten",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA +B25/S14568 -B257/S245678",
+     "seed": {
+      "halves": {
+       "density": 0.3
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Halves of two rules: a noisy side eats the still, glowing strip. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA noise eats the stone (IH41)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "ih41",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trihex-stripes-eaten",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA +B2,3,8,10/S01239 -B23/S47",
+     "seed": {
+      "halves": {
+       "density": 0.3
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Halves of two rules: the striped still side is eaten by the noise. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA striped stone eaten (3.6.3.6)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trihex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-anneal-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B36/S3456",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B36/S3456: smooth annealing fronts that round off and straighten, coloured by age. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA smooth rainbow bands (squares)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-anneal-red",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B368/S3456",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B368/S3456: annealing fronts where the older territory glows red. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA aging territories (squares)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "snubsq-anneal",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B345/S147",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Smooth, curvature-driven fronts on the snub square tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA annealing bands (snub square)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "snubsq",
+    "size": {
+     "rect": {
+      "h": 52,
+      "w": 77
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-anneal",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B345/S0,5,6,9,10,12",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Smooth, curvature-driven fronts on triangles. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA annealing (triangles)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "elongtri-anneal",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA B345/S0,2,3,5,6,8,10,12",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Smooth territories with a striped texture on the elongated triangular tiling. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA striped annealing (3.3.3.4.4)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "elongtri",
+    "size": {
+     "rect": {
+      "h": 54,
+      "w": 148
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rhombitrihex-maze",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B34/S12356",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B34/S12356 on the rhombitrihexagonal tiling: a maze-like texture at war with itself. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA maze war (3.4.6.4)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "rhombitrihex",
+    "size": {
+     "rect": {
+      "h": 56,
+      "w": 72
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rhombitrihex-shards",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B345/S3,4,5,6,8,9,11 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 1: still shards in a colourful, shifting mosaic. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA shards and mosaic (3.4.6.4)",
+   "rng_state": 25,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "rhombitrihex",
+    "size": {
+     "rect": {
+      "h": 56,
+      "w": 72
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "oct-city",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA +B3457/S12346 -B345/S123468",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Two close rules on the truncated square tiling build blocky, rectilinear territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA blocky city (4.8.8)",
+   "rng_state": 26,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "oct",
+    "size": {
+     "rect": {
+      "h": 89,
+      "w": 134
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "rhombitrihex-bubbles",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA +B345/S1,2,3,4,5,8,9,11,12 -B346/S0,1,2,4,8,11",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Round bubbles of one rule float in the other's still sea. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA bubbles in a still sea (3.4.6.4)",
+   "rng_state": 31,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "rhombitrihex",
+    "size": {
+     "rect": {
+      "h": 56,
+      "w": 72
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-bubbles",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA +B368/S0234568 -B347/S2456",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Bubbles of B368/S0234568 appear in a still B347/S2456 sea, grow and merge until they hold the grid. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA invading bubbles (squares)",
+   "rng_state": 24,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-rainbow-bubbles",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA +B368/S0234568 -B34/S2456",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Rainbow bubbles grow and merge until one side holds everything. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow bubbles (squares)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "trihex-dark-islands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA +B36/S2345678 -B35/S0,1,2,4,6,7,8,11,12",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Still dark islands of one rule hold out against the other's noise. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA dark islands vs noise (3.6.3.6)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "trihex",
+    "size": {
+     "rect": {
+      "h": 79,
+      "w": 102
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "square-circuit",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B1234/S2 blast 2",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours and blast 2 on squares: the war draws itself as a diagonal circuit board. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA circuit board (edge, blast 2)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "triangle-edge-rainbow",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B1/S01 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.1,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B1/S01 with edge neighbours and blast 1 on triangles: still territories with rainbow fronts. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA rainbow fronts (triangles, edge)",
+   "rng_state": 27,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "triangle",
+    "size": {
+     "rect": {
+      "h": 97,
+      "w": 124
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "k3-blast3-loops",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Neon",
+     "palette_neg": "Synthwave",
+     "rule": "JACA +B13/S234 -B13/S2345 blast 3",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Blast 3 on a 3-uniform tiling with edge neighbours: wide glowing loops that shrink and collapse. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA collapsing loops (blast 3)",
+   "rng_state": 30,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "periodic",
+    "params": {
+     "catalog": "k3-011"
+    },
+    "size": {
+     "rect": {
+      "h": 28,
+      "w": 96
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-one-front",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Moss",
+     "palette_neg": "Autumn",
+     "rule": "JACA B1/S01234 blast 2",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours and blast 2: the territories straighten until one glowing front divides the patch. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA one glowing front (Penrose rhombs, edge)",
+   "rng_state": 31,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-rhomb",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "square-cracks",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "neighborhood": "edge",
+     "palette": "Tide",
+     "palette_neg": "Ember",
+     "rule": "JACA B13/S012 blast 1",
+     "seed": {
+      "signed": {
+       "density": 0.2,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "Edge neighbours and blast 1: thin red cracks run across the still territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA cracked territories (squares, edge)",
+   "rng_state": 31,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "penrose-pink-bands",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Aurora",
+     "palette_neg": "Lava",
+     "rule": "JACA B36/S23456",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B36/S23456: still pink bands of one sign against the other's cyan noise. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA pink bands vs noise (Penrose rhombs)",
+   "rng_state": 28,
+   "tiling": {
+    "boundary": "dead",
+    "family": "penrose-rhomb",
+    "size": {
+     "level": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "square-wavy-lines",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Phosphor",
+     "palette_neg": "Koi",
+     "rule": "JACA B3678/S34567",
+     "seed": {
+      "signed": {
+       "density": 0.45,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B3678/S34567: smooth, wavy fronts that glow, with sparkle inside the territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA wavy glowing lines (squares)",
+   "rng_state": 21,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+     "rect": {
+      "h": 126,
+      "w": 190
+     }
+    }
+   }
+  }
+ },
+ {
+  "id": "elongtri-streaky-shards",
+  "scene": {
+   "jetcarp_version": "0.1.0",
+   "cas": [
+    {
+     "enabled": true,
+     "palette": "Deep Sea",
+     "palette_neg": "Thermal",
+     "rule": "JACA B3,11/S3456",
+     "seed": {
+      "signed": {
+       "density": 0.3,
+       "negative": 0.5
+      }
+     },
+     "steps_per_gen": 1
+    }
+   ],
+   "description": "B3,11/S3456 on the elongated triangular tiling: streaky, shard-like territories. Found with jaca_search.",
+   "format": 1,
+   "name": "JACA streaky shards (3.3.3.4.4)",
+   "rng_state": 29,
+   "tiling": {
+    "boundary": "wrap",
+    "family": "elongtri",
+    "size": {
+     "rect": {
+      "h": 54,
+      "w": 148
+     }
+    }
+   }
+  }
+ }
+]

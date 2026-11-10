@@ -1,0 +1,22 @@
+{
+  "name": "Script: Rule 30, Day & Night, Seeds, Life, ants",
+  "description": "A scripted sequence on one shared field. Rule 30 fills the grid, Day & Night reshapes it until it calms down, Seeds bursts it apart, Life settles it, then ants wander the ash.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 200, "h": 150}}, "boundary": "dead"},
+  "rng_state": 5,
+  "cas": [
+    {"rule": "W30", "seed": "top_center"},
+    {"rule": "B3678/S34678"},
+    {"rule": "B2/S"},
+    {"rule": "B3/S23"},
+    {"rule": "Ant RL", "steps_per_gen": 100, "seed": {"ants": {"count": 3}}}
+  ],
+  "script": {
+    "steps": [
+      {"name": "Rule 30 fills the grid", "run": ["Rule 30"], "until": {"when": "generations", "n": 149}},
+      {"name": "Day & Night until it calms", "run": ["Day & Night"], "until": {"when": "activity_below", "fraction": 0.002, "for_gens": 20}, "max_gens": 400},
+      {"name": "Seeds bursts it", "run": ["Seeds"], "until": {"when": "generations", "n": 12}},
+      {"name": "Life settles", "run": ["Life"], "until": {"when": "repeats", "max_period": 6}, "max_gens": 2000},
+      {"name": "Ants", "run": ["Langton's ant"], "until": {"when": "never"}}
+    ]
+  }
+}

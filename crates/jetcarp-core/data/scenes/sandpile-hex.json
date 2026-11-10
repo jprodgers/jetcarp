@@ -1,0 +1,7 @@
+{
+  "name": "Sandpile on hexagons",
+  "description": "An Abelian sandpile: a cell with as many grains as neighbours topples, giving one to each. A large pile spreads into a fractal.",
+  "tiling": {"family": "hex", "size": {"rect": {"w": 140, "h": 120}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 20, "seed": {"pile": {"grains": 30000}}, "palette": "Tide"}]
+}

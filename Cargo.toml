@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp-cli", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
+default-members = ["crates/jetcarp-core", "crates/jetcarp-gpu", "crates/jetcarp-mcp", "crates/jetcarp-cli", "crates/jetcarp-app", "crates/jetcarp-script", "crates/jetcarp-display", "crates/jetcarp-host", "crates/jetcarp-saver"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.95"
+authors = ["Jimmie Rodgers <jimmie@jimmieprodgers.com>"]
+license = "Unlicense OR MIT"
+repository = "https://github.com/jprodgers/jetcarp"
+homepage = "https://github.com/jprodgers/jetcarp"
+keywords = ["cellular-automata", "tilings", "aperiodic", "game-of-life", "simulation"]
+categories = ["science", "simulation", "mathematics"]
+# Nothing is published until the v0.4.0 release is cut.
+publish = false
+
+[workspace.dependencies]
+jetcarp-core = { path = "crates/jetcarp-core" }
+jetcarp-gpu = { path = "crates/jetcarp-gpu" }
+jetcarp-mcp = { path = "crates/jetcarp-mcp" }
+jetcarp-script = { path = "crates/jetcarp-script" }
+jetcarp-display = { path = "crates/jetcarp-display" }
+rayon = "1.12"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+png = "0.18.1"
+clap = { version = "4.6.7", features = ["derive"] }
+anyhow = "1.0.104"
+eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "wgpu", "wayland", "x11", "accesskit"] }
+egui-wgpu = "0.37.0"
+# Docked panes in the app (targets egui 0.37; its default `serde` feature saves the layout).
+egui_tiles = "0.18.0"
+# The app reads the monitor list from winit; the version eframe 0.37 uses, so it is not built twice.
+winit = { version = "0.30.13", default-features = false }
+bytemuck = { version = "1", features = ["derive"] }
+wgpu = "30.0.1"
+pollster = "0.4.0"
+rfd = "0.17.2"
+dirs = "7.0.0"
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+flate2 = "1.1.10"
+gif = { version = "0.14.2", default-features = false, features = ["std"] }
+image-webp = "0.2.4"
+
+# Simulation code is slow unoptimized; keep debug builds debuggable but usable.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+debug = 1

@@ -1,0 +1,16 @@
+JETCARP is dual-licensed under the Unlicense and the MIT licence.
+
+You may use JETCARP's own code and data under either licence, at your option:
+
+  * UNLICENSE   - a public-domain dedication (https://unlicense.org)
+  * LICENSE-MIT - the MIT licence, for places that do not recognise a
+                  public-domain dedication
+
+The aim is public-domain research software. The MIT licence is offered only
+as a fallback.
+
+A few files contain or are derived from other people's work and keep their
+own licences. Those licences are compatible with this dual licence, but their
+notices must be kept. The files and their licences are listed in
+THIRD_PARTY_NOTICES.md. Compiled releases also include the notices of the
+Rust libraries that JETCARP is built with.

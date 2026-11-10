@@ -1,0 +1,10 @@
+{
+  "name": "von Neumann: storage loops growing channels",
+  "description": "Burks' Fig. 12: a four-cell loop with one confluent cell (delay 2) stores five bits and feeds them into ground forever. 10000 builds an ordinary east cell each pass, so the top channel grows right; 10100 builds ordinary south cells, so the lower two grow downward. Blue: ordinary; bright: excited; green: confluent; amber: sensitized.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 96, "h": 40}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "JvN29", "seed": {"cells": {"cells": [
+    [97,9],[98,27],[99,9],[193,11],[194,13],[769,10],[770,27],[771,9],[808,10],[809,27],[810,9],[865,11],
+    [866,13],[904,11],[905,13]
+  ]}}}]
+}

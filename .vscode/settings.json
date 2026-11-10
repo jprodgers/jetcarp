@@ -1,0 +1,8 @@
+{
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.files.exclude": [".claude", "target"],
+  "rust-analyzer.files.watcherExclude": [".claude", "target"],
+  "files.exclude": { "**/target": true, ".claude/worktrees": true },
+  "files.watcherExclude": { "**/target/**": true, "**/.claude/worktrees/**": true },
+  "search.exclude": { "**/target": true, ".claude/worktrees": true, "reference/*.html": true }
+}

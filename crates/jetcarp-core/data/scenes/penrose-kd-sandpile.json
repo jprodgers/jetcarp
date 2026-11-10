@@ -1,0 +1,7 @@
+{
+  "name": "Sandpile on Penrose kites and darts",
+  "description": "Every kite and dart has four edge neighbours, so every tile topples at four grains, as on the square grid. The pile grows from the tile beside the patch's five-fold centre.",
+  "tiling": {"family": "penrose-kd", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 20, "seed": {"pile": {"grains": 30000}}, "palette": "Prism"}]
+}

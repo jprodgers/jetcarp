@@ -1,0 +1,7 @@
+{
+  "name": "Brian's Brain on Penrose rhombs",
+  "description": "Thick and thin rhombs touch seven to eleven others at their corners. Brian's Brain (fire with exactly two firing neighbours, then rest) keeps waves of activity running across the aperiodic tiling.",
+  "tiling": {"family": "penrose-rhomb", "size": {"level": 4}},
+  "rng_state": 2,
+  "cas": [{"rule": "B2/S/C3", "seed": {"random": {"density": 0.2}}, "palette": "Prism"}]
+}

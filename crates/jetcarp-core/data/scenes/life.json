@@ -1,0 +1,7 @@
+{
+  "name": "Life on the square grid",
+  "description": "Conway's Game of Life from a random start, on a wrapped (toroidal) grid. Colour shows how long each cell has been alive.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 200, "h": 140}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.35}}}]
+}

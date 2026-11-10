@@ -1,0 +1,7 @@
+{
+  "name": "Sandpile on the Spectre",
+  "description": "On the aperiodic Spectre each tile has 4 to 7 edge neighbours, so the toppling threshold varies from tile to tile.",
+  "tiling": {"family": "spectre", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 20, "seed": {"pile": {"grains": 30000}}, "palette": "Prism"}]
+}

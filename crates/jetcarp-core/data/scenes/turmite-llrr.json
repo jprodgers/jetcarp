@@ -1,0 +1,7 @@
+{
+  "name": "Four-colour turmite LLRR",
+  "description": "A turmite with four colours: left, left, right, right. It grows a symmetric, slowly filling blob.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 160}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Turmite LLRR", "steps_per_gen": 200, "seed": {"ants": {"count": 1}}, "palette": "Prism"}]
+}

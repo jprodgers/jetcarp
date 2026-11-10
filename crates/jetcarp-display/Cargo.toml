@@ -1,0 +1,35 @@
+[package]
+name = "jetcarp-display"
+description = "JETCARP display engine: draws worlds with wgpu, steps them on the GPU, and holds scene profiles. No window toolkit, so a wallpaper, a screensaver, or the app can all use it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+jetcarp-core.workspace = true
+jetcarp-gpu.workspace = true
+jetcarp-script.workspace = true
+wgpu.workspace = true
+bytemuck.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rhai = { version = "=1.27.0", features = ["sync", "serde"] }
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+dirs.workspace = true
+# The caption on surfaces with no egui: glyph drawing, and the font the app already ships.
+ab_glyph = "0.2.32"
+epaint_default_fonts = "0.37.0"
+
+[dev-dependencies]
+pollster.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"

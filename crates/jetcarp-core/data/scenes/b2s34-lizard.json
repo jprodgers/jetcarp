@@ -1,0 +1,7 @@
+{
+  "name": "B2/S34 on Escher's lizard tile",
+  "description": "The prototype's default: a three-fold hexagon with curved edges. Six neighbours each, so B2/S34 behaves as it does on hexagons.",
+  "tiling": {"family": "lizard", "size": {"cells": 2500}},
+  "rng_state": 4,
+  "cas": [{"rule": "B2/S34", "seed": {"random": {"density": 0.34}}, "palette": "Tide"}]
+}

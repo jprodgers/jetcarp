@@ -1,0 +1,7 @@
+{
+  "name": "WireWorld clocks",
+  "description": "Electrons circle three loops and stream down wires. Heads are blue, tails red, wire amber. Paint wire with the Draw tool.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 120, "h": 60}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "WireWorld", "seed": "wire_demo"}]
+}
