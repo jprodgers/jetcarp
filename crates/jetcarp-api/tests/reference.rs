@@ -253,7 +253,9 @@ fn files_list_reads_inside_its_roots_only() {
     std::fs::write(dir.join("b.png"), [0u8; 8]).unwrap();
     std::fs::create_dir_all(dir.join("sweep")).unwrap();
     std::fs::write(dir.join("sweep/manifest.json"), "{}").unwrap();
-    let cx = Ctx::new();
+    let cx = Ctx::new()
+        .with_out_root(Some(dir.clone()))
+        .with_library(Some(dir.join("catalog")));
     let list = |a: FilesIn| FilesList::run(&cx, a, &Quiet);
     let FilesOut::Listing(l) = list(FilesIn {
         path: Some(dir.display().to_string()),

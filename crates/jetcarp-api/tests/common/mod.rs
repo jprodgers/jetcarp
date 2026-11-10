@@ -6,10 +6,11 @@ use jetcarp_api::ApiError;
 use jetcarp_api::ErrorKind;
 use std::path::PathBuf;
 
-/// A fresh folder for one test, under the output folder (`JETCARP_OUT` when the tests run with
-/// their own folders), so files.list can see it.
+/// A fresh folder for one test, in Cargo's scratch folder for this target
+/// (`target/tmp/api-tests`), never in the user's own folders. A test that needs it inside the
+/// output root (files.list) passes it to `Ctx::with_out_root`.
 pub fn scratch(name: &str) -> PathBuf {
-    let dir = jetcarp_core::paths::output_dir()
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join("api-tests")
         .join(format!("{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

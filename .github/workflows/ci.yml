@@ -8,7 +8,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Keep tests away from the runner's real settings, data and Pictures folders.
+  # Keep tests away from the runner's real settings, data and Pictures folders. The Linux test
+  # step clears these and checks the default folders stay empty, so a test that would write to a
+  # user's own folders fails there.
   JETCARP_CONFIG_DIR: ${{ github.workspace }}/.ci/config
   JETCARP_DATA_DIR: ${{ github.workspace }}/.ci/data
   JETCARP_OUT: ${{ github.workspace }}/.ci/out
@@ -39,7 +41,24 @@ jobs:
       - name: Build
         run: cargo build --workspace --release --all-targets ${{ matrix.features }}
       - name: Test
+        if: runner.os != 'Linux'
         run: cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
+      - name: Test (Linux, with the default folders, failing if a test writes to them)
+        if: runner.os == 'Linux'
+        env:
+          JETCARP_CONFIG_DIR: ""
+          JETCARP_DATA_DIR: ""
+          JETCARP_OUT: ""
+          JETCARP_LIBRARY: ""
+        run: |
+          cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
+          for d in "$HOME/Pictures/JETCARP" "$HOME/.local/share/jetcarp" "$HOME/.config/jetcarp"; do
+            if [ -e "$d" ]; then
+              echo "::error::a test wrote to $d"
+              find "$d" | head -20
+              exit 1
+            fi
+          done
 
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.
