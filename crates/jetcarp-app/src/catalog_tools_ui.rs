@@ -1,14 +1,23 @@
 //! The *Catalog tools…* window: the catalog actions that were CLI- or script-only before
 //! (Phase 3 reachability gaps). Collide two patterns, export and import JSON records, remove a
-//! record, and run the evolutionary glider search, each on a background thread.
+//! record, and run the evolutionary glider search.
+//!
+//! Collisions and evolve searches are catalog jobs: *Collide* and *Evolve* call the operation
+//! `search.start` (strategies `collide` and `evolve`, in the background), the evolve search's
+//! *Stop* calls `jobs.stop` and *Resume* `jobs.resume` (`crate::window_job`), so they are in the
+//! process's job registry, where the dashboard and `jobs.status` see them. The window draws
+//! their live progress (placements run, then products verified; each generation's best), and at
+//! the end what their progress lists: a collision's outcomes and products, an evolve search's
+//! champions, verified movers, and folder.
 
+use crate::window_job::{Hooks, WindowJob};
 use eframe::egui::{self, Color32, RichText};
-use jetcarp_core::evolve::{EvolveSpec, GenStats, evolve};
-use jetcarp_core::library::collide::{CollideSpec, collide};
-use jetcarp_core::library::{self, AddOutcome, JobStatus, Library};
+use jetcarp_api::ops::jobs::ResumeIn;
+use jetcarp_api::ops::search::SearchStartIn;
+use jetcarp_core::library::{self, AddOutcome, Library};
 use jetcarp_core::world::Scene;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use serde_json::{Value, json};
+use std::path::PathBuf;
 
 /// This window's key in `crate::popout` and the settings file.
 pub const KEY: &str = "catalog-tools";
@@ -40,37 +49,107 @@ pub enum Action {
     Message(String, bool),
 }
 
+/// A finished collision, as its job's progress lists it.
 #[derive(Clone)]
 struct CollideDone {
     a: String,
     b: String,
     rule: String,
     counts: Vec<(String, usize)>,
+    /// Products: id, label, new to the catalog.
     products: Vec<(String, String, bool)>,
 }
 
-type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
+impl CollideDone {
+    fn of(p: &Value) -> CollideDone {
+        let text = |k: &str| p[k].as_str().unwrap_or_default().to_string();
+        CollideDone {
+            a: text("a"),
+            b: text("b"),
+            rule: text("rule"),
+            counts: p["outcomes"]
+                .as_object()
+                .map(|o| {
+                    o.iter()
+                        .map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0) as usize))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            products: p["found"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|x| {
+                    (
+                        x["id"].as_str().unwrap_or_default().to_string(),
+                        x["label"].as_str().unwrap_or_default().to_string(),
+                        x["new"].as_bool().unwrap_or(false),
+                    )
+                })
+                .collect(),
+        }
+    }
+}
 
-/// A collision in flight: its result slot and (placements done, placements).
-type CollideJob = (Slot<CollideDone>, Arc<Mutex<(usize, usize)>>);
+/// What a finished evolve search's progress lists: its best champions, the verified movers (or
+/// that there were none), and its folder.
+fn evolve_lines(p: &Value) -> Vec<String> {
+    let mut lines: Vec<String> = p["champions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(5)
+        .map(|c| {
+            format!(
+                "{:.2}  {}",
+                c["fitness"].as_f64().unwrap_or(0.0),
+                c["rule"].as_str().unwrap_or("")
+            )
+        })
+        .collect();
+    let movers = p["movers"].as_array().cloned().unwrap_or_default();
+    lines.extend(movers.iter().map(|m| {
+        format!(
+            "{}: {} ({} new)",
+            m["kind"].as_str().unwrap_or("mover"),
+            m["summary"].as_str().unwrap_or(""),
+            m["added"].as_array().map_or(0, |a| a.len())
+        )
+    }));
+    if movers.is_empty() {
+        lines.push(format!(
+            "{} generations, no verified glider",
+            p["generation"].as_u64().unwrap_or(0)
+        ));
+    }
+    if let Some(f) = p["folder"].as_str().filter(|f| !f.is_empty()) {
+        lines.push(format!("Files in {f}"));
+    }
+    lines
+}
 
-struct EvolveRun {
-    stop: Arc<AtomicBool>,
-    live: Arc<Mutex<Option<GenStats>>>,
-    done: Slot<Vec<String>>,
+/// The end of a job a tab started: its last progress, or why it failed.
+fn ended(j: &WindowJob) -> Result<Value, String> {
+    let p = j.progress();
+    match (j.error(), p["status"].as_str()) {
+        (Some(e), _) => Err(e),
+        (None, Some("failed")) => Err("the job failed".into()),
+        _ => Ok(p),
+    }
 }
 
 pub struct CatalogTools {
     pub open: bool,
     pub tab: Tab,
     lib: Library,
+    catalog: PathBuf,
     // Collide
     pub a: String,
     pub b: String,
     offsets: i32,
     gens: u64,
     store: bool,
-    collide_job: Option<CollideJob>,
+    collide_job: Option<WindowJob>,
     collide_last: Option<Result<CollideDone, String>>,
     // Export and import
     export_dir: String,
@@ -87,7 +166,8 @@ pub struct CatalogTools {
     ev_gens: usize,
     ev_radius: u32,
     ev_seed: u64,
-    evolve: Option<EvolveRun>,
+    /// The evolve search started or resumed here (kept once stopped, for *Resume*).
+    evolve: Option<WindowJob>,
     evolve_last: Option<Result<Vec<String>, String>>,
     pub autorun: bool,
 }
@@ -99,6 +179,7 @@ impl Default for CatalogTools {
             open: false,
             tab: Tab::Collide,
             lib: Library::open_default(),
+            catalog: Library::default_path(),
             a: "block".into(),
             b: "glider".into(),
             offsets: 4,
@@ -125,53 +206,6 @@ impl Default for CatalogTools {
     }
 }
 
-fn run_collide(
-    lib: &Library,
-    a: &str,
-    b: &str,
-    spec: &CollideSpec,
-    store: bool,
-    prog: &Mutex<(usize, usize)>,
-) -> Result<CollideDone, String> {
-    let ra = lib.get(a)?;
-    let rb = lib.get(b)?;
-    let p = |d: usize, t: usize| *prog.lock().unwrap() = (d, t);
-    let out = collide(&ra, &rb, spec, 0, Some(&p))?;
-    let mut new_ids = Vec::new();
-    if store && !out.records.is_empty() {
-        let job = lib.create_job(
-            "collide",
-            &serde_json::to_value(&out.report.spec).unwrap_or_default(),
-        )?;
-        for (rec, o) in out
-            .records
-            .iter()
-            .zip(lib.add_many(out.records.clone(), Some(job))?)
-        {
-            if o? == AddOutcome::Added {
-                new_ids.push(rec.id.clone());
-            }
-        }
-        lib.update_job(job, Some(JobStatus::Done), None, None)?;
-    }
-    Ok(CollideDone {
-        a: out.report.a_label.clone(),
-        b: out.report.b_label.clone(),
-        rule: out.report.rule.clone(),
-        counts: out
-            .report
-            .counts
-            .iter()
-            .map(|(k, v)| (k.clone(), *v))
-            .collect(),
-        products: out
-            .records
-            .iter()
-            .map(|r| (r.id.clone(), r.label(), new_ids.contains(&r.id)))
-            .collect(),
-    })
-}
-
 impl CatalogTools {
     /// `JETCARP_CATALOG_TOOLS=collide|export|remove|evolve[:run]` (headless checks).
     pub fn open_env(&mut self, s: &str) {
@@ -182,114 +216,99 @@ impl CatalogTools {
     }
 
     fn busy(&self) -> bool {
-        self.collide_job.is_some() || self.evolve.is_some()
+        self.collide_job.is_some() || self.evolving()
     }
 
+    /// The evolve search started or resumed here is still at work.
+    fn evolving(&self) -> bool {
+        self.evolve.as_ref().is_some_and(|j| j.busy())
+    }
+
+    /// *Collide*: the collision as a job (`search.start`, strategy `collide`).
     fn start_collide(&mut self) {
-        let spec = CollideSpec {
-            dx: [-self.offsets, self.offsets],
-            dy: [-self.offsets, self.offsets],
-            gens: self.gens,
+        let a = SearchStartIn {
+            strategy: Some("collide".into()),
+            spec: json!({
+                "a": self.a.trim(),
+                "b": self.b.trim(),
+                "offsets": self.offsets,
+                "gens": self.gens,
+                "store": self.store,
+            }),
             ..Default::default()
         };
-        let slot: Slot<CollideDone> = Default::default();
-        let prog = Arc::new(Mutex::new((0, 0)));
-        let (l, a, b, st, s2, p2) = (
-            self.lib.clone(),
-            self.a.clone(),
-            self.b.clone(),
-            self.store,
-            slot.clone(),
-            prog.clone(),
-        );
-        std::thread::spawn(move || {
-            let r = run_collide(&l, &a, &b, &spec, st, &p2);
-            *s2.lock().unwrap() = Some(r);
-        });
-        self.collide_job = Some((slot, prog));
+        self.collide_last = None;
+        self.collide_job = Some(WindowJob::start(&self.catalog, a, Hooks::default()));
     }
 
+    /// *Evolve*: the search as a job (`search.start`, strategy `evolve`), its files in a new
+    /// `evolve-<tiling>` folder in the output folder.
     fn start_evolve(&mut self) {
-        let tiling = match library::tiling_from_key(&self.ev_tiling) {
-            Ok(t) => t,
-            Err(e) => {
-                self.evolve_last = Some(Err(e));
-                return;
-            }
-        };
-        let spec = EvolveSpec {
-            tiling,
-            states: self.ev_states,
-            pop: self.ev_pop,
-            gens: self.ev_gens,
-            radius: self.ev_radius,
-            seed: self.ev_seed,
+        if let Err(e) = library::tiling_from_key(&self.ev_tiling) {
+            self.evolve_last = Some(Err(e));
+            return;
+        }
+        let a = SearchStartIn {
+            strategy: Some("evolve".into()),
+            spec: json!({
+                "tiling": self.ev_tiling.trim(),
+                "states": self.ev_states,
+                "pop": self.ev_pop,
+                "gens": self.ev_gens,
+                "radius": self.ev_radius,
+                "seed": self.ev_seed,
+            }),
             ..Default::default()
         };
-        let run = EvolveRun {
-            stop: Arc::new(AtomicBool::new(false)),
-            live: Default::default(),
-            done: Default::default(),
-        };
-        let (stop, live, done, lib) = (
-            run.stop.clone(),
-            run.live.clone(),
-            run.done.clone(),
-            self.lib.clone(),
-        );
-        std::thread::spawn(move || {
-            let r = evolve(&spec, &|g| {
-                *live.lock().unwrap() = Some(g.clone());
-                !stop.load(Ordering::SeqCst)
-            })
-            .and_then(|rep| {
-                let found =
-                    jetcarp_core::evolve::catalog::catalog_gliders(&rep, Some(&lib), 20_000)?;
-                let mut lines: Vec<String> = rep
-                    .champions
-                    .iter()
-                    .take(5)
-                    .map(|c| format!("{:.2}  {}", c.fitness, c.rule))
-                    .collect();
-                lines.extend(
-                    found
-                        .iter()
-                        .map(|m| format!("{}: {} ({} new)", m.kind, m.summary, m.added.len())),
-                );
-                if found.is_empty() {
-                    lines.push(format!(
-                        "{} generations, no verified glider",
-                        rep.generations.len()
-                    ));
-                }
-                Ok(lines)
-            });
-            *done.lock().unwrap() = Some(r);
-        });
-        self.evolve = Some(run);
+        self.evolve_last = None;
+        self.evolve = Some(WindowJob::start(&self.catalog, a, Hooks::default()));
     }
 
-    /// Collect finished background work.
-    fn poll(&mut self, out: &mut Vec<Action>) {
-        let collided = self
-            .collide_job
+    /// *Resume*: carry the stopped evolve search on from its last generation (`jobs.resume`).
+    fn resume_evolve(&mut self, job: i64) {
+        let a = ResumeIn {
+            job,
+            ..Default::default()
+        };
+        self.evolve_last = None;
+        self.evolve = Some(WindowJob::resume(&self.catalog, a, Hooks::default()));
+    }
+
+    /// The stopped evolve search that *Resume* carries on.
+    fn evolve_resumable(&self) -> Option<i64> {
+        self.evolve
             .as_ref()
-            .and_then(|(slot, _)| slot.lock().unwrap().take());
-        if let Some(r) = collided {
+            .filter(|j| !j.busy() && j.status() == "paused")
+            .and_then(|j| j.job())
+    }
+
+    /// Collect finished jobs.
+    fn poll(&mut self, out: &mut Vec<Action>) {
+        if let Some(j) = self.collide_job.as_ref().filter(|j| !j.busy()) {
+            let r = ended(j).map(|p| CollideDone::of(&p));
             if r.as_ref().is_ok_and(|d| d.products.iter().any(|p| p.2)) {
                 out.push(Action::LibraryChanged);
             }
             self.collide_last = Some(r);
             self.collide_job = None;
         }
-        let evolved = self
-            .evolve
-            .as_ref()
-            .and_then(|run| run.done.lock().unwrap().take());
-        if let Some(r) = evolved {
-            out.push(Action::LibraryChanged);
-            self.evolve_last = Some(r);
-            self.evolve = None;
+        if self.evolve_last.is_none()
+            && let Some(j) = self.evolve.as_ref().filter(|j| !j.busy())
+        {
+            match ended(j) {
+                Ok(p) if p["status"] == "done" => {
+                    out.push(Action::LibraryChanged);
+                    self.evolve_last = Some(Ok(evolve_lines(&p)));
+                }
+                Ok(p) => {
+                    self.evolve_last = Some(Ok(vec![format!(
+                        "Stopped after generation {} of {}. Resume carries it on from there.",
+                        p["generation"].as_u64().unwrap_or(0),
+                        p["generations"].as_u64().unwrap_or(self.ev_gens as u64)
+                    )]));
+                }
+                Err(e) => self.evolve_last = Some(Err(e)),
+            }
         }
     }
 
@@ -376,12 +395,24 @@ impl CatalogTools {
                 self.start_collide();
             }
         });
-        if let Some((_, p)) = &self.collide_job {
-            let (d, t) = *p.lock().unwrap();
-            ui.add(
-                egui::ProgressBar::new(if t > 0 { d as f32 / t as f32 } else { 0.0 })
-                    .text(format!("{d} of {t} placements")),
-            );
+        if let Some(j) = &self.collide_job {
+            let p = j.progress();
+            let n = |k: &str| p[k].as_u64().unwrap_or(0);
+            let (d, t) = (n("runs_done"), n("runs"));
+            let (frac, text) = match p.get("verified") {
+                Some(v) if t > 0 && d == t => {
+                    let (v, all) = (v.as_u64().unwrap_or(0), n("products"));
+                    (
+                        if all > 0 { v as f32 / all as f32 } else { 1.0 },
+                        format!("{t} placements run; verifying {v} of {all} products"),
+                    )
+                }
+                _ => (
+                    if t > 0 { d as f32 / t as f32 } else { 0.0 },
+                    format!("{d} of {t} placements"),
+                ),
+            };
+            ui.add(egui::ProgressBar::new(frac).text(text));
         }
         match &self.collide_last {
             Some(Ok(d)) => {
@@ -583,12 +614,14 @@ impl CatalogTools {
             RichText::new(
                 "Edmond's evolutionary glider search (as `jetcarp search evolve`): multi-state priority \
                  rules evolve towards seeds that travel far; the best are verified and the movers \
-                 stored. The published settings are population 256, 800 generations, radius 48.",
+                 stored, and the run's files go to a new evolve folder in the output folder. It \
+                 runs as a job: Stop keeps its last generation, and Resume carries it on. The \
+                 published settings are population 256, 800 generations, radius 48.",
             )
             .small()
             .weak(),
         );
-        let busy = self.evolve.is_some();
+        let busy = self.evolving();
         ui.add_enabled_ui(!busy, |ui| {
             egui::Grid::new("evolve-form")
                 .num_columns(2)
@@ -613,28 +646,51 @@ impl CatalogTools {
                     ui.end_row();
                 });
         });
+        let mut resume = None;
         ui.horizontal(|ui| {
             if !busy && ui.button("Evolve").clicked() {
                 self.start_evolve();
             }
-            if let Some(r) = &self.evolve
-                && ui.button("Stop").clicked()
+            if busy
+                && let Some(j) = &self.evolve
+                && ui
+                    .button("Stop")
+                    .on_hover_text("Stop after this generation; Resume carries it on")
+                    .clicked()
             {
-                r.stop.store(true, Ordering::SeqCst);
+                j.stop();
+            }
+            if let Some(job) = self.evolve_resumable()
+                && ui
+                    .button("Resume")
+                    .on_hover_text(format!(
+                        "Carry search {job} on from its last generation (or `jetcarp jobs resume {job}`)"
+                    ))
+                    .clicked()
+            {
+                resume = Some(job);
             }
         });
-        if let Some(r) = &self.evolve {
-            match r.live.lock().unwrap().as_ref() {
-                Some(g) => {
+        if let Some(job) = resume {
+            self.resume_evolve(job);
+        }
+        if let Some(j) = self.evolve.as_ref().filter(|j| j.busy()) {
+            let p = j.progress();
+            match (p["best"].as_f64(), p["generation"].as_u64()) {
+                (Some(best), Some(g)) => {
+                    let total = p["generations"].as_u64().unwrap_or(self.ev_gens as u64);
                     ui.add(
-                        egui::ProgressBar::new(g.generation as f32 / self.ev_gens.max(1) as f32)
-                            .text(format!(
-                                "generation {}/{}: best {:.2}, best ever {:.2}, {:.0} s",
-                                g.generation, self.ev_gens, g.best, g.best_ever, g.elapsed_s
-                            )),
+                        egui::ProgressBar::new(g as f32 / total.max(1) as f32).text(format!(
+                            "generation {g}/{total}: best {best:.2}, best ever {:.2}, {:.0} s",
+                            p["best_ever"].as_f64().unwrap_or(best),
+                            p["elapsed_s"].as_f64().unwrap_or(0.0)
+                        )),
                     );
                 }
-                None => {
+                _ if p["status"] == "done" => {
+                    ui.label("verifying the champions…");
+                }
+                _ => {
                     ui.label("building the arena…");
                 }
             }
@@ -666,21 +722,31 @@ impl CatalogTools {
     }
     /// An evolve search started here still runs.
     pub fn evolve_running(&self) -> bool {
-        self.evolve.is_some()
+        self.evolving()
     }
     /// *Stop* on the Evolve tab.
     pub fn test_stop_evolve(&mut self) {
-        if let Some(r) = &self.evolve {
-            r.stop.store(true, Ordering::SeqCst);
+        if let Some(j) = &self.evolve {
+            j.stop();
         }
     }
-    /// The evolve search has stopped (the old window ends a stopped search).
-    pub fn test_evolve_stopped(&self) -> bool {
-        self.evolve.is_none()
+    /// The evolve search's job.
+    pub fn test_evolve_job(&self) -> Option<i64> {
+        self.evolve.as_ref().and_then(|j| j.job())
     }
-    /// *Resume* a stopped evolve search; false when the window cannot.
+    /// The evolve search has stopped (paused, resumable).
+    pub fn test_evolve_stopped(&self) -> bool {
+        self.evolve_resumable().is_some()
+    }
+    /// *Resume* a stopped evolve search; false when there is none.
     pub fn test_resume_evolve(&mut self) -> bool {
-        false
+        match self.evolve_resumable() {
+            Some(j) => {
+                self.resume_evolve(j);
+                true
+            }
+            None => false,
+        }
     }
     /// Start a collision from the Collide tab, as *Collide* does.
     pub fn test_collide(&mut self, a: &str, b: &str, offsets: i32) {

@@ -123,7 +123,8 @@ this family. The comparison is described in [Findings](../research/findings.md#t
   draws the glider's trail over 70 generations as one picture.
 - `jetcarp search evolve --help` describes the search. Each search is a catalog job, saved after
   every generation: `jetcarp jobs resume JOB` carries on one that was stopped, ending exactly as an
-  uninterrupted run would, and the app's *Hunts…* window lists, stops, and resumes it.
+  uninterrupted run would, and the app's *Hunts…* window lists, stops, and resumes it. The app's
+  *Catalog tools…* window (the *Evolve* tab) starts one the same way, with *Stop* and *Resume*.
 
 ## References
 

@@ -105,7 +105,9 @@ one grain on the centre tile. The abelian property makes the result the same as 
 grains at once, while heights stay small at every step. The board grows as the pile does, so no grain
 is ever lost, and on aperiodic tilings the pile is built on an exact patch of up to about 17 million
 tiles. Piles can be toppled on the GPU on periodic tilings, and are saved after every doubling step so
-a long run can be resumed. See the guide [Large sandpiles](../guides/large-sandpiles.md).
+a long run can be resumed. The app's *Sandpile…* window builds one too, as a catalog job: it draws
+the pile as it grows, and a stopped pile carries on from its last finished step, from the window, the
+*Hunts…* window, or `jetcarp jobs resume`. See the guide [Large sandpiles](../guides/large-sandpiles.md).
 
 ## What is new here
 

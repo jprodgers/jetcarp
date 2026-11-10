@@ -196,11 +196,20 @@ mod tests {
         o.frame(0.05, &mut ui)
     }
 
+    /// Piles topple on the GPU through the toppler the app registers at start (`crate::run`).
+    fn gpu_piles() {
+        jetcarp_core::pile::set_gpu_factory(|| {
+            jetcarp_gpu::pile::PileGpu::headless()
+                .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
+        });
+    }
+
     /// The Sandpile window in a light and a dark palette (needs `JETCARP_OUT` set to a scratch
     /// folder: the pile is written there).
     #[test]
     #[ignore]
     fn offscreen_sandpile_window() {
+        gpu_piles();
         let Some(dir) = out_dir() else { return };
         assert!(std::env::var_os("JETCARP_OUT").is_some(), "set JETCARP_OUT");
         for (pal, rev, tiling) in [("Candy", false, "hex:1e5"), ("Aurora", true, "square:2e5")] {
@@ -274,6 +283,93 @@ mod tests {
         eprintln!("wrote {}", p.display());
     }
 
+    /// The Sandpile window through a stop and a resume: a larger pile drawn live, stopped part
+    /// way (paused, its finished steps kept), resumed, and done (needs `JETCARP_OUT` and
+    /// `JETCARP_LIBRARY`: the pile is a job in that catalog).
+    #[test]
+    #[ignore]
+    fn offscreen_sandpile_stop_resume() {
+        gpu_piles();
+        use crate::pile_ui::PileWindow;
+        let Some(dir) = out_dir() else { return };
+        assert!(std::env::var_os("JETCARP_OUT").is_some(), "set JETCARP_OUT");
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(900, 860) else {
+            return;
+        };
+        let show = |w: &mut PileWindow, ctx: &egui::Context| w.show(ctx);
+        let mut w = PileWindow::default();
+        w.palette = "Tide".into();
+        w.open_env("square:4e6");
+        let ok = frames_until(&mut o, 60.0, &mut w, show, |w| {
+            let (st, step, steps) = w.test_progress();
+            st == "running" && steps > 0 && step + 2 >= steps
+        });
+        assert!(ok, "the pile never got far: {:?}", w.test_progress());
+        // A second or two into a long step, so the drawing is the step in flight.
+        frames_until(&mut o, 1.5, &mut w, show, |_| false);
+        shot(&mut o, &mut w, show, &dir, "sandpile-running");
+        seen_running(w.test_job().unwrap());
+        w.test_stop();
+        let ok = frames_until(&mut o, 30.0, &mut w, show, |w| w.finished());
+        assert!(ok, "the pile never stopped: {:?}", w.test_progress());
+        shot(&mut o, &mut w, show, &dir, "sandpile-stopped");
+        seen(w.test_job().unwrap());
+        if w.test_resume() {
+            frames_until(&mut o, 2.0, &mut w, show, |_| false);
+            shot(&mut o, &mut w, show, &dir, "sandpile-resumed");
+            let ok = frames_until(&mut o, 300.0, &mut w, show, |w| w.finished());
+            assert!(ok, "the pile never finished: {:?}", w.test_progress());
+            assert_eq!(w.test_progress().0, "done");
+        } else {
+            eprintln!("the pile ended before the stop: {:?}", w.test_progress());
+        }
+        shot(&mut o, &mut w, show, &dir, "sandpile-resumed-done");
+    }
+
+    /// The Ants window through a stop and a resume (the scratch catalog `JETCARP_LIBRARY`).
+    #[test]
+    #[ignore]
+    fn offscreen_ants_stop_resume() {
+        use crate::ants_ui::AntsWindow;
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(900, 980) else {
+            return;
+        };
+        let show = |w: &mut AntsWindow, ctx: &egui::Context| {
+            w.show(ctx);
+        };
+        let mut w = AntsWindow::default();
+        w.open_env("square,hex:2-7");
+        frames_until(&mut o, 3.0, &mut w, show, |_| false);
+        shot(&mut o, &mut w, show, &dir, "ants-running");
+        seen_running(w.test_job().unwrap());
+        w.test_stop();
+        let ok = frames_until(&mut o, 30.0, &mut w, show, |w| w.search_done());
+        assert!(ok, "the search never stopped");
+        shot(&mut o, &mut w, show, &dir, "ants-stopped");
+        if w.test_resume() {
+            frames_until(&mut o, 2.0, &mut w, show, |_| false);
+            shot(&mut o, &mut w, show, &dir, "ants-resumed");
+            // Stopped again (the whole search is long); its runs so far are stored.
+            w.test_stop();
+            let ok = frames_until(&mut o, 30.0, &mut w, show, |w| w.search_done());
+            assert!(ok, "the resumed search never stopped");
+            assert_eq!(w.test_status(), "paused");
+        } else {
+            eprintln!("the search ended before the stop: {}", w.test_status());
+        }
+        frames_until(&mut o, 2.0, &mut w, show, |_| false);
+        shot(&mut o, &mut w, show, &dir, "ants-stopped-again");
+    }
+
     /// Frames of `w`'s window until `done(w)` or `secs`; whether `done` came.
     fn frames_until<W>(
         o: &mut Offscreen,
@@ -291,6 +387,57 @@ mod tests {
             std::thread::sleep(Duration::from_millis(100));
         }
         false
+    }
+
+    /// How the other front ends see job `job`: its status from `jobs.list` on an MCP context
+    /// in this process (whether it runs here), from the MCP tool `job_status` (as over the
+    /// app's link), and from `jetcarp jobs list` in a process of its own (when the binary is
+    /// built). Printed for the record, and returned.
+    fn seen(job: i64) -> ((String, bool), String, Option<String>) {
+        use jetcarp_api::op::{Op, Quiet};
+        use jetcarp_api::ops::jobs::{JobsList, ListIn};
+        let l = JobsList::run(&jetcarp_api::Ctx::interactive(), ListIn::default(), &Quiet).unwrap();
+        let line = l
+            .jobs
+            .iter()
+            .find(|j| j.job == job)
+            .expect("jobs.list lists it");
+        let listed = (line.status.clone(), line.here);
+        let out =
+            jetcarp_mcp::job_tools::call("job_status", &serde_json::json!({ "job": job })).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out.joined_text()).unwrap();
+        let mcp = v["status"].as_str().unwrap_or_default().to_string();
+        let bin =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release/jetcarp");
+        let cli = bin.exists().then(|| {
+            let o = std::process::Command::new(&bin)
+                .args(["jobs", "list", "--json"])
+                .output()
+                .unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap_or_default();
+            v["jobs"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|j| j["job"] == job)
+                .and_then(|j| j["status"].as_str())
+                .unwrap_or("not listed")
+                .to_string()
+        });
+        eprintln!(
+            "job {job}: jobs.list {listed:?}, MCP job_status {mcp}, jetcarp jobs list {cli:?}"
+        );
+        (listed, mcp, cli)
+    }
+
+    /// Job `job` runs here, and every front end says so.
+    fn seen_running(job: i64) {
+        let (listed, mcp, cli) = seen(job);
+        assert_eq!(listed, ("running".to_string(), true));
+        assert_eq!(mcp, "running");
+        if let Some(c) = cli {
+            assert_eq!(c, "running");
+        }
     }
 
     /// A settled frame of `w`'s window saved as `<dir>/<name>.png`.
@@ -335,12 +482,14 @@ mod tests {
         assert!(ok, "the hunt never showed as running: {:?}", status(&w));
         shot(&mut o, &mut w, show, &dir, "dashboard-running");
         let job = status(&w).unwrap().0;
+        seen_running(job);
         w.test_pause(job);
         let ok = frames_until(&mut o, 30.0, &mut w, show, |w| {
             status(w).is_some_and(|s| s.1 == "paused" && !s.2)
         });
         assert!(ok, "the hunt never showed as paused: {:?}", status(&w));
         shot(&mut o, &mut w, show, &dir, "dashboard-paused");
+        seen(job);
         w.test_resume(job);
         let ok = frames_until(&mut o, 30.0, &mut w, show, |w| {
             status(w).is_some_and(|s| s.1 == "running" && s.2)
@@ -392,6 +541,9 @@ mod tests {
         w.test_evolve("spectre", 48, 2000, 16);
         frames_until(&mut o, 1.5, &mut w, show, |_| false);
         shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-running");
+        if let Some(job) = w.test_evolve_job() {
+            seen_running(job);
+        }
         w.test_stop_evolve();
         frames_until(&mut o, 60.0, &mut w, show, |w| w.test_evolve_stopped());
         shot(&mut o, &mut w, show, &dir, "catalog-tools-evolve-stopped");

@@ -8,18 +8,25 @@
 //! *Colours* picks a palette for the media and for runs opened in the main view: the house
 //! style (stored in the catalog, Prism when opened) or any built-in palette (rendered in
 //! memory for this window, so the catalog's media stay in the house style).
+//!
+//! A search starts through the operation `search.start` (strategy `ants`, in the background),
+//! stops through `jobs.stop`, and resumes through `jobs.resume` (`crate::window_job`), so it is
+//! in the process's job registry with the dashboard's jobs. The stored runs and the census are
+//! read, and curation written, on a catalog thread of the window's own, never on the UI thread.
 //! `JETCARP_ANTS_SELECT=<k>` selects row k (headless checks).
 
-use jetcarp_core::ants::job::{self, AntProgress, AntSpec};
+use crate::window_job::{CatalogThread, Hooks, WindowJob};
+use eframe::egui::{self, Color32, RichText, TextureHandle};
+use jetcarp_api::ops::jobs::ResumeIn;
+use jetcarp_api::ops::search::SearchStartIn;
+use jetcarp_core::ants::job::AntProgress;
 use jetcarp_core::ants::run::Outcome;
-use jetcarp_core::ants::search::Strings;
-use jetcarp_core::jobs::{JobHandle, RunOptions, Runner};
 use jetcarp_core::library::{AntCensus, AntQuery, AntRow, AntUpdate, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle, MediaTarget};
 use jetcarp_core::render::Image;
 use jetcarp_core::world::Scene;
-use eframe::egui::{self, Color32, RichText, TextureHandle};
-use std::sync::mpsc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
 
 /// This window's key in `crate::popout` and the settings file.
@@ -46,14 +53,23 @@ pub enum Action {
     Message(String, bool),
 }
 
+/// The stored runs and the census, as the catalog thread last read them.
+type Read = (Result<Vec<AntRow>, String>, Vec<AntCensus>);
+
 pub struct AntsWindow {
     pub open: bool,
     lib: Library,
+    catalog: PathBuf,
+    /// The window's catalog thread (made on first use).
+    bg: Option<CatalogThread>,
+    /// A read the catalog thread has finished, to take.
+    read: Arc<Mutex<Option<Read>>>,
     tilings: String,
     min_len: usize,
     max_len: usize,
     steps: u64,
-    handle: Option<JobHandle>,
+    /// The last search started or resumed here.
+    job: Option<WindowJob>,
     last: Option<AntProgress>,
     outcome: Option<Outcome>,
     tiling_filter: String,
@@ -64,6 +80,8 @@ pub struct AntsWindow {
     error: Option<String>,
     selected: Option<Selected>,
     select_env: Option<usize>,
+    /// The last run has ended and its runs have been read.
+    read_after_end: bool,
     /// Palette for media and opened runs (`None`: the house style; saved in the settings).
     pub palette: Option<String>,
 }
@@ -73,11 +91,14 @@ impl Default for AntsWindow {
         AntsWindow {
             open: false,
             lib: Library::open_default(),
+            catalog: Library::default_path(),
+            bg: None,
+            read: Default::default(),
             tilings: "square".into(),
             min_len: 2,
             max_len: 5,
             steps: 1_000_000,
-            handle: None,
+            job: None,
             last: None,
             outcome: Some(Outcome::Highway),
             tiling_filter: String::new(),
@@ -87,6 +108,7 @@ impl Default for AntsWindow {
             loaded: None,
             error: None,
             selected: None,
+            read_after_end: false,
             select_env: std::env::var("JETCARP_ANTS_SELECT")
                 .ok()
                 .and_then(|v| v.parse().ok()),
@@ -112,38 +134,52 @@ impl AntsWindow {
         self.reload();
     }
 
+    /// The search started or resumed here is still at work.
     fn running(&self) -> bool {
-        self.handle.as_ref().is_some_and(|h| !h.is_finished())
+        self.job.as_ref().is_some_and(|j| j.busy())
     }
 
     fn start(&mut self) {
         self.error = None;
-        let tilings = match jetcarp_core::library::tiling_list(&self.tilings) {
-            Ok(t) => t,
-            Err(e) => {
-                self.error = Some(e);
-                return;
-            }
-        };
-        let spec = AntSpec {
-            tilings,
-            strings: Some(Strings {
-                min: self.min_len.min(self.max_len),
-                max: self.max_len.max(self.min_len),
-                alphabet: None,
+        // Checked here for a message at once; the operation reads the same text.
+        if let Err(e) = jetcarp_core::library::tiling_list(&self.tilings) {
+            self.error = Some(e);
+            return;
+        }
+        let a = SearchStartIn {
+            strategy: Some("ants".into()),
+            spec: serde_json::json!({
+                "tilings": self.tilings,
+                "strings": [self.min_len.min(self.max_len), self.max_len.max(self.min_len)],
+                "steps": self.steps,
             }),
-            steps: self.steps,
             ..Default::default()
         };
-        match job::start(&self.lib, &spec) {
-            Ok(jid) => match Runner::new(self.lib.clone()).spawn(jid, RunOptions::default()) {
-                Ok(h) => self.handle = Some(h),
-                Err(e) => self.error = Some(e),
-            },
-            Err(e) => self.error = Some(e),
-        }
+        self.last = None;
+        self.read_after_end = false;
+        self.job = Some(WindowJob::start(&self.catalog, a, Hooks::default()));
     }
 
+    /// Carry the stopped search on (`jobs.resume`).
+    fn resume(&mut self, job: i64) {
+        self.error = None;
+        let a = ResumeIn {
+            job,
+            ..Default::default()
+        };
+        self.read_after_end = false;
+        self.job = Some(WindowJob::resume(&self.catalog, a, Hooks::default()));
+    }
+
+    /// Run `f` on the window's catalog thread.
+    fn on_catalog(&mut self, f: impl FnOnce(&Library) + Send + 'static) {
+        let catalog = &self.catalog;
+        self.bg
+            .get_or_insert_with(|| CatalogThread::new(catalog))
+            .run(f);
+    }
+
+    /// Read the stored runs (as filtered) and the census again, on the catalog thread.
     fn reload(&mut self) {
         let q = AntQuery {
             outcome: self.outcome,
@@ -152,12 +188,24 @@ impl AntsWindow {
             limit: Some(200),
             ..Default::default()
         };
-        match self.lib.ants(&q) {
-            Ok(r) => self.rows = r,
-            Err(e) => self.error = Some(e),
-        }
-        self.census = self.lib.ant_census(None).unwrap_or_default();
+        let slot = self.read.clone();
+        self.on_catalog(move |lib| {
+            let rows = lib.ants(&q);
+            let census = lib.ant_census(None).unwrap_or_default();
+            *slot.lock().unwrap() = Some((rows, census));
+        });
         self.loaded = Some(Instant::now());
+    }
+
+    /// Take a finished read.
+    fn take_read(&mut self) {
+        if let Some((rows, census)) = self.read.lock().unwrap().take() {
+            match rows {
+                Ok(r) => self.rows = r,
+                Err(e) => self.error = Some(e),
+            }
+            self.census = census;
+        }
     }
 
     /// Select a run: its name for editing, and its media rendered (or read) in the background.
@@ -230,11 +278,15 @@ impl AntsWindow {
         });
     }
 
+    /// Curate a run (on the catalog thread), then read the runs again.
     fn update(&mut self, id: &str, u: AntUpdate) {
-        match self.lib.update_ant(id, &u) {
-            Ok(_) => self.reload(),
-            Err(e) => self.error = Some(e),
-        }
+        let (id, slot) = (id.to_string(), self.read.clone());
+        self.on_catalog(move |lib| {
+            if let Err(e) = lib.update_ant(&id, &u) {
+                *slot.lock().unwrap() = Some((Err(e), lib.ant_census(None).unwrap_or_default()));
+            }
+        });
+        self.reload();
     }
 
     /// The selected run's panel: name, rating, state, media.
@@ -356,18 +408,28 @@ impl AntsWindow {
 
     pub fn show(&mut self, ctx: &egui::Context) -> Vec<Action> {
         let mut out = vec![];
+        self.take_read();
         if let Some(k) = self.select_env
             && let Some(r) = self.rows.get(k).cloned()
         {
             self.select_env = None;
             self.select(&r);
         }
-        if let Some(h) = &self.handle {
-            self.last = Some(h.progress_as::<AntProgress>());
-            if h.is_finished() {
-                self.handle = None;
-                self.reload();
+        let mut ended = false;
+        if let Some(j) = &self.job {
+            let p = j.progress();
+            if p.is_object() {
+                self.last = Some(serde_json::from_value(p).unwrap_or_default());
             }
+            if let Some(e) = j.error() {
+                self.error = Some(e);
+            }
+            ended = !j.busy();
+        }
+        if ended && !self.read_after_end {
+            // The run has ended: read its last runs once (the job stays, for Resume).
+            self.read_after_end = true;
+            self.reload();
         }
         if self.running() {
             ctx.request_repaint_after(std::time::Duration::from_millis(300));
@@ -416,10 +478,32 @@ impl AntsWindow {
                         }
                     });
                 });
-                if let Some(h) = &self.handle
-                    && ui.button("Stop (resumable)").clicked()
-                {
-                    h.stop();
+                let mut resume = None;
+                ui.horizontal(|ui| {
+                    if let Some(j) = &self.job {
+                        if running {
+                            if ui
+                                .button("Stop (resumable)")
+                                .on_hover_text("Stop at the next batch; Resume carries it on")
+                                .clicked()
+                            {
+                                j.stop();
+                            }
+                        } else if j.status() == "paused"
+                            && let Some(id) = j.job()
+                            && ui
+                                .button("Resume")
+                                .on_hover_text(format!(
+                                    "Carry search {id} on from its last checkpoint (or `jetcarp jobs resume {id}`)"
+                                ))
+                                .clicked()
+                        {
+                            resume = Some(id);
+                        }
+                    }
+                });
+                if let Some(id) = resume {
+                    self.resume(id);
                 }
                 if let Some(p) = &self.last {
                     let frac = if p.runs_total > 0 {
@@ -572,13 +656,47 @@ impl AntsWindow {
 impl AntsWindow {
     /// The search started by `open_env` has finished (offscreen checks).
     pub fn search_done(&self) -> bool {
-        self.handle.is_none()
+        !self.running()
     }
     /// Select the first stored run (offscreen checks).
     pub fn select_first(&mut self) {
         self.reload();
+        let t = Instant::now();
+        while self.read.lock().unwrap().is_none() && t.elapsed().as_secs() < 10 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        self.take_read();
         if let Some(r) = self.rows.first().cloned() {
             self.select(&r);
         }
+    }
+    /// *Stop (resumable)*.
+    pub fn test_stop(&self) {
+        if let Some(j) = &self.job {
+            j.stop();
+        }
+    }
+    /// *Resume* the stopped search; false when there is none.
+    pub fn test_resume(&mut self) -> bool {
+        match self
+            .job
+            .as_ref()
+            .filter(|j| !j.busy() && j.status() == "paused")
+        {
+            Some(j) => {
+                let id = j.job().unwrap();
+                self.resume(id);
+                true
+            }
+            None => false,
+        }
+    }
+    /// The last search's job.
+    pub fn test_job(&self) -> Option<i64> {
+        self.job.as_ref().and_then(|j| j.job())
+    }
+    /// The last search's status (`running`, `paused`, `done`).
+    pub fn test_status(&self) -> String {
+        self.job.as_ref().map(|j| j.status()).unwrap_or_default()
     }
 }

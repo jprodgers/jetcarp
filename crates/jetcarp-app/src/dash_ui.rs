@@ -6,19 +6,26 @@
 //! The UI thread never touches SQLite: a worker thread with its own catalog connection reads
 //! the `jobs` table every [`JOBS_EVERY`] (WAL lets it read while hunts write), recomputes the
 //! selected job's heat map and finds at most every [`DETAIL_EVERY`] and only when the job wrote
-//! new progress, and runs the commands (start, pause, resume, stop, rate, reject); the jobs it
-//! runs here are on the job runner, their handles in the process's registry
-//! (`jetcarp_core::jobs::registry`, shared with anything else this process runs). Animations are
-//! made on two more threads (`media::pattern_animation`) only for the finds on screen, in the
-//! house style or the palette picked under *Colours* (which *Render media* uses too).
-//! Everything kind-specific is in `jetcarp_core::jobs::StrategyKind`.
+//! new progress, and runs the commands (start, pause, resume, stop, rate, reject). A hunt
+//! starts through the operation `search.start`, pause and stop go through `jobs.stop`, and
+//! *Resume here* through `jobs.resume`, all in the background: the jobs run on the job runner,
+//! their handles in the process's registry (`jetcarp_core::jobs::registry`), which the other
+//! windows' jobs and the app's MCP link share. Animations are made on two more threads
+//! (`media::pattern_animation`) only for the finds on screen, in the house style or the palette
+//! picked under *Colours* (which *Render media* uses too). Everything kind-specific is in
+//! `jetcarp_core::jobs::StrategyKind`.
 
 use crate::thumbs;
+use crate::window_job::{self, AppPlatform};
 use eframe::egui::{self, Color32, ColorImage, Rect, RichText, Sense, TextureHandle};
+use jetcarp_api::op::{Op, Quiet};
+use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
+use jetcarp_api::ops::search::{HuntIn, SearchStart, SearchStartIn};
+use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
-use jetcarp_core::hunt::job::{HuntSpec, SoupBatcher};
+use jetcarp_core::hunt::job::HuntSpec;
 use jetcarp_core::hunt::soup::SoupSpec;
-use jetcarp_core::jobs::{self, RunOptions, registry};
+use jetcarp_core::jobs::{self, registry};
 use jetcarp_core::library::{HeatRow, JobStatus, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
@@ -124,6 +131,26 @@ impl HuntForm {
         spec.check()?;
         Ok(spec)
     }
+
+    /// The hunt as the operation `search.start` takes it (strategy `hunt`), once
+    /// [`spec`](Self::spec) has checked it.
+    pub fn input(&self) -> HuntIn {
+        HuntIn {
+            rules: Some(serde_json::json!(split_list(&self.rules))),
+            tilings: Some(serde_json::json!(split_list(&self.tilings))),
+            nb: match self.nb {
+                1 => Some("touch".into()),
+                2 => Some("edge".into()),
+                _ => None,
+            },
+            soups: Some(if self.forever { 0 } else { self.soups }),
+            size: Some(serde_json::json!([self.w.max(1), self.h.max(1)])),
+            density: Some(self.density),
+            seed: Some(self.seed),
+            gens: Some(self.max_gens),
+            ..Default::default()
+        }
+    }
 }
 
 /// The selected job's heat map and finds.
@@ -152,7 +179,7 @@ struct Selection {
 
 enum Cmd {
     Select(Selection),
-    Start(Box<HuntSpec>, bool, usize),
+    Start(Box<HuntIn>, bool, usize),
     Pause(i64),
     Resume(i64, bool, usize),
     Stop(i64),
@@ -240,7 +267,10 @@ struct Worker {
     last_detail: Option<Instant>,
     detail_updated: String,
     rev: u64,
-    gpu: Option<Arc<dyn SoupBatcher>>,
+    /// The operations' context, on the worker's catalog connection.
+    cx: Ctx,
+    /// The GPU soup hunter was asked for and is missing (said once).
+    no_gpu: bool,
 }
 
 impl Worker {
@@ -248,33 +278,45 @@ impl Worker {
         self.shared.lock().unwrap().messages.push((m, err));
     }
 
-    fn opts(&mut self, gpu: bool, threads: usize) -> RunOptions {
-        if gpu && self.gpu.is_none() {
-            match jetcarp_gpu::hunt::GpuHunter::headless() {
-                Ok(g) => self.gpu = Some(Arc::new(g)),
-                Err(e) => self.msg(format!("No GPU for hunts ({e}); running on the CPU."), true),
-            }
+    /// GPU batches for a hunt when asked for and there is a GPU; else the CPU, said once.
+    fn gpu(&mut self, asked: bool) -> bool {
+        if !asked || self.no_gpu {
+            return false;
         }
-        RunOptions {
-            threads,
-            gpu: if gpu { self.gpu.clone() } else { None },
-            ..Default::default()
+        match AppPlatform.soup_batcher() {
+            Ok(_) => true,
+            Err(e) => {
+                self.no_gpu = true;
+                self.msg(format!("No GPU for hunts ({e}); running on the CPU."), true);
+                false
+            }
         }
     }
 
+    /// *Resume here*: `jobs.resume` in the background (the run gets its own catalog
+    /// connection, so its writes never wait on the worker's reads).
     fn resume(&mut self, job: i64, gpu: bool, threads: usize) {
         if registry().is_running(&self.lib, job) {
             return;
         }
-        let row = match self.lib.job(job) {
-            Ok(r) => r,
-            Err(e) => return self.msg(e, true),
+        let hunt = self.lib.job(job).is_ok_and(|r| r.kind == "hunt");
+        let a = ResumeIn {
+            job,
+            threads: Some(threads),
+            gpu: hunt && self.gpu(gpu),
+            background: true,
+            ..Default::default()
         };
-        let o = self.opts(gpu && row.kind == "hunt", threads);
-        // Each job here gets its own connection, so its writes never wait on the worker's reads.
-        match registry().start(Library::open(&self.path), job, o) {
-            Ok(()) => self.msg(format!("Job {job} is running here."), false),
-            Err(e) => self.msg(e, true),
+        match JobsResume::run(&self.cx, a, &Quiet) {
+            Ok(_) => self.msg(format!("Job {job} is running here."), false),
+            Err(e) => self.msg(e.to_string(), true),
+        }
+    }
+
+    /// *Pause*: `jobs.stop`, here or in whatever process runs it.
+    fn pause(&mut self, job: i64) {
+        if let Err(e) = JobsStop::run(&self.cx, JobIn { job }, &Quiet) {
+            self.msg(e.to_string(), true);
         }
     }
 
@@ -286,23 +328,24 @@ impl Worker {
                     self.sel_dirty = true;
                 }
             }
-            Cmd::Start(spec, gpu, threads) => {
-                match jetcarp_core::hunt::job::start(&self.lib, &spec) {
-                    Ok(job) => {
-                        self.resume(job, gpu, threads);
-                        self.shared.lock().unwrap().started = Some(job);
+            Cmd::Start(hunt, gpu, threads) => {
+                let a = SearchStartIn {
+                    strategy: Some("hunt".into()),
+                    spec: serde_json::to_value(*hunt).unwrap_or_default(),
+                    threads: Some(threads),
+                    gpu: self.gpu(gpu),
+                    background: true,
+                    ..Default::default()
+                };
+                match SearchStart::run(&self.cx, a, &Quiet) {
+                    Ok(out) => {
+                        self.msg(format!("Job {} is running here.", out.job), false);
+                        self.shared.lock().unwrap().started = Some(out.job);
                     }
-                    Err(e) => self.msg(e, true),
+                    Err(e) => self.msg(e.to_string(), true),
                 }
             }
-            Cmd::Pause(job) => {
-                if !registry().stop(&self.lib, job)
-                    && let Ok(row) = self.lib.job(job)
-                    && let Err(e) = jobs::kind(&row.kind).request_stop(&self.lib, job)
-                {
-                    self.msg(e, true);
-                }
-            }
+            Cmd::Pause(job) => self.pause(job),
             Cmd::Resume(job, gpu, threads) => self.resume(job, gpu, threads),
             Cmd::Stop(job) => {
                 self.finishing.insert(job);
@@ -489,7 +532,9 @@ impl Worker {
                 Ok(Cmd::Shutdown(ack)) => {
                     let here = registry().jobs(&self.lib);
                     for &j in &here {
-                        registry().stop(&self.lib, j);
+                        if registry().is_running(&self.lib, j) {
+                            self.pause(j);
+                        }
                     }
                     for j in here {
                         let _ = registry().wait(&self.lib, j);
@@ -793,8 +838,10 @@ impl DashWindow {
     fn send(&mut self, c: Cmd) {
         if self.tx.is_none() {
             let (tx, rx) = channel();
+            let lib = Library::open(&self.path);
             let w = Worker {
-                lib: Library::open(&self.path),
+                cx: window_job::ctx_on(lib.clone()),
+                lib,
                 path: self.path.clone(),
                 shared: self.shared.clone(),
                 finishing: HashSet::new(),
@@ -803,7 +850,7 @@ impl DashWindow {
                 last_detail: None,
                 detail_updated: String::new(),
                 rev: 0,
-                gpu: None,
+                no_gpu: false,
             };
             std::thread::Builder::new()
                 .name("jetcarp-dashboard".into())
@@ -871,10 +918,10 @@ impl DashWindow {
 
     fn start_hunt(&mut self) {
         match self.form.spec() {
-            Ok(spec) => {
+            Ok(_) => {
                 self.form_error = None;
                 let (gpu, threads) = (self.form.gpu, self.form.threads);
-                self.send(Cmd::Start(Box::new(spec), gpu, threads));
+                self.send(Cmd::Start(Box::new(self.form.input()), gpu, threads));
                 self.form_open = false;
             }
             Err(e) => self.form_error = Some(e),
@@ -1720,10 +1767,25 @@ mod tests {
         assert_eq!(s.tilings.len(), 2);
         assert_eq!((s.soup.w, s.soup.h, s.soup.density), (20, 12, 0.4));
         assert_eq!(s.soups, Some(500));
+        // What search.start gets.
+        let i = serde_json::to_value(f.input()).unwrap();
+        assert_eq!(i["rules"], serde_json::json!(["B3/S23", "B36/S23", "B2/S"]));
+        assert_eq!(i["tilings"], serde_json::json!(["square", "hex"]));
+        assert_eq!(i["size"], serde_json::json!([20, 12]));
+        assert_eq!(
+            (i["soups"].as_u64(), i["density"].as_f64()),
+            (Some(500), Some(0.4))
+        );
+        assert!(i["nb"].is_null());
         f.forever = true;
         f.nb = 2;
         let s = f.spec().unwrap();
         assert_eq!((s.soups, s.neighborhood), (None, Some(Nb::Edge)));
+        let i = serde_json::to_value(f.input()).unwrap();
+        assert_eq!(
+            (i["soups"].as_u64(), i["nb"].as_str()),
+            (Some(0), Some("edge"))
+        );
         f.rules = "W30".into();
         assert!(f.spec().is_err(), "row rules cannot be hunted");
         f.rules = "B3/S23".into();

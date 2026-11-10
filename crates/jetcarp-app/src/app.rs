@@ -413,8 +413,13 @@ impl eframe::App for JetcarpApp {
             self.saver_leave(&ctx);
             self.save_settings(&ctx, true);
         }
-        // Hunts and searches running here stop at a checkpoint and are left paused.
+        // Hunts and searches running here stop at a checkpoint and are left paused: the
+        // dashboard's, then those the other windows started (when the dashboard never opened).
         self.dash.shutdown(std::time::Duration::from_secs(20));
+        crate::window_job::shutdown(
+            &jetcarp_core::library::Library::default_path(),
+            std::time::Duration::from_secs(20),
+        );
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
