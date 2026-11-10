@@ -15,6 +15,7 @@
 #   python3 docs/tools/gen-bibliography.py
 #   python3 docs/tools/gen-named-rules.py
 #   python3 docs/tools/gen-tiling-catalogue.py
+#   python3 docs/tools/gen-scripting.py
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 JETCARP=${JETCARP:-target/release/jetcarp}
@@ -87,6 +88,17 @@ render tilings/penrose-kd-sandpile       3000   560
 render tilings/penrose-rhomb-b2s34        200   560
 render tilings/hat-b2s34                  200   560
 render tilings/spectre-b2s23v             200   560
+
+# ---- Guides ---------------------------------------------------------------------------------
+render guides/several-shared              110   480
+render guides/several-separate            110   480
+render guides/palettes-age                600   480
+render guides/palettes-state              600   480
+# guides/hashlife-view.png is a picture of the HashLife view window on the built-in scene
+# crates/jetcarp-core/data/scenes/life-not.json after 2^10 generations, drawn by the app's
+# offscreen test (it needs a GPU adapter):
+#   JETCARP_OFFSCREEN_OUT=<folder> cargo test -p jetcarp-app --release offscreen_hashlife_window -- --ignored
+# then copy <folder>/hashlife-synthwave.png to docs/src/images/guides/hashlife-view.png.
 
 # Thumbnails for the tiling catalogue (docs/src/tilings/catalogue.md).
 if [[ -z "$FILTER" || "thumbs" == *"$FILTER"* ]]; then

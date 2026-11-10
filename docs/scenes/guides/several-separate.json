@@ -1,0 +1,10 @@
+{
+  "name": "Rule 30 and Life on separate fields",
+  "description": "The same two rules, with Affects others switched off for Life: it runs on a private field from a soup of its own, drawn over Rule 30's field, and neither touches the other.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 200, "h": 120}}, "boundary": "dead"},
+  "rng_state": 30,
+  "cas": [
+    {"rule": "W30", "seed": "top_center", "palette": "Ember"},
+    {"rule": "B3/S23", "affects_others": false, "seed": {"blob": {"radius": 0.45, "density": 0.35}}, "palette": "Glacier"}
+  ]
+}

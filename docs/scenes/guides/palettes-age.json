@@ -1,0 +1,7 @@
+{
+  "name": "Life coloured by age",
+  "description": "Conway's Life from a soup, coloured by age in Verdigris: young cells at the first stop, cells that have not changed for 400 generations or more at the last.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 12,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.35}}, "palette": "Verdigris", "color_by": "age"}]
+}

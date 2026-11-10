@@ -1,0 +1,7 @@
+{
+  "name": "Life coloured by state",
+  "description": "The same run coloured by state: Life has one live state, so every live cell takes the palette's first stop.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 12,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.35}}, "palette": "Verdigris", "color_by": "state"}]
+}

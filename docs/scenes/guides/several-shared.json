@@ -1,0 +1,10 @@
+{
+  "name": "Rule 30 and Life on one shared field",
+  "description": "Rule 30 grows from one cell at the top while Life rewrites every row it writes. Both rules are binary, so by default they share one field and act on each other's cells.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 200, "h": 120}}, "boundary": "dead"},
+  "rng_state": 30,
+  "cas": [
+    {"rule": "W30", "seed": "top_center", "palette": "Ember"},
+    {"rule": "B3/S23", "seed": "empty", "palette": "Glacier"}
+  ]
+}
