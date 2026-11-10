@@ -60,7 +60,7 @@ pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
 mod ratings;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
-pub use jobs::StepWrite;
+pub use jobs::{StepEnd, StepWrite};
 pub use ratings::RatingRow;
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 

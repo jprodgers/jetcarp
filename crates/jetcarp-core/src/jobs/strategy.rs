@@ -4,8 +4,8 @@
 use super::{Live, Sink, now_seconds, status_name};
 use crate::dashboard::{Finds, HeatSpace, JobSummary};
 use crate::hunt::job::SoupBatcher;
-use crate::library::store::{JobRow, StepWrite};
-use crate::library::{JobStatus, Library};
+use crate::library::store::JobRow;
+use crate::library::{AddOutcome, JobStatus, Library};
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -94,8 +94,9 @@ pub trait Strategy {
     fn restore(&mut self, _cx: &RunCx<'_>, _checkpoint: Option<&[u8]>) -> Result<(), String> {
         Ok(())
     }
-    /// One batch of work; its results go in `sink`. It should not take much longer than a
-    /// few seconds to a minute: the runner checks for a stop between steps.
+    /// One batch of work; its results go in `sink`. It should take no more than a few seconds:
+    /// the runner checks for a stop between steps (a step that cannot be cut that small
+    /// watches [`RunCx::stop`] itself, and may [`RunCx::publish`] its progress meanwhile).
     fn step(&mut self, _cx: &RunCx<'_>, _sink: &mut Sink) -> Result<Step, String> {
         Err("this strategy runs as a whole, not in steps".into())
     }
@@ -111,6 +112,11 @@ pub trait Strategy {
     fn items(&self) -> u64 {
         0
     }
+    /// What became of the records of the step being written (one result per record of the
+    /// sink's `patterns`, then its `verified`, in order), told inside its transaction before
+    /// its progress and checkpoint are taken: a strategy whose progress counts the records new
+    /// to the catalog, or that remembers which are stored, reads them here.
+    fn stored(&mut self, _outcomes: &[Result<AddOutcome, String>]) {}
     /// After the last step: the finishing work (results in `sink`, written with the final
     /// progress, status `done`).
     fn finish(&mut self, _cx: &RunCx<'_>, _sink: &mut Sink) -> Result<(), String> {
@@ -152,41 +158,46 @@ impl RunCx<'_> {
     pub fn paused_elsewhere(&self) -> bool {
         self.lib.job(self.job).map(|j| j.status) == Ok(JobStatus::Paused)
     }
+    /// Show (and save) the progress part way through a long step: the job's progress is
+    /// written, only while this runner holds the job, and the live progress set.
+    pub fn publish(&self, progress: Value) {
+        let w = Sink::default().take(None, now_seconds());
+        let _ = self
+            .lib
+            .job_step(self.job, self.owner, w, |_| Ok((progress.clone(), None)));
+        self.live.set(progress);
+    }
 }
 
-/// Write a step: the sink's rows, the progress, the checkpoint, the status, the heartbeat.
-fn write(
+/// Write a step in one transaction: the sink's rows, then (told what became of its records)
+/// the strategy's progress with this status and, when `save` is set, its checkpoint, with the
+/// heartbeat. The job's status is set only when `set` is (a step's write leaves it, so a pause
+/// marked by another process meanwhile is seen at the next check). Returns the progress
+/// written.
+fn write<S: Strategy + ?Sized>(
     cx: &RunCx<'_>,
+    s: &mut S,
     sink: &mut Sink,
-    progress: &Value,
-    checkpoint: Option<&[u8]>,
-    status: Option<JobStatus>,
-) -> Result<(), String> {
-    let res = cx.lib.job_step(
-        cx.job,
-        cx.owner,
-        StepWrite {
-            patterns: std::mem::take(&mut sink.patterns),
-            sightings: &sink.sightings,
-            ants: &sink.ants,
-            progress: Some(progress),
-            checkpoint,
-            status,
-            heartbeat: now_seconds(),
-        },
-    )?;
-    sink.sightings.clear();
-    sink.ants.clear();
-    sink.stored.extend(res);
-    Ok(())
+    status: JobStatus,
+    set: bool,
+    save: bool,
+) -> Result<Value, String> {
+    let w = sink.take(set.then_some(status), now_seconds());
+    cx.lib.job_step(cx.job, cx.owner, w, |outcomes| {
+        s.stored(outcomes);
+        let p = s.progress(status);
+        let c = if save { s.checkpoint()? } else { None };
+        Ok((p, c))
+    })
 }
 
 /// The runner's loop for a step-based strategy: restore from the job's checkpoint, then until
 /// the strategy is done: stop (paused) when the stop flag is set, another process marked the
 /// job `paused`, or the item budget has run; else run a step and write its results, progress,
 /// and checkpoint in one transaction (only while this runner holds the job). After the last
-/// step, [`Strategy::finish`] and the final write (status `done`). A failing step marks the job
-/// `failed` with the error in its progress.
+/// step, [`Strategy::finish`] and the final write (status `done`). A failing step (or a write
+/// that fails) marks the job `failed` with the error in its progress, as far as this runner
+/// still may.
 pub fn drive<S: Strategy + ?Sized>(s: &mut S, cx: &RunCx<'_>) -> Result<Value, String> {
     if cx.row.status == JobStatus::Done {
         return Ok(cx.row.progress.clone());
@@ -198,8 +209,10 @@ pub fn drive<S: Strategy + ?Sized>(s: &mut S, cx: &RunCx<'_>) -> Result<Value, S
         };
         p["status"] = "failed".into();
         p["error"] = e.clone().into();
-        let mut sink = Sink::default();
-        let _ = write(cx, &mut sink, &p, None, Some(JobStatus::Failed));
+        let w = Sink::default().take(Some(JobStatus::Failed), now_seconds());
+        let _ = cx
+            .lib
+            .job_step(cx.job, cx.owner, w, |_| Ok((p.clone(), None)));
         cx.live.set(p);
         e
     };
@@ -208,14 +221,12 @@ pub fn drive<S: Strategy + ?Sized>(s: &mut S, cx: &RunCx<'_>) -> Result<Value, S
         return Err(fail(e, cx.row.progress.clone()));
     }
     let mut sink = Sink::default();
-    let p = s.progress(JobStatus::Running);
-    write(cx, &mut sink, &p, None, Some(JobStatus::Running))?;
+    let p = write(cx, s, &mut sink, JobStatus::Running, true, false)?;
     cx.live.set(p);
     loop {
         let out_of_items = cx.items.is_some_and(|n| s.items() >= n);
         if cx.stopped() || out_of_items || cx.paused_elsewhere() {
-            let p = s.progress(JobStatus::Paused);
-            write(cx, &mut sink, &p, None, Some(JobStatus::Paused))?;
+            let p = write(cx, s, &mut sink, JobStatus::Paused, true, false)?;
             cx.live.set(p.clone());
             return Ok(p);
         }
@@ -227,18 +238,17 @@ pub fn drive<S: Strategy + ?Sized>(s: &mut S, cx: &RunCx<'_>) -> Result<Value, S
             if let Err(e) = s.finish(cx, &mut sink) {
                 return Err(fail(e, s.progress(JobStatus::Running)));
             }
-            let p = s.progress(JobStatus::Done);
-            let c = s.checkpoint()?;
-            write(cx, &mut sink, &p, c.as_deref(), Some(JobStatus::Done))?;
+            let p = match write(cx, s, &mut sink, JobStatus::Done, true, true) {
+                Ok(p) => p,
+                Err(e) => return Err(fail(e, s.progress(JobStatus::Running))),
+            };
             cx.live.set(p.clone());
             return Ok(p);
         }
-        let p = s.progress(JobStatus::Running);
-        let c = match s.checkpoint() {
-            Ok(c) => c,
-            Err(e) => return Err(fail(e, p)),
+        let p = match write(cx, s, &mut sink, JobStatus::Running, false, true) {
+            Ok(p) => p,
+            Err(e) => return Err(fail(e, s.progress(JobStatus::Running))),
         };
-        write(cx, &mut sink, &p, c.as_deref(), None)?;
         cx.live.set(p);
     }
 }

@@ -2,6 +2,24 @@
 
 use super::*;
 
+/// Store census rule summaries of a job: (rule index, rule, summary).
+pub(super) fn rows_in(
+    tx: &Transaction,
+    job: i64,
+    rows: &[(usize, String, Value)],
+) -> Result<(), String> {
+    for (idx, rule, summary) in rows {
+        tx.prepare_cached(
+            "INSERT OR REPLACE INTO census_rows (job_id, idx, rule, summary)
+             VALUES (?1, ?2, ?3, ?4)",
+        )
+        .map_err(e)?
+        .execute(params![job, *idx as i64, rule, summary.to_string()])
+        .map_err(e)?;
+    }
+    Ok(())
+}
+
 impl Library {
     /// Store one census rule summary (a census job's result row).
     pub fn put_census_rows(
@@ -13,15 +31,7 @@ impl Library {
     ) -> Result<(), String> {
         let now = now_utc();
         self.write(|tx| {
-            for (idx, rule, summary) in rows {
-                tx.prepare_cached(
-                    "INSERT OR REPLACE INTO census_rows (job_id, idx, rule, summary)
-                     VALUES (?1, ?2, ?3, ?4)",
-                )
-                .map_err(e)?
-                .execute(params![job, *idx as i64, rule, summary.to_string()])
-                .map_err(e)?;
-            }
+            rows_in(tx, job, rows)?;
             let n = tx
                 .execute(
                     "UPDATE jobs SET updated = ?2, progress = ?3, checkpoint = ?4 WHERE id = ?1",

@@ -60,39 +60,69 @@ impl Outcome {
 }
 
 type Source = Arc<dyn Fn() -> Value + Send + Sync>;
+type Observer = Arc<dyn Fn(&Value) + Send + Sync>;
 
-/// A run's live progress, readable from any thread: a value the run sets after each step, or
-/// a source it reads from (a coarse strategy's own live progress, read only when asked).
+#[derive(Default)]
+struct LiveState {
+    value: Value,
+    source: Option<Source>,
+    observers: Vec<Observer>,
+}
+
+/// A run's live progress, readable from any thread: a value the run sets after each step (or
+/// a source it reads from, read only when asked), and the observers told of each value set
+/// (a front end's progress lines and live views).
 #[derive(Clone, Default)]
-pub struct Live(Arc<Mutex<(Value, Option<Source>)>>);
+pub struct Live(Arc<Mutex<LiveState>>);
 
 impl Live {
-    /// The progress now.
+    /// The progress now; the observers are told.
     pub fn set(&self, v: Value) {
-        *self.0.lock().unwrap() = (v, None);
+        let obs = {
+            let mut l = self.0.lock().unwrap();
+            l.value = v.clone();
+            l.source = None;
+            l.observers.clone()
+        };
+        for f in obs {
+            f(&v);
+        }
     }
     /// Read the progress from `f` when asked, from now on.
     pub fn follow(&self, f: impl Fn() -> Value + Send + Sync + 'static) {
-        self.0.lock().unwrap().1 = Some(Arc::new(f));
+        self.0.lock().unwrap().source = Some(Arc::new(f));
+    }
+    /// Call `f` with each progress set from now on (after the step's write, on the run's
+    /// thread).
+    pub fn observe(&self, f: impl Fn(&Value) + Send + Sync + 'static) {
+        self.0.lock().unwrap().observers.push(Arc::new(f));
     }
     pub fn get(&self) -> Value {
         let (v, src) = {
             let l = self.0.lock().unwrap();
-            (l.0.clone(), l.1.clone())
+            (l.value.clone(), l.source.clone())
         };
         match src {
             Some(f) => f(),
             None => v,
         }
     }
-    /// Change one key of the progress (and stop following a source).
+    /// Replace the progress without telling the observers (the run's end, as the runner
+    /// reports it).
+    fn replace(&self, v: Value) {
+        let mut l = self.0.lock().unwrap();
+        l.value = v;
+        l.source = None;
+    }
+    /// Change one key of the progress (and stop following a source), without telling the
+    /// observers.
     fn put(&self, key: &str, value: Value) {
         let mut v = self.get();
         if !v.is_object() {
             v = serde_json::json!({});
         }
         v[key] = value;
-        self.set(v);
+        self.replace(v);
     }
 }
 
@@ -340,7 +370,7 @@ fn execute(
             } else {
                 None
             };
-            live.set(progress.clone());
+            live.replace(progress.clone());
             if !lost {
                 live.put("status", status_name(status).into());
             }

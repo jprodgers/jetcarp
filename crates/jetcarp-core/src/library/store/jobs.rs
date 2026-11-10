@@ -14,8 +14,8 @@
 
 use super::super::search::SearchOutput;
 use super::{
-    AddOutcome, AntRow, JobStatus, Library, PatternRecord, Sighting, StoredSearch, add_in,
-    ants::put_ant, e, name_of, now_utc, prepare, sightings_in,
+    AddOutcome, AntRow, JobStatus, Library, PatternRecord, Sighting, StoredSearch, UnstoredFlush,
+    add_in, ants::put_ant, census, e, name_of, now_utc, prepare, sightings_in, unstored,
 };
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, params};
@@ -27,21 +27,31 @@ ALTER TABLE jobs ADD COLUMN owner TEXT;
 ALTER TABLE jobs ADD COLUMN heartbeat INTEGER;
 "#;
 
-/// What a runner's step writes (see [`Library::job_step`]).
+/// What a runner's step writes (see [`Library::job_step`]): the rows its step put in its sink.
 #[derive(Clone, Debug, Default)]
-pub struct StepWrite<'a> {
+pub struct StepWrite {
     /// Pattern records, each with the soups it appeared in (credited to the job). Records not
-    /// yet verified are verified first.
+    /// yet verified are verified first, and each gets its rule range.
     pub patterns: Vec<(PatternRecord, u64)>,
+    /// Verified records stored as they are (no rule range is computed; an unverified one is
+    /// refused): a hunt's finds.
+    pub verified: Vec<(PatternRecord, u64)>,
     /// Sightings of patterns already stored.
-    pub sightings: &'a [Sighting],
-    pub ants: &'a [AntRow],
-    pub progress: Option<&'a Value>,
-    pub checkpoint: Option<&'a [u8]>,
+    pub sightings: Vec<Sighting>,
+    /// A hunt's objects counted but not stored as records (copies added, rows of objects now
+    /// stored removed).
+    pub unstored: UnstoredFlush,
+    pub ants: Vec<AntRow>,
+    /// Census rule summaries: (rule index, rule, summary).
+    pub census: Vec<(usize, String, Value)>,
     pub status: Option<JobStatus>,
     /// The heartbeat to record (seconds since 1970).
     pub heartbeat: i64,
 }
+
+/// What a step's write ends with, made once its rows are in (so it can count what they did):
+/// the job's progress and, when given, its new checkpoint.
+pub type StepEnd = (Value, Option<Vec<u8>>);
 
 impl Library {
     /// A job's lease: its owner (`host:pid`) and last heartbeat (seconds since 1970).
@@ -87,16 +97,19 @@ impl Library {
         })
     }
 
-    /// One runner step in one transaction: the records, sightings, and ant runs it found, then
-    /// the job's progress, checkpoint, status (each only when given), and heartbeat, all only
-    /// while `owner` holds the job. Returns one result per record, in order; an error (nothing
-    /// written) when the job has another owner now.
+    /// One runner step in one transaction, only while `owner` holds the job (an error, nothing
+    /// written, when it has another owner now): the rows of `w` (records, then sightings, a
+    /// hunt's unstored objects, ant runs, census rows), then `end` with what became of the
+    /// records (one result per record, `patterns` then `verified`, in order) to make the job's
+    /// progress and checkpoint, written with the status (when given) and the heartbeat. An
+    /// error from `end` writes nothing. Returns the progress written.
     pub fn job_step(
         &self,
         job: i64,
         owner: &str,
-        w: StepWrite<'_>,
-    ) -> Result<Vec<Result<AddOutcome, String>>, String> {
+        w: StepWrite,
+        end: impl FnOnce(&[Result<AddOutcome, String>]) -> Result<StepEnd, String>,
+    ) -> Result<Value, String> {
         let ready: Vec<(Result<PatternRecord, String>, u64)> = w
             .patterns
             .into_par_iter()
@@ -104,51 +117,60 @@ impl Library {
             .collect();
         let now = now_utc();
         self.write(|tx| {
-            let n = tx
-                .execute(
-                    "UPDATE jobs SET updated = ?2,
-                        status = coalesce(?3, status),
-                        progress = coalesce(?4, progress),
-                        checkpoint = coalesce(?5, checkpoint),
-                        heartbeat = ?6,
-                        finished = CASE WHEN ?3 IN ('done', 'failed') THEN ?2 ELSE finished END
-                     WHERE id = ?1 AND owner IS ?7",
-                    params![
-                        job,
-                        now,
-                        w.status.map(|s| name_of(&s)),
-                        w.progress.map(|p| p.to_string()),
-                        w.checkpoint,
-                        w.heartbeat,
-                        owner
-                    ],
-                )
+            let held: Option<Option<String>> = tx
+                .query_row("SELECT owner FROM jobs WHERE id = ?1", [job], |r| r.get(0))
+                .optional()
                 .map_err(e)?;
-            if n == 0 {
-                let held: Option<Option<String>> = tx
-                    .query_row("SELECT owner FROM jobs WHERE id = ?1", [job], |r| r.get(0))
-                    .optional()
-                    .map_err(e)?;
-                return Err(match held {
-                    None => format!("no job {job}"),
-                    Some(o) => format!(
+            match held {
+                None => return Err(format!("no job {job}")),
+                Some(o) if o.as_deref() != Some(owner) => {
+                    return Err(format!(
                         "job {job} is now held by {} (this runner lost it); nothing was written",
                         o.as_deref().unwrap_or("nobody")
-                    ),
-                });
+                    ));
+                }
+                Some(_) => {}
             }
-            let mut out = Vec::with_capacity(ready.len());
+            let mut out = Vec::with_capacity(ready.len() + w.verified.len());
             for (r, soups) in ready {
                 out.push(match r {
                     Ok(r) => Ok(add_in(tx, r, job, soups)?),
                     Err(x) => Err(x),
                 });
             }
-            sightings_in(tx, job, w.sightings, &now)?;
-            for a in w.ants {
+            for (r, soups) in w.verified {
+                out.push(if r.verified.periods == 0 {
+                    Err(format!("{}: not verified", r.id))
+                } else {
+                    Ok(add_in(tx, r, job, soups)?)
+                });
+            }
+            sightings_in(tx, job, &w.sightings, &now)?;
+            unstored::flush_in(tx, job, &w.unstored)?;
+            for a in &w.ants {
                 put_ant(tx, a, job, &now)?;
             }
-            Ok(out)
+            census::rows_in(tx, job, &w.census)?;
+            let (progress, checkpoint) = end(&out)?;
+            tx.execute(
+                "UPDATE jobs SET updated = ?2,
+                    status = coalesce(?3, status),
+                    progress = ?4,
+                    checkpoint = coalesce(?5, checkpoint),
+                    heartbeat = ?6,
+                    finished = CASE WHEN ?3 IN ('done', 'failed') THEN ?2 ELSE finished END
+                 WHERE id = ?1",
+                params![
+                    job,
+                    now,
+                    w.status.map(|s| name_of(&s)),
+                    progress.to_string(),
+                    checkpoint,
+                    w.heartbeat,
+                ],
+            )
+            .map_err(e)?;
+            Ok(progress)
         })
     }
 
