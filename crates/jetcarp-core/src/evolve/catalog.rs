@@ -1,16 +1,14 @@
 //! Verified gliders from a search into the pattern library: exact spaceships on lattices (the
 //! object detector and the library's recurrence check), movers verified to a distance on
 //! aperiodic patches (the mover tracker). [`glider_records`] classifies them and gives the
-//! records to store (an evolve job stores them through its sink, credited to the job);
-//! [`catalog_gliders`] stores them straight away, as manual finds.
+//! records to store; an evolve job (`crate::jobs::evolve`) stores them through its sink,
+//! credited to the job.
 
 use super::arena::{Arena, is_aperiodic};
 use super::{Champion, EvolveReport};
 use crate::library::movers::{MoverReport, TrackSpec, mover_record, track};
 use crate::library::split::records_from_object;
-use crate::library::{
-    AddOutcome, DiscoveredBy, Library, PatternRecord, Provenance, now_utc, prepare,
-};
+use crate::library::{DiscoveredBy, PatternRecord, Provenance, now_utc, prepare};
 use crate::objects::{ObjClass, ObjectOptions, find_objects};
 use crate::world::{CaSpec, Command, SeedSpec, World};
 use serde::{Deserialize, Serialize};
@@ -48,34 +46,6 @@ fn provenance(
         jetcarp_version: crate::VERSION.into(),
         date: now_utc(),
     }
-}
-
-/// Catalog every verified glider of a search (`lib = None`: classify only, store nothing). The
-/// records go in one at a time as manual finds (job 0); a glider whose records cannot all be
-/// stored is reported as not cataloged (those before the failure stay stored).
-pub fn catalog_gliders(
-    report: &EvolveReport,
-    lib: Option<&Library>,
-    track_gens: u64,
-) -> Result<Vec<FoundMover>, String> {
-    let mut out = Vec::new();
-    for (mut f, recs) in glider_records(report, track_gens, lib.is_some())? {
-        if let Some(l) = lib {
-            for r in recs {
-                let id = r.id.clone();
-                match l.add(r) {
-                    Ok(AddOutcome::Added) if f.ids.contains(&id) => f.added.push(id),
-                    Ok(_) => {}
-                    Err(e) => {
-                        f = not_cataloged(&f.rule, &e);
-                        break;
-                    }
-                }
-            }
-        }
-        out.push(f);
-    }
-    Ok(out)
 }
 
 /// A glider that could not be cataloged.

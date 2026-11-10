@@ -1767,7 +1767,7 @@ fn strategy_here(
             } else {
                 None
             };
-            (Box::new(PileRunOn::new(toppler, None)), Slot::None)
+            (Box::new(PileRunOn::new(toppler)), Slot::None)
         }
         _ => {
             let s = k.build(row).map_err(ApiError::engine)?;

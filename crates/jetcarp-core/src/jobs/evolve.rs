@@ -395,4 +395,3 @@ fn done_progress(job: i64, spec: Option<&EvolveJobSpec>, d: &Finished) -> Value 
             report.generations.len(), report.gliders.len()),
     })
 }
-

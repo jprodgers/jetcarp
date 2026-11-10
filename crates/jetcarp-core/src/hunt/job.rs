@@ -221,7 +221,7 @@ pub struct Find {
 }
 
 /// Progress of a hunt, written to the job's `progress` at every flush and kept live in memory
-/// for a dashboard (`crate::jobs::hunt::HuntRun::live`; `crate::jobs::JobHandle::progress`).
+/// for a dashboard (`crate::jobs::JobHandle::progress`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct HuntProgress {
     pub job: i64,
@@ -346,9 +346,6 @@ pub trait SoupBatcher: Send + Sync {
         soups: &[Vec<crate::objects::LCell>],
     ) -> Result<Vec<super::soup::Prefix>, String>;
 }
-
-/// Called with the progress after every batch.
-pub type ProgressHook = Arc<dyn Fn(&HuntProgress) + Send + Sync>;
 
 /// Create a hunt job (status `paused` until a runner starts it). Returns the job id.
 pub fn start(lib: &Library, spec: &HuntSpec) -> Result<i64, String> {

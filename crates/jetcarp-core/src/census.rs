@@ -294,9 +294,6 @@ impl CensusProgress {
     }
 }
 
-/// Called with a census job's progress after every chunk.
-pub type CensusHook = Arc<dyn Fn(&CensusProgress) + Send + Sync>;
-
 /// Store a census as a job (status `paused` until a runner starts it).
 pub fn start_job(lib: &crate::library::Library, spec: &CensusSpec) -> Result<i64, String> {
     check_spec(spec)?;

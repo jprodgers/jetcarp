@@ -9,7 +9,6 @@ use crate::library::{JobStatus, Library, tiling_display_name};
 use crate::pile::Toppler;
 use crate::pile::job::{self as job, PileJobSpec, PileProgress};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
 
 pub struct PileKind;
 pub(super) static KIND: PileKind = PileKind;
@@ -96,19 +95,13 @@ impl StrategyKind for PileKind {
 #[derive(Default)]
 pub struct PileRunOn {
     pub toppler: Option<Box<dyn Toppler>>,
-    /// The caller's live progress, kept up to date too (in a step as well).
-    pub live: Option<Arc<Mutex<PileProgress>>>,
     pile: Option<job::PileJob>,
 }
 
 impl PileRunOn {
-    pub fn new(
-        toppler: Option<Box<dyn Toppler>>,
-        live: Option<Arc<Mutex<PileProgress>>>,
-    ) -> PileRunOn {
+    pub fn new(toppler: Option<Box<dyn Toppler>>) -> PileRunOn {
         PileRunOn {
             toppler,
-            live,
             pile: None,
         }
     }
@@ -118,10 +111,6 @@ const NOT_OPEN: &str = "the pile was not restored";
 
 impl Strategy for PileRunOn {
     fn restore(&mut self, cx: &RunCx<'_>, _checkpoint: Option<&[u8]>) -> Result<(), String> {
-        if let Some(l) = self.live.clone() {
-            cx.live
-                .observe(move |v| *l.lock().unwrap() = typed::<PileProgress>(v));
-        }
         self.pile = Some(job::PileJob::open(cx)?);
         Ok(())
     }
@@ -162,6 +151,6 @@ impl Strategy for PileRun {
         } else {
             None
         };
-        drive(&mut PileRunOn::new(t, None), cx)
+        drive(&mut PileRunOn::new(t), cx)
     }
 }

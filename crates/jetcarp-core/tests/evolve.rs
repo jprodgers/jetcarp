@@ -139,7 +139,6 @@ fn spectre_glider_passes_cross_radius_check() {
 fn square_search_finds_an_exact_spaceship() {
     let lib_dir = std::env::temp_dir().join(format!("jetcarp-evolve-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&lib_dir);
-    let lib = Library::open(&lib_dir);
     let spec = EvolveSpec {
         tiling: TilingSpec::new("square"),
         pop: 256,
@@ -151,19 +150,13 @@ fn square_search_finds_an_exact_spaceship() {
     };
     let rep = evolve(&spec, &|_| true).unwrap();
     assert!(!rep.gliders.is_empty(), "no glider in 60 generations");
-    let found = catalog::catalog_gliders(&rep, Some(&lib), 1000).unwrap();
-    assert!(found.iter().any(|f| f.kind == "spaceship"), "{found:?}");
-    let ships: Vec<_> = lib
-        .list()
+    // Classified, nothing stored: an exact spaceship.
+    let found: Vec<catalog::FoundMover> = catalog::glider_records(&rep, 1000, false)
         .unwrap()
         .into_iter()
-        .filter(|r| r.class == PatternClass::Spaceship)
+        .map(|x| x.0)
         .collect();
-    assert!(!ships.is_empty());
-    for s in &ships {
-        assert!(s.rule.starts_with("Priority"));
-        assert!(s.verified.periods >= 4);
-    }
+    assert!(found.iter().any(|f| f.kind == "spaceship"), "{found:?}");
 
     // As a job: the same search, its gliders stored with the final write and credited to the
     // job (not to manual finds, job 0), the progress saying which were new.
@@ -202,6 +195,17 @@ fn square_search_finds_an_exact_spaceship() {
         .map(|m| m["added"].as_array().unwrap().len())
         .sum();
     assert_eq!(added, credited.len(), "{}", out.progress);
+    let ships: Vec<_> = jlib
+        .list()
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.class == PatternClass::Spaceship)
+        .collect();
+    assert!(!ships.is_empty());
+    for s in &ships {
+        assert!(s.rule.starts_with("Priority"));
+        assert!(s.verified.periods >= 4);
+    }
     let _ = std::fs::remove_dir_all(&lib_dir);
 }
 
@@ -223,13 +227,17 @@ fn hat_search_finds_a_mover() {
     };
     let rep = evolve(&spec, &|_| true).unwrap();
     assert!(!rep.gliders.is_empty(), "no glider on the hat");
-    let found = catalog::catalog_gliders(&rep, Some(&lib), 5000).unwrap();
-    let m = found
+    // Classified and made ready to store, then stored.
+    let found = catalog::glider_records(&rep, 5000, true).unwrap();
+    let (m, recs) = found
         .iter()
-        .find(|f| f.kind == "mover")
-        .unwrap_or_else(|| panic!("{found:?}"));
+        .find(|f| f.0.kind == "mover")
+        .unwrap_or_else(|| panic!("{:?}", found.iter().map(|f| &f.0).collect::<Vec<_>>()));
     let t = m.tracker.as_ref().unwrap();
     assert!(t.verified && t.reach.rings >= 100, "{}", t.summary);
+    for r in recs {
+        lib.add(r.clone()).unwrap();
+    }
     let rec = lib.get(&m.ids[0]).unwrap();
     assert_eq!(rec.class, PatternClass::Mover);
     assert!(rec.mover.as_ref().unwrap().distance_rings >= 100);

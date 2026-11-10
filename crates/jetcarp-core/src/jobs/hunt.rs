@@ -3,17 +3,15 @@
 //! loop before it ran in steps (and its checkpoints read as they were).
 
 use super::{
-    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list,
-    status_name, typed,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list, status_name, typed,
 };
 use crate::dashboard::{FindItem, Finds, HeatSpace, JobSummary, Target, digits};
-use crate::hunt::job::{self as hunt, HuntProgress, HuntSpec, ProgressHook};
+use crate::hunt::job::{self as hunt, HuntProgress, HuntSpec};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, HeatQuery, JobStatus, Library, tiling_display_name};
 use crate::rules::Rule;
 use crate::topology::Nb;
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
 
 pub struct HuntKind;
 pub(super) static KIND: HuntKind = HuntKind;
@@ -188,15 +186,12 @@ impl StrategyKind for HuntKind {
 
 /// A hunt run in steps ([`hunt::Hunt`]): one batch of soups merged and written per step, the
 /// next batch running meanwhile, on the runner's threads and GPU, stopping exactly at the item
-/// budget (soups per group in this session), with the caller's batch size and hooks.
+/// budget (soups per group in this session), with the caller's batch size. (A caller follows
+/// its progress through the run's `Live`: `RunOptions::observe`.)
 #[derive(Default)]
 pub struct HuntRun {
     /// Soups per batch (0: adapt).
     pub batch: u64,
-    /// Called with the progress after every write.
-    pub on_progress: Option<ProgressHook>,
-    /// The caller's live progress, kept up to date too.
-    pub live: Option<Arc<Mutex<HuntProgress>>>,
     hunt: Option<hunt::Hunt>,
 }
 
@@ -214,18 +209,6 @@ const NOT_OPEN: &str = "the hunt was not restored";
 
 impl Strategy for HuntRun {
     fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
-        if self.on_progress.is_some() || self.live.is_some() {
-            let (hook, live) = (self.on_progress.clone(), self.live.clone());
-            cx.live.observe(move |v| {
-                let p: HuntProgress = typed(v);
-                if let Some(l) = &live {
-                    *l.lock().unwrap() = p.clone();
-                }
-                if let Some(h) = &hook {
-                    h(&p);
-                }
-            });
-        }
         self.hunt = Some(hunt::Hunt::open(cx, checkpoint, self.batch)?);
         Ok(())
     }
@@ -255,4 +238,3 @@ impl Strategy for HuntRun {
         self.hunt.as_ref().map_or(0, |h| h.soups_run())
     }
 }
-

@@ -2,11 +2,8 @@
 //! each. The rules' summaries and stored rows are those of the census's loop before it ran in
 //! steps (and its checkpoints read as they were).
 
-use super::{
-    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta,
-    status_name, typed,
-};
-use crate::census::{self, CensusHook, CensusProgress, CensusSpec};
+use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status_name, typed};
+use crate::census::{self, CensusProgress, CensusSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library, tiling_display_name};
@@ -78,13 +75,11 @@ impl StrategyKind for CensusKind {
 
 /// A census run in steps ([`census::CensusJob`]): one chunk of rules per step on the runner's
 /// threads, stopping exactly at the item budget (rules in this session), with the caller's chunk
-/// size and hook.
+/// size.
 #[derive(Default)]
 pub struct CensusRun {
     /// Rules per chunk (0: adapt).
     pub chunk: u64,
-    /// Called with the progress after every write.
-    pub on_progress: Option<CensusHook>,
     census: Option<census::CensusJob>,
 }
 
@@ -92,9 +87,6 @@ const NOT_OPEN: &str = "the census was not restored";
 
 impl Strategy for CensusRun {
     fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
-        if let Some(h) = self.on_progress.clone() {
-            cx.live.observe(move |v| h(&typed(v)));
-        }
         self.census = Some(census::CensusJob::open(cx, checkpoint, self.chunk)?);
         Ok(())
     }
@@ -119,4 +111,3 @@ impl Strategy for CensusRun {
         self.census.as_ref().map_or(0, |c| c.rules_run())
     }
 }
-

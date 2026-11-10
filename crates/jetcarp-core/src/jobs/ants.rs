@@ -3,15 +3,13 @@
 //! in steps (and its checkpoints read as they were).
 
 use super::{
-    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta,
-    short_list, status_name, typed,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list, status_name, typed,
 };
-use crate::ants::job::{self as job, AntProgress, AntSpec, ProgressHook};
+use crate::ants::job::{self as job, AntProgress, AntSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library, tiling_display_name};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
 
 pub struct AntsKind;
 pub(super) static KIND: AntsKind = AntsKind;
@@ -110,15 +108,11 @@ impl StrategyKind for AntsKind {
 
 /// An ant search run in steps ([`job::AntSearch`]): one batch of runs per step on the runner's
 /// threads, stopping exactly at the item budget (runs in this session), with the caller's
-/// batch size and hooks.
+/// batch size.
 #[derive(Default)]
 pub struct AntsRun {
     /// Runs per batch (0: adapt).
     pub batch: u64,
-    /// Called with the progress after every write.
-    pub on_progress: Option<ProgressHook>,
-    /// The caller's live progress, kept up to date too.
-    pub live: Option<Arc<Mutex<AntProgress>>>,
     search: Option<job::AntSearch>,
 }
 
@@ -126,18 +120,6 @@ const NOT_OPEN: &str = "the ant search was not restored";
 
 impl Strategy for AntsRun {
     fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
-        if self.on_progress.is_some() || self.live.is_some() {
-            let (hook, live) = (self.on_progress.clone(), self.live.clone());
-            cx.live.observe(move |v| {
-                let p: AntProgress = typed(v);
-                if let Some(l) = &live {
-                    *l.lock().unwrap() = p.clone();
-                }
-                if let Some(h) = &hook {
-                    h(&p);
-                }
-            });
-        }
         self.search = Some(job::AntSearch::open(cx, checkpoint, self.batch)?);
         Ok(())
     }
@@ -162,4 +144,3 @@ impl Strategy for AntsRun {
         self.search.as_ref().map_or(0, |s| s.runs_run())
     }
 }
-
