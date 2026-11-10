@@ -1378,7 +1378,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Noise eats a still blue crystal, front by front. Found with jaca_search.",
+   "description": "Noise eats a still crystal, front by front, until it is gone (by about generation 4,000). Found with jaca_search.",
    "format": 1,
    "name": "JACA noise conquers crystal (Penrose rhombs)",
    "rng_state": 28,
@@ -2322,7 +2322,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours and blast 2: the territories straighten until one glowing front divides the patch. Found with jaca_search.",
+   "description": "Edge neighbours and blast 2: the territories straighten until one glowing front divides the patch, after about 8,000 generations. Found with jaca_search.",
    "format": 1,
    "name": "JACA one glowing front (Penrose rhombs, edge)",
    "rng_state": 31,
@@ -2390,9 +2390,9 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B36/S23456: still pink bands of one sign against the other's cyan noise. Found with jaca_search.",
+   "description": "B36/S23456: still red and purple blobs of one sign against the other's cyan noise. Found with jaca_search.",
    "format": 1,
-   "name": "JACA pink bands vs noise (Penrose rhombs)",
+   "name": "JACA red blobs vs noise (Penrose rhombs)",
    "rng_state": 28,
    "tiling": {
     "boundary": "dead",
