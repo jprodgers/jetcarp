@@ -1,21 +1,21 @@
 //! Long mover verifications as catalog jobs: a pattern followed on a sliding window
 //! ([`super::track`]) in the background, with its progress in the job row and a checkpoint taken
-//! right after a window is built (about every ten seconds), so a stopped or crashed run resumes
+//! right after a window is built (every step, about every two seconds), so a stopped or crashed
+//! run resumes
 //! and ends exactly as an uninterrupted one. A job of kind `mover` has a [`MoverJobSpec`]; when it
 //! ends verified it stores the mover in the catalog (with the sliding-window flag in its record).
 //!
 //! A run stops at its next window when its stop flag is set or another process marks the job
 //! `paused` ([`request_stop`]).
 //!
-//! The job runner (`crate::jobs::mover`) runs [`run_job`] as it is, under its lease, in this
-//! process or on a thread of it.
+//! The job runner (`crate::jobs::mover`) runs a job in steps of a couple of seconds each
+//! ([`MoverJob`]), under its lease, in this process or on a thread of it.
 
 use super::track::{Tracker, WindowCheckpoint, WindowOpts};
 use crate::library::movers::{MoverReport, Stop, TrackSpec, mover_record};
-use crate::library::{DiscoveredBy, JobStatus, Library, Provenance, now_utc};
+use crate::library::{DiscoveredBy, JobStatus, Library, PatternRecord, Provenance, now_utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub const KIND: &str = "mover";
@@ -37,7 +37,8 @@ fn yes() -> bool {
     true
 }
 
-/// Progress, written to the job row about every ten seconds and kept live in memory.
+/// Progress, written to the job row after every step (about every two seconds) and kept live
+/// in memory.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MoverProgress {
     pub job: i64,
@@ -150,7 +151,7 @@ pub fn travelling_start(
     ))
 }
 
-/// Create a run (status `paused` until [`run_job`] starts it). Fails early on a bad spec.
+/// Create a run (status `paused` until a runner starts it). Fails early on a bad spec.
 pub fn start(lib: &Library, spec: &MoverJobSpec) -> Result<i64, String> {
     // Builds the first window and checks the rule and the start.
     Tracker::new(&spec.track, &spec.window)?;
@@ -227,116 +228,142 @@ fn progress(job: i64, t: &Tracker, status: &str, session: (Instant, u64, u32)) -
     }
 }
 
-/// Run (or resume) a job until it ends or is stopped. Returns its final progress.
-pub fn run_job(
-    lib: &Library,
+/// A mover run in steps by the job runner (`crate::jobs::mover`): each step runs the tracker
+/// for a slice of time (two seconds by default) and on to the next window it builds, where its
+/// checkpoint is taken (once it is past the repeat check's first 4,096 generations; before
+/// that a step ends at the slice and there is no checkpoint yet). A stop part way through a
+/// slice runs on to the next window too, so the checkpoint written with the pause is current.
+/// When the run ends verified, [`MoverJob::finish`] makes the mover's record for the sink.
+pub struct MoverJob {
     job: i64,
-    stop: Arc<AtomicBool>,
-    live: Option<Arc<Mutex<MoverProgress>>>,
-) -> Result<MoverProgress, String> {
-    let (j, spec) = job_spec(lib, job)?;
-    if j.status == JobStatus::Done {
-        return status(lib, job).map(|x| x.1);
-    }
-    let fail = |e: String| {
-        let _ = lib.update_job(
+    spec: MoverJobSpec,
+    t: Tracker,
+    /// Session start, and the generation and rings then.
+    session: (Instant, u64, u32),
+    slice: Duration,
+    end: Option<Stop>,
+    done: Option<MoverProgress>,
+    /// The id of the record in the sink, until it is stored.
+    record: Option<String>,
+}
+
+impl MoverJob {
+    /// Open the run's job from its checkpoint (a window frame), if it has one, with steps of
+    /// `seconds` (0: two).
+    pub fn open(
+        cx: &crate::jobs::RunCx<'_>,
+        checkpoint: Option<&[u8]>,
+        seconds: f64,
+    ) -> Result<MoverJob, String> {
+        let (j, job) = (cx.row, cx.job);
+        if j.kind != KIND {
+            return Err(format!("job {job} is a {} job, not a mover run", j.kind));
+        }
+        let spec: MoverJobSpec =
+            serde_json::from_value(j.spec.clone()).map_err(|e| format!("job {job} spec: {e}"))?;
+        let t = match checkpoint {
+            Some(b) => {
+                let cp: WindowCheckpoint =
+                    serde_json::from_slice(b).map_err(|e| format!("job {job} checkpoint: {e}"))?;
+                Tracker::resume(&spec.track, &spec.window, &cp)?
+            }
+            None => Tracker::new(&spec.track, &spec.window)?,
+        };
+        let slice = if seconds > 0.0 && seconds.is_finite() {
+            Duration::from_secs_f64(seconds)
+        } else {
+            Duration::from_secs(2)
+        };
+        Ok(MoverJob {
             job,
-            Some(JobStatus::Failed),
-            Some(&serde_json::json!({"status": "failed", "error": e, "updated": now_utc()})),
-            None,
-        );
-        e
-    };
-    let mut t = match lib.job_checkpoint(job)? {
-        Some(b) => {
-            let cp: WindowCheckpoint =
-                serde_json::from_slice(&b).map_err(|e| format!("job {job} checkpoint: {e}"))?;
-            Tracker::resume(&spec.track, &spec.window, &cp).map_err(fail)?
+            spec,
+            session: (Instant::now(), t.generation(), t.rings()),
+            t,
+            slice,
+            end: None,
+            done: None,
+            record: None,
+        })
+    }
+
+    /// One slice. `Ok(true)`: the run has ended (verified or not).
+    pub fn step(&mut self, stop: &AtomicBool) -> Result<bool, String> {
+        let t = &mut self.t;
+        let until = Instant::now() + self.slice;
+        if let Some(s) = t.run(Some(until), Some(stop))? {
+            self.end = Some(s);
+            return Ok(true);
         }
-        None => Tracker::new(&spec.track, &spec.window).map_err(fail)?,
-    };
-    lib.update_job(job, Some(JobStatus::Running), None, None)?;
-    let session = (Instant::now(), t.generation(), t.rings());
-    let mut last_save = Instant::now();
-    let publish = |p: &MoverProgress| {
-        if let Some(l) = &live {
-            *l.lock().unwrap() = p.clone();
-        }
-    };
-    let end = loop {
-        let until = Instant::now() + Duration::from_secs(2);
-        match t.run(Some(until), Some(&stop)).map_err(fail)? {
-            Some(s) => break Some(s),
-            None => {
-                let paused = stop.load(Ordering::SeqCst)
-                    || lib.job(job).map(|j| j.status) == Ok(JobStatus::Paused);
-                if paused {
-                    // Run on to the next window so the checkpoint is current.
-                    let mut n = 0;
-                    while t.checkpoint().is_none() && t.stopped().is_none() && n < 100_000 {
-                        t.step_once().map_err(fail)?;
-                        n += 1;
-                    }
-                    if let Some(s) = t.stopped() {
-                        break Some(s);
-                    }
-                    break None;
-                }
-                let p = progress(job, &t, "running", session);
-                publish(&p);
-                if last_save.elapsed() >= Duration::from_secs(10)
-                    && let Some(cp) = t.checkpoint()
-                {
-                    last_save = Instant::now();
-                    let pj = serde_json::to_value(&p).unwrap_or_default();
-                    let cj = serde_json::to_vec(&cp).map_err(|e| e.to_string())?;
-                    lib.update_job(job, None, Some(&pj), Some(&cj))?;
-                }
+        if stop.load(Ordering::SeqCst) {
+            // Run on to the next window so the checkpoint is current.
+            let mut n = 0;
+            while t.checkpoint().is_none() && t.stopped().is_none() && n < 100_000 {
+                t.step_once()?;
+                n += 1;
+            }
+            if let Some(s) = t.stopped() {
+                self.end = Some(s);
+                return Ok(true);
             }
         }
-    };
-    match end {
-        None => {
-            let p = progress(job, &t, "paused", session);
-            let pj = serde_json::to_value(&p).unwrap_or_default();
-            let cj = t
-                .checkpoint()
-                .map(|cp| serde_json::to_vec(&cp).unwrap_or_default());
-            lib.update_job(job, Some(JobStatus::Paused), Some(&pj), cj.as_deref())?;
-            publish(&p);
-            Ok(p)
-        }
-        Some(s) => {
-            let rep = t.report();
-            let mut p = progress(job, &t, "done", session);
-            if spec.store && rep.verified && s != Stop::Stopped {
-                let prov = Provenance {
-                    source: if spec.source.is_empty() {
-                        "mover job".into()
-                    } else {
-                        spec.source.clone()
-                    },
-                    tiling: Some(spec.track.patch.clone()),
-                    jetcarp_version: crate::VERSION.into(),
-                    date: now_utc(),
-                    ..Default::default()
-                };
-                match mover_record(&spec.track, &rep, prov, DiscoveredBy::User) {
-                    Ok(rec) => {
-                        let id = rec.id.clone();
-                        match lib.add_in_job(rec, job) {
-                            Ok(_) => p.record = Some(id),
-                            Err(e) => p.error = Some(e),
-                        }
-                    }
-                    Err(e) => p.error = Some(e),
+        Ok(false)
+    }
+
+    /// The run has ended: its report, and the mover's record when it ended verified and the
+    /// job stores it (credited to the job when the runner writes it).
+    pub fn finish(&mut self) -> Option<PatternRecord> {
+        let rep = self.t.report();
+        let mut p = progress(self.job, &self.t, "done", self.session);
+        let mut rec = None;
+        let spec = &self.spec;
+        if spec.store && rep.verified && self.end != Some(Stop::Stopped) {
+            let prov = Provenance {
+                source: if spec.source.is_empty() {
+                    "mover job".into()
+                } else {
+                    spec.source.clone()
+                },
+                tiling: Some(spec.track.patch.clone()),
+                jetcarp_version: crate::VERSION.into(),
+                date: now_utc(),
+                ..Default::default()
+            };
+            match mover_record(&spec.track, &rep, prov, DiscoveredBy::User) {
+                Ok(r) => {
+                    self.record = Some(r.id.clone());
+                    rec = Some(r);
                 }
+                Err(e) => p.error = Some(e),
             }
-            p.report = Some(rep);
-            let pj = serde_json::to_value(&p).unwrap_or_default();
-            lib.update_job(job, Some(JobStatus::Done), Some(&pj), None)?;
-            publish(&p);
-            Ok(p)
         }
+        p.report = Some(rep);
+        self.done = Some(p);
+        rec
+    }
+
+    /// What became of the record: stored (its id in the progress), or the error.
+    pub fn stored(&mut self, outcome: Option<&Result<crate::library::AddOutcome, String>>) {
+        if let (Some(id), Some(o), Some(p)) = (self.record.take(), outcome, self.done.as_mut()) {
+            match o {
+                Ok(_) => p.record = Some(id),
+                Err(e) => p.error = Some(e.clone()),
+            }
+        }
+    }
+
+    /// The progress with this status (once ended: the final one).
+    pub fn progress(&self, status: &str) -> MoverProgress {
+        match &self.done {
+            Some(p) => p.clone(),
+            None => progress(self.job, &self.t, status, self.session),
+        }
+    }
+
+    /// The window frame to resume from, when the tracker is right after building one.
+    pub fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {
+        self.t
+            .checkpoint()
+            .map(|cp| serde_json::to_vec(&cp).map_err(|e| e.to_string()))
+            .transpose()
     }
 }

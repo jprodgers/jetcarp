@@ -1,10 +1,12 @@
-//! Sliding-window movers (`jobs.kind` `mover`): `crate::window::job`'s loop wrapped as it is.
-//! Results and stored rows are exactly those of `window::job::run_job`.
+//! Sliding-window movers (`jobs.kind` `mover`): `crate::window::job`, run in steps of a couple
+//! of seconds each, checkpointed at the window that ends each step. The run and the stored
+//! mover are those of the job's loop before it ran in steps (and its checkpoints read as they
+//! were).
 
-use super::{RunCx, Strategy, StrategyKind, base_summary, eta, typed};
+use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status_name, typed};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{Library, tiling_display_name};
+use crate::library::{AddOutcome, JobStatus, Library, tiling_display_name};
 use crate::window::job::{self as job, MoverJobSpec, MoverProgress};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -91,30 +93,71 @@ impl StrategyKind for MoverKind {
     }
 }
 
-/// A mover run: `window::job::run_job` with the runner's stop flag (it checkpoints at the next
-/// window).
-#[derive(Clone, Default)]
+/// Called with a mover run's progress after every write.
+pub type MoverHook = Arc<dyn Fn(&MoverProgress) + Send + Sync>;
+
+/// A mover run in steps ([`job::MoverJob`]): a slice of the tracker each (it checkpoints at the
+/// window that ends it), and at the end the verified mover stored in the job.
+#[derive(Default)]
 pub struct MoverRun {
+    /// Seconds per step (0: two).
+    pub seconds: f64,
+    /// Called with the progress after every write.
+    pub on_progress: Option<MoverHook>,
     /// The caller's live progress, kept up to date too.
     pub live: Option<Arc<Mutex<MoverProgress>>>,
+    mover: Option<job::MoverJob>,
 }
 
+const NOT_OPEN: &str = "the mover run was not restored";
+
 impl Strategy for MoverRun {
-    fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
-        let live = self
-            .live
-            .clone()
-            .unwrap_or_else(|| Arc::new(Mutex::new(MoverProgress::default())));
-        {
-            let mut l = live.lock().unwrap();
-            *l = job::status(cx.lib, cx.job).map(|x| x.1).unwrap_or_default();
-            l.job = cx.job;
-            l.status = "running".into();
+    fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
+        if self.on_progress.is_some() || self.live.is_some() {
+            let (hook, live) = (self.on_progress.clone(), self.live.clone());
+            cx.live.observe(move |v| {
+                let p: MoverProgress = typed(v);
+                if let Some(l) = &live {
+                    *l.lock().unwrap() = p.clone();
+                }
+                if let Some(h) = &hook {
+                    h(&p);
+                }
+            });
         }
-        let l2 = live.clone();
-        cx.live
-            .follow(move || serde_json::to_value(&*l2.lock().unwrap()).unwrap_or_default());
-        job::run_job(cx.lib, cx.job, cx.stop.clone(), Some(live))
-            .and_then(|p| serde_json::to_value(p).map_err(|e| e.to_string()))
+        self.mover = Some(job::MoverJob::open(cx, checkpoint, self.seconds)?);
+        Ok(())
+    }
+    fn step(&mut self, cx: &RunCx<'_>, _sink: &mut Sink) -> Result<Step, String> {
+        let m = self.mover.as_mut().ok_or(NOT_OPEN)?;
+        Ok(if m.step(&cx.stop)? {
+            Step::Done
+        } else {
+            Step::More
+        })
+    }
+    fn finish(&mut self, _cx: &RunCx<'_>, sink: &mut Sink) -> Result<(), String> {
+        let m = self.mover.as_mut().ok_or(NOT_OPEN)?;
+        if let Some(rec) = m.finish() {
+            sink.patterns.push((rec, 0));
+        }
+        Ok(())
+    }
+    fn stored(&mut self, outcomes: &[Result<AddOutcome, String>]) {
+        if let Some(m) = &mut self.mover {
+            m.stored(outcomes.first());
+        }
+    }
+    fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {
+        match &self.mover {
+            Some(m) => m.checkpoint(),
+            None => Ok(None),
+        }
+    }
+    fn progress(&self, status: JobStatus) -> Value {
+        match &self.mover {
+            Some(m) => serde_json::to_value(m.progress(status_name(status))).unwrap_or_default(),
+            None => Value::Null,
+        }
     }
 }

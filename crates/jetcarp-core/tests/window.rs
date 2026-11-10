@@ -319,8 +319,10 @@ fn window_runs_resume_exactly() {
     assert_eq!(rb.stop, Stop::GenLimit);
 
     // As a catalog job on the job runner, stopped by request on the way and resumed.
-    use jetcarp_core::jobs::{RunOptions, Runner};
+    use jetcarp_core::jobs::{RunOptions, Runner, mover::MoverRun};
     use jetcarp_core::window::job::{MoverJobSpec, MoverProgress, start};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     let d = std::env::temp_dir().join(format!("jetcarp-window-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     let lib = jetcarp_core::library::Library::open(&d);
@@ -331,14 +333,32 @@ fn window_runs_resume_exactly() {
         source: "test".into(),
     };
     let job = start(&lib, &js).unwrap();
+    // Stopped before its first step, it pauses with nothing run.
+    let stop = Arc::new(AtomicBool::new(true));
+    let o = RunOptions {
+        stop: Some(stop.clone()),
+        ..Default::default()
+    };
+    let p: MoverProgress = Runner::new(lib.clone()).run(job, &o).unwrap().progress_as();
+    assert_eq!((p.status.as_str(), p.generation), ("paused", 0), "{p:?}");
+    assert!(lib.job_checkpoint(job).unwrap().is_none());
+    // In short steps, stopped once a step has gone past the repeat check's 4,096 generations
+    // (its step ends at a new window, which it checkpoints): it pauses there.
+    stop.store(false, Ordering::SeqCst);
+    let s2 = stop.clone();
+    let mut run = MoverRun::default();
+    run.seconds = 0.02;
+    run.on_progress = Some(Arc::new(move |p: &MoverProgress| {
+        if p.status == "running" && p.generation > 4096 {
+            s2.store(true, Ordering::SeqCst);
+        }
+    }));
     let h = Runner::new(lib.clone())
-        .spawn(job, RunOptions::default())
+        .spawn_with(job, Box::new(run), o)
         .unwrap();
-    // Stopped at once, it runs on to its first checkpoint (past the repeat check's 4,096
-    // generations, at the next window) and pauses there.
-    h.stop();
     let p: MoverProgress = h.wait().unwrap().progress_as();
     assert_eq!(p.status, "paused", "{p:?}");
+    assert!(p.generation > 4096 && p.generation < 9_000, "{p:?}");
     assert!(lib.job_checkpoint(job).unwrap().is_some());
     let p: MoverProgress = Runner::new(lib.clone())
         .spawn(job, RunOptions::default())
