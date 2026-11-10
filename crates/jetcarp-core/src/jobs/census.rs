@@ -1,13 +1,16 @@
-//! Census jobs (`jobs.kind` `census`): `crate::census`'s job loop wrapped as it is. Results
-//! and stored rows are exactly those of `census::run_job`.
+//! Census jobs (`jobs.kind` `census`): `crate::census`, run in steps of one chunk of rules
+//! each. The rules' summaries and stored rows are those of the census's loop before it ran in
+//! steps (and its checkpoints read as they were).
 
-use super::{Budget, RunCx, RunOptions, Runner, Strategy, StrategyKind, base_summary, eta, typed};
+use super::{
+    Budget, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta,
+    status_name, typed,
+};
 use crate::census::{self, CensusHook, CensusJobOptions, CensusProgress, CensusSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{Library, tiling_display_name};
+use crate::library::{JobStatus, Library, tiling_display_name};
 use serde_json::Value;
-use std::sync::Arc;
 
 pub struct CensusKind;
 pub(super) static KIND: CensusKind = CensusKind;
@@ -70,46 +73,58 @@ impl StrategyKind for CensusKind {
     }
 }
 
-/// A census run: `census::run_job` with the runner's threads, stop flag, and item budget (as
-/// its session `limit`), and the caller's chunk size and hook.
-#[derive(Clone, Default)]
+/// A census run in steps ([`census::CensusJob`]): one chunk of rules per step on the runner's
+/// threads, stopping exactly at the item budget (rules in this session), with the caller's chunk
+/// size and hook.
+#[derive(Default)]
 pub struct CensusRun {
     /// Rules per chunk (0: adapt).
     pub chunk: u64,
+    /// Called with the progress after every write.
     pub on_progress: Option<CensusHook>,
+    census: Option<census::CensusJob>,
 }
 
+const NOT_OPEN: &str = "the census was not restored";
+
 impl Strategy for CensusRun {
-    fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
-        let live = cx.live.clone();
-        if let Ok((_, mut p)) = census::job_status(cx.lib, cx.job) {
-            p.status = "running".into();
-            live.set(serde_json::to_value(p).unwrap_or_default());
+    fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
+        if let Some(h) = self.on_progress.clone() {
+            cx.live.observe(move |v| h(&typed(v)));
         }
-        let hook = self.on_progress.clone();
-        let opts = CensusJobOptions {
-            threads: cx.threads,
-            stop: cx.stop.clone(),
-            limit: cx.items,
-            chunk: self.chunk,
-            on_progress: Some(Arc::new(move |p: &CensusProgress| {
-                live.set(serde_json::to_value(p).unwrap_or_default());
-                if let Some(h) = &hook {
-                    h(p);
-                }
-            })),
-        };
-        census::run_job(cx.lib, cx.job, &opts)
-            .and_then(|p| serde_json::to_value(p).map_err(|e| e.to_string()))
+        self.census = Some(census::CensusJob::open(cx, checkpoint, self.chunk)?);
+        Ok(())
+    }
+    fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<Step, String> {
+        let c = self.census.as_mut().ok_or(NOT_OPEN)?;
+        Ok(if c.step(cx, sink)? {
+            Step::Done
+        } else {
+            Step::More
+        })
+    }
+    fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {
+        self.census.as_ref().map(|c| c.checkpoint()).transpose()
+    }
+    fn progress(&self, status: JobStatus) -> Value {
+        match &self.census {
+            Some(c) => serde_json::to_value(c.progress(status_name(status))).unwrap_or_default(),
+            None => Value::Null,
+        }
+    }
+    fn items(&self) -> u64 {
+        self.census.as_ref().map_or(0, |c| c.rules_run())
     }
 }
 
 /// Run (or resume) a census job here, on this thread, under the runner (its lease and
-/// heartbeat): `census::run_job` with these options, as before.
+/// heartbeat), with these options: its threads, stop flag, session limit (the item budget),
+/// chunk size, and hook.
 pub fn run(lib: &Library, job: i64, opts: CensusJobOptions) -> Result<CensusProgress, String> {
     let mut s = CensusRun {
         chunk: opts.chunk,
         on_progress: opts.on_progress.clone(),
+        census: None,
     };
     let o = RunOptions {
         threads: opts.threads,

@@ -21,30 +21,6 @@ pub(super) fn rows_in(
 }
 
 impl Library {
-    /// Store one census rule summary (a census job's result row).
-    pub fn put_census_rows(
-        &self,
-        job: i64,
-        rows: &[(usize, String, Value)],
-        progress: &Value,
-        checkpoint: &[u8],
-    ) -> Result<(), String> {
-        let now = now_utc();
-        self.write(|tx| {
-            rows_in(tx, job, rows)?;
-            let n = tx
-                .execute(
-                    "UPDATE jobs SET updated = ?2, progress = ?3, checkpoint = ?4 WHERE id = ?1",
-                    params![job, now, progress.to_string(), checkpoint],
-                )
-                .map_err(e)?;
-            if n == 0 {
-                return Err(format!("no job {job}"));
-            }
-            Ok(())
-        })
-    }
-
     /// A census job's rule summaries, in rule order.
     pub fn census_rows(&self, job: i64) -> Result<Vec<Value>, String> {
         self.read(vec![], |c| {

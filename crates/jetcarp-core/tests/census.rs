@@ -3,6 +3,7 @@
 
 use jetcarp_core::board::Board;
 use jetcarp_core::census::*;
+use jetcarp_core::jobs::census::run as run_job;
 use jetcarp_core::*;
 use std::sync::Arc;
 
@@ -240,7 +241,7 @@ fn census_jobs_resume_to_the_same_report() {
         let p = run_job(
             &Library::open(&dir),
             job,
-            &CensusJobOptions {
+            CensusJobOptions {
                 limit: Some(limit),
                 chunk: 3,
                 ..Default::default()
@@ -251,7 +252,7 @@ fn census_jobs_resume_to_the_same_report() {
     }
     assert_eq!(lib.job(job).unwrap().status, JobStatus::Paused);
     assert_eq!(job_report(&lib, job).unwrap().rules.len(), 12);
-    let p = run_job(&Library::open(&dir), job, &CensusJobOptions::default()).unwrap();
+    let p = run_job(&Library::open(&dir), job, CensusJobOptions::default()).unwrap();
     assert_eq!((p.status.as_str(), p.rules_done), ("done", 33));
     let r = job_report(&lib, job).unwrap();
     let mut a = straight.report.clone();

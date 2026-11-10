@@ -13,10 +13,11 @@
 //! equals the world's (`tests/census.rs` compares both). Other rules and tilings run on the world.
 //! A run's `hash` is the FNV hash of its final cell states ([`World::states_hash`]).
 //!
-//! **Jobs** (gap 6). [`start_job`] stores a census as a catalog job; [`run_job`] runs its rules in
-//! chunks, writing each chunk's summaries (`census_rows`) with the progress and checkpoint in one
-//! transaction, so an interrupted census resumes where it stopped and [`job_report`] gives the same
-//! report as an uninterrupted run.
+//! **Jobs** (gap 6). [`start_job`] stores a census as a catalog job; the job runner
+//! (`crate::jobs::census`) runs its rules in chunks, a step each ([`CensusJob`]), writing each
+//! chunk's summaries (`census_rows`) with the progress and checkpoint in one transaction, so an
+//! interrupted census resumes where it stopped and [`job_report`] gives the same report as an
+//! uninterrupted run.
 
 use crate::render::{Image, RenderOptions, render};
 use crate::rng::{Fnv, Rng};
@@ -309,7 +310,7 @@ pub struct CensusJobOptions {
     pub on_progress: Option<CensusHook>,
 }
 
-/// Store a census as a job (status `paused` until [`run_job`] starts it).
+/// Store a census as a job (status `paused` until a runner starts it).
 pub fn start_job(lib: &crate::library::Library, spec: &CensusSpec) -> Result<i64, String> {
     check_spec(spec)?;
     let v = serde_json::to_value(spec).map_err(|e| e.to_string())?;
@@ -360,107 +361,135 @@ pub fn request_stop(lib: &crate::library::Library, job: i64) -> Result<(), Strin
     Ok(())
 }
 
-/// Run (or resume) a census job until it is done or stopped.
-pub fn run_job(
-    lib: &crate::library::Library,
-    job: i64,
-    o: &CensusJobOptions,
-) -> Result<CensusProgress, String> {
-    use crate::library::JobStatus;
-    let (j, spec) = census_job(lib, job)?;
-    let (_, mut p) = job_status(lib, job)?;
-    if j.status == JobStatus::Done {
-        return Ok(p);
-    }
-    check_spec(&spec)?;
-    let mut next: u64 = match lib.job_checkpoint(job)? {
-        Some(b) => serde_json::from_slice::<u64>(&b).map_err(|e| format!("checkpoint: {e}"))?,
-        None => 0,
-    };
-    let topo = Arc::new(Topology::build(&spec.tiling)?);
-    let threads = if o.threads == 0 {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
-    } else {
-        o.threads
-    };
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build()
-        .map_err(|e| e.to_string())?;
-    lib.update_job(job, Some(JobStatus::Running), None, None)?;
-    let total = spec.rules.len() as u64;
-    let session = std::time::Instant::now();
-    let base_elapsed = p.elapsed_s;
-    let mut session_done = 0u64;
-    let mut chunk = if o.chunk > 0 { o.chunk } else { 32 };
-    let opts = CensusOptions::default();
-    loop {
-        let other_stop = lib
-            .job(job)
-            .map(|j| j.status == JobStatus::Paused)
-            .unwrap_or(false);
-        let limit_hit = o.limit.is_some_and(|l| session_done >= l);
-        let status = if next >= total {
-            Some(JobStatus::Done)
-        } else if o.stop.load(Ordering::SeqCst) || other_stop || limit_hit {
-            Some(JobStatus::Paused)
-        } else {
-            None
+/// A census job run in steps by the job runner (`crate::jobs::census`): each step runs one
+/// chunk of rules (adapting to about three seconds of work) and puts their summaries in the
+/// sink, which the runner writes with the progress and checkpoint (the next rule index) in one
+/// transaction.
+pub struct CensusJob {
+    spec: CensusSpec,
+    topo: Arc<Topology>,
+    pool: rayon::ThreadPool,
+    /// The next rule index.
+    next: u64,
+    /// Rules per chunk, and whether it adapts.
+    chunk: u64,
+    adapt: bool,
+    p: CensusProgress,
+    session: std::time::Instant,
+    session_done: u64,
+    base_elapsed: f64,
+}
+
+impl CensusJob {
+    /// Open the run's census job (on its threads; `chunk` rules per step, 0: adapt) from its
+    /// checkpoint, if it has one (the next rule index, as it always was).
+    pub fn open(
+        cx: &crate::jobs::RunCx<'_>,
+        checkpoint: Option<&[u8]>,
+        chunk: u64,
+    ) -> Result<CensusJob, String> {
+        let (j, job) = (cx.row, cx.job);
+        if j.kind != "census" {
+            return Err(format!("job {job} is a {} job, not a census", j.kind));
+        }
+        let spec: CensusSpec =
+            serde_json::from_value(j.spec.clone()).map_err(|e| format!("job {job} spec: {e}"))?;
+        check_spec(&spec)?;
+        let next: u64 = match checkpoint {
+            Some(b) => serde_json::from_slice::<u64>(b).map_err(|e| format!("checkpoint: {e}"))?,
+            None => 0,
         };
-        if let Some(st) = status {
-            p.status = if st == JobStatus::Done {
-                "done"
-            } else {
-                "paused"
-            }
-            .into();
-            let v = serde_json::to_value(&p).map_err(|e| e.to_string())?;
-            lib.update_job(job, Some(st), Some(&v), None)?;
-            if let Some(h) = &o.on_progress {
-                h(&p);
-            }
-            return Ok(p);
+        let mut p: CensusProgress = serde_json::from_value(j.progress.clone()).unwrap_or_default();
+        p.job = job;
+        p.rules_total = spec.rules.len() as u64;
+        let topo = Arc::new(Topology::build(&spec.tiling)?);
+        let threads = if cx.threads == 0 {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        } else {
+            cx.threads
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .map_err(|e| e.to_string())?;
+        Ok(CensusJob {
+            topo,
+            pool,
+            next,
+            chunk: if chunk > 0 { chunk } else { 32 },
+            adapt: chunk == 0,
+            base_elapsed: p.elapsed_s,
+            p,
+            spec,
+            session: std::time::Instant::now(),
+            session_done: 0,
+        })
+    }
+
+    /// One chunk of rules (none past the end or the item budget), its summaries put in the
+    /// sink. `Ok(true)`: the census has run its last rule.
+    pub fn step(
+        &mut self,
+        cx: &crate::jobs::RunCx<'_>,
+        sink: &mut crate::jobs::Sink,
+    ) -> Result<bool, String> {
+        let total = self.spec.rules.len() as u64;
+        if self.next >= total {
+            return Ok(true);
         }
-        let mut n = chunk.min(total - next);
-        if let Some(l) = o.limit {
-            n = n.min(l - session_done).max(1);
+        let mut n = self.chunk.min(total - self.next);
+        if let Some(l) = cx.items {
+            n = n.min(l - self.session_done).max(1);
         }
-        let which: Vec<usize> = (next as usize..(next + n) as usize).collect();
+        let which: Vec<usize> = (self.next as usize..(self.next + n) as usize).collect();
         let t0 = std::time::Instant::now();
-        let out = pool.install(|| run_rules(&topo, &spec, &which, &opts, None));
-        let rows: Vec<(usize, String, serde_json::Value)> = which
-            .iter()
-            .zip(&out)
-            .map(|(&i, (r, _))| {
+        let (topo, spec) = (&self.topo, &self.spec);
+        let out = self
+            .pool
+            .install(|| run_rules(topo, spec, &which, &CensusOptions::default(), None));
+        sink.census
+            .extend(which.iter().zip(&out).map(|(&i, (r, _))| {
                 (
                     i,
                     r.rule.clone(),
                     serde_json::to_value(r).unwrap_or(serde_json::Value::Null),
                 )
-            })
-            .collect();
-        next += n;
-        session_done += n;
-        let el = session.elapsed().as_secs_f64();
-        p.rules_done = next;
+            }));
+        self.next += n;
+        self.session_done += n;
+        let el = self.session.elapsed().as_secs_f64();
+        let p = &mut self.p;
+        p.rules_done = self.next;
         p.rules_total = total;
-        p.per_s = session_done as f64 / el.max(1e-9);
-        p.elapsed_s = base_elapsed + el;
-        p.status = "running".into();
+        p.per_s = self.session_done as f64 / el.max(1e-9);
+        p.elapsed_s = self.base_elapsed + el;
         p.updated = crate::library::now_utc();
-        let pv = serde_json::to_value(&p).map_err(|e| e.to_string())?;
-        let cp = serde_json::to_vec(&next).map_err(|e| e.to_string())?;
-        lib.put_census_rows(job, &rows, &pv, &cp)?;
-        if let Some(h) = &o.on_progress {
-            h(&p);
-        }
-        if o.chunk == 0 {
+        if self.adapt {
             let dt = t0.elapsed().as_secs_f64();
             let want = (n as f64 * 3.0 / dt.max(1e-3)).clamp(4.0, 4096.0) as u64;
-            chunk = ((chunk + want) / 2).max(4);
+            self.chunk = ((self.chunk + want) / 2).max(4);
         }
+        Ok(self.next >= total)
+    }
+
+    /// The progress (as of the last chunk) with this status.
+    pub fn progress(&self, status: &str) -> CensusProgress {
+        CensusProgress {
+            status: status.into(),
+            ..self.p.clone()
+        }
+    }
+
+    /// The checkpoint: the next rule index.
+    pub fn checkpoint(&self) -> Result<Vec<u8>, String> {
+        serde_json::to_vec(&self.next).map_err(|e| e.to_string())
+    }
+
+    /// Rules run in this session.
+    pub fn rules_run(&self) -> u64 {
+        self.session_done
     }
 }
 
