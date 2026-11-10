@@ -1,7 +1,7 @@
 //! Media for the catalog and the website: per-step frames (PNG), an animation (GIF or animated
-//! WebP), a poster frame, and a thumbnail, for a catalog pattern, a Quick Start entry, a stage 1
-//! setting (through its Quick Start entry), an ant run ([`crate::ants::media`]: a highway's
-//! moving loop alone, the build-up from step 0), or any scene.
+//! WebP), a poster frame, and a thumbnail, for a catalog pattern, a Quick Start entry, an ant run
+//! ([`crate::ants::media`]: a highway's moving loop alone, the build-up from step 0), or any
+//! scene.
 //!
 //! **Two modes** ([`MediaMode`]), chosen automatically with a manual override:
 //!
@@ -15,7 +15,7 @@
 //!   then shown for one period, which loops because the stream is periodic. Puffers, movers on
 //!   aperiodic patches, and other records run from their start in a window around everything
 //!   they reach (not seamless).
-//! - **Seed** (Quick Start entries, settings, scenes; patterns on request): the scene from its
+//! - **Seed** (Quick Start entries, scenes; patterns on request): the scene from its
 //!   first generation, the whole grid, `gens` generations (row rules: one frame per row).
 //!
 //! **House style** ([`MediaStyle`]): a fixed palette per field kind (cells coloured by state, never
@@ -966,8 +966,6 @@ pub enum MediaTarget {
     Pattern(String),
     /// A Quick Start entry by id.
     QuickStart(String),
-    /// A stage 1 setting by id, through its Quick Start entry (`source_kind = 'setting'`).
-    Setting(String),
     /// An ant run by id ([`crate::ants::media`]): alone is the moving highway loop, seed the
     /// build-up from step 0.
     Ant(String),
@@ -978,7 +976,6 @@ impl MediaTarget {
         match self {
             MediaTarget::Pattern(_) => "pattern",
             MediaTarget::QuickStart(_) => "quickstart",
-            MediaTarget::Setting(_) => "setting",
             MediaTarget::Ant(_) => "ant",
         }
     }
@@ -1170,27 +1167,6 @@ fn resolve(lib: &Library, t: &MediaTarget, mode: MediaMode) -> Result<Job, Strin
             };
             gens = Some(crate::ants::media::build_gens(&a));
             ("ant", a.id.clone(), src, want)
-        }
-        MediaTarget::Setting(id) => {
-            let q = lib
-                .quickstart(&[
-                    QsStatus::Auto,
-                    QsStatus::Candidate,
-                    QsStatus::Approved,
-                    QsStatus::Rejected,
-                ])?
-                .into_iter()
-                .find(|q| q.source_kind == "setting" && q.source_id.as_deref() == Some(id))
-                .ok_or_else(|| format!("setting {id} has no Quick Start entry to render"))?;
-            if mode == MediaMode::Alone {
-                return Err("settings render from the seed only".into());
-            }
-            (
-                "setting",
-                id.clone(),
-                Source::Scene(Box::new(q.scene)),
-                MediaMode::Seed,
-            )
         }
     };
     let mode = if mode == MediaMode::Auto { auto } else { mode };
@@ -1625,7 +1601,6 @@ fn id_of(t: &MediaTarget) -> String {
     match t {
         MediaTarget::Pattern(x)
         | MediaTarget::QuickStart(x)
-        | MediaTarget::Setting(x)
         | MediaTarget::Ant(x) => x.clone(),
     }
 }

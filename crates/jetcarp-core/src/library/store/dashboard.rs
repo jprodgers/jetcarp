@@ -21,14 +21,12 @@ pub struct HeatRow {
     pub birth: u32,
     pub survive: u32,
     pub notation: String,
-    /// Distinct patterns seen (hunts), or settings stored (stage 1).
+    /// Distinct patterns seen.
     pub finds: u64,
     /// Distinct spaceships seen (hunts).
     pub ships: u64,
     /// Object copies seen (hunts).
     pub copies: u64,
-    /// Best settings score (stage 1).
-    pub score: Option<f64>,
 }
 
 /// What the heat map counts.
@@ -36,8 +34,6 @@ pub struct HeatRow {
 pub enum HeatQuery {
     /// Patterns sighted (by one job, or every job), per rule.
     Patterns { job: Option<i64> },
-    /// Stage 1 settings stored (by one job, or every job), per rule.
-    Settings { job: Option<i64> },
 }
 
 /// A pattern a job saw, for the dashboard's lists.
@@ -122,18 +118,10 @@ impl Library {
                 HeatQuery::Patterns { job } => (
                     "SELECT r.birth, r.survive, r.notation, count(DISTINCT s.pattern_id),
                         count(DISTINCT CASE WHEN p.class = 'spaceship' THEN s.pattern_id END),
-                        coalesce(sum(s.count), 0), NULL
+                        coalesce(sum(s.count), 0)
                      FROM sightings s JOIN rules r ON r.id = s.rule_id
                         JOIN patterns p ON p.id = s.pattern_id
                      WHERE (?1 IS NULL OR s.job_id = ?1) AND p.tiling = ?2
-                        AND r.neighborhood = ?3 AND r.states = ?4 AND r.birth IS NOT NULL
-                     GROUP BY s.rule_id",
-                    *job,
-                ),
-                HeatQuery::Settings { job } => (
-                    "SELECT r.birth, r.survive, r.notation, count(*), 0, 0, max(s.score)
-                     FROM settings s JOIN rules r ON r.id = s.rule_id
-                     WHERE (?1 IS NULL OR s.job_id = ?1) AND s.tiling = ?2
                         AND r.neighborhood = ?3 AND r.states = ?4 AND r.birth IS NOT NULL
                      GROUP BY s.rule_id",
                     *job,
@@ -148,7 +136,6 @@ impl Library {
                     finds: r.get::<_, i64>(3)? as u64,
                     ships: r.get::<_, i64>(4)? as u64,
                     copies: r.get::<_, i64>(5)? as u64,
-                    score: r.get(6)?,
                 })
             })
             .map_err(e)?

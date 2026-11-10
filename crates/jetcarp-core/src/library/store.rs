@@ -1,5 +1,5 @@
 //! The catalog: one SQLite file holding every pattern, the rules they work in, sightings, jobs,
-//! the Quick Start entries, stage 1 settings, ratings, score versions, and (for later waves) media.
+//! census results, the Quick Start entries, ratings, ant runs, and media.
 //!
 //! **File.** `JETCARP_LIBRARY` if set (a folder, or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`. A folder means `<folder>/catalog.sqlite`. The file is
@@ -19,14 +19,15 @@
 //! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `first_seen` |
 //! | `sightings` | (pattern, rule, job) | `count` (copies), `soups` (soups it appeared in), `first_seen`, `last_seen`; job 0 is "manual" (adds outside a job) |
 //! | `jobs` | search or hunt | `kind`, `spec` (JSON), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB) |
-//! | `settings` | stage 1 setting: rule, tiling, density, soup size, grid size, boundary, generations | `spec` (the setting, JSON), `descriptors` (JSON), `score`, `qs_status` (`stored`, `candidate`, `auto`, `approved`, `rejected`), `model_id`, `pass`, `behaviour`, `job_id` (see [`settings`]) |
-//! | `score_models` | version of the settings score | `source` (`hand`, `refit`, `thresholds`), `model` (JSON: weights, bias, thresholds, fit), `ratings`, `active` |
 //! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON) |
-//! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`, `setting-<n>`), `source_kind` (`pattern`, `sweep`, `setting`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (as settings) |
+//! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`) |
 //! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
-//! | `ratings` | rating of a pattern, setting, or Quick Start entry | `target_kind`, `target_id`, `rater` (`user` or `model:<name>`), `rating` (1-5), `note` |
+//! | `ratings` | rating of a pattern, an ant run, or a Quick Start entry | `target_kind`, `target_id`, `rater` (`user` or `model:<name>`), `rating` (1-5), `note` |
 //! | `ants` | ant or turmite run: rule, tiling, start ([`ants`]) | `id` (`ant-<hash>`), `rule`, `kind` (`string`, `table`), `states`, `colors`, `tiling`, `tiling_id`, `start`, `outcome` (`highway`, `periodic`, `symmetric`, `bounded`, `chaotic`), `period`, `dx`/`dy`, `speed`, `onset`, `steps`, `cells`, `body` (JSON: the run with its proof, and the limits), `score`, curation, `job_id` |
 //! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `path` (relative to the catalog's folder), `from_seed`, `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale), `hash` (content hash) |
+//!
+//! The tables `settings` and `score_models` of the old stage 1 settings search (migration 3) are
+//! still created, but nothing reads or writes them; the schema v1 of the data layer drops them.
 //!
 //! "Every pattern that works in rule R" is [`Query::works_in`](super::Query): the range test on
 //! the bitmasks (`birth_min & ~B = 0`, `B & ~birth_max = 0`, the same for S, and the state count
@@ -56,14 +57,9 @@ mod census;
 mod dashboard;
 pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
 mod ratings;
-mod settings;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use ratings::RatingRow;
-pub use settings::{
-    FlushFinish, NewSetting, RescoreReport, SettingRow, SettingStatus, SettingsQuery, Stage1Flush,
-    ThinOptions, ThinReport, parse_setting_id,
-};
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 
 /// The catalog's file name inside a folder.
@@ -406,9 +402,9 @@ impl QsStatus {
 /// One Quick Start entry (table `quickstart`).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QuickStartRow {
-    /// Pattern id, `sweep-<hash>`, or `setting-<n>`. The app shows it as `find:<id>`.
+    /// Pattern id, `sweep-<hash>`, or a scene's id. The app shows it as `find:<id>`.
     pub id: String,
-    /// `pattern`, `sweep`, `setting`, or `scene`.
+    /// `pattern`, `sweep`, or `scene`.
     pub source_kind: String,
     pub source_id: Option<String>,
     pub title: String,
@@ -485,8 +481,8 @@ pub struct JobRow {
 }
 
 impl JobRow {
-    /// The job's label (`spec.label`, set with [`Library::set_job_label`]), if any: pipelines
-    /// label their jobs (`pipeline 3 · stage 2 · Hexagon (touch)`) so they can be told apart.
+    /// The job's label (`spec.label`, set with [`Library::set_job_label`]), if any: scripts
+    /// label their jobs (`survey · Hexagon (touch)`) so they can be found again and told apart.
     pub fn label(&self) -> Option<&str> {
         self.spec.get("label").and_then(|l| l.as_str())
     }
@@ -538,7 +534,6 @@ pub struct CatalogInfo {
     pub sightings: i64,
     pub seen: i64,
     pub jobs: i64,
-    pub settings: i64,
     pub quickstart: i64,
     pub ratings: i64,
     pub media: i64,
@@ -1438,7 +1433,7 @@ impl Library {
 
     /// Label a job: `spec.label` is set to `label` (the spec structs ignore the extra key, so
     /// any kind of job can carry one). Scripts find their jobs again by label, which makes a
-    /// pipeline resumable, and the dashboard shows it.
+    /// script of labelled jobs resumable, and the dashboard shows it.
     pub fn set_job_label(&self, id: i64, label: &str) -> Result<(), String> {
         let mut j = self.job(id)?;
         if !j.spec.is_object() {
@@ -1453,7 +1448,7 @@ impl Library {
         })
     }
 
-    /// Replace a job's spec (a pipeline's budgets changed on resume). The label is kept.
+    /// Replace a job's spec (new budgets on resume). The label is kept.
     pub fn set_job_spec(&self, id: i64, spec: &Value) -> Result<(), String> {
         let mut spec = spec.clone();
         if let Some(l) = self.job(id)?.label() {
@@ -1888,7 +1883,6 @@ impl Library {
                     })
                     .map_err(e)?,
                 jobs: n("jobs")?,
-                settings: n("settings")?,
                 quickstart: n("quickstart")?,
                 ratings: n("ratings")?,
                 media: n("media")?,

@@ -5,12 +5,9 @@
 use jetcarp_core::dashboard::{self, HeatColour, Target};
 use jetcarp_core::hunt::job::{self as hunt, HuntOptions, HuntSpec};
 use jetcarp_core::library::{
-    CurationState, HeatQuery, HeatRow, JobStatus, Library, NewSetting, QsStatus, QuickStartRow,
-    SettingStatus, UsageRow,
+    CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
 };
 use jetcarp_core::qsmenu::{self, Filter, Origin, Sort};
-use jetcarp_core::stage1::eval::{Descriptors, Setting};
-use jetcarp_core::stage1::score::ScoreModel;
 use jetcarp_core::topology::{Nb, TilingSpec};
 use std::collections::HashMap;
 
@@ -79,20 +76,16 @@ fn gray_order_puts_rule_neighbours_side_by_side() {
 }
 
 #[test]
-fn heat_map_bins_sum_finds_and_take_the_best_score() {
-    let row = |b: u32, s: u32, finds: u64, ships: u64, score: Option<f64>| HeatRow {
+fn heat_map_bins_sum_finds_and_fold_high_counts() {
+    let row = |b: u32, s: u32, finds: u64, ships: u64| HeatRow {
         birth: b,
         survive: s,
         notation: format!("{b}/{s}"),
         finds,
         ships,
         copies: finds,
-        score,
     };
-    let rows = vec![
-        row(1 << 3, 0b1100, 10, 2, Some(40.0)),
-        row(1 << 2, 0b0100, 5, 1, Some(70.0)),
-    ];
+    let rows = vec![row(1 << 3, 0b1100, 10, 2), row(1 << 2, 0b0100, 5, 1)];
     let m = dashboard::heat_map(&rows, 8, HeatColour::Finds);
     assert_eq!((m.w, m.h, m.folded), (256, 512, false));
     let (x, y) = dashboard::heat_cell(1 << 3, 0b1100, 8);
@@ -104,15 +97,15 @@ fn heat_map_bins_sum_finds_and_take_the_best_score() {
     assert_eq!((h.w, h.h), (64, 128));
     assert_eq!(h.values.iter().sum::<f64>(), 3.0);
     // Twelve neighbours fold B9+ and S9+ onto the first eight counts: these two rules share a
-    // cell, whose score is the better one.
+    // cell, which sums their finds.
     let tri = vec![
-        row((1 << 3) | (1 << 10), 1 << 2, 1, 0, Some(30.0)),
-        row(1 << 3, (1 << 2) | (1 << 11), 1, 0, Some(55.0)),
+        row((1 << 3) | (1 << 10), 1 << 2, 1, 0),
+        row(1 << 3, (1 << 2) | (1 << 11), 2, 0),
     ];
-    let t = dashboard::heat_map(&tri, 12, HeatColour::Score);
+    let t = dashboard::heat_map(&tri, 12, HeatColour::Finds);
     assert!(t.folded);
     let (x, y) = dashboard::heat_cell(1 << 3, 1 << 2, 12);
-    assert_eq!(t.at(x, y), 55.0);
+    assert_eq!(t.at(x, y), 3.0);
     assert_eq!(t.rules_at(x, y).len(), 2);
     assert_eq!(
         dashboard::tiling_degree(&TilingSpec::new("hex"), Nb::Touch, &[]),
@@ -179,7 +172,6 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     assert!(!f.newest.is_empty() && !f.other.is_empty());
     let seen = |t: &Target| match t {
         Target::Pattern(id) => lib.get(id).unwrap().seen,
-        _ => 0,
     };
     let rare: Vec<u64> = f.other.iter().map(|i| seen(&i.target)).collect();
     assert!(
@@ -192,7 +184,7 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     // Rating and rejecting a find.
     let t = f.other[0].target.clone();
     dashboard::rate(&lib, &t, 5).unwrap();
-    let Target::Pattern(id) = &t else { panic!() };
+    let Target::Pattern(id) = &t;
     assert_eq!(lib.get(id).unwrap().rating, Some(5));
     let r = lib.ratings(Some("pattern")).unwrap();
     assert_eq!(
@@ -232,50 +224,6 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     assert!(s[0].can_resume() && s[0].total.is_none() && s[0].eta_s.is_none());
 }
 
-fn synthetic(i: usize) -> (Setting, Descriptors) {
-    let s = Setting {
-        rule: format!("B{}/S{}", 1 + i % 6, i / 6 % 7),
-        tiling: TilingSpec::new("hex"),
-        ..Default::default()
-    };
-    let d = Descriptors {
-        runs: 4,
-        activity: vec![0.01; 8],
-        activity_mean: 0.003,
-        compress: 0.4,
-        entropy: 0.5,
-        distinct: 3,
-        behaviour: if i.is_multiple_of(2) {
-            "spaceships"
-        } else {
-            "chaotic"
-        }
-        .into(),
-        ..Default::default()
-    };
-    (s, d)
-}
-
-/// Settings with scores 30, 35, ..., 85: four `auto` and three `candidate` Quick Start rows.
-fn with_settings(lib: &Library) -> Vec<i64> {
-    let hand = ScoreModel::hand();
-    let rows: Vec<NewSetting> = (0..12)
-        .map(|i| {
-            let (s, d) = synthetic(i);
-            let score = 30.0 + 5.0 * i as f64;
-            NewSetting {
-                setting: s,
-                descriptors: d,
-                score,
-                status: SettingStatus::for_score(&hand, score),
-                model_id: None,
-                pass: "test".into(),
-            }
-        })
-        .collect();
-    lib.stage1_flush(None, &rows, None).unwrap().ids
-}
-
 fn scene_row(id: &str, title: &str, status: QsStatus) -> QuickStartRow {
     let e = jetcarp_core::quickstart::entries()
         .into_iter()
@@ -291,14 +239,13 @@ fn scene_row(id: &str, title: &str, status: QsStatus) -> QuickStartRow {
 #[test]
 fn menu_has_every_source_categories_and_search() {
     let lib = temp_lib("menu");
-    with_settings(&lib);
     lib.put_quickstart(&scene_row("my-life", "My Life soup", QsStatus::Approved))
         .unwrap();
     lib.put_quickstart(&scene_row("waiting", "Waiting", QsStatus::Candidate))
         .unwrap();
     let mut items = qsmenu::load_with(&lib, None);
     let n_built = jetcarp_core::quickstart::entries().len();
-    // One approved scene and the built-ins; the candidate is hidden; stage 1 settings are gone.
+    // One approved scene and the built-ins; the candidate is hidden.
     assert_eq!(items.len(), n_built + 1);
     assert!(items.iter().all(|i| i.q.id != "find:waiting"));
     assert!(items.iter().all(|i| i.q.id.strip_prefix("find:").is_none_or(|x| x == "my-life")));
@@ -437,55 +384,6 @@ fn popular_recent_and_random_rows() {
     assert_eq!(qsmenu::random(&items, 1, 100_000).len(), items.len());
 }
 
-#[test]
-fn stage1_jobs_summarise_and_list_their_settings() {
-    use jetcarp_core::stage1::job::{self as s1, Space, Stage1Options, Stage1Spec};
-    let lib = temp_lib("stage1");
-    let mut sq = Space::new(TilingSpec::new("square"), Nb::Touch);
-    sq.rules = vec!["B3/S23".into(), "B36/S23".into(), "B2/S".into()];
-    let spec = Stage1Spec {
-        spaces: vec![sq],
-        base: s1::Base {
-            grid: [32, 32],
-            gens: 200,
-            soups: 1,
-            ..Default::default()
-        },
-        refine: s1::Refine {
-            top: 0,
-            ..Default::default()
-        },
-        neighbours: s1::Neighbours { top: 0, rounds: 1 },
-    };
-    let job = s1::start(&lib, &spec).unwrap();
-    s1::run(&lib, job, &Stage1Options::default()).unwrap();
-    let row = lib.job(job).unwrap();
-    let k = dashboard::kind("stage1");
-    let s = k.summary(&row);
-    assert_eq!(
-        (s.kind_label.as_str(), s.done, s.total),
-        ("Stage 1 search", 3, Some(3))
-    );
-    assert_eq!(s.bars.len(), 10);
-    assert_eq!(s.bars.iter().map(|b| b.1).sum::<u64>(), 3);
-    let spaces = k.heat_spaces(&row);
-    assert_eq!(spaces[0].query, HeatQuery::Settings { job: Some(job) });
-    let (map, rows) = dashboard::load_heat(&lib, &spaces[0], HeatColour::Score).unwrap();
-    assert_eq!(rows.len(), 3);
-    let best = rows.iter().map(|r| r.score.unwrap()).fold(0.0, f64::max);
-    assert_eq!(map.max, best);
-    let f = k.finds(&lib, &row, &[], 10).unwrap();
-    assert_eq!(f.other.len(), 3);
-    let t = f.other[0].target.clone();
-    dashboard::rate(&lib, &t, 3).unwrap();
-    let f = k.finds(&lib, &row, &[], 10).unwrap();
-    assert_eq!(f.other[0].rating, Some(3));
-    let f1 = k.finds(&lib, &row, &["B2/S".to_string()], 10).unwrap();
-    assert!(f1.other.iter().all(|i| i.rule == "B2/S"));
-}
-
-/// Ant searches, sandpiles, sliding-window movers, and evolutionary searches have their own
-/// summaries; ants and piles run, stop, and resume through their kinds.
 #[test]
 fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
     use jetcarp_core::ants::job::{self as antjob, AntSpec};

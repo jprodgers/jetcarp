@@ -22,7 +22,6 @@ type R<T> = Result<T, Box<EvalAltResult>>;
 const MEDIA_KEYS: &[&str] = &[
     "pattern",
     "quickstart",
-    "setting",
     "ant",
     "missing",
     "class",
@@ -151,12 +150,10 @@ pub fn media_into(lib: &Library, v: &Value) -> Result<Value, String> {
             MediaTarget::Pattern(p.into())
         } else if let Some(q) = get_str(v, "quickstart")? {
             MediaTarget::QuickStart(q.into())
-        } else if let Some(s) = get_str(v, "setting")? {
-            MediaTarget::Setting(s.into())
         } else if let Some(a) = get_str(v, "ant")? {
             MediaTarget::Ant(a.into())
         } else {
-            return Err("media: give pattern, quickstart, setting, ant, or missing: true".into());
+            return Err("media: give pattern, quickstart, ant, or missing: true".into());
         };
         media::render_many(lib, &[t], &o)?
     };

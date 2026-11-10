@@ -52,7 +52,7 @@ impl JetcarpApp {
                 let busy = if self.dash.busy() { " ●" } else { "" };
                 if ui
                     .button(format!("Hunts{busy}…"))
-                    .on_hover_text("Every hunt and stage 1 search in the catalog: progress, heat map, finds")
+                    .on_hover_text("Every hunt and search job in the catalog: progress, heat map, finds")
                     .clicked()
                 {
                     self.dash.open = !self.dash.open;

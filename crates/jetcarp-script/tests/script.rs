@@ -723,6 +723,8 @@ fn scripts_run_soup_searches_into_the_library() {
         let again = lib.search(#{ rules: "B3/S23", tilings: ["rhombitrihex"], soups: 4,
                                   size: "32x32", gens: 600, seed: 1 });
         print(`again ${again.new_patterns} ${again.known_patterns}`);
+        let n = lib.rate("pattern", g.patterns[0].id, 4, #{ rater: "model:stub", note: "nice" });
+        print(`rated ${n > 0}`);
         "#,
         o,
     );
@@ -739,6 +741,7 @@ fn scripts_run_soup_searches_into_the_library() {
         "{:?}",
         s.log
     );
+    assert!(s.log.iter().any(|l| l == "rated true"), "{:?}", s.log);
 }
 
 #[test]
@@ -796,53 +799,6 @@ fn scripts_run_ant_searches() {
     ] {
         assert!(s.log.iter().any(|l| l == want), "{want}: {:?}", s.log);
     }
-}
-
-#[test]
-fn scripts_run_stage1_searches_and_rate_settings() {
-    let root = temp_root("stage1");
-    let mut o = opts(&root);
-    o.library = Some(root.join("lib"));
-    let s = ok(
-        r#"
-        let lib = library();
-        let spec = #{ tilings: "hex", birth: "2-3", survive: "2-4", grid: [32, 32], gens: 200,
-                      soups: 2, refine: #{ top: 2, densities: [0.2], soups: [], grids: [],
-                      gens: [] }, neighbours: false };
-        let p = stage1(spec + #{ limit: 10 });
-        print(`first ${p.status} ${p.evaluated}`);
-        let q = lib.stage1(#{ resume: p.job });
-        print(`then ${q.status} ${q.evaluated} ${q.passes.len()}`);
-        let top = lib.settings(#{ job: p.job, limit: 3 });
-        print(`top ${top.len()} ${top[0].score >= top[1].score} ${top[0].descriptors.runs}`);
-        let one = lib.setting(top[0].id);
-        print(`one ${one.rule == top[0].rule} ${one.scene.cas.len()}`);
-        let r = lib.rate("setting", top[1].id, 5, #{ rater: "model:stub", note: "nice" });
-        let a = lib.approve(top[2].id);
-        print(`rated ${r > 0} ${a.status} ${lib.score_model().source}`);
-        let st = lib.stage1_status(p.job);
-        print(`status ${st.status} ${st.spec.spaces.len()} ${lib.stage1_jobs().len()}`);
-        let sh = lib.stage1_sheet(#{ png: "s1/top.png", query: #{ job: p.job, limit: 4 },
-                                     thumb: 60, cols: 2, labels: ["A", "B", "C", "D"] });
-        print(`sheet ${sh.count}`);
-        "#,
-        o,
-    );
-    for want in [
-        "first paused 10",
-        "then done 34 2",
-        "top 3 true 2",
-        "one true 1",
-        "rated true approved hand",
-        "status done 1 1",
-        "sheet 4",
-    ] {
-        assert!(s.log.iter().any(|l| l == want), "{want}: {:?}", s.log);
-    }
-    let side: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(root.join("s1/top.json")).unwrap()).unwrap();
-    assert_eq!(side["entries"][0]["label"], "A");
-    assert!(side["entries"][3]["setting_id"].as_i64().is_some());
 }
 
 #[test]

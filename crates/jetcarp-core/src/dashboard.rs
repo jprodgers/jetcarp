@@ -7,8 +7,8 @@
 //! ([`JobKind::request_stop`]), how to run or resume it in this process ([`JobKind::resume`],
 //! returning a [`RunningJob`] with live progress), which heat maps it feeds
 //! ([`JobKind::heat_spaces`]), and its finds ([`JobKind::finds`]). [`kind`] looks one up by the
-//! `jobs.kind` column: `hunt` (`crate::hunt::job`), `stage1` (`crate::stage1::job`), `census`
-//! (`crate::census`), `ants` (`crate::ants::job`), `pile` (`crate::pile::job`), `mover`
+//! `jobs.kind` column: `hunt` (`crate::hunt::job`), `census` (`crate::census`), `ants`
+//! (`crate::ants::job`), `pile` (`crate::pile::job`), `mover`
 //! (`crate::window::job`), `evolve` (summary and stop; a search has no checkpoint to resume),
 //! and a generic fallback for the rest (`search`, `collide`: listed, paused by setting the
 //! status, never resumed). A new kind of job is one more `impl JobKind` and a
@@ -21,18 +21,16 @@
 //! interesting rules show up as clusters rather than scattered dots. Squares with Moore
 //! neighbours make 256 x 512 cells, hexagons 64 x 128, von Neumann squares 16 x 32. Tilings with
 //! more than 8 neighbours fold the higher counts onto the cell of their first eight (the map
-//! says so). A cell's value is the sum over its rules (finds, spaceships) or the maximum
-//! (settings score).
+//! says so). A cell's value is the sum over its rules (finds, spaceships).
 
 use crate::census;
 use crate::hunt::job::{self as hunt, HuntOptions, HuntProgress, HuntSpec, SoupBatcher};
 use crate::library::store::JobRow;
 use crate::library::{
-    CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, SettingStatus, SettingsQuery,
-    Update, tiling_display_name, tiling_key,
+    CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update, tiling_display_name,
+    tiling_key,
 };
 use crate::rules::Rule;
-use crate::stage1::job::{self as stage1, Stage1Options, Stage1Progress, Stage1Spec};
 use crate::topology::{Nb, SizeSpec, TilingSpec, Topology};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -48,7 +46,7 @@ pub const STALE_S: i64 = 300;
 pub struct JobSummary {
     pub id: i64,
     pub kind: String,
-    /// `Hunt`, `Stage 1 search`, `Census`, ...
+    /// `Hunt`, `Census`, `Ant search`, ...
     pub kind_label: String,
     /// `running`, `paused`, `done`, `failed`.
     pub status: String,
@@ -152,7 +150,6 @@ impl HeatSpace {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Target {
     Pattern(String),
-    Setting(i64),
 }
 
 /// A find to show (and animate, rate, reject).
@@ -168,12 +165,12 @@ pub struct FindItem {
     pub rejected: bool,
 }
 
-/// Newest and rarest (hunts) or newest and best (stage 1) finds.
+/// Newest and rarest finds.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Finds {
     pub newest: Vec<FindItem>,
     pub other: Vec<FindItem>,
-    /// `Rarest` or `Best`.
+    /// `Rarest`.
     pub other_title: String,
 }
 
@@ -219,9 +216,7 @@ pub trait JobKind: Send + Sync {
 }
 
 static HUNT: HuntKind = HuntKind;
-static STAGE1: Stage1Kind = Stage1Kind;
 static CENSUS: CensusKind = CensusKind;
-static PIPELINE: PipelineKind = PipelineKind;
 static OTHER: OtherKind = OtherKind;
 static ANTS: AntsKind = AntsKind;
 static PILE: PileKind = PileKind;
@@ -232,9 +227,7 @@ static EVOLVE: EvolveKind = EvolveKind;
 pub fn kind(name: &str) -> &'static dyn JobKind {
     match name {
         "hunt" => &HUNT,
-        "stage1" => &STAGE1,
         "census" => &CENSUS,
-        "pipeline" => &PIPELINE,
         crate::ants::job::KIND => &ANTS,
         crate::pile::job::KIND => &PILE,
         crate::window::job::KIND => &MOVER,
@@ -557,208 +550,6 @@ impl JobKind for HuntKind {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Stage 1 searches
-
-struct Stage1Kind;
-
-/// A stage 1 search's summary from its spec and progress.
-pub fn stage1_summary(
-    base: JobSummary,
-    spec: Option<&Stage1Spec>,
-    p: &Stage1Progress,
-) -> JobSummary {
-    let mut s = base;
-    if let Some(sp) = spec {
-        let spaces: Vec<String> = sp.spaces.iter().map(|x| x.label()).collect();
-        s.title = format!("settings on {}", short_list(&spaces, 3));
-    }
-    let pass = p.passes.get(p.pass).cloned().unwrap_or_default();
-    s.unit = if pass.is_empty() {
-        "settings".into()
-    } else {
-        format!(
-            "settings ({pass} pass {} of {})",
-            p.pass + 1,
-            p.passes.len()
-        )
-    };
-    s.done = p.pass_done;
-    s.total = (p.pass_total > 0).then_some(p.pass_total);
-    s.per_s = p.per_s;
-    s.elapsed_s = p.elapsed_s;
-    s.eta_s = eta(s.done, s.total, s.per_s, s.status == "running");
-    s.counters = vec![("settings evaluated".into(), digits(p.evaluated))];
-    for (k, v) in &p.statuses {
-        s.counters.push((k.clone(), digits(*v)));
-    }
-    if let Some(b) = p.best.first() {
-        s.counters.push((
-            "best".into(),
-            format!("{:.1} {} ({})", b.score, b.rule, b.behaviour),
-        ));
-    }
-    s.bars_title = "Settings by score (0-10, ..., 90-100)".into();
-    s.bars = p
-        .histogram
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (format!("{}", i * 10), *n))
-        .collect();
-    s.error = p.error.clone();
-    s
-}
-
-struct Stage1Run(stage1::Stage1Handle);
-
-impl RunningJob for Stage1Run {
-    fn job(&self) -> i64 {
-        self.0.job
-    }
-    fn summary(&self) -> JobSummary {
-        let p = self.0.progress();
-        let base = JobSummary {
-            id: self.0.job,
-            kind: "stage1".into(),
-            kind_label: STAGE1.label().into(),
-            status: p.status.clone(),
-            here: true,
-            resumable: true,
-            updated: p.updated.clone(),
-            ..Default::default()
-        };
-        stage1_summary(base, None, &p)
-    }
-    fn stop(&self) {
-        self.0.stop();
-    }
-    fn is_finished(&self) -> bool {
-        self.0.is_finished()
-    }
-    fn join(self: Box<Self>) -> Result<(), String> {
-        self.0.join().map(|_| ())
-    }
-}
-
-fn setting_item(
-    id: i64,
-    rule: &str,
-    tiling: &str,
-    score: f64,
-    behaviour: &str,
-    status: &str,
-    rating: Option<u8>,
-) -> FindItem {
-    FindItem {
-        target: Target::Setting(id),
-        title: format!("{behaviour}: {rule}"),
-        subtitle: format!("{tiling} · score {score:.1} · {status}"),
-        rule: rule.to_string(),
-        rating,
-        rejected: status == "rejected",
-    }
-}
-
-impl JobKind for Stage1Kind {
-    fn kind(&self) -> &'static str {
-        "stage1"
-    }
-    fn label(&self) -> &'static str {
-        "Stage 1 search"
-    }
-    fn summary(&self, row: &JobRow) -> JobSummary {
-        let spec: Option<Stage1Spec> = serde_json::from_value(row.spec.clone()).ok();
-        let p: Stage1Progress = serde_json::from_value(row.progress.clone()).unwrap_or_default();
-        stage1_summary(base_summary(row, self), spec.as_ref(), &p)
-    }
-    fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
-        stage1::request_stop(lib, job)
-    }
-    fn resumable(&self) -> bool {
-        true
-    }
-    fn resume(
-        &self,
-        lib: Library,
-        job: i64,
-        o: &RunOptions,
-    ) -> Result<Box<dyn RunningJob>, String> {
-        let opts = Stage1Options {
-            threads: o.threads,
-            ..Default::default()
-        };
-        Ok(Box::new(Stage1Run(stage1::Stage1Handle::spawn(
-            lib, job, opts,
-        ))))
-    }
-    fn heat_spaces(&self, row: &JobRow) -> Vec<HeatSpace> {
-        let Ok(spec) = serde_json::from_value::<Stage1Spec>(row.spec.clone()) else {
-            return vec![];
-        };
-        spec.spaces
-            .iter()
-            .map(|sp| HeatSpace {
-                tiling: sp.tiling.clone(),
-                tiling_name: tiling_display_name(&sp.tiling),
-                nb: sp.nb,
-                states: sp.states as u32,
-                query: HeatQuery::Settings { job: Some(row.id) },
-            })
-            .collect()
-    }
-    fn finds(
-        &self,
-        lib: &Library,
-        row: &JobRow,
-        rules: &[String],
-        n: usize,
-    ) -> Result<Finds, String> {
-        let ratings = lib.user_ratings()?;
-        let rating = |id: i64| {
-            ratings
-                .get(&("setting".to_string(), id.to_string()))
-                .map(|r| r.round() as u8)
-        };
-        let fetch = |order: &str, status: Vec<SettingStatus>| -> Result<Vec<FindItem>, String> {
-            let mut out = Vec::new();
-            let rule_list: Vec<Option<String>> = if rules.is_empty() {
-                vec![None]
-            } else {
-                rules.iter().cloned().map(Some).collect()
-            };
-            for rule in rule_list {
-                let q = SettingsQuery {
-                    job: Some(row.id),
-                    rule,
-                    status: status.clone(),
-                    order: Some(order.into()),
-                    limit: n,
-                    ..Default::default()
-                };
-                for s in lib.settings(&q)? {
-                    out.push(setting_item(
-                        s.id,
-                        &s.notation,
-                        &s.tiling_name,
-                        s.score.unwrap_or(0.0),
-                        &s.behaviour,
-                        &s.status.name(),
-                        rating(s.id),
-                    ));
-                }
-            }
-            out.truncate(n);
-            Ok(out)
-        };
-        use SettingStatus::*;
-        Ok(Finds {
-            newest: fetch("created", vec![Auto, Candidate, Approved])?,
-            other: fetch("score", vec![Auto, Candidate, Approved, Stored])?,
-            other_title: "Best".into(),
-        })
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
 // Census jobs
 
 struct CensusKind;
@@ -879,74 +670,6 @@ impl JobKind for CensusKind {
             live,
             thread,
         }))
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Catalog pipelines
-
-struct PipelineKind;
-
-/// A pipeline's summary: the step it is on, each step's status and time. Its stage 1 searches
-/// and hunts are jobs of their own, listed with the pipeline's label.
-pub fn pipeline_summary(
-    base: JobSummary,
-    spec: Option<&crate::pipeline::PipelineSpec>,
-    p: &crate::pipeline::PipelineProgress,
-) -> JobSummary {
-    use crate::pipeline::step_title;
-    let mut s = base;
-    let step = p.steps.get(p.step);
-    s.title = format!(
-        "{} mode, {}",
-        spec.map(|x| x.mode.as_str()).unwrap_or("?"),
-        step.map(|x| format!("step {}: {}", p.step + 1, step_title(&x.name)))
-            .unwrap_or_else(|| "finished".into())
-    );
-    s.done = p.done() as u64;
-    s.total = Some(p.steps.len() as u64);
-    s.unit = "steps".into();
-    s.elapsed_s = p.elapsed_s;
-    for st in &p.steps {
-        let mut v = st.status.clone();
-        if st.seconds > 0.0 {
-            v.push_str(&format!(", {}", duration(st.seconds)));
-        }
-        if !st.jobs.is_empty() {
-            let ids: Vec<String> = st.jobs.iter().map(|j| j.to_string()).collect();
-            v.push_str(&format!(", jobs {}", ids.join(" ")));
-        }
-        if !st.note.is_empty() {
-            v.push_str(&format!(" ({})", st.note));
-        }
-        s.counters.push((step_title(&st.name).into(), v));
-    }
-    s
-}
-
-impl JobKind for PipelineKind {
-    fn kind(&self) -> &'static str {
-        "pipeline"
-    }
-    fn label(&self) -> &'static str {
-        "Catalog pipeline"
-    }
-    fn summary(&self, row: &JobRow) -> JobSummary {
-        let spec: Option<crate::pipeline::PipelineSpec> =
-            serde_json::from_value(row.spec.clone()).ok();
-        let p: crate::pipeline::PipelineProgress = serde_json::from_value(row.progress.clone())
-            .unwrap_or_else(|_| crate::pipeline::PipelineProgress::new(row.id));
-        let mut s = pipeline_summary(base_summary(row, self), spec.as_ref(), &p);
-        // The label is added by `summaries`; the title here is the step.
-        if let Some(sp) = &spec
-            && row.label().is_none()
-        {
-            s.title = format!("{}: {}", sp.label, s.title);
-        }
-        s
-    }
-    fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
-        crate::pipeline::request_stop(lib, job)
     }
 }
 
@@ -1485,14 +1208,11 @@ impl JobKind for OtherKind {
 pub fn rate(lib: &Library, t: &Target, stars: u8) -> Result<(), String> {
     match t {
         Target::Pattern(id) => lib.rate_pattern(id, stars, "").map(|_| ()),
-        Target::Setting(id) => lib
-            .rate("setting", &id.to_string(), "user", stars as f64, "")
-            .map(|_| ()),
     }
 }
 
 /// Reject a find: a pattern's curation state becomes `rejected` (and its Quick Start entry, if
-/// it has one, is hidden); a setting is rejected as in the approval queue.
+/// it has one, is hidden).
 pub fn reject(lib: &Library, t: &Target) -> Result<(), String> {
     match t {
         Target::Pattern(id) => {
@@ -1508,9 +1228,6 @@ pub fn reject(lib: &Library, t: &Target) -> Result<(), String> {
             }
             Ok(())
         }
-        Target::Setting(id) => lib
-            .review_setting(&id.to_string(), SettingStatus::Rejected, None, "")
-            .map(|_| ()),
     }
 }
 
@@ -1520,20 +1237,17 @@ pub fn reject(lib: &Library, t: &Target) -> Result<(), String> {
 /// What colours the heat map.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HeatColour {
-    /// Distinct patterns found (hunts) or settings stored (stage 1).
+    /// Distinct patterns found.
     #[default]
     Finds,
-    /// Distinct spaceships found (hunts).
+    /// Distinct spaceships found.
     Ships,
-    /// Best settings score (stage 1).
-    Score,
 }
 
 impl HeatColour {
-    pub const ALL: [(HeatColour, &'static str); 3] = [
+    pub const ALL: [(HeatColour, &'static str); 2] = [
         (HeatColour::Finds, "finds"),
         (HeatColour::Ships, "spaceships"),
-        (HeatColour::Score, "settings score"),
     ];
     pub fn label(self) -> &'static str {
         Self::ALL
@@ -1547,7 +1261,6 @@ impl HeatColour {
         match self {
             HeatColour::Finds => r.finds as f64,
             HeatColour::Ships => r.ships as f64,
-            HeatColour::Score => r.score.unwrap_or(0.0),
         }
     }
 }
@@ -1638,11 +1351,7 @@ pub fn heat_map(rows: &[HeatRow], degree: u32, colour: HeatColour) -> HeatMap {
     for (i, r) in rows.iter().enumerate() {
         let (x, y) = heat_cell(r.birth, r.survive, degree);
         let k = y * w + x;
-        let v = colour.value(r);
-        m.values[k] = match colour {
-            HeatColour::Score => m.values[k].max(v),
-            _ => m.values[k] + v,
-        };
+        m.values[k] += colour.value(r);
         m.rules.entry(k).or_default().push(i);
     }
     m.max = m.values.iter().cloned().fold(0.0, f64::max);

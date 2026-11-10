@@ -110,10 +110,9 @@ pub const NAMES: &[&str] = &[
     "library_update",
     "library_promote",
     "library_collide",
-    // Background jobs: one start tool per kind (`hunt_tools.rs`, `stage1_tools.rs`,
-    // `job_tools.rs`), one status and one stop tool for all of them.
+    // Background jobs: one start tool per kind (`hunt_tools.rs`, `job_tools.rs`), one status
+    // and one stop tool for all of them.
     "hunt_start",
-    "stage1_start",
     "ants_start",
     "pile_start",
     "evolve_start",
@@ -183,7 +182,7 @@ pub fn definitions() -> Vec<Value> {
             "jetcarp_help",
             "JETCARP help and worked examples",
             true,
-            "Explains JETCARP and shows worked examples. `topic`: \"overview\" (default: what JETCARP is, coordinates, a glider in Life, Brian's Brain on hexagons, sandpiles, several CAs at once), \"catalog\" (finding, listing, curating, and promoting patterns, ants, settings), \"jobs\" (long searches in the background: start, job_status, job_stop, resume), or \"scripts\" (the full function reference for run_script). Call this first if you are unsure how the tools fit together.",
+            "Explains JETCARP and shows worked examples. `topic`: \"overview\" (default: what JETCARP is, coordinates, a glider in Life, Brian's Brain on hexagons, sandpiles, several CAs at once), \"catalog\" (finding, listing, curating, and promoting patterns, ants, Quick Start entries), \"jobs\" (long searches in the background: start, job_status, job_stop, resume), or \"scripts\" (the full function reference for run_script). Call this first if you are unsure how the tools fit together.",
             json!({"type": "object", "properties": {
                 "topic": {"type": "string", "enum": ["overview", "catalog", "jobs", "scripts"], "description": "Default overview."},
             }, "additionalProperties": false}),
@@ -346,7 +345,6 @@ pub fn definitions() -> Vec<Value> {
     .into_iter()
     .chain(crate::library_tools::definitions())
     .chain(crate::hunt_tools::definitions())
-    .chain(crate::stage1_tools::definitions())
     .chain(crate::job_tools::definitions())
     .chain(crate::media_tools::definitions())
     .chain(crate::files_tools::definitions())
@@ -399,7 +397,6 @@ pub fn call_ctx(
         }
         n if crate::explore_tools::handles(n) => crate::explore_tools::call(n, args),
         n if crate::hunt_tools::handles(n) => crate::hunt_tools::call(n, args),
-        n if crate::stage1_tools::handles(n) => crate::stage1_tools::call(n, args),
         "job_status" => crate::job_tools::status_wait(args, cancel.as_deref()),
         n if crate::job_tools::handles(n) => crate::job_tools::call(n, args),
         n if crate::media_tools::handles(n) => crate::media_tools::call(n, args),
@@ -2001,7 +1998,7 @@ Tips
   manifest), write a script for run_script; jetcarp_help {"topic": "scripts"} lists its functions.
   world_status reports `done` when nothing can change any more (e.g. an elementary rule reached
   the bottom).
-- The catalog (patterns, ant runs, settings, Quick Start entries): jetcarp_help {"topic": "catalog"}.
+- The catalog (patterns, ant runs, Quick Start entries): jetcarp_help {"topic": "catalog"}.
   Long searches run in the background as jobs: jetcarp_help {"topic": "jobs"}. files_list shows what
   runs wrote.
 "#;
@@ -2012,7 +2009,6 @@ pub const HELP_CATALOG: &str = r#"The catalog: one database of what JETCARP has 
 Kinds of record (library_list "kind"):
 - pattern: verified still lifes, oscillators, spaceships, guns. Rule-free: `rules` lists every rule it was verified in and `range` the rules it runs identically in.
 - ant: one ant or turmite run (a turn string such as RL or LLRR, or a table) on a tiling: outcome highway (proved exactly: period, displacement d per period, onset step), periodic, symmetric (grows mirror-symmetrically), bounded, or chaotic.
-- setting: a stage 1 setting (rule, tiling, soup density and size, grid, generations) with an interest score; candidates wait for approval.
 - quickstart: entries of the app's Quick Start ("My finds").
 
 Example 1: the best spaceships on hexagons, then one of them in a world
@@ -2029,7 +2025,7 @@ Example 2: Langton's ant highway and other highways on hexagons
 
 Example 3: curate
 - library_update {"id": "<pattern id>", "rating": 4, "append_notes": "LLM: clean p3 oscillator"}
-- library_update {"id": "setting-12", "decision": "approve"}   (or "rating": 2)
+- library_update {"id": "find:<id>", "decision": "reject"}   (hides a Quick Start entry; "approve" shows it)
 - library_update {"id": "ant-...", "name": "slow hex highway", "rating": 5}
 - library_promote {"id": "<pattern or ant id>"}   (adds it to the Quick Start)
 - library_collide {"a": "block", "b": "glider", "offsets": 4}   (collisions; new products are stored)
@@ -2040,7 +2036,6 @@ pub const HELP_JOBS: &str = r#"Long searches run in the background as catalog jo
 
 Start (each takes {"resume": job} to continue a stopped job):
 - hunt_start: soup hunts (patterns in B/S and Generations rules on periodic tilings).
-- stage1_start: the settings search (which rules and settings look interesting).
 - ants_start: ant and turmite searches (highways).
 - pile_start: one large sandpile (pictures in its folder under <Pictures>/JETCARP/piles).
 - mover_start: follow a mover on an aperiodic tiling on a sliding window, far past the fixed
@@ -2051,7 +2046,7 @@ Watch and stop (any kind, started anywhere: here, the CLI, a script, the app):
 - job_status {"job": 3}: progress now; {"job": 3, "wait_s": 300} waits up to 5 minutes for it to finish (one call instead of many polls); job_status {} lists jobs, {"kind": "ants"} only ant searches.
 - job_stop {"job": 3}: stops at the next checkpoint; the job stays resumable.
 
-Results: library_list (patterns, {"kind": "ant"}, {"kind": "setting"}), and files_list for folders
+Results: library_list (patterns, {"kind": "ant"}), and files_list for folders
 (piles, sweeps, media). run_script, library_search, and step stop early when the client cancels
 the request (notifications/cancelled).
 

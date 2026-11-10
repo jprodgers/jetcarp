@@ -1,6 +1,5 @@
-//! The catalog pipeline's scripts: `crates/jetcarp-script/scripts/stage1-all.rhai` and `stage2-hunt.rhai` in
-//! test mode, labelled jobs found again (a rerun starts nothing new), censuses as jobs, and rule
-//! neighbours.
+//! Jobs from scripts: labelled jobs found again (a rerun starts nothing new), censuses as jobs,
+//! and rule neighbours.
 
 use jetcarp_core::library::Library;
 use jetcarp_script::{RunOptions, Screen, Summary};
@@ -37,15 +36,6 @@ fn ok(src: &str, o: RunOptions) -> Summary {
     s
 }
 
-fn script(name: &str) -> String {
-    std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("scripts")
-            .join(name),
-    )
-    .unwrap()
-}
-
 #[test]
 fn labelled_jobs_census_jobs_and_rule_neighbours() {
     let root = temp_root("labelled-jobs");
@@ -66,10 +56,6 @@ fn labelled_jobs_census_jobs_and_rule_neighbours() {
         print(`nb ${rule_neighbours("B3/S23").len()} ${rule_neighbours("B2/S34", #{ tiling: "hex" }).len()}`);
         let e = rule_neighbours("B2/S3V", #{ tiling: "square" });
         print(`edge ${e.len()} ${e.contains("B12/S3V")} ${e.contains("B2/S03V")}`);
-        let s1 = lib.stage1(#{ label: "t · s1", tilings: "hex", birth: "2", survive: "3", gens: 50,
-                               soups: 1, refine: false, neighbours: false });
-        let s2 = lib.stage1(#{ label: "t · s1" });
-        print(`stage1 ${s1.job == s2.job} ${s2.status}`);
         "#,
         opts(&root),
     );
@@ -81,7 +67,6 @@ fn labelled_jobs_census_jobs_and_rule_neighbours() {
         "jobs 2 hunt",
         "nb 17 13",
         "edge 9 true true",
-        "stage1 true done",
     ] {
         assert!(s.log.iter().any(|l| l == want), "{want}: {:?}", s.log);
     }
@@ -94,66 +79,4 @@ fn labelled_jobs_census_jobs_and_rule_neighbours() {
         "{:?}",
         sums.iter().map(|s| s.title.clone()).collect::<Vec<_>>()
     );
-}
-
-#[test]
-fn stage_scripts_cover_every_group_and_resume_by_label() {
-    let root = temp_root("stage-scripts");
-    let one = script("stage1-all.rhai");
-    let two = script("stage2-hunt.rhai");
-    let run = |src: &str| {
-        let mut o = opts(&root);
-        o.params.insert("mode".into(), "test".into());
-        o.params.insert("label".into(), "p".into());
-        ok(src, o)
-    };
-    let s = run(&one);
-    let lib = Library::open(root.join("lib"));
-    let jobs = lib.jobs().unwrap();
-    let labels: Vec<String> = jobs
-        .iter()
-        .filter_map(|j| j.label().map(String::from))
-        .collect();
-    for g in [
-        "squares",
-        "hexagons",
-        "triangles",
-        "archimedean",
-        "kuniform",
-        "isohedral",
-    ] {
-        assert!(
-            labels.contains(&format!("p · stage 1 · {g}")),
-            "{g}: {labels:?}\n{:?}",
-            s.log
-        );
-    }
-    assert!(labels.contains(&"p · stage 1 · aperiodic · spectre".to_string()));
-    assert!(
-        jobs.iter()
-            .filter(|j| j.id != 0)
-            .all(|j| j.status == jetcarp_core::library::JobStatus::Done)
-    );
-    let n1 = jobs.len();
-    // Stage 2: one hunt per space with settings above the test threshold, and a soup search on
-    // the Spectre patch.
-    run(&two);
-    let jobs = lib.jobs().unwrap();
-    let hunts: Vec<_> = jobs
-        .iter()
-        .filter(|j| j.label().is_some_and(|l| l.starts_with("p · stage 2 · ")))
-        .collect();
-    assert!(hunts.iter().any(|j| j.kind == "hunt"));
-    assert!(hunts.iter().any(|j| j.kind == "search"));
-    assert!(
-        hunts
-            .iter()
-            .any(|j| j.label() == Some("p · stage 2 · Hexagon (touch)"))
-    );
-    let n2 = jobs.len();
-    assert!(n2 > n1);
-    // Rerunning both changes nothing: every job is found by its label.
-    run(&one);
-    run(&two);
-    assert_eq!(lib.jobs().unwrap().len(), n2);
 }

@@ -18,7 +18,6 @@ pub mod library_tools;
 pub mod link;
 pub mod media_tools;
 pub mod protocol;
-pub mod stage1_tools;
 pub mod stdio;
 pub mod tools;
 mod util;

@@ -2,10 +2,10 @@
 //! `census(#{ ... })` / `lib.census(#{ ... })`, `lib.census_rows(job)`, and
 //! `rule_neighbours(rule, #{ tiling, nb })` (see `help.md`).
 //!
-//! A `label` on `stage1`, `hunt`, `census`, and `lib.search` names the job; called again with
-//! the same label, the job already in the catalog is resumed (or, when done, returned as it is)
-//! instead of a new one being started. That is what makes `scripts/stage1-all.rhai`,
-//! `scripts/stage2-hunt.rhai`, and `jetcarp pipeline` resumable after a reboot.
+//! A `label` on `hunt`, `census`, and `lib.search` names the job; called again with the same
+//! label, the job already in the catalog is resumed (or, when done, returned as it is) instead of
+//! a new one being started. That is what makes a script of labelled jobs resumable after a
+//! reboot.
 
 use crate::spec::{check_keys, get_f64, get_str, get_u64};
 use jetcarp_core::Nb;

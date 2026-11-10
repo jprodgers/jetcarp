@@ -21,10 +21,8 @@ mod library;
 mod media_cmd;
 mod movers_cmd;
 mod pile_cmd;
-mod pipeline_cmd;
 mod research;
 mod script_cmd;
-mod stage1_cmd;
 mod wallpaper_cmd;
 
 #[derive(Parser)]
@@ -148,13 +146,6 @@ enum Cmd {
     /// `status`, `stop`, `run`, `list`, `show`, `census`, `update`, `remove`, `scene`,
     /// `promote`).
     Ants(Box<ants_cmd::AntsArgs>),
-    /// Stage 1 settings search: score rules (with soup density, size, grid, generations) for
-    /// visual interest, refine, expand to neighbours; the best go to the Quick Start. Resumable.
-    Stage1(Box<stage1_cmd::Stage1Args>),
-    /// Catalog pipeline: stage 1 on every grid, contact sheets and a local model's shortlist,
-    /// the score refit, stage 2 hunts, media, and the website export, as one resumable job
-    /// (`run --mode quick|standard|full`, `resume`, `status`, `stop`, `report`).
-    Pipeline(Box<pipeline_cmd::PipelineArgs>),
     /// Evolutionary glider search (Edmond's method) on any tiling; verified movers go to the library.
     Evolve(Box<evolve_cmd::EvolveArgs>),
     /// Movers on aperiodic tilings: track across growing patch levels, verified to a distance.
@@ -168,10 +159,11 @@ enum Cmd {
     /// cropped PNG, a preview, metadata, and a resumable pile file per step.
     Pile(Box<pile_cmd::PileArgs>),
     /// Media for the catalog: per-step frames, a GIF or animated WebP, a poster, and a
-    /// thumbnail for a pattern (alone), a Quick Start entry or setting (from the seed), or a
+    /// thumbnail for a pattern (alone), a Quick Start entry (from the seed), an ant run, or a
     /// scene; `--missing` renders everything missing or stale.
     Media(media_cmd::MediaArgs),
-    /// Website export: the public catalog as JSON and media with a manifest, incrementally.
+    /// Website export: the public catalog as JSON and media with a manifest and a viewer page,
+    /// incrementally.
     Site(media_cmd::SiteArgs),
     /// List tiling families with their neighbour counts.
     Tilings,
@@ -568,8 +560,6 @@ fn main() -> Result<()> {
         Cmd::Explore(a) => explore_cmd::run(*a)?,
         Cmd::Hunt(a) => hunt_cmd::run(*a)?,
         Cmd::Ants(a) => ants_cmd::run(*a)?,
-        Cmd::Stage1(a) => stage1_cmd::run(*a)?,
-        Cmd::Pipeline(a) => pipeline_cmd::pipeline(*a)?,
         Cmd::Evolve(a) => evolve_cmd::run(*a)?,
         Cmd::Movers(a) => movers_cmd::run(a)?,
         Cmd::Hashlife(a) => hashlife_cmd::run(*a)?,

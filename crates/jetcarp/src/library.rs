@@ -605,17 +605,17 @@ pub fn run(a: LibraryArgs) -> Result<()> {
                 println!("schema version: {}", i.schema_version);
                 println!(
                     "patterns {}, rules {}, pattern rules {}, sightings {} ({} copies), jobs {}, \
-                     settings {}, Quick Start {}, ratings {}, media {}",
+                     Quick Start {}, ratings {}, media {}, ants {}",
                     i.patterns,
                     i.rules,
                     i.pattern_rules,
                     i.sightings,
                     i.seen,
                     i.jobs,
-                    i.settings,
                     i.quickstart,
                     i.ratings,
-                    i.media
+                    i.media,
+                    i.ants
                 );
             }
             Ok(())

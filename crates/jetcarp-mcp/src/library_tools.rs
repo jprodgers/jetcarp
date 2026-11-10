@@ -46,10 +46,10 @@ pub fn definitions() -> Vec<Value> {
             "library_list",
             "List catalog records",
             true,
-            "Lists records of the catalog, best first. `kind` picks what: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns; rule-free, with every rule verified in and the rule range), \"ant\" (ant and turmite runs: outcome highway, periodic, symmetric, bounded, or chaotic, with period, displacement, onset, and the outcome census per tiling), \"setting\" (stage 1 settings; default the approval queue, status candidate), or \"quickstart\" (Quick Start entries, \"My finds\"). Ids work with library_get, library_update, library_promote, media_render. Filters are optional and per kind; at most 100 per call. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"tiling\": \"hex\", \"sort\": \"onset\"}, {\"kind\": \"setting\", \"status\": [\"auto\", \"approved\"]}, {\"kind\": \"quickstart\"}.",
+            "Lists records of the catalog, best first. `kind` picks what: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns; rule-free, with every rule verified in and the rule range), \"ant\" (ant and turmite runs: outcome highway, periodic, symmetric, bounded, or chaotic, with period, displacement, onset, and the outcome census per tiling), or \"quickstart\" (Quick Start entries, \"My finds\"). Ids work with library_get, library_update, library_promote, media_render. Filters are optional and per kind; at most 100 per call. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"tiling\": \"hex\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\"}.",
             json!({"type": "object", "properties": {
-                "kind": {"type": "string", "enum": ["pattern", "ant", "setting", "quickstart"], "description": "What to list (default pattern)."},
-                "rule": {"type": "string", "description": "pattern: verified in a rule whose notation contains this; ant: this turn string or table (\"RL\", \"LLRR\"); setting: this rule."},
+                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What to list (default pattern)."},
+                "rule": {"type": "string", "description": "pattern: verified in a rule whose notation contains this; ant: this turn string or table (\"RL\", \"LLRR\")."},
                 "works_in": {"type": "string", "description": "pattern: runs in this rule (inside its rule range or verified there), e.g. \"B3678/S0235678\"."},
                 "order": {"type": "string", "enum": ["score", "seen", "rare", "newest", "updated", "cells", "period", "rating"], "description": "pattern: sort order (default score)."},
                 "sort": {"type": "string", "enum": ["score", "onset", "period", "speed", "rule"], "description": "ant: sort order (default score)."},
@@ -58,11 +58,10 @@ pub fn definitions() -> Vec<Value> {
                 "class": {"type": "string", "enum": ["still_life", "oscillator", "spaceship", "puffer", "gun", "mover"], "description": "pattern: only this class."},
                 "outcome": {"type": "string", "enum": ["highway", "periodic", "symmetric", "bounded", "chaotic"], "description": "ant: only this outcome."},
                 "state": {"type": "string", "enum": ["new", "reviewed", "promoted", "rejected"], "description": "pattern: only this curation state."},
-                "status": {"type": ["array", "string"], "items": {"type": "string"}, "description": "setting: stored, candidate, auto, approved, rejected (default candidate); quickstart: auto, candidate, approved, rejected."},
-                "job": {"type": "integer", "description": "ant, setting: only records of this job."},
-                "behaviour": {"type": "string", "description": "setting: spaceships, oscillators, chaotic, growth, ..."},
+                "status": {"type": ["array", "string"], "items": {"type": "string"}, "description": "quickstart: auto, candidate, approved, or rejected (default: all)."},
+                "job": {"type": "integer", "description": "ant: only records of this job."},
                 "min_period": {"type": "integer", "minimum": 1, "description": "pattern: periods of at least this."},
-                "min_score": {"type": "number", "description": "pattern, setting: scores of at least this (0-100)."},
+                "min_score": {"type": "number", "description": "pattern: scores of at least this (0-100)."},
                 "tag": {"type": "string", "description": "pattern: only entries with this tag."},
                 "text": {"type": "string", "description": "pattern: part of the name or label."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Default 20."},
@@ -72,10 +71,10 @@ pub fn definitions() -> Vec<Value> {
             "library_get",
             "Get one catalog record",
             true,
-            "Returns one record by id: a pattern (the default), an ant run (ids ant-...: rule, tiling, outcome, period, displacement, onset, speed, the exact proof), a stage 1 setting (setting-<n>), or a Quick Start entry (find:<id>). A pattern record has: rule (the one it runs in by default), rules (every rule it was verified in), range (B/S and Generations: minimal and maximal rule it runs identically in, with bitmasks), sightings (copies seen per rule and search job), tiling, class, period, displacement (spaceships: lattice vector per period) and speed, cells, bounding box, the cells of every phase as `i,j,k,s` tuples (lattice column, row, tile type, state), verification (periods checked exactly), provenance (where and when it was found), seen count, score, rating, name, tags, notes, state. On square and hexagon grids it also draws the phases as text ('O' live, '.' empty; hexagon rows are offset by half a cell). `id` may be the full id, a unique prefix, or the pattern's name (\"glider\").",
+            "Returns one record by id: a pattern (the default), an ant run (ids ant-...: rule, tiling, outcome, period, displacement, onset, speed, the exact proof), or a Quick Start entry (find:<id>). A pattern record has: rule (the one it runs in by default), rules (every rule it was verified in), range (B/S and Generations: minimal and maximal rule it runs identically in, with bitmasks), sightings (copies seen per rule and search job), tiling, class, period, displacement (spaceships: lattice vector per period) and speed, cells, bounding box, the cells of every phase as `i,j,k,s` tuples (lattice column, row, tile type, state), verification (periods checked exactly), provenance (where and when it was found), seen count, score, rating, name, tags, notes, state. On square and hexagon grids it also draws the phases as text ('O' live, '.' empty; hexagon rows are offset by half a cell). `id` may be the full id, a unique prefix, or the pattern's name (\"glider\").",
             json!({"type": "object", "properties": {
-                "id": {"type": "string", "description": "Pattern id, unique id prefix, or name; ant-..., setting-<n>, or find:<id>."},
-                "kind": {"type": "string", "enum": ["pattern", "ant", "setting", "quickstart"], "description": "What the id names (default: from the id's form)."},
+                "id": {"type": "string", "description": "Pattern id, unique id prefix, or name; ant-..., or find:<id>."},
+                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What the id names (default: from the id's form)."},
                 "phases": {"type": "integer", "minimum": 1, "maximum": 16, "description": "How many phases to draw (default 1)."},
                 "record": {"type": "boolean", "description": "Include the full record JSON (default true)."},
             }, "required": ["id"], "additionalProperties": false}),
@@ -117,10 +116,10 @@ pub fn definitions() -> Vec<Value> {
             "library_update",
             "Curate a catalog record",
             false,
-            "Curates a record. Patterns (default): name, tags (replace with `tags`, or add_tags / remove_tags), notes or append_notes, rating 1-5 (0 clears), state (new, reviewed, promoted, rejected), discovered_by. Ants (ids ant-...): name, notes, rating 1-5, state. Settings (setting-<n>, or kind setting): `rating` 1-5 (refits the settings score; `rater` user or model:<name>, default model:mcp; `note`), and/or `decision` approve (counts as a rating) or reject. Quick Start entries (find:<id>): `decision` approve or reject. Mark LLM-written text as such in the notes. Examples: {\"id\": \"glider\", \"rating\": 4}, {\"id\": \"setting-1551\", \"decision\": \"approve\"}.",
+            "Curates a record. Patterns (default): name, tags (replace with `tags`, or add_tags / remove_tags), notes or append_notes, rating 1-5 (0 clears), state (new, reviewed, promoted, rejected), discovered_by. Ants (ids ant-...): name, notes, rating 1-5, state. Quick Start entries (find:<id>): `decision` approve (shown in the menu) or reject (hidden). Mark LLM-written text as such in the notes. Examples: {\"id\": \"glider\", \"rating\": 4}, {\"id\": \"find:sweep-1a2b\", \"decision\": \"reject\"}.",
             json!({"type": "object", "properties": {
-                "id": {"type": ["string", "integer"], "description": "Pattern id, prefix, or name; ant-...; setting-<n>; find:<id>."},
-                "kind": {"type": "string", "enum": ["pattern", "ant", "setting", "quickstart"], "description": "What the id names (default: from the id's form)."},
+                "id": {"type": ["string", "integer"], "description": "Pattern id, prefix, or name; ant-...; find:<id>."},
+                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What the id names (default: from the id's form)."},
                 "name": {"type": "string", "description": "New name (empty clears it)."},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: replace all tags."},
                 "add_tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: tags to add."},
@@ -130,9 +129,7 @@ pub fn definitions() -> Vec<Value> {
                 "rating": {"type": "number", "minimum": 0, "maximum": 5, "description": "1 (dull) to 5 (remarkable); 0 clears (patterns)."},
                 "state": {"type": "string", "description": "pattern: new, reviewed, promoted, rejected; ant: free text."},
                 "discovered_by": {"type": "string", "enum": ["search", "script", "llm", "user"], "description": "pattern: who found it."},
-                "decision": {"type": "string", "enum": ["approve", "reject"], "description": "setting, quickstart: approve or reject."},
-                "rater": {"type": "string", "description": "setting: \"user\" or \"model:<name>\" (default model:mcp)."},
-                "note": {"type": "string", "description": "setting: why (optional)."},
+                "decision": {"type": "string", "enum": ["approve", "reject"], "description": "quickstart: approve (shown) or reject (hidden)."},
             }, "required": ["id"], "additionalProperties": false}),
         ),
         tool(
@@ -225,7 +222,6 @@ fn kind_of<'a>(args: &'a Value, id: &str) -> Result<&'a str, String> {
     Ok(match string(args, "kind")? {
         Some(k) => k,
         None if id.starts_with("ant-") => "ant",
-        None if id.starts_with("setting-") => "setting",
         None if id.starts_with("find:") => "quickstart",
         None => "pattern",
     })
@@ -246,11 +242,8 @@ fn list(args: &Value) -> Res {
     match string(args, "kind")?.unwrap_or("pattern") {
         "pattern" => list_patterns(&rest),
         "ant" => list_ants(&rest),
-        "setting" => crate::stage1_tools::candidates(&rest),
         "quickstart" => quickstart_list(&rest),
-        k => Err(format!(
-            "`kind` is pattern, ant, setting, or quickstart, not {k}"
-        )),
+        k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
 }
 
@@ -376,23 +369,13 @@ fn get(args: &Value) -> Res {
             out.content.push(json!({"type": "text", "text": serde_json::to_string_pretty(&r).unwrap_or_default()}));
             return Ok(out);
         }
-        "setting" => {
-            let r = l.setting(id.trim_start_matches("setting-"))?;
-            return Ok(ToolOutput::json(
-                &serde_json::to_value(&r).unwrap_or_default(),
-            ));
-        }
         "quickstart" => {
             let q = l.get_quickstart(id.trim_start_matches("find:"))?;
             return Ok(ToolOutput::json(
                 &serde_json::to_value(&q).unwrap_or_default(),
             ));
         }
-        k => {
-            return Err(format!(
-                "`kind` is pattern, ant, setting, or quickstart, not {k}"
-            ));
-        }
+        k => return Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
 
     let r = l.get(id)?;
@@ -754,22 +737,6 @@ fn update(args: &Value) -> Res {
             )?;
             Ok(ToolOutput::json(&ant_json(&r)))
         }
-        "setting" => {
-            check_unknown(&rest, &["id", "rating", "decision", "rater", "note"])?;
-            let mut v = rest.clone();
-            v["id"] = json!(id.trim_start_matches("setting-"));
-            match (string(&rest, "decision")?, rest.get("rating")) {
-                (Some(_), _) => {
-                    let mut w = without(&v, &["rater"]);
-                    w["id"] = v["id"].clone();
-                    crate::stage1_tools::review(&w)
-                }
-                (None, Some(_)) => crate::stage1_tools::rate(&without(&v, &["decision"])),
-                (None, None) => {
-                    Err("give `rating` (1 to 5) or `decision` (approve, reject)".into())
-                }
-            }
-        }
         "quickstart" => {
             check_unknown(&rest, &["id", "decision"])?;
             let st = match string(&rest, "decision")? {
@@ -783,9 +750,7 @@ fn update(args: &Value) -> Res {
                 &json!({"id": format!("find:{qid}"), "status": st}),
             ))
         }
-        k => Err(format!(
-            "`kind` is pattern, ant, setting, or quickstart, not {k}"
-        )),
+        k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
 }
 

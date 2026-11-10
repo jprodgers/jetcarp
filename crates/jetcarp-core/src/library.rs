@@ -56,10 +56,8 @@ pub use paste::{PasteAt, PatternSource};
 pub use range::{RuleRange, identity};
 pub use site::Site;
 pub use store::{
-    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, FlushFinish, JobStatus, Library,
-    NewSetting, QsStatus, QuickStartRow, RatingRow, RescoreReport, SettingRow, SettingStatus,
-    SettingsQuery, Sighting, SightingRow, Stage1Flush, StoredSearch, ThinOptions, ThinReport,
-    ant_id, ant_score, parse_setting_id,
+    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsStatus, QuickStartRow,
+    RatingRow, Sighting, SightingRow, StoredSearch, ant_id, ant_score,
 };
 pub use store::{FindRow, HeatQuery, HeatRow, PruneReport, UnstoredFlush, UnstoredRow, UsageRow};
 pub use symmetry::CellMap;

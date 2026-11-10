@@ -449,8 +449,8 @@ pub fn built_in_items() -> Vec<Item> {
     classics_items(&HashSet::new())
 }
 
-/// Catalog rows (status `auto` or `approved`) as menu items; stage 1 settings' rows are gone
-/// from the menu (the atlas replaced them).
+/// Catalog rows (status `auto` or `approved`) as menu items. Rows the old settings search left
+/// in a catalog (`source_kind = 'setting'`) stay out of the menu.
 pub fn catalog_items(lib: &Library, rows: Vec<QuickStartRow>) -> Vec<Item> {
     rows.into_iter()
         .filter(|r| r.status.shown() && r.source_kind != "setting")
@@ -512,14 +512,9 @@ pub fn scene_by_id(lib: &Library, id: &str) -> Option<crate::Scene> {
 pub fn rating_target(id: &str, row: Option<&QuickStartRow>) -> (String, String) {
     let bare = id.trim_start_matches("find:");
     if let Some(r) = row {
-        match (r.source_kind.as_str(), &r.source_id) {
-            ("setting", Some(s)) => return ("setting".into(), s.clone()),
-            ("pattern", Some(p)) => return ("pattern".into(), p.clone()),
-            _ => {}
+        if let ("pattern", Some(p)) = (r.source_kind.as_str(), &r.source_id) {
+            return ("pattern".into(), p.clone());
         }
-    }
-    if let Some(n) = bare.strip_prefix("setting-") {
-        return ("setting".into(), n.to_string());
     }
     ("quickstart".into(), bare.to_string())
 }

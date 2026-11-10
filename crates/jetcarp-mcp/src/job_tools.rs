@@ -1,7 +1,7 @@
 //! Background jobs over MCP: `ants_start`, `pile_start`, and `evolve_start` start an ant search,
-//! a large sandpile, or an evolutionary glider search, and `job_status` / `job_stop` watch and stop any catalog job (hunts, stage 1
-//! searches, ant searches, piles, and the finished soup searches, collisions, and census jobs),
-//! wherever it was started. One status and one stop tool for every kind keeps the list short for
+//! a large sandpile, or an evolutionary glider search, and `job_status` / `job_stop` watch and
+//! stop any catalog job (hunts, ant searches, piles, evolve searches, mover verifications, and the
+//! finished soup searches, collisions, and census jobs), wherever it was started. One status and one stop tool for every kind keeps the list short for
 //! small models; `kind` filters the listing.
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
@@ -147,11 +147,11 @@ pub fn definitions() -> Vec<Value> {
             "job_status",
             "Job status",
             true,
-            "Reports a catalog job's progress: hunts (soups, objects by class, newest finds), stage 1 searches (passes, settings, best scores), ant searches (runs, outcomes, newest highways), piles (doubling step, grains, topplings, the pictures when done), mover verifications (generations, rings, speed, the summary and stored record when done), and finished soup searches, collisions, and census jobs. With `wait_s`, waits up to that many seconds (at most 600) for a running job to finish before answering, so one call replaces many polls. Without `job`, lists every job (newest first), optionally of one `kind`. Example: {\"job\": 3, \"wait_s\": 300}, {\"kind\": \"ants\"}.",
+            "Reports a catalog job's progress: hunts (soups, objects by class, newest finds), ant searches (runs, outcomes, newest highways), piles (doubling step, grains, topplings, the pictures when done), mover verifications (generations, rings, speed, the summary and stored record when done), and finished soup searches, collisions, and census jobs. With `wait_s`, waits up to that many seconds (at most 600) for a running job to finish before answering, so one call replaces many polls. Without `job`, lists every job (newest first), optionally of one `kind`. Example: {\"job\": 3, \"wait_s\": 300}, {\"kind\": \"ants\"}.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id (default: list jobs)."},
                 "wait_s": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Wait up to this many seconds for the job to stop running (default 0: answer now)."},
-                "kind": {"type": "string", "enum": ["hunt", "stage1", "ants", "pile", "evolve", "mover", "search", "collide", "census"], "description": "List only this kind."},
+                "kind": {"type": "string", "enum": ["hunt", "ants", "pile", "evolve", "mover", "search", "collide", "census"], "description": "List only this kind."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Most jobs listed (default 30)."},
             }, "additionalProperties": false}),
         ),
@@ -159,7 +159,7 @@ pub fn definitions() -> Vec<Value> {
             "job_stop",
             "Stop a job",
             false,
-            "Stops a running hunt, stage 1 search, ant search, pile, evolve search, or mover verification at its next checkpoint (a few seconds; a pile cancels the step in flight). It stays resumable: hunt_start, stage1_start, ants_start, pile_start, or mover_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
+            "Stops a running hunt, ant search, pile, evolve search, or mover verification at its next checkpoint (a few seconds; a pile cancels the step in flight). It stays resumable: hunt_start, ants_start, pile_start, or mover_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id."},
             }, "required": ["job"], "additionalProperties": false}),
@@ -687,7 +687,6 @@ fn job_json(l: &Library, jid: i64) -> Result<Value, String> {
     let j = l.job(jid)?;
     let v = match j.kind.as_str() {
         "hunt" => crate::hunt_tools::status_json(l, jid)?,
-        "stage1" => crate::stage1_tools::status_json(l, jid)?,
         ants::KIND => {
             let here = ants_running()
                 .lock()
@@ -810,7 +809,6 @@ fn stop(args: &Value) -> Res {
     let j = l.job(jid)?;
     let here = match j.kind.as_str() {
         "hunt" => crate::hunt_tools::stop_here(jid),
-        "stage1" => crate::stage1_tools::stop_here(jid),
         ants::KIND => match ants_running().lock().unwrap().get(&jid) {
             Some(h) => {
                 h.stop();
@@ -847,7 +845,6 @@ fn stop(args: &Value) -> Res {
     }
     let resume = match j.kind.as_str() {
         "hunt" => "hunt_start",
-        "stage1" => "stage1_start",
         ants::KIND => "ants_start",
         "evolve" => "evolve_start",
         moverjob::KIND => "mover_start",

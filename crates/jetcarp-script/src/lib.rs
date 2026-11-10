@@ -29,7 +29,6 @@ pub mod results;
 pub mod series;
 pub mod sim;
 pub mod spec;
-pub mod stage1;
 pub mod sweep;
 
 pub use spec::Screen;

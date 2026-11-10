@@ -1,5 +1,5 @@
 //! `jetcarp media` (frames, animations, posters, thumbnails for catalog patterns, Quick Start
-//! entries, settings, and scenes) and `jetcarp site` (incremental static export for a website).
+//! entries, ant runs, and scenes) and `jetcarp site` (incremental static export for a website).
 //! The work is in `jetcarp_core::media` and `jetcarp_core::website`.
 
 use anyhow::{Result, bail};
@@ -38,7 +38,7 @@ enum MediaCmd {
     Render(Box<RenderArgs>),
     /// List a target's stored media files.
     List {
-        /// `pattern`, `quickstart`, or `setting`.
+        /// `pattern`, `quickstart`, or `ant`.
         kind: String,
         id: String,
         #[arg(long)]
@@ -54,9 +54,6 @@ struct RenderArgs {
     /// A Quick Start entry by id.
     #[arg(long)]
     quickstart: Option<String>,
-    /// A stage 1 setting by id (rendered from its Quick Start entry's scene).
-    #[arg(long)]
-    setting: Option<String>,
     /// An ant run by id (`jetcarp ants list`): a highway's moving loop alone, the build-up from the
     /// seed.
     #[arg(long)]
@@ -213,7 +210,6 @@ fn render(lib: &Library, a: RenderArgs) -> Result<()> {
     let picked = [
         a.pattern.is_some(),
         a.quickstart.is_some(),
-        a.setting.is_some(),
         a.ant.is_some(),
         a.scene.is_some(),
         a.missing,
@@ -223,7 +219,7 @@ fn render(lib: &Library, a: RenderArgs) -> Result<()> {
     .count();
     if picked != 1 {
         bail!(
-            "give one of --pattern ID, --quickstart ID, --setting ID, --ant ID, --scene FILE, --missing"
+            "give one of --pattern ID, --quickstart ID, --ant ID, --scene FILE, --missing"
         );
     }
     if let Some(path) = &a.scene {
@@ -263,10 +259,8 @@ fn render(lib: &Library, a: RenderArgs) -> Result<()> {
             MediaTarget::Pattern(p)
         } else if let Some(q) = a.quickstart {
             MediaTarget::QuickStart(q)
-        } else if let Some(x) = a.ant {
-            MediaTarget::Ant(x)
         } else {
-            MediaTarget::Setting(a.setting.unwrap())
+            MediaTarget::Ant(a.ant.unwrap())
         };
         media::render_many(lib, &[t], &o).map_err(err)?
     };

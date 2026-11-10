@@ -97,7 +97,7 @@ impl ToolWin {
                 "The pattern library: browse, curate, paste into this world, promote to the Quick Start"
             }
             ToolWin::Hunts => {
-                "Every hunt and stage 1 search in the catalog: progress, heat map, finds, ratings"
+                "Every hunt and search job in the catalog: progress, heat map, finds, ratings"
             }
             ToolWin::CatalogTools => {
                 "Collide patterns, export and import records, remove a record, run the evolutionary glider search"

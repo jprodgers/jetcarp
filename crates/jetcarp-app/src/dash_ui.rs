@@ -1,14 +1,14 @@
-//! The *Hunts…* window (Phase 4 deliverable 7): every catalog job (hunts, stage 1 searches,
-//! censuses, older searches), including jobs another process runs, with live counters, pause,
-//! resume, and stop; a form to start a hunt here; the rule-space heat map of the selected job;
-//! and its newest and rarest (or best) finds, animated, to rate or reject.
+//! The *Hunts…* window (Phase 4 deliverable 7): every catalog job (hunts, censuses, ant
+//! searches, piles, movers, evolve and older searches), including jobs another process runs, with
+//! live counters, pause, resume, and stop; a form to start a hunt here; the rule-space heat map of
+//! the selected job; and its newest and rarest finds, animated, to rate or reject.
 //!
 //! The UI thread never touches SQLite: a worker thread with its own catalog connection reads
 //! the `jobs` table every [`JOBS_EVERY`] (WAL lets it read while hunts write), recomputes the
 //! selected job's heat map and finds at most every [`DETAIL_EVERY`] and only when the job wrote
 //! new progress, runs the commands (start, pause, resume, stop, rate, reject), and owns the jobs
 //! running in this process. Animations are made on two more threads
-//! (`media::pattern_animation`, `media::scene_animation`) only for the finds on screen, in the
+//! (`media::pattern_animation`) only for the finds on screen, in the
 //! house style or the palette picked under *Colours* (which *Render media* uses too).
 //! Everything kind-specific is in `jetcarp_core::dashboard::JobKind`.
 
@@ -194,12 +194,12 @@ pub fn ramp(t: f64) -> [u8; 3] {
     out
 }
 
-/// A cell's colour position: log scale for counts, the score itself (0-100) for scores.
-pub fn heat_t(v: f64, max: f64, colour: HeatColour) -> f64 {
-    match colour {
-        HeatColour::Score => v / 100.0,
-        _ if max <= 0.0 => 0.0,
-        _ => (1.0 + v).ln() / (1.0 + max).ln(),
+/// A cell's colour position: log scale for counts.
+pub fn heat_t(v: f64, max: f64) -> f64 {
+    if max <= 0.0 {
+        0.0
+    } else {
+        (1.0 + v).ln() / (1.0 + max).ln()
     }
 }
 
@@ -217,7 +217,7 @@ pub fn heat_image(m: &HeatMap) -> ColorImage {
                     Color32::from_gray(27)
                 }
             } else {
-                let [r, g, b] = ramp(0.15 + 0.85 * heat_t(v, m.max, m.colour));
+                let [r, g, b] = ramp(0.15 + 0.85 * heat_t(v, m.max));
                 Color32::from_rgb(r, g, b)
             });
         }
@@ -323,7 +323,6 @@ impl Worker {
                     .into_iter()
                     .map(|t| match t {
                         Target::Pattern(id) => media::MediaTarget::Pattern(id),
-                        Target::Setting(id) => media::MediaTarget::Setting(id.to_string()),
                     })
                     .collect();
                 let path = self.path.clone();
@@ -592,17 +591,6 @@ fn make_anim(
     };
     let anim = match t {
         Target::Pattern(id) => media::pattern_animation(&lib.get(id)?, &o)?,
-        Target::Setting(id) => {
-            let q = lib.get_quickstart(&format!("setting-{id}"))?;
-            media::scene_animation(
-                &q.scene,
-                &MediaOptions {
-                    gens: Some(96),
-                    every: 2,
-                    ..o
-                },
-            )?
-        }
     };
     let n = anim.frames.len();
     let pick: Vec<usize> = if n <= ANIM_FRAMES {
@@ -622,7 +610,6 @@ fn make_anim(
 fn key_of(t: &Target) -> String {
     match t {
         Target::Pattern(id) => format!("p:{id}"),
-        Target::Setting(id) => format!("s:{id}"),
     }
 }
 
@@ -905,18 +892,14 @@ impl DashWindow {
         }
     }
 
-    /// Select a job: its first rule space, no rule filter, and its usual colouring (settings
-    /// score for stage 1 searches, finds otherwise) unless one was chosen.
+    /// Select a job: its first rule space, no rule filter, and finds as the colouring unless one
+    /// was chosen.
     fn pick(&mut self, j: &JobSummary) {
         self.selected = Some(j.id);
         self.space = 0;
         self.rules.clear();
         if !self.colour_fixed {
-            self.colour = if j.kind == "stage1" {
-                HeatColour::Score
-            } else {
-                HeatColour::Finds
-            };
+            self.colour = HeatColour::Finds;
         }
         self.select();
     }
@@ -1039,7 +1022,7 @@ impl DashWindow {
         if jobs.is_empty() {
             thumbs::empty_note(
                 ui,
-                "No jobs yet. Start a hunt here, or run `jetcarp hunt` or `jetcarp stage1` in a terminal.",
+                "No jobs yet. Start a hunt here, or run `jetcarp hunt` in a terminal.",
             );
             return;
         }
@@ -1402,7 +1385,7 @@ impl DashWindow {
             if k < 3.0 {
                 let m = if k < 1.5 { 4.0 } else { 3.0 };
                 for &(x, y, v) in &d.marks {
-                    let [r, g, b] = ramp(0.15 + 0.85 * heat_t(v, map.max, map.colour));
+                    let [r, g, b] = ramp(0.15 + 0.85 * heat_t(v, map.max));
                     p.rect_filled(
                         Rect::from_center_size(centre(x, y), egui::vec2(m, m)),
                         0.0,
@@ -1443,7 +1426,7 @@ impl DashWindow {
                         "{}{} : {} {}",
                         names.join(", "),
                         if here.len() > 6 { " …" } else { "" },
-                        fmt_value(map.at(x, y), map.colour),
+                        fmt_value(map.at(x, y)),
                         map.colour.label()
                     )
                 };
@@ -1473,7 +1456,7 @@ impl DashWindow {
             RichText::new(format!(
                 "{axes}, each in Gray-code order: neighbours differ by one count. {} rules, max {}{}",
                 dashboard::digits(d.heat_rows.len() as u64),
-                fmt_value(map.max, map.colour),
+                fmt_value(map.max),
                 if map.folded {
                     "; counts above 8 folded onto the first eight"
                 } else {
@@ -1642,11 +1625,8 @@ pub fn transpose(img: &ColorImage) -> ColorImage {
     }
 }
 
-fn fmt_value(v: f64, c: HeatColour) -> String {
-    match c {
-        HeatColour::Score => format!("{v:.1}"),
-        _ => dashboard::digits(v as u64),
-    }
+fn fmt_value(v: f64) -> String {
+    dashboard::digits(v as u64)
 }
 
 fn truncate(s: &str, n: usize) -> String {
@@ -1745,9 +1725,9 @@ mod tests {
     fn heat_colours_and_image() {
         assert_eq!(ramp(0.0), [0x2b, 0x24, 0x70]);
         assert_eq!(ramp(1.0), [0xff, 0xf6, 0xe0]);
-        assert_eq!(heat_t(0.0, 10.0, HeatColour::Finds), 0.0);
-        assert!((heat_t(10.0, 10.0, HeatColour::Finds) - 1.0).abs() < 1e-12);
-        assert_eq!(heat_t(50.0, 80.0, HeatColour::Score), 0.5);
+        assert_eq!(heat_t(0.0, 10.0), 0.0);
+        assert!((heat_t(10.0, 10.0) - 1.0).abs() < 1e-12);
+        assert_eq!(heat_t(3.0, 0.0), 0.0);
         let rows = vec![HeatRow {
             birth: 1 << 3,
             survive: 0b1100,

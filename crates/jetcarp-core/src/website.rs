@@ -70,7 +70,7 @@ pub struct ExportFilter {
     /// oscillators are common in most rules).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_osc_period: Option<u64>,
-    /// Only these pattern ids (empty: no limit), e.g. the patterns a pipeline gave media.
+    /// Only these pattern ids (empty: no limit), e.g. a showcase that has media.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
     /// Export Quick Start entries with these statuses (default `auto` and `approved`; empty:

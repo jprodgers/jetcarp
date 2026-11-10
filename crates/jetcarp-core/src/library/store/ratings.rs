@@ -16,9 +16,8 @@ pub struct RatingRow {
 }
 
 impl Library {
-    /// Rate a pattern, a setting, or a Quick Start entry, 1 to 5. `rater` is `user` or
-    /// `model:<name>`. A Quick Start entry made from a setting (`setting-<n>`) is rated as the
-    /// setting. Returns the rating's id.
+    /// Rate a pattern, an ant run, or a Quick Start entry (`find:` optional), 1 to 5. `rater` is
+    /// `user` or `model:<name>`. Returns the rating's id.
     pub fn rate(
         &self,
         target_kind: &str,
@@ -34,25 +33,14 @@ impl Library {
             return Err(format!("rater is user or model:<name>, not '{rater}'"));
         }
         let (kind, id) = match target_kind {
-            "setting" => ("setting", parse_setting_id(target_id)?.to_string()),
-            "quickstart" => {
-                let t = target_id.trim().trim_start_matches("find:");
-                match t.strip_prefix("setting-") {
-                    Some(n) => ("setting", parse_setting_id(n)?.to_string()),
-                    None => ("quickstart", t.to_string()),
-                }
-            }
+            "quickstart" => (
+                "quickstart",
+                target_id.trim().trim_start_matches("find:").to_string(),
+            ),
             "pattern" => ("pattern", target_id.trim().to_string()),
             "ant" => ("ant", self.ant(target_id)?.id),
-            x => {
-                return Err(format!(
-                    "target is pattern, setting, quickstart, or ant, not '{x}'"
-                ));
-            }
+            x => return Err(format!("target is pattern, quickstart, or ant, not '{x}'")),
         };
-        if kind == "setting" {
-            self.setting(&id)?;
-        }
         let now = now_utc();
         self.write(|tx| rate_in(tx, kind, &id, rater, rating, note, &now))
     }
@@ -84,7 +72,7 @@ impl Library {
     }
 }
 
-pub(super) fn rate_in(
+fn rate_in(
     tx: &Transaction,
     kind: &str,
     id: &str,

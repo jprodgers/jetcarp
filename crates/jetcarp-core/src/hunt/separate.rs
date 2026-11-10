@@ -253,7 +253,7 @@ pub struct Census {
     pub piece_distance: u32,
     /// Test growing groups for guns (and puffers).
     pub growth_tests: bool,
-    /// Compute each new pattern's rule range (stage 1 only needs ids and classes).
+    /// Compute each new pattern's rule range (off: ids and classes only).
     pub ranges: bool,
 }
 
@@ -311,8 +311,8 @@ impl Census {
         Ok(c)
     }
 
-    /// A census on a small topology and symmetries built once for many rules (stage 1), without
-    /// the well-known Life names.
+    /// A census on a small topology and symmetries built once for many rules, without the
+    /// well-known Life names.
     pub fn from_parts(
         rule: Rule,
         nb: Nb,
