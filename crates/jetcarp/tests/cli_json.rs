@@ -115,3 +115,157 @@ fn api_lists_describes_and_calls_operations() {
     let o = jetcarp(&["api", "call", "reference.palettes", "--text"]);
     assert!(String::from_utf8_lossy(&o.stdout).starts_with("Ember "));
 }
+
+/// A catalog holding Life's glider, in `dir`.
+fn glider_catalog(dir: &std::path::Path) -> std::path::PathBuf {
+    use jetcarp_core::library::{DiscoveredBy, Library, Provenance, record_from_object};
+    use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+    use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
+    let mut w = World::new(TilingSpec::rect("square", 30, 30, Boundary::Wrap), 1).unwrap();
+    let g = w.topo.lattice().unwrap().clone();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells {
+            cells: place_rows(&g, ".o./..o/ooo", 10, 10),
+        }),
+    })
+    .unwrap();
+    let lib = Library::open(dir.join("lib"));
+    for o in find_objects(&w, &ObjectOptions::default())
+        .unwrap()
+        .objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+    {
+        let prov = Provenance {
+            source: "cli test".into(),
+            ..Default::default()
+        };
+        let rec = record_from_object(&w, w.cas[0].id, o, prov, DiscoveredBy::User).unwrap();
+        lib.add(rec).unwrap();
+    }
+    dir.join("lib")
+}
+
+#[test]
+fn library_media_and_picture_commands_as_json() {
+    let dir =
+        jetcarp_core::paths::output_dir().join(format!("cli-json-lib-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = glider_catalog(&dir);
+    let l = lib.to_str().unwrap();
+    let p = |name: &str| dir.join(name).display().to_string();
+    // Commands that printed JSON before print the same shapes: info in the record's own key
+    // order, the list as an array of records.
+    let o = jetcarp(&["library", "--library", l, "info", "--json"]);
+    let text = String::from_utf8(o.stdout).unwrap();
+    assert!(text.starts_with("{\n  \"path\": "), "{text}");
+    let list = json_of(&["--json", "library", "--library", l, "list"]);
+    assert_eq!(list[0]["name"], "glider");
+    // New: promotion, a status change, a drawing.
+    let add = json_of(&["library", "--library", l, "promote", "glider", "--json"]);
+    assert_eq!(add["source"], "pattern");
+    let entry = add["entry"].as_str().unwrap().to_string();
+    assert_eq!(entry, format!("find:{}", list[0]["id"].as_str().unwrap()));
+    let entries = json_of(&["library", "--library", l, "quickstart", "--json"]);
+    assert_eq!(entries[0]["id"], entry.as_str());
+    let set = format!("{entry}=rejected");
+    let st = json_of(&[
+        "--json",
+        "library",
+        "--library",
+        l,
+        "quickstart",
+        "--set",
+        &set,
+    ]);
+    assert_eq!(
+        (&st["status"], &st["shown"]),
+        (&json!("rejected"), &json!(false))
+    );
+    let r = json_of(&["library", "--library", l, "render", "glider", "--json"]);
+    assert_eq!(r["phases"].as_array().unwrap().len(), 4);
+    // Media: the catalog's report as before; the text with its counts on stderr.
+    let m = json_of(&[
+        "media",
+        "--library",
+        l,
+        "render",
+        "--pattern",
+        "glider",
+        "--no-frames",
+        "--json",
+    ]);
+    assert_eq!(m["done"][0]["target_kind"], "pattern");
+    let o = jetcarp(&[
+        "media",
+        "--library",
+        l,
+        "render",
+        "--pattern",
+        "glider",
+        "--no-frames",
+    ]);
+    assert!(String::from_utf8_lossy(&o.stdout).contains("[alone] up to date: "));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("0 rendered, 1 up to date, 0 failed"));
+    // Site export: the report in its own key order.
+    let o = jetcarp(&[
+        "site",
+        "--library",
+        l,
+        "export",
+        "--to",
+        &p("site"),
+        "--no-render",
+        "--json",
+    ]);
+    assert!(String::from_utf8_lossy(&o.stdout).starts_with("{\n  \"dir\": "));
+    // Pictures, which had no JSON before.
+    let s = json_of(&[
+        "sheet",
+        "--png",
+        &p("w.png"),
+        "--count",
+        "4",
+        "--thumb",
+        "20",
+        "--width",
+        "11",
+        "--json",
+    ]);
+    assert_eq!(s["png"], p("w.png").as_str());
+    let iso = json_of(&[
+        "--json",
+        "isohedral",
+        "--png",
+        &p("iso.png"),
+        "--thumb",
+        "12",
+    ]);
+    assert!(iso["width"].as_u64().unwrap() > 0);
+    let scene = p("soup.json");
+    let mut sc = jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+        "square",
+        16,
+        12,
+        jetcarp_core::Boundary::Wrap,
+    ));
+    sc.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
+    std::fs::write(&scene, sc.to_json()).unwrap();
+    let w = json_of(&[
+        "wallpaper",
+        &scene,
+        "--size",
+        "40x30",
+        "--out",
+        &p("wp.png"),
+        "--json",
+    ]);
+    assert_eq!(
+        (&w["files"][0]["width"], &w["files"][0]["height"]),
+        (&json!(40), &json!(30))
+    );
+    let q = json_of(&["quickstart", "--filter", "langton", "--json"]);
+    assert_eq!(q["examples"].as_array().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(dir);
+}

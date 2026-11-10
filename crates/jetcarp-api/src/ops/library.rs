@@ -1033,7 +1033,13 @@ impl Op for LibraryImport {
     fn run(cx: &Ctx, a: ImportIn, _: &dyn Progress) -> Result<Imported, ApiError> {
         let src = cx.fs.readable(&a.path)?;
         let lib = cx.library();
-        let done = lib.import(&src).map_err(catalog_err)?;
+        let done = lib.import(&src).map_err(|e| {
+            if src.exists() {
+                catalog_err(e)
+            } else {
+                ApiError::not_found(e)
+            }
+        })?;
         let distinct: std::collections::HashSet<&String> = done.iter().map(|d| &d.0).collect();
         Ok(Imported {
             catalog: lib.path().display().to_string(),

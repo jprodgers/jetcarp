@@ -709,6 +709,56 @@ fn scripts_promote_sweep_runs() {
 }
 
 #[test]
+fn scripts_call_any_operation_by_name() {
+    let root = temp_root("ops-by-name");
+    let mut o = opts(&root);
+    o.library = Some(root.join("lib"));
+    let s = ok(
+        r#"
+        print(jetcarp("reference.palettes").palettes[0].name);
+        // World operations share one private world for the run.
+        let w = jetcarp("world.new", #{ tiling: "hex", width: 12, height: 10,
+                                        cas: [#{ rule: "Life", seed: "random:0.3" }] });
+        print(w.status.tiling.id);
+        jetcarp("world.step", #{ generations: 3 });
+        print(jetcarp("world.status").status.generation);
+        // The run's catalog and file rules.
+        let w2 = world(#{ tiling: "square", size: [30, 30], boundary: "wrap",
+                          cas: [#{ rule: "B3/S23", seed: "empty" }] });
+        w2.set_cells([[11, 10, 1], [12, 11, 1], [10, 12, 1], [11, 12, 1], [12, 12, 1]]);
+        library().catalog(w2);
+        let q = jetcarp("library.query", #{ class: "spaceship" });
+        print(`${q.matching} ${q.patterns[0].name}`);
+        let a = jetcarp("quickstart.add", #{ pattern: "glider" });
+        print(a.entry == "find:" + q.patterns[0].id);
+        print(jetcarp("quickstart.list").entries.len());
+        let r = jetcarp("library.render", #{ id: "glider", png: "glider.png", px: 40 });
+        print(r.png_size[0] > 0);
+        try { jetcarp("no.such_op"); } catch (e) { print("err " + e); }
+        try { jetcarp("library.get", #{ id: "nonesuch" }); } catch (e) { print("err " + e); }
+        try { jetcarp("library.render", #{ id: "glider", png: "/elsewhere/x.png" }); }
+        catch (e) { print("err " + e); }
+        "#,
+        o,
+    );
+    let log = &s.log;
+    assert_eq!(log[0], "Ember");
+    assert_eq!(log[1], "hex");
+    assert_eq!(log[2], "3");
+    assert_eq!(log[3], "1 glider");
+    assert_eq!(log[4], "true");
+    assert_eq!(log[5], "1");
+    assert_eq!(log[6], "true");
+    assert!(log[7].starts_with("err no operation no.such_op"), "{log:?}");
+    assert!(log[8].starts_with("err no pattern 'nonesuch'"), "{log:?}");
+    assert!(
+        log[9].starts_with("err scripts may only write inside "),
+        "{log:?}"
+    );
+    assert!(root.join("glider.png").exists());
+}
+
+#[test]
 fn scripts_run_soup_searches_into_the_library() {
     let root = temp_root("lib-search");
     let mut o = opts(&root);
