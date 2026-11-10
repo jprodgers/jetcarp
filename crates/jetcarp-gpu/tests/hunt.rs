@@ -3,9 +3,9 @@
 //! catalog a CPU-only hunt leaves. Skipped (with a note) when no GPU adapter is available.
 
 use jetcarp_core::hunt::job::{self, HuntProgress, HuntSpec, SoupBatcher};
-use jetcarp_core::jobs::{RunOptions, Runner};
 use jetcarp_core::hunt::separate::Census;
 use jetcarp_core::hunt::soup::{Layout, prefix_cpu, soup_state};
+use jetcarp_core::jobs::{RunOptions, Runner};
 use jetcarp_core::library::{Library, Query};
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_gpu::hunt::GpuHunter;
@@ -124,10 +124,7 @@ fn gpu_hunt_equals_cpu_hunt() {
             gpu: use_gpu.then(|| g.clone() as Arc<dyn SoupBatcher>),
             ..Default::default()
         };
-        let p: HuntProgress = Runner::new(lib.clone())
-            .run(jid, &o)
-            .unwrap()
-            .progress_as();
+        let p: HuntProgress = Runner::new(lib.clone()).run(jid, &o).unwrap().progress_as();
         assert_eq!(p.status, "done");
         let mut recs = lib.query(&Query::default()).unwrap();
         recs.sort_by(|a, b| a.id.cmp(&b.id));

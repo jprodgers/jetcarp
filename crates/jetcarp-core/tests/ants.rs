@@ -17,13 +17,7 @@ use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
 
 /// Run (or resume) an ant search here on the job runner: on `threads` threads (0: all), `batch`
 /// runs per batch (0: adapt), stopping (paused) after `limit` runs in this session.
-fn run_job(
-    lib: &Library,
-    job: i64,
-    threads: usize,
-    batch: u64,
-    limit: Option<u64>,
-) -> AntProgress {
+fn run_job(lib: &Library, job: i64, threads: usize, batch: u64, limit: Option<u64>) -> AntProgress {
     let o = RunOptions {
         threads,
         budget: Budget {

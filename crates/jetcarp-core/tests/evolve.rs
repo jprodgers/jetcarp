@@ -27,7 +27,6 @@ fn small(tiling: &str, pop: usize, gens: usize, seed: u64) -> EvolveSpec {
     }
 }
 
-
 /// Run (or resume) an evolve job here on the job runner, `on_generation` seeing each generation;
 /// with the search's result when it finished.
 fn run_evolve(

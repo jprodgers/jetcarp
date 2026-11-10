@@ -3,10 +3,10 @@
 
 use jetcarp_core::hunt::bits::{Plan, Universe};
 use jetcarp_core::hunt::job::{self, HuntSpec};
-use jetcarp_core::jobs::hunt::HuntRun;
-use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::hunt::separate::{Cache, Census};
 use jetcarp_core::hunt::soup::{Layout, continue_soup, prefix_cpu, run_soup, soup_state};
+use jetcarp_core::jobs::hunt::HuntRun;
+use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::library::{JobStatus, Library, PatternRecord, Query};
 use jetcarp_core::objects::LCell;
 use jetcarp_core::objects::puffer::Sparse;
@@ -63,7 +63,6 @@ fn small_spec() -> HuntSpec {
         ..Default::default()
     }
 }
-
 
 /// Run (or resume) a hunt here on the job runner: on `threads` threads (0: all), `batch` soups
 /// per batch (0: adapt), stopping (paused) after `limit` soups per group in this session.

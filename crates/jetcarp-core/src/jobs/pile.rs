@@ -2,10 +2,7 @@
 //! (its state is the folder's step files, as before), then exported. The pile and its files are
 //! those of the job's loop before it ran in steps.
 
-use super::{
-    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, drive,
-    status_name, typed,
-};
+use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, drive, status_name, typed};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library, tiling_display_name};
@@ -168,4 +165,3 @@ impl Strategy for PileRun {
         drive(&mut PileRunOn::new(t, None), cx)
     }
 }
-
