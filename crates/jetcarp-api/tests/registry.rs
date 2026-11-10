@@ -12,12 +12,25 @@ use serde_json::{Map, Value, json};
 #[test]
 fn every_operation_is_named_once_and_found_by_name() {
     let mut names: Vec<&str> = OPS.iter().map(|o| o.name()).collect();
-    assert!(names.len() >= 25, "{names:?}");
+    assert!(names.len() >= 49, "{names:?}");
     for o in OPS {
         let n = o.name();
         let (group, rest) = n.split_once('.').expect(n);
         assert!(
-            ["system", "reference", "files", "scene", "world"].contains(&group),
+            [
+                "system",
+                "reference",
+                "files",
+                "scene",
+                "world",
+                "library",
+                "quickstart",
+                "media",
+                "site",
+                "wallpaper",
+                "sheet"
+            ]
+            .contains(&group),
             "{n}"
         );
         assert!(
@@ -25,7 +38,12 @@ fn every_operation_is_named_once_and_found_by_name() {
             "{n}"
         );
         assert!(o.summary().ends_with('.') && o.summary().len() > 30, "{n}");
-        assert_eq!(o.on_world(), group == "world", "{n}");
+        // World operations, and a wallpaper of the world.
+        assert_eq!(
+            o.on_world(),
+            group == "world" || n == "wallpaper.export",
+            "{n}"
+        );
         let found = find(n).unwrap();
         assert_eq!((found.name(), found.on_world()), (n, o.on_world()));
     }
@@ -43,6 +61,15 @@ fn every_operation_is_named_once_and_found_by_name() {
         ("world.read", true),
         ("world.draw", false),
         ("world.step", false),
+        ("library.query", true),
+        ("library.get", true),
+        ("library.update", false),
+        ("quickstart.list", true),
+        ("quickstart.add", false),
+        ("media.list", true),
+        ("media.render", false),
+        ("site.export", false),
+        ("wallpaper.export", false),
     ] {
         assert_eq!(find(n).unwrap().read_only(), ro, "{n}");
     }

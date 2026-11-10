@@ -7,14 +7,23 @@
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
+//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.export`, `library.import`, `library.paste`, `library.verify`, `library.prune` |
+//! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check` |
+//! | [`media`] | `media.render`, `media.list`, `site.export` |
+//! | [`wallpaper`] | `wallpaper.export` |
+//! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
 //!
-//! The library, Quick Start, media, wallpaper, and site operations follow (refactor step 3b),
-//! then the search and job operations (step 5).
+//! The search and job operations follow (refactor step 5).
 
 pub mod files;
+pub mod library;
+pub mod media;
+pub mod quickstart;
 pub mod reference;
 pub mod scene;
+pub mod sheet;
 pub mod system;
+pub mod wallpaper;
 pub mod world;
 
 use crate::op::{DynOp, OnWorld, Plain};
@@ -46,4 +55,28 @@ pub static OPS: &[&dyn DynOp] = &[
     &OnWorld::<world::WorldApply>::NEW,
     &OnWorld::<world::WorldStep>::NEW,
     &OnWorld::<world::WorldRender>::NEW,
+    &Plain::<library::LibraryInfoOp>::NEW,
+    &Plain::<library::LibraryQuery>::NEW,
+    &Plain::<library::LibraryGet>::NEW,
+    &Plain::<library::LibraryUpdate>::NEW,
+    &Plain::<library::LibraryRemove>::NEW,
+    &Plain::<library::LibraryRender>::NEW,
+    &Plain::<library::LibraryExport>::NEW,
+    &Plain::<library::LibraryImport>::NEW,
+    &Plain::<library::LibraryPaste>::NEW,
+    &Plain::<library::LibraryVerify>::NEW,
+    &Plain::<library::LibraryPrune>::NEW,
+    &Plain::<quickstart::QuickstartList>::NEW,
+    &Plain::<quickstart::QuickstartGet>::NEW,
+    &Plain::<quickstart::QuickstartAdd>::NEW,
+    &Plain::<quickstart::QuickstartUpdate>::NEW,
+    &Plain::<quickstart::QuickstartRemove>::NEW,
+    &Plain::<quickstart::QuickstartCheck>::NEW,
+    &Plain::<media::MediaRender>::NEW,
+    &Plain::<media::MediaListOp>::NEW,
+    &Plain::<media::SiteExport>::NEW,
+    &OnWorld::<wallpaper::WallpaperExport>::NEW,
+    &Plain::<sheet::SheetRules>::NEW,
+    &Plain::<sheet::SheetSweep>::NEW,
+    &Plain::<sheet::SheetIsohedral>::NEW,
 ];

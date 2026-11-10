@@ -1,7 +1,7 @@
 //! What an operation runs with: [`Ctx`] holds the folders, the limits of the front end that
-//! started it, the file-system policy, and what the program knows about the machine
-//! ([`Platform`]: graphics adapters, the GPU simulator, desktop integration). The catalog store and
-//! the job registry join it when they move here (steps 4 and 5 of the refactor).
+//! started it, the file-system policy, the pattern catalog (opened once, on first use), and what
+//! the program knows about the machine ([`Platform`]: graphics adapters, the GPU simulator,
+//! desktop integration). The job registry joins it in step 5 of the refactor.
 
 use crate::error::ApiError;
 use crate::out::{self, Guard};
@@ -11,7 +11,7 @@ use jetcarp_core::library::Library;
 use schemars::JsonSchema;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 /// Bounds on what one call may do. The command line trusts its user ([`Limits::NONE`]); the MCP
 /// server bounds every call so a model cannot stall it ([`Limits::INTERACTIVE`]).
@@ -120,6 +120,15 @@ impl FsPolicy {
             })?;
         }
         Ok(path)
+    }
+
+    /// A folder `path` may be written into: made absolute, checked, and created.
+    pub fn writable_dir(&self, path: &str) -> Result<PathBuf, ApiError> {
+        let p = self.writable(&format!("{}/.keep", path.trim_end_matches(['/', '\\'])))?;
+        let dir = p.parent().map(Path::to_path_buf).unwrap_or(p);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| ApiError::io(format!("{}: {e}", dir.display())))?;
+        Ok(dir)
     }
 
     /// A file `path` may be read from (relative paths start at the base).
@@ -235,8 +244,12 @@ pub struct Ctx {
     /// Output root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
     pub out_root: Option<PathBuf>,
     /// Catalog instead of `$JETCARP_LIBRARY` or `<data>/catalog.sqlite` (a folder means
-    /// `<folder>/catalog.sqlite`).
+    /// `<folder>/catalog.sqlite`). Set it before the first operation that reads the catalog
+    /// ([`Ctx::with_library`]): the catalog is opened once.
     pub library: Option<PathBuf>,
+    /// The catalog, opened on first use and shared by every operation on this context (one
+    /// SQLite connection instead of one per call).
+    store: OnceLock<Library>,
     /// The world that world operations act on when the caller has none (`call_json`).
     session: Mutex<Option<Session>>,
 }
@@ -256,6 +269,7 @@ impl Ctx {
             platform: Arc::new(Headless),
             out_root: None,
             library: None,
+            store: OnceLock::new(),
             session: Mutex::new(None),
         }
     }
@@ -280,6 +294,24 @@ impl Ctx {
         self.platform = p;
         self
     }
+    /// Use this catalog (a `.sqlite` file, or a folder holding `catalog.sqlite`) instead of
+    /// `$JETCARP_LIBRARY` or the default.
+    pub fn with_library(mut self, path: Option<PathBuf>) -> Ctx {
+        self.library = path;
+        self.store = OnceLock::new();
+        self
+    }
+    /// Use this open catalog (its connection is shared with the caller's handle).
+    pub fn with_store(self, lib: Library) -> Ctx {
+        let mut cx = self.with_library(Some(lib.path().to_path_buf()));
+        cx.store = OnceLock::from(lib);
+        cx
+    }
+    /// Write outputs under this root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
+    pub fn with_out_root(mut self, root: Option<PathBuf>) -> Ctx {
+        self.out_root = root;
+        self
+    }
 
     /// The folders, as they are now.
     pub fn paths(&self) -> Paths {
@@ -300,18 +332,25 @@ impl Ctx {
 
     /// The catalog's file.
     pub fn library_path(&self) -> PathBuf {
-        match &self.library {
-            Some(p) => Library::file_for(p.clone()),
-            None => Library::default_path(),
+        match self.store.get() {
+            Some(l) => l.path().to_path_buf(),
+            None => match &self.library {
+                Some(p) => Library::file_for(p.clone()),
+                None => Library::default_path(),
+            },
         }
     }
 
-    /// The catalog (nothing is created until the first write).
+    /// The catalog: opened on first use (`library`, else `$JETCARP_LIBRARY`, else
+    /// `<data>/catalog.sqlite`), then the same handle every time. Nothing is created until the
+    /// first write.
     pub fn library(&self) -> Library {
-        match &self.library {
-            Some(p) => Library::open(p.clone()),
-            None => Library::open_default(),
-        }
+        self.store
+            .get_or_init(|| match &self.library {
+                Some(p) => Library::open(p.clone()),
+                None => Library::open_default(),
+            })
+            .clone()
     }
 
     /// The world operations act on when no host is given: a private headless world, made on

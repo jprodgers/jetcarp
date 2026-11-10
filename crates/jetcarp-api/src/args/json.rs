@@ -56,6 +56,23 @@ pub fn get_bool(v: &Value, key: &str) -> Result<Option<bool>, String> {
     }
 }
 
+/// Text items under `key`: a list of text (other items are skipped), or one text split at commas.
+/// Missing or anything else: none.
+pub fn get_list(v: &Value, key: &str) -> Vec<String> {
+    match v.get(key) {
+        Some(Value::String(s)) => s
+            .split(',')
+            .map(|x| x.trim().to_string())
+            .filter(|x| !x.is_empty())
+            .collect(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|x| x.as_str().map(String::from))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Reject keys that are not in `allowed`, listing the ones that are. `what` names the options
 /// in the message ("unknown world option ..."). `null` stands for no options.
 pub fn check_keys(v: &Value, allowed: &[&str], what: &str) -> Result<(), String> {

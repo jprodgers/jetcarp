@@ -31,7 +31,7 @@ pub mod size;
 pub mod tiling;
 pub mod until;
 
-pub use json::{check_keys, get, get_bool, get_f64, get_pair, get_str, get_u64};
+pub use json::{check_keys, get, get_bool, get_f64, get_list, get_pair, get_str, get_u64};
 pub use reseed::{reseed_mode, reseed_policies, reseed_policy};
 pub use rule::{
     CA_KEYS, apply_ca_options, ca_spec, nb_word, parse_nb, parse_pile_nb, resolve_rule,

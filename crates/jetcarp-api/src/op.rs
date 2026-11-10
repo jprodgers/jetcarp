@@ -23,6 +23,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub trait Report {
     /// The text, ending with a newline when it is more than a fragment.
     fn text(&self) -> String;
+    /// Lines the command line prints on standard error after the text: counts and failures
+    /// that are not the result itself (`media render`'s "2 rendered, 1 up to date").
+    fn notes(&self) -> String {
+        String::new()
+    }
     /// A check the output itself failed, reported after the output is shown (`jetcarp run
     /// --expect HASH` prints the run, then fails on a different hash).
     fn check(&self) -> Result<(), ApiError> {
