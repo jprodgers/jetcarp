@@ -192,18 +192,21 @@ Beyond those, JETCARP's catalogue holds spaceships in Life-like rules on the 4.8
 
 - Against every Archimedean, 2-uniform, 3-uniform and isohedral tiling, with both neighbourhoods. A
   ship that sees exactly the same neighbour counts in a corridor of a simpler tiling belongs to that
-  tiling.
+  tiling, and so does one whose live tiles evolve the same way there in some rule.
 - For being two smaller ships flying together.
 - On large patches, with wrapped edges and with dead edges.
 
 Ten catalogue entries turned out to be pairs of smaller ships flying side by side, eight of them two
 of Guttesen's kagome gliders, and they are not claimed; every Life candidate on the kagome tiling was
 such a pair. Eight ships found on 3-uniform tilings run unchanged on a simpler tiling, and they are
-listed there. That leaves 62 distinct objects. Thirteen are a smaller ship with a passenger, or a
-bound pair, and are listed with the smaller ship. Twenty-two, six of those thirteen among them, carry a
+listed there. A looser test, which asks only that the live tiles evolve the same way whatever the
+neighbour counts of the empty tiles around them, found two more catalogue entries that are the same
+ship as another, and eight ships that run on a simpler tiling than the one they were found on. That
+leaves 60 distinct objects. Thirteen are a smaller ship with a passenger, or a
+bound pair, and are listed with the smaller ship. Twenty-four, six of those thirteen among them, carry a
 flag: they are small and turn up often in soups, run in a well-known rule, or are built on Guttesen's
-gliders, so others may well have seen them, although we found no report. To our knowledge, the remaining 33 single ships, on 4.8.8, 3.12.12, 3.4.6.4, 3.3.3.4.4,
-3.3.3.3.6 and on 2- and 3-uniform tilings, have not been reported before. Only two of the 62 run in
+gliders, so others may well have seen them, although we found no report. To our knowledge, the remaining 29 single ships, on 4.8.8, 3.12.12, 3.4.6.4, 3.3.3.4.4,
+3.3.3.3.6 and on 2- and 3-uniform tilings, have not been reported before. Only two of the 60 run in
 Life itself: both are on the snub square tiling, both are built around Guttesen's glider, and both are
 flagged. The rest are in other rules.
 

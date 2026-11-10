@@ -1,15 +1,15 @@
 {
- "name": "Spaceship 0d9a694c on the 3-uniform tiling k3-003",
- "description": "A period-10 spaceship on the 3-uniform tiling k3-003 (touching neighbours), 4 to 10 cells, moving one lattice step every 10 generations (c/10). It runs the same way in the 512 rules from B3/S2456 to B3,6,7,8,9,10/S0,2,4,5,6,8,9,10; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 254 times). To our knowledge not reported before.",
+ "name": "Spaceship 0d9a694c on the 2-uniform tiling k2-012",
+ "description": "A period-10 spaceship on the 2-uniform tiling k2-012 (touching neighbours), 4 to 10 cells, moving one lattice step every 10 generations (c/10). It runs the same way in the 131,072 rules from B3/S2456 to B3,6,7,8,9,10,11,12,13,14/S0,2,4,5,6,8,9,10,11,12,13,14; the scene uses the rule it was found in. Its live cells evolve the same way on k3-003, where the empty tiles around them have other neighbour counts. The range of rules depends on the tiling: 131,072 rules on k2-012; 512 rules on k3-003. JETCARP's soup search found it on k3-003 (seen 254 times). To our knowledge not reported before.",
  "tiling": {
   "family": "periodic",
   "params": {
-   "catalog": "k3-003"
+   "catalog": "k2-012"
   },
   "size": {
    "rect": {
-    "w": 30,
-    "h": 8
+    "w": 26,
+    "h": 10
    }
   },
   "boundary": "wrap"
@@ -30,11 +30,11 @@
    "op": "paste_pattern",
    "id": 1,
    "pattern": {
-    "cells": "0,0,0,1 0,0,1,1 0,0,3,1 0,0,4,1 1,0,0,1 1,0,1,1 1,0,2,1 1,0,4,1 2,0,1,1 1,1,5,1",
+    "cells": "0,0,4,1 1,0,0,1 1,0,1,1 1,0,2,1 1,0,3,1 1,0,4,1 2,0,1,1 0,1,2,1 1,1,2,1 2,1,2,1",
     "tiling": {
      "family": "periodic",
      "params": {
-      "catalog": "k3-003"
+      "catalog": "k2-012"
      },
      "boundary": "dead"
     }

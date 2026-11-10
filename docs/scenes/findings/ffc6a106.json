@@ -1,15 +1,12 @@
 {
- "name": "Spaceship ffc6a106 on the 2-uniform tiling k2-003",
- "description": "A period-26 spaceship on the 2-uniform tiling k2-003 (touching neighbours), 17 to 26 cells, moving one lattice step every 26 generations (c/26). It runs the same way in the 16 rules from B45679/S3478 to B4,5,6,7,9,10/S0,1,3,4,7,8,10; the scene uses the rule it was found in. The same object runs unchanged on k2-004, k3-010 and k3-016. JETCARP's soup search found it on k3-010 (seen once). To our knowledge not reported before.",
+ "name": "Spaceship ffc6a106 on 3.3.3.4.4",
+ "description": "A period-26 spaceship on the elongated triangular tiling 3.3.3.4.4 (touching neighbours), 17 to 26 cells, moving one lattice step every 26 generations (c/26). It runs the same way in the 256 rules from B45679/S3478 to B4,5,6,7,9,10,11,12/S0,1,3,4,7,8,10,11,12; the scene uses the rule it was found in. Its live cells evolve the same way on k2-003, k2-004, k3-010 and k3-016, where the empty tiles around them have other neighbour counts, and on k3-013, k3-019, k3-051 and k3-052. The range of rules depends on the tiling: 256 rules on 3.3.3.4.4, k3-013, k3-019, k3-051 and k3-052; 16 rules on k2-003, k2-004, k3-010 and k3-016. JETCARP's soup search found it on k3-010 (seen once). To our knowledge not reported before.",
  "tiling": {
-  "family": "periodic",
-  "params": {
-   "catalog": "k2-003"
-  },
+  "family": "elongtri",
   "size": {
    "rect": {
-    "w": 48,
-    "h": 8
+    "w": 46,
+    "h": 12
    }
   },
   "boundary": "wrap"
@@ -30,12 +27,9 @@
    "op": "paste_pattern",
    "id": 1,
    "pattern": {
-    "cells": "0,0,0,1 0,1,1,1 1,0,0,1 1,0,3,1 1,0,4,1 1,1,1,1 2,0,0,1 2,0,4,1 2,1,1,1 3,0,0,1 3,0,4,1 3,1,1,1 4,0,0,1 4,0,4,1 4,1,1,1 5,0,0,1 5,0,3,1 5,0,4,1 6,0,0,1 6,0,3,1 6,0,4,1 6,1,1,1 7,0,0,1 7,0,3,1 7,0,4,1 8,0,4,1",
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 1,0,0,1 1,0,1,1 1,0,2,1 2,0,0,1 2,0,1,1 2,0,2,1 3,0,0,1 3,0,1,1 3,0,2,1 4,0,0,1 4,0,1,1 4,0,2,1 5,0,1,1 5,0,2,1 6,0,0,1 6,0,1,1 6,0,2,1 7,0,1,1 7,0,2,1 0,1,0,1 4,1,0,1 5,1,0,1 6,1,0,1",
     "tiling": {
-     "family": "periodic",
-     "params": {
-      "catalog": "k2-003"
-     },
+     "family": "elongtri",
      "boundary": "dead"
     }
    },

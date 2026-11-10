@@ -1,6 +1,6 @@
 {
  "name": "Spaceship 7860a67a on the 2-uniform tiling k2-003",
- "description": "A 7-cell period-4 spaceship moving one lattice step every 4 generations (c/4) on the 2-uniform tiling k2-003 (touching neighbours). The same object runs unchanged on k2-004 and in corridors of the 3-uniform tilings k3-010 and k3-016, where it was first found. It runs the same way in the 256 rules from B45/S34 to B4,5,8,9,10/S0,3,4,7,8,9,10; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 249 times). To our knowledge not reported before.",
+ "description": "A 7-cell period-4 spaceship moving one lattice step every 4 generations (c/4) on the 2-uniform tiling k2-003 (touching neighbours). The same object runs unchanged on k2-004 and in corridors of the 3-uniform tilings k3-010 and k3-016, where it was first found. It runs the same way in the 256 rules from B45/S34 to B4,5,8,9,10/S0,3,4,7,8,9,10; the scene uses the rule it was found in. Its live cells also evolve the same way on k3-013, k3-019 (where it was catalogued a second time, as 25e004f4), k3-051, k3-052 and the Archimedean tiling 3.3.3.4.4, where the tiles around it have more neighbours and it runs in 4,096 rules. Found by JETCARP's soup search (seen 447 times in all). Flagged as most likely already known: small, common and wide-range on an Archimedean tiling.",
  "tiling": {
   "family": "periodic",
   "params": {

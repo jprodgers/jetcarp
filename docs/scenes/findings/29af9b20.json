@@ -1,6 +1,6 @@
 {
  "name": "Spaceship 29af9b20 on the 2-uniform tiling k2-004",
- "description": "A period-5 spaceship on the 2-uniform tiling k2-004 (touching neighbours), 5 to 9 cells, moving one lattice step every 5 generations (c/5). It runs the same way in the 512 rules from B3/S356 to B3,7,8,9,10/S0,3,5,6,7,8,9,10; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 4 times). To our knowledge not reported before.",
+ "description": "A period-5 spaceship on the 2-uniform tiling k2-004 (touching neighbours), 5 to 9 cells, moving one lattice step every 5 generations (c/5). It runs the same way in the 512 rules from B3/S356 to B3,7,8,9,10/S0,3,5,6,7,8,9,10; the scene uses the rule it was found in. Its live cells also evolve the same way on k2-003, k3-010 and k3-016, where the empty tiles around them have other neighbour counts. Found by JETCARP's soup search (seen 4 times). To our knowledge not reported before.",
  "tiling": {
   "family": "periodic",
   "params": {

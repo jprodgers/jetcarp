@@ -89,18 +89,18 @@ family as hexagon rules.
 ### 4. Spaceships on non-square tilings
 
 **Claim (to our knowledge).** JETCARP's soup searches have found spaceships in Life-like rules on
-Archimedean and k-uniform tilings that we have not found reported before. Of 72 candidates, 62
-distinct objects survived the checks in the box below. We claim, to our knowledge, only the 33 of
-them that are single ships and carry no flag: seven on Archimedean tilings (4.8.8, 3.12.12, 3.4.6.4,
-3.3.3.4.4 and 3.3.3.3.6), fourteen on 2-uniform tilings and twelve on 3-uniform tilings. Every one is
-listed, with its rule range, in [Findings](findings.md#the-62-objects). Each runs the same way in a
+Archimedean and k-uniform tilings that we have not found reported before. Of 72 candidates, 60
+distinct objects survived the checks in the box below. We claim, to our knowledge, only the 29 of
+them that are single ships and carry no flag: ten on Archimedean tilings (4.8.8, 3.12.12, 3.4.6.4,
+3.3.3.4.4 and 3.3.3.3.6), thirteen on 2-uniform tilings and six on 3-uniform tilings. Every one is
+listed, with its rule range, in [Findings](findings.md#the-60-objects). Each runs the same way in a
 whole range of rules; none runs in Life itself.
 
-The other 29 are described, not claimed:
+The other 31 are described, not claimed:
 
-- **Flagged, 22.** Nine are flagged as most likely already known: six small ships that turn up often
-  in soups and run in many rules on an Archimedean tiling (on 4.8.8, 3.12.12, 4.6.12 and 3.6.3.6), and
-  three built on Guttesen's gliders. Thirteen are flagged to check before claiming: they run in a
+- **Flagged, 24.** Eleven are flagged as most likely already known: eight small ships that turn up
+  often in soups and run in many rules on an Archimedean tiling (on 4.8.8, 3.12.12, 4.6.12, 3.6.3.6 and
+  3.3.3.4.4), and three built on Guttesen's gliders. Thirteen are flagged to check before claiming: they run in a
   well-known rule (HighLife, Pedestrian Life, or `B2/S34` on 4.8.8), contain a phase of one of
   Guttesen's gliders, or were very common in their search. We found no earlier report
   of any of them, but others may well have seen them.
@@ -108,7 +108,7 @@ The other 29 are described, not claimed:
   unchanged, or a bound pair of gliders. They are kept as distinct objects with the core named, as
   Life catalogues keep tag-alongs, but they are not counted as discoveries.
 
-The five strongest candidates, single ships with no flag that the checks confirmed on every count:
+The four strongest candidates, single ships with no flag that the checks confirmed on every count:
 
 <figure class="pair">
 <div><picture>
@@ -124,7 +124,8 @@ cells; watch it change shape through its long period while it moves 3 lattice st
 in the 1,024 rules from <code>B3/S235</code> up and only on its own tiling. Right: <code>a13d3fbf</code>
 on the elongated triangular tiling 3.3.3.4.4, period 8, 13 to 17 cells, moving 2 lattice steps along
 the rows every period (c/4), in the 1,024 rules from <code>B46/S3458</code> up; it also runs unchanged
-in corridors of the 3-uniform tilings k3-051 and k3-052. Scenes
+in corridors of the 3-uniform tilings k3-051 and k3-052, and its live tiles evolve the same way on six
+more 2- and 3-uniform tilings. Scenes
 <code>docs/scenes/tilings/ship-aa7e7357.json</code> and <code>ship-a13d3fbf.json</code>.</figcaption>
 </figure>
 
@@ -145,15 +146,21 @@ that does not move at c/2, and it contains no smaller ship. Scenes
 <code>docs/scenes/tilings/ship-acd0fa8b.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
 </figure>
 
+One ship that was among the strongest before the congruence test shows how far that test reaches:
+
 <figure>
 <picture>
   <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-7860a67a.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
 </picture>
-<figcaption><code>7860a67a</code>, one 7-cell period-4 ship that runs on four tilings: here on the
-2-uniform tiling k2-003, and unchanged on k2-004 and in corridors of the 3-uniform tilings k3-010 and
-k3-016, where the search first found it. It moves one lattice step every 4 generations (c/4) in the
-256 rules from <code>B45/S34</code> up. Scene <code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
+<figcaption><code>7860a67a</code>, a 7-cell period-4 ship that moves one lattice step every 4
+generations (c/4), here on the 2-uniform tiling k2-003 in the 256 rules from <code>B45/S34</code> up.
+It runs unchanged on k2-004 and in strips of the 3-uniform tilings k3-010 and k3-016, where the search
+first found it, and its live tiles evolve the same way on k3-013 and k3-019 (where it was catalogued a
+second time, as <code>25e004f4</code>), on k3-051 and k3-052, and on the Archimedean elongated triangular
+tiling 3.3.3.4.4, where the tiles around it have more neighbours. Small, common and running in many
+rules on an Archimedean tiling, it is now flagged as most likely already known. Scene
+<code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
 </figure>
 
 **Evidence.** Gliders on triangles, hexagons and Cairo pentagons go back to Carter Bays
@@ -182,7 +189,11 @@ Life-like spaceship on a k-uniform tiling with k of 2 or more was found in the l
   ship JETCARP found on an isohedral type is a known ship of the square or triangular grid, such as
   Conway's glider, and results on an isohedral type are presented as results on its Laves tiling.
 - **Ships of simpler tilings.** Eight ships found on 3-uniform tilings run unchanged on a 2-uniform
-  tiling or on 3.6.3.6, and are claimed only there.
+  tiling or on 3.6.3.6, and eight more, among them five found in strips of squares and triangles,
+  run with the same live tiles on 3.3.3.4.4 or on a 2-uniform tiling; each is claimed only on the
+  simplest tiling it runs on.
+- **The same ship catalogued twice.** `25e004f4` is `7860a67a`, and `f62ba07d` is `c15dd310`: the
+  same live tiles at every generation, at positions with other neighbour counts around them.
 
 <figure class="pair">
 <div><picture>
@@ -214,10 +225,19 @@ the snub square tiling 3.3.4.3.4. Both are credited to
   81 catalogued 2- and 3-uniform tilings with touching and with edge neighbours. The map must keep every
   live-neighbour count, so a hit means the ship runs on that tiling too; JETCARP then ran each hit to
   confirm it. No candidate is a ship of the square, hexagonal or triangular grid, of Cairo, or of any
-  Laves tiling; 16 run on several tilings, and 8 belong to a simpler one.
+  Laves tiling; 8 belong to a simpler tiling.
+- **Congruence.** Two ships are also the same object if one rotation, reflection and translation
+  carries the live tiles of one onto those of the other at every generation, whatever the neighbour
+  counts of the empty tiles around them. JETCARP dumped every generation's live tiles with their
+  polygons for all 72 candidates, their images on other tilings, the compounds' parts, Guttesen's
+  gliders and the lattice objects of the catalogue, and compared every pair: two pairs of candidates
+  are one ship each and were merged. Each candidate's live tiles were then placed isometrically on
+  all 181 tilings above and run by JETCARP in a rule the counts there allow: 8 more ships run on a
+  simpler tiling (5 on 3.3.3.4.4), and 19 objects run on several tilings.
 - **Compound and same-object checks.** Every phase of every ship was split into groups and each
   group run alone: 10 candidates were two ships flying together, and 13 carry a smaller ship inside
-  unchanged. Every candidate was compared with all 137 ship records: no two are the same object.
+  unchanged. Every candidate was compared with all 137 ship records: no two have the same neighbour
+  counts everywhere (but see the congruence check above).
 - **Robustness.** Each ship ran 40 periods on a wrapped patch of about 30,000 cells, on a smaller
   patch and with dead edges, with identical results.
 - **Not yet searched.** The ConwayLife.com forums, where hobbyists report most new patterns, refuse

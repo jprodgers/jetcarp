@@ -124,18 +124,20 @@ version of the hexagon tiling, `hex_flat`, exists for the three-parent
 
 The tilings are classical. On them, JETCARP's searches have found spaceships in Life-like rules on
 4.8.8, 3.12.12, 4.6.12, 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6, and on 3.6.3.6 in rules other than Life. After
-the checks described in [What is new in JETCARP](../research/contributions.md#how-we-checked), seven
-single ships with no flag remain on these tilings, two on 4.8.8, two on 3.12.12 and one each on 3.4.6.4,
-3.3.3.4.4 and 3.3.3.3.6, and to our knowledge they have not been reported before. Four of them are
-below.
+the checks described in [What is new in JETCARP](../research/contributions.md#how-we-checked), ten
+single ships with no flag remain on these tilings, two on 4.8.8, two on 3.12.12, four on 3.3.3.4.4 and
+one each on 3.4.6.4 and 3.3.3.3.6, and to our knowledge they have not been reported before. Three of
+the four on 3.3.3.4.4 were found in strips of squares and triangles inside 2- and 3-uniform tilings;
+their live tiles evolve the same way on the elongated triangular tiling itself, so they are listed
+there. Four of the ten are below.
 
-The others on these tilings are described rather than claimed. On 4.8.8, 3.12.12, 4.6.12 and 3.6.3.6
-the rest are small ships that turn up often in soups, ships in well-known rules such as HighLife or
+The others on these tilings are described rather than claimed. On 4.8.8, 3.12.12, 4.6.12, 3.6.3.6 and
+3.3.3.4.4 the rest are small ships that turn up often in soups, ships in well-known rules such as HighLife or
 `B2/S34`, or a smaller ship with a passenger, and others may well have seen them. Guttesen's Life
 gliders on 3.6.3.6 and 3.3.4.3.4, which JETCARP also found, are his, and so are the pairs of them that
 JETCARP's catalogue first listed as separate ships. In Life on 3.3.4.3.4, JETCARP also found two larger
 ships built around his glider, of periods 16 and 24; we found no earlier report of them. Every ship is
-listed in [Findings](../research/findings.md#the-62-objects).
+listed in [Findings](../research/findings.md#the-60-objects).
 
 <figure class="pair">
 <div><picture>

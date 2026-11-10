@@ -104,10 +104,14 @@ one is not a lattice ship in disguise.
 A k-uniform tiling can still contain a corridor of a simpler tiling, and a ship that runs in such a
 corridor belongs to the simpler tiling. JETCARP's skeptical pass checked every ship against all the
 2- and 3-uniform tilings: eight ships found on 3-uniform tilings run unchanged on a 2-uniform tiling or
-on 3.6.3.6, and are claimed there, and others run on several tilings of the same k. After those checks,
-14 single ships with no flag on 2-uniform tilings and 12 on 3-uniform tilings are, to our knowledge, new;
-a few more are flagged because they were very common in their search or run in HighLife. All are listed
-in [Findings](../research/findings.md#the-62-objects); see also
+on 3.6.3.6, and are claimed there, and others run on several tilings of the same k. A looser
+congruence test, which asks only that the live tiles evolve the same way whatever the neighbour counts
+of the empty tiles around them, moved eight more: five ships of strips of squares and triangles run on
+the Archimedean tiling 3.3.3.4.4, and three 3-uniform ships run on a 2-uniform tiling. It also showed
+that two pairs of catalogue entries are one ship each. After those checks, 13 single ships with no flag
+on 2-uniform tilings and 6 on 3-uniform tilings are, to our knowledge, new; a few more are flagged
+because they were very common in their search or run in HighLife. All are listed
+in [Findings](../research/findings.md#the-60-objects); see also
 [What is new in JETCARP](../research/contributions.md).
 
 <figure>
@@ -117,8 +121,10 @@ in [Findings](../research/findings.md#the-62-objects); see also
 </picture>
 <figcaption>A 7-cell period-4 spaceship on the 2-uniform tiling k2-003, moving one lattice step every
 four generations in the 256 rules from <code>B45/S34</code> up. The same ship runs unchanged on k2-004
-and in corridors of the 3-uniform tilings k3-010 and k3-016, where the search first found it, so it is
-claimed on the 2-uniform tilings. Watch the triangles at its front and back take turns. Scene
+and in corridors of the 3-uniform tilings k3-010 and k3-016, where the search first found it. Its live
+tiles also evolve the same way on k3-013, k3-019, k3-051, k3-052 and on the Archimedean tiling 3.3.3.4.4,
+where the tiles beside its strip have more neighbours, so it is listed on 3.3.3.4.4, and flagged there as
+small and common. Watch the triangles at its front and back take turns. Scene
 <code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
 </figure>
 
