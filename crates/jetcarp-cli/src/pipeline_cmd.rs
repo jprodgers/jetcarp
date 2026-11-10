@@ -31,7 +31,7 @@ const SITE_INDEX: &str = include_str!("../../../tools/site-example/index.html");
 #[derive(clap::Args)]
 pub struct PipelineArgs {
     /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <Documents>/jetcarp-out/catalog.sqlite).
+    /// <data>/catalog.sqlite).
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]

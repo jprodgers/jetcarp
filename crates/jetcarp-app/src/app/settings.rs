@@ -115,10 +115,13 @@ pub(super) struct Store {
 impl Store {
     /// The settings file for this run (None: do not read or write one).
     pub fn from_env() -> Store {
-        let path = match std::env::var_os("JETCARP_CONFIG_DIR") {
-            Some(d) => Some(PathBuf::from(d).join("app.json")),
-            None if std::env::var_os("JETCARP_SCREENSHOT").is_some() => None,
-            None => dirs::config_dir().map(|d| d.join("jetcarp").join("app.json")),
+        // Screenshot runs never touch the user's settings unless a folder is given.
+        let path = if std::env::var_os("JETCARP_CONFIG_DIR").is_none()
+            && std::env::var_os("JETCARP_SCREENSHOT").is_some()
+        {
+            None
+        } else {
+            jetcarp_core::paths::config_dir().map(|d| d.join("app.json"))
         };
         Store {
             path,

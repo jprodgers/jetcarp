@@ -25,7 +25,7 @@ fn err(e: String) -> anyhow::Error {
 #[derive(clap::Args)]
 pub struct MediaArgs {
     /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <Documents>/jetcarp-out/catalog.sqlite). Media files go under its folder.
+    /// <data>/catalog.sqlite). Media files go under its folder.
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]
@@ -104,7 +104,7 @@ struct RenderArgs {
     /// so media stored in another palette render again.
     #[arg(long)]
     palette: Option<String>,
-    /// --scene: output folder (default <Documents>/jetcarp-out/media/<scene name>).
+    /// --scene: output folder (default <Pictures>/JETCARP/media/<scene name>).
     #[arg(long)]
     out: Option<PathBuf>,
     /// Worker threads (default: all cores).

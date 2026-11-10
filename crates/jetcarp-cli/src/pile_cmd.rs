@@ -31,7 +31,7 @@ pub struct PileArgs {
     /// Aperiodic tilings: patch level (default: the smallest that should hold the pile, up to 8).
     #[arg(long)]
     level: Option<u32>,
-    /// Parent folder for the run folder (default `<Documents>/jetcarp-out/piles`).
+    /// Parent folder for the run folder (default `<Pictures>/JETCARP/piles`).
     #[arg(long)]
     out: Option<PathBuf>,
     /// Continue a pile: its job id, or its run folder (from the last saved step).

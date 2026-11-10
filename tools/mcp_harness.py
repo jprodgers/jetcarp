@@ -150,7 +150,19 @@ def check_triangle(mcp, text, calls):
     return ok, f"tiling {st['tiling']['id']}, gen {st['generation']}, status {st['status']}, population {pop}"
 
 
-EXPLORE = os.path.expanduser("~/Documents/jetcarp-out/explore")
+def data_dir():
+    """JETCARP's data folder, as `jetcarp paths` reports it (JETCARP_DATA_DIR overrides it)."""
+    if os.environ.get("JETCARP_DATA_DIR"):
+        return os.environ["JETCARP_DATA_DIR"]
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "jetcarp")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/jetcarp/data")
+    xdg = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(xdg, "jetcarp")
+
+
+EXPLORE = os.path.join(data_dir(), "explore")
 
 
 def check_explore_query(mcp, text, calls):

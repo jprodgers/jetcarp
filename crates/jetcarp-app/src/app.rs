@@ -153,7 +153,7 @@ pub struct JetcarpApp {
     scripts: crate::scripts_ui::ScriptsWindow,
     /// Sweep results browser.
     results: crate::results::ResultsBrowser,
-    /// Where scripts write (`$JETCARP_OUT` or `<Documents>/jetcarp-out`).
+    /// Where scripts write (`$JETCARP_OUT` or `<Pictures>/JETCARP`).
     out_root: std::path::PathBuf,
     /// Pattern library window.
     library: crate::library_ui::LibraryWindow,

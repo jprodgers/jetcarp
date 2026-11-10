@@ -546,7 +546,7 @@ fn fields_shared_and_private() {
 // Extra: every bundled scene loads, runs, renders, and replays to the same hash after saving.
 #[test]
 fn bundled_scenes_run() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenes");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data/scenes");
     let mut count = 0;
     for entry in std::fs::read_dir(&dir).unwrap() {
         let path = entry.unwrap().path();

@@ -541,7 +541,7 @@ fn scene_json(name: &str, description: &str, j: &Jvn, gh: u32) -> String {
 
 fn check_scene(file: &str, json: String) -> World {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scenes")
+        .join("data/scenes")
         .join(file);
     if std::env::var_os("JETCARP_WRITE_SCENES").is_some() {
         std::fs::write(&path, &json).unwrap();

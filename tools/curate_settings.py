@@ -175,7 +175,7 @@ def parse_json(text):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--jetcarp", default=os.path.join(REPO, "target", "release", "jetcarp"))
-    ap.add_argument("--library", help="catalog (a folder or .sqlite file; default: $JETCARP_LIBRARY or <Documents>/jetcarp-out/catalog.sqlite)")
+    ap.add_argument("--library", help="catalog (a folder or .sqlite file; default: $JETCARP_LIBRARY or <data>/catalog.sqlite)")
     ap.add_argument("--base-url", default="http://localhost:1234/v1")
     ap.add_argument("--model", default="qwen/qwen3.8-27b")
     ap.add_argument("--status", default="candidate,auto", help="statuses to rate (comma separated)")

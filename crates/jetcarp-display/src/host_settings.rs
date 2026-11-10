@@ -122,10 +122,7 @@ pub const MAX_AWAKE_MINUTES: u32 = 24 * 60;
 
 /// JETCARP's settings folder (`JETCARP_CONFIG_DIR` overrides it, as it does for the app).
 pub fn config_dir() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os("JETCARP_CONFIG_DIR").filter(|d| !d.is_empty()) {
-        return Some(PathBuf::from(d));
-    }
-    Some(dirs::config_dir()?.join("jetcarp"))
+    jetcarp_core::paths::config_dir()
 }
 
 /// The file the stores of profiles and rotations are placed beside.

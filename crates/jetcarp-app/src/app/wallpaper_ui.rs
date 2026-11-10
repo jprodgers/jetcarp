@@ -85,7 +85,7 @@ pub(super) struct WallpaperSettings {
     pub outlines: f64,
     /// Colour every CA with this palette (None: as they are).
     pub palette: Option<String>,
-    /// Output folder (None: `<jetcarp-out>/wallpapers`).
+    /// Output folder (None: `<Pictures>/JETCARP/wallpapers`).
     pub folder: Option<PathBuf>,
 }
 

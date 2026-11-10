@@ -1044,7 +1044,7 @@ pub fn ui(ui: &mut egui::Ui, f: &mut SweepForm, info: &ScreenInfo) -> bool {
                 );
                 ui.label(
                     RichText::new(format!(
-                        "saved in jetcarp-out/<date>_<time>_{}",
+                        "saved in <Pictures>/JETCARP/<date>_<time>_{}",
                         if f.label.trim().is_empty() { f.default_label() } else { f.label.trim().to_string() }
                     ))
                     .weak(),

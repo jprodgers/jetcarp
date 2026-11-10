@@ -635,7 +635,7 @@ pub fn find_entry(lib: &crate::library::Library, q: crate::library::QuickStartRo
 }
 
 /// The shown finds in the default catalog (`JETCARP_LIBRARY`, else
-/// `<Documents>/jetcarp-out/catalog.sqlite`) first, marked featured, then the built-in entries.
+/// `<data>/catalog.sqlite`) first, marked featured, then the built-in entries.
 /// The app shows this list.
 pub fn all_entries() -> Vec<QuickStart> {
     let mut v = user_finds(&crate::library::Library::open_default());

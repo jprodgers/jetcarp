@@ -1,24 +1,18 @@
 //! Output folders, the write guard, and PNG encoding.
 //!
-//! Scripts write only inside the output root (`<Documents>/jetcarp-out`, `JETCARP_OUT`, or the host's
+//! Scripts write only inside the output root (`<Pictures>/JETCARP`, `JETCARP_OUT`, or the host's
 //! override) and folders the user named (`--out`, [`crate::RunOptions::allow_dirs`]).
 
 use jetcarp_core::render::Image;
 use std::path::{Component, Path, PathBuf};
 
-/// The output root: `explicit` (host option), else `$JETCARP_OUT`, else `<Documents>/jetcarp-out`
-/// (`dirs::document_dir()`, falling back to `~/Documents`, then the working directory).
+/// The output root: `explicit` (host option), else [`jetcarp_core::paths::output_dir`]
+/// (`$JETCARP_OUT`, else `<Pictures>/JETCARP`).
 pub fn out_root(explicit: Option<&Path>) -> PathBuf {
-    if let Some(p) = explicit {
-        return absolute(p);
+    match explicit {
+        Some(p) => absolute(p),
+        None => absolute(&jetcarp_core::paths::output_dir()),
     }
-    if let Some(p) = std::env::var_os("JETCARP_OUT").filter(|p| !p.is_empty()) {
-        return absolute(Path::new(&p));
-    }
-    let docs = dirs::document_dir()
-        .or_else(|| dirs::home_dir().map(|h| h.join("Documents")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    absolute(&docs.join("jetcarp-out"))
 }
 
 /// Local time as `2026-11-05_14-30-02` (safe in file names on every system).

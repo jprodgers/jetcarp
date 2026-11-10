@@ -1,7 +1,7 @@
 //! `files_list`: a read-only look into JETCARP's output folders (script runs, sweeps, piles, media,
 //! website exports) and the catalog's folder, so a model can find what a run wrote.
 //!
-//! Only two roots are visible: the output root (`JETCARP_OUT`, else `<Documents>/jetcarp-out`) and the
+//! Only two roots are visible: the output root (`JETCARP_OUT`, else `<Pictures>/JETCARP`) and the
 //! folder holding the catalog (`JETCARP_LIBRARY`'s folder). A path may be relative to a root or an
 //! absolute path inside one; it is resolved (symbolic links and `..` included) and refused when it
 //! leaves its root. Nothing is ever written or deleted. Small text files (JSON, CSV, text, at most
@@ -24,7 +24,7 @@ pub fn definitions() -> Vec<Value> {
         "files_list",
         "List output files",
         true,
-        "Lists what JETCARP wrote, read only: the output folder (root \"out\", default: <Documents>/jetcarp-out with script runs, sweep folders, piles/, media) or the catalog's folder (root \"catalog\": catalog.sqlite, media/, website exports). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind (dir or file), size, modified time, and for folders what marks them (manifest.json = a sweep or export, pile.json = a pile, favourites.json). `file` returns a small text file (JSON, CSV, text; first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"root\": \"catalog\", \"path\": \"media/ant\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.",
+        "Lists what JETCARP wrote, read only: the output folder (root \"out\", default: <Pictures>/JETCARP with script runs, sweep folders, piles/, media) or the catalog's folder (root \"catalog\": catalog.sqlite, media/, website exports). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind (dir or file), size, modified time, and for folders what marks them (manifest.json = a sweep or export, pile.json = a pile, favourites.json). `file` returns a small text file (JSON, CSV, text; first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"root\": \"catalog\", \"path\": \"media/ant\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.",
         json!({"type": "object", "properties": {
             "root": {"type": "string", "enum": ["out", "catalog"], "description": "Which root (default out)."},
             "path": {"type": "string", "description": "Folder inside the root (default: the root itself)."},

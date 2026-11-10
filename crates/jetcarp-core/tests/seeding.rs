@@ -890,7 +890,7 @@ fn scenes_and_validation() {
 // Adding pattern seeds leaves every saved scene and the JACA presets readable.
 #[test]
 fn existing_scenes_still_load() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenes");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data/scenes");
     let mut count = 0;
     for entry in std::fs::read_dir(&dir).unwrap() {
         let path = entry.unwrap().path();

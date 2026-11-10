@@ -24,7 +24,7 @@ Python standard library only; pictures are laid out by `jetcarp sheet --folder`.
    `--promote K` the top K go to the Quick Start's "My finds" through
    `jetcarp library promote-run <folder> #<index> --title ... --note ...`.
 
-    python3 tools/curate_sweep.py ~/Documents/jetcarp-out/2026-11-05_17-18-41_HexT3-sum
+    python3 tools/curate_sweep.py ~/Pictures/JETCARP/2026-11-05_17-18-41_HexT3-sum
     python3 tools/curate_sweep.py <folder> --candidates 48 --batch 8 --picks 2 --promote 3 \\
             --library /tmp/lib            # or JETCARP_LIBRARY
     python3 tools/curate_sweep.py <folder> --preselect-only   # list the candidates, no model
@@ -266,7 +266,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder", help="sweep folder (manifest.json, run.json, PNGs)")
     ap.add_argument("--jetcarp", default=os.path.join(REPO, "target", "release", "jetcarp"))
-    ap.add_argument("--library", help="library folder for --promote (a folder or .sqlite file; default: $JETCARP_LIBRARY or <Documents>/jetcarp-out/catalog.sqlite)")
+    ap.add_argument("--library", help="library folder for --promote (a folder or .sqlite file; default: $JETCARP_LIBRARY or <data>/catalog.sqlite)")
     ap.add_argument("--base-url", default="http://localhost:1234/v1")
     ap.add_argument("--model", default="qwen/qwen3.8-27b")
     ap.add_argument("--candidates", type=int, default=48, help="runs shown to the model in round 1")

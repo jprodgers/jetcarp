@@ -166,6 +166,13 @@ enum Cmd {
     Site(media_cmd::SiteArgs),
     /// List tiling families with their neighbour counts.
     Tilings,
+    /// Print the settings, data, and output folders JETCARP uses (environment overrides
+    /// included).
+    Paths {
+        /// Print them as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet.
     Isohedral {
         /// Write a contact sheet of all 81 types here instead of listing them.
@@ -553,6 +560,19 @@ fn main() -> Result<()> {
         Cmd::Media(a) => media_cmd::run(a)?,
         Cmd::Site(a) => media_cmd::run_site(a)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(*a)?,
+        Cmd::Paths { json } => {
+            use jetcarp_core::paths;
+            if json {
+                let v = serde_json::json!({
+                    "settings": paths::config_dir(),
+                    "data": paths::data_dir(),
+                    "output": paths::output_dir(),
+                });
+                println!("{}", serde_json::to_string_pretty(&v)?);
+            } else {
+                print!("{}", paths::describe());
+            }
+        }
         Cmd::Palettes => {
             let hex = |c: [u8; 4]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
             for name in jetcarp_core::render::palette_names() {

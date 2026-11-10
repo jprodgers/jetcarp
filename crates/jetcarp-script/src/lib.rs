@@ -12,7 +12,7 @@
 //! - [`estimate`]: time a few runs of a sweep before starting it;
 //! - [`run_world`]: rebuild one run of a finished sweep (to open it in a live view).
 //!
-//! Scripts write only inside the output root (`<Documents>/jetcarp-out`, `$JETCARP_OUT`, or
+//! Scripts write only inside the output root (`<Pictures>/JETCARP`, `$JETCARP_OUT`, or
 //! [`RunOptions::out_root`]) and folders in [`RunOptions::allow_dirs`].
 
 mod ants;
@@ -55,7 +55,7 @@ pub struct RunOptions {
     pub screen: Screen,
     /// Worker threads for the whole script (default: all cores). Results do not depend on it.
     pub threads: Option<usize>,
-    /// Output root instead of `$JETCARP_OUT` or `<Documents>/jetcarp-out`.
+    /// Output root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
     pub out_root: Option<PathBuf>,
     /// Further folders scripts may write into.
     pub allow_dirs: Vec<PathBuf>,
@@ -66,7 +66,7 @@ pub struct RunOptions {
     /// Otherwise `show` only logs a line.
     pub live_view: bool,
     /// The pattern catalog `library()` opens (default: `JETCARP_LIBRARY`, else
-    /// `<Documents>/jetcarp-out/catalog.sqlite`; a folder means `<folder>/catalog.sqlite`).
+    /// `<data>/catalog.sqlite`; a folder means `<folder>/catalog.sqlite`).
     pub library: Option<PathBuf>,
 }
 

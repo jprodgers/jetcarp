@@ -16,7 +16,7 @@ use std::time::Instant;
 #[derive(clap::Args)]
 pub struct HuntArgs {
     /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <Documents>/jetcarp-out/catalog.sqlite).
+    /// <data>/catalog.sqlite).
     #[arg(long)]
     library: Option<PathBuf>,
     /// Rules, separated by spaces or semicolons (B/S and Generations rules without B0; a `V`

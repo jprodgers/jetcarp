@@ -331,7 +331,7 @@ pub fn definitions() -> Vec<Value> {
             "run_script",
             "Run a JETCARP script",
             false,
-            "Runs a JETCARP script (Rhai language) and returns its log, errors with line numbers, output folders, and sweep summaries. Scripts make their own worlds (the current world is not changed), run them until something happens, save PNGs, and run parallel rule sweeps into <Documents>/jetcarp-out. Example: `let w = world(#{ tiling: \"hex\", size: [120, 80], boundary: \"dead\" }); w.add_ca(\"HexW3 8229\", #{ seed: \"top_center\" }); let r = w.run(#{ until: \"done\" }); print(r.generations); w.save_png(out_dir(\"test\") + \"/a.png\");` or `sweep(#{ rules: \"W\", until: \"done\", png: #{ size: [400, 300] } });`. jetcarp_help {\"topic\": \"scripts\"} lists every function. Runs are limited in time (max_seconds) and world size.",
+            "Runs a JETCARP script (Rhai language) and returns its log, errors with line numbers, output folders, and sweep summaries. Scripts make their own worlds (the current world is not changed), run them until something happens, save PNGs, and run parallel rule sweeps into <Pictures>/JETCARP. Example: `let w = world(#{ tiling: \"hex\", size: [120, 80], boundary: \"dead\" }); w.add_ca(\"HexW3 8229\", #{ seed: \"top_center\" }); let r = w.run(#{ until: \"done\" }); print(r.generations); w.save_png(out_dir(\"test\") + \"/a.png\");` or `sweep(#{ rules: \"W\", until: \"done\", png: #{ size: [400, 300] } });`. jetcarp_help {\"topic\": \"scripts\"} lists every function. Runs are limited in time (max_seconds) and world size.",
             json!({"type": "object", "properties": {
                 "script": {"type": "string", "description": "The script text (Rhai)."},
                 "params": {"type": "object", "description": "Values the script reads as `params.key`."},
@@ -2042,7 +2042,7 @@ Start (each takes {"resume": job} to continue a stopped job):
 - hunt_start: soup hunts (patterns in B/S and Generations rules on periodic tilings).
 - stage1_start: the settings search (which rules and settings look interesting).
 - ants_start: ant and turmite searches (highways).
-- pile_start: one large sandpile (pictures in its folder under <Documents>/jetcarp-out/piles).
+- pile_start: one large sandpile (pictures in its folder under <Pictures>/JETCARP/piles).
 - mover_start: follow a mover on an aperiodic tiling on a sliding window, far past the fixed
   patches (default: the Spectre glider to 10,000 rings; {"rings": 1000000} takes minutes).
 - evolve_start: the evolutionary glider search (not resumable; resume runs it again).

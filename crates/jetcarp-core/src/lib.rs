@@ -26,6 +26,7 @@ pub mod ltl;
 pub mod media;
 pub mod objects;
 pub mod patch;
+pub mod paths;
 pub mod penrose;
 pub mod pile;
 pub mod pipeline;

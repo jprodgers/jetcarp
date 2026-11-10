@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use JETCARP in your research, please cite it using these metadata."
+type: software
+title: "JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program"
+abstract: >-
+  JETCARP runs cellular automata on square, hexagonal, Archimedean, k-uniform,
+  isohedral, custom periodic and aperiodic tilings (Penrose, hat and spectre),
+  with several automata at once on shared or separate cell fields. It includes
+  a graphical app, a command line, a scripting language, and a Model Context
+  Protocol server, plus search tools for spaceships, oscillators and other
+  patterns, verified pattern catalogues, and reproducible scenes identified by
+  state hashes.
+authors:
+  - given-names: Jimmie
+    family-names: Rodgers
+    email: jimmie@jimmieprodgers.com
+    affiliation: Independent
+    orcid: "https://orcid.org/0009-0003-8775-6483"
+    website: "https://jimmieprodgers.com"
+version: 0.4.0
+license:
+  - Unlicense
+  - MIT
+repository-code: "https://github.com/jprodgers/jetcarp"
+keywords:
+  - cellular automata
+  - tilings
+  - aperiodic tilings
+  - k-uniform tilings
+  - Game of Life
+  - spaceships
+  - sandpiles
+  - research software

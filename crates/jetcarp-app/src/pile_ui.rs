@@ -1,6 +1,6 @@
 //! The *Sandpile…* window: build a large sandpile (`jetcarp_core::pile`) on a background thread,
 //! see the pile drawn live, the doubling step (k of log2 N), and an ETA; cancel; the result is
-//! written to `<Documents>/jetcarp-out/piles/<time>_<tiling>-<N>/` like `jetcarp pile`.
+//! written to `<Pictures>/JETCARP/piles/<time>_<tiling>-<N>/` like `jetcarp pile`.
 //!
 //! **Colours.** The palette (its stops for heights 1 to the largest degree, its background for
 //! empty cells, its stage around the pile) and *Reverse* can change at any time: the live view
@@ -256,7 +256,7 @@ impl PileWindow {
                     RichText::new(
                         "N grains on one spot of an unbounded grid, settled by doubling (N's binary \
                          digits). Writes pile.png, preview.png, pile.json, and a resumable file per \
-                         step to jetcarp-out/piles/.",
+                         step to <Pictures>/JETCARP/piles/.",
                     )
                     .small()
                     .weak(),

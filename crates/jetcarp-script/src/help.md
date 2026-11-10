@@ -52,7 +52,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 
 | Function | What it does |
 | --- | --- |
-| `out_dir("label")` | Make `<Documents>/jetcarp-out/<date>_<time>_label/` and return its path. `JETCARP_OUT` (or `--out`) changes the root. Relative paths below are relative to the newest output folder. |
+| `out_dir("label")` | Make `<Pictures>/JETCARP/<date>_<time>_label/` and return its path. `JETCARP_OUT` (or `--out`) changes the root. Relative paths below are relative to the newest output folder. |
 | `w.save_png(path)`, `w.save_png(path, #{ size: [800, 600], scale: 4, max_side: 2000, outlines: true, palette: "Ink", compression: "fast" })` | PNG with JETCARP's metadata (version, generation, hash, scene). Default size: the screen, world fitted and centred. Returns `#{ path, width, height, bytes }`. |
 | `w.save_scene(path)`, `w.scene()` | Scene JSON (replays to the same hash). |
 | `write_text(path, s)`, `append_text(path, s)`, `write_json(path, value)`, `write_csv(path, [#{...}, ...])` | Files inside the output root (or `--out`/allowed folders). |
@@ -88,7 +88,7 @@ row_shift, periodic_from, distinct_rows, row_class, row_entropy, row_hint, png_b
 ## Pattern library
 
 The library is the SQLite catalog: `JETCARP_LIBRARY` if set (a folder, or a `.sqlite` file), else
-`<Documents>/jetcarp-out/catalog.sqlite` (see the README's *Pattern library and catalog*). Records are
+`<data>/catalog.sqlite` (see the README's *Pattern library and catalog*). Records are
 verified exactly before they are stored. A pattern's id does not depend on the rule: the same evolution
 found in several rules is one pattern, with `rules` (every rule it was verified in) and, for B/S
 and Generations rules, `range` (`min_rule`, `max_rule`, bitmasks, `states_min`/`states_max`:

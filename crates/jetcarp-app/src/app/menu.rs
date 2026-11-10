@@ -111,7 +111,7 @@ impl ToolWin {
                 "Ant and turmite search: turn strings on unbounded tilings, highways proved exactly, every run in the catalog"
             }
             ToolWin::Sandpile => {
-                "A large sandpile on an unbounded grid: N grains settled by doubling, drawn live, written to jetcarp-out/piles"
+                "A large sandpile on an unbounded grid: N grains settled by doubling, drawn live, written to <Pictures>/JETCARP/piles"
             }
             ToolWin::HashLife => "This world's pattern on the unbounded plane, jumped any distance",
             ToolWin::Palettes => "Edit palettes and apply one to every CA",

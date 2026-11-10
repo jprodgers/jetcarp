@@ -1,7 +1,7 @@
 //! MCP tools for the exploratory search (`jetcarp_core::explore`), so a model can run a search,
 //! look at what it finds, try ideas of its own, and record what it thinks.
 //!
-//! A database is `db`: a path, or a bare name inside `<Documents>/jetcarp-out/explore`
+//! A database is `db`: a path, or a bare name inside `<data>/explore`
 //! (default `search`).
 
 use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
@@ -39,10 +39,7 @@ fn db_path(args: &Value) -> Result<PathBuf, String> {
     if name.contains('/') || name.ends_with(".sqlite") {
         return Ok(PathBuf::from(name));
     }
-    let base = dirs::document_dir()
-        .ok_or("no Documents folder")?
-        .join("jetcarp-out/explore");
-    Ok(base.join(format!("{name}.sqlite")))
+    Ok(jetcarp_core::paths::explore_dir().join(format!("{name}.sqlite")))
 }
 
 fn read(args: &Value) -> Result<Connection, String> {
@@ -51,7 +48,7 @@ fn read(args: &Value) -> Result<Connection, String> {
         .map_err(|e| format!("{}: {e}", p.display()))
 }
 
-const DB: &str = "Database: a path, or a name inside Documents/jetcarp-out/explore (default \"search\").";
+const DB: &str = "Database: a path, or a name inside the data folder's explore folder (default \"search\").";
 
 pub fn definitions() -> Vec<Value> {
     vec![

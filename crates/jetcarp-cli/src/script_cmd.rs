@@ -25,7 +25,7 @@ pub struct ScriptArgs {
     /// Worker threads (default: all cores). Results do not depend on it.
     #[arg(long)]
     threads: Option<usize>,
-    /// Output root instead of $JETCARP_OUT or ~/Documents/jetcarp-out.
+    /// Output root instead of $JETCARP_OUT or <Pictures>/JETCARP.
     #[arg(long)]
     out: Option<PathBuf>,
     /// Only check the script for syntax errors.

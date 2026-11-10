@@ -1,6 +1,6 @@
 //! Reseeding and wallpapers: `reseed` (reseed now, set or clear the automatic policies, report
 //! their status and the recent activity) and `export_wallpaper` (a desktop-sized PNG under
-//! <jetcarp-out>/wallpapers). Both act through the host's commands, so they work on the headless
+//! <Pictures>/JETCARP/wallpapers). Both act through the host's commands, so they work on the headless
 //! session and, through `use_app`, on the world in the app.
 
 use crate::host::Host;
@@ -36,7 +36,7 @@ pub fn definitions() -> Vec<Value> {
             "export_wallpaper",
             "Export a desktop wallpaper",
             false,
-            "Writes a desktop-sized PNG of the current world (scene, version, and hash embedded) under <Documents>/jetcarp-out/wallpapers/ (or `path`) and returns the file paths and sizes. `fit`: cover (default: the grid fills the image, cropped, no stage colour showing), contain (the whole grid, letterboxed), repeat (a wrap-edge grid tiled at `cell_px`), or `center` and `scale` for a given view. `monitors` (WIDTHxHEIGHT+X+Y, comma separated) renders the whole span; with `split`, one image per monitor, cut so they line up. `fresh` renders a new grid of the world's tiling sized to fill the image at `cell_px` (the current CAs and seeds, run `gens` generations), leaving the current world alone. `palette` recolours the current world's CAs first (a logged update_ca). Examples: {\"size\": \"2560x1440\"}, {\"size\": \"4K\", \"fresh\": true, \"cell_px\": 3, \"gens\": 300, \"palette\": \"Paper\"}, {\"monitors\": \"2560x1440+0+0,1920x1080+2560+180\", \"split\": true}.",
+            "Writes a desktop-sized PNG of the current world (scene, version, and hash embedded) under <Pictures>/JETCARP/wallpapers/ (or `path`) and returns the file paths and sizes. `fit`: cover (default: the grid fills the image, cropped, no stage colour showing), contain (the whole grid, letterboxed), repeat (a wrap-edge grid tiled at `cell_px`), or `center` and `scale` for a given view. `monitors` (WIDTHxHEIGHT+X+Y, comma separated) renders the whole span; with `split`, one image per monitor, cut so they line up. `fresh` renders a new grid of the world's tiling sized to fill the image at `cell_px` (the current CAs and seeds, run `gens` generations), leaving the current world alone. `palette` recolours the current world's CAs first (a logged update_ca). Examples: {\"size\": \"2560x1440\"}, {\"size\": \"4K\", \"fresh\": true, \"cell_px\": 3, \"gens\": 300, \"palette\": \"Paper\"}, {\"monitors\": \"2560x1440+0+0,1920x1080+2560+180\", \"split\": true}.",
             json!({"type": "object", "properties": {
                 "size": {"type": "string", "description": "WIDTHxHEIGHT or a preset: HD, WUXGA, QHD, WQXGA, UWQHD, 4K, 5K, 8K, Phone (default 3840x2160). Ignored with monitors."},
                 "fit": {"type": "string", "enum": ["cover", "contain", "repeat"], "description": "Default cover."},
@@ -49,7 +49,7 @@ pub fn definitions() -> Vec<Value> {
                 "monitors": {"type": "string", "description": "Monitor layout, e.g. \"2560x1440+0+0,1920x1080+2560+180\"."},
                 "split": {"type": "boolean", "description": "With monitors: one image per monitor."},
                 "outlines": {"type": "number", "minimum": 0, "description": "Draw tile outlines when tiles are at least this many pixels (default 0: never)."},
-                "path": {"type": "string", "description": "Output .png file or folder (default <jetcarp-out>/wallpapers/)."},
+                "path": {"type": "string", "description": "Output .png file or folder (default <Pictures>/JETCARP/wallpapers/)."},
             }, "additionalProperties": false}),
         ),
     ]

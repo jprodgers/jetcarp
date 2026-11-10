@@ -179,7 +179,7 @@ def ask(args, rec, ascii_art, png_path, images):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--jetcarp", default=os.path.join(REPO, "target", "release", "jetcarp"))
-    ap.add_argument("--library", help="library folder (a folder or .sqlite file; default: $JETCARP_LIBRARY or <Documents>/jetcarp-out/catalog.sqlite)")
+    ap.add_argument("--library", help="library folder (a folder or .sqlite file; default: $JETCARP_LIBRARY or <data>/catalog.sqlite)")
     ap.add_argument("--base-url", default="http://localhost:1234/v1")
     ap.add_argument("--model", default="qwen/qwen3.8-27b")
     ap.add_argument("--limit", type=int, default=5)

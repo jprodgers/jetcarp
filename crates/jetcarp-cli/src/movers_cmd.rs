@@ -14,7 +14,7 @@ use std::path::PathBuf;
 #[derive(clap::Args)]
 pub struct MoversArgs {
     /// Catalog: a .sqlite file or a folder (default: $JETCARP_LIBRARY, else
-    /// <Documents>/jetcarp-out/catalog.sqlite).
+    /// <data>/catalog.sqlite).
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]

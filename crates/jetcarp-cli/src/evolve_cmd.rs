@@ -48,11 +48,11 @@ pub struct EvolveArgs {
     /// Worker threads (default: all cores). Results do not depend on this.
     #[arg(long)]
     threads: Option<usize>,
-    /// Output root (default: $JETCARP_OUT, else <Documents>/jetcarp-out); the run gets its own folder.
+    /// Output root (default: $JETCARP_OUT, else <Pictures>/JETCARP); the run gets its own folder.
     #[arg(long)]
     out: Option<PathBuf>,
     /// Catalog for verified movers: a .sqlite file or a folder (default: $JETCARP_LIBRARY, else
-    /// <Documents>/jetcarp-out/catalog.sqlite).
+    /// <data>/catalog.sqlite).
     #[arg(long)]
     library: Option<PathBuf>,
     /// Do not add verified movers to the library.

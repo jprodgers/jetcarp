@@ -48,8 +48,8 @@ fn atlas_lookup_order() {
         atlas::locate_from(None, Some(&docs), Some(&exe)),
         Some(repo_copy.clone())
     );
-    // The Documents copy wins over the repo's.
-    let doc_copy = docs.join("jetcarp-out").join("explore").join("atlas.sqlite");
+    // The data folder's copy wins over the repo's.
+    let doc_copy = docs.join("atlas.sqlite");
     touch(&doc_copy);
     assert_eq!(
         atlas::locate_from(None, Some(&docs), Some(&exe)),

@@ -201,24 +201,28 @@ pub struct AtlasMeta {
 }
 
 /// The file in this order: `$JETCARP_ATLAS` (when set to an existing file),
-/// `<Documents>/jetcarp-out/explore/atlas.sqlite`, then `scenes/atlas.sqlite` found walking up from
-/// the executable (the repo's copy).
+/// `<data>/explore/atlas.sqlite` ([`crate::paths::explore_dir`]), then `scenes/atlas.sqlite` found
+/// walking up from the executable (a copy shipped beside it).
 pub fn locate() -> Option<PathBuf> {
     let env = std::env::var_os("JETCARP_ATLAS");
-    let docs = dirs::document_dir().or_else(|| dirs::home_dir().map(|h| h.join("Documents")));
+    let explore = crate::paths::explore_dir();
     let exe = std::env::current_exe().ok();
-    locate_from(env.as_deref(), docs.as_deref(), exe.as_deref())
+    locate_from(env.as_deref(), Some(&explore), exe.as_deref())
 }
 
-/// [`locate`] with the three places given (for tests).
-pub fn locate_from(env: Option<&OsStr>, docs: Option<&Path>, exe: Option<&Path>) -> Option<PathBuf> {
+/// [`locate`] with the three places given (for tests): `explore` is the search databases' folder.
+pub fn locate_from(
+    env: Option<&OsStr>,
+    explore: Option<&Path>,
+    exe: Option<&Path>,
+) -> Option<PathBuf> {
     if let Some(p) = env.filter(|p| !p.is_empty()).map(PathBuf::from)
         && p.is_file()
     {
         return Some(p);
     }
-    if let Some(d) = docs {
-        let p = d.join("jetcarp-out").join("explore").join("atlas.sqlite");
+    if let Some(d) = explore {
+        let p = d.join("atlas.sqlite");
         if p.is_file() {
             return Some(p);
         }

@@ -51,7 +51,7 @@ pub struct WallpaperArgs {
     /// Draw tile outlines when tiles are at least this many pixels across (0 = never).
     #[arg(long, default_value_t = 0.0)]
     outline: f64,
-    /// Output file (.png) or folder. Default: <jetcarp-out>/wallpapers/.
+    /// Output file (.png) or folder. Default: <Pictures>/JETCARP/wallpapers/.
     #[arg(short, long)]
     out: Option<PathBuf>,
 }

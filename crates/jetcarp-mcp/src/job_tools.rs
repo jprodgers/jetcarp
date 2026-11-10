@@ -89,7 +89,7 @@ pub fn definitions() -> Vec<Value> {
             "pile_start",
             "Start a large sandpile",
             false,
-            "Starts a large sandpile in the background and returns its job id at once (poll job_status, stop with job_stop): N grains dropped on one cell of an unbounded grid, built by doubling (N's binary digits), every finished step saved so a stopped pile resumes ({\"resume\": job}), then a cropped pile.png, a preview.png, growth.csv, and pile.json in its folder under <Documents>/jetcarp-out/piles (files_list shows them). A million grains takes seconds; 10^8 hours. Example: {\"tiling\": \"hex\", \"grains\": \"1e6\"}.",
+            "Starts a large sandpile in the background and returns its job id at once (poll job_status, stop with job_stop): N grains dropped on one cell of an unbounded grid, built by doubling (N's binary digits), every finished step saved so a stopped pile resumes ({\"resume\": job}), then a cropped pile.png, a preview.png, growth.csv, and pile.json in its folder under <Pictures>/JETCARP/piles (files_list shows them). A million grains takes seconds; 10^8 hours. Example: {\"tiling\": \"hex\", \"grains\": \"1e6\"}.",
             json!({"type": "object", "properties": {
                 "tiling": {"type": "string", "description": "Tiling id (default \"square\"); aperiodic patches up to level 8."},
                 "grains": {"type": ["integer", "string"], "description": "Grains: 1000000, \"1e7\", \"2^30\"."},

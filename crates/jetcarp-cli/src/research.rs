@@ -99,7 +99,7 @@ pub struct CensusArgs {
     /// With --job or --resume: pause after this many rules in this session.
     #[arg(long)]
     limit: Option<u64>,
-    /// Catalog for census jobs (default: $JETCARP_LIBRARY, else <Documents>/jetcarp-out/catalog.sqlite).
+    /// Catalog for census jobs (default: $JETCARP_LIBRARY, else <data>/catalog.sqlite).
     #[arg(long)]
     library: Option<PathBuf>,
 }

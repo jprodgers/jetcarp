@@ -2,7 +2,7 @@
 //! the Quick Start entries, stage 1 settings, ratings, score versions, and (for later waves) media.
 //!
 //! **File.** `JETCARP_LIBRARY` if set (a folder, or a `.sqlite` file), else
-//! `<Documents>/jetcarp-out/catalog.sqlite`. A folder means `<folder>/catalog.sqlite`. The file is
+//! `<data>/catalog.sqlite`. A folder means `<folder>/catalog.sqlite`. The file is
 //! opened in WAL mode with a 30 s busy timeout, so the app, the CLI, scripts, and MCP servers can
 //! read while a long hunt writes. Writes go through `BEGIN IMMEDIATE` transactions; batch them
 //! ([`Library::add_many`], [`Library::add_sightings`]) for speed.
@@ -997,16 +997,13 @@ fn migrate(c: &mut Connection) -> Result<(), String> {
 type Guard<'a> = MutexGuard<'a, Option<Connection>>;
 
 impl Library {
-    /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<Documents>/jetcarp-out/catalog.sqlite`
-    /// (`dirs::document_dir()`, falling back to `~/Documents`).
+    /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/catalog.sqlite`
+    /// ([`crate::paths::data_dir`]).
     pub fn default_path() -> PathBuf {
         if let Some(p) = std::env::var_os("JETCARP_LIBRARY").filter(|p| !p.is_empty()) {
             return Library::file_for(PathBuf::from(p));
         }
-        let docs = dirs::document_dir()
-            .or_else(|| dirs::home_dir().map(|h| h.join("Documents")))
-            .unwrap_or_else(|| PathBuf::from("."));
-        docs.join("jetcarp-out").join(FILE)
+        crate::paths::data_dir().join(FILE)
     }
 
     /// The catalog file for a path: itself if it names a `.sqlite`/`.db` file, else

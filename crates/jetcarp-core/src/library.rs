@@ -1,7 +1,7 @@
 //! Pattern library: verified still lifes, oscillators, and spaceships in the SQLite catalog.
 //!
 //! **Store.** [`Library`] is the catalog file (`JETCARP_LIBRARY`, else
-//! `<Documents>/jetcarp-out/catalog.sqlite`); [`store`] documents its tables and migrations. JSON
+//! `<data>/catalog.sqlite`); [`store`] documents its tables and migrations. JSON
 //! records ([`PatternRecord::to_json`], one file per pattern) remain the exchange format for
 //! [`Library::export`] and [`Library::import`].
 //!
