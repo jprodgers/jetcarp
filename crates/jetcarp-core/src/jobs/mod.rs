@@ -44,10 +44,11 @@
 //!
 //! Batches adapt to a few seconds of work: a hunt's to about three (with the next batch already
 //! running, so the slow soups at a batch's end, its merge, and its write overlap it), an ant
-//! search's, a bounded search's, and a collision's to about two (then the distinct finds are
-//! verified in batches too), a census's chunks to about three; a mover runs two seconds and on
-//! to the next window it builds, where it checkpoints. A pile's doubling step is cancelled
-//! within a second of a stop and run again on resume.
+//! search's to about two, a census's chunks to about three. A bounded search hands out soups for
+//! two seconds a step and a collision placements for one ([`prefix_until`]: in order, so a step
+//! gathers a prefix, however much its items vary), then their finds are verified in batches. A
+//! mover runs two seconds and on to the next window it builds, where it checkpoints. A pile's
+//! doubling step is cancelled within a second of a stop and run again on resume.
 //!
 //! Any other kind (and the `collide` jobs stored before collisions were strategies) is listed
 //! and can be stopped, but not run. Every kind here is deterministic: a job stopped and resumed,
@@ -305,4 +306,36 @@ pub(crate) fn thread_count(threads: usize) -> usize {
     } else {
         threads
     }
+}
+
+/// Run `f` on the indices of `range` on every thread of `pool`, handing them out in order until
+/// `deadline` passes or `stop` is set; every index handed out runs to its end. Returns the
+/// results of those (a prefix of `range`, in order): a step of a job whose items vary a lot in
+/// cost runs for about the time it is given, whatever its items.
+pub(crate) fn prefix_until<T: Send>(
+    pool: &rayon::ThreadPool,
+    range: std::ops::Range<usize>,
+    deadline: std::time::Instant,
+    stop: &std::sync::atomic::AtomicBool,
+    f: impl Fn(usize) -> T + Sync,
+) -> Vec<T> {
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let next = AtomicUsize::new(range.start);
+    let done: Mutex<Vec<(usize, T)>> = Mutex::new(Vec::new());
+    pool.broadcast(|_| {
+        // The time is checked before an index is taken, so the indices taken are a prefix.
+        while !stop.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            let i = next.fetch_add(1, Ordering::SeqCst);
+            if i >= range.end {
+                break;
+            }
+            let r = f(i);
+            done.lock().unwrap().push((i, r));
+        }
+    });
+    let mut done = done.into_inner().unwrap();
+    done.sort_unstable_by_key(|x| x.0);
+    debug_assert!(done.iter().enumerate().all(|(k, x)| x.0 == range.start + k));
+    done.into_iter().map(|x| x.1).collect()
 }

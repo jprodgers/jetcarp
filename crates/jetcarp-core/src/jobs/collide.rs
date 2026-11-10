@@ -7,7 +7,8 @@
 //! strategies (its spec without `a` and `b`) cannot be run again.
 
 use super::{
-    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, status_name, thread_count,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, prefix_until, status_name,
+    thread_count,
 };
 use crate::dashboard::JobSummary;
 use crate::library::collide::{Collected, CollideSpec, Collision};
@@ -93,8 +94,9 @@ impl StrategyKind for CollideKind {
     }
 }
 
-/// A collision run in steps, on a pool of the runner's threads: a batch of placements per step
-/// (about two seconds of work), gathered in placement order into the checkpoint
+/// A collision run in steps, on a pool of the runner's threads: placements handed out for a
+/// second per step (handed out in order, so the step gathers a placement-order prefix: some
+/// placements run far longer than others), gathered into the checkpoint
 /// ([`Collected`]), then the products verified a batch per step, then (when the job stores
 /// them) the verified products stored in the job, with the ones new to the catalog in the final
 /// progress.
@@ -103,8 +105,7 @@ pub struct CollideRun {
     collision: Option<Collision>,
     got: Option<Collected>,
     pool: Option<rayon::ThreadPool>,
-    /// Placements and verifications per step (they adapt).
-    runs: usize,
+    /// Verifications per step (they adapt).
     checks: usize,
     /// Placements gathered when this session began.
     session_start: usize,
@@ -120,7 +121,6 @@ impl CollideRun {
             collision: None,
             got: None,
             pool: None,
-            runs: 1,
             checks: 1,
             session_start: 0,
             products: None,
@@ -130,6 +130,10 @@ impl CollideRun {
 }
 
 const NOT_OPEN: &str = "the collision was not restored";
+
+/// How long a step hands out placements (a placement that explodes or never settles can run a
+/// few seconds by itself, so the step ends that much later).
+const STEP: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// The next batch size, for about two seconds of work at `dt` seconds for `n` items.
 fn adapt(n: usize, dt: f64) -> usize {
@@ -162,7 +166,7 @@ impl Strategy for CollideRun {
                 .build()
                 .map_err(|e| e.to_string())?,
         );
-        (self.runs, self.checks) = (threads * 2, threads * 4);
+        self.checks = threads * 4;
         self.session_start = got.next;
         self.collision = Some(c);
         self.got = Some(got);
@@ -176,17 +180,14 @@ impl Strategy for CollideRun {
         let total = c.placements();
         let t0 = Instant::now();
         if got.next < total {
-            let a = got.next;
-            let mut b = (a + self.runs).min(total);
+            // Placements handed out in order for a second (each one started runs to its end,
+            // even after a stop), up to the item budget.
+            let mut b = total;
             if let Some(n) = cx.items {
                 b = b.min(self.session_start + n as usize);
             }
-            let Some(outs) = pool.install(|| c.run(a..b, 0, None, Some(&cx.stop))) else {
-                // Cut short: dropped (the checkpoint is the last batch gathered).
-                return Ok(Step::More);
-            };
+            let outs = prefix_until(pool, got.next..b, t0 + STEP, &cx.stop, |k| c.run_one(k, 0));
             got.add(outs, false)?;
-            self.runs = adapt(b - a, t0.elapsed().as_secs_f64());
         } else if got.verified() < got.products() {
             let n = self.checks.min(got.products() - got.verified());
             pool.install(|| got.verify(n));

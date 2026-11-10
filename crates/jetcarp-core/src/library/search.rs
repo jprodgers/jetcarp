@@ -226,15 +226,12 @@ impl SoupSearch {
         progress: Option<&(dyn Fn(usize, usize) + Sync)>,
         cancel: Option<&std::sync::atomic::AtomicBool>,
     ) -> Vec<SoupOut> {
-        let spec = &self.spec;
         let total = self.runs();
         let done = AtomicUsize::new(range.start);
         range
             .collect::<Vec<usize>>()
             .par_iter()
             .map(|&k| {
-                let (gi, soup) = (k / spec.soups as usize, (k % spec.soups as usize) as u32);
-                let (t, r) = self.groups[gi];
                 if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
                     return SoupOut {
                         ended: 0,
@@ -242,14 +239,7 @@ impl SoupSearch {
                         error: Some("cancelled".into()),
                     };
                 }
-                let out = match &self.topos[t] {
-                    Ok(topo) => run_soup(spec, topo, &spec.rules[r], soup, date),
-                    Err(e) => SoupOut {
-                        ended: 0,
-                        objects: vec![],
-                        error: Some(e.clone()),
-                    },
-                };
+                let out = self.run_one(date, k);
                 let d = done.fetch_add(1, Ordering::Relaxed) + 1;
                 if let Some(p) = progress {
                     p(d, total);
@@ -257,6 +247,21 @@ impl SoupSearch {
                 out
             })
             .collect()
+    }
+
+    /// Run `k` (on this thread).
+    pub fn run_one(&self, date: &str, k: usize) -> SoupOut {
+        let spec = &self.spec;
+        let (gi, soup) = (k / spec.soups as usize, (k % spec.soups as usize) as u32);
+        let (t, r) = self.groups[gi];
+        match &self.topos[t] {
+            Ok(topo) => run_soup(spec, topo, &spec.rules[r], soup, date),
+            Err(e) => SoupOut {
+                ended: 0,
+                objects: vec![],
+                error: Some(e.clone()),
+            },
+        }
     }
 }
 

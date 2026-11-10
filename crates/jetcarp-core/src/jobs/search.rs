@@ -6,7 +6,9 @@
 //! an uninterrupted one. Searches stored before they ran in steps had no checkpoint; a paused one
 //! simply starts again.
 
-use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, thread_count};
+use super::{
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, prefix_until, thread_count,
+};
 use crate::dashboard::JobSummary;
 use crate::library::search::{Gathered, SearchSpec, SoupSearch};
 use crate::library::store::JobRow;
@@ -66,8 +68,9 @@ impl StrategyKind for SearchKind {
     }
 }
 
-/// A bounded search run in steps, on a pool of the runner's threads: a batch of soup runs per
-/// step (about two seconds of work), gathered in run order into the checkpoint
+/// A bounded search run in steps, on a pool of the runner's threads: soup runs for about two
+/// seconds per step (handed out in order, so the step gathers a run-order prefix), gathered
+/// into the checkpoint
 /// ([`Gathered`]), then the distinct patterns verified a batch per step, then the verified
 /// records stored into the job with their soups, and its counts (`added`: the records new to
 /// the catalog) in the final progress, as `Library::store_search` stores a whole run.
@@ -76,8 +79,7 @@ pub struct SearchRun {
     search: Option<SoupSearch>,
     state: Option<Gathered>,
     pool: Option<rayon::ThreadPool>,
-    /// Soup runs and verifications per step (they adapt).
-    runs: usize,
+    /// Verifications per step (they adapt).
     checks: usize,
     /// Soup runs gathered when this session began.
     session_start: usize,
@@ -93,7 +95,6 @@ impl SearchRun {
             search: None,
             state: None,
             pool: None,
-            runs: 1,
             checks: 1,
             session_start: 0,
             records: None,
@@ -103,6 +104,9 @@ impl SearchRun {
 }
 
 const NOT_OPEN: &str = "the search was not restored";
+
+/// How long a step hands out soups.
+const STEP: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The next batch size, for about two seconds of work at `dt` seconds for `n` items.
 fn adapt(n: usize, dt: f64) -> usize {
@@ -126,7 +130,7 @@ impl Strategy for SearchRun {
                 .build()
                 .map_err(|e| e.to_string())?,
         );
-        (self.runs, self.checks) = (threads, threads * 4);
+        self.checks = threads * 4;
         self.session_start = state.next;
         self.search = Some(search);
         self.state = Some(state);
@@ -141,18 +145,17 @@ impl Strategy for SearchRun {
         let total = search.runs();
         let t0 = Instant::now();
         if state.next < total {
-            let a = state.next;
-            let mut b = (a + self.runs).min(total);
+            // Soups handed out in order for about two seconds (each one started runs to its
+            // end, even after a stop), up to the item budget.
+            let mut b = total;
             if let Some(n) = cx.items {
                 b = b.min(self.session_start + n as usize);
             }
-            let outs = pool.install(|| search.run(&state.date, a..b, None, Some(&cx.stop)));
-            if cx.stopped() {
-                // Cut short: dropped (the checkpoint is the last batch gathered).
-                return Ok(Step::More);
-            }
+            let date = state.date.clone();
+            let outs = prefix_until(pool, state.next..b, t0 + STEP, &cx.stop, |k| {
+                search.run_one(&date, k)
+            });
             state.add(search, outs);
-            self.runs = adapt(b - a, t0.elapsed().as_secs_f64());
         } else if state.verified() < state.distinct() {
             let n = self.checks.min(state.distinct() - state.verified());
             pool.install(|| state.verify(n));

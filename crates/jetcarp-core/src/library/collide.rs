@@ -325,45 +325,16 @@ impl Collision {
         cancel: Option<&std::sync::atomic::AtomicBool>,
     ) -> Option<Vec<Result<RunOut, String>>> {
         use std::sync::atomic::Ordering;
-        let (a, b, spec) = (&self.a, &self.b, &self.spec);
         let total = self.jobs.len();
         let done = std::sync::atomic::AtomicUsize::new(range.start);
-        let outs: Vec<Option<Result<RunOut, String>>> = self.jobs[range]
+        let outs: Vec<Option<Result<RunOut, String>>> = range
+            .collect::<Vec<usize>>()
             .par_iter()
-            .map(|&(dx, dy, ph)| {
+            .map(|&k| {
                 if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
                     return None;
                 }
-                let bi = self.phases.iter().position(|&p| p == ph).unwrap();
-                let cells_b = shifted(&self.b_phases[bi], dx, dy);
-                let r = if cells_b.iter().any(|c| self.near.contains(&(c.i, c.j, c.k))) {
-                    Ok((
-                        CollideRun {
-                            dx,
-                            dy,
-                            phase: ph,
-                            outcome: Outcome::Overlap,
-                            gens: 0,
-                            result: String::new(),
-                            products: vec![],
-                        },
-                        vec![],
-                        None,
-                    ))
-                } else {
-                    run_one(
-                        a,
-                        b,
-                        spec,
-                        &self.info,
-                        &self.cells_a,
-                        &cells_b,
-                        (dx, dy, ph),
-                        (&a.id, &b.id),
-                        &self.date,
-                        thumb_px,
-                    )
-                };
+                let r = self.run_one(k, thumb_px);
                 let d = done.fetch_add(1, Ordering::Relaxed) + 1;
                 if let Some(p) = progress {
                     p(d, total);
@@ -372,6 +343,41 @@ impl Collision {
             })
             .collect();
         outs.into_iter().collect()
+    }
+
+    /// Run placement `k` (on this thread; `thumb_px` > 0 renders its thumbnail).
+    pub fn run_one(&self, k: usize, thumb_px: u32) -> Result<RunOut, String> {
+        let (a, b, spec) = (&self.a, &self.b, &self.spec);
+        let (dx, dy, ph) = self.jobs[k];
+        let bi = self.phases.iter().position(|&p| p == ph).unwrap();
+        let cells_b = shifted(&self.b_phases[bi], dx, dy);
+        if cells_b.iter().any(|c| self.near.contains(&(c.i, c.j, c.k))) {
+            return Ok((
+                CollideRun {
+                    dx,
+                    dy,
+                    phase: ph,
+                    outcome: Outcome::Overlap,
+                    gens: 0,
+                    result: String::new(),
+                    products: vec![],
+                },
+                vec![],
+                None,
+            ));
+        }
+        run_one(
+            a,
+            b,
+            spec,
+            &self.info,
+            &self.cells_a,
+            &cells_b,
+            (dx, dy, ph),
+            (&a.id, &b.id),
+            &self.date,
+            thumb_px,
+        )
     }
 }
 
