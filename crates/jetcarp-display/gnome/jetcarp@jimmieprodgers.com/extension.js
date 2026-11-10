@@ -248,6 +248,10 @@ export default class JetcarpDesktop extends Extension {
         this._indicator?.destroy();
         this._indicator = null;
 
+        // Host windows go back into the window lists first (InjectionManager can only put
+        // methods back), then every overridden method is restored.
+        this._undoWindowList?.();
+        this._undoWindowList = null;
         this._injections.clear();
         this._injections = null;
 
@@ -283,61 +287,173 @@ export default class JetcarpDesktop extends Extension {
     }
 
     _installOverrides() {
-        const injections = this._injections;
         const extension = this;
+        const injections = this._injections;
 
-        // Every new background (monitors changed, wallpaper changed, lock screen) gets a slot
-        // straight away, so a lock screen is live from its first frame.
-        injections.overrideMethod(Background.BackgroundManager.prototype, '_createBackgroundActor',
-            original => function () {
-                const bg = original.call(this);
-                extension._adopt(bg);
-                return bg;
-            });
+        // A host window is one that isRenderer() recognises by the tag in its title; a host
+        // actor is the compositor actor of a host window.
+        const isHostWindow = metaWindow => Boolean(metaWindow) && isRenderer(metaWindow);
+        const isHostActor = actor => isHostWindow(actor?.meta_window);
 
-        injections.overrideMethod(Shell.Global.prototype, 'get_window_actors', original => {
-            this._allActors = () => original.call(global);
-            return function () {
-                return original.call(this).filter(a => !isRenderer(a.meta_window));
-            };
-        });
-        // Touching it now makes the override above run, which records the unfiltered list.
-        global.get_window_actors();
-
-        const notRenderer = original => function (window) {
-            return !isRenderer(window) && original.call(this, window);
+        // Replace owner[name] through the InjectionManager, but only when that method exists in
+        // the running Shell. If a release renames or drops it, that one change is skipped instead
+        // of throwing. Returns the original method (or null) for code that still needs the full,
+        // unfiltered answer.
+        const hook = (owner, name, makeReplacement) => {
+            const original = owner?.[name];
+            if (typeof original !== 'function') {
+                console.debug(`JETCARP: ${name}() not found in this GNOME Shell, not changing it`);
+                return null;
+            }
+            injections.overrideMethod(owner, name, makeReplacement);
+            return original;
         };
-        injections.overrideMethod(Workspace.Workspace.prototype, '_isOverviewWindow', notRenderer);
-        injections.overrideMethod(WorkspaceThumbnail.WorkspaceThumbnail.prototype,
-            '_isOverviewWindow', notRenderer);
 
-        injections.overrideMethod(Meta.Display.prototype, 'get_tab_list', original =>
-            function (...args) {
-                return original.apply(this, args).filter(w => !isRenderer(w));
+        // Backgrounds. BackgroundManager builds every background actor (the desktop on each
+        // monitor, the overview, the workspace-switch animation and the lock screen) in
+        // _createBackgroundActor(), both when the manager is constructed and again whenever the
+        // wallpaper setting changes. Each new actor is handed to _adopt() the moment it exists, so
+        // a new monitor or the lock screen shows the live picture from its first frame instead of
+        // flashing the static wallpaper.
+        hook(Background.BackgroundManager?.prototype, '_createBackgroundActor',
+            original => function (...args) {
+                const actor = original.apply(this, args);
+                try {
+                    extension._adopt(actor);
+                } catch (e) {
+                    // A failure here must never stop the shell from building its background; it
+                    // just keeps the plain wallpaper.
+                    console.error('JETCARP: could not take over a new background', e);
+                }
+                return actor;
             });
 
-        // The dash and the app switcher look through these. On its own the host has no other
-        // windows, so it should not count as a running app.
-        injections.overrideMethod(Shell.WindowTracker.prototype, 'get_window_app', original =>
-            function (window) {
-                return isRenderer(window) ? null : original.call(this, window);
+        // The global window-actor list. Most of the shell's window walks get their windows from
+        // global.get_window_actors(): the overview, the workspace thumbnails, the workspace-switch
+        // animation, the screenshot tool's window picker, the dynamic-workspace bookkeeping (so
+        // the host never keeps an otherwise empty workspace alive), and other extensions. Host
+        // windows are taken out of that list. The extension itself needs the host actors to clone
+        // them, so this._allActors calls the original method, which InjectionManager hands over
+        // directly.
+        const unfilteredActors = hook(Shell.Global.prototype, 'get_window_actors',
+            original => function (...args) {
+                return original.apply(this, args).filter(actor => !isHostActor(actor));
             });
-        let appWindows;
-        injections.overrideMethod(Shell.App.prototype, 'get_windows', original => {
-            appWindows = app => original.call(app);
-            return function () {
-                return original.call(this).filter(w => !isRenderer(w));
+        this._allActors = unfilteredActors
+            ? () => unfilteredActors.call(global)
+            : () => [];
+
+        // Mutter's own window-list flag. Meta.Window.hide_from_window_list() (public since Mutter
+        // 49) marks a window skip-taskbar and skip-pager from the compositor side, and the shell
+        // honours that by itself: an app whose only windows are host windows is marked stopped (no
+        // dash entry, no running dot in the app grid, not in the app switcher), the host never
+        // becomes the top bar's focused app, a request for attention from it raises no "is ready"
+        // notification, an open overview drops its preview at once, and docks and window lists
+        // from other extensions skip it too. The tag is in the title, and a Wayland window exists
+        // before its title arrives, so every window is watched for title changes, not just checked
+        // once when it is created. The method overrides further down still apply, both for the
+        // places this flag does not reach and for Mutter versions without it.
+        this._undoWindowList = null;
+        const windowProto = Meta.Window.prototype;
+        if (typeof windowProto.hide_from_window_list === 'function' &&
+            typeof windowProto.show_in_window_list === 'function') {
+            const display = global.display;
+            const flagged = new Set(); // host windows this extension has hidden
+            const watched = new Map(); // window -> its signal handler ids
+
+            const sync = win => {
+                const host = isHostWindow(win);
+                if (host && !flagged.has(win)) {
+                    win.hide_from_window_list();
+                    flagged.add(win);
+                } else if (!host && flagged.has(win)) {
+                    // The tag was removed again: give the window back.
+                    win.show_in_window_list();
+                    flagged.delete(win);
+                }
             };
-        });
-        injections.overrideMethod(Shell.App.prototype, 'get_n_windows', () =>
-            function () {
-                return this.get_windows().length;
+            const forget = win => {
+                for (const id of watched.get(win) ?? [])
+                    win.disconnect(id);
+                watched.delete(win);
+                flagged.delete(win);
+            };
+            const watch = win => {
+                if (watched.has(win))
+                    return;
+                watched.set(win, [
+                    win.connect('notify::title', () => sync(win)),
+                    win.connect('unmanaged', () => forget(win)),
+                ]);
+                sync(win);
+            };
+
+            const createdId = display.connect('window-created', (_display, win) => watch(win));
+            const existing = display.list_all_windows?.() ??
+                this._allActors().map(actor => actor.meta_window);
+            existing.forEach(watch);
+
+            // InjectionManager can only put methods back; disable() calls this first to give
+            // host windows back to the window lists and disconnect the handlers.
+            this._undoWindowList = () => {
+                display.disconnect(createdId);
+                for (const win of [...watched.keys()]) {
+                    if (flagged.has(win))
+                        win.show_in_window_list();
+                    forget(win);
+                }
+            };
+        }
+
+        // Activities overview. Workspace decides which windows get a preview in the overview's
+        // workspace view, and WorkspaceThumbnail which get a miniature in the workspace strip, each
+        // through its own _isOverviewWindow(). The filtered actor list above covers the windows
+        // present when the overview opens; these cover windows that appear or move to a workspace
+        // while it is open. Workspace is given a Meta.Window, WorkspaceThumbnail a Meta.WindowActor.
+        hook(Workspace.Workspace?.prototype, '_isOverviewWindow',
+            original => function (metaWindow, ...rest) {
+                return !isHostWindow(metaWindow) && original.call(this, metaWindow, ...rest);
             });
-        injections.overrideMethod(Shell.AppSystem.prototype, 'get_running', original =>
-            function () {
-                return original.call(this).filter(app => {
-                    const windows = appWindows ? appWindows(app) : app.get_windows();
-                    return windows.length === 0 || !windows.every(isRenderer);
+        hook(WorkspaceThumbnail.WorkspaceThumbnail?.prototype, '_isOverviewWindow',
+            original => function (actor, ...rest) {
+                return !isHostActor(actor) && original.call(this, actor, ...rest);
+            });
+
+        // Window switchers. The app and window switchers (Alt+Tab, Super+Tab, Alt+`, Alt+Esc) and
+        // the Ctrl+Alt+Tab accessibility switcher get their windows from
+        // global.display.get_tab_list(). This filter is needed even with the Mutter flag above:
+        // Ctrl+Alt+Tab lists Mutter's DOCKS tab list, which is exactly where skip-taskbar windows
+        // end up.
+        hook(Meta.Display.prototype, 'get_tab_list',
+            original => function (...args) {
+                return original.apply(this, args).filter(win => !isHostWindow(win));
+            });
+
+        // Applications. The window tracker files a host window under an app like any other window.
+        // Anything that asks an app for its windows (the Alt+F6 same-app window cycler, the app
+        // menu's window list, the shell's introspection D-Bus API, docks from other extensions)
+        // gets the list without host windows, and per-app window counts leave them out. The count
+        // reads the original get_windows() so that it subtracts host windows from the real total.
+        const unfilteredAppWindows = hook(Shell.App.prototype, 'get_windows',
+            original => function (...args) {
+                return original.apply(this, args).filter(win => !isHostWindow(win));
+            });
+        const allWindowsOf = app => unfilteredAppWindows?.call(app) ?? [];
+        hook(Shell.App.prototype, 'get_n_windows',
+            original => function (...args) {
+                const hosts = allWindowsOf(this).filter(isHostWindow).length;
+                return Math.max(0, original.apply(this, args) - hosts);
+            });
+
+        // An app whose every window is a host window is not running as far as the user is
+        // concerned. The dash and the app switcher both start from AppSystem.get_running(), so
+        // such apps are dropped from it. With the Mutter flag the shell already marks these apps
+        // stopped; this filter is the fallback for Mutter versions without the flag.
+        hook(Shell.AppSystem.prototype, 'get_running',
+            original => function (...args) {
+                return original.apply(this, args).filter(app => {
+                    const windows = allWindowsOf(app);
+                    return windows.length === 0 || !windows.every(isHostWindow);
                 });
             });
     }
