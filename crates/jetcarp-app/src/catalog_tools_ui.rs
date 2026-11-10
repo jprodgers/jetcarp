@@ -56,14 +56,18 @@ struct CollideDone {
     b: String,
     rule: String,
     counts: Vec<(String, usize)>,
-    /// Products: id, label, new to the catalog.
+    /// Products: id, label, new to the catalog (the first the progress lists).
     products: Vec<(String, String, bool)>,
+    /// Products beyond those.
+    more: usize,
 }
 
 impl CollideDone {
     fn of(p: &Value) -> CollideDone {
         let text = |k: &str| p[k].as_str().unwrap_or_default().to_string();
+        let listed = p["found"].as_array().map_or(0, |a| a.len());
         CollideDone {
+            more: (p["products"].as_u64().unwrap_or(0) as usize).saturating_sub(listed),
             a: text("a"),
             b: text("b"),
             rule: text("rule"),
@@ -441,6 +445,9 @@ impl CatalogTools {
                             ui.colored_label(Color32::LIGHT_GREEN, "new");
                         }
                     });
+                }
+                if d.more > 0 {
+                    ui.label(RichText::new(format!("and {} more", d.more)).weak());
                 }
                 if let Some(id) = open_id {
                     match self
