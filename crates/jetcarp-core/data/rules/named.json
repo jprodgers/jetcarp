@@ -5,182 +5,185 @@
    "name": "AntiLife",
    "notation": "B0123478/S01234678",
    "family": "Life-like (B0)",
-   "blurb": "The black/white reversal of Conway's Game of Life.",
+   "blurb": "Conway's Life in negative: swap live and dead and every Life pattern behaves the same.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "InverseLife",
    "notation": "B0123478/S34678",
    "family": "Life-like (B0)",
-   "blurb": "A rule by Jason Rampe, showing similar oscillators and gliders to Conway's Game of Life.",
+   "blurb": "Has Life-like gliders and oscillators. It is B3678/S23 with live and dead swapped.",
+   "author": "Jason Rampe",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Wickstretcher And The Parasites",
    "notation": "B01356/S012345",
    "family": "Life-like (B0)",
-   "blurb": "An explosive strobing rule which forms different wickstretchers of different speeds and sizes, mostly accompanied by a parasite or...",
+   "blurb": "Explosive and strobing. Wickstretchers of many speeds and sizes appear, most with parasites clinging on that resize their wicks.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Oils",
    "notation": "B014/S2",
    "family": "Life-like (B0)",
-   "blurb": "An exploding rule that forms many wickstrechers, along with other patterns such as a c/16 diagonal spaceship.",
+   "blurb": "Explosive; full of wickstretchers, and home to a diagonal c/16 spaceship.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Invertamaze",
    "notation": "B028/S0124",
    "family": "Life-like (B0)",
-   "blurb": "A strobing rule which makes mazes that invert themselves each generation (SEIZURE WARNING).",
+   "blurb": "Builds mazes that swap live and dead on every step. Warning: rapid flashing.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Neon Blobs",
    "notation": "B08/S4",
    "family": "Life-like (B0)",
-   "blurb": "A strobing rule in which patterns become neon-like explosive patterns.",
+   "blurb": "Strobing; patterns blow up into glowing, neon-looking blobs.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "H-trees",
    "notation": "B1/S012345678",
    "family": "Life-like",
-   "blurb": "An exploding rule where H-shaped branches grow from pattern borders.",
+   "blurb": "Explosive growth of branching H shapes along the edges of patterns.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Fuzz",
    "notation": "B1/S014567",
    "family": "Life-like",
-   "blurb": "An exploding rule in which solid patterns appear.",
+   "blurb": "Explosive, with solid regions forming in the growth.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Gnarl",
    "notation": "B1/S1",
    "family": "Life-like",
-   "blurb": "A simple exploding rule by Kellie Evans that forms complex patterns from even a single live cell.",
+   "blurb": "Explosive: one live cell is enough to grow an intricate, gnarled pattern.",
+   "author": "Kellie Evans",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Snakeskin",
    "notation": "B1/S134567",
    "family": "Life-like",
-   "blurb": "A rule in which patterns explode and form snake-like patterns.",
+   "blurb": "Explosive; the growth fills with snake-like shapes.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Solid islands grow amongst static",
    "notation": "B12678/S15678",
    "family": "Life-like",
-   "blurb": "A rule in which patterns grow exponentially and form solid patterns inside static-like patterns.",
+   "blurb": "Grows rapidly; solid islands form inside regions of static-like noise.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Replicator",
    "notation": "B1357/S1357",
    "family": "Life-like",
-   "blurb": "A rule in which every pattern is a replicator.",
+   "blurb": "Any pattern at all makes copies of itself.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Fredkin",
    "notation": "B1357/S02468",
    "family": "Life-like",
-   "blurb": "A rule in which, like Replicator, every pattern is a replicator.",
+   "blurb": "Like Replicator, any pattern copies itself. Also called Replicator 2.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Feux",
    "notation": "B1358/S0247",
    "family": "Life-like",
-   "blurb": "An explosive rule where patterns turn into replicators and flash in and out of existence.",
+   "blurb": "Explosive; patterns become replicators that blink on and off.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Forrest of Ls",
    "notation": "B168/S236",
    "family": "Life-like",
-   "blurb": "An explosive rule where the insides of patterns slowy stablize into still formations.",
+   "blurb": "Explosive, though the inside of the growth slowly settles into still shapes.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Seeds",
    "notation": "B2/S",
    "family": "Life-like",
-   "blurb": "An exploding rule by Brian Silverman in which every cell dies in every generation.",
+   "blurb": "No cell survives a step, yet it explodes. Many small orthogonal spaceships, but most patterns blow up.",
+   "author": "Brian Silverman",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Live Free or Die",
    "notation": "B2/S0",
    "family": "Life-like",
-   "blurb": "An exploding rule in which only cells with no neighbors survive.",
+   "blurb": "Explosive; only isolated cells survive. Rich in oscillators, spaceships and puffers, some stretchable to any size and period.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Serviettes",
    "notation": "B234/S",
    "family": "Life-like",
-   "blurb": "An exploding rule in which every cell dies in every generation (like Seeds).",
+   "blurb": "Like Seeds, no cell survives and growth explodes, weaving patterns that look like fabric. Also called Persian Rug.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Iceballs",
    "notation": "B25678/S5678",
    "family": "Life-like",
-   "blurb": "Small masses of solid living cells flicker in and out of existence.",
+   "blurb": "Small solid clumps blink on and off; a few grow big enough to start spreading slowly. Also called Ice nine.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Life without death",
    "notation": "B3/S012345678",
    "family": "Life-like",
-   "blurb": "An expanding rule that produces complex flakes, featuring dense wickstretchers named ladders.",
+   "blurb": "Cells never die, so growth only spreads, forming intricate flakes and dense ladder wickstretchers. Also called Flakes or Inkspot.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "DotLife",
    "notation": "B3/S023",
    "family": "Life-like",
-   "blurb": "An exploding rule closely related to Conway's Life.",
+   "blurb": "Life plus survival with zero neighbours; explosive. The B-heptomino often grows forever here, but it can be tamed into a spaceship.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Star Trek",
    "notation": "B3/S0248",
    "family": "Life-like",
-   "blurb": "A rule with several spaceships of various speeds.",
+   "blurb": "Has spaceships moving at several different speeds.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Flock",
    "notation": "B3/S12",
    "family": "Life-like",
-   "blurb": "Patterns tend to quickly settle into dominoes, duoplets and period 2 oscillators.",
+   "blurb": "Soups quickly reduce to period-2 oscillators, dominoes and duoplets; a period-14 pre-beehive shuttle is common.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Mazectric",
    "notation": "B3/S1234",
    "family": "Life-like",
-   "blurb": "An expanding rule that crystalizes to form maze-like designs that tend to be straighter (ie.",
+   "blurb": "Grows into mazes, like Maze, but with straighter, longer corridors.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Maze",
    "notation": "B3/S12345",
    "family": "Life-like",
-   "blurb": "An expanding rule that crystalizes to form maze-like designs.",
+   "blurb": "Spreads and hardens into a maze of corridors.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Magnezones",
    "notation": "B3/S123678",
    "family": "Life-like",
-   "blurb": "An explosive rule that is liquid with four types of crystals appearing in the liquid.",
+   "blurb": "Explosive, with a fluid-like interior in which four kinds of crystal form.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -194,42 +197,43 @@
    "name": "Corrosion of Conformity",
    "notation": "B3/S124",
    "family": "Life-like",
-   "blurb": "A rule similar to Mazectric but without S3.",
+   "blurb": "Mazectric without S3. Nearly any start burns slowly, eating away at its surroundings like rust.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "EightFlock",
    "notation": "B3/S128",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Flock with survival on 8 added.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "LowLife",
    "notation": "B3/S13",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Life with survival on 1 instead of 2.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Conway's Life",
    "notation": "B3/S23",
    "family": "Life-like",
-   "blurb": "A chaotic rule that is by far the most well-known and well-studied.",
+   "blurb": "The most famous and most studied Life-like rule; chaotic, with endlessly complex behaviour.",
+   "author": "John Conway",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "EightLife",
    "notation": "B3/S238",
    "family": "Life-like",
-   "blurb": "Also known as Pulsar Life.",
+   "blurb": "Life with survival on 8 too. Also called Pulsar Life.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Shoots and Roots",
    "notation": "B3/S245678",
    "family": "Life-like",
-   "blurb": "Shoots are slow growing, well-ordered patterns, while Roots grow faster than shoots, and explosive as they grow.",
+   "blurb": "Two kinds of growth: orderly, slow shoots and faster, explosive roots.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -243,14 +247,14 @@
    "name": "Coral",
    "notation": "B3/S45678",
    "family": "Life-like",
-   "blurb": "An exploding rule in which patterns grow slowly and form coral-like textures.",
+   "blurb": "Slow, explosive growth with a texture like coral.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "3-4 Life",
    "notation": "B34/S34",
    "family": "Life-like",
-   "blurb": "An exploding rule that was initially thought to be a stable alternative to Conway's Life, until computer simulation found that most...",
+   "blurb": "Long thought a stable cousin of Life, until computers showed most patterns explode. Many tiny oscillators; period-3 ships move straight and diagonally.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -271,7 +275,7 @@
    "name": "Never happy",
    "notation": "B345/S0456",
    "family": "Life-like",
-   "blurb": "An explosive rule where patterns slowly form diamond-like shapes and slowly explode.",
+   "blurb": "Explosive but sluggish; growth takes on diamond outlines.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -285,161 +289,162 @@
    "name": "Assimilation",
    "notation": "B345/S4567",
    "family": "Life-like",
-   "blurb": "A very stable rule that forms permanent diamond-shaped patterns with partially filled interiors.",
+   "blurb": "Very stable; growth ends in lasting diamonds, part-filled inside. As in 2x2, block patterns always stay block patterns.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Long Life",
    "notation": "B345/S5",
    "family": "Life-like",
-   "blurb": "A stable rule that gets its name from the fact that it has many simple extremely high period oscillators.",
+   "blurb": "Stable, and named for its many simple oscillators with extremely long periods.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Spiral and polygonal growth",
    "notation": "B34568/S15678",
    "family": "Life-like",
-   "blurb": "A rule with plow structures that move along an edge of a polygon, increasing its size (turning corners and thickening it as they go),...",
+   "blurb": "Plows crawl along polygon edges, enlarging them and turning corners. One 16-cell methuselah runs 12127116559 generations before settling to period 2.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Gems",
    "notation": "B3457/S4568",
    "family": "Life-like",
-   "blurb": "An exploding rule with many smaller high-period oscillators and a c/5648 spaceship.",
+   "blurb": "Explosive, with many small oscillators of high period and a very slow c/5648 spaceship.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Gems Minor",
    "notation": "B34578/S456",
    "family": "Life-like",
-   "blurb": "An exploding rule with many smaller high-period oscillators and a c/2068 spaceship.",
+   "blurb": "Like Gems: explosive, with plenty of small oscillators of high period and a slow c/2068 ship.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Grounded Life",
    "notation": "B35/S23",
    "family": "Life-like",
-   "blurb": "A stable rule one outer-totalistic condition away from Life, where neither of the standard spaceships works, and the most common...",
+   "blurb": "Stable; Life plus birth on 5. Life's usual ships fail, and the commonest ship is Glider 3736, orthogonal at 2c/5.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Land Rush",
    "notation": "B35/S234578",
    "family": "Life-like",
-   "blurb": "Expanding chaos organizing itself into plowed fields.",
+   "blurb": "Chaotic growth spreads out and sorts itself into rows like ploughed fields.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Eppstein",
    "notation": "B35/S236",
    "family": "Life-like",
-   "blurb": "An exploding rule explored by Dean Hickerson and David Eppstein.",
+   "blurb": "Explosive; Life plus birth on 5 and survival on 6.",
+   "author": "Dean Hickerson and David Eppstein",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Bugs",
    "notation": "B3567/S15678",
    "family": "Life-like",
-   "blurb": "An explosive rule with many high density spaceships.",
+   "blurb": "Explosive, with lots of spaceships packed with live cells.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Cheerios",
    "notation": "B35678/S34567",
    "family": "Life-like",
-   "blurb": "An explosive rule where patterns explode while cheerios form in the chaotic mess.",
+   "blurb": "Explosive; objects called cheerios appear amid the chaos.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Holstein",
    "notation": "B35678/S4678",
    "family": "Life-like",
-   "blurb": "A self-complementary rule.",
+   "blurb": "Self-complementary. Froth wears solid regions away from the corners unless edge oscillators hold them. Ships at c/7, c/5, c/4 and c/3.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Diamoeba",
    "notation": "B35678/S5678",
    "family": "Life-like",
-   "blurb": "A chaotic pattern that forms large diamonds with chaotically oscillating boundaries.",
+   "blurb": "Grows big diamonds whose edges churn chaotically; some patterns grow quadratically, and block patterns stay block patterns, as in 2x2.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Amoeba",
    "notation": "B357/S1358",
    "family": "Life-like",
-   "blurb": "A chaotic rule that is well balanced between life and death; it forms patterns with chaotic interiors and wildly moving boundaries.",
+   "blurb": "Chaotic and evenly poised between growth and decay: blobs with turbulent insides and edges that lurch about.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Pseudo Life",
    "notation": "B357/S238",
    "family": "Life-like",
-   "blurb": "A chaotic rule with evolution that resembles Conway's Life, but few patterns from Life work in this rule because the glider is unstable.",
+   "blurb": "Soups look much like Life's, but the glider breaks down, so few Life patterns carry over.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Geology",
    "notation": "B3578/S24678",
    "family": "Life-like",
-   "blurb": "A very well-balanced and chaotic rule that forms large continents of live cells surrounded by chaos at a roughly 50% density, but they...",
+   "blurb": "Chaotic and finely balanced: large live continents in a sea of roughly 50% chaos slowly wear down into islands. Self-complementary.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "HighFlock",
    "notation": "B36/S12",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Flock with an extra birth on 6.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "2x2",
    "notation": "B36/S125",
    "family": "Life-like",
-   "blurb": "A chaotic rule with many simple still lifes, oscillators and spaceships.",
+   "blurb": "Chaotic, with many simple oscillators, still lifes and ships. The name: any pattern built of 2x2 blocks stays built of 2x2 blocks.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "IronFlock",
    "notation": "B36/S128",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Flock with birth on 6 and survival on 8 added.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "HighLife",
    "notation": "B36/S23",
    "family": "Life-like",
-   "blurb": "A chaotic rule very similar to Conway's Life that is of interest because it has a simple replicator.",
+   "blurb": "Life plus birth on 6. Behaves much like Life, but famous for a small replicator.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Land Rush 2",
    "notation": "B36/S234578",
    "family": "Life-like",
-   "blurb": "An exploding rule that got confused with Land Rush, likely due to a typo.",
+   "blurb": "Explosive; once mixed up with Land Rush, probably through a typo. Has an orthogonal c/2 ship of period 4.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Virus",
    "notation": "B36/S235",
    "family": "Life-like",
-   "blurb": "An exploding rule where the T-tetromino is a blinker puffer, appropriate because it evolves into traffic light in Life, also made of...",
+   "blurb": "Explosive. The T-tetromino becomes a puffer that leaves blinkers behind, a fitting echo of its traffic-light fate in Life.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "IronLife",
    "notation": "B36/S238",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "HighLife with survival on 8 added.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "sqrt replicator rule",
    "notation": "B36/S245",
    "family": "Life-like",
-   "blurb": "Name comes from a dirty orthogonal replicator, formerly known as the logarithmic replicator rule.",
+   "blurb": "Has a messy orthogonal replicator, hence the name; once called the logarithmic replicator rule.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -453,42 +458,42 @@
    "name": "DrighLife",
    "notation": "B367/S23",
    "family": "Life-like",
-   "blurb": "A mix between DryLife and HighLife",
+   "blurb": "Life plus births on 6 and 7: the HighLife and DryLife changes together.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "2x2 2",
    "notation": "B3678/S1258",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "2x2 with births on 7 and 8 and survival on 8 added.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Castles",
    "notation": "B3678/S135678",
    "family": "Life-like",
-   "blurb": "A rule where patterns almost explode into castle-like stable patterns.",
+   "blurb": "Patterns nearly explode before freezing into stable, castle-like forms.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Stains",
    "notation": "B3678/S235678",
    "family": "Life-like",
-   "blurb": "A stable rule in which most patterns tend to fill in bounded regions.",
+   "blurb": "Stable: most patterns fill in the areas they enclose. Nearby rules, Coagulations among them, usually explode.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Day & Night",
    "notation": "B3678/S34678",
    "family": "Life-like",
-   "blurb": "A stable rule that is symmetric under on-off reversal.",
+   "blurb": "Stable and self-complementary: live and dead regions follow the same law. Many patterns with intricate behaviour are known.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "LowDeath without Death",
    "notation": "B368/S012345678",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "LowDeath in which cells never die.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -502,126 +507,127 @@
    "name": "Life SkyHigh",
    "notation": "B368/S236",
    "family": "Life-like",
-   "blurb": "A rule that is similar to HighLife but adds a B8 and S6 to the rulestring, hence, the name SkyHigh.",
+   "blurb": "HighLife plus B8 and S6, which explains the name.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "LowDeath",
    "notation": "B368/S238",
    "family": "Life-like",
-   "blurb": "HighLife's replicator works in this rule, albeit with a different evolution sequence due to the result of B38/S23's pedestrian effect.",
+   "blurb": "HighLife's replicator still works, though it runs a different sequence because of the pedestrian effect of B38/S23.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Morley",
    "notation": "B368/S245",
    "family": "Life-like",
-   "blurb": "A rule in which random patterns tend to stabilize extremely quickly.",
+   "blurb": "Random soups settle very fast. A slow spaceship and a slow puffer are both common. Also called Move.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "DryLife without Death",
    "notation": "B37/S012345678",
    "family": "Life-like",
-   "blurb": "Similar to Life without death, but patterns tend to grow quadratically instead of forming 'ladders'.",
+   "blurb": "Cells never die, as in Life without death, but growth goes quadratic instead of building ladders.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "DryFlock",
    "notation": "B37/S12",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Flock with an extra birth on 7.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Mazectric with Mice",
    "notation": "B37/S1234",
    "family": "Life-like",
-   "blurb": "Some mice run back and forth in the halls of the maze.",
+   "blurb": "Mazectric plus B7; mice shuttle to and fro along the maze corridors.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Maze with Mice",
    "notation": "B37/S12345",
    "family": "Life-like",
-   "blurb": "Similar to B37/S1234, some mice run back and forth in the continually-stretching halls of the maze.",
+   "blurb": "Maze plus B7. As in Mazectric with Mice, mice shuttle along corridors that keep lengthening.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "DryLife",
    "notation": "B37/S23",
    "family": "Life-like",
-   "blurb": "An exploding rule closely related to Conway's Life, named after the fact that standard spaceships bigger than the glider do not function...",
+   "blurb": "Life plus B7; explosive. Ships larger than the glider fail, hence the name. A 9c/28 R-pentomino puffer can be combined into spaceships.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Plow World",
    "notation": "B378/S012345678",
    "family": "Life-like",
-   "blurb": "An explosive rule, some of the patterns can turn into wickstretchers.",
+   "blurb": "Explosive; cells never die, and some patterns become wickstretchers.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Coagulations",
    "notation": "B378/S235678",
    "family": "Life-like",
-   "blurb": "An exploding rule in which patterns tend to expand forever, producing a thick goo as it does so.",
+   "blurb": "Explosive; patterns usually spread without end, leaving thick goo. Oddly, it has one birth condition fewer than the stable Stains.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Pedestrian Life without Death",
    "notation": "B38/S012345678",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Pedestrian Life in which cells never die.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Pedestrian Flock",
    "notation": "B38/S12",
    "family": "Life-like",
-   "blurb": "A mix between Pedestrian Life and Flock.",
+   "blurb": "Pedestrian Life's births (3 and 8) with Flock's survival (1 and 2).",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "HoneyFlock",
    "notation": "B38/S128",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Flock with the extra B8 and S8 that HoneyLife adds to Life.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Pedestrian Life",
    "notation": "B38/S23",
    "family": "Life-like",
-   "blurb": "A close Life variant with a number of distinctive natural growth patterns and (5,2)c/190 oblique spaceships.",
+   "blurb": "Life plus birth on 8, with growth patterns all its own and oblique (5,2)c/190 spaceships.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "HoneyLife",
    "notation": "B38/S238",
    "family": "Life-like",
-   "blurb": "A mix between Pedestrian Life and EightLife.",
+   "blurb": "Pedestrian Life's B8 together with EightLife's S8, both added to Life.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Electrified Maze",
    "notation": "B45/S12345",
    "family": "Life-like",
-   "blurb": "",
+   "blurb": "Maze with birth on 4 and 5 instead of 3.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Oscillators Rule",
    "notation": "B45/S1235",
    "family": "Life-like",
-   "blurb": "Random patterns shrink to tiny oscillators, with periods anywhere between 1 (still lifes) and 16.",
+   "blurb": "Soups dwindle to tiny oscillators and still lifes; periods above 16 are rare.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Walled cities",
    "notation": "B45678/S2345",
    "family": "Life-like",
-   "blurb": "A stable rule by David Macfarlane that forms centers of pseudo-random activity separated by walls.",
+   "blurb": "Stable; pockets of seemingly random activity sit inside walls that keep them apart.",
+   "author": "David Macfarlane",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -635,7 +641,7 @@
    "name": "Vote 4/5",
    "notation": "B4678/S35678",
    "family": "Life-like",
-   "blurb": "A modification of the standard Gérard Vichniac voting rule, also known as Anneal, used as a model for majority voting.",
+   "blurb": "A twist on Gérard Vichniac's voting rule that models majority opinion; also called Anneal.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
@@ -649,399 +655,451 @@
    "name": "Rings 'n' Slugs",
    "notation": "B56/S14568",
    "family": "Life-like",
-   "blurb": "A rule in which patterns stabilize into Rings and Slugs.",
+   "blurb": "Activity settles down into the stable rings and slugs that give the rule its name.",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "Vote",
    "notation": "B5678/S45678",
    "family": "Life-like",
-   "blurb": "Standard Gérard Vichniac voting rule, also known as Majority, used as a model for majority voting.",
+   "blurb": "Each cell takes the majority state of its 3x3 block, a simple model of voting. Also called Majority.",
+   "author": "Gérard Vichniac",
    "source": "https://conwaylife.com/wiki/List_of_Life-like_rules"
   },
   {
    "name": "9:43 at Knight",
    "notation": "B34578/S237/C4",
    "family": "Generations",
-   "blurb": "Stable. By EricG.",
+   "blurb": "A stable four-state Generations rule.",
+   "author": "EricG",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Banners",
    "notation": "B3457/S2367/C5",
    "family": "Generations",
-   "blurb": "A rule that often produces spaceships with growing fluttering banners. Exploding. By Mirek Wójtowicz.",
+   "blurb": "Explosive; ships often trail banners that lengthen and flutter.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "BelZhab",
    "notation": "B23/S23/C8",
    "family": "Generations",
-   "blurb": "A rule exhibiting Zhabotinsky reactions. Exploding.",
+   "blurb": "Explosive; shows Belousov-Zhabotinsky-style reaction patterns.",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "BelZhab Sediment",
    "notation": "B23/S145678/C8",
    "family": "Generations",
-   "blurb": "The rule creates BelZhab-like patterns that have growing regions of sedimentary deposits. Exploding. By Jason Rampe.",
+   "blurb": "Explosive; BelZhab-style activity that leaves spreading beds of sediment.",
+   "author": "Jason Rampe",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Bloomerang",
    "notation": "B34678/S234/C24",
    "family": "Generations",
-   "blurb": "A wave rule that rebounds into a kinder, gentler form of kaleidoscopics — rounded, soft, full, and slow. Expanding. By John Elliott.",
+   "blurb": "Expanding waves bounce back into slow, soft, rounded kaleidoscopic forms.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Bombers",
    "notation": "B24/S345/C25",
    "family": "Generations",
-   "blurb": "A close variant of the Star Wars rule with many more history steps, resulting in beautiful ships, puffers and oscillators. Chaotic. By...",
+   "blurb": "Chaotic; a close cousin of Star Wars with many more decay states, full of fine oscillators, ships and puffers.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Brain 6",
    "notation": "B246/S6/C3",
    "family": "Generations",
-   "blurb": "An interesting variation of the immortal Brian's Brain, with many patterns constructed. Chaotic. By Michael Sweney.",
+   "blurb": "Chaotic; a variant of Brian's Brain for which many patterns have been built.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Brian's Brain",
    "notation": "B2/S/C3",
    "family": "Generations",
-   "blurb": "Also called BB, or simply Brain, this is unquestionably one of the best known and most beautiful CA rules. Chaotic. By Brian Silverman.",
+   "blurb": "Chaotic and widely loved: a ready cell fires when exactly two neighbours fire, then rests for a step. Nicknamed Brain or BB.",
+   "author": "Brian Silverman",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Burst",
    "notation": "B3468/S0235678/C9",
    "family": "Generations",
-   "blurb": "A rule related to Nova, Prairie Fire and others which features large areas of cells that slowly die out or decay into oscillators....",
+   "blurb": "Chaotic; kin to Nova and Prairie on fire. Big regions slowly fade or break into oscillators; named for a typical exploding oscillator.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Burst II",
    "notation": "B3468/S235678/C9",
    "family": "Generations",
-   "blurb": "This rule is basically Burst without the single cell still life. Chaotic. By Michael Sweney.",
+   "blurb": "Chaotic; Burst minus its one-cell still life (no S0). Has ships fast and slow, methuselahs, and a signature oscillator of period 500+.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Caterpillars",
    "notation": "B378/S124567/C4",
    "family": "Generations",
-   "blurb": "Named after its very common caterpillar-like patterns. Chaotic. By Mirek Wójtowicz.",
+   "blurb": "Chaotic, and full of objects that look like caterpillars.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Chenille",
    "notation": "B24567/S05678/C6",
    "family": "Generations",
-   "blurb": "Exploding.",
+   "blurb": "An explosive six-state Generations rule.",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Circuit Genesis",
    "notation": "B1234/S2345/C8",
    "family": "Generations",
-   "blurb": "Rockafellor. Expanding. By Charles A.",
+   "blurb": "Expanding; grows circuit-like structures that keep developing long after the starting pattern's edges have moved away.",
+   "author": "Charles A. Rockafellor",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Cooties",
    "notation": "B2/S23/C8",
    "family": "Generations",
-   "blurb": "A very vivacious rule, with cells crawling around like mad lice. Exploding. By Rudy Rucker.",
+   "blurb": "Explosive and lively; cells swarm about like lice.",
+   "author": "Rudy Rucker",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Ebb and Flow",
    "notation": "B36/S012478/C18",
    "family": "Generations",
-   "blurb": "A slow exploding rule with interesting internal dynamics within the growth boundaries. Exploding. By Michael Sweney.",
+   "blurb": "Slowly explosive, with lively motion inside the growing edge. A pattern's symmetry often decides whether it grows forever or dies.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Ebb and Flow II",
    "notation": "B37/S012468/C18",
    "family": "Generations",
-   "blurb": "A close variant of Ebb and Flow that supports simple gliders. Exploding. By Michael Sweney.",
+   "blurb": "Explosive; a near relative of Ebb and Flow, with simple gliders.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Faders",
    "notation": "B2/S2/C25",
    "family": "Generations",
-   "blurb": "A genetic cross of Life and Brian's Brain. Exploding. By Rudy Rucker and John Walker.",
+   "blurb": "Explosive; part Life, part Brian's Brain. Cells are born and keep firing on exactly two firing neighbours, then fade through 23 refractory states.",
+   "author": "Rudy Rucker and John Walker",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Fireworks",
    "notation": "B13/S2/C21",
    "family": "Generations",
-   "blurb": "Nearly perfect fireworks simulation. Exploding. By John Elliott.",
+   "blurb": "Explosive; looks remarkably like fireworks. Random or designed starts both work, and even a few scattered cells run for a long time.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Flaming Starbows",
    "notation": "B23/S347/C8",
    "family": "Generations",
-   "blurb": "Rockafellor. Exploding. By Charles A.",
+   "blurb": "Explosive; growing diamonds and skewed parallelograms sweep the grid, trailing fire and spirals, a bit like Faders crossed with Zhabotinsky spirals.",
+   "author": "Charles A. Rockafellor",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Frogs",
    "notation": "B34/S12/C3",
    "family": "Generations",
-   "blurb": "A rule named after its very common frog-like gliders. Chaotic. By Scott Robert Ladd.",
+   "blurb": "Chaotic; its frog-shaped gliders are very common and give it its name.",
+   "author": "Scott Robert Ladd",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Frozen Spirals",
    "notation": "B23/S356/C6",
    "family": "Generations",
-   "blurb": "This rule features a popular Zhabotinsky reaction, but with one difference — spirals have icicles in their vertices. Cyclic. By Mirek...",
+   "blurb": "Cyclic; Zhabotinsky-style spirals whose corners grow icicles.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Glisserati",
    "notation": "B245678/S035678/C7",
    "family": "Generations",
-   "blurb": "From simple seeds this rule is often highly glideriferous, generating striking kaleidoscopic patterns. Exploding. By John Elliott.",
+   "blurb": "Explosive; simple seeds tend to fill with gliders in kaleidoscopic patterns, though some runs stay sparse, like Transers, with very long transients.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Glissergy",
    "notation": "B245678/S035678/C5",
    "family": "Generations",
-   "blurb": "This rule differs from Glisserati only in its cellsize (5 rather than 7). Exploding. By John Elliott.",
+   "blurb": "Explosive; Glisserati with 5 states instead of 7. That makes it much busier: random and simple starts alike run for a long time.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Lava",
    "notation": "B45678/S12345/C8",
    "family": "Generations",
-   "blurb": "All patterns are getting very slowly filled with hot lava. Expanding. By Mirek Wójtowicz.",
+   "blurb": "Expanding; patterns fill in, very slowly, with something like molten lava.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Lines",
    "notation": "B458/S012345/C3",
    "family": "Generations",
-   "blurb": "This rule quickly self-organizes into linear structures, with separate orthogonally hatched areas. Stable. By Anders Starmark.",
+   "blurb": "Stable; rapidly sorts itself into straight lines and separate areas of orthogonal hatching. Best from a 20%-dense disc of radius 40 or more.",
+   "author": "Anders Starmark",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Living On The Edge",
    "notation": "B3/S345/C6",
    "family": "Generations",
-   "blurb": "Also known as LOTE. Chaotic. By Mirek Wójtowicz.",
+   "blurb": "Highly chaotic; whether a pattern lasts or dies out is hard to predict. Also called LOTE.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Meteor Guns",
    "notation": "B3/S01245678/C8",
    "family": "Generations",
-   "blurb": "Rockafellor. Expanding. By Charles A.",
+   "blurb": "Expanding; most larger patterns become a slowly growing fireball that fires off gliders (the meteors). Still lifes and oscillators are easy to find.",
+   "author": "Charles A. Rockafellor",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Nova",
    "notation": "B2478/S45678/C25",
    "family": "Generations",
-   "blurb": "Very lovely rule characterized by vibrant yet stately streaming growth from solid seeds. Expanding. By Mirek Wójtowicz.",
+   "blurb": "Expanding; solid seeds stream outward in steady, vivid growth whose border geometry depends on the seed's size and shape.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "OrthoGo",
    "notation": "B2/S3/C4",
    "family": "Generations",
-   "blurb": "This simple rule supports spontaneous orthogonally productive glider colliders. Exploding. By John Elliott.",
+   "blurb": "Mostly quiet; glider collisions that spawn orthogonal products arise by themselves.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Prairie on fire",
    "notation": "B34/S345/C6",
    "family": "Generations",
-   "blurb": "This rule covers the lattice with fire. Exploding. By Mirek Wójtowicz.",
+   "blurb": "Explosive; fire spreads across the grid. Looks best in reds and yellows.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "RainZha",
    "notation": "B23/S2/C8",
    "family": "Generations",
-   "blurb": "The simplest Zhabotinsky style cellular automaton. Exploding. By Rudy Rucker and John Walker.",
+   "blurb": "Explosive; about as simple as a Zhabotinsky-style rule gets. Random starts grow spirals by themselves.",
+   "author": "Rudy Rucker and John Walker",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Rake",
    "notation": "B2678/S3467/C6",
    "family": "Generations",
-   "blurb": "This rule is a simple variation of the Worms rule and is characterized by the numerous rake puffers that it generates. Exploding. By...",
+   "blurb": "Explosive; a Worms variant teeming with rake puffers, ships and growing wings. Collide them to build puffers and ships of any complexity.",
+   "author": "Brian Prentice",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "SediMental",
    "notation": "B25678/S45678/C4",
    "family": "Generations",
-   "blurb": "From a random seed state of 30% ones, the rule tends to form stable islands, with active coastlines and fascinating inter-island...",
+   "blurb": "A 30% random fill forms stable islands with busy coasts and traffic between them; sparser starts stay thin, denser ones merge into one continent.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Snake",
    "notation": "B25/S03467/C6",
    "family": "Generations",
-   "blurb": "This rule is a simple variation of the Worms rule. Exploding. By Brian Prentice.",
+   "blurb": "Explosive Worms variant. Its 3x3 square and shuttle oscillators combine into many more; a puffer laying shuttles leaves a snake-like tail.",
+   "author": "Brian Prentice",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Soft Freeze",
    "notation": "B38/S13458/C6",
    "family": "Generations",
-   "blurb": "The rule is delicately poised between solid and liquid phases. Chaotic. By John Elliott.",
+   "blurb": "Chaotic, on the edge between frozen and fluid: crystals grow, melt and regrow next to an active phase, seemingly without end.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Spirals",
    "notation": "B234/S2/C5",
    "family": "Generations",
-   "blurb": "The rule produces beautiful stable spirals that unroll forever. Exploding.",
+   "blurb": "Explosive; steady spirals keep unwinding without end.",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Star Wars",
    "notation": "B2/S345/C4",
    "family": "Generations",
-   "blurb": "Also known as MirekGro, this is a very interesting and beautiful rule producing deep space battle scenes; a paradise for patterns'...",
+   "blurb": "Explosive; Brian's Brain with added stability, playing out like a space battle. Rich in natural glider guns. Also called MirekGro.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Sticks",
    "notation": "B2/S3456/C6",
    "family": "Generations",
-   "blurb": "This interesting rule builds a variety of sticks, with ships floating among them. Exploding. By Rudy Rucker.",
+   "blurb": "Explosive; ships drift among a growing collection of sticks.",
+   "author": "Rudy Rucker",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Swirl",
    "notation": "B34/S23/C8",
    "family": "Generations",
-   "blurb": "While spirals are common in CAs (see for example RainZha or Cyclic CAs), Swirl's whirlers are of the rarer discrete variety - isolated...",
+   "blurb": "Chaotic; separate whirlpools turn in empty space, in two usual sizes (swirlpool and flamewhirl), plus a flame glider whose twin tail flickers.",
+   "author": "Scott Robert Ladd",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Thrill Grill",
    "notation": "B34/S1234/C48",
    "family": "Generations",
-   "blurb": "Sparkling dynamics inhabit and rearrange a grill-like background of one-cells. Expanding. By John Elliott.",
+   "blurb": "Expanding; glittering activity moves through and reshapes a grill of live cells.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Transers",
    "notation": "B26/S345/C5",
    "family": "Generations",
-   "blurb": "A beautiful and dynamic rule with many distinctive entities that occur in the wild, with remarkable inter-entity transformations....",
+   "blurb": "Explosive and lively; many distinct objects arise naturally and change into one another.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Transers II",
    "notation": "B26/S0345/C6",
    "family": "Generations",
-   "blurb": "Exploding. By Michael Sweney.",
+   "blurb": "Explosive; Transers plus S0, with six states.",
+   "author": "Michael Sweney",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Wanderers",
    "notation": "B34678/S345/C5",
    "family": "Generations",
-   "blurb": "A rule very similar to Prairie on fire, but creates interesting dynamically moving patterns. Exploding. By Mirek Wójtowicz.",
+   "blurb": "Explosive; a near twin of Prairie on fire whose patterns roam about.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Worms",
    "notation": "B25/S3467/C6",
    "family": "Generations",
-   "blurb": "A very vigorous rule producing crowds of disgusting worms. Exploding. By Mirek Wójtowicz.",
+   "blurb": "Explosive and vigorous; it breeds swarms of worms.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Xtasy",
    "notation": "B2356/S1456/C16",
    "family": "Generations",
-   "blurb": "From simple seeds in a closed universe this is a lovely kaleidoscopic wave rule that tends to do extended meditations on the letter X....",
+   "blurb": "Explosive; in a closed grid, simple seeds make kaleidoscopic waves that dwell on X shapes.",
+   "author": "John Elliott",
    "source": "https://conwaylife.com/wiki/List_of_Generations_rules"
   },
   {
    "name": "Majority (LtL)",
    "notation": "R4,C2,S40-80,B41-81",
    "family": "Larger than Life",
-   "blurb": "stable rule by David Griffeath; MCell form R4,C0,M1,S41..81,B41..81,NM (HROT excludes middle cell, MCell M1 includes it)",
+   "blurb": "Stable; each cell takes the majority of the 9x9 block around it.",
+   "author": "David Griffeath",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Bosco's Rule",
    "notation": "R5,C2,S33-57,B34-45",
    "family": "Larger than Life",
-   "blurb": "chaotic rule by Kellie Evans, known for hollow 'bugs' spaceships; MCell form R5,C0,M1,S34..58,B34..45,NM",
+   "blurb": "Chaotic; famous for its hollow spaceships, called bugs.",
+   "author": "Kellie Evans",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Waffle",
    "notation": "R7,C2,S99-199,B75-170",
    "family": "Larger than Life",
-   "blurb": "expanding rule by Kellie Evans",
+   "blurb": "An expanding range-7 rule.",
+   "author": "Kellie Evans",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Majorly",
    "notation": "R7,C2,S112-224,B113-225",
    "family": "Larger than Life",
-   "blurb": "expanding rule by David Griffeath",
+   "blurb": "Expanding; a range-7 rule whose thresholds amount to a majority vote over the 15x15 block.",
+   "author": "David Griffeath",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Globe",
    "notation": "R8,C2,S163-223,B74-252",
    "family": "Larger than Life",
-   "blurb": "expanding rule by Mirek Wojtowicz",
+   "blurb": "An expanding range-8 rule.",
+   "author": "Mirek Wójtowicz",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Bugsmovie",
    "notation": "R10,C2,S122-211,B123-170",
    "family": "Larger than Life",
-   "blurb": "chaotic rule by David Griffeath (MCell 'Bugs'); name on page is Bugsmovie",
+   "blurb": "Chaotic; range 10. MCell calls it Bugs.",
+   "author": "David Griffeath",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "ModernArt",
    "notation": "R10,C255,S1-2,B3",
    "family": "Larger than Life",
-   "blurb": "chaotic rule by Charles A.",
+   "blurb": "Chaotic; range 10 with 255 states.",
+   "author": "Charles A. Rockafellor",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Factorio",
    "notation": "R3,C2,S2,B3,N+",
    "family": "Larger than Life",
-   "blurb": "semistable rule by H.",
+   "blurb": "Semi-stable; range 3 on a cross-shaped neighbourhood.",
+   "author": "H. H. P. M. P. Cole",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Coexistence",
    "notation": "R4,C2,S9,14,16-17,21,23-24,30-31,37-38,44-45,51-52,58-59,B3,10,17,21,24,31,38,45,52,59,NW100010001000000000000000000000777000100707001000777000000000000000000000100010001",
    "family": "Larger than Life",
-   "blurb": "chaotic rule by bubblegum; weighted neighbourhood, HROT only",
+   "blurb": "Chaotic; needs a weighted neighbourhood.",
+   "author": "bubblegum",
    "source": "https://conwaylife.com/wiki/Larger_than_Life"
   },
   {
    "name": "Hexagonal Life",
    "notation": "B2/S34H",
    "family": "Life-like, hexagonal",
-   "blurb": "Name appears only as a forum thread title '(Hexagonal Life)' linked from the hexagonal neighbourhood page; the page uses B2/S34H as its...",
+   "blurb": "Life-like rule on hexagons: birth on 2, survival on 3 or 4.",
    "source": "https://conwaylife.com/wiki/Hexagonal_neighbourhood",
    "note": "Name not confirmed on a LifeWiki rule page."
   },
@@ -1049,35 +1107,36 @@
    "name": "Gnarl (von Neumann)",
    "notation": "B1/S0V",
    "family": "Life-like, von Neumann",
-   "blurb": "LifeWiki Gnarl disambiguation: 'the von Neumann neighbourhood rule B1/S0V' (Hensel B1e2ak3inqy4ny5e/S01c2cn3c4c)",
+   "blurb": "Gnarl on the four edge neighbours: born with one live neighbour, survives only with none.",
+   "author": "Kellie Evans",
    "source": "https://conwaylife.com/wiki/Gnarl"
   },
   {
    "name": "Turmite RLR",
    "notation": "Turmite RLR",
    "family": "Agents",
-   "blurb": "Three colours; grows chaotically.",
+   "blurb": "Three colours; spreads as an irregular, chaotic blob.",
    "source": "https://en.wikipedia.org/wiki/Langton%27s_ant"
   },
   {
    "name": "Turmite LRRRRRLLR",
    "notation": "Turmite LRRRRRLLR",
    "family": "Agents",
-   "blurb": "Nine colours; fills a growing square around itself.",
+   "blurb": "Nine colours; its trail fills out an ever larger square.",
    "source": "https://en.wikipedia.org/wiki/Langton%27s_ant"
   },
   {
    "name": "Turmite LLRRRLRLRLLR",
    "notation": "Turmite LLRRRLRLRLLR",
    "family": "Agents",
-   "blurb": "Twelve colours; builds a convoluted highway.",
+   "blurb": "Twelve colours; lays down a winding, intricate highway.",
    "source": "https://en.wikipedia.org/wiki/Langton%27s_ant"
   },
   {
    "name": "Turmite RRLLLRLLLRRR",
    "notation": "Turmite RRLLLRLLLRRR",
    "family": "Agents",
-   "blurb": "Twelve colours; grows a filled triangle that moves.",
+   "blurb": "Twelve colours; its trail becomes a solid triangle that grows as it travels.",
    "source": "https://en.wikipedia.org/wiki/Langton%27s_ant"
   },
   {

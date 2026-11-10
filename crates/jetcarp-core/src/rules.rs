@@ -1216,8 +1216,8 @@ struct NamedFile {
     rules: Vec<NamedRule>,
 }
 
-/// A named rule from `data/rules/named.json` (built by `tools/build_named_rules.py` from
-/// LifeWiki's rule lists and a few Wikipedia articles).
+/// A named rule from `data/rules/named.json` (built by `tools/build_named_rules.py` from facts in
+/// LifeWiki's rule lists and a few Wikipedia articles; the blurbs are JETCARP's own wording).
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct NamedRule {
     pub name: String,
@@ -1225,6 +1225,9 @@ pub struct NamedRule {
     pub family: String,
     #[serde(default)]
     pub blurb: String,
+    /// Who the rule is credited to, when the source names someone.
+    #[serde(default)]
+    pub author: String,
     #[serde(default)]
     pub source: String,
     #[serde(default)]
@@ -1279,7 +1282,10 @@ pub fn catalog() -> &'static [CatalogEntry] {
                 name: leak(&r.name),
                 notation: leak(&canon),
                 family: leak(&r.family),
-                blurb: leak(&r.blurb),
+                blurb: leak(&match r.author.as_str() {
+                    "" => r.blurb.clone(),
+                    a => format!("{} ({a})", r.blurb),
+                }),
             });
         }
         v

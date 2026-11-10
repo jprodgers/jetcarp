@@ -1,0 +1,163 @@
+name	notation	family	author	blurb	start	source_url	status
+AntiLife	B0123478/S01234678	Life-like (B0 strobing)		Conway's Life in negative: swap live and dead and every Life pattern behaves the same.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+InverseLife	B0123478/S34678	Life-like (B0 strobing)	Jason Rampe	Has Life-like gliders and oscillators. It is B3678/S23 with live and dead swapped.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B01245/S01245	Life-like (B0 strobing)		Strobing; spearheaders grow out of its chaotic, oscillating pattern edges.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Wickstretcher And The Parasites	B01356/S012345	Life-like (B0 strobing)		Explosive and strobing. Wickstretchers of many speeds and sizes appear, most with parasites clinging on that resize their wicks.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Oils	B014/S2	Life-like (B0 strobing)		Explosive; full of wickstretchers, and home to a diagonal c/16 spaceship.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Invertamaze	B028/S0124	Life-like (B0 strobing)		Builds mazes that swap live and dead on every step. Warning: rapid flashing.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Neon Blobs	B08/S4	Life-like (B0 strobing)		Strobing; patterns blow up into glowing, neon-looking blobs.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+H-trees	B1/S012345678	Life-like		Explosive growth of branching H shapes along the edges of patterns.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Fuzz	B1/S014567	Life-like		Explosive, with solid regions forming in the growth.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Gnarl	B1/S1	Life-like	Kellie Evans	Explosive: one live cell is enough to grow an intricate, gnarled pattern.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Snakeskin	B1/S134567	Life-like		Explosive; the growth fills with snake-like shapes.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Solid islands grow amongst static	B12678/S15678	Life-like		Grows rapidly; solid islands form inside regions of static-like noise.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Replicator	B1357/S1357	Life-like		Any pattern at all makes copies of itself.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Fredkin	B1357/S02468	Life-like		Like Replicator, any pattern copies itself. Also called Replicator 2.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Feux	B1358/S0247	Life-like		Explosive; patterns become replicators that blink on and off.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Forrest of Ls	B168/S236	Life-like		Explosive, though the inside of the growth slowly settles into still shapes.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Seeds	B2/S	Life-like	Brian Silverman	No cell survives a step, yet it explodes. Many small orthogonal spaceships, but most patterns blow up.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Live Free or Die	B2/S0	Life-like		Explosive; only isolated cells survive. Rich in oscillators, spaceships and puffers, some stretchable to any size and period.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B2/S13	Life-like		Explosive; a replicator exists, which is rare among B2 rules.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B2/S2345	Life-like		Explosive, but some still lifes are permanent walls; used as casings, they guide one-shot signals and allow logic gates.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B2/S23456	Life-like		Behaves much like B2/S2345.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B2/S2345678	Life-like		Behaves much like B2/S2345.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Serviettes	B234/S	Life-like		Like Seeds, no cell survives and growth explodes, weaving patterns that look like fabric. Also called Persian Rug.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B25/S4	Life-like		Explosive; home to an asymmetric replicator that copies along a single line.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Iceballs	B25678/S5678	Life-like		Small solid clumps blink on and off; a few grow big enough to start spreading slowly. Also called Ice nine.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Life without death	B3/S012345678	Life-like		Cells never die, so growth only spreads, forming intricate flakes and dense ladder wickstretchers. Also called Flakes or Inkspot.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+DotLife	B3/S023	Life-like		Life plus survival with zero neighbours; explosive. The B-heptomino often grows forever here, but it can be tamed into a spaceship.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Star Trek	B3/S0248	Life-like		Has spaceships moving at several different speeds.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Flock	B3/S12	Life-like		Soups quickly reduce to period-2 oscillators, dominoes and duoplets; a period-14 pre-beehive shuttle is common.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Mazectric	B3/S1234	Life-like		Grows into mazes, like Maze, but with straighter, longer corridors.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Maze	B3/S12345	Life-like		Spreads and hardens into a maze of corridors.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Magnezones	B3/S123678	Life-like		Explosive, with a fluid-like interior in which four kinds of crystal form.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+SnowLife	B3/S1237	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Corrosion of Conformity	B3/S124	Life-like		Mazectric without S3. Nearly any start burns slowly, eating away at its surroundings like rust.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+EightFlock	B3/S128	Life-like		Flock with survival on 8 added.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+LowLife	B3/S13	Life-like		Life with survival on 1 instead of 2.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B3/S2	Life-like		Just six still lifes up to 8 cells and none from 9 to 19; common oscillators include the blinker and toad.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Conway's Life	B3/S23	Life-like	John Conway	The most famous and most studied Life-like rule; chaotic, with endlessly complex behaviour.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+EightLife	B3/S238	Life-like		Life with survival on 8 too. Also called Pulsar Life.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Shoots and Roots	B3/S245678	Life-like		Two kinds of growth: orderly, slow shoots and faster, explosive roots.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Lifeguard 2	B3/S4567	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Coral	B3/S45678	Life-like		Slow, explosive growth with a texture like coral.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+3-4 Life	B34/S34	Life-like		Long thought a stable cousin of Life, until computers showed most patterns explode. Many tiny oscillators; period-3 ships move straight and diagonally.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Dance	B34/S35	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Bacteria	B34/S456	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Never happy	B345/S0456	Life-like		Explosive but sluggish; growth takes on diamond outlines.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Blinkers	B345/S2	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Assimilation	B345/S4567	Life-like		Very stable; growth ends in lasting diamonds, part-filled inside. As in 2x2, block patterns always stay block patterns.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Long Life	B345/S5	Life-like		Stable, and named for its many simple oscillators with extremely long periods.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Spiral and polygonal growth	B34568/S15678	Life-like		Plows crawl along polygon edges, enlarging them and turning corners. One 16-cell methuselah runs 12127116559 generations before settling to period 2.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Gems	B3457/S4568	Life-like		Explosive, with many small oscillators of high period and a very slow c/5648 spaceship.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Gems Minor	B34578/S456	Life-like		Like Gems: explosive, with plenty of small oscillators of high period and a slow c/2068 ship.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Grounded Life	B35/S23	Life-like		Stable; Life plus birth on 5. Life's usual ships fail, and the commonest ship is Glider 3736, orthogonal at 2c/5.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Land Rush	B35/S234578	Life-like		Chaotic growth spreads out and sorts itself into rows like ploughed fields.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Eppstein	B35/S236	Life-like	Dean Hickerson and David Eppstein	Explosive; Life plus birth on 5 and survival on 6.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Bugs	B3567/S15678	Life-like		Explosive, with lots of spaceships packed with live cells.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Cheerios	B35678/S34567	Life-like		Explosive; objects called cheerios appear amid the chaos.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Holstein	B35678/S4678	Life-like		Self-complementary. Froth wears solid regions away from the corners unless edge oscillators hold them. Ships at c/7, c/5, c/4 and c/3.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Diamoeba	B35678/S5678	Life-like		Grows big diamonds whose edges churn chaotically; some patterns grow quadratically, and block patterns stay block patterns, as in 2x2.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Amoeba	B357/S1358	Life-like		Chaotic and evenly poised between growth and decay: blobs with turbulent insides and edges that lurch about.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Pseudo Life	B357/S238	Life-like		Soups look much like Life's, but the glider breaks down, so few Life patterns carry over.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Geology	B3578/S24678	Life-like		Chaotic and finely balanced: large live continents in a sea of roughly 50% chaos slowly wear down into islands. Self-complementary.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+HighFlock	B36/S12	Life-like		Flock with an extra birth on 6.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+2×2	B36/S125	Life-like		Chaotic, with many simple oscillators, still lifes and ships. The name: any pattern built of 2x2 blocks stays built of 2x2 blocks.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+IronFlock	B36/S128	Life-like		Flock with birth on 6 and survival on 8 added.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+HighLife	B36/S23	Life-like		Life plus birth on 6. Behaves much like Life, but famous for a small replicator.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Land Rush 2	B36/S234578	Life-like		Explosive; once mixed up with Land Rush, probably through a typo. Has an orthogonal c/2 ship of period 4.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Virus	B36/S235	Life-like		Explosive. The T-tetromino becomes a puffer that leaves blinkers behind, a fitting echo of its traffic-light fate in Life.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+IronLife	B36/S238	Life-like		HighLife with survival on 8 added.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+sqrt replicator rule	B36/S245	Life-like		Has a messy orthogonal replicator, hence the name; once called the logarithmic replicator rule.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Slow Blob	B367/S125678	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+DrighLife	B367/S23	Life-like		Life plus births on 6 and 7: the HighLife and DryLife changes together.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+2×2 2	B3678/S1258	Life-like		2x2 with births on 7 and 8 and survival on 8 added.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Castles	B3678/S135678	Life-like		Patterns nearly explode before freezing into stable, castle-like forms.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B3678/S23	Life-like		Life plus births on 6, 7 and 8; InverseLife with live and dead swapped.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Stains	B3678/S235678	Life-like		Stable: most patterns fill in the areas they enclose. Nearby rules, Coagulations among them, usually explode.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Day & Night	B3678/S34678	Life-like		Stable and self-complementary: live and dead regions follow the same law. Many patterns with intricate behaviour are known.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+LowDeath without Death	B368/S012345678	Life-like		LowDeath in which cells never die.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+	B368/S12578	Life-like		Explosive, behaving like 2x2. Its tiny 4c/13o replicator has been used to build W110 unit cells and guns.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+LowFlockDeath	B368/S128	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Life SkyHigh	B368/S236	Life-like		HighLife plus B8 and S6, which explains the name.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+LowDeath	B368/S238	Life-like		HighLife's replicator still works, though it runs a different sequence because of the pedestrian effect of B38/S23.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Morley	B368/S245	Life-like		Random soups settle very fast. A slow spaceship and a slow puffer are both common. Also called Move.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+DryLife without Death	B37/S012345678	Life-like		Cells never die, as in Life without death, but growth goes quadratic instead of building ladders.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+DryFlock	B37/S12	Life-like		Flock with an extra birth on 7.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Mazectric with Mice	B37/S1234	Life-like		Mazectric plus B7; mice shuttle to and fro along the maze corridors.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Maze with Mice	B37/S12345	Life-like		Maze plus B7. As in Mazectric with Mice, mice shuttle along corridors that keep lengthening.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+DryLife	B37/S23	Life-like		Life plus B7; explosive. Ships larger than the glider fail, hence the name. A 9c/28 R-pentomino puffer can be combined into spaceships.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Plow World	B378/S012345678	Life-like		Explosive; cells never die, and some patterns become wickstretchers.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Coagulations	B378/S235678	Life-like		Explosive; patterns usually spread without end, leaving thick goo. Oddly, it has one birth condition fewer than the stable Stains.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Pedestrian Life without Death	B38/S012345678	Life-like		Pedestrian Life in which cells never die.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Pedestrian Flock	B38/S12	Life-like		Pedestrian Life's births (3 and 8) with Flock's survival (1 and 2).		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+HoneyFlock	B38/S128	Life-like		Flock with the extra B8 and S8 that HoneyLife adds to Life.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Pedestrian Life	B38/S23	Life-like		Life plus birth on 8, with growth patterns all its own and oblique (5,2)c/190 spaceships.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+HoneyLife	B38/S238	Life-like		Pedestrian Life's B8 together with EightLife's S8, both added to Life.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Electrified Maze	B45/S12345	Life-like		Maze with birth on 4 and 5 instead of 3.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Oscillators Rule	B45/S1235	Life-like		Soups dwindle to tiny oscillators and still lifes; periods above 16 are rare.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Walled cities	B45678/S2345	Life-like	David Macfarlane	Stable; pockets of seemingly random activity sit inside walls that keep them apart.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Majority	B45678/S5678	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Vote 4/5	B4678/S35678	Life-like		A twist on Gérard Vichniac's voting rule that models majority opinion; also called Anneal.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Lifeguard 1	B48/S234	Life-like				https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Rings 'n' Slugs	B56/S14568	Life-like		Activity settles down into the stable rings and slugs that give the rule its name.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+Vote	B5678/S45678	Life-like	Gérard Vichniac	Each cell takes the majority state of its 3x3 block, a simple model of voting. Also called Majority.		https://conwaylife.com/wiki/List_of_Life-like_rules	VERIFIED
+9:43 at Knight	B34578/S237/C4	Generations	EricG	A stable four-state Generations rule.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Banners	B3457/S2367/C5	Generations	Mirek Wójtowicz	Explosive; ships often trail banners that lengthen and flutter.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+BelZhab	B23/S23/C8	Generations		Explosive; shows Belousov-Zhabotinsky-style reaction patterns.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+BelZhab Sediment	B23/S145678/C8	Generations	Jason Rampe	Explosive; BelZhab-style activity that leaves spreading beds of sediment.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Bloomerang	B34678/S234/C24	Generations	John Elliott	Expanding waves bounce back into slow, soft, rounded kaleidoscopic forms.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Bombers	B24/S345/C25	Generations	Mirek Wójtowicz	Chaotic; a close cousin of Star Wars with many more decay states, full of fine oscillators, ships and puffers.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Brain 6	B246/S6/C3	Generations	Michael Sweney	Chaotic; a variant of Brian's Brain for which many patterns have been built.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Brian's Brain	B2/S/C3	Generations	Brian Silverman	Chaotic and widely loved: a ready cell fires when exactly two neighbours fire, then rests for a step. Nicknamed Brain or BB.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Burst	B3468/S0235678/C9	Generations	Michael Sweney	Chaotic; kin to Nova and Prairie on fire. Big regions slowly fade or break into oscillators; named for a typical exploding oscillator.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Burst II	B3468/S235678/C9	Generations	Michael Sweney	Chaotic; Burst minus its one-cell still life (no S0). Has ships fast and slow, methuselahs, and a signature oscillator of period 500+.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Caterpillars	B378/S124567/C4	Generations	Mirek Wójtowicz	Chaotic, and full of objects that look like caterpillars.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Chenille	B24567/S05678/C6	Generations		An explosive six-state Generations rule.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Circuit Genesis	B1234/S2345/C8	Generations	Charles A. Rockafellor	Expanding; grows circuit-like structures that keep developing long after the starting pattern's edges have moved away.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Cooties	B2/S23/C8	Generations	Rudy Rucker	Explosive and lively; cells swarm about like lice.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Ebb and Flow	B36/S012478/C18	Generations	Michael Sweney	Slowly explosive, with lively motion inside the growing edge. A pattern's symmetry often decides whether it grows forever or dies.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Ebb and Flow II	B37/S012468/C18	Generations	Michael Sweney	Explosive; a near relative of Ebb and Flow, with simple gliders.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Faders	B2/S2/C25	Generations	Rudy Rucker and John Walker	Explosive; part Life, part Brian's Brain. Cells are born and keep firing on exactly two firing neighbours, then fade through 23 refractory states.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Fireworks	B13/S2/C21	Generations	John Elliott	Explosive; looks remarkably like fireworks. Random or designed starts both work, and even a few scattered cells run for a long time.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Flaming Starbows	B23/S347/C8	Generations	Charles A. Rockafellor	Explosive; growing diamonds and skewed parallelograms sweep the grid, trailing fire and spirals, a bit like Faders crossed with Zhabotinsky spirals.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Frogs	B34/S12/C3	Generations	Scott Robert Ladd	Chaotic; its frog-shaped gliders are very common and give it its name.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Frozen Spirals	B23/S356/C6	Generations	Mirek Wójtowicz	Cyclic; Zhabotinsky-style spirals whose corners grow icicles.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Glisserati	B245678/S035678/C7	Generations	John Elliott	Explosive; simple seeds tend to fill with gliders in kaleidoscopic patterns, though some runs stay sparse, like Transers, with very long transients.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Glissergy	B245678/S035678/C5	Generations	John Elliott	Explosive; Glisserati with 5 states instead of 7. That makes it much busier: random and simple starts alike run for a long time.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Lava	B45678/S12345/C8	Generations	Mirek Wójtowicz	Expanding; patterns fill in, very slowly, with something like molten lava.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Lines	B458/S012345/C3	Generations	Anders Starmark	Stable; rapidly sorts itself into straight lines and separate areas of orthogonal hatching. Best from a 20%-dense disc of radius 40 or more.	circle r>=40 at density 20%	https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Living On The Edge	B3/S345/C6	Generations	Mirek Wójtowicz	Highly chaotic; whether a pattern lasts or dies out is hard to predict. Also called LOTE.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Meteor Guns	B3/S01245678/C8	Generations	Charles A. Rockafellor	Expanding; most larger patterns become a slowly growing fireball that fires off gliders (the meteors). Still lifes and oscillators are easy to find.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Nova	B2478/S45678/C25	Generations	Mirek Wójtowicz	Expanding; solid seeds stream outward in steady, vivid growth whose border geometry depends on the seed's size and shape.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+OrthoGo	B2/S3/C4	Generations	John Elliott	Mostly quiet; glider collisions that spawn orthogonal products arise by themselves.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Prairie on fire	B34/S345/C6	Generations	Mirek Wójtowicz	Explosive; fire spreads across the grid. Looks best in reds and yellows.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+RainZha	B23/S2/C8	Generations	Rudy Rucker and John Walker	Explosive; about as simple as a Zhabotinsky-style rule gets. Random starts grow spirals by themselves.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Rake	B2678/S3467/C6	Generations	Brian Prentice	Explosive; a Worms variant teeming with rake puffers, ships and growing wings. Collide them to build puffers and ships of any complexity.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+SediMental	B25678/S45678/C4	Generations	John Elliott	A 30% random fill forms stable islands with busy coasts and traffic between them; sparser starts stay thin, denser ones merge into one continent.	random 30% density	https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Snake	B25/S03467/C6	Generations	Brian Prentice	Explosive Worms variant. Its 3x3 square and shuttle oscillators combine into many more; a puffer laying shuttles leaves a snake-like tail.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Soft Freeze	B38/S13458/C6	Generations	John Elliott	Chaotic, on the edge between frozen and fluid: crystals grow, melt and regrow next to an active phase, seemingly without end.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Spirals	B234/S2/C5	Generations		Explosive; steady spirals keep unwinding without end.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Star Wars	B2/S345/C4	Generations	Mirek Wójtowicz	Explosive; Brian's Brain with added stability, playing out like a space battle. Rich in natural glider guns. Also called MirekGro.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Sticks	B2/S3456/C6	Generations	Rudy Rucker	Explosive; ships drift among a growing collection of sticks.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Swirl	B34/S23/C8	Generations	Scott Robert Ladd	Chaotic; separate whirlpools turn in empty space, in two usual sizes (swirlpool and flamewhirl), plus a flame glider whose twin tail flickers.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Thrill Grill	B34/S1234/C48	Generations	John Elliott	Expanding; glittering activity moves through and reshapes a grill of live cells.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Transers	B26/S345/C5	Generations	John Elliott	Explosive and lively; many distinct objects arise naturally and change into one another.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Transers II	B26/S0345/C6	Generations	Michael Sweney	Explosive; Transers plus S0, with six states.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Wanderers	B34678/S345/C5	Generations	Mirek Wójtowicz	Explosive; a near twin of Prairie on fire whose patterns roam about.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Worms	B25/S3467/C6	Generations	Mirek Wójtowicz	Explosive and vigorous; it breeds swarms of worms.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Xtasy	B2356/S1456/C16	Generations	John Elliott	Explosive; in a closed grid, simple seeds make kaleidoscopic waves that dwell on X shapes.		https://conwaylife.com/wiki/List_of_Generations_rules	VERIFIED
+Gnarl (LtL)	R1,C2,S0,B1,NN	Larger than Life	Kellie Evans	Explosive; the same rule as B1/S0V, written in LtL form.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Majority (LtL)	R4,C2,S40-80,B41-81	Larger than Life	David Griffeath	Stable; each cell takes the majority of the 9x9 block around it.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Bosco's Rule	R5,C2,S33-57,B34-45	Larger than Life	Kellie Evans	Chaotic; famous for its hollow spaceships, called bugs.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Waffle	R7,C2,S99-199,B75-170	Larger than Life	Kellie Evans	An expanding range-7 rule.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Majorly	R7,C2,S112-224,B113-225	Larger than Life	David Griffeath	Expanding; a range-7 rule whose thresholds amount to a majority vote over the 15x15 block.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Globe	R8,C2,S163-223,B74-252	Larger than Life	Mirek Wójtowicz	An expanding range-8 rule.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Bugsmovie	R10,C2,S122-211,B123-170	Larger than Life	David Griffeath	Chaotic; range 10. MCell calls it Bugs.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+ModernArt	R10,C255,S1-2,B3	Larger than Life	Charles A. Rockafellor	Chaotic; range 10 with 255 states.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Marine	R2,C2,S4,6-9,B6-8,N@03ddef	Higher-range outer-totalistic (HROT)	MathAndCode	Chaotic; uses a custom HROT neighbourhood (N@03ddef) that JETCARP cannot run yet.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Factorio	R3,C2,S2,B3,N+	Higher-range outer-totalistic (HROT)	H. H. P. M. P. Cole	Semi-stable; range 3 on a cross-shaped neighbourhood.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Coexistence	R4,C2,S9,14,16-17,21,23-24,30-31,37-38,44-45,51-52,58-59,B3,10,17,21,24,31,38,45,52,59,NW100010001000000000000000000000777000100707001000777000000000000000000000100010001	Higher-range outer-totalistic (HROT)	bubblegum	Chaotic; needs a weighted neighbourhood.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Hash	R2,C2,S4-6,B5-6,N#	Higher-range outer-totalistic (HROT)	b-engine	Chaotic; uses the hash-shaped (#) neighbourhood.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
+Hexagonal Life	B2/S34H	Hexagonal		Life-like rule on hexagons: birth on 2, survival on 3 or 4.		https://conwaylife.com/wiki/Hexagonal_neighbourhood	UNVERIFIED
+Gnarl (von Neumann)	B1/S0V	Von Neumann	Kellie Evans	Gnarl on the four edge neighbours: born with one live neighbour, survives only with none.	single cell	https://conwaylife.com/wiki/Gnarl	VERIFIED
