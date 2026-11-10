@@ -438,7 +438,38 @@ pub fn engine(ctx: Arc<Ctx>) -> Engine {
     crate::pile::register(&mut e, &ctx);
     crate::ants::register(&mut e, &ctx);
     crate::media::register(&mut e, &ctx);
+    register_ops(&mut e, &ctx);
     e
+}
+
+/// A script's progress for operations: cancelled when the script is (or runs out of time).
+struct ScriptProgress(Arc<Ctx>);
+impl jetcarp_api::Progress for ScriptProgress {
+    fn cancelled(&self) -> bool {
+        self.0.stopped()
+    }
+}
+
+/// `jetcarp(op)`, `jetcarp(op, #{...})`: any operation by name (`jetcarp api list` lists them),
+/// with this run's file rules; world operations act on one private world kept for the run.
+fn register_ops(e: &mut Engine, ctx: &Arc<Ctx>) {
+    let call = {
+        let c = ctx.clone();
+        move |name: &str, input: Value| -> R<Dynamic> {
+            let cx = c.api(None);
+            let mut world = c.op_world.lock().unwrap_or_else(|p| p.into_inner());
+            let host = world.get_or_insert_with(jetcarp_api::world::Session::new);
+            let p = ScriptProgress(c.clone());
+            let called = jetcarp_api::call_on(&cx, host, name, input, &p).or_err()?;
+            called.check.or_err()?;
+            Ok(from_json(&called.value))
+        }
+    };
+    let f = call.clone();
+    e.register_fn("jetcarp", move |name: &str| f(name, Value::Null));
+    e.register_fn("jetcarp", move |name: &str, m: Map| {
+        call(name, map_json(&m)?)
+    });
 }
 
 fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
@@ -1186,7 +1217,13 @@ fn lib_records(v: Vec<jetcarp_core::library::PatternRecord>) -> Array {
 }
 
 fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
-    use jetcarp_core::library::{DiscoveredBy, Library, Query, Update, promote::promote};
+    use jetcarp_api::op;
+    use jetcarp_api::ops::library::{
+        GetIn, LibraryGet, LibraryInfoOp, LibraryQuery, LibraryUpdate, QueryIn, RecordView,
+        UpdateIn,
+    };
+    use jetcarp_api::ops::quickstart::{AddIn, ListIn, QuickstartAdd, QuickstartList};
+    use jetcarp_core::library::{DiscoveredBy, Library, Query, Update};
     e.register_type_with_name::<LibHandle>("Library");
     let c = ctx.clone();
     e.register_fn("library", move || {
@@ -1214,67 +1251,101 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
         format!("Library({})", l.0.path().display())
     });
     e.register_fn("path", |l: &mut LibHandle| l.0.path().display().to_string());
-    e.register_fn("info", |l: &mut LibHandle| -> R<Map> {
-        let i = l.0.info().or_err()?;
-        Ok(from_json(&serde_json::to_value(i).unwrap_or_default()).cast::<Map>())
-    });
-    e.register_fn("works_in", |l: &mut LibHandle, rule: &str| -> R<Array> {
-        let q = Query {
-            works_in: Some(rule.to_string()),
-            ..Default::default()
+    // Reading and curation are the operations library.* and quickstart.*, on this handle's
+    // catalog with the run's file rules.
+    let c = ctx.clone();
+    let info = move |l: &mut LibHandle| -> R<Map> {
+        let i = LibraryInfoOp::run(&c.api(Some(l.0.clone())), NoInput {}, &Quiet).or_err()?;
+        Ok(from_json(&op::to_value(&i)).cast::<Map>())
+    };
+    e.register_fn("info", info);
+    let c = ctx.clone();
+    let query = move |l: &LibHandle, q: QueryIn| -> R<jetcarp_api::ops::library::QueryOut> {
+        LibraryQuery::run(&c.api(Some(l.0.clone())), q, &Quiet).or_err()
+    };
+    let q = query.clone();
+    e.register_fn(
+        "works_in",
+        move |l: &mut LibHandle, rule: &str| -> R<Array> {
+            let a = QueryIn {
+                works_in: Some(rule.to_string()),
+                ..Default::default()
+            };
+            Ok(lib_records(q(l, a)?.patterns))
+        },
+    );
+    let c = ctx.clone();
+    let get = move |l: &LibHandle, key: &str, bare: bool| -> R<RecordView> {
+        let a = GetIn {
+            id: key.to_string(),
+            kind: Some("pattern".into()),
+            phases: None,
+            bare,
         };
-        Ok(lib_records(l.0.query(&q).or_err()?))
-    });
-    e.register_fn("sightings", |l: &mut LibHandle, key: &str| -> R<Array> {
-        let id = l.0.get(key).or_err()?.id;
-        let v = l.0.sightings(&id).or_err()?;
-        Ok(v.iter()
-            .map(|s| from_json(&serde_json::to_value(s).unwrap_or_default()))
-            .collect())
-    });
+        LibraryGet::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()
+    };
+    let g = get.clone();
+    e.register_fn(
+        "sightings",
+        move |l: &mut LibHandle, key: &str| -> R<Array> {
+            Ok(g(l, key, false)?
+                .sightings
+                .iter()
+                .map(|s| from_json(&serde_json::to_value(s).unwrap_or_default()))
+                .collect())
+        },
+    );
     // Quick Start entries ("My finds"): all, or with one status.
-    let qs = |l: &LibHandle, status: Option<&str>| -> R<Array> {
-        let st = match status {
-            Some(s) => vec![jetcarp_core::library::QsStatus::parse(s).or_err()?],
-            None => vec![],
+    let c = ctx.clone();
+    let qs = move |l: &LibHandle, status: Option<&str>| -> R<Array> {
+        let a = ListIn {
+            status: status.map(String::from),
         };
-        Ok(l.0
-            .quickstart(&st)
-            .or_err()?
+        let out = QuickstartList::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()?;
+        Ok(out
+            .entries
             .iter()
-            .map(|q| {
-                from_json(&serde_json::json!({
-                    "id": format!("find:{}", q.id), "title": q.title,
-                    "description": q.description, "grid": q.grid, "rule": q.rule,
-                    "rule_family": q.rule_family, "behaviour": q.behaviour,
-                    "source_kind": q.source_kind, "source_id": q.source_id, "score": q.score,
-                    "status": q.status, "created": q.created,
-                }))
-            })
+            .map(|q| from_json(&op::to_value(q)))
             .collect())
     };
-    e.register_fn("quickstart", move |l: &mut LibHandle| qs(l, None));
+    let f = qs.clone();
+    e.register_fn("quickstart", move |l: &mut LibHandle| f(l, None));
     e.register_fn("quickstart", move |l: &mut LibHandle, status: &str| {
         qs(l, Some(status))
     });
-    e.register_fn("query", |l: &mut LibHandle, m: Map| -> R<Array> {
+    let parse_query = |m: &Map| -> R<QueryIn> {
         let q: Query =
-            serde_json::from_value(map_json(&m)?).map_err(|e| format!("bad library query: {e}"))?;
-        Ok(lib_records(l.0.query(&q).or_err()?))
+            serde_json::from_value(map_json(m)?).map_err(|e| format!("bad library query: {e}"))?;
+        Ok(QueryIn::from_query(&q))
+    };
+    let q = query.clone();
+    e.register_fn("query", move |l: &mut LibHandle, m: Map| -> R<Array> {
+        Ok(lib_records(q(l, parse_query(&m)?)?.patterns))
     });
-    e.register_fn("list", |l: &mut LibHandle| -> R<Array> {
-        Ok(lib_records(l.0.list().or_err()?))
+    let q = query.clone();
+    e.register_fn("list", move |l: &mut LibHandle| -> R<Array> {
+        Ok(lib_records(q(l, QueryIn::default())?.patterns))
     });
-    e.register_fn("count", |l: &mut LibHandle| -> R<INT> {
-        Ok(l.0.count(&Query::default()).or_err()? as INT)
+    let q = query.clone();
+    e.register_fn("count", move |l: &mut LibHandle| -> R<INT> {
+        let a = QueryIn {
+            count_only: true,
+            ..Default::default()
+        };
+        Ok(q(l, a)?.matching.unwrap_or(0) as INT)
     });
-    e.register_fn("count", |l: &mut LibHandle, m: Map| -> R<INT> {
-        let q: Query =
-            serde_json::from_value(map_json(&m)?).map_err(|e| format!("bad library query: {e}"))?;
-        Ok(l.0.count(&q).or_err()? as INT)
+    let q = query.clone();
+    e.register_fn("count", move |l: &mut LibHandle, m: Map| -> R<INT> {
+        let a = QueryIn {
+            count_only: true,
+            ..parse_query(&m)?
+        };
+        Ok(q(l, a)?.matching.unwrap_or(0) as INT)
     });
-    e.register_fn("get", |l: &mut LibHandle, key: &str| -> R<Map> {
-        let r = l.0.get(key).or_err()?;
+    let g = get.clone();
+    e.register_fn("get", move |l: &mut LibHandle, key: &str| -> R<Map> {
+        let v = g(l, key, true)?;
+        let r = v.pattern.ok_or("no pattern")?;
         Ok(from_json(&crate::library::record_json(&r)).cast::<Map>())
     });
     let c = ctx.clone();
@@ -1309,16 +1380,23 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
             f(l, &s, &map_json(&m)?)
         });
     }
-    let prom = |l: &LibHandle, key: &str, title: Option<&str>| -> R<Map> {
-        let (sc, id) = promote(&l.0, key, title, None).or_err()?;
+    let c = ctx.clone();
+    let prom = move |l: &LibHandle, key: &str, title: Option<&str>| -> R<Map> {
+        let a = AddIn {
+            pattern: Some(key.to_string()),
+            title: title.map(String::from),
+            ..Default::default()
+        };
+        let p = QuickstartAdd::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()?;
         let mut m = Map::new();
-        m.insert("entry".into(), format!("find:{id}").into());
-        m.insert("id".into(), id.into());
-        m.insert("title".into(), sc.name.into());
+        m.insert("entry".into(), p.entry.into());
+        m.insert("id".into(), p.id.into());
+        m.insert("title".into(), p.title.into());
         Ok(m)
     };
+    let f = prom.clone();
     e.register_fn("promote", move |l: &mut LibHandle, key: &str| {
-        prom(l, key, None)
+        f(l, key, None)
     });
     e.register_fn(
         "promote",
@@ -1411,19 +1489,19 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     let prom_run = move |l: &LibHandle, folder: &str, run: &str, v: &Value| -> R<Map> {
         args::check_keys(v, &["title", "note"], "promote_run").or_err()?;
         let dir = c.readable(folder).or_err()?;
-        let p = crate::results::promote_folder_run(
-            &dir,
-            run,
-            &l.0,
-            args::get_str(v, "title").or_err()?,
-            args::get_str(v, "note").or_err()?,
-        )
-        .or_err()?;
+        let a = AddIn {
+            folder: Some(dir.display().to_string()),
+            run: Some(run.to_string()),
+            title: args::get_str(v, "title").or_err()?.map(String::from),
+            note: args::get_str(v, "note").or_err()?.map(String::from),
+            ..Default::default()
+        };
+        let p = QuickstartAdd::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()?;
         let mut m = Map::new();
-        m.insert("rule".into(), p.rule.into());
-        m.insert("index".into(), (p.index as INT).into());
+        m.insert("rule".into(), p.rule.unwrap_or_default().into());
+        m.insert("index".into(), (p.run.unwrap_or(0) as INT).into());
         m.insert("title".into(), p.title.into());
-        m.insert("entry".into(), format!("find:{}", p.id).into());
+        m.insert("entry".into(), p.entry.into());
         Ok(m)
     };
     let f = prom_run.clone();
@@ -1437,12 +1515,18 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
             prom_run(l, folder, run, &map_json(&m)?)
         },
     );
-    e.register_fn("update", |l: &mut LibHandle, key: &str, m: Map| -> R<Map> {
-        let u: Update = serde_json::from_value(map_json(&m)?)
-            .map_err(|e| format!("bad library update: {e}"))?;
-        let r = l.0.update(key, &u).or_err()?;
-        Ok(from_json(&crate::library::record_json(&r)).cast::<Map>())
-    });
+    let c = ctx.clone();
+    e.register_fn(
+        "update",
+        move |l: &mut LibHandle, key: &str, m: Map| -> R<Map> {
+            let u: Update = serde_json::from_value(map_json(&m)?)
+                .map_err(|e| format!("bad library update: {e}"))?;
+            let a = UpdateIn::from_update(key, &u);
+            let r = LibraryUpdate::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()?;
+            let r = r.pattern.ok_or("no pattern")?;
+            Ok(from_json(&crate::library::record_json(&r)).cast::<Map>())
+        },
+    );
     // `lib.rate(kind, id, rating)`, `lib.rate(kind, id, rating, #{ rater, note })`.
     let rate = |l: &LibHandle, kind: &str, id: &str, rating: f64, v: &Value| -> R<INT> {
         args::check_keys(v, &["rater", "note"], "rate").or_err()?;

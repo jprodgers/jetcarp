@@ -16,9 +16,7 @@ use std::time::Instant;
 /// This window's key in `crate::popout` and the settings file.
 pub const KEY: &str = "results";
 
-pub use jetcarp_script::results::{
-    Favourites, Manifest, Row, num, promote_run, subtitle, sweep_folders, text,
-};
+pub use jetcarp_script::results::{Favourites, Manifest, Row, num, subtitle, sweep_folders, text};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PeriodFilter {
@@ -799,12 +797,26 @@ impl ResultsBrowser {
         self.cataloging = Some(rx);
     }
 
-    /// Add a Quick Start entry ("My finds") for a run. Returns its id.
+    /// Add a Quick Start entry ("My finds") for a run with `quickstart.add`. Returns its id.
     fn promote_row(&mut self, row: usize) -> Result<String, String> {
+        use jetcarp_api::op::{Op, Quiet};
+        use jetcarp_api::ops::quickstart::{AddIn, QuickstartAdd};
         let m = self.manifest.as_ref().ok_or("no sweep open")?;
-        let lib = jetcarp_core::library::Library::open_default();
-        let id = promote_run(m, row, &lib)?;
-        let r = &m.rows[row];
+        let r = m.rows.get(row).ok_or("no such run in the manifest")?;
+        let index = r
+            .get("index")
+            .and_then(|i| i.as_u64())
+            .ok_or("this run has no index in the manifest")?;
+        let a = AddIn {
+            folder: Some(m.folder.display().to_string()),
+            run: Some(format!("#{index}")),
+            // This window keeps the favourites itself (below).
+            favourite: false,
+            ..Default::default()
+        };
+        let id = QuickstartAdd::run(&jetcarp_api::Ctx::new(), a, &Quiet)
+            .map_err(|e| e.to_string())?
+            .id;
         // Note it on the favourite.
         if let Some(i) = r.get("index").and_then(|i| i.as_u64())
             && let Some(f) = self.favs.items.get_mut(&i)
@@ -1070,7 +1082,7 @@ mod tests {
         assert_eq!(text(r, "hash"), w.hash_hex());
         // Promote the run: a Quick Start entry the finds list reads, which runs to the same state.
         let lib = jetcarp_core::library::Library::open(root.join("lib"));
-        let id = promote_run(&m, 2, &lib).unwrap();
+        let id = jetcarp_api::sweeps::promote_run(&m, 2, &lib).unwrap();
         let finds = jetcarp_core::quickstart::user_finds(&lib);
         assert_eq!(finds.len(), 1);
         assert_eq!(finds[0].rule, "W30");

@@ -597,6 +597,8 @@ pub(crate) struct Ctx {
     pub files_written: AtomicU64,
     sweeps: Mutex<Vec<Value>>,
     pub ast: Mutex<Option<Arc<AST>>>,
+    /// The world `jetcarp(op, #{...})` acts on for world operations (made on first use).
+    pub op_world: Mutex<Option<jetcarp_api::world::Session>>,
 }
 
 impl Ctx {
@@ -618,7 +620,32 @@ impl Ctx {
             files_written: AtomicU64::new(0),
             sweeps: Mutex::new(vec![]),
             ast: Mutex::new(None),
+            op_world: Mutex::new(None),
             opts,
+        }
+    }
+
+    /// The context of the operations a script calls: this run's file rules (writes inside the
+    /// output root and the allowed folders, relative paths from the newest output folder, reads
+    /// restricted when the run says so), its output root, its world-size limit, and the catalog
+    /// `lib` (default: the run's `library` option, else the default catalog).
+    pub fn api(&self, lib: Option<jetcarp_core::library::Library>) -> jetcarp_api::Ctx {
+        let roots = self.guard.lock().unwrap().roots.clone();
+        let mut limits = jetcarp_api::Limits::NONE;
+        if let Some(m) = self.opts.limits.max_cells {
+            limits.max_cells = m;
+        }
+        let cx = jetcarp_api::Ctx::new()
+            .with_limits(limits)
+            .with_fs(jetcarp_api::FsPolicy::guarded(
+                self.base(),
+                roots,
+                self.opts.limits.restrict_reads,
+            ))
+            .with_out_root(Some(self.root.clone()));
+        match lib {
+            Some(l) => cx.with_store(l),
+            None => cx.with_library(self.opts.library.clone()),
         }
     }
 

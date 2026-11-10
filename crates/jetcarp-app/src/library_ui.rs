@@ -6,7 +6,7 @@
 use crate::sweep_form::thousands;
 use crate::thumbs::{self, Thumb, ThumbCache};
 use jetcarp_core::Scene;
-use jetcarp_core::library::promote::{promote, render_phases_in, showcase_scene};
+use jetcarp_core::library::promote::{render_phases_in, showcase_scene};
 use jetcarp_core::library::{
     CurationState, Library, PatternClass, PatternRecord, PatternSource, Query, Update,
     orientation_moves,
@@ -736,13 +736,13 @@ impl LibraryWindow {
                 .on_hover_text("Adds it to the Quick Start under My finds and marks it promoted")
                 .clicked()
             {
-                match promote(&self.lib, &r.id, r.name.as_deref(), None) {
-                    Ok((_, entry)) => {
+                match promote(&self.lib, &r) {
+                    Ok(entry) => {
                         self.reload();
                         self.edit = self.record(&r.id).map(Edit::of);
                         out.push(Action::QuickStartChanged);
                         out.push(Action::Message(
-                            format!("Promoted {} to the Quick Start (find:{entry})", r.label()),
+                            format!("Promoted {} to the Quick Start ({entry})", r.label()),
                             false,
                         ));
                     }
@@ -751,6 +751,22 @@ impl LibraryWindow {
             }
         });
     }
+}
+
+/// Add a pattern to the Quick Start ("My finds") with `quickstart.add`, titled with its name, and
+/// mark it promoted. Returns the entry (`find:<id>`).
+fn promote(lib: &Library, r: &PatternRecord) -> Result<String, String> {
+    use jetcarp_api::op::{Op, Quiet};
+    use jetcarp_api::ops::quickstart::{AddIn, QuickstartAdd};
+    let cx = jetcarp_api::Ctx::new().with_store(lib.clone());
+    let a = AddIn {
+        pattern: Some(r.id.clone()),
+        title: r.name.clone(),
+        ..Default::default()
+    };
+    QuickstartAdd::run(&cx, a, &Quiet)
+        .map(|p| p.entry)
+        .map_err(|e| e.to_string())
 }
 
 /// A record's thumbnail: phase 0, rendered on a worker thread (keyed by id, last change, and
@@ -861,7 +877,7 @@ mod tests {
         assert_eq!(r.tags, vec!["a", "b"]);
         assert_eq!((r.state, r.rating), (CurationState::Reviewed, Some(4)));
         // Promote: the scene appears in the Quick Start's finds.
-        promote(&lib, &ship.id, None, None).unwrap();
+        assert_eq!(promote(&lib, ship).unwrap(), format!("find:{}", ship.id));
         let finds = jetcarp_core::quickstart::user_finds(&lib);
         assert_eq!(finds.len(), 1);
         assert_eq!(lib.get(&ship.id).unwrap().state, CurationState::Promoted);
