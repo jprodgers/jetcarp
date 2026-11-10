@@ -18,3 +18,7 @@ serde.workspace = true
 serde_json.workspace = true
 png.workspace = true
 chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+rayon.workspace = true
+# JSON Schemas for each operation's input and output (the op registry, `jetcarp api schema`,
+# and later the MCP tools' input schemas).
+schemars = "1.2.3"

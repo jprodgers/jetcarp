@@ -159,6 +159,25 @@ pub fn encode_png(
     Ok(buf)
 }
 
+/// Encode an image as an RGBA PNG with text chunks, default compression: the bytes the MCP
+/// `render_image` tool has always returned.
+pub fn encode_png_rgba(img: &Image, text: &[(&str, String)]) -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut buf, img.width, img.height);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        for (k, v) in text {
+            enc.add_itxt_chunk(k.to_string(), v.clone())
+                .map_err(|e| e.to_string())?;
+        }
+        let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+        wr.write_image_data(&img.rgba).map_err(|e| e.to_string())?;
+        wr.finish().map_err(|e| e.to_string())?;
+    }
+    Ok(buf)
+}
+
 /// Palette (RGBA as little-endian u32) and one index per pixel, if there are at most 256 colours.
 fn palette_of(rgba: &[u8]) -> Option<(Vec<u32>, Vec<u8>)> {
     let mut palette: Vec<u32> = Vec::new();
