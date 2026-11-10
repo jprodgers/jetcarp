@@ -52,8 +52,8 @@ fn reference(
 
 #[test]
 fn flat_hexagons_have_three_parents_above() {
-    let t =
-        jetcarp_core::Topology::build(&TilingSpec::rect("hex_flat", 12, 10, Boundary::Dead)).unwrap();
+    let t = jetcarp_core::Topology::build(&TilingSpec::rect("hex_flat", 12, 10, Boundary::Dead))
+        .unwrap();
     let g = t.flat_hex_rows().expect("flat-top hexagon rows");
     assert_eq!((g.w, g.h, g.ntypes), (12, 10, 2));
     let (edge, touch) = t.degree_sets();
@@ -519,7 +519,8 @@ fn lenia_kernels_sum_to_one() {
         ("snubsq", "Lenia R=6,T=5,b=1,m=0.15,s=0.015"),
         ("hex_flat", ORBIUM),
     ] {
-        let t = jetcarp_core::Topology::build(&TilingSpec::rect(fam, 40, 40, Boundary::Wrap)).unwrap();
+        let t =
+            jetcarp_core::Topology::build(&TilingSpec::rect(fam, 40, 40, Boundary::Wrap)).unwrap();
         let k = jetcarp_core::lenia::kernel(&t, &lenia_rule(rule)).unwrap();
         for s in k.sums() {
             assert!((s - 1.0).abs() < 1e-5, "{fam} {rule}: {s}");
@@ -540,7 +541,8 @@ fn lenia_kernels_sum_to_one() {
         &TilingSpec::new("spectre").with_size(jetcarp_core::SizeSpec::Level(2)),
     )
     .unwrap();
-    let k = jetcarp_core::lenia::kernel(&t, &lenia_rule("Lenia R=3,T=10,b=1,m=0.15,s=0.015")).unwrap();
+    let k =
+        jetcarp_core::lenia::kernel(&t, &lenia_rule("Lenia R=3,T=10,b=1,m=0.15,s=0.015")).unwrap();
     let sums = k.sums();
     let ones = sums.iter().filter(|s| (*s - 1.0).abs() < 1e-5).count();
     assert!(ones * 2 > sums.len(), "{ones} of {}", sums.len());

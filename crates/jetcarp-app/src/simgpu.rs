@@ -1,7 +1,7 @@
 //! The GPU simulation toggle (`jetcarp_display::simgpu`), on the app's own device, and its status.
 
-pub use jetcarp_display::simgpu::{SimBackend, SimStatus};
 use eframe::egui::{self, Color32};
+pub use jetcarp_display::simgpu::{SimBackend, SimStatus};
 
 /// The simulator for the app's wgpu device.
 pub fn backend(cc: &eframe::CreationContext<'_>) -> SimBackend {

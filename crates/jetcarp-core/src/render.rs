@@ -322,9 +322,7 @@ impl Palette {
                 Some(rgb3(v))
             })
             .collect();
-        stops
-            .filter(|s| !s.is_empty())
-            .map(|s| Palette::new(t, s))
+        stops.filter(|s| !s.is_empty()).map(|s| Palette::new(t, s))
     }
     pub fn builtin(name: &str) -> Option<Palette> {
         PALETTES.iter().find(|p| p.name == name).map(|p| Palette {

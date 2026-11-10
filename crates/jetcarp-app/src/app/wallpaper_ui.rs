@@ -1313,7 +1313,12 @@ mod tests {
         assert_eq!((*fw, *fh), (2560, 1440));
         let (pw, ph, keys) = png_info(path);
         assert_eq!((pw, ph), (2560, 1440));
-        for k in ["jetcarp:version", "jetcarp:hash", "jetcarp:scene", "jetcarp:wallpaper"] {
+        for k in [
+            "jetcarp:version",
+            "jetcarp:hash",
+            "jetcarp:scene",
+            "jetcarp:wallpaper",
+        ] {
             assert!(keys.iter().any(|x| x == k), "{k} missing: {keys:?}");
         }
         assert!(

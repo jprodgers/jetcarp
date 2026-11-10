@@ -5,8 +5,8 @@
 //! - [`picker_opt`]: the same with a "none" entry first (`None` = the caller's default, such as
 //!   "the scene's own palette" or "house style").
 
-use jetcarp_core::render::{self, Palette};
 use eframe::egui::{self, Color32, Sense};
+use jetcarp_core::render::{self, Palette};
 use serde::{Deserialize, Serialize};
 
 /// Each tool window's palette choice, saved in the app settings (`tool_palettes`). `None` is

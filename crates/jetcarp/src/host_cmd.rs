@@ -2,6 +2,7 @@
 //! window. Settings go to its file and a running host is told to read them again.
 
 use anyhow::{Result, anyhow, bail};
+use clap::{Args, Subcommand};
 use jetcarp_display::autostart;
 use jetcarp_display::caption::Corner;
 use jetcarp_display::gnome;
@@ -10,7 +11,6 @@ use jetcarp_display::host_settings::{
 };
 use jetcarp_display::saver;
 use jetcarp_mcp::link::host_call;
-use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
@@ -308,7 +308,10 @@ pub fn run(a: HostArgs) -> Result<()> {
             }
             #[cfg(not(windows))]
             {
-                bail!("`.scr` screen savers exist only on Windows ({} arguments)", args.len())
+                bail!(
+                    "`.scr` screen savers exist only on Windows ({} arguments)",
+                    args.len()
+                )
             }
         }
         HostCmd::Start { rotation, headless } => start(rotation.as_deref(), headless, j),

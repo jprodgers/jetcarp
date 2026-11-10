@@ -2,12 +2,12 @@
 //! and edge points, choose free / mirror / half-turn / straight edges, snap, curves, undo.
 //! The editing rules live in jetcarp-core (`edges.rs`, `families.rs`) and are tested there.
 
+use eframe::egui::{self, Color32, Pos2, RichText, Sense, Stroke, Vec2};
 use jetcarp_core::TilingSpec;
 use jetcarp_core::edges::{self, EdgeMode, EdgeShape, GlueKind, Node};
 use jetcarp_core::families::{self, FAMILIES, Family, FamilyKind};
 use jetcarp_core::geom::{self, Affine, P};
 use jetcarp_core::topology::{curve_check, ghost_transforms};
-use eframe::egui::{self, Color32, Pos2, RichText, Sense, Stroke, Vec2};
 use serde_json::Value;
 
 /// This window's key in `crate::popout` and the settings file.

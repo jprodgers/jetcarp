@@ -60,6 +60,17 @@ jobs:
             fi
           done
 
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.
     name: Build (${{ matrix.name }})

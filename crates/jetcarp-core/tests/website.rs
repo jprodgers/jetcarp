@@ -11,7 +11,8 @@ use jetcarp_core::*;
 use std::path::PathBuf;
 
 fn temp(name: &str) -> (Library, PathBuf) {
-    let root = std::env::temp_dir().join(format!("jetcarp-site-test-{name}-{}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("jetcarp-site-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     (Library::open(root.join("catalog")), root.join("site"))
 }
@@ -233,7 +234,9 @@ fn ants_are_exported_with_their_media() {
         rows.push(
             run_one(
                 &parse_rule(rule).unwrap(),
-                &jetcarp_core::library::tiling_list("square").unwrap().remove(0),
+                &jetcarp_core::library::tiling_list("square")
+                    .unwrap()
+                    .remove(0),
                 &Start::Empty,
                 &lim(steps),
             )

@@ -7,10 +7,10 @@
 //! `JetcarpApp::try_exec`, the path behind all of the app's buttons.
 
 use super::JetcarpApp;
+use eframe::egui::{self, Color32, RichText};
 use jetcarp_core::Command;
 use jetcarp_core::world::{Applied, Scene, World};
 use jetcarp_mcp::link::{DEFAULT_PORT, Listener};
-use eframe::egui::{self, Color32, RichText};
 use serde_json::{Value, json};
 use std::sync::Arc;
 

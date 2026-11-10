@@ -271,7 +271,8 @@ fn orbit(q: P, p: P, order: u32, mirror: Option<f64>) -> Vec<P> {
         points.push((c2 * x + s2 * y, s2 * x - c2 * y));
     }
     for k in 0..order {
-        let (s, c) = jetcarp_core::detmath::sin_cos(std::f64::consts::TAU * k as f64 / order as f64);
+        let (s, c) =
+            jetcarp_core::detmath::sin_cos(std::f64::consts::TAU * k as f64 / order as f64);
         for &(x, y) in &points {
             out.push([q[0] + c * x - s * y, q[1] + s * x + c * y]);
         }

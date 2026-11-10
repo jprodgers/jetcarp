@@ -2,8 +2,8 @@
 //! tiling panel and the tile editor. The 81 types are kept out of the flat family lists: those
 //! show one "Isohedral" entry, and this picker chooses the type.
 
-use jetcarp_core::isohedral::{self, IH_FAMILIES, IH_TYPES};
 use eframe::egui::{self, RichText};
+use jetcarp_core::isohedral::{self, IH_FAMILIES, IH_TYPES};
 use serde_json::{Value, json};
 
 pub fn is_ih(id: &str) -> bool {

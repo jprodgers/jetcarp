@@ -28,6 +28,6 @@ pub mod world;
 pub use ctx::{Ctx, FsPolicy, Limits, Paths, Platform};
 pub use error::{ApiError, ErrorKind};
 pub use op::{
-    Callbacks, DynOp, NoInput, Op, Progress, Quiet, Report, WorldOp, call, call_json,
-    call_json_on, call_on, find,
+    Callbacks, DynOp, NoInput, Op, Progress, Quiet, Report, WorldOp, call, call_json, call_json_on,
+    call_on, find,
 };

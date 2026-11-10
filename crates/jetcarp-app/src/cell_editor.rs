@@ -4,12 +4,12 @@
 //! edits the cell and draws the report.
 
 use crate::editor::EditorAction;
+use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use jetcarp_core::TilingSpec;
 use jetcarp_core::catalog;
 use jetcarp_core::cellcheck::{self, CellReport, Problem, UnitCell};
 use jetcarp_core::families::{self, FAMILIES, FamilyKind};
 use jetcarp_core::geom::{self, P, add, cross, dist, dot, len, scale, sub};
-use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 
 /// This window's key in `crate::popout` and the settings file.
 pub const KEY: &str = "cell-editor";

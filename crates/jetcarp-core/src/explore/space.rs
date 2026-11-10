@@ -323,7 +323,11 @@ pub fn all_tilings() -> Vec<TilingChoice> {
             key: key.clone(),
             group: group.clone(),
             aperiodic: is_aperiodic(key),
-            weight: if twin.is_some() { *weight * 0.05 } else { *weight },
+            weight: if twin.is_some() {
+                *weight * 0.05
+            } else {
+                *weight
+            },
             twin_of: twin,
         });
     }
@@ -386,8 +390,10 @@ impl Grid {
         let bin: Vec<u16> = cent
             .iter()
             .map(|p| {
-                let x = (((p[0] as f64 - b[0]) / bw.max(1e-9) * SIDE as f64) as usize).min(SIDE - 1);
-                let y = (((p[1] as f64 - b[1]) / bh.max(1e-9) * SIDE as f64) as usize).min(SIDE - 1);
+                let x =
+                    (((p[0] as f64 - b[0]) / bw.max(1e-9) * SIDE as f64) as usize).min(SIDE - 1);
+                let y =
+                    (((p[1] as f64 - b[1]) / bh.max(1e-9) * SIDE as f64) as usize).min(SIDE - 1);
                 (y * SIDE + x) as u16
             })
             .collect();
@@ -457,10 +463,7 @@ fn mask(rng: &mut Rng, d: usize, k: usize, centre: f64, spread: f64, zero: bool)
 fn bs_rule(rng: &mut Rng, d: usize) -> (u32, u32) {
     let d = d.clamp(3, 30);
     let (bk, sk) = (1 + rng.below(4) as usize, rng.below(6) as usize);
-    let (bc, sc) = (
-        0.15 + 0.35 * rng.next_f64(),
-        0.15 + 0.45 * rng.next_f64(),
-    );
+    let (bc, sc) = (0.15 + 0.35 * rng.next_f64(), 0.15 + 0.45 * rng.next_f64());
     let mut b = mask(rng, d, bk, bc, 0.45, false);
     if b == 0 {
         b = 1 << (1 + rng.below(d.min(5) as u64));
@@ -496,10 +499,7 @@ pub fn sample_ltl(grid: &Grid, rng: &mut Rng, fixed: Option<(Hood, u8)>) -> Opti
     }
     let f = max as f64;
     let (b0, s0) = (0.22 + 0.2 * rng.next_f64(), 0.22 + 0.25 * rng.next_f64());
-    let (bw, sw) = (
-        0.03 + 0.18 * rng.next_f64(),
-        0.05 + 0.3 * rng.next_f64(),
-    );
+    let (bw, sw) = (0.03 + 0.18 * rng.next_f64(), 0.05 + 0.3 * rng.next_f64());
     let span = |a: f64, w: f64| -> (usize, usize) {
         let lo = (a * f).round() as usize;
         (lo.max(1), ((a + w) * f).round() as usize)
@@ -653,7 +653,8 @@ pub fn sample_rule(fam: Fam, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Rule>
             let states = uniform(rng, 2, 3) as u8;
             Rule::HexWolfram {
                 states,
-                number: rng.below((states as u64).pow((states * states) as u32).min(1 << 32)) as u32,
+                number: rng.below((states as u64).pow((states * states) as u32).min(1 << 32))
+                    as u32,
             }
         }
         Fam::HexTri => {
@@ -758,21 +759,42 @@ pub fn mutate_rule(rule: &Rule, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Ru
             },
         },
         Rule::Cyclic { states, threshold } => {
-            let (s, t) = bump(rng, *states as i64, *threshold as i64, 3, 1, d as i64 / 2 + 1);
+            let (s, t) = bump(
+                rng,
+                *states as i64,
+                *threshold as i64,
+                3,
+                1,
+                d as i64 / 2 + 1,
+            );
             Rule::Cyclic {
                 states: s as u8,
                 threshold: t as u8,
             }
         }
         Rule::Rps { states, threshold } => {
-            let (s, t) = bump(rng, *states as i64, *threshold as i64, 3, 1, d as i64 / 2 + 1);
+            let (s, t) = bump(
+                rng,
+                *states as i64,
+                *threshold as i64,
+                3,
+                1,
+                d as i64 / 2 + 1,
+            );
             Rule::Rps {
                 states: s as u8,
                 threshold: t as u8,
             }
         }
         Rule::GreenbergHastings { states, threshold } => {
-            let (s, t) = bump(rng, *states as i64, *threshold as i64, 3, 1, d as i64 / 2 + 1);
+            let (s, t) = bump(
+                rng,
+                *states as i64,
+                *threshold as i64,
+                3,
+                1,
+                d as i64 / 2 + 1,
+            );
             Rule::GreenbergHastings {
                 states: s as u8,
                 threshold: t as u8,
@@ -837,7 +859,10 @@ pub fn mutate_rule(rule: &Rule, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Ru
                 1 => j.pos_survive = toggle(rng, j.pos_survive, d, true),
                 2 => j.neg_birth = toggle(rng, j.neg_birth, d, false),
                 3 => j.neg_survive = toggle(rng, j.neg_survive, d, true),
-                _ => j.blast = (j.blast as i64 + if rng.below(2) == 0 { 1 } else { -1 }).clamp(0, 4) as u8,
+                _ => {
+                    j.blast =
+                        (j.blast as i64 + if rng.below(2) == 0 { 1 } else { -1 }).clamp(0, 4) as u8
+                }
             }
             Rule::Jaca(j)
         }

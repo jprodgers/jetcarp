@@ -555,7 +555,10 @@ mod tests {
             fn world(&self) -> &jetcarp_core::World {
                 &self.s.world
             }
-            fn exec(&mut self, c: jetcarp_core::Command) -> Result<jetcarp_core::world::Applied, String> {
+            fn exec(
+                &mut self,
+                c: jetcarp_core::Command,
+            ) -> Result<jetcarp_core::world::Applied, String> {
                 self.s.exec(c)
             }
             fn replace(&mut self, s: jetcarp_core::Scene) -> Result<(), String> {

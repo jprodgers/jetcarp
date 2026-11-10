@@ -17,7 +17,8 @@ use jetcarp_core::render::Image;
 use jetcarp_core::*;
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!("jetcarp-media-test-{name}-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("jetcarp-media-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     Library::open(dir)
 }

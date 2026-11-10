@@ -325,7 +325,10 @@ fn script_five_matches_the_json_scene() {
         })
         .collect();
     assert_eq!(stages.len(), 5);
-    let sc = jetcarp_core::Scene::from_json(include_str!("../../jetcarp-core/data/scenes/script-five.json")).unwrap();
+    let sc = jetcarp_core::Scene::from_json(include_str!(
+        "../../jetcarp-core/data/scenes/script-five.json"
+    ))
+    .unwrap();
     let mut w = jetcarp_core::World::from_scene(&sc).unwrap();
     let mut ends = vec![];
     let mut step = w.script_state.step;
@@ -419,7 +422,9 @@ fn scene_sweeps_vary_one_ca() {
         .commands
         .retain(|c| !matches!(c, jetcarp_core::Command::Step { .. }));
     let mut again = jetcarp_core::World::from_scene(&start).unwrap();
-    again.apply(jetcarp_core::Command::Step { gens: 12 }).unwrap();
+    again
+        .apply(jetcarp_core::Command::Step { gens: 12 })
+        .unwrap();
     assert_eq!(r[2]["hash"], again.hash_hex());
     // Different rules give different worlds (the rule really was replaced).
     assert_ne!(r[0]["hash"], r[2]["hash"]);
@@ -620,8 +625,12 @@ fn three_parent_hexagon_sweep() {
     let r = rows(&folder(&s));
     assert_eq!(r.len(), 32);
     // The flat-top grid is the default; every run stops at the bottom half-row layer.
-    let size =
-        jetcarp_core::topology::fill_size(&jetcarp_core::TilingSpec::new("hex_flat"), 320.0, 200.0, 8.0);
+    let size = jetcarp_core::topology::fill_size(
+        &jetcarp_core::TilingSpec::new("hex_flat"),
+        320.0,
+        200.0,
+        8.0,
+    );
     let jetcarp_core::SizeSpec::Rect { h, .. } = size else {
         panic!("{size:?}")
     };

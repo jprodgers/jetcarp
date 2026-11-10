@@ -652,7 +652,8 @@ impl JetcarpApp {
     }
 
     fn aperiodic_family(&self) -> bool {
-        jetcarp_core::families::family(&self.t_family).is_some_and(|f| f.kind == FamilyKind::Aperiodic)
+        jetcarp_core::families::family(&self.t_family)
+            .is_some_and(|f| f.kind == FamilyKind::Aperiodic)
     }
 
     pub(super) fn action_enabled(&self, a: Action) -> bool {

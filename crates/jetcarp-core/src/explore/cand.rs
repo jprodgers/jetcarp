@@ -53,7 +53,9 @@ impl Cand {
         self.tiling.hash(&mut h);
         (self.nb as u8).hash(&mut h);
         self.rule.hash(&mut h);
-        serde_json::to_string(&self.seed).unwrap_or_default().hash(&mut h);
+        serde_json::to_string(&self.seed)
+            .unwrap_or_default()
+            .hash(&mut h);
         self.cells.hash(&mut h);
         self.rng.hash(&mut h);
         h.finish()

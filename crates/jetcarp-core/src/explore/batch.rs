@@ -129,11 +129,7 @@ pub fn neighbor_csr(topo: &Topology, nb: Nb, ltl: Option<(Hood, u8)>) -> Result<
 }
 
 /// Step one prepared world (one running CA, on field 0) and measure it.
-pub fn trace_world(
-    world: &mut World,
-    gens: u32,
-    frames_at: &[u32],
-) -> Result<WorldTrace, String> {
+pub fn trace_world(world: &mut World, gens: u32, frames_at: &[u32]) -> Result<WorldTrace, String> {
     if world.fields.is_empty() {
         return Err("the world has no field".into());
     }

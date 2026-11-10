@@ -2,7 +2,7 @@
 
 use super::cand::Cand;
 use super::job::feat_from_blob;
-use super::space::{Fam, sized_spec, ALL_FAMS};
+use super::space::{ALL_FAMS, Fam, sized_spec};
 use crate::render::{Image, RenderOptions, render_fitted};
 use crate::sheet::{Label, labelled_sheet_scaled};
 use crate::topology::Nb;
@@ -154,7 +154,11 @@ pub fn sheet(
         );
         for (k, img) in v.iter().enumerate() {
             let label: Label = if k == 0 {
-                vec![(line1.clone(), white), (line2.clone(), dim), (line3.clone(), dim)]
+                vec![
+                    (line1.clone(), white),
+                    (line2.clone(), dim),
+                    (line3.clone(), dim),
+                ]
             } else {
                 vec![
                     (format!("t={}", (r.cand.gens as f64 * fracs[k]) as u32), dim),

@@ -4,9 +4,9 @@
 
 use crate::rhai_edit;
 use crate::sweep_form::{self, ScreenInfo, SweepForm, thousands};
+use eframe::egui::{self, Color32, RichText, text::LayoutJob};
 use jetcarp_core::World;
 use jetcarp_script::{Event, Job, Progress, RunOptions, Screen, ScriptError, Summary};
-use eframe::egui::{self, Color32, RichText, text::LayoutJob};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;

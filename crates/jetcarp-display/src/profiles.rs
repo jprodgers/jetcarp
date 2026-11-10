@@ -1147,8 +1147,10 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("jetcarp-profiles-test-{}-{name}", std::process::id()));
+        let d = std::env::temp_dir().join(format!(
+            "jetcarp-profiles-test-{}-{name}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&d);
         d
     }

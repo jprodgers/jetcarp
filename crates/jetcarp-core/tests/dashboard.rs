@@ -247,7 +247,11 @@ fn menu_has_every_source_categories_and_search() {
     // One approved scene and the built-ins; the candidate is hidden.
     assert_eq!(items.len(), n_built + 1);
     assert!(items.iter().all(|i| i.q.id != "find:waiting"));
-    assert!(items.iter().all(|i| i.q.id.strip_prefix("find:").is_none_or(|x| x == "my-life")));
+    assert!(
+        items
+            .iter()
+            .all(|i| i.q.id.strip_prefix("find:").is_none_or(|x| x == "my-life"))
+    );
     let mine = items.iter().find(|i| i.q.id == "find:my-life").unwrap();
     assert_eq!(
         (mine.origin, mine.family.as_str(), mine.grid_group.as_str()),
@@ -302,7 +306,12 @@ fn menu_has_every_source_categories_and_search() {
     assert!(qsmenu::rate_entry(&lib, &row, 6).is_err());
     let r = lib.ratings(Some("quickstart")).unwrap();
     assert_eq!(
-        (r.len(), r[0].target_id.as_str(), r[0].rating, r[0].rater.as_str()),
+        (
+            r.len(),
+            r[0].target_id.as_str(),
+            r[0].rating,
+            r[0].rater.as_str()
+        ),
         (1, "my-life", 5.0, "user")
     );
     lib.note_quickstart_open("find:my-life").unwrap();

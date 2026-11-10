@@ -165,7 +165,8 @@ pub fn run(a: ExploreArgs) -> Result<()> {
                 min_score,
                 max_entries,
             };
-            let n = jetcarp_core::explore::atlas::build(&conn, &out, &opts).map_err(|e| anyhow!(e))?;
+            let n =
+                jetcarp_core::explore::atlas::build(&conn, &out, &opts).map_err(|e| anyhow!(e))?;
             println!("{n} entries in {}", out.display());
             Ok(())
         }

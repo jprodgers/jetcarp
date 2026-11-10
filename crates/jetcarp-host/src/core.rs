@@ -136,7 +136,9 @@ fn seed() -> u64 {
 }
 
 /// The rotation called `name`, ready to run. An unknown name is an error, not a silent default.
-pub fn load_rotation(name: &str) -> Result<(Rotation, Vec<jetcarp_display::rotation::Slot>), String> {
+pub fn load_rotation(
+    name: &str,
+) -> Result<(Rotation, Vec<jetcarp_display::rotation::Slot>), String> {
     let (r, slots, warnings) = jetcarp_display::rotation::load_stored(name)?;
     for w in warnings {
         say!("jetcarp-host: {name}: {w}");

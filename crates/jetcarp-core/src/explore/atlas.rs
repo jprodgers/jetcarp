@@ -44,7 +44,11 @@ impl Default for AtlasOpts {
 /// at what the search found.
 pub fn categorize(fate: &str, f: &Features, fam: Fam, gens: u32) -> &'static str {
     if fam.is_rows() {
-        return if f.bits > 0.3 { "Fractals & rows" } else { QUIET_ROWS };
+        return if f.bits > 0.3 {
+            "Fractals & rows"
+        } else {
+            QUIET_ROWS
+        };
     }
     if fam == Fam::Sandpile {
         return "Sandpiles";
@@ -109,18 +113,50 @@ pub fn categorize(fate: &str, f: &Features, fam: Fam, gens: u32) -> &'static str
 }
 
 /// A palette for an entry.
-pub fn pick_palette(cat: &str, fam: Fam, states: usize, id: i64) -> (&'static str, Option<&'static str>) {
+pub fn pick_palette(
+    cat: &str,
+    fam: Fam,
+    states: usize,
+    id: i64,
+) -> (&'static str, Option<&'static str>) {
     // Age-coloured rules show settled cells in a palette's last stop, so it has to stay bright or
     // a pattern that has found order fades into the background.
     let settled = [
-        "Verdigris", "Marigold", "Coral", "Orchid", "Citrus", "Riso", "Bone", "Ultramarine",
-        "Stained Glass", "Opal", "Synthwave", "Blueprint",
+        "Verdigris",
+        "Marigold",
+        "Coral",
+        "Orchid",
+        "Citrus",
+        "Riso",
+        "Bone",
+        "Ultramarine",
+        "Stained Glass",
+        "Opal",
+        "Synthwave",
+        "Blueprint",
     ];
-    let movers = ["Prism", "Synthwave", "Neon", "Koi", "Candy", "Riso", "Coral", "Citrus"];
+    let movers = [
+        "Prism",
+        "Synthwave",
+        "Neon",
+        "Koi",
+        "Candy",
+        "Riso",
+        "Coral",
+        "Citrus",
+    ];
     // Whole-grid fields: strong, distinct stops. Palettes that open on white wash these out.
     let fields = [
-        "Stained Glass", "Riso", "Ember", "Tide", "Synthwave", "Aurora", "Verdigris", "Thermal",
-        "Bone", "Deep Sea",
+        "Stained Glass",
+        "Riso",
+        "Ember",
+        "Tide",
+        "Synthwave",
+        "Aurora",
+        "Verdigris",
+        "Thermal",
+        "Bone",
+        "Deep Sea",
     ];
     let wheels = ["Stained Glass", "Opal"];
     let jaca_pos = ["Aurora", "Ultramarine", "Verdigris", "Orchid"];
@@ -129,7 +165,10 @@ pub fn pick_palette(cat: &str, fam: Fam, states: usize, id: i64) -> (&'static st
     let mixed = ((id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) as usize;
     let pick = |set: &[&'static str]| set[mixed % set.len()];
     if fam == Fam::Jaca {
-        return (pick(&jaca_pos), Some(jaca_neg[(mixed >> 8) % jaca_neg.len()]));
+        return (
+            pick(&jaca_pos),
+            Some(jaca_neg[(mixed >> 8) % jaca_neg.len()]),
+        );
     }
     let field_rule = matches!(
         fam,
@@ -322,7 +361,9 @@ pub fn load_card(conn: &AtlasConn, id: i64) -> Result<AtlasCard, String> {
 pub fn load_full(path: &Path, id: i64) -> Result<Scene, String> {
     let c = open(path)?;
     let full: String = c
-        .query_row("SELECT full FROM entries WHERE id=?1", params![id], |r| r.get(0))
+        .query_row("SELECT full FROM entries WHERE id=?1", params![id], |r| {
+            r.get(0)
+        })
         .map_err(|x| x.to_string())?;
     serde_json::from_str(&full).map_err(|x| x.to_string())
 }
@@ -384,8 +425,10 @@ pub fn load(path: &Path) -> Result<Vec<AtlasEntry>, String> {
                 rule: r.get(6)?,
                 seed: r.get(7)?,
                 score: r.get(8)?,
-                preview: serde_json::from_str(&prev).unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
-                full: serde_json::from_str(&full).unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
+                preview: serde_json::from_str(&prev)
+                    .unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
+                full: serde_json::from_str(&full)
+                    .unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
                 mature_gen: r.get::<_, i64>(11)? as u32,
                 mature: r.get(12)?,
             })
@@ -446,7 +489,10 @@ fn tiling_group(key: &str) -> String {
 }
 
 /// Select runs for the atlas: a list of `(parent run, confirmed score, category)`.
-pub fn select(conn: &Connection, opts: &AtlasOpts) -> Result<Vec<(RunRow, f64, &'static str)>, String> {
+pub fn select(
+    conn: &Connection,
+    opts: &AtlasOpts,
+) -> Result<Vec<(RunRow, f64, &'static str)>, String> {
     let scores = confirmed_scores(conn)?;
     let runs = query_runs(
         conn,
@@ -469,7 +515,11 @@ pub fn select(conn: &Connection, opts: &AtlasOpts) -> Result<Vec<(RunRow, f64, &
             let f = feat_from_blob(&r.feats);
             let c = categorize(&r.fate, &f, r.cand.fam, r.cand.gens);
             // Plain stripes from one cell don't earn the lift the fractal ones do.
-            let s = if c == QUIET_ROWS { s } else { seed_adjusted(r.cand.fam, &r.cand.seed, &r.fate, s) };
+            let s = if c == QUIET_ROWS {
+                s
+            } else {
+                seed_adjusted(r.cand.fam, &r.cand.seed, &r.fate, s)
+            };
             Some((r, s, c))
         })
         .collect();
@@ -601,7 +651,11 @@ fn contrast_picks(
             continue;
         }
         // WireWorld contrast means circuits, the busy ones first.
-        let order = if fam == Fam::WireWorld { "(seed_kind='circuit') DESC, score DESC" } else { "score DESC" };
+        let order = if fam == Fam::WireWorld {
+            "(seed_kind='circuit') DESC, score DESC"
+        } else {
+            "score DESC"
+        };
         let mut runs = query_runs(
             conn,
             &format!(
@@ -613,7 +667,11 @@ fn contrast_picks(
             runs.sort_by_key(|r| !busy_circuit(&r.cand.seed, &r.fate));
         }
         // A family tied to one or two grids can fill its share there.
-        let tilings = runs.iter().map(|r| r.cand.tiling.as_str()).collect::<HashSet<_>>().len();
+        let tilings = runs
+            .iter()
+            .map(|r| r.cand.tiling.as_str())
+            .collect::<HashSet<_>>()
+            .len();
         let tiling_cap = if tilings < 4 { THIN_FAMILY } else { 8 };
         let mut rules: HashSet<(String, String)> = HashSet::new();
         let mut per_tiling: HashMap<String, usize> = HashMap::new();
@@ -686,26 +744,27 @@ fn make_entry(run: &RunRow, score: f64, cat: &str, group: &str) -> Result<AtlasE
     let preview = scene_for(c.cells, c.rng)?;
     let full = scene_for(64_000, c.rng)?;
     // Skip to where the action is: just before the run settles, or halfway.
-    let (mature_gen, mature) = if c.fam.is_rows() || matches!(c.fam, Fam::Turmite | Fam::Sandpile | Fam::Lenia) {
-        (0, None)
-    } else {
-        let at = if run.fate == "died" {
-            0
-        } else if run.fate == "running" {
-            c.gens / 2
-        } else {
-            f.settle.saturating_sub(200).min(c.gens)
-        };
-        if at == 0 {
+    let (mature_gen, mature) =
+        if c.fam.is_rows() || matches!(c.fam, Fam::Turmite | Fam::Sandpile | Fam::Lenia) {
             (0, None)
         } else {
-            let mut w = World::from_scene(&preview)?;
-            for _ in 0..at {
-                w.step();
+            let at = if run.fate == "died" {
+                0
+            } else if run.fate == "running" {
+                c.gens / 2
+            } else {
+                f.settle.saturating_sub(200).min(c.gens)
+            };
+            if at == 0 {
+                (0, None)
+            } else {
+                let mut w = World::from_scene(&preview)?;
+                for _ in 0..at {
+                    w.step();
+                }
+                (at, w.fields.first().map(|x| deflate(&x.state)))
             }
-            (at, w.fields.first().map(|x| deflate(&x.state)))
-        }
-    };
+        };
     Ok(AtlasEntry {
         id: run.id,
         title: format!("{} on {}", c.rule, c.tiling),
@@ -733,7 +792,10 @@ pub fn build(conn: &Connection, out: &Path, opts: &AtlasOpts) -> Result<usize, S
     let entries: Vec<AtlasEntry> = picks
         .par_iter()
         .filter_map(|(r, s, c)| {
-            let group = groups.get(&r.cand.tiling).cloned().unwrap_or_else(|| "other".into());
+            let group = groups
+                .get(&r.cand.tiling)
+                .cloned()
+                .unwrap_or_else(|| "other".into());
             make_entry(r, *s, c, &group).ok()
         })
         .collect();
@@ -773,7 +835,11 @@ pub fn build(conn: &Connection, out: &Path, opts: &AtlasOpts) -> Result<usize, S
 
 /// A stratified sample of screened runs for a person to rate: spread over categories and
 /// families, half strong and half random, so ratings can calibrate the score.
-pub fn taste_sample(conn: &Connection, n: usize, seed: u64) -> Result<Vec<(RunRow, &'static str)>, String> {
+pub fn taste_sample(
+    conn: &Connection,
+    n: usize,
+    seed: u64,
+) -> Result<Vec<(RunRow, &'static str)>, String> {
     let strong = query_runs(
         conn,
         "SELECT id FROM runs WHERE stage=1 ORDER BY score DESC LIMIT 12000",
@@ -875,14 +941,26 @@ mod tests {
 
     #[test]
     fn seeding_shifts_the_atlas_score() {
-        let busy = SeedSpec::Circuit { sites: 60, electrons: 300 };
-        let thin = SeedSpec::Circuit { sites: 8, electrons: 8 };
+        let busy = SeedSpec::Circuit {
+            sites: 60,
+            electrons: 300,
+        };
+        let thin = SeedSpec::Circuit {
+            sites: 8,
+            electrons: 8,
+        };
         let soup = SeedSpec::Random { density: 0.3 };
         assert_eq!(seed_adjusted(Fam::WireWorld, &busy, "cycle", 0.6), 1.2);
         assert_eq!(seed_adjusted(Fam::WireWorld, &busy, "froze", 0.6), 0.6);
         assert_eq!(seed_adjusted(Fam::WireWorld, &thin, "cycle", 0.6), 0.6);
-        assert_eq!(seed_adjusted(Fam::Wolfram, &SeedSpec::TopCenter, "froze", 1.0), 1.5);
-        assert_eq!(seed_adjusted(Fam::Layered, &SeedSpec::Center, "froze", 1.0), 1.25);
+        assert_eq!(
+            seed_adjusted(Fam::Wolfram, &SeedSpec::TopCenter, "froze", 1.0),
+            1.5
+        );
+        assert_eq!(
+            seed_adjusted(Fam::Layered, &SeedSpec::Center, "froze", 1.0),
+            1.25
+        );
         assert_eq!(seed_adjusted(Fam::Layered, &soup, "froze", 1.0), 0.6);
         assert_eq!(seed_adjusted(Fam::Jaca, &soup, "cycle", 1.0), 1.0);
     }

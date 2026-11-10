@@ -10,12 +10,12 @@
 
 use crate::gpu::{Geometry, TileCallback, TileRenderer};
 use crate::start;
+use eframe::egui::{self, Color32, RichText, Sense};
 use jetcarp_core::families::{FAMILIES, FamilyKind};
 use jetcarp_core::render::{self, ColorBy, Palette, RenderOptions};
 use jetcarp_core::rules::{FieldKind, Rule, catalog};
 use jetcarp_core::world::Applied;
 use jetcarp_core::*;
-use eframe::egui::{self, Color32, RichText, Sense};
 use std::sync::Arc;
 
 /// Opt-in local endpoint for AI control (MCP). A child module so it can use `try_exec`.

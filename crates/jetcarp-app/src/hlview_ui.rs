@@ -14,12 +14,12 @@
 //! - `JETCARP_HLVIEW=<gens>[:<pixels per cell>[:<i>,<j>]]` (headless checks) opens the window on
 //!   the loaded scene, jumps synchronously, and frames the pattern (or the given centre).
 
+use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Vec2};
 use jetcarp_core::World;
 use jetcarp_core::geom::{Affine, P};
 use jetcarp_core::hashlife::{self, HlColors, Options, Plane};
 use jetcarp_core::render::Palette;
 use jetcarp_core::topology::LatticeGrid;
-use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Vec2};
 use std::sync::mpsc;
 
 /// This window's key in `crate::popout` and the settings file.

@@ -1599,9 +1599,7 @@ pub fn render_many(
 
 fn id_of(t: &MediaTarget) -> String {
     match t {
-        MediaTarget::Pattern(x)
-        | MediaTarget::QuickStart(x)
-        | MediaTarget::Ant(x) => x.clone(),
+        MediaTarget::Pattern(x) | MediaTarget::QuickStart(x) | MediaTarget::Ant(x) => x.clone(),
     }
 }
 

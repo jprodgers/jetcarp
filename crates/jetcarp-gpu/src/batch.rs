@@ -1035,7 +1035,12 @@ impl BatchSim {
         self.read_mapped(buf, bytes, |view| {
             traces.par_iter_mut().enumerate().for_each(|(w, tr)| {
                 let at = w * stride * 4;
-                let frame: Vec<u8> = view[at..at + n * 4].as_chunks::<4>().0.iter().map(|c| c[0]).collect();
+                let frame: Vec<u8> = view[at..at + n * 4]
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| c[0])
+                    .collect();
                 tr.frames.push(frame);
             });
         })

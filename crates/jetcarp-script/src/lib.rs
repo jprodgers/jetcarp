@@ -845,10 +845,22 @@ mod tests {
 /// Example scripts shipped with JETCARP (the files in this crate's `scripts/` folder), as
 /// (file name, source). The app lists them in its Scripts window.
 pub const EXAMPLES: &[(&str, &str)] = &[
-    ("hexw3-atlas.rhai", include_str!("../scripts/hexw3-atlas.rhai")),
+    (
+        "hexw3-atlas.rhai",
+        include_str!("../scripts/hexw3-atlas.rhai"),
+    ),
     ("hexw-all.rhai", include_str!("../scripts/hexw-all.rhai")),
-    ("wolfram-all.rhai", include_str!("../scripts/wolfram-all.rhai")),
+    (
+        "wolfram-all.rhai",
+        include_str!("../scripts/wolfram-all.rhai"),
+    ),
     ("soup-hunt.rhai", include_str!("../scripts/soup-hunt.rhai")),
-    ("catalog-hunt.rhai", include_str!("../scripts/catalog-hunt.rhai")),
-    ("script-five.rhai", include_str!("../scripts/script-five.rhai")),
+    (
+        "catalog-hunt.rhai",
+        include_str!("../scripts/catalog-hunt.rhai"),
+    ),
+    (
+        "script-five.rhai",
+        include_str!("../scripts/script-five.rhai"),
+    ),
 ];

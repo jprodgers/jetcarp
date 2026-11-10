@@ -9,9 +9,9 @@
 //! - **HashLife view…**: the pattern on the plane in its own window (`hlview_ui`), jumped any
 //!   distance and drawn from the quadtree at any zoom.
 
+use eframe::egui;
 use jetcarp_core::World;
 use jetcarp_core::hashlife;
-use eframe::egui;
 
 pub enum JumpAction {
     InPlace(u64),

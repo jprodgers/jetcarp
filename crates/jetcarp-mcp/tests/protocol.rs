@@ -151,7 +151,12 @@ fn stop_when_settled_runs_without_a_count() {
         json!({"tiling": "square", "width": 21, "height": 21, "boundary": "dead",
                "cas": [{"rule": "Sandpile", "seed": "pile:400"}]}),
     ));
-    let t = ok(&call(&mut s, &mut h, "step", json!({"stop_when_settled": true})));
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "step",
+        json!({"stop_when_settled": true}),
+    ));
     assert!(!t.contains("not yet stable"), "{t}");
     assert!(!t.contains("Ran 1 generation"), "{t}");
 }

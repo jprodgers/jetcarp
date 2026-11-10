@@ -2,8 +2,8 @@
 //! builds the `periodic` family with `{"catalog": id}`. State lives in egui memory, so the app only
 //! calls [`show`].
 
-use jetcarp_core::catalog::{self, CatalogTiling};
 use eframe::egui::{self, RichText};
+use jetcarp_core::catalog::{self, CatalogTiling};
 
 #[derive(Clone, Default)]
 struct State {

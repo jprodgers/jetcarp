@@ -328,14 +328,7 @@ pub fn track_movers(g: &Grid, frames: &[&[u8]]) -> (u32, f32) {
             speed += net / gens / tile;
         }
     }
-    (
-        count,
-        if count > 0 {
-            speed / count as f32
-        } else {
-            0.0
-        },
-    )
+    (count, if count > 0 { speed / count as f32 } else { 0.0 })
 }
 
 /// Measure a run. `window` is how many of the last frames (consecutive generations, ending at

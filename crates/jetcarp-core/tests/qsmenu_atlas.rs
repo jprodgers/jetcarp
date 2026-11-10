@@ -2,14 +2,14 @@
 //! filters and counts with atlas items, the Featured shuffle, and that every named rule stays
 //! reachable when the atlas covers some of them.
 
+use flate2::Compression;
+use flate2::write::DeflateEncoder;
 use jetcarp_core::explore::atlas::{self, AtlasEntry};
 use jetcarp_core::library::Library;
 use jetcarp_core::qsmenu::{self, Filter, Origin, Sort, canonical_rule};
 use jetcarp_core::rules::catalog;
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_core::{CaSpec, Scene, World};
-use flate2::Compression;
-use flate2::write::DeflateEncoder;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -69,7 +69,12 @@ fn atlas_lookup_order() {
 }
 
 fn life_scene(rule: &str, w: u32, h: u32) -> Scene {
-    let mut s = Scene::new(TilingSpec::rect("square", w, h, jetcarp_core::Boundary::Wrap));
+    let mut s = Scene::new(TilingSpec::rect(
+        "square",
+        w,
+        h,
+        jetcarp_core::Boundary::Wrap,
+    ));
     let mut ca = CaSpec::new(rule);
     ca.palette = Some("Ember".into());
     ca.palette_neg = Some("Ink".into());

@@ -253,7 +253,8 @@ impl JetcarpApp {
         let parsed = std::fs::read_to_string(&path)
             .map_err(|e| e.to_string())
             .and_then(|t| {
-                serde_json::from_str::<jetcarp_core::table::RuleTable>(&t).map_err(|e| e.to_string())
+                serde_json::from_str::<jetcarp_core::table::RuleTable>(&t)
+                    .map_err(|e| e.to_string())
             });
         match parsed {
             Ok(table) => {

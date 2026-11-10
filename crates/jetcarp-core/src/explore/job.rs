@@ -291,7 +291,12 @@ fn emit(
                 let (sd, k) = seed_for(fam, grid, rng);
                 (r, k.to_string(), sd, "random")
             } else if roll < 0.65 {
-                let el = s.archive.lock().unwrap().sample(rng, Some(fam)).map(|(_, e)| e.clone());
+                let el = s
+                    .archive
+                    .lock()
+                    .unwrap()
+                    .sample(rng, Some(fam))
+                    .map(|(_, e)| e.clone());
                 let Some(el) = el else { continue };
                 let Some(base) = el.cand.rule() else { continue };
                 if let Some(g) = ltl
@@ -302,7 +307,12 @@ fn emit(
                 let r = space::mutate_rule(&base, grid, nb, rng);
                 (r, "mutated".to_string(), el.cand.seed.clone(), "mutate")
             } else if roll < 0.8 {
-                let el = s.archive.lock().unwrap().sample(rng, Some(fam)).map(|(_, e)| e.clone());
+                let el = s
+                    .archive
+                    .lock()
+                    .unwrap()
+                    .sample(rng, Some(fam))
+                    .map(|(_, e)| e.clone());
                 let Some(el) = el else { continue };
                 let Some(base) = el.cand.rule() else { continue };
                 if let Some(g) = ltl
@@ -340,7 +350,9 @@ fn emit(
                     let i = rng.below(q.len() as u64) as usize;
                     q.swap_remove(i)
                 };
-                let Ok((r, _)) = Rule::parse(&named.1) else { continue };
+                let Ok((r, _)) = Rule::parse(&named.1) else {
+                    continue;
+                };
                 let f2 = Fam::of(&r);
                 // A rule this loop cannot run goes back for the other loop.
                 if ltl.is_some()
@@ -403,8 +415,12 @@ fn publish(s: &Shared, rows: Vec<RowOut>, stage: u8) {
         let mut a = s.archive.lock().unwrap();
         let mut cov = s.coverage.lock().unwrap();
         for r in &rows {
-            *cov.entry((s.tiling_index(&r.ev.cand.tiling), r.ev.cand.fam, r.seed_kind.clone()))
-                .or_insert(0) += 1;
+            *cov.entry((
+                s.tiling_index(&r.ev.cand.tiling),
+                r.ev.cand.fam,
+                r.seed_kind.clone(),
+            ))
+            .or_insert(0) += 1;
             a.offer(r.id, r.ev.clone(), s.group(&r.ev.cand.tiling));
         }
     } else {
@@ -511,14 +527,20 @@ fn gpu_round(s: &Shared, be: &mut dyn Backend, rng: &mut Rng) -> Result<(), Stri
     let tg = Instant::now();
     let grid = s.grid(&key, s.cfg.screen_cells)?;
     if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() {
-        eprintln!("grid {key} {:.2}s; t={:.1}", tg.elapsed().as_secs_f64(), s.t_start.elapsed().as_secs_f64());
+        eprintln!(
+            "grid {key} {:.2}s; t={:.1}",
+            tg.elapsed().as_secs_f64(),
+            s.t_start.elapsed().as_secs_f64()
+        );
     }
     let nb = if grid.has_edge && rng.below(4) == 0 {
         Nb::Edge
     } else {
         Nb::Touch
     };
-    let mut max_worlds = (be.max_cells() / grid.topo.len().next_multiple_of(256)).min(s.cfg.batch).max(1);
+    let mut max_worlds = (be.max_cells() / grid.topo.len().next_multiple_of(256))
+        .min(s.cfg.batch)
+        .max(1);
     let ltl = if ltl_round {
         let hood = if rng.below(4) == 0 {
             Hood::VonNeumann
@@ -526,7 +548,11 @@ fn gpu_round(s: &Shared, be: &mut dyn Backend, rng: &mut Rng) -> Result<(), Stri
             Hood::Moore
         };
         // The largest range whose reach stays affordable (aperiodic reaches run slowly).
-        let limit = if grid.topo.lattice().is_some() { 180 } else { 60 };
+        let limit = if grid.topo.lattice().is_some() {
+            180
+        } else {
+            60
+        };
         let mut r = (2 + rng.below(5)) as u8;
         while r > 1 && grid.reach_size(hood, r) > limit {
             r -= 1;
@@ -554,7 +580,11 @@ fn gpu_round(s: &Shared, be: &mut dyn Backend, rng: &mut Rng) -> Result<(), Stri
         Some(&filter),
     );
     if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() {
-        eprintln!("emit {:.2}s for {}", te.elapsed().as_secs_f64(), cands.len());
+        eprintln!(
+            "emit {:.2}s for {}",
+            te.elapsed().as_secs_f64(),
+            cands.len()
+        );
     }
     let tagged = cands.into_iter().map(|(c, k)| (c, k, None)).collect();
     gpu_batch(s, be, &grid, nb, tagged, 1)
@@ -673,9 +703,10 @@ fn cpu_loop(s: Arc<Shared>, seed: u64, fams: Vec<(Fam, f64)>) {
                 let key = native_tiling(f).expect("native family");
                 (s.tiling_index(key), vec![(f, 1.0)])
             }
-            1 | 2 if !everywhere.is_empty() => {
-                (s.least_tried_tiling(&mut rng, &everywhere), everywhere.clone())
-            }
+            1 | 2 if !everywhere.is_empty() => (
+                s.least_tried_tiling(&mut rng, &everywhere),
+                everywhere.clone(),
+            ),
             _ => (s.pick_tiling(&mut rng), fams.clone()),
         };
         let key = s.tilings[ti].key.clone();
@@ -965,7 +996,8 @@ fn writer(path: PathBuf, rx: mpsc::Receiver<Vec<RowOut>>) {
 pub fn rescore(db: &Path) -> Result<usize, String> {
     let e = |x: rusqlite::Error| x.to_string();
     let mut c = Connection::open(db).map_err(e)?;
-    c.busy_timeout(std::time::Duration::from_secs(60)).map_err(e)?;
+    c.busy_timeout(std::time::Duration::from_secs(60))
+        .map_err(e)?;
     let scores: Vec<(i64, f64)> = {
         let mut st = c
             .prepare("SELECT id,fam,fate,gens,feats FROM runs")
@@ -993,14 +1025,18 @@ pub fn rescore(db: &Path) -> Result<usize, String> {
         out
     };
     let tx = c.transaction().map_err(e)?;
-    tx.execute_batch("DROP INDEX IF EXISTS runs_score").map_err(e)?;
+    tx.execute_batch("DROP INDEX IF EXISTS runs_score")
+        .map_err(e)?;
     {
-        let mut st = tx.prepare("UPDATE runs SET score=? WHERE id=?").map_err(e)?;
+        let mut st = tx
+            .prepare("UPDATE runs SET score=? WHERE id=?")
+            .map_err(e)?;
         for (id, s) in &scores {
             st.execute(rusqlite::params![s, id]).map_err(e)?;
         }
     }
-    tx.execute_batch("CREATE INDEX runs_score ON runs(score)").map_err(e)?;
+    tx.execute_batch("CREATE INDEX runs_score ON runs(score)")
+        .map_err(e)?;
     tx.commit().map_err(e)?;
     Ok(scores.len())
 }
@@ -1045,8 +1081,25 @@ fn resume(s: &Shared, c: &Connection) -> Result<(), String> {
     let mut seen = s.seen.lock().unwrap();
     let mut cov = s.coverage.lock().unwrap();
     for row in rows.flatten() {
-        let (id, tiling, nb, fam, rule, seed, kind, cells, gens, steps, rng, origin, fate, score, bin, feats, stage) =
-            row;
+        let (
+            id,
+            tiling,
+            nb,
+            fam,
+            rule,
+            seed,
+            kind,
+            cells,
+            gens,
+            steps,
+            rng,
+            origin,
+            fate,
+            score,
+            bin,
+            feats,
+            stage,
+        ) = row;
         let Some(fam) = fam_of(&fam) else { continue };
         let Ok(seed) = serde_json::from_str(&seed) else {
             continue;
@@ -1231,12 +1284,16 @@ pub fn run(cfg: Cfg, backend: Option<Box<dyn Backend>>) -> Result<(), String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let be_name = backend.as_ref().map_or("cpu only".to_string(), |b| b.name());
+    let be_name = backend
+        .as_ref()
+        .map_or("cpu only".to_string(), |b| b.name());
     let mut handles = Vec::new();
     {
         let s = shared.clone();
         let name = be_name.clone();
-        handles.push(std::thread::spawn(move || status_loop(s, name, started, t0)));
+        handles.push(std::thread::spawn(move || {
+            status_loop(s, name, started, t0)
+        }));
     }
     let mut cpu_fams = CPU_FAMS.to_vec();
     match backend {

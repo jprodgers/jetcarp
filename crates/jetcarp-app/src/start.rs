@@ -13,11 +13,11 @@
 
 use crate::previews::{MAX_LIVE, Pool, Source};
 use crate::thumbs;
+use eframe::egui::{self, Color32, Rect, RichText, Sense};
+use jetcarp_core::Scene;
 use jetcarp_core::explore::atlas;
 use jetcarp_core::library::Library;
 use jetcarp_core::qsmenu::{self, Facets, Filter, Item, Origin, Sort};
-use jetcarp_core::Scene;
-use eframe::egui::{self, Color32, Rect, RichText, Sense};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Instant;

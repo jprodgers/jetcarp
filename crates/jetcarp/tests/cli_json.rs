@@ -28,7 +28,10 @@ fn jetcarp(args: &[&str]) -> Output {
         .args(args)
         .env("JETCARP_OUT", out_root())
         .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
-        .env("JETCARP_CONFIG_DIR", test_dir("JETCARP_CONFIG_DIR", "config"))
+        .env(
+            "JETCARP_CONFIG_DIR",
+            test_dir("JETCARP_CONFIG_DIR", "config"),
+        )
         .output()
         .expect("run jetcarp")
 }
@@ -70,8 +73,7 @@ fn json_before_or_after_the_subcommand() {
 #[test]
 fn run_and_verify_as_json() {
     use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, TilingSpec};
-    let dir =
-        out_root().join(format!("cli-json-test-{}", std::process::id()));
+    let dir = out_root().join(format!("cli-json-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let scene = dir.join("soup.json");
@@ -170,8 +172,7 @@ fn glider_catalog(dir: &std::path::Path) -> std::path::PathBuf {
 
 #[test]
 fn library_media_and_picture_commands_as_json() {
-    let dir =
-        out_root().join(format!("cli-json-lib-{}", std::process::id()));
+    let dir = out_root().join(format!("cli-json-lib-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let lib = glider_catalog(&dir);
@@ -294,8 +295,7 @@ fn library_media_and_picture_commands_as_json() {
 
 #[test]
 fn search_and_jobs_commands_as_json() {
-    let dir =
-        out_root().join(format!("cli-json-jobs-{}", std::process::id()));
+    let dir = out_root().join(format!("cli-json-jobs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let lib = dir.join("lib");

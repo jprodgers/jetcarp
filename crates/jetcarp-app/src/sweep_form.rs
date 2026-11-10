@@ -2,10 +2,10 @@
 //! (`jetcarp_script::sweep_to_script` turns it into one), so everything here can also be written
 //! by hand. The model and its JSON are plain Rust (tested below); `ui` draws it.
 
+use eframe::egui::{self, RichText};
 use jetcarp_core::families::{FAMILIES, FamilyKind};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::*;
-use eframe::egui::{self, RichText};
 use serde_json::{Map, Value, json};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

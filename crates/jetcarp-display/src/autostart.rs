@@ -323,7 +323,10 @@ mod tests {
         assert!(d.starts_with("[Desktop Entry]\n"));
         let p = launch_agent(&cmd("/Users/a&b/jetcarp"));
         assert!(p.contains("<string>/Users/a&amp;b/jetcarp</string>"), "{p}");
-        assert!(p.contains("<string>host</string>\n        <string>serve</string>"), "{p}");
+        assert!(
+            p.contains("<string>host</string>\n        <string>serve</string>"),
+            "{p}"
+        );
         assert!(p.contains("<key>RunAtLoad</key>"));
     }
 

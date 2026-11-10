@@ -936,7 +936,11 @@ impl GpuSim {
 
     /// Apply reseed edits planned at the end of a batch: on the GPU for fields whose newest copy
     /// is resident, on the world's copy otherwise (and that field's GPU copy is dropped).
-    fn apply_edits(&mut self, world: &mut World, pending: Vec<(usize, jetcarp_core::reseed::Edits)>) {
+    fn apply_edits(
+        &mut self,
+        world: &mut World,
+        pending: Vec<(usize, jetcarp_core::reseed::Edits)>,
+    ) {
         use wgpu::util::DeviceExt;
         let res = self.res.as_mut().unwrap();
         for (f, edits) in pending {

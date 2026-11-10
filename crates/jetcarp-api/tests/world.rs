@@ -446,7 +446,11 @@ fn reseed_render_save_and_open() {
     h.exec(Command::Step { gens: 100 }).unwrap();
     let r = reseed(&mut h, json!({"activity_gens": 4})).unwrap();
     assert_eq!(r.policies[0].status["fired"], 10);
-    assert!((1..=4).contains(&r.activity.rows.len()), "{:?}", r.activity.rows);
+    assert!(
+        (1..=4).contains(&r.activity.rows.len()),
+        "{:?}",
+        r.activity.rows
+    );
     for (v, needle) in [
         (json!({"mode": "hail"}), "`mode` is random, rain, blobs"),
         (json!({"ca": 1}), "`ca` goes with `mode`"),

@@ -6,8 +6,8 @@
 
 use crate::sweep_form::thousands;
 use crate::thumbs::{self, ThumbCache};
-use jetcarp_core::{Command, World};
 use eframe::egui::{self, Color32, RichText};
+use jetcarp_core::{Command, World};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};

@@ -54,9 +54,10 @@ fn every_example_works() {
 fn examples_are_reproducible() {
     for e in entries().iter().step_by(17) {
         let run = || {
-            let mut w =
-                jetcarp_core::World::from_scene(&jetcarp_core::quickstart::preview_scene(&e.scene, 3000))
-                    .unwrap();
+            let mut w = jetcarp_core::World::from_scene(&jetcarp_core::quickstart::preview_scene(
+                &e.scene, 3000,
+            ))
+            .unwrap();
             w.apply(jetcarp_core::Command::Step { gens: 40 }).unwrap();
             w.hash_hex()
         };

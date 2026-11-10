@@ -53,8 +53,16 @@ impl JetcarpApp {
                         if ca.rule == Rule::VonNeumann {
                             jvn_state_picker(ui, &mut self.draw_value);
                         } else if matches!(ca.rule, Rule::Jaca(_)) {
-                            ui.radio_value(&mut self.draw_value, jetcarp_core::jaca::POS as u32, "+1");
-                            ui.radio_value(&mut self.draw_value, jetcarp_core::jaca::NEG as u32, "−1");
+                            ui.radio_value(
+                                &mut self.draw_value,
+                                jetcarp_core::jaca::POS as u32,
+                                "+1",
+                            );
+                            ui.radio_value(
+                                &mut self.draw_value,
+                                jetcarp_core::jaca::NEG as u32,
+                                "−1",
+                            );
                         } else {
                             ui.add(egui::DragValue::new(&mut self.draw_value).range(1..=max));
                         }

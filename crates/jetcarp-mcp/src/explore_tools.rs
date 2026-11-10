@@ -49,7 +49,8 @@ fn read(args: &Value) -> Result<Connection, String> {
         .map_err(|e| format!("{}: {e}", p.display()))
 }
 
-const DB: &str = "Database: a path, or a name inside the data folder's explore folder (default \"search\").";
+const DB: &str =
+    "Database: a path, or a name inside the data folder's explore folder (default \"search\").";
 
 pub fn definitions() -> Vec<Value> {
     vec![
@@ -193,7 +194,8 @@ fn start(args: &Value) -> Res {
         c.arg("--no-gpu");
     }
     let log = std::fs::File::create(db.with_extension("log")).map_err(|e| e.to_string())?;
-    c.stdout(log.try_clone().map_err(|e| e.to_string())?).stderr(log);
+    c.stdout(log.try_clone().map_err(|e| e.to_string())?)
+        .stderr(log);
     let child = c.spawn().map_err(|e| e.to_string())?;
     Ok(ToolOutput::json(&json!({
         "started": true, "pid": child.id(), "db": db, "hours": hours,
@@ -291,12 +293,19 @@ fn query(args: &Value) -> Res {
 }
 
 fn sheet_tool(args: &Value) -> Res {
-    check_unknown(args, &["db", "ids", "sql", "px", "cols", "fracs", "palette"])?;
+    check_unknown(
+        args,
+        &["db", "ids", "sql", "px", "cols", "fracs", "palette"],
+    )?;
     let conn = read(args)?;
     let sql = if let Some(s) = string(args, "sql")? {
         safe_sql(s)?
     } else if let Some(a) = args.get("ids").and_then(Value::as_array) {
-        let ids: Vec<String> = a.iter().filter_map(Value::as_i64).map(|i| i.to_string()).collect();
+        let ids: Vec<String> = a
+            .iter()
+            .filter_map(Value::as_i64)
+            .map(|i| i.to_string())
+            .collect();
         format!("SELECT id FROM runs WHERE id IN ({})", ids.join(","))
     } else {
         return Err("give ids or sql".into());

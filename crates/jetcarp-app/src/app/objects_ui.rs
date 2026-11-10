@@ -3,8 +3,8 @@
 //! `JetcarpApp` needs no new fields.
 
 use super::JetcarpApp;
-use jetcarp_core::objects::{ObjectOptions, ObjectReport, find_objects};
 use eframe::egui::{self, Color32, RichText, Stroke};
+use jetcarp_core::objects::{ObjectOptions, ObjectReport, find_objects};
 use std::sync::Arc;
 
 #[derive(Clone, Default)]

@@ -54,7 +54,10 @@ impl Link {
     fn client(&mut self) -> std::result::Result<&mut AppClient, String> {
         if self.client.is_none() {
             let c = AppClient::connect(self.info.clone())?;
-            eprintln!("jetcarp mcp: connected to the JETCARP app on port {}", c.port);
+            eprintln!(
+                "jetcarp mcp: connected to the JETCARP app on port {}",
+                c.port
+            );
             *self.app_writer.lock().unwrap() = c.writer();
             self.client = Some(c);
         }

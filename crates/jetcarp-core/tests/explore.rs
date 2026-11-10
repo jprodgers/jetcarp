@@ -19,7 +19,12 @@ fn life(grid: &Grid, cells: &[(usize, usize)]) -> Vec<u8> {
     v
 }
 
-fn run(grid: &Grid, init: Vec<u8>, gens: u32, frames: Vec<u32>) -> jetcarp_core::explore::batch::WorldTrace {
+fn run(
+    grid: &Grid,
+    init: Vec<u8>,
+    gens: u32,
+    frames: Vec<u32>,
+) -> jetcarp_core::explore::batch::WorldTrace {
     let job = BatchJob {
         topo: grid.topo.clone(),
         nb: Nb::Touch,
@@ -154,7 +159,10 @@ fn neighbour_lists_agree_with_the_topology() {
         for i in (0..g.topo.len()).step_by(37) {
             let mut v = Vec::new();
             g.topo.for_each_neighbor(i, nb, |x| v.push(x as u32));
-            assert_eq!(&c.nb[c.off[i] as usize..c.off[i + 1] as usize], v.as_slice());
+            assert_eq!(
+                &c.nb[c.off[i] as usize..c.off[i + 1] as usize],
+                v.as_slice()
+            );
         }
     }
     let t: Arc<_> = g.topo.clone();
@@ -228,7 +236,10 @@ fn circuit_seeds_lay_thin_wires_with_signals_on_any_tiling() {
         .unwrap();
         let count = |s: u8| w.fields[0].state.iter().filter(|x| **x == s).count();
         let wire = count(3) + count(1) + count(2);
-        assert!(wire > 0 && wire < n / 2, "{key}: {wire} of {n} cells are wire");
+        assert!(
+            wire > 0 && wire < n / 2,
+            "{key}: {wire} of {n} cells are wire"
+        );
         assert!(count(1) > 0, "{key}: no signals");
     }
 }

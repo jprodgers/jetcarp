@@ -178,7 +178,11 @@ oo........o...o.oo....o.o.........../\
 ...........o...o..................../\
 ............oo......................";
 
-fn gun_record(rows: &str, rule: &str, mirror: bool) -> (Census, jetcarp_core::library::PatternRecord) {
+fn gun_record(
+    rows: &str,
+    rule: &str,
+    mirror: bool,
+) -> (Census, jetcarp_core::library::PatternRecord) {
     use jetcarp_core::hunt::separate::Obj;
     let c = Census::new(rule, &TilingSpec::new("square"), None, 64).unwrap();
     let mut cells = jetcarp_core::objects::rows_to_cells(rows);
@@ -192,7 +196,9 @@ fn gun_record(rows: &str, rule: &str, mirror: bool) -> (Census, jetcarp_core::li
     let guns: Vec<_> = parts
         .iter()
         .filter_map(|p| match &p.obj {
-            Obj::Pattern(f) if f.class == jetcarp_core::library::PatternClass::Gun => Some(f.clone()),
+            Obj::Pattern(f) if f.class == jetcarp_core::library::PatternClass::Gun => {
+                Some(f.clone())
+            }
             _ => None,
         })
         .collect();

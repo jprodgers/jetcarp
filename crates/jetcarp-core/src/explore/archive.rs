@@ -153,7 +153,12 @@ pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
         4
     };
     let mover = (f.movers > 0) as u32;
-    fate_bin * 5 * 5 * 5 * 5 * 2 + trans * 5 * 5 * 5 * 2 + dens * 5 * 5 * 2 + act * 5 * 2 + shape * 2 + mover
+    fate_bin * 5 * 5 * 5 * 5 * 2
+        + trans * 5 * 5 * 5 * 2
+        + dens * 5 * 5 * 2
+        + act * 5 * 2
+        + shape * 2
+        + mover
 }
 
 /// How many runs each niche keeps.
@@ -187,9 +192,11 @@ impl Archive {
             }
         };
         // One per rule text in a niche: keep the better one.
-        let same_rule = list
-            .iter()
-            .position(|(i, _)| self.runs.get(i).is_some_and(|r| r.cand.rule == ev.cand.rule));
+        let same_rule = list.iter().position(|(i, _)| {
+            self.runs
+                .get(i)
+                .is_some_and(|r| r.cand.rule == ev.cand.rule)
+        });
         if let Some(p) = same_rule {
             if list[p].1 >= score {
                 return false;

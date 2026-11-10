@@ -61,14 +61,17 @@ fn main() {
         (_, "topology") => {
             let t = Instant::now();
             let topo = jetcarp_core::Topology::build(
-                &jetcarp_core::TilingSpec::new(family).with_size(jetcarp_core::SizeSpec::Level(level)),
+                &jetcarp_core::TilingSpec::new(family)
+                    .with_size(jetcarp_core::SizeSpec::Level(level)),
             )
             .unwrap();
             // Bytes held per tile: placements, shape ids, both CSR graphs, open flags.
             let held = match &topo.storage {
                 jetcarp_core::Storage::Explicit(e) => {
                     let place = match &e.transforms {
-                        jetcarp_core::topology::Placements::Exact { places, .. } => places.len() * 20,
+                        jetcarp_core::topology::Placements::Exact { places, .. } => {
+                            places.len() * 20
+                        }
                         jetcarp_core::topology::Placements::Float(v) => v.len() * 48,
                     };
                     let csr: usize = e.csr.iter().map(|c| (c.off.len() + c.nb.len()) * 4).sum();

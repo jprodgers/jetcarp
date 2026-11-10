@@ -6,8 +6,8 @@
 
 use super::{JetcarpApp, Screen};
 use crate::gpu::Geometry;
-use jetcarp_core::{Scene, SizeSpec, TilingSpec, Topology, World, aperiodic};
 use eframe::egui::{self, Color32};
+use jetcarp_core::{Scene, SizeSpec, TilingSpec, Topology, World, aperiodic};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;

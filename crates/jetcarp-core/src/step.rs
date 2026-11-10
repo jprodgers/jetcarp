@@ -308,11 +308,7 @@ fn step_hex_wolfram(topo: &Topology, k: u8, number: u32, cursor: &mut u32, f: &m
     let Some(g) = topo.hex_rows() else { return };
     let live = topo.live_edges() as u32;
     let r = *cursor;
-    let next = if r + 1 >= g.h {
-        return
-    } else {
-        r + 1
-    };
+    let next = if r + 1 >= g.h { return } else { r + 1 };
     // The two edge offsets pointing one row up, ordered left to right.
     let mut up: Vec<_> = g.offsets[Nb::Edge as usize][0]
         .iter()
@@ -385,7 +381,7 @@ fn step_hext(topo: &Topology, kind: FieldKind, table: &[u8], cursor: &mut u32, f
     let live = topo.live_edges() as u32;
     let layers = hext_layers(g);
     let next = if *cursor + 1 >= layers {
-        return
+        return;
     } else {
         *cursor + 1
     };
@@ -540,11 +536,7 @@ fn step_wolfram(topo: &Topology, rule: u8, cursor: &mut u32, f: &mut Field) {
     let Some(g) = topo.rows() else { return };
     let (w, h) = (g.w as i32, g.h);
     let r = *cursor;
-    let next = if r + 1 >= h {
-        return
-    } else {
-        r + 1
-    };
+    let next = if r + 1 >= h { return } else { r + 1 };
     let live = topo.live_edges() as u32;
     let at = |u: i32| -> u32 {
         let u = if g.wrap { u.rem_euclid(w) } else { u };

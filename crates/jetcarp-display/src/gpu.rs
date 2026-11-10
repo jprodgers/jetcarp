@@ -976,7 +976,10 @@ impl TileRenderer {
         let v = self.views.entry(id).or_insert_with(|| ViewGpu {
             geom: 0,
             uniforms: ubuf("jetcarp uniforms", std::mem::size_of::<Uniforms>()),
-            lat_uniforms: ubuf("jetcarp lattice uniforms", std::mem::size_of::<LatUniforms>()),
+            lat_uniforms: ubuf(
+                "jetcarp lattice uniforms",
+                std::mem::size_of::<LatUniforms>(),
+            ),
             texture: None,
             bind: None,
             used: 0,

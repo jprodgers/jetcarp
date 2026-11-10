@@ -1,8 +1,8 @@
 //! `jetcarp script`: run a Rhai script (see `jetcarp_script`), with progress on stderr.
 
 use anyhow::{Context, Result, bail};
-use jetcarp_script::{Event, RunOptions, Screen};
 use clap::Args;
+use jetcarp_script::{Event, RunOptions, Screen};
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

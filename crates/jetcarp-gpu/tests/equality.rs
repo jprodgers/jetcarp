@@ -142,7 +142,10 @@ fn explicit_storage_spectre() {
         );
     }
     // The prototype's glider scene.
-    let sc = Scene::from_json(include_str!("../../jetcarp-core/data/scenes/spectre-glider.json")).unwrap();
+    let sc = Scene::from_json(include_str!(
+        "../../jetcarp-core/data/scenes/spectre-glider.json"
+    ))
+    .unwrap();
     compare_gpu(&mut sim, &sc, &[3, 100, 300], "spectre-glider.json");
 }
 
@@ -314,7 +317,10 @@ fn scripts_and_period_detection() {
         }
     }
     // A script that switches to CPU-only CAs (rule 30, ants) and back.
-    let sc = Scene::from_json(include_str!("../../jetcarp-core/data/scenes/script-five.json")).unwrap();
+    let sc = Scene::from_json(include_str!(
+        "../../jetcarp-core/data/scenes/script-five.json"
+    ))
+    .unwrap();
     let (on_gpu, on_cpu) = compare(&mut sim, &sc, &[10, 200, 600], "script-five.json");
     eprintln!("script-five.json: {on_gpu} generations on the GPU, {on_cpu} on the CPU");
     assert!(on_gpu > 0 && on_cpu > 0);

@@ -437,8 +437,9 @@ fn pile_export_and_jobs_keep_the_palette() {
         serde_json::from_str(&std::fs::read_to_string(dir.join("pile.json")).unwrap()).unwrap();
     assert_eq!(meta["image"]["palette"], "Candy");
     assert_eq!(meta["image"]["reverse"], true);
-    let png = jetcarp_core::media::encode::decode_png(&std::fs::read(dir.join("pile.png")).unwrap())
-        .unwrap();
+    let png =
+        jetcarp_core::media::encode::decode_png(&std::fs::read(dir.join("pile.png")).unwrap())
+            .unwrap();
     let candy = jetcarp_core::render::Palette::builtin("Candy").unwrap();
     assert_eq!(&png.rgba[..4], &candy.background_rgba()[..]);
     // look.json round trip.

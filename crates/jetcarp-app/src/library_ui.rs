@@ -5,13 +5,13 @@
 
 use crate::sweep_form::thousands;
 use crate::thumbs::{self, Thumb, ThumbCache};
+use eframe::egui::{self, Color32, RichText, TextureHandle};
 use jetcarp_core::Scene;
 use jetcarp_core::library::promote::{render_phases_in, showcase_scene};
 use jetcarp_core::library::{
     CurationState, Library, PatternClass, PatternRecord, PatternSource, Query, Update,
     orientation_moves,
 };
-use eframe::egui::{self, Color32, RichText, TextureHandle};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -831,7 +831,8 @@ mod tests {
         ] {
             cells.push([g.index(x, y, 0) as u32, 1]);
         }
-        w.apply(jetcarp_core::Command::SetCells { id, cells }).unwrap();
+        w.apply(jetcarp_core::Command::SetCells { id, cells })
+            .unwrap();
         let rep = jetcarp_script::library::catalog_world(
             &lib,
             &w,

@@ -99,13 +99,16 @@ fn states_for(fam: Fam, rng: &mut Rng) -> SeedStates {
             1 => SeedStates::ByRegion,
             _ => SeedStates::Signed { negative: 0.5 },
         },
-        Fam::Cyclic | Fam::Rps | Fam::Hodgepodge | Fam::GreenbergHastings | Fam::Priority | Fam::WireWorld => {
-            match rng.below(4) {
-                0 => SeedStates::ByRegion,
-                1 => SeedStates::One,
-                _ => SeedStates::Uniform,
-            }
-        }
+        Fam::Cyclic
+        | Fam::Rps
+        | Fam::Hodgepodge
+        | Fam::GreenbergHastings
+        | Fam::Priority
+        | Fam::WireWorld => match rng.below(4) {
+            0 => SeedStates::ByRegion,
+            1 => SeedStates::One,
+            _ => SeedStates::Uniform,
+        },
         _ => SeedStates::One,
     }
 }

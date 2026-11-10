@@ -12,7 +12,10 @@ use jetcarp_core::*;
 use std::collections::HashSet;
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!("jetcarp-catalog-test-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "jetcarp-catalog-test-{name}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     Library::open(dir)
 }

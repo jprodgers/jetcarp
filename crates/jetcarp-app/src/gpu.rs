@@ -1,8 +1,8 @@
 //! The tile renderer (`jetcarp_display::gpu`) as an egui paint callback.
 
-pub use jetcarp_display::gpu::*;
 use eframe::egui;
 use egui_wgpu::wgpu;
+pub use jetcarp_display::gpu::*;
 
 /// One view's tiles, drawn inside egui's render pass.
 #[derive(Clone)]
