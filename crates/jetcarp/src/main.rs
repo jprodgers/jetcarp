@@ -4,10 +4,8 @@
 
 use anyhow::{Result, bail};
 use clap::{CommandFactory, Parser, Subcommand};
-use jetcarp_api::op::{self, NoInput, Op, Quiet, Report};
-use jetcarp_api::ops::{reference, scene, system};
-use jetcarp_core::render::write_png;
-use jetcarp_core::*;
+use jetcarp_api::op::{self, NoInput, Op, Progress, Quiet, Report};
+use jetcarp_api::ops::{quickstart, reference, scene, sheet, system};
 use std::path::PathBuf;
 
 mod ants_cmd;
@@ -275,30 +273,35 @@ fn args() -> Vec<std::ffi::OsString> {
     args
 }
 
-/// Print an operation's output, as JSON with `--json`, else as text; then fail if the output's
-/// own check failed (`run --expect`).
-fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<()> {
+/// Print an operation's output, as JSON with `--json`, else as text (and its notes on standard
+/// error); then fail if the output's own check failed (`run --expect`).
+pub(crate) fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<()> {
     if json {
         println!("{}", op::to_pretty(out));
     } else {
         print!("{}", out.text());
+        eprint!("{}", out.notes());
     }
     out.check().map_err(anyhow::Error::new)
+}
+
+/// Progress as one line on standard error, rewritten in place (`\r`); the caller ends it.
+pub(crate) struct ProgressLine;
+impl Progress for ProgressLine {
+    fn report(&self, _done: u64, _total: Option<u64>, msg: &str) {
+        eprint!("\r{msg}");
+    }
 }
 
 /// Commands that print no result of their own, so `--json` means nothing to them.
 fn without_json(cmd: &Cmd) -> Option<&'static str> {
     Some(match cmd {
-        Cmd::Wallpaper(_) => "wallpaper",
-        Cmd::Sheet { .. } => "sheet",
         Cmd::Census(_) => "census",
         Cmd::Explore(_) => "explore",
         Cmd::Evolve(_) => "evolve",
         Cmd::Demo(_) => "demo",
         Cmd::Pile(_) => "pile",
         Cmd::Mcp { .. } => "mcp",
-        Cmd::Quickstart { .. } => "quickstart",
-        Cmd::Isohedral { png: Some(_), .. } => "isohedral --png",
         _ => return None,
     })
 }
@@ -394,69 +397,44 @@ fn main() -> Result<()> {
             labels,
             label_scale,
         } => {
+            let png = png.display().to_string();
             if let Some(folder) = folder {
-                let m =
-                    jetcarp_script::results::Manifest::load(&folder).map_err(anyhow::Error::msg)?;
+                let folder = folder.display().to_string();
                 if runs.is_empty() {
-                    anyhow::bail!("give the runs to show with --runs (rule, #index, or n=number)");
+                    // Checked here first, so a folder that is not a sweep reads as it always has.
+                    jetcarp_api::sweeps::Manifest::load(std::path::Path::new(&folder))
+                        .map_err(anyhow::Error::msg)?;
+                    bail!("give the runs to show with --runs (rule, #index, or n=number)");
                 }
-                let mut items = vec![];
-                for (k, key) in runs.iter().enumerate() {
-                    let row = m
-                        .find(key)
-                        .ok_or_else(|| anyhow::anyhow!("no run '{key}' in {}", folder.display()))?;
-                    let r = &m.rows[row];
-                    let label = labels
-                        .get(k)
-                        .cloned()
-                        .unwrap_or_else(|| format!("#{}", r["index"]));
-                    items.push((
-                        row,
-                        vec![label, jetcarp_script::results::text(r, "rule").into()],
-                    ));
-                }
-                let img = jetcarp_script::results::contact_sheet(&m, &items, thumb, cols, label_scale)
-                    .map_err(anyhow::Error::msg)?;
-                let meta = vec![
-                    ("jetcarp:version", VERSION.to_string()),
-                    (
-                        "jetcarp:sheet",
-                        format!("{} runs {}", m.name(), runs.join(",")),
-                    ),
-                ];
-                write_png(&png, &img, &meta).map_err(anyhow::Error::msg)?;
-                println!("sheet: {} ({}x{})", png.display(), img.width, img.height);
+                let a = sheet::SweepIn {
+                    folder,
+                    runs,
+                    labels,
+                    thumb,
+                    cols,
+                    label_scale,
+                    png,
+                };
+                show(&sheet::SheetSweep::run(&cx, a, &Quiet)?, json)?;
                 return Ok(());
             }
-            let kind = jetcarp_core::sheet::SheetKind::parse(&kind).ok_or_else(|| {
-                anyhow::anyhow!("kind is w, hexw, hexw3, hext, hext3, or hext3sum")
-            })?;
-            let o = jetcarp_core::sheet::SheetOptions {
+            let a = sheet::RulesIn {
                 kind,
-                first: from,
+                from,
                 count,
                 cols,
                 width,
-                thumb_px: thumb,
+                thumb,
                 random_row,
-                rng_state: 1,
                 palette,
+                png,
             };
-            let img = jetcarp_core::sheet::contact_sheet(&o).map_err(anyhow::Error::msg)?;
-            let meta = vec![
-                ("jetcarp:version", VERSION.to_string()),
-                (
-                    "jetcarp:sheet",
-                    format!("{kind:?} {from}+{count} width {width} random_row {random_row:?}"),
-                ),
-            ];
-            write_png(&png, &img, &meta).map_err(anyhow::Error::msg)?;
-            println!("sheet: {} ({}x{})", png.display(), img.width, img.height);
+            show(&sheet::SheetRules::run(&cx, a, &Quiet)?, json)?;
         }
         Cmd::Census(a) => research::census(*a)?,
         Cmd::Script(a) => script_cmd::script(a)?,
         Cmd::Objects(a) => research::objects(a)?,
-        Cmd::Library(a) => library::run(a)?,
+        Cmd::Library(a) => library::run(a, json)?,
         Cmd::Explore(a) => explore_cmd::run(*a)?,
         Cmd::Hunt(a) => hunt_cmd::run(*a)?,
         Cmd::Ants(a) => ants_cmd::run(*a)?,
@@ -465,9 +443,9 @@ fn main() -> Result<()> {
         Cmd::Hashlife(a) => hashlife_cmd::run(*a)?,
         Cmd::Demo(a) => demo_cmd::run(a)?,
         Cmd::Pile(a) => pile_cmd::run(*a)?,
-        Cmd::Media(a) => media_cmd::run(a)?,
-        Cmd::Site(a) => media_cmd::run_site(a)?,
-        Cmd::Wallpaper(a) => wallpaper_cmd::run(*a)?,
+        Cmd::Media(a) => media_cmd::run(a, json)?,
+        Cmd::Site(a) => media_cmd::run_site(a, json)?,
+        Cmd::Wallpaper(a) => wallpaper_cmd::run(&cx, *a, json)?,
         Cmd::Doctor => show(&system::SystemDoctor::run(&cx, NoInput {}, &Quiet)?, json)?,
         Cmd::Uninstall(a) => {
             let a = system::UninstallIn {
@@ -487,20 +465,27 @@ fn main() -> Result<()> {
             json,
         )?,
         Cmd::Quickstart {
-            survey_tilings: true,
-            gens,
-            ..
-        } => survey_tilings(gens)?,
-        Cmd::Quickstart {
             check,
             survey,
+            survey_tilings,
             gens,
             sheet,
             filter,
             thumb,
             cols,
-            ..
-        } => quickstart_cmd(check, survey, gens, sheet, filter, thumb, cols)?,
+        } => {
+            let a = quickstart::CheckIn {
+                filter,
+                check,
+                survey,
+                survey_tilings,
+                gens,
+                sheet: sheet.map(|p| p.display().to_string()),
+                thumb,
+                cols,
+            };
+            show(&quickstart::QuickstartCheck::run(&cx, a, &Quiet)?, json)?;
+        }
         Cmd::Isohedral {
             png,
             straight,
@@ -509,24 +494,14 @@ fn main() -> Result<()> {
             seed,
         } => match png {
             Some(png) => {
-                let o = jetcarp_core::isohedral::sheet::IhSheetOptions {
+                let a = sheet::IsohedralIn {
+                    straight,
                     cols,
-                    thumb_px: thumb,
-                    curved: !straight,
-                    rng_state: seed,
-                    ..Default::default()
+                    thumb,
+                    seed,
+                    png: png.display().to_string(),
                 };
-                let img =
-                    jetcarp_core::isohedral::sheet::contact_sheet(&o).map_err(anyhow::Error::msg)?;
-                let meta = vec![
-                    ("jetcarp:version", VERSION.to_string()),
-                    (
-                        "jetcarp:sheet",
-                        format!("isohedral curved {} seed {seed}", !straight),
-                    ),
-                ];
-                write_png(&png, &img, &meta).map_err(anyhow::Error::msg)?;
-                println!("sheet: {} ({}x{})", png.display(), img.width, img.height);
+                show(&sheet::SheetIsohedral::run(&cx, a, &Quiet)?, json)?
             }
             None => show(
                 &reference::ReferenceIsohedral::run(&cx, NoInput {}, &Quiet)?,
@@ -543,184 +518,6 @@ fn main() -> Result<()> {
             json,
         )?,
         Cmd::Api(a) => api_cmd::run(&cx, a, json)?,
-    }
-    Ok(())
-}
-
-fn quickstart_cmd(
-    check: bool,
-    survey: bool,
-    gens: u64,
-    sheet: Option<PathBuf>,
-    filter: Option<String>,
-    thumb: u32,
-    cols: u32,
-) -> Result<()> {
-    use jetcarp_core::quickstart;
-    use rayon::prelude::*;
-    let all = quickstart::entries();
-    let f = filter.map(|s| s.to_lowercase());
-    let picked: Vec<(usize, &quickstart::QuickStart)> = all
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| {
-            f.as_ref().is_none_or(|f| {
-                [&e.scene.name, &e.rule, &e.family, &e.tiling]
-                    .iter()
-                    .any(|x| x.to_lowercase().contains(f.as_str()))
-            })
-        })
-        .collect();
-    if survey {
-        let mut seeds: Vec<SeedSpec> =
-            [0.005, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.55, 0.6]
-                .iter()
-                .map(|&d| SeedSpec::Random { density: d })
-                .collect();
-        for (r, d) in [(0.08, 0.5), (0.2, 0.4), (0.5, 0.3), (0.3, 0.55), (0.5, 0.5)] {
-            seeds.push(SeedSpec::Blob {
-                radius: r,
-                density: d,
-            });
-        }
-        for (k, e) in &picked {
-            println!("{k:3} {} {}", e.scene.name, e.rule);
-            let rows: Vec<String> = seeds
-                .par_iter()
-                .map(|sd| {
-                    let mut sc = e.scene.clone();
-                    sc.cas[0].seed = Some(sd.clone());
-                    match quickstart::health(&sc, gens, quickstart::preview_cells(&e.scene, 6000)) {
-                        Ok(h) => format!(
-                            "      {:44} {} pop {:.3} act {:.3} {}",
-                            format!("{sd:?}"),
-                            if h.works() { "ok  " } else { "FAIL" },
-                            h.population as f64 / h.cells as f64,
-                            h.activity,
-                            h.status
-                        ),
-                        Err(err) => format!("      {sd:?} error {err}"),
-                    }
-                })
-                .collect();
-            for r in rows {
-                println!("{r}");
-            }
-        }
-        return Ok(());
-    }
-    let health: Vec<Option<quickstart::Health>> = if check {
-        picked
-            .par_iter()
-            .map(|(_, e)| {
-                quickstart::health(&e.scene, gens, quickstart::preview_cells(&e.scene, 6000)).ok()
-            })
-            .collect()
-    } else {
-        vec![None; picked.len()]
-    };
-    let mut bad = 0;
-    for ((k, e), h) in picked.iter().zip(&health) {
-        let tail = match h {
-            Some(h) => {
-                if !h.works() {
-                    bad += 1;
-                }
-                format!(
-                    "  {} pop {:.3} act {:.3} {}",
-                    if h.works() { "ok  " } else { "FAIL" },
-                    h.population as f64 / h.cells as f64,
-                    h.activity,
-                    h.status
-                )
-            }
-            None if check => "  FAIL could not load".to_string(),
-            None => String::new(),
-        };
-        println!(
-            "{:3} {:34} {:24} {:20} {:24}{}",
-            k, e.scene.name, e.rule, e.family, e.tiling, tail
-        );
-    }
-    if check {
-        println!("{} examples, {} not working", picked.len(), bad);
-    }
-    if let Some(p) = sheet {
-        // Numbers on the sheet are list positions, so render in runs of consecutive indices.
-        let scenes: Vec<&Scene> = picked.iter().map(|(_, e)| &e.scene).collect();
-        let first = picked.first().map(|x| x.0 as u32).unwrap_or(0);
-        let contiguous = picked.windows(2).all(|w| w[1].0 == w[0].0 + 1);
-        let img = quickstart::contact_sheet(
-            &scenes,
-            if contiguous { first } else { 0 },
-            gens,
-            thumb,
-            cols,
-        );
-        write_png(&p, &img, &[]).map_err(anyhow::Error::msg)?;
-        println!("wrote {} ({}x{})", p.display(), img.width, img.height);
-    }
-    Ok(())
-}
-
-fn survey_tilings(gens: u64) -> Result<()> {
-    use jetcarp_core::quickstart::{health, preview_scene};
-    use rayon::prelude::*;
-    const CANDIDATES: &[&str] = &[
-        "B3/S23",
-        "B36/S23",
-        "B3/S23V",
-        "B2/S34",
-        "B2/S34V",
-        "B34/S34",
-        "B2/S23V",
-        "B35/S234",
-        "B2/S/C3",
-        "B2/S/C3V",
-        "B23/S34/C5",
-        "B2/S3/C4V",
-    ];
-    let mut fams: Vec<String> = jetcarp_core::families::FAMILIES
-        .iter()
-        .filter(|f| f.id != "periodic")
-        .map(|f| f.id.to_string())
-        .collect();
-    fams.extend(
-        [
-            "ih01", "ih07", "ih21", "ih28", "ih41", "ih55", "ih74", "ih81", "ih90",
-        ]
-        .map(String::from),
-    );
-    let rows: Vec<String> = fams
-        .par_iter()
-        .map(|fam| {
-            let size = if jetcarp_core::families::family(fam)
-                .is_some_and(|f| f.kind == jetcarp_core::families::FamilyKind::Aperiodic)
-            {
-                SizeSpec::Level(jetcarp_core::aperiodic::default_level(fam))
-            } else {
-                SizeSpec::Cells(6000)
-            };
-            let mut found = Vec::new();
-            for r in CANDIDATES {
-                let mut sc = Scene::new(
-                    TilingSpec::new(fam)
-                        .with_size(size)
-                        .with_boundary(Boundary::Wrap),
-                );
-                sc.cas = vec![CaSpec::new(r).seed(SeedSpec::Random { density: 0.35 })];
-                if let Ok(h) = health(&preview_scene(&sc, 6000), gens, None) {
-                    let pop = h.population as f64 / h.cells as f64;
-                    if h.works() && h.activity >= 0.01 && (0.03..0.7).contains(&pop) {
-                        found.push(format!("{r} (pop {pop:.2} act {:.2})", h.activity));
-                    }
-                }
-            }
-            format!("{fam:12} {}", found.join(" | "))
-        })
-        .collect();
-    for r in rows {
-        println!("{r}");
     }
     Ok(())
 }

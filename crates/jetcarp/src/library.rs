@@ -1,14 +1,23 @@
 //! `jetcarp library`: the pattern catalog (list, show, search, collide, paste, promote, render,
 //! update, export, import, remove, quickstart, jobs, info). The work is in `jetcarp_core::library`.
 
+use crate::show;
 use anyhow::{Context, Result, bail};
+use jetcarp_api::Ctx;
 use jetcarp_api::args;
+use jetcarp_api::op::{self, NoInput, Op, Quiet};
+use jetcarp_api::ops::library::{
+    ExportIn, GetIn, ImportIn, LibraryExport, LibraryGet, LibraryImport, LibraryInfoOp,
+    LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove, LibraryRender, LibraryUpdate,
+    LibraryVerify, PasteSceneIn, PruneIn, QueryIn, RemoveIn, RenderIn, UpdateIn, VerifyIn,
+};
+use jetcarp_api::ops::quickstart::{
+    AddIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
+    StatusIn,
+};
 use jetcarp_core::library::collide::{CollideSpec, collide};
 use jetcarp_core::library::search::{SearchSpec, search};
-use jetcarp_core::library::{
-    self, AddOutcome, CurationState, DiscoveredBy, JobStatus, Library, PasteAt, PatternClass,
-    PatternRecord, QsStatus, Query, Update,
-};
+use jetcarp_core::library::{self, AddOutcome, JobStatus, Library, PatternClass};
 use jetcarp_core::render::write_png;
 use jetcarp_core::*;
 use std::path::PathBuf;
@@ -372,7 +381,7 @@ fn set_threads(t: Option<usize>) -> Result<()> {
     Ok(())
 }
 
-/// `--boundary` for searches and pastes: wrap or dead (no live edges).
+/// `--boundary` for searches: wrap or dead (no live edges).
 fn parse_boundary(s: &str) -> Result<Boundary> {
     match args::parse_boundary(s) {
         Ok(b @ (Boundary::Wrap | Boundary::Dead)) => Ok(b),
@@ -380,32 +389,64 @@ fn parse_boundary(s: &str) -> Result<Boundary> {
     }
 }
 
-pub fn run(a: LibraryArgs) -> Result<()> {
-    let lib = match &a.library {
-        Some(p) => Library::open(p.clone()),
-        None => Library::open_default(),
-    };
+fn path(p: &std::path::Path) -> String {
+    p.display().to_string()
+}
+
+pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
+    let cx = crate::platform::ctx().with_library(a.library.clone());
     match a.cmd {
-        LibCmd::List(l) => list(&lib, l),
-        LibCmd::Show { id, json, phases } => show(&lib, &id, json, phases),
-        LibCmd::Search(s) => search_cmd(&lib, *s),
-        LibCmd::Collide(c) => collide_cmd(&lib, *c),
-        LibCmd::Paste(p) => paste_cmd(&lib, p),
+        LibCmd::List(l) => list(&cx, l, json),
+        LibCmd::Show {
+            id,
+            json: j,
+            phases,
+        } => {
+            let v = LibraryGet::run(
+                &cx,
+                GetIn {
+                    id,
+                    kind: Some("pattern".into()),
+                    phases: Some(phases),
+                    bare: false,
+                },
+                &Quiet,
+            )?;
+            if json || j {
+                // The record, as it has always printed.
+                if let Some(r) = &v.pattern {
+                    println!("{}", r.to_json());
+                }
+                return Ok(());
+            }
+            show(&v, false)
+        }
+        LibCmd::Search(s) => search_cmd(&cx.library(), *s),
+        LibCmd::Collide(c) => collide_cmd(&cx.library(), *c),
+        LibCmd::Paste(p) => {
+            let a = PasteSceneIn {
+                placements: p.placements,
+                out: path(&p.out),
+                size: p.size,
+                boundary: p.boundary,
+                name: p.name,
+                png: p.png.as_deref().map(path),
+                gens: p.gens,
+            };
+            show(&LibraryPaste::run(&cx, a, &Quiet)?, json)
+        }
         LibCmd::Promote {
             id,
             title,
             description,
         } => {
-            let (sc, entry) = msg(library::promote::promote(
-                &lib,
-                &id,
-                title.as_deref(),
-                description.as_deref(),
-            ))?;
-            println!("promoted: {}", sc.name);
-            println!("entry:    find:{entry} in {}", lib.path().display());
-            println!("It appears in the app's Quick Start under \"My finds\".");
-            Ok(())
+            let a = AddIn {
+                pattern: Some(id),
+                title,
+                description,
+                ..Default::default()
+            };
+            show(&QuickstartAdd::run(&cx, a, &Quiet)?, json)
         }
         LibCmd::PromoteRun {
             folder,
@@ -413,17 +454,15 @@ pub fn run(a: LibraryArgs) -> Result<()> {
             title,
             note,
         } => {
-            let p = msg(jetcarp_script::results::promote_folder_run(
-                &folder,
-                &run,
-                &lib,
-                title.as_deref(),
-                note.as_deref(),
-            ))?;
-            println!("promoted: {} as \"{}\" (run #{})", p.rule, p.title, p.index);
-            println!("entry:    find:{} in {}", p.id, lib.path().display());
-            println!("It appears in the app's Quick Start under \"My finds\".");
-            Ok(())
+            let a = AddIn {
+                folder: Some(path(&folder)),
+                run: Some(run),
+                title,
+                note,
+                favourite: true,
+                ..Default::default()
+            };
+            show(&QuickstartAdd::run(&cx, a, &Quiet)?, json)
         }
         LibCmd::Render {
             id,
@@ -433,57 +472,37 @@ pub fn run(a: LibraryArgs) -> Result<()> {
             ascii,
             palette,
         } => {
-            if let Some(p) = &palette {
-                msg(jetcarp_core::render::builtin_palette(p))?;
-            }
-            let rec = msg(lib.get(&id))?;
-            if ascii || png.is_none() {
-                print_ascii(&rec, rec.period.min(max_phases as u64))?;
-            }
-            if let Some(p) = png {
-                let img = msg(library::promote::render_phases_in(
-                    &rec,
-                    px,
-                    max_phases,
-                    palette.as_deref(),
-                ))?;
-                let meta = vec![
-                    ("jetcarp:version", VERSION.to_string()),
-                    ("jetcarp:pattern", rec.id.clone()),
-                    ("jetcarp:label", rec.label()),
-                ];
-                msg(write_png(&p, &img, &meta))?;
-                println!("png: {} ({}x{})", p.display(), img.width, img.height);
-            }
-            Ok(())
+            let a = RenderIn {
+                id,
+                png: png.as_deref().map(path),
+                px,
+                max_phases,
+                ascii,
+                palette,
+            };
+            show(&LibraryRender::run(&cx, a, &Quiet)?, json)
         }
-        LibCmd::Update(u) => update_cmd(&lib, u),
+        LibCmd::Update(u) => update_cmd(&cx, u, json),
         LibCmd::Export { ids, to } => {
-            let done = msg(lib.export(&ids, &to))?;
-            println!("{} pattern(s) exported to {}", done.len(), to.display());
-            Ok(())
+            let a = ExportIn { ids, to: path(&to) };
+            show(&LibraryExport::run(&cx, a, &Quiet)?, json)
         }
-        LibCmd::Import { path } => {
-            let done = msg(lib.import(&path))?;
-            print_adds(&done);
-            let distinct: std::collections::HashSet<&String> = done.iter().map(|d| &d.0).collect();
-            println!(
-                "{} pattern(s) ({} pattern and rule pairs) imported into {}",
-                distinct.len(),
-                done.len(),
-                lib.path().display()
-            );
-            Ok(())
+        LibCmd::Import { path: p } => {
+            let a = ImportIn { path: path(&p) };
+            show(&LibraryImport::run(&cx, a, &Quiet)?, json)
         }
         LibCmd::Remove { id } => {
-            let r = msg(lib.remove(&id))?;
-            println!("removed {} ({})", r.id, r.label());
-            Ok(())
+            let a = RemoveIn {
+                id,
+                kind: Some("pattern".into()),
+            };
+            show(&LibraryRemove::run(&cx, a, &Quiet)?, json)
         }
-        LibCmd::Quickstart(q) => quickstart_cmd(&lib, q),
-        LibCmd::Jobs { json } => {
+        LibCmd::Quickstart(q) => quickstart_cmd(&cx, q, json),
+        LibCmd::Jobs { json: j } => {
+            let lib = cx.library();
             let v = msg(lib.jobs())?;
-            if json {
+            if json || j {
                 println!("{}", serde_json::to_string_pretty(&v)?);
                 return Ok(());
             }
@@ -516,7 +535,17 @@ pub fn run(a: LibraryArgs) -> Result<()> {
             sample,
             periods,
             drop,
-        } => verify_cmd(&lib, all, sample, periods, drop),
+        } => {
+            let a = VerifyIn {
+                all,
+                sample,
+                periods,
+                drop,
+            };
+            let out = LibraryVerify::run(&cx, a, &crate::ProgressLine)?;
+            eprintln!();
+            show(&out, json)
+        }
         LibCmd::Prune {
             max_cells,
             max_volume,
@@ -524,319 +553,82 @@ pub fn run(a: LibraryArgs) -> Result<()> {
             backup,
             no_vacuum,
         } => {
-            let size = |p: &std::path::Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-            let file = lib.path().to_path_buf();
-            let before = size(&file);
-            if let Some(b) = &backup {
-                let t0 = std::time::Instant::now();
-                msg(lib.backup_to(b))?;
-                println!(
-                    "backup: {} ({:.1} GB, {:.0} s)",
-                    b.display(),
-                    size(b) as f64 / 1e9,
-                    t0.elapsed().as_secs_f64()
-                );
-            }
-            let t0 = std::time::Instant::now();
-            let r = msg(lib.prune_patterns(max_cells, max_volume, min_seen))?;
-            println!(
-                "pruned {} of {} still lifes and oscillators ({:?}); {} unstored rows, {} media rows; {:.0} s",
-                r.deleted,
-                r.checked,
-                r.by_class,
-                r.unstored_rows,
-                r.media_rows,
-                t0.elapsed().as_secs_f64()
-            );
-            let t0 = std::time::Instant::now();
-            let (n, a, b) = msg(lib.compact_bodies())?;
-            println!(
-                "compressed {n} bodies: {:.0} MB to {:.0} MB; {:.0} s",
-                a as f64 / 1e6,
-                b as f64 / 1e6,
-                t0.elapsed().as_secs_f64()
-            );
-            if !no_vacuum {
-                let t0 = std::time::Instant::now();
-                msg(lib.vacuum())?;
-                println!("vacuum: {:.0} s", t0.elapsed().as_secs_f64());
-            }
-            println!(
-                "{}: {:.2} GB before, {:.2} GB after",
-                file.display(),
-                before as f64 / 1e9,
-                size(&file) as f64 / 1e9
-            );
-            Ok(())
+            let a = PruneIn {
+                max_cells,
+                max_volume,
+                min_seen,
+                backup: backup.as_deref().map(path),
+                no_vacuum,
+            };
+            show(&LibraryPrune::run(&cx, a, &Quiet)?, json)
         }
-        LibCmd::Info { json } => {
-            let i = msg(lib.info())?;
-            if json {
-                println!("{}", serde_json::to_string_pretty(&i)?);
-            } else {
-                println!("catalog:        {}", i.path);
-                println!("schema version: {}", i.schema_version);
-                println!(
-                    "patterns {}, rules {}, pattern rules {}, sightings {} ({} copies), jobs {}, \
-                     Quick Start {}, ratings {}, media {}, ants {}",
-                    i.patterns,
-                    i.rules,
-                    i.pattern_rules,
-                    i.sightings,
-                    i.seen,
-                    i.jobs,
-                    i.quickstart,
-                    i.ratings,
-                    i.media,
-                    i.ants
-                );
+        LibCmd::Info { json: j } => {
+            let i = LibraryInfoOp::run(&cx, NoInput {}, &Quiet)?;
+            if json || j {
+                // In the record's own key order, as it has always printed.
+                println!("{}", serde_json::to_string_pretty(&i.0)?);
+                return Ok(());
             }
-            Ok(())
+            show(&i, false)
         }
     }
 }
 
-fn quickstart_cmd(lib: &Library, q: QuickstartArgs) -> Result<()> {
-    if let Some(id) = &q.remove {
-        msg(lib.remove_quickstart(id))?;
-        println!("removed {id}");
-        return Ok(());
+fn quickstart_cmd(cx: &Ctx, q: QuickstartArgs, json: bool) -> Result<()> {
+    let json = json || q.json;
+    if let Some(id) = q.remove {
+        return show(&QuickstartRemove::run(cx, IdIn { id }, &Quiet)?, json);
     }
     if let Some(s) = &q.set {
         let (id, st) = s
             .rsplit_once('=')
             .context("--set wants ID=STATUS, e.g. find:1a2b...=approved")?;
-        msg(lib.set_quickstart_status(id, msg(QsStatus::parse(st))?))?;
-        println!("{id}: {st}");
+        let a = StatusIn {
+            id: id.to_string(),
+            status: st.to_string(),
+        };
+        return show(&QuickstartUpdate::run(cx, a, &Quiet)?, json);
+    }
+    let v = QuickstartList::run(cx, ListIn { status: q.status }, &Quiet)?;
+    if json {
+        // The entries, as they have always printed.
+        println!("{}", op::to_pretty(&v.entries));
         return Ok(());
     }
-    let st = match &q.status {
-        Some(s) => vec![msg(QsStatus::parse(s))?],
-        None => vec![],
-    };
-    let v = msg(lib.quickstart(&st))?;
-    if q.json {
-        let rows: Vec<serde_json::Value> = v
-            .iter()
-            .map(|r| {
-                serde_json::json!({
-                    "id": format!("find:{}", r.id), "title": r.title, "grid": r.grid,
-                    "rule": r.rule, "rule_family": r.rule_family, "behaviour": r.behaviour,
-                    "source_kind": r.source_kind, "source_id": r.source_id, "score": r.score,
-                    "status": r.status, "created": r.created, "description": r.description,
-                })
-            })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&rows)?);
-        return Ok(());
-    }
-    println!("catalog: {} ({} entries)", lib.path().display(), v.len());
-    for r in &v {
-        println!(
-            "find:{:<24} {:<9} {:<8} {:<28} {:<14} {}",
-            r.id,
-            r.status.name(),
-            r.source_kind,
-            r.title.chars().take(28).collect::<String>(),
-            r.rule.chars().take(14).collect::<String>(),
-            r.grid
-        );
-    }
-    Ok(())
+    show(&v, false)
 }
 
-fn print_adds(v: &[(String, AddOutcome)]) {
-    for (id, o) in v {
-        match o {
-            AddOutcome::Added => println!("  added  {id}"),
-            AddOutcome::Merged { seen, new_rule } => println!(
-                "  merged {id} (seen {seen}{})",
-                if *new_rule { ", new rule" } else { "" }
-            ),
-        }
-    }
-}
-
-fn list(lib: &Library, l: ListArgs) -> Result<()> {
-    let q = Query {
+fn list(cx: &Ctx, l: ListArgs, json: bool) -> Result<()> {
+    let q = QueryIn {
         rule: l.rule,
         works_in: l.works_in,
-        neighborhood: None,
         order: l.order,
         offset: l.offset,
         tiling: l.tiling,
-        class: l
-            .class
-            .as_deref()
-            .map(PatternClass::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
+        class: l.class,
         min_period: l.min_period,
         max_period: l.max_period,
         min_score: l.min_score,
-        state: l
-            .state
-            .as_deref()
-            .map(CurationState::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
+        state: l.state,
         tag: l.tag,
         text: l.text,
-        discovered_by: l
-            .by
-            .as_deref()
-            .map(DiscoveredBy::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
+        discovered_by: l.by,
         limit: l.limit,
+        ..Default::default()
     };
-    let v = msg(lib.query(&q))?;
-    if l.json {
-        println!("{}", serde_json::to_string_pretty(&v)?);
+    let v = LibraryQuery::run(cx, q, &Quiet)?;
+    if json || l.json {
+        // The records, as they have always printed.
+        println!("{}", serde_json::to_string_pretty(&v.patterns)?);
         return Ok(());
     }
     if l.ids {
-        for r in &v {
+        for r in &v.patterns {
             println!("{}", r.id);
         }
         return Ok(());
     }
-    println!(
-        "catalog: {} ({} shown of {} matching)",
-        lib.path().display(),
-        v.len(),
-        msg(lib.count(&q))?
-    );
-    for r in &v {
-        println!("{}", r.summary());
-    }
-    Ok(())
-}
-
-fn print_ascii(rec: &PatternRecord, phases: u64) -> Result<()> {
-    for t in 0..phases.max(1) {
-        match msg(library::ascii(rec, t))? {
-            Some(s) => {
-                println!("phase {t}:");
-                print!("{s}");
-            }
-            None => {
-                println!(
-                    "phase {t}: {}",
-                    rec.phases[(t % rec.period.max(1)) as usize]
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-fn show(lib: &Library, id: &str, json: bool, phases: u64) -> Result<()> {
-    let r = msg(lib.get(id))?;
-    if json {
-        println!("{}", r.to_json());
-        return Ok(());
-    }
-    println!("id:          {}", r.id);
-    println!("label:       {}", r.label());
-    println!(
-        "rule:        {} ({:?} neighbours, {} step(s) per generation)",
-        r.rule, r.neighborhood, r.steps_per_gen
-    );
-    println!(
-        "tiling:      {} ({} tile type(s) per unit cell)",
-        r.tiling_name, r.tile_types
-    );
-    println!("class:       {}, period {}", r.class.name(), r.period);
-    if r.rules.len() > 1 {
-        println!("verified in: {}", r.rules.join(", "));
-    }
-    if let Some(x) = &r.range {
-        println!("works in:    {}", x.describe());
-    }
-    if let (Some(d), Some(xy)) = (r.displacement, r.displacement_xy) {
-        println!(
-            "moves:       {} : lattice vector ({}, {}) per period = ({:.3}, {:.3}) world units",
-            r.speed.as_deref().unwrap_or("?"),
-            d[0],
-            d[1],
-            xy[0],
-            xy[1]
-        );
-        // Direction in each orientation, for `collide --orientation-b` and pasting.
-        let dirs: Vec<String> = msg(library::orientation_moves(&r))?
-            .iter()
-            .enumerate()
-            .map(|(k, v)| format!("{k}:({},{})", v[0], v[1]))
-            .collect();
-        println!("orientations: {}", dirs.join(" "));
-    }
-    println!(
-        "cells:       {} (phases {}..{}), bounding box {}x{}",
-        r.cells,
-        r.min_cells,
-        r.max_cells,
-        r.bbox[2] + 1,
-        r.bbox[3] + 1
-    );
-    println!("seen:        {}", r.seen);
-    for s in msg(lib.sightings(&r.id))? {
-        println!(
-            "             {} x{} in {} soup(s), job {} ({} to {})",
-            s.rule, s.count, s.soups, s.job, s.first_seen, s.last_seen
-        );
-    }
-    println!(
-        "score:       {}{}",
-        r.score,
-        r.rating
-            .map(|x| format!("  rating {x}/5"))
-            .unwrap_or_default()
-    );
-    println!(
-        "state:       {}  (discovered by {:?})",
-        r.state.name(),
-        r.discovered_by
-    );
-    if !r.tags.is_empty() {
-        println!("tags:        {}", r.tags.join(", "));
-    }
-    println!(
-        "verified:    {} periods ({} generations) on {}, JETCARP {} {}",
-        r.verified.periods,
-        r.verified.generations,
-        r.verified.field,
-        r.verified.jetcarp_version,
-        r.verified.date
-    );
-    let p = &r.provenance;
-    println!(
-        "found:       {} {}{}{} JETCARP {} {}",
-        p.source,
-        p.soup.map(|s| format!("soup {s} ")).unwrap_or_default(),
-        p.rng_state.map(|s| format!("rng {s} ")).unwrap_or_default(),
-        p.generation
-            .map(|g| format!("generation {g}"))
-            .unwrap_or_default(),
-        p.jetcarp_version,
-        p.date
-    );
-    if let Some(s) = &r.site {
-        println!(
-            "site:        {} tiles within {} steps, anchor cell {} on {} {:?}",
-            s.tiles.len(),
-            s.radius,
-            s.anchor,
-            s.patch.family,
-            s.patch.size
-        );
-    }
-    println!("canonical:   {}", r.canonical);
-    if !r.notes.is_empty() {
-        println!("notes:\n{}", r.notes);
-    }
-    println!();
-    print_ascii(&r, phases)
+    show(&v, false)
 }
 
 fn search_cmd(lib: &Library, a: SearchArgs) -> Result<()> {
@@ -1175,136 +967,10 @@ fn collide_cmd(lib: &Library, c: CollideArgs) -> Result<()> {
     Ok(())
 }
 
-fn paste_cmd(lib: &Library, p: PasteArgs) -> Result<()> {
-    struct Place {
-        rec: PatternRecord,
-        at: PasteAt,
-        orientation: u32,
-        phase: u32,
-    }
-    let mut places = Vec::new();
-    for s in &p.placements {
-        let (id, rest) = s.split_once('@').unwrap_or((s.as_str(), ""));
-        let rec = msg(lib.get(id))?;
-        let mut parts = rest.split(',').map(str::trim).filter(|x| !x.is_empty());
-        let mut at = if rec.site.is_some() {
-            PasteAt::Original
-        } else {
-            PasteAt::Center
-        };
-        let (mut orientation, mut phase) = (0, 0);
-        let first = parts.next();
-        if let Some(x) = first {
-            if let Some(cell) = x.strip_prefix('#') {
-                at = PasteAt::Index {
-                    cell: cell.parse().context("cell index after #")?,
-                };
-            } else {
-                let y = parts.next().context("placement is ID@X,Y")?;
-                at = PasteAt::Cell {
-                    x: x.parse().context("x")?,
-                    y: y.parse().context("y")?,
-                };
-            }
-        }
-        for q in parts {
-            if let Some(o) = q.strip_prefix('o') {
-                orientation = o.parse().context("orientation")?;
-            } else if let Some(ph) = q.strip_prefix('p') {
-                phase = ph.parse().context("phase")?;
-            } else {
-                bail!("unknown placement option '{q}' (oK = orientation, pK = phase)");
-            }
-        }
-        places.push(Place {
-            rec,
-            at,
-            orientation,
-            phase,
-        });
-    }
-    let first = &places[0].rec;
-    for pl in &places[1..] {
-        if library::tiling_key(&pl.rec.tiling) != library::tiling_key(&first.tiling) {
-            bail!(
-                "all patterns must be on one tiling ({} vs {})",
-                first.tiling_name,
-                pl.rec.tiling_name
-            );
-        }
-    }
-    let mut tiling = match &first.site {
-        Some(s) => s.patch.clone(),
-        None => library::tiling_identity(&first.tiling),
-    };
-    if first.site.is_none() {
-        tiling.size = Some(msg(args::size_spec(&p.size))?);
-        tiling.boundary = parse_boundary(&p.boundary)?;
-    }
-    let mut sc = Scene::new(tiling);
-    sc.name = p
-        .name
-        .clone()
-        .unwrap_or_else(|| format!("{} patterns", places.len()));
-    // One CA per distinct rule, in order of first use.
-    let mut rules: Vec<(String, Nb, u32)> = Vec::new();
-    for pl in &places {
-        let k = (
-            pl.rec.rule.clone(),
-            pl.rec.neighborhood,
-            pl.rec.steps_per_gen,
-        );
-        if !rules.contains(&k) {
-            rules.push(k);
-        }
-    }
-    sc.cas = rules
-        .iter()
-        .map(|(r, nb, s)| CaSpec::new(r).nb(*nb).steps(*s).seed(SeedSpec::Empty))
-        .collect();
-    for pl in &places {
-        let k = (
-            pl.rec.rule.clone(),
-            pl.rec.neighborhood,
-            pl.rec.steps_per_gen,
-        );
-        let ca = rules.iter().position(|x| *x == k).unwrap() as u32 + 1;
-        sc.commands.push(Command::PastePattern {
-            id: ca,
-            pattern: library::paste::source_from_record(&pl.rec, pl.phase as u64),
-            at: pl.at.clone(),
-            orientation: pl.orientation,
-            phase: 0,
-        });
-    }
-    let mut w = msg(World::from_scene(&sc))?;
-    std::fs::write(&p.out, sc.to_json() + "\n")
-        .with_context(|| format!("writing {}", p.out.display()))?;
-    println!(
-        "scene: {} ({} patterns, {} CA(s), hash {})",
-        p.out.display(),
-        places.len(),
-        sc.cas.len(),
-        w.hash_hex()
-    );
-    if let Some(png) = &p.png {
-        if p.gens > 0 {
-            msg(w.apply(Command::Step { gens: p.gens }))?;
-        }
-        let opts = render::RenderOptions::default();
-        msg(render::write_png_streaming(
-            png,
-            &w,
-            &opts,
-            &render::png_metadata(&w),
-        ))?;
-        println!("png:   {} (generation {})", png.display(), w.generation);
-    }
-    Ok(())
-}
-
-fn update_cmd(lib: &Library, u: UpdateArgs) -> Result<()> {
-    let up = Update {
+fn update_cmd(cx: &Ctx, u: UpdateArgs, json: bool) -> Result<()> {
+    let a = UpdateIn {
+        id: u.id,
+        kind: Some("pattern".into()),
         name: u.name,
         tags: u.tags.map(|t| {
             t.split(',')
@@ -1316,106 +982,17 @@ fn update_cmd(lib: &Library, u: UpdateArgs) -> Result<()> {
         remove_tags: u.remove_tag,
         notes: u.notes,
         append_notes: u.append_notes,
-        rating: u.rating,
-        state: u
-            .state
-            .as_deref()
-            .map(CurationState::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
-        discovered_by: u
-            .discovered_by
-            .as_deref()
-            .map(DiscoveredBy::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
+        rating: u.rating.map(f64::from),
+        state: u.state,
+        discovered_by: u.discovered_by,
     };
-    let r = msg(lib.update(&u.id, &up))?;
-    if u.json {
-        println!("{}", r.to_json());
-    } else {
-        println!("updated {} ({}), state {}", r.id, r.label(), r.state.name());
-    }
-    Ok(())
-}
-
-/// `jetcarp library verify`: verify stored patterns again, in pages of 5,000 (bounded memory).
-fn verify_cmd(
-    lib: &Library,
-    all: bool,
-    sample: usize,
-    periods: Option<u64>,
-    drop: bool,
-) -> Result<()> {
-    use rayon::prelude::*;
-    let t0 = std::time::Instant::now();
-    let (mut checked, mut sampled) = (0usize, 0usize);
-    let mut failed: Vec<(String, String, String)> = Vec::new();
-    let mut by_tiling: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
-    let mut offset = 0;
-    loop {
-        let page = msg(lib.query(&Query {
-            order: Some("id".into()),
-            limit: Some(5000),
-            offset: Some(offset),
-            ..Default::default()
-        }))?;
-        if page.is_empty() {
-            break;
+    let r = LibraryUpdate::run(cx, a, &Quiet)?;
+    if json || u.json {
+        // The record, as it has always printed.
+        if let Some(p) = &r.pattern {
+            println!("{}", p.to_json());
         }
-        offset += page.len();
-        let pick: Vec<PatternRecord> = page
-            .into_iter()
-            .filter(|r| {
-                let main = matches!(r.tiling.family.as_str(), "square" | "hex");
-                if all || !main {
-                    true
-                } else if sampled < sample {
-                    sampled += 1;
-                    true
-                } else {
-                    false
-                }
-            })
-            .collect();
-        let res: Vec<(String, String, Option<String>)> = pick
-            .par_iter()
-            .map(|r| {
-                let n = periods.unwrap_or_else(|| jetcarp_core::library::default_periods(r.period));
-                let e = jetcarp_core::library::verify(r, n).err();
-                (r.id.clone(), r.tiling_name.clone(), e)
-            })
-            .collect();
-        for (id, t, e) in res {
-            checked += 1;
-            let x = by_tiling.entry(t.clone()).or_default();
-            x.0 += 1;
-            if let Some(e) = e {
-                x.1 += 1;
-                failed.push((id, t, e));
-            }
-        }
-        eprint!("\r{checked} checked, {} failed", failed.len());
+        return Ok(());
     }
-    eprintln!();
-    for (t, (n, f)) in &by_tiling {
-        if *f > 0 {
-            println!("  {t}: {f} of {n} failed");
-        }
-    }
-    for (id, t, e) in failed.iter().take(5) {
-        println!("  e.g. {id} on {t}: {e}");
-    }
-    println!(
-        "{checked} patterns verified ({sampled} of them on squares and hexagons) in {:.0} s: {} failed",
-        t0.elapsed().as_secs_f64(),
-        failed.len()
-    );
-    if drop && !failed.is_empty() {
-        for (id, _, _) in &failed {
-            msg(lib.remove(id))?;
-        }
-        println!("removed {} patterns", failed.len());
-    }
-    Ok(())
+    show(&r, false)
 }

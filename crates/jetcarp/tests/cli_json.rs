@@ -40,7 +40,7 @@ fn json_before_or_after_the_subcommand() {
     let iso = json_of(&["isohedral", "--json"]);
     assert_eq!(iso["types"][0]["id"], "ih01");
     // Commands with no result to print say so.
-    let o = jetcarp(&["--json", "sheet", "--png", "never-written.png"]);
+    let o = jetcarp(&["--json", "mcp"]);
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("has no JSON output"));
 }

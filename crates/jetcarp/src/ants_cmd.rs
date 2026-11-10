@@ -7,7 +7,7 @@ use jetcarp_api::args;
 use jetcarp_core::ants::job::{self, AntOptions, AntProgress, AntSpec, Soups, parse_rule};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};
-use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, JobStatus, Library, QuickStartRow};
+use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, JobStatus, Library};
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -383,24 +383,15 @@ pub fn run(a: AntsArgs) -> Result<()> {
             Ok(())
         }
         AntsCmd::Promote { id, palette } => {
-            let r = msg(lib.ant(&id))?;
-            let sc = msg(jetcarp_core::ants::media::build_scene_in(
-                &r,
-                palette.as_deref(),
-            ))?;
-            let mut q = QuickStartRow::for_scene(&r.id, "scene", sc);
-            q.behaviour = r.outcome.name().into();
-            q.score = Some(r.score);
-            msg(lib.put_quickstart(&q))?;
-            msg(lib.update_ant(
-                &r.id,
-                &AntUpdate {
-                    state: Some("promoted".into()),
-                    ..Default::default()
-                },
-            ))?;
-            println!("Quick Start entry {} ({})", q.id, q.title);
-            Ok(())
+            use jetcarp_api::op::{Op, Quiet};
+            use jetcarp_api::ops::quickstart::{AddIn, QuickstartAdd};
+            let cx = jetcarp_api::Ctx::new().with_store(lib);
+            let add = AddIn {
+                ant: Some(id),
+                palette,
+                ..Default::default()
+            };
+            crate::show(&QuickstartAdd::run(&cx, add, &Quiet)?, a.json)
         }
     }
 }

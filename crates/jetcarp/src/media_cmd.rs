@@ -1,26 +1,15 @@
 //! `jetcarp media` (frames, animations, posters, thumbnails for catalog patterns, Quick Start
 //! entries, ant runs, and scenes) and `jetcarp site` (incremental static export for a website).
-//! The work is in `jetcarp_core::media` and `jetcarp_core::website`.
+//! The work is in the operations `media.render`, `media.list`, and `site.export`.
 
+use crate::show;
 use anyhow::{Result, bail};
-use jetcarp_core::library::{CurationState, Library, PatternClass, QsStatus};
-use jetcarp_core::media::{
-    self, BatchReport, MediaFormat, MediaMode, MediaOptions, MediaTarget, MissingFilter,
+use jetcarp_api::op::{Op, Quiet, Report};
+use jetcarp_api::ops::media::{
+    MediaListIn, MediaListOp, MediaRender, MediaRenderIn, SiteExport, SiteIn,
 };
-use jetcarp_core::website::{self, ExportFilter, ExportOptions};
-use jetcarp_core::world::Scene;
-use std::path::PathBuf;
-
-fn open(p: &Option<PathBuf>) -> Library {
-    match p {
-        Some(p) => Library::open(p.clone()),
-        None => Library::open_default(),
-    }
-}
-
-fn err(e: String) -> anyhow::Error {
-    anyhow::Error::msg(e)
-}
+use jetcarp_core::library::Library;
+use std::path::{Path, PathBuf};
 
 #[derive(clap::Args)]
 pub struct MediaArgs {
@@ -112,101 +101,49 @@ struct RenderArgs {
     json: bool,
 }
 
-fn classes(s: &Option<String>) -> Result<Vec<PatternClass>> {
-    s.as_deref()
-        .unwrap_or("")
-        .split(',')
+/// A comma-separated list.
+fn split(s: &str) -> Vec<String> {
+    s.split(',')
         .map(str::trim)
         .filter(|x| !x.is_empty())
-        .map(|x| PatternClass::parse(x).map_err(err))
+        .map(String::from)
         .collect()
 }
 
-fn print_report(r: &BatchReport, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(r)?);
-        return Ok(());
+/// A comma-separated list ("none" or empty: none).
+fn list(s: &str) -> Vec<String> {
+    if s.trim() == "none" {
+        return Vec::new();
     }
-    for d in &r.done {
-        let what = if d.written { "rendered" } else { "up to date" };
-        let anim = d
-            .animation()
-            .map(|a| {
-                format!(
-                    "{} ({} x {}, {} frames, {} bytes)",
-                    a.abs_path.display(),
-                    a.width,
-                    a.height,
-                    a.frames,
-                    a.bytes
-                )
-            })
-            .unwrap_or_default();
-        println!(
-            "{} {} [{}] {what}: {anim}",
-            d.target_kind,
-            d.target_id,
-            d.mode.name()
-        );
-    }
-    for (k, id, e) in &r.failed {
-        eprintln!("{k} {id}: {e}");
-    }
-    eprintln!(
-        "{} rendered, {} up to date, {} failed",
-        r.written(),
-        r.skipped(),
-        r.failed.len()
-    );
-    Ok(())
+    split(s)
 }
 
-pub fn run(a: MediaArgs) -> Result<()> {
-    let lib = open(&a.library);
+pub fn run(a: MediaArgs, json: bool) -> Result<()> {
+    let cx = crate::platform::ctx().with_library(a.library.clone());
     match a.cmd {
-        MediaCmd::List { kind, id, json } => {
-            let rows = media::stored(&lib, &kind, &id).map_err(err)?;
-            if json {
-                println!("{}", serde_json::to_string_pretty(&rows)?);
-            } else if rows.is_empty() {
-                println!("no media for {kind} {id}");
-            } else {
-                for r in rows {
-                    println!(
-                        "{:<6} {:<5} {:>4} x {:<4} {:>4} frames {:>9} bytes  {}",
-                        r.kind,
-                        if r.from_seed { "seed" } else { "alone" },
-                        r.width,
-                        r.height,
-                        r.frames,
-                        r.bytes,
-                        r.abs_path.display()
-                    );
-                }
+        MediaCmd::List { kind, id, json: j } => {
+            let out = MediaListOp::run(&cx, MediaListIn { kind, id }, &Quiet)?;
+            if json || j {
+                // The rows, as they have always printed.
+                println!("{}", serde_json::to_string_pretty(&out.media)?);
+                return Ok(());
             }
-            Ok(())
+            show(&out, false)
         }
-        MediaCmd::Render(r) => render(&lib, *r),
+        MediaCmd::Render(r) => render(&cx, *r, json),
     }
 }
 
-fn render(lib: &Library, a: RenderArgs) -> Result<()> {
-    if let Some(t) = a.threads {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(t)
-            .build_global()
-            .ok();
+/// `abs` as the user would write it: under `given` (relative) instead of `dir` (absolute).
+fn as_given(abs: &Path, dir: &Path, given: &Path) -> PathBuf {
+    match abs.strip_prefix(dir) {
+        Ok(rest) if given.is_relative() => given.join(rest),
+        _ => abs.to_path_buf(),
     }
-    let o = MediaOptions {
-        mode: MediaMode::parse(&a.mode).map_err(err)?,
-        format: MediaFormat::parse(&a.format).map_err(err)?,
-        periods: a.periods.max(1),
-        gens: a.gens,
-        every: a.every.max(1),
-        frames: !a.no_frames,
-        force: a.force,
-        style: media::MediaStyle::with_palette(a.palette.as_deref()).map_err(err)?,
-    };
+}
+
+fn render(cx: &jetcarp_api::Ctx, a: RenderArgs, json: bool) -> Result<()> {
+    let json = json || a.json;
     let picked = [
         a.pattern.is_some(),
         a.quickstart.is_some(),
@@ -218,13 +155,31 @@ fn render(lib: &Library, a: RenderArgs) -> Result<()> {
     .filter(|x| **x)
     .count();
     if picked != 1 {
-        bail!(
-            "give one of --pattern ID, --quickstart ID, --ant ID, --scene FILE, --missing"
-        );
+        bail!("give one of --pattern ID, --quickstart ID, --ant ID, --scene FILE, --missing");
     }
+    let mut input = MediaRenderIn {
+        pattern: a.pattern,
+        quickstart: a.quickstart,
+        ant: a.ant,
+        missing: a.missing,
+        class: a.class.as_deref().map(split).unwrap_or_default(),
+        only_patterns: a.only_patterns,
+        only_quickstart: a.only_quickstart,
+        limit: a.limit,
+        mode: Some(a.mode),
+        format: Some(a.format),
+        periods: Some(a.periods),
+        gens: a.gens,
+        every: Some(a.every),
+        frames: Some(!a.no_frames),
+        force: a.force,
+        palette: a.palette,
+        threads: a.threads,
+        ..Default::default()
+    };
+    let mut out_dir = None;
     if let Some(path) = &a.scene {
         let text = std::fs::read_to_string(path)?;
-        let sc = Scene::from_json(&text).map_err(err)?;
         let stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
@@ -235,40 +190,34 @@ fn render(lib: &Library, a: RenderArgs) -> Result<()> {
                 .map(|p| p.join("media").join("scenes").join(&stem))
                 .unwrap_or_else(|| PathBuf::from(&stem))
         });
-        let rows = media::render_scene_to(&sc, &dir, &o).map_err(err)?;
-        if a.json {
-            println!("{}", serde_json::to_string_pretty(&rows)?);
+        input.scene = Some(serde_json::Value::String(text));
+        input.out = Some(dir.display().to_string());
+        out_dir = Some(dir);
+    }
+    let out = MediaRender::run(cx, input, &Quiet)?;
+    if let (Some(given), Some(dir)) = (out_dir, &out.folder) {
+        // A scene: its files, as they have always printed.
+        if json {
+            println!("{}", serde_json::to_string_pretty(&out.rows)?);
         } else {
-            for r in rows {
-                println!("{:<6} {}", r.kind, r.abs_path.display());
+            for r in &out.rows {
+                println!(
+                    "{:<6} {}",
+                    r.kind,
+                    as_given(&r.abs_path, dir, &given).display()
+                );
             }
         }
         return Ok(());
     }
-    let report = if a.missing {
-        let filter = MissingFilter {
-            patterns: !a.only_quickstart,
-            classes: classes(&a.class)?,
-            quickstart: !a.only_patterns && a.class.is_none(),
-            ants: !a.only_patterns && !a.only_quickstart && a.class.is_none(),
-            limit: a.limit,
-        };
-        media::render_missing(lib, &filter, &o).map_err(err)?
-    } else {
-        let t = if let Some(p) = a.pattern {
-            MediaTarget::Pattern(p)
-        } else if let Some(q) = a.quickstart {
-            MediaTarget::QuickStart(q)
-        } else {
-            MediaTarget::Ant(a.ant.unwrap())
-        };
-        media::render_many(lib, &[t], &o).map_err(err)?
-    };
-    print_report(&report, a.json)?;
-    if !report.failed.is_empty() && report.done.is_empty() {
-        bail!("nothing rendered");
+    if json {
+        // The catalog's report, as it has always printed.
+        if let Some(r) = &out.report {
+            println!("{}", serde_json::to_string_pretty(r)?);
+        }
+        return out.check().map_err(anyhow::Error::new);
     }
-    Ok(())
+    show(&out, false)
 }
 
 #[derive(clap::Args)]
@@ -334,85 +283,38 @@ struct ExportArgs {
     json: bool,
 }
 
-/// A comma-separated list ("none" or empty: none).
-fn list(s: &str) -> Vec<String> {
-    if s.trim() == "none" {
-        return Vec::new();
-    }
-    s.split(',')
-        .map(|x| x.trim().to_string())
-        .filter(|x| !x.is_empty())
-        .collect()
-}
-
-pub fn run_site(a: SiteArgs) -> Result<()> {
-    let lib = open(&a.library);
+pub fn run_site(a: SiteArgs, json: bool) -> Result<()> {
+    let cx = crate::platform::ctx().with_library(a.library.clone());
     match a.cmd {
         SiteCmd::Export(e) => {
-            let states = e
-                .state
-                .split(',')
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .map(|x| CurationState::parse(x).map_err(err))
-                .collect::<Result<Vec<_>>>()?;
-            let quickstart = if e.quickstart.trim() == "none" {
-                Vec::new()
-            } else {
-                e.quickstart
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|x| !x.is_empty())
-                    .map(|x| QsStatus::parse(x).map_err(err))
-                    .collect::<Result<Vec<_>>>()?
-            };
-            let o = ExportOptions {
-                filter: ExportFilter {
-                    states,
-                    min_score: e.min_score,
-                    min_rating: e.min_rating,
-                    classes: classes(&e.class)?,
-                    min_osc_period: e.min_osc_period,
-                    ids: Vec::new(),
-                    quickstart,
-                    ant_states: list(&e.ants),
-                    ant_outcomes: e.ant_outcome.as_deref().map(list).unwrap_or_default(),
-                },
+            let input = SiteIn {
+                to: e.to.display().to_string(),
+                state: Some(split(&e.state)),
+                min_score: e.min_score,
+                min_rating: e.min_rating,
+                min_osc_period: e.min_osc_period,
+                class: e.class.as_deref().map(split).unwrap_or_default(),
+                quickstart: Some(if e.quickstart.trim() == "none" {
+                    Vec::new()
+                } else {
+                    split(&e.quickstart)
+                }),
+                ants: Some(list(&e.ants)),
+                ant_outcome: e.ant_outcome.as_deref().map(list).unwrap_or_default(),
                 frames: e.frames,
                 render: !e.no_render,
-                media: MediaOptions {
-                    style: media::MediaStyle::with_palette(e.palette.as_deref()).map_err(err)?,
-                    ..Default::default()
-                },
+                palette: e.palette,
+                page: !e.no_page,
             };
-            let mut r = website::export(&lib, &e.to, &o).map_err(err)?;
-            if !e.no_page && website::write_page(&e.to).map_err(err)? {
-                r.written.push("index.html".into());
+            let mut out = SiteExport::run(&cx, input, &Quiet)?;
+            // The folder as given.
+            out.0.dir = e.to.clone();
+            if json || e.json {
+                // In the report's own key order, as it has always printed.
+                println!("{}", serde_json::to_string_pretty(&out.0)?);
+                return Ok(());
             }
-            if e.json {
-                println!("{}", serde_json::to_string_pretty(&r)?);
-            } else {
-                for p in &r.written {
-                    println!("wrote   {p}");
-                }
-                for p in &r.deleted {
-                    println!("deleted {p}");
-                }
-                for (k, id, x) in &r.media_failed {
-                    eprintln!("no media for {k} {id}: {x}");
-                }
-                eprintln!(
-                    "{}: {} patterns, {} Quick Start entries; {} files written, {} deleted, {} items unchanged, {} media rendered",
-                    r.dir.display(),
-                    r.patterns,
-                    r.quickstart,
-                    r.written.len(),
-                    r.deleted.len(),
-                    r.unchanged,
-                    r.rendered
-                );
-            }
-            Ok(())
+            show(&out, false)
         }
     }
 }
