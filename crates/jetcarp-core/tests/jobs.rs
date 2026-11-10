@@ -555,9 +555,114 @@ fn bounded_searches_resumed_store_what_one_whole_search_stores() {
     assert_eq!(snapshot(&a, st.job), snapshot(&b, job));
 }
 
+/// A block and a glider (records from a world), and a collision of the glider into the block
+/// (as `tests/library.rs` collides them).
+fn glider_into_block() -> (
+    PatternRecord,
+    PatternRecord,
+    jetcarp_core::library::collide::CollideSpec,
+) {
+    use jetcarp_core::library::{DiscoveredBy, Provenance, record_from_object};
+    use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+    use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, Topology, World};
+    let mut w = World::new(TilingSpec::rect("square", 96, 80, Boundary::Wrap), 1).unwrap();
+    let g = w.topo.lattice().unwrap().clone();
+    let mut cells = place_rows(&g, ".o./..o/ooo", 10, 10);
+    cells.extend(place_rows(&g, "oo/oo", 40, 40));
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells }),
+    })
+    .unwrap();
+    let objs = find_objects(&w, &ObjectOptions::default()).unwrap();
+    let recs: Vec<PatternRecord> = objs
+        .objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .map(|o| {
+            record_from_object(
+                &w,
+                w.cas[0].id,
+                o,
+                Provenance::default(),
+                DiscoveredBy::User,
+            )
+            .unwrap()
+        })
+        .collect();
+    let named = |n: &str| recs.iter().find(|r| r.name.as_deref() == Some(n)).unwrap();
+    let (block, glider) = (named("block").clone(), named("glider").clone());
+    let topo = Topology::build(&TilingSpec::rect("square", 8, 8, Boundary::Dead)).unwrap();
+    let d = glider.displacement.unwrap();
+    let o = jetcarp_core::library::paste::orientations(&topo, glider.neighborhood)
+        .iter()
+        .position(|m| m.vector(d) == [-1, -1])
+        .unwrap() as u32;
+    let cs = jetcarp_core::library::collide::CollideSpec {
+        dx: [-2, 5],
+        dy: [3, 5],
+        orientation_b: o,
+        gens: 600,
+        ..Default::default()
+    };
+    (block, glider, cs)
+}
+
+#[test]
+fn collisions_resumed_equal_uninterrupted() {
+    use jetcarp_core::jobs::collide::{self as collide_job, CollideJobSpec};
+    let (block, glider, cs) = glider_into_block();
+    let job_in = |name: &str| {
+        let l = temp_lib(name);
+        l.add(block.clone()).unwrap();
+        l.add(glider.clone()).unwrap();
+        let spec = CollideJobSpec {
+            a: block.id.clone(),
+            b: glider.id.clone(),
+            collide: cs.clone(),
+            store: true,
+        };
+        let j = collide_job::start(&l, &spec).unwrap();
+        (l, j)
+    };
+    let (a, ja) = job_in("collide-whole");
+    let whole = Runner::new(a.clone()).run(ja, &opts(2)).unwrap();
+    assert_eq!(whole.status, JobStatus::Done);
+    assert_eq!(whole.progress["runs"], 96);
+    // Twenty placements a session, from new catalog handles, then the verification.
+    let (b, jb) = job_in("collide-sessions");
+    let mut sessions = 0;
+    let last = loop {
+        let out = Runner::new(Library::open(b.path()))
+            .run(
+                jb,
+                &RunOptions {
+                    threads: 3,
+                    budget: Budget::items(20),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        sessions += 1;
+        if out.status == JobStatus::Done {
+            break out;
+        }
+        assert_eq!(out.stopped, Some(Stopped::Budget));
+        assert_eq!(
+            out.progress["runs_done"].as_u64(),
+            Some((20 * sessions).min(96)),
+            "{}",
+            out.progress
+        );
+    };
+    assert_eq!(sessions, 5);
+    assert_eq!(last.progress, whole.progress);
+    assert_eq!(b.job(jb).unwrap().progress, a.job(ja).unwrap().progress);
+    assert_eq!(snapshot(&a, ja), snapshot(&b, jb));
+}
+
 #[test]
 fn bounded_searches_and_collisions_store_what_their_calls_store() {
-    use jetcarp_core::library::collide::{CollideSpec, collide};
+    use jetcarp_core::library::collide::collide;
     use jetcarp_core::library::search::{SearchSpec, search};
     let spec = SearchSpec {
         rules: vec!["B3/S23".into()],
@@ -598,50 +703,9 @@ fn bounded_searches_and_collisions_store_what_their_calls_store() {
     // A glider into a block (as `tests/library.rs` collides them), the products stored in the
     // job.
     use jetcarp_core::jobs::collide::CollideJobSpec;
-    use jetcarp_core::library::{DiscoveredBy, Provenance, record_from_object};
-    use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
-    use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, Topology, World};
-    let mut w = World::new(TilingSpec::rect("square", 96, 80, Boundary::Wrap), 1).unwrap();
-    let g = w.topo.lattice().unwrap().clone();
-    let mut cells = place_rows(&g, ".o./..o/ooo", 10, 10);
-    cells.extend(place_rows(&g, "oo/oo", 40, 40));
-    w.apply(Command::AddCa {
-        ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells }),
-    })
-    .unwrap();
-    let objs = find_objects(&w, &ObjectOptions::default()).unwrap();
-    let recs: Vec<PatternRecord> = objs
-        .objects
-        .iter()
-        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
-        .map(|o| {
-            record_from_object(
-                &w,
-                w.cas[0].id,
-                o,
-                Provenance::default(),
-                DiscoveredBy::User,
-            )
-            .unwrap()
-        })
-        .collect();
-    let named = |n: &str| recs.iter().find(|r| r.name.as_deref() == Some(n)).unwrap();
-    let (block, glider) = (named("block").clone(), named("glider").clone());
+    let (block, glider, cs) = glider_into_block();
     b.add(block.clone()).unwrap();
     b.add(glider.clone()).unwrap();
-    let topo = Topology::build(&TilingSpec::rect("square", 8, 8, Boundary::Dead)).unwrap();
-    let d = glider.displacement.unwrap();
-    let o = jetcarp_core::library::paste::orientations(&topo, glider.neighborhood)
-        .iter()
-        .position(|m| m.vector(d) == [-1, -1])
-        .unwrap() as u32;
-    let cs = CollideSpec {
-        dx: [-2, 5],
-        dy: [3, 5],
-        orientation_b: o,
-        gens: 600,
-        ..Default::default()
-    };
     let direct = collide(&block, &glider, &cs, 0, None).unwrap();
     assert!(!direct.records.is_empty());
     let cjs = CollideJobSpec {

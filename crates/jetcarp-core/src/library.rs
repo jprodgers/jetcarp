@@ -55,6 +55,7 @@ pub mod verify;
 pub use paste::{PasteAt, PatternSource};
 pub use range::{RuleRange, identity};
 pub use site::Site;
+pub use store::prepare;
 pub use store::{
     AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsStatus, QuickStartRow,
     RatingRow, Sighting, SightingRow, StoredSearch, ant_id, ant_score,

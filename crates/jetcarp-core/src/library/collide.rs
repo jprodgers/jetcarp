@@ -16,6 +16,11 @@
 //! Outcomes: `both_survive` (A and B come out as they went in, possibly moved or turned),
 //! `both_die` (nothing left), `a_survives` / `b_survives` (only that one is left), `new_objects`
 //! (anything else; the products are listed and cataloged).
+//!
+//! Every placement's run is a pure function of its inputs and results are gathered in placement
+//! order ([`Collected`]), so they are identical at any thread count and in any batches:
+//! [`collide`] runs them all at once; a collide job (`crate::jobs::collide`) runs them a batch per
+//! step, its checkpoint the gathered state.
 
 use super::verify::{Frame, lattice_info, rule_world};
 use super::{
@@ -168,184 +173,345 @@ pub fn collide(
     thumb_px: u32,
     progress: Option<&(dyn Fn(usize, usize) + Sync)>,
 ) -> Result<CollideOutput, String> {
-    if a.site.is_some() || b.site.is_some() {
-        return Err("collisions need lattice tilings (not aperiodic patches)".into());
-    }
-    if a.neighborhood != b.neighborhood || a.steps_per_gen != b.steps_per_gen {
-        return Err("the patterns use different neighbourhoods or steps per generation".into());
-    }
-    // Patterns are rule-free: run both in one rule they both work in.
-    let rule = match &spec.rule {
-        Some(r) => r.clone(),
-        None if b.works_in(&a.rule) => a.rule.clone(),
-        None if a.works_in(&b.rule) => b.rule.clone(),
-        None => {
+    let c = Collision::new(a, b, spec, now_utc())?;
+    let mut got = Collected::new(&c);
+    let outs = c
+        .run(0..c.placements(), thumb_px, progress, None)
+        .unwrap_or_default();
+    got.add(outs, true)?;
+    got.verify(got.products());
+    Ok(got.output(&c))
+}
+
+/// One placement's run, its products' records, and its thumbnail.
+pub type RunOut = (CollideRun, Vec<PatternRecord>, Option<Image>);
+
+/// A collision ready to run: both patterns in the rule they run in, A's cells, B's phases, and
+/// the placements (phases outer, then dy, then dx), numbered. Placement `k` is a pure function
+/// of the patterns, the spec, `k`, and the collision's date (in the products' provenance).
+pub struct Collision {
+    a: PatternRecord,
+    b: PatternRecord,
+    spec: CollideSpec,
+    date: String,
+    info: super::verify::LatticeInfo,
+    cells_a: Phase,
+    /// Cells within two steps of A (unwrapped lattice coordinates).
+    near: HashSet<(i32, i32, u32)>,
+    phases: Vec<u32>,
+    b_phases: Vec<Phase>,
+    jobs: Vec<(i32, i32, u32)>,
+}
+
+impl Collision {
+    pub fn new(
+        a: &PatternRecord,
+        b: &PatternRecord,
+        spec: &CollideSpec,
+        date: String,
+    ) -> Result<Collision, String> {
+        if a.site.is_some() || b.site.is_some() {
+            return Err("collisions need lattice tilings (not aperiodic patches)".into());
+        }
+        if a.neighborhood != b.neighborhood || a.steps_per_gen != b.steps_per_gen {
+            return Err("the patterns use different neighbourhoods or steps per generation".into());
+        }
+        // Patterns are rule-free: run both in one rule they both work in.
+        let rule = match &spec.rule {
+            Some(r) => r.clone(),
+            None if b.works_in(&a.rule) => a.rule.clone(),
+            None if a.works_in(&b.rule) => b.rule.clone(),
+            None => {
+                return Err(format!(
+                    "no common rule: {} works in {}, {} in {} (give a rule both work in)",
+                    a.label(),
+                    a.range
+                        .as_ref()
+                        .map(|r| r.describe())
+                        .unwrap_or_else(|| a.rule.clone()),
+                    b.label(),
+                    b.range
+                        .as_ref()
+                        .map(|r| r.describe())
+                        .unwrap_or_else(|| b.rule.clone())
+                ));
+            }
+        };
+        let (a, b) = (a.in_rule(&rule)?, b.in_rule(&rule)?);
+        if super::tiling_key(&a.tiling) != super::tiling_key(&b.tiling) {
             return Err(format!(
-                "no common rule: {} works in {}, {} in {} (give a rule both work in)",
-                a.label(),
-                a.range
-                    .as_ref()
-                    .map(|r| r.describe())
-                    .unwrap_or_else(|| a.rule.clone()),
-                b.label(),
-                b.range
-                    .as_ref()
-                    .map(|r| r.describe())
-                    .unwrap_or_else(|| b.rule.clone())
+                "the patterns are on different tilings ({} and {})",
+                a.tiling_name, b.tiling_name
             ));
         }
-    };
-    let (a, b) = (&a.in_rule(&rule)?, &b.in_rule(&rule)?);
-    if super::tiling_key(&a.tiling) != super::tiling_key(&b.tiling) {
-        return Err(format!(
-            "the patterns are on different tilings ({} and {})",
-            a.tiling_name, b.tiling_name
-        ));
-    }
-    if spec.dx[0] > spec.dx[1] || spec.dy[0] > spec.dy[1] {
-        return Err("offset ranges must be low..high".into());
-    }
-    let n_off = (spec.dx[1] - spec.dx[0] + 1) as u64 * (spec.dy[1] - spec.dy[0] + 1) as u64;
-    let phases: Vec<u32> = if spec.phases.is_empty() {
-        (0..b.period as u32).collect()
-    } else {
-        spec.phases.clone()
-    };
-    if n_off * phases.len() as u64 > 100_000 {
-        return Err("more than 100,000 placements; narrow the offset ranges".into());
-    }
-    let info = lattice_info(&a.tiling, a.neighborhood)?;
-    // A small frame to get the tiling's offsets and symmetries.
-    let probe = Frame::around(&a.tiling, &info, &a.phase(0)?, 2)?;
-    let topo = probe.topo.clone();
-    let g = topo.lattice().unwrap().clone();
-    let cells_a = oriented(&topo, a.neighborhood, &a.phase(0)?, spec.orientation_a)?;
-    // Cells within two steps of A (unwrapped lattice coordinates).
-    let mut near: HashSet<(i32, i32, u32)> = cells_a.iter().map(|c| (c.i, c.j, c.k)).collect();
-    for _ in 0..2 {
-        let cur: Vec<(i32, i32, u32)> = near.iter().copied().collect();
-        for (i, j, k) in cur {
-            for o in &g.offsets[a.neighborhood as usize][k as usize] {
-                near.insert((i + o.di, j + o.dj, o.k));
-            }
+        if spec.dx[0] > spec.dx[1] || spec.dy[0] > spec.dy[1] {
+            return Err("offset ranges must be low..high".into());
         }
-    }
-    let mut jobs = Vec::new();
-    for &ph in &phases {
-        for dy in spec.dy[0]..=spec.dy[1] {
-            for dx in spec.dx[0]..=spec.dx[1] {
-                jobs.push((dx, dy, ph));
-            }
+        let n_off = (spec.dx[1] - spec.dx[0] + 1) as u64 * (spec.dy[1] - spec.dy[0] + 1) as u64;
+        let phases: Vec<u32> = if spec.phases.is_empty() {
+            (0..b.period as u32).collect()
+        } else {
+            spec.phases.clone()
+        };
+        if n_off * phases.len() as u64 > 100_000 {
+            return Err("more than 100,000 placements; narrow the offset ranges".into());
         }
-    }
-    let b_phases: Vec<Phase> = phases
-        .iter()
-        .map(|&ph| {
-            oriented(
-                &topo,
-                b.neighborhood,
-                &b.phase(ph as u64)?,
-                spec.orientation_b,
-            )
-        })
-        .collect::<Result<_, _>>()?;
-    let key_a = a.id.clone();
-    let key_b = b.id.clone();
-    let date = now_utc();
-    let total = jobs.len();
-    let done = std::sync::atomic::AtomicUsize::new(0);
-    type RunOut = (CollideRun, Vec<PatternRecord>, Option<Image>);
-    let outs: Vec<Result<RunOut, String>> = jobs
-        .par_iter()
-        .map(|&(dx, dy, ph)| {
-            let bi = phases.iter().position(|&p| p == ph).unwrap();
-            let cells_b = shifted(&b_phases[bi], dx, dy);
-            let r = if cells_b.iter().any(|c| near.contains(&(c.i, c.j, c.k))) {
-                Ok((
-                    CollideRun {
-                        dx,
-                        dy,
-                        phase: ph,
-                        outcome: Outcome::Overlap,
-                        gens: 0,
-                        result: String::new(),
-                        products: vec![],
-                    },
-                    vec![],
-                    None,
-                ))
-            } else {
-                run_one(
-                    a,
-                    b,
-                    spec,
-                    &info,
-                    &cells_a,
-                    &cells_b,
-                    (dx, dy, ph),
-                    (&key_a, &key_b),
-                    &date,
-                    thumb_px,
-                )
-            };
-            let d = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            if let Some(p) = progress {
-                p(d, total);
-            }
-            r
-        })
-        .collect();
-    let mut runs = Vec::new();
-    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    let mut products: Vec<PatternRecord> = Vec::new();
-    let mut at: HashMap<String, usize> = HashMap::new();
-    let mut thumbs = Vec::new();
-    for o in outs {
-        let (run, recs, img) = o?;
-        *counts.entry(run.outcome.name().into()).or_default() += 1;
-        for r in recs {
-            match at.get(&r.id) {
-                Some(&k) => products[k].seen += 1,
-                None => {
-                    at.insert(r.id.clone(), products.len());
-                    products.push(r);
+        let info = lattice_info(&a.tiling, a.neighborhood)?;
+        // A small frame to get the tiling's offsets and symmetries.
+        let probe = Frame::around(&a.tiling, &info, &a.phase(0)?, 2)?;
+        let topo = probe.topo.clone();
+        let g = topo.lattice().unwrap().clone();
+        let cells_a = oriented(&topo, a.neighborhood, &a.phase(0)?, spec.orientation_a)?;
+        let mut near: HashSet<(i32, i32, u32)> = cells_a.iter().map(|c| (c.i, c.j, c.k)).collect();
+        for _ in 0..2 {
+            let cur: Vec<(i32, i32, u32)> = near.iter().copied().collect();
+            for (i, j, k) in cur {
+                for o in &g.offsets[a.neighborhood as usize][k as usize] {
+                    near.insert((i + o.di, j + o.dj, o.k));
                 }
             }
         }
-        if let Some(img) = img {
-            thumbs.push((
-                format!("{},{} p{}", run.dx, run.dy, run.phase),
-                run.outcome,
-                img,
-            ));
+        let mut jobs = Vec::new();
+        for &ph in &phases {
+            for dy in spec.dy[0]..=spec.dy[1] {
+                for dx in spec.dx[0]..=spec.dx[1] {
+                    jobs.push((dx, dy, ph));
+                }
+            }
         }
-        runs.push(run);
-    }
-    let checked: Vec<Result<PatternRecord, String>> = products
-        .into_par_iter()
-        .map(|mut r| {
-            r.rescore();
-            r.verified = verify(&r, default_periods(r.period))?;
-            Ok(r)
-        })
-        .collect();
-    let records: Vec<PatternRecord> = checked.into_iter().filter_map(Result::ok).collect();
-    Ok(CollideOutput {
-        report: CollideReport {
-            jetcarp_version: crate::VERSION.into(),
-            a: a.id.clone(),
-            b: b.id.clone(),
-            a_label: a.label(),
-            b_label: b.label(),
-            rule: a.rule.clone(),
-            tiling: a.tiling_name.clone(),
+        let b_phases: Vec<Phase> = phases
+            .iter()
+            .map(|&ph| {
+                oriented(
+                    &topo,
+                    b.neighborhood,
+                    &b.phase(ph as u64)?,
+                    spec.orientation_b,
+                )
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Collision {
+            a,
+            b,
             spec: spec.clone(),
-            counts,
-            runs,
-        },
-        records,
-        thumbs,
-    })
+            date,
+            info,
+            cells_a,
+            near,
+            phases,
+            b_phases,
+            jobs,
+        })
+    }
+
+    /// Placements in all.
+    pub fn placements(&self) -> usize {
+        self.jobs.len()
+    }
+
+    /// The date in the products' provenance.
+    pub fn date(&self) -> &str {
+        &self.date
+    }
+
+    /// Run placements `range` in parallel on the current rayon pool, in order (`thumb_px` > 0
+    /// renders thumbnails). `progress(done, total)` is called as they finish. `None` when
+    /// `cancel` was set part way (the rest skipped).
+    pub fn run(
+        &self,
+        range: std::ops::Range<usize>,
+        thumb_px: u32,
+        progress: Option<&(dyn Fn(usize, usize) + Sync)>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Option<Vec<Result<RunOut, String>>> {
+        use std::sync::atomic::Ordering;
+        let (a, b, spec) = (&self.a, &self.b, &self.spec);
+        let total = self.jobs.len();
+        let done = std::sync::atomic::AtomicUsize::new(range.start);
+        let outs: Vec<Option<Result<RunOut, String>>> = self.jobs[range]
+            .par_iter()
+            .map(|&(dx, dy, ph)| {
+                if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+                    return None;
+                }
+                let bi = self.phases.iter().position(|&p| p == ph).unwrap();
+                let cells_b = shifted(&self.b_phases[bi], dx, dy);
+                let r = if cells_b.iter().any(|c| self.near.contains(&(c.i, c.j, c.k))) {
+                    Ok((
+                        CollideRun {
+                            dx,
+                            dy,
+                            phase: ph,
+                            outcome: Outcome::Overlap,
+                            gens: 0,
+                            result: String::new(),
+                            products: vec![],
+                        },
+                        vec![],
+                        None,
+                    ))
+                } else {
+                    run_one(
+                        a,
+                        b,
+                        spec,
+                        &self.info,
+                        &self.cells_a,
+                        &cells_b,
+                        (dx, dy, ph),
+                        (&a.id, &b.id),
+                        &self.date,
+                        thumb_px,
+                    )
+                };
+                let d = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(p) = progress {
+                    p(d, total);
+                }
+                Some(r)
+            })
+            .collect();
+        outs.into_iter().collect()
+    }
+}
+
+/// A collision's results so far, gathered placement by placement in order, whatever the
+/// batches (a collide job's checkpoint): the runs per outcome and the products (each id once,
+/// from its first run, `seen` = the runs producing it). Once every placement is in, the products
+/// are verified (in any batches) and [`output`](Self::output) gives exactly what one whole run
+/// gives. The runs themselves (and thumbnails) are kept only when asked for.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Collected {
+    /// When the collision started (its products' provenance date).
+    pub date: String,
+    /// Placements gathered.
+    pub next: usize,
+    /// Runs per outcome.
+    pub counts: BTreeMap<String, usize>,
+    products: Vec<PatternRecord>,
+    /// Products verified (once every placement is in), and those that failed.
+    verified: usize,
+    failed: Vec<usize>,
+    #[serde(skip)]
+    at: HashMap<String, usize>,
+    #[serde(skip)]
+    runs: Vec<CollideRun>,
+    #[serde(skip)]
+    thumbs: Vec<(String, Outcome, Image)>,
+}
+
+impl Collected {
+    pub fn new(c: &Collision) -> Collected {
+        Collected {
+            date: c.date.clone(),
+            ..Default::default()
+        }
+    }
+
+    /// One read back from a checkpoint (its index rebuilt); it must be of this collision.
+    pub fn restored(mut self, c: &Collision) -> Result<Collected, String> {
+        if self.next > c.placements() || self.date != c.date {
+            return Err("the checkpoint does not match the collision".into());
+        }
+        self.at = self
+            .products
+            .iter()
+            .enumerate()
+            .map(|(k, r)| (r.id.clone(), k))
+            .collect();
+        Ok(self)
+    }
+
+    /// Distinct products so far.
+    pub fn products(&self) -> usize {
+        self.products.len()
+    }
+    /// Products verified so far.
+    pub fn verified(&self) -> usize {
+        self.verified
+    }
+
+    /// Gather the next placements' runs (of placements `next..`, in order), keeping the runs
+    /// and thumbnails when `keep`. A run that failed fails the collision.
+    pub fn add(&mut self, outs: Vec<Result<RunOut, String>>, keep: bool) -> Result<(), String> {
+        for o in outs {
+            let (run, recs, img) = o?;
+            self.next += 1;
+            *self.counts.entry(run.outcome.name().into()).or_default() += 1;
+            for r in recs {
+                match self.at.get(&r.id) {
+                    Some(&k) => self.products[k].seen += 1,
+                    None => {
+                        self.at.insert(r.id.clone(), self.products.len());
+                        self.products.push(r);
+                    }
+                }
+            }
+            if keep {
+                if let Some(img) = img {
+                    self.thumbs.push((
+                        format!("{},{} p{}", run.dx, run.dy, run.phase),
+                        run.outcome,
+                        img,
+                    ));
+                }
+                self.runs.push(run);
+            }
+        }
+        Ok(())
+    }
+
+    /// Verify the next `n` products (in parallel on the current rayon pool); every placement
+    /// must be in.
+    pub fn verify(&mut self, n: usize) {
+        let (a, b) = (self.verified, (self.verified + n).min(self.products.len()));
+        let checked: Vec<Result<(), String>> = self.products[a..b]
+            .par_iter_mut()
+            .map(|r| {
+                r.rescore();
+                r.verified = verify(r, default_periods(r.period))?;
+                Ok(())
+            })
+            .collect();
+        for (u, r) in (a..b).zip(checked) {
+            if r.is_err() {
+                self.failed.push(u);
+            }
+        }
+        self.verified = b;
+    }
+
+    /// The verified products' records (`seen` = runs producing them), once every placement is
+    /// in and every product verified.
+    pub fn records(&self) -> Vec<PatternRecord> {
+        self.products
+            .iter()
+            .enumerate()
+            .filter(|(u, _)| !self.failed.contains(u))
+            .map(|(_, r)| r.clone())
+            .collect()
+    }
+
+    /// The collision's report (with the runs kept), verified records, and thumbnails.
+    pub fn output(self, c: &Collision) -> CollideOutput {
+        let records = self.records();
+        CollideOutput {
+            report: CollideReport {
+                jetcarp_version: crate::VERSION.into(),
+                a: c.a.id.clone(),
+                b: c.b.id.clone(),
+                a_label: c.a.label(),
+                b_label: c.b.label(),
+                rule: c.a.rule.clone(),
+                tiling: c.a.tiling_name.clone(),
+                spec: c.spec.clone(),
+                counts: self.counts,
+                runs: self.runs,
+            },
+            records,
+            thumbs: self.thumbs,
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

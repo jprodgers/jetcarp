@@ -947,8 +947,10 @@ fn add_in(
     Ok(out)
 }
 
-/// Verify (if not yet verified) and compute the rule range (if missing).
-fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
+/// A record as the catalog stores it: verified (if not yet verified) and given its rule range
+/// (if missing). Adding a record does this first; a job that must know a record can be stored
+/// before it writes (its write is then only the store) does it itself.
+pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
     if rec.verified.periods == 0 {
         rec.verified = verify(&rec, default_periods(rec.period))?;
     }
