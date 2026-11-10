@@ -2,16 +2,18 @@
 //! the command line (run scenes headless, print state hashes, export PNGs, search, catalogue),
 //! the background host (`jetcarp host serve`), and the MCP server (`jetcarp mcp`).
 
-use anyhow::{Context, Result, bail};
-use jetcarp_core::render::{RenderOptions, png_metadata, write_png};
+use anyhow::{Result, bail};
+use clap::{CommandFactory, Parser, Subcommand};
+use jetcarp_api::op::{self, NoInput, Op, Quiet, Report};
+use jetcarp_api::ops::{reference, scene, system};
+use jetcarp_core::render::write_png;
 use jetcarp_core::*;
-use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod ants_cmd;
+mod api_cmd;
 mod app_cmd;
 mod demo_cmd;
-mod doctor_cmd;
 mod evolve_cmd;
 mod explore_cmd;
 mod hashlife_cmd;
@@ -21,6 +23,7 @@ mod library;
 mod media_cmd;
 mod movers_cmd;
 mod pile_cmd;
+mod platform;
 mod research;
 mod script_cmd;
 mod wallpaper_cmd;
@@ -36,6 +39,9 @@ mod wallpaper_cmd;
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
+    /// Print the result as JSON instead of text (commands that report a result).
+    #[arg(long, global = true)]
+    json: bool,
     #[command(flatten)]
     app: jetcarp_app::LaunchArgs,
     #[command(subcommand)]
@@ -67,9 +73,6 @@ enum Cmd {
         /// Fail unless the final hash equals this.
         #[arg(long)]
         expect: Option<String>,
-        /// Print the summary as JSON.
-        #[arg(long)]
-        json: bool,
         /// Step the --gens generations on the GPU where the rules allow it (results are identical).
         #[arg(long)]
         gpu: bool,
@@ -169,17 +172,13 @@ enum Cmd {
     Tilings,
     /// What JETCARP sees on this machine: version, folders, graphics adapters, desktop
     /// integration. Include it in bug reports.
-    Doctor(doctor_cmd::DoctorArgs),
+    Doctor,
     /// Undo what JETCARP set up outside its folders (login entry, GNOME extension, screen
     /// saver), and optionally delete its settings and data. Shows the plan unless --yes.
-    Uninstall(doctor_cmd::UninstallArgs),
+    Uninstall(platform::UninstallArgs),
     /// Print the settings, data, and output folders JETCARP uses (environment overrides
     /// included).
-    Paths {
-        /// Print them as JSON.
-        #[arg(long)]
-        json: bool,
-    },
+    Paths,
     /// List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet.
     Isohedral {
         /// Write a contact sheet of all 81 types here instead of listing them.
@@ -219,6 +218,10 @@ enum Cmd {
         #[arg(long)]
         token: Option<String>,
     },
+    /// JETCARP's operations by name, for automation and tests: `list`, `schema OP`,
+    /// `call OP [JSON]` (the result as JSON).
+    #[command(hide = true)]
+    Api(api_cmd::ApiArgs),
     /// Quick Start examples: list them, check that each one works, or render a contact sheet.
     Quickstart {
         /// Run each example (at preview size) and report whether it is alive and changing.
@@ -247,16 +250,76 @@ enum Cmd {
     },
 }
 
+/// The arguments, with a `--json` given before the subcommand moved after it: the app's flags
+/// cannot be mixed with subcommands, but `--json` applies to them (`jetcarp --json paths`).
+fn args() -> Vec<std::ffi::OsString> {
+    let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let cmd = Cli::command();
+    let names: Vec<String> = cmd
+        .get_subcommands()
+        .flat_map(|c| {
+            std::iter::once(c.get_name().to_string()).chain(c.get_all_aliases().map(String::from))
+        })
+        .collect();
+    let sub = args
+        .iter()
+        .skip(1)
+        .position(|a| a.to_str().is_some_and(|a| names.iter().any(|n| n == a)))
+        .map(|i| i + 1);
+    if let Some(sub) = sub
+        && let Some(j) = args[1..sub].iter().position(|a| a == "--json")
+    {
+        let flag = args.remove(j + 1);
+        args.insert(sub, flag);
+    }
+    args
+}
+
+/// Print an operation's output, as JSON with `--json`, else as text; then fail if the output's
+/// own check failed (`run --expect`).
+fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<()> {
+    if json {
+        println!("{}", op::to_pretty(out));
+    } else {
+        print!("{}", out.text());
+    }
+    out.check().map_err(anyhow::Error::new)
+}
+
+/// Commands that print no result of their own, so `--json` means nothing to them.
+fn without_json(cmd: &Cmd) -> Option<&'static str> {
+    Some(match cmd {
+        Cmd::Wallpaper(_) => "wallpaper",
+        Cmd::Sheet { .. } => "sheet",
+        Cmd::Census(_) => "census",
+        Cmd::Explore(_) => "explore",
+        Cmd::Evolve(_) => "evolve",
+        Cmd::Demo(_) => "demo",
+        Cmd::Pile(_) => "pile",
+        Cmd::Mcp { .. } => "mcp",
+        Cmd::Quickstart { .. } => "quickstart",
+        Cmd::Isohedral { png: Some(_), .. } => "isohedral --png",
+        _ => return None,
+    })
+}
+
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(args());
     let Some(cmd) = cli.cmd else {
         return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
     };
+    let json = cli.json;
+    if json && let Some(name) = without_json(&cmd) {
+        bail!(
+            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, and the library, hunt, ants, media, host, and app commands that print records)"
+        );
+    }
     // Scripts may ask for GPU toppling of large sandpiles.
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()
             .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
     });
+    let cx = platform::ctx();
     match cmd {
         Cmd::Run {
             scene,
@@ -267,214 +330,54 @@ fn main() -> Result<()> {
             save,
             threads,
             expect,
-            json,
             gpu,
             reseed,
             reseed_now,
         } => {
-            if let Some(t) = threads {
-                rayon::ThreadPoolBuilder::new()
-                    .num_threads(t)
-                    .build_global()
-                    .context("thread pool")?;
-            }
-            let text = std::fs::read_to_string(&scene)
-                .with_context(|| format!("reading {}", scene.display()))?;
-            let sc = Scene::from_json(&text).map_err(anyhow::Error::msg)?;
-            let t0 = std::time::Instant::now();
-            let mut w = World::from_scene(&sc).map_err(anyhow::Error::msg)?;
-            if let Some(text) = &reseed {
-                let v: serde_json::Value =
-                    serde_json::from_str(text).context("--reseed: not JSON")?;
-                let policies = jetcarp_api::args::reseed_policies(&v)
-                    .map_err(anyhow::Error::msg)
-                    .context("--reseed: not a reseed policy")?;
-                w.apply(Command::SetReseed { policies })
-                    .map_err(anyhow::Error::msg)?;
-            }
-            if let Some(text) = &reseed_now {
-                let mode = jetcarp_api::args::reseed_mode(&serde_json::json!(text))
-                    .map_err(anyhow::Error::msg)
-                    .context("--reseed-now: not a reseed mode")?;
-                w.apply(Command::Reseed { ca: None, mode })
-                    .map_err(anyhow::Error::msg)?;
-            }
-            let cpu = format!("cpu ({} threads)", rayon::current_num_threads());
-            let backend = match gpu.then(jetcarp_gpu::GpuSim::headless) {
-                Some(Ok(mut sim)) => {
-                    let m = sim.step_mixed(&mut w, gens).map_err(anyhow::Error::msg)?;
-                    match m.fallback {
-                        None => format!("gpu ({})", sim.name()),
-                        Some(why) => format!(
-                            "gpu ({}); {} of {gens} generations on the {cpu}: {why}",
-                            sim.name(),
-                            m.cpu_gens
-                        ),
-                    }
-                }
-                other => {
-                    if gens > 0 {
-                        w.apply(Command::Step { gens })
-                            .map_err(anyhow::Error::msg)?;
-                    }
-                    match other {
-                        Some(Err(e)) => format!("{cpu}; no GPU: {e}"),
-                        _ => cpu,
-                    }
-                }
-            };
-            let secs = t0.elapsed().as_secs_f64();
-            let hash = w.hash_hex();
-            let mut png_size = None;
-            if let Some(p) = &png {
-                // Streams in strips, so very large images (e.g. --scale 2 on a huge grid) fit.
-                let opts = RenderOptions {
-                    scale,
-                    max_side,
-                    ..Default::default()
-                };
-                png_size = Some(
-                    jetcarp_core::render::write_png_streaming(p, &w, &opts, &png_metadata(&w))
-                        .map_err(anyhow::Error::msg)?,
-                );
-            }
-            if let Some(p) = &save {
-                let mut out = w.to_scene();
-                out.name = sc.name.clone();
-                out.description = sc.description.clone();
-                out.view = sc.view.clone();
-                std::fs::write(p, out.to_json())
-                    .with_context(|| format!("writing {}", p.display()))?;
-            }
-            let fields: Vec<serde_json::Value> = w
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    let users: Vec<String> = w
-                        .cas
-                        .iter()
-                        .filter(|c| c.field == i)
-                        .map(|c| c.name.clone())
-                        .collect();
-                    serde_json::json!({
-                        "field": i, "kind": f.kind.name(), "shared": f.shared,
-                        "population": f.population(), "lost": f.lost, "cas": users,
-                    })
+            use anyhow::Context;
+            // Checked here as well, so a missing file or a bad value reads as it always has.
+            std::fs::metadata(&scene).with_context(|| format!("reading {}", scene.display()))?;
+            let reseed = reseed
+                .map(|text| -> Result<serde_json::Value> {
+                    let v: serde_json::Value =
+                        serde_json::from_str(&text).context("--reseed: not JSON")?;
+                    jetcarp_api::args::reseed_policies(&v)
+                        .map_err(anyhow::Error::msg)
+                        .context("--reseed: not a reseed policy")?;
+                    Ok(v)
                 })
-                .collect();
-            if json {
-                let v = serde_json::json!({
-                    "scene": scene, "tiling": w.topo.describe(), "cells": w.topo.len(),
-                    "generation": w.generation, "hash": hash, "status": w.status().to_string(),
-                    "done": w.done(), "done_reason": w.done_reason(),
-                    "dead_boundary": w.topo.has_boundary(), "threads": rayon::current_num_threads(),
-                    "jetcarp_version": VERSION, "seconds": secs, "fields": fields, "backend": backend,
-                    "png": png.as_ref().map(|p| p.display().to_string()), "png_size": png_size,
-                    "reseed": reseed_json(&w),
-                });
-                println!("{}", serde_json::to_string_pretty(&v)?);
-            } else {
-                println!("scene:      {}", scene.display());
-                println!("tiling:     {}", w.topo.describe());
-                for warning in &w.topo.warnings {
-                    println!("warning:    {warning}");
-                }
-                println!("backend:    {backend}");
-                println!("generation: {}", w.generation);
-                println!("hash:       {hash}");
-                println!("status:     {}", w.status());
-                match w.done_reason() {
-                    Some(r) => println!("done:       yes ({r})"),
-                    None => println!("done:       no"),
-                }
-                for (p, st) in w.reseed_policies().iter().zip(w.reseed_status()) {
-                    let err = st
-                        .error
-                        .as_deref()
-                        .map(|e| format!(" ({e})"))
-                        .unwrap_or_default();
-                    println!(
-                        "reseed:     {} {}: fired {} times, last at {}{err}",
-                        p.mode.name(),
-                        match p.when {
-                            jetcarp_core::reseed::ReseedWhen::Settled { .. } => "when settled".into(),
-                            jetcarp_core::reseed::ReseedWhen::Every { gens } =>
-                                format!("every {gens}"),
-                        },
-                        st.fired,
-                        st.last_fired.map_or("-".into(), |g| g.to_string()),
-                    );
-                }
-                if let Some(sc) = &w.script {
-                    let st = &w.script_state;
-                    let name = sc.steps.get(st.step).map(|x| x.name.as_str()).unwrap_or("");
-                    let fin = if st.finished { " (finished)" } else { "" };
-                    println!(
-                        "script:     step {} of {}: {name}{fin}",
-                        st.step + 1,
-                        sc.steps.len()
-                    );
-                }
-                for (i, f) in w.fields.iter().enumerate() {
-                    let users: Vec<String> = w
-                        .cas
-                        .iter()
-                        .filter(|c| c.field == i)
-                        .map(|c| format!("{} [{}]", c.name, c.notation()))
-                        .collect();
-                    let what = if f.kind == rules::FieldKind::Height {
-                        "grains"
-                    } else {
-                        "live"
-                    };
-                    let lost = if f.kind == rules::FieldKind::Height {
-                        format!(", {} lost off edges", f.lost)
-                    } else {
-                        String::new()
-                    };
-                    println!(
-                        "field {i}:    {} {}, {} {what}{lost}: {}",
-                        if f.shared { "shared" } else { "private" },
-                        f.kind.name(),
-                        f.population(),
-                        users.join(", ")
-                    );
-                }
-                if let (Some(p), Some((pw, ph))) = (&png, png_size) {
-                    println!("png:        {} ({pw}x{ph})", p.display());
-                }
-                if let Some(p) = &save {
-                    println!("saved:      {}", p.display());
-                }
-                println!(
-                    "time:       {secs:.2}s on {} threads",
-                    rayon::current_num_threads()
-                );
-            }
-            if let Some(e) = expect
-                && e != hash
-            {
-                bail!("hash mismatch: expected {e}, got {hash}");
-            }
+                .transpose()?;
+            let reseed_now = reseed_now
+                .map(|text| -> Result<serde_json::Value> {
+                    let v = serde_json::json!(text);
+                    jetcarp_api::args::reseed_mode(&v)
+                        .map_err(anyhow::Error::msg)
+                        .context("--reseed-now: not a reseed mode")?;
+                    Ok(v)
+                })
+                .transpose()?;
+            let a = scene::RunIn {
+                scene: scene.display().to_string(),
+                gens,
+                png: png.map(|p| p.display().to_string()),
+                scale,
+                max_side,
+                save: save.map(|p| p.display().to_string()),
+                threads,
+                expect,
+                gpu,
+                reseed,
+                reseed_now,
+            };
+            show(&scene::SceneRun::run(&cx, a, &Quiet)?, json)?;
         }
         Cmd::Verify { scene } => {
-            let text = std::fs::read_to_string(&scene)?;
-            let sc = Scene::from_json(&text).map_err(anyhow::Error::msg)?;
-            let Some(rec) = sc.record.clone() else {
-                bail!("scene has no recorded hash")
+            std::fs::metadata(&scene)?;
+            let a = scene::SceneSource {
+                scene: None,
+                path: Some(scene.display().to_string()),
             };
-            let w = World::from_scene(&sc).map_err(anyhow::Error::msg)?;
-            if w.generation != rec.generation || w.hash_hex() != rec.hash {
-                bail!(
-                    "MISMATCH: recorded gen {} hash {}, replayed gen {} hash {}",
-                    rec.generation,
-                    rec.hash,
-                    w.generation,
-                    w.hash_hex()
-                );
-            }
-            println!("ok: generation {} hash {}", w.generation, rec.hash);
+            show(&scene::SceneVerify::run(&cx, a, &Quiet)?, json)?;
         }
         Cmd::Sheet {
             kind,
@@ -565,58 +468,24 @@ fn main() -> Result<()> {
         Cmd::Media(a) => media_cmd::run(a)?,
         Cmd::Site(a) => media_cmd::run_site(a)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(*a)?,
-        Cmd::Doctor(a) => doctor_cmd::doctor(a)?,
-        Cmd::Uninstall(a) => doctor_cmd::uninstall(a)?,
-        Cmd::Paths { json } => {
-            use jetcarp_core::paths;
-            if json {
-                let v = serde_json::json!({
-                    "settings": paths::config_dir(),
-                    "data": paths::data_dir(),
-                    "output": paths::output_dir(),
-                });
-                println!("{}", serde_json::to_string_pretty(&v)?);
-            } else {
-                print!("{}", paths::describe());
-            }
+        Cmd::Doctor => show(&system::SystemDoctor::run(&cx, NoInput {}, &Quiet)?, json)?,
+        Cmd::Uninstall(a) => {
+            let a = system::UninstallIn {
+                yes: a.yes,
+                settings: a.settings,
+                data: a.data,
+            };
+            show(&system::SystemUninstall::run(&cx, a, &Quiet)?, json)?;
         }
-        Cmd::Palettes => {
-            let hex = |c: [u8; 4]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
-            for name in jetcarp_core::render::palette_names() {
-                let p = jetcarp_core::render::Palette::builtin(name).unwrap();
-                let stops: Vec<String> = p
-                    .stops
-                    .iter()
-                    .map(|c| hex([c[0], c[1], c[2], 255]))
-                    .collect();
-                println!(
-                    "{name:10} background {} stage {} stops {}",
-                    hex(p.background_rgba()),
-                    hex(p.stage_rgba()),
-                    stops.join(" ")
-                );
-            }
-        }
-        Cmd::Tilings => {
-            for f in families::FAMILIES {
-                let spec = TilingSpec::new(f.id);
-                match Topology::build(&spec) {
-                    Ok(t) => {
-                        let (e, to) = t.degree_sets();
-                        println!(
-                            "{:9} {:28} {:5} storage {:9} edge {:?} touch {:?}",
-                            f.id,
-                            f.name,
-                            f.sym,
-                            t.storage_name(),
-                            e,
-                            to
-                        );
-                    }
-                    Err(e) => println!("{:9} error: {e}", f.id),
-                }
-            }
-        }
+        Cmd::Paths => show(&system::SystemPaths::run(&cx, NoInput {}, &Quiet)?, json)?,
+        Cmd::Palettes => show(
+            &reference::ReferencePalettes::run(&cx, NoInput {}, &Quiet)?,
+            json,
+        )?,
+        Cmd::Tilings => show(
+            &reference::ReferenceTilings::run(&cx, Default::default(), &Quiet)?,
+            json,
+        )?,
         Cmd::Quickstart {
             survey_tilings: true,
             gens,
@@ -659,37 +528,21 @@ fn main() -> Result<()> {
                 write_png(&png, &img, &meta).map_err(anyhow::Error::msg)?;
                 println!("sheet: {} ({}x{})", png.display(), img.width, img.height);
             }
-            None => {
-                for (f, t) in jetcarp_core::isohedral::IH_FAMILIES
-                    .iter()
-                    .zip(&jetcarp_core::isohedral::IH_TYPES)
-                {
-                    match Topology::build(&TilingSpec::new(f.id)) {
-                        Ok(topo) => {
-                            let (e, to) = topo.degree_sets();
-                            println!(
-                                "{} {:5} params {} aspects {:2} edge {:?} touch {:?}",
-                                f.id, f.sym, t.np, t.na, e, to
-                            );
-                        }
-                        Err(e) => println!("{} error: {e}", f.id),
-                    }
-                }
-            }
+            None => show(
+                &reference::ReferenceIsohedral::run(&cx, NoInput {}, &Quiet)?,
+                json,
+            )?,
         },
         Cmd::App(a) => app_cmd::run(a)?,
         Cmd::Host(a) => host_cmd::run(a)?,
         Cmd::Mcp { app, port, token } => {
             jetcarp_mcp::stdio::run(app, port, token).map_err(anyhow::Error::msg)?
         }
-        Cmd::Rules => {
-            for e in rules::catalog() {
-                println!("{:30} {:15} {}", e.name, e.notation, e.blurb);
-            }
-            println!(
-                "\nAny B/S rule (B3/S23, add V for edge neighbours), Generations B2/S/C3, W0..W255, HexW 0..15, HexW3 0..19682,\nHexT 0..255 / HexT3 n / HexT3 sum 0..2186 (flat-top hexagons), Margolus <16 block outputs> or Margolus BBM,\nLenia R=13,T=10,b=1,m=0.15,s=0.015, Ant RL, Turmite LLRR. See the README for every family."
-            );
-        }
+        Cmd::Rules => show(
+            &reference::ReferenceRules::run(&cx, Default::default(), &Quiet)?,
+            json,
+        )?,
+        Cmd::Api(a) => api_cmd::run(&cx, a, json)?,
     }
     Ok(())
 }
@@ -870,13 +723,4 @@ fn survey_tilings(gens: u64) -> Result<()> {
         println!("{r}");
     }
     Ok(())
-}
-
-/// Reseed policies and their status, for `jetcarp run --json`.
-fn reseed_json(w: &World) -> serde_json::Value {
-    w.reseed_policies()
-        .iter()
-        .zip(w.reseed_status())
-        .map(|(p, st)| serde_json::json!({"policy": p, "status": st}))
-        .collect()
 }

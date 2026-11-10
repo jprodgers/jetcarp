@@ -79,7 +79,7 @@ struct TrackArgs {
     store: bool,
     /// Write the full report as JSON.
     #[arg(long)]
-    json: Option<PathBuf>,
+    json_out: Option<PathBuf>,
     /// Follow the pattern on a sliding window (supertiles generated around it) instead of fixed
     /// patch levels, as far as --rings or --gens allow.
     #[arg(long)]
@@ -379,7 +379,7 @@ fn track_cmd(a: TrackArgs, lib: &Library) -> Result<()> {
     println!("{}", rep.summary);
     print_levels(&rep);
     println!("{}", rep.note);
-    if let Some(p) = &a.json {
+    if let Some(p) = &a.json_out {
         std::fs::write(p, serde_json::to_string_pretty(&rep)? + "\n")?;
         println!("wrote {}", p.display());
     }

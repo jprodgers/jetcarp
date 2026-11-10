@@ -66,7 +66,7 @@ pub struct CensusArgs {
     csv: Option<PathBuf>,
     /// Write the full report (spec, seeds, every run) as JSON.
     #[arg(long)]
-    json: Option<PathBuf>,
+    json_out: Option<PathBuf>,
     /// Labelled contact sheet of each rule's first soup at the end of its run.
     #[arg(long)]
     sheet: Option<PathBuf>,
@@ -356,7 +356,7 @@ fn write_outputs(a: &CensusArgs, r: &CensusReport, thumbs: &[Option<render::Imag
     if let Some(p) = &a.csv {
         std::fs::write(p, r.to_csv()).with_context(|| format!("writing {}", p.display()))?;
     }
-    if let Some(p) = &a.json {
+    if let Some(p) = &a.json_out {
         std::fs::write(p, r.to_json()).with_context(|| format!("writing {}", p.display()))?;
     }
     if let Some(p) = &a.sheet {
@@ -382,7 +382,7 @@ fn write_outputs(a: &CensusArgs, r: &CensusReport, thumbs: &[Option<render::Imag
         write_png(p, &img, &meta).map_err(anyhow::Error::msg)?;
     }
     print_census(r);
-    for (what, p) in [("csv", &a.csv), ("json", &a.json), ("sheet", &a.sheet)] {
+    for (what, p) in [("csv", &a.csv), ("json", &a.json_out), ("sheet", &a.sheet)] {
         if let Some(p) = p {
             println!("{what:9} {}", p.display());
         }

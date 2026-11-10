@@ -32,6 +32,7 @@ jetcarp-api.workspace = true
 jetcarp-gpu.workspace = true
 clap.workspace = true
 anyhow.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 jetcarp-mcp.workspace = true
 jetcarp-display.workspace = true

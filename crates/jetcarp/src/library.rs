@@ -242,7 +242,7 @@ struct SearchArgs {
     soup_radius: Option<f64>,
     /// Write the full report as JSON.
     #[arg(long)]
-    json: Option<PathBuf>,
+    json_out: Option<PathBuf>,
     /// Report only; do not add to the library.
     #[arg(long)]
     no_store: bool,
@@ -289,7 +289,7 @@ struct CollideArgs {
     #[arg(long)]
     csv: Option<PathBuf>,
     #[arg(long)]
-    json: Option<PathBuf>,
+    json_out: Option<PathBuf>,
     /// Labelled contact sheet of every run's final state, objects coloured by class.
     #[arg(long)]
     sheet: Option<PathBuf>,
@@ -903,7 +903,7 @@ fn search_cmd(lib: &Library, a: SearchArgs) -> Result<()> {
         }
         stored = Some(st);
     }
-    if let Some(p) = &a.json {
+    if let Some(p) = &a.json_out {
         std::fs::write(p, serde_json::to_string_pretty(&out.report)?)
             .with_context(|| format!("writing {}", p.display()))?;
     }
@@ -1012,7 +1012,7 @@ fn search_cmd(lib: &Library, a: SearchArgs) -> Result<()> {
         "time: {secs:.1}s on {} threads",
         rayon::current_num_threads()
     );
-    if let Some(p) = &a.json {
+    if let Some(p) = &a.json_out {
         println!("json: {}", p.display());
     }
     Ok(())
@@ -1140,7 +1140,7 @@ fn collide_cmd(lib: &Library, c: CollideArgs) -> Result<()> {
         std::fs::write(p, s).with_context(|| format!("writing {}", p.display()))?;
         println!("csv:   {}", p.display());
     }
-    if let Some(p) = &c.json {
+    if let Some(p) = &c.json_out {
         std::fs::write(p, serde_json::to_string_pretty(r)?)
             .with_context(|| format!("writing {}", p.display()))?;
         println!("json:  {}", p.display());
