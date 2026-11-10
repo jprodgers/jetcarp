@@ -39,3 +39,9 @@ and macOS. Its code was written with [Claude Code](https://claude.com/claude-cod
 coding tool. Every simulation result JETCARP reports is checked by its own test suite or by exact
 verification (for example, exact recurrence for spaceships), but please treat it as you would any
 research software: check the results that matter to you.
+
+## Acknowledgements
+
+Emily Teich rated hundreds of animated clips from JETCARP's exploratory search. Her ratings
+trained the score that decides which runs the search shows people, which brought her eye for
+what is beautiful into the search itself.
