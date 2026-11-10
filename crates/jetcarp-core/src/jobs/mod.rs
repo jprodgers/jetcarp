@@ -21,31 +21,46 @@
 //! A job is also stopped from any process by marking it `paused` ([`StrategyKind::request_stop`]);
 //! the run sees that at its next checkpoint.
 //!
-//! **Strategies.** A step-based strategy implements [`Strategy::restore`] (load the
-//! checkpoint), [`Strategy::step`] (one batch, its results put in a [`Sink`]),
-//! [`Strategy::checkpoint`], [`Strategy::progress`], and [`Strategy::finish`]. The runner's loop
-//! ([`drive`]) checks the stop flag, the budget, and a pause from another process before each
-//! step, and after it writes the sink's rows, the progress, the checkpoint, and the heartbeat in
-//! one transaction, only while the runner still holds the job. A coarse strategy overrides
-//! [`Strategy::run`] instead and keeps its own loop, checkpoints, and catalog writes: the job
-//! kinds older than the runner are wrapped that way, their `run()` functions unchanged, so their
-//! results and stored rows are exactly as before.
+//! **Strategies.** A strategy implements [`Strategy::restore`] (load the checkpoint),
+//! [`Strategy::step`] (one batch, its results put in a [`Sink`]), [`Strategy::checkpoint`],
+//! [`Strategy::progress`], and [`Strategy::finish`]. The runner's loop ([`drive`]) checks the
+//! stop flag, the budget, and a pause from another process before each step, and after it writes
+//! the sink's rows and then (told what became of the records, [`Strategy::stored`]) the progress,
+//! the checkpoint, and the heartbeat in one transaction, only while the runner still holds the
+//! job. Every kind runs this way, in steps of at most a few seconds, so a stop, a pause, or a
+//! lost lease is seen within a step; a sandpile's doubling step, which cannot be cut smaller,
+//! watches the stop flag itself and publishes its progress meanwhile.
 //!
-//! | `jobs.kind` | What | Module | Runs as | Item budget |
+//! | `jobs.kind` | What | Module | A step | Item budget |
 //! | --- | --- | --- | --- | --- |
-//! | `hunt` | soups on the plane engine | `crate::hunt::job` | coarse | soups |
-//! | `search` | soups on a bounded grid (any tiling) | `crate::library::search` | coarse, whole | – |
-//! | `ants` | ant and turmite runs | `crate::ants::job` | coarse | runs |
-//! | `census` | rules by fate | `crate::census` | coarse | rules |
-//! | `mover` | a mover on a sliding window | `crate::window::job` | coarse | – |
-//! | `pile` | a large sandpile | `crate::pile::job` | coarse | – |
-//! | `collide` | two patterns at every offset | `crate::library::collide` | coarse, whole | – |
-//! | `evolve` | the evolutionary glider search | `crate::evolve` | steps (one generation each) | generations |
+//! | `hunt` | soups on the plane engine | `crate::hunt::job` | a batch of soups | soups |
+//! | `search` | soups on a bounded grid | `crate::library::search` | soups, then checks | soups |
+//! | `ants` | ant and turmite runs | `crate::ants::job` | a batch of runs | runs |
+//! | `census` | rules by fate | `crate::census` | a chunk of rules | rules |
+//! | `mover` | a mover on a sliding window | `crate::window::job` | a slice, to a window | – |
+//! | `pile` | a large sandpile | `crate::pile::job` | a doubling step | – |
+//! | `collide` | two patterns at every offset | `crate::library::collide` | runs, then checks | runs |
+//! | `evolve` | the evolutionary glider search | `crate::evolve` | a generation | generations |
 //!
-//! Any other kind (and the `search` and `collide` jobs stored before they were strategies) is
-//! listed and can be stopped, but not run. Every kind here is deterministic: a job stopped and
-//! resumed, in any process, ends exactly as an uninterrupted one
-//! ([`StrategyKind::deterministic`]).
+//! Batches adapt to a few seconds of work: a hunt's to about three (with the next batch already
+//! running, so the slow soups at a batch's end, its merge, and its write overlap it), an ant
+//! search's, a bounded search's, and a collision's to about two (then the distinct finds are
+//! verified in batches too), a census's chunks to about three; a mover runs two seconds and on
+//! to the next window it builds, where it checkpoints. A pile's doubling step is cancelled
+//! within a second of a stop and run again on resume.
+//!
+//! Any other kind (and the `collide` jobs stored before collisions were strategies) is listed
+//! and can be stopped, but not run. Every kind here is deterministic: a job stopped and resumed,
+//! in any process, ends exactly as an uninterrupted one ([`StrategyKind::deterministic`]).
+//!
+//! **Checkpoints.** Hunts, ant searches, censuses, and movers keep the checkpoints they had
+//! before they ran in steps (the next soup, run, or rule index with the totals; a mover's window
+//! frame), so jobs stopped before then resume as they were. A pile's state is its folder's step
+//! files, as before. Evolve's is the generation checkpoint it has had since it became a job.
+//! Bounded searches and collisions had no checkpoint (a stopped one started again); now theirs
+//! is the state gathered so far (a search's deflated, `Z1` first), and a paused job from before
+//! simply starts again. A checkpoint a kind cannot read fails the run with the reason, the job
+//! left `failed` (there are no users with old jobs to keep).
 
 mod lease;
 mod registry;

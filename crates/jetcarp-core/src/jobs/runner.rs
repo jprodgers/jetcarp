@@ -59,19 +59,17 @@ impl Outcome {
     }
 }
 
-type Source = Arc<dyn Fn() -> Value + Send + Sync>;
 type Observer = Arc<dyn Fn(&Value) + Send + Sync>;
 
 #[derive(Default)]
 struct LiveState {
     value: Value,
-    source: Option<Source>,
     observers: Vec<Observer>,
 }
 
-/// A run's live progress, readable from any thread: a value the run sets after each step (or
-/// a source it reads from, read only when asked), and the observers told of each value set
-/// (a front end's progress lines and live views).
+/// A run's live progress, readable from any thread: the value the run sets after each step's
+/// write (or part way through a long step, [`RunCx::publish`](super::RunCx::publish)), and the
+/// observers told of each value set (a front end's progress lines and live views).
 #[derive(Clone, Default)]
 pub struct Live(Arc<Mutex<LiveState>>);
 
@@ -81,16 +79,11 @@ impl Live {
         let obs = {
             let mut l = self.0.lock().unwrap();
             l.value = v.clone();
-            l.source = None;
             l.observers.clone()
         };
         for f in obs {
             f(&v);
         }
-    }
-    /// Read the progress from `f` when asked, from now on.
-    pub fn follow(&self, f: impl Fn() -> Value + Send + Sync + 'static) {
-        self.0.lock().unwrap().source = Some(Arc::new(f));
     }
     /// Call `f` with each progress set from now on (after the step's write, on the run's
     /// thread).
@@ -98,24 +91,14 @@ impl Live {
         self.0.lock().unwrap().observers.push(Arc::new(f));
     }
     pub fn get(&self) -> Value {
-        let (v, src) = {
-            let l = self.0.lock().unwrap();
-            (l.value.clone(), l.source.clone())
-        };
-        match src {
-            Some(f) => f(),
-            None => v,
-        }
+        self.0.lock().unwrap().value.clone()
     }
     /// Replace the progress without telling the observers (the run's end, as the runner
     /// reports it).
     fn replace(&self, v: Value) {
-        let mut l = self.0.lock().unwrap();
-        l.value = v;
-        l.source = None;
+        self.0.lock().unwrap().value = v;
     }
-    /// Change one key of the progress (and stop following a source), without telling the
-    /// observers.
+    /// Change one key of the progress, without telling the observers.
     fn put(&self, key: &str, value: Value) {
         let mut v = self.get();
         if !v.is_object() {

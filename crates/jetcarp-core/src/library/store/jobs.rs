@@ -8,9 +8,9 @@
 //! (`crate::jobs`); these columns make the hold visible and let a runner's step write only
 //! while it still holds the job ([`Library::job_step`]).
 //!
-//! **Searches as jobs.** [`Library::store_search_in`] stores a bounded soup search's records
-//! into a job that already exists (the runner's `search` strategy), with its status and
-//! progress in the same transaction; [`Library::store_search`] makes the job first.
+//! **Whole searches.** [`Library::store_search`] stores a bounded soup search run in one call
+//! (`jetcarp library search`, MCP, Rhai) as a job of its own, done, its records and counts in
+//! one transaction. A search run by the runner stores the same rows through its steps' writes.
 
 use super::super::search::SearchOutput;
 use super::{
@@ -176,7 +176,11 @@ impl Library {
 
     /// Store a soup search's verified records into an existing job (each pattern's copies and
     /// soups as its sightings), and mark the job done with its counts, in one transaction.
-    pub fn store_search_in(&self, job: i64, out: &SearchOutput) -> Result<StoredSearch, String> {
+    pub(super) fn store_search_in(
+        &self,
+        job: i64,
+        out: &SearchOutput,
+    ) -> Result<StoredSearch, String> {
         let soups_total: u64 = out.report.groups.iter().map(|g| g.soups as u64).sum();
         let ready: Vec<Result<PatternRecord, String>> =
             out.records.par_iter().map(|r| prepare(r.clone())).collect();

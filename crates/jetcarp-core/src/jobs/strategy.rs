@@ -79,11 +79,12 @@ pub enum Step {
 /// One live run of a job, built by its kind (or by a front end with its own hooks) and run by
 /// the [`super::Runner`].
 ///
-/// A step-based strategy implements [`restore`](Self::restore), [`step`](Self::step),
+/// A strategy implements [`restore`](Self::restore), [`step`](Self::step),
 /// [`checkpoint`](Self::checkpoint), [`progress`](Self::progress), and maybe
-/// [`finish`](Self::finish) and [`items`](Self::items); the default [`run`](Self::run) is the
-/// runner's loop, [`drive`]. A coarse strategy overrides [`run`](Self::run) and does it all
-/// itself (stops at [`RunCx::stop`], stays within [`RunCx::items`], writes its own rows).
+/// [`finish`](Self::finish), [`stored`](Self::stored), and [`items`](Self::items); the default
+/// [`run`](Self::run) is the runner's loop, [`drive`]. A strategy that must set itself up on the
+/// run's own thread (a sandpile's GPU toppler, which is not `Send`) overrides
+/// [`run`](Self::run) to build its stepper there and [`drive`] it.
 pub trait Strategy {
     /// Run (or resume) the job until it is done, stopped, or out of budget. Returns its last
     /// progress (this kind's progress JSON).
