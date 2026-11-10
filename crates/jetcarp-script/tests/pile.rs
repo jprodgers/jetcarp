@@ -13,8 +13,10 @@ fn sandpile_pile_and_sheet() {
         .join("pile");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
+    // Piles are catalog jobs: the test's own catalog, beside its output.
     let o = RunOptions {
         out_root: Some(root.clone()),
+        library: Some(root.join("lib")),
         ..Default::default()
     };
     let src = r#"
