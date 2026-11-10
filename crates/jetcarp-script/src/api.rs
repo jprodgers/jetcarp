@@ -886,7 +886,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
             serde_json::from_value(v).map_err(|e| format!("apply: bad command: {e}"))?;
         s.lock().world.apply(cmd).or_err().map(|_| ())
     });
-    // Reseeding (see README "Reseeding"): now, automatic policies, and their status.
+    // Reseeding (see the book's "Reseeding" guide): now, automatic policies, and their status.
     let reseed = |s: &mut Shared, mode: Dynamic, ca: Option<INT>| -> R<()> {
         let v = match mode.clone().try_cast::<String>() {
             Some(t) => Value::String(t),

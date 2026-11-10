@@ -1,4 +1,4 @@
-//! Reseed modes and automatic reseed policies (README "Reseeding").
+//! Reseed modes and automatic reseed policies (the book's "Reseeding" guide).
 
 use jetcarp_core::reseed::{self, AutoReseed, ReseedMode};
 use serde_json::Value;

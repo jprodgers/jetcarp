@@ -316,7 +316,7 @@ abelian property and is presumably known. See [The Abelian sandpile](../automata
 
 **Claim (to our knowledge).** JETCARP's exploratory search is the first to treat the tiling itself as a
 search dimension: it explores tiling, rule family, rule and starting pattern together, over about 1,200
-periodic and aperiodic tilings and 21 rule families in one archive. (Fewer of the tilings are distinct
+periodic and aperiodic tilings and 22 rule families in one archive. (Fewer of the tilings are distinct
 as neighbour graphs: the 81 isohedral types among them have only 11.) Its first full run covered about
 15 million runs.
 

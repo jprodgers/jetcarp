@@ -74,7 +74,7 @@ enum Cmd {
         #[arg(long)]
         gpu: bool,
         /// Install automatic reseed policies before running: one policy or a list, as JSON
-        /// (README "Reseeding"), e.g.
+        /// (the book's "Reseeding" guide), e.g.
         /// '{"mode":{"kind":"blobs"},"when":{"kind":"settled"},"cooldown":200}'.
         #[arg(long)]
         reseed: Option<String>,
@@ -187,7 +187,7 @@ enum Cmd {
     },
     /// List named rules and notation.
     Rules,
-    /// Run a Rhai script: worlds, runs, images, parallel rule sweeps (see README "Scripting").
+    /// Run a Rhai script: worlds, runs, images, parallel rule sweeps (see the book's "Scripting (Rhai) API" reference).
     Script(script_cmd::ScriptArgs),
     /// Control the running JETCARP app (AI control on, or `jetcarp --control`): `status`,
     /// `screensaver on|off [--profile NAME]`, `profiles`, `display ...`, `play`, `pause`,
