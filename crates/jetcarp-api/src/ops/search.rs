@@ -21,6 +21,13 @@
 //! search's report, a collision's runs, a census's table, an evolve search's champions, a pile's
 //! metadata) and writes the files asked for ([`FilesIn`]). The budget given is this run's own:
 //! the job stays resumable (`jobs.resume`) past it.
+//!
+//! A bounded search or a collision run in the call keeps within the context's limits
+//! (`Limits::max_search_*`, `max_collide_*`: the MCP server's are [`Limits::INTERACTIVE`]): its
+//! rules, tilings, soups, generations, cell updates, and placements. One in the background or
+//! detached has no such bound.
+//!
+//! [`Limits::INTERACTIVE`]: crate::Limits::INTERACTIVE
 
 use super::jobs::{noun, progress_text, summary_of};
 use super::library::catalog_err;
@@ -1568,6 +1575,9 @@ impl Op for SearchStart {
                 None => match build(cx, &lib, kind, &a.spec, p)? {
                     Built::Existing(j) => (j, false),
                     Built::New(spec) => {
+                        if !a.background && !a.detach {
+                            within_limits(cx, &lib, kind, &spec)?;
+                        }
                         let js = JobSpec {
                             strategy: kind.into(),
                             spec,
@@ -1593,6 +1603,85 @@ impl Op for SearchStart {
         out.seconds = t0.elapsed().as_secs_f64();
         Ok(out)
     }
+}
+
+/// A bounded search or a collision that runs in the call, within the context's limits
+/// (`Limits::max_search_*` and `max_collide_*`): an interactive front end's calls finish in
+/// seconds to a minute. Jobs run in the background or in a process of their own have no such
+/// bound.
+fn within_limits(cx: &Ctx, lib: &Library, kind: &str, spec: &Value) -> Result<(), ApiError> {
+    use jetcarp_core::dashboard::digits;
+    let l = &cx.limits;
+    let over = |m: String| Err(ApiError::limit(m));
+    let spec_err = |e: serde_json::Error| ApiError::engine(format!("{kind} spec: {e}"));
+    match kind {
+        "search" => {
+            let s = serde_json::from_value::<SearchJobSpec>(spec.clone())
+                .map_err(spec_err)?
+                .search;
+            for (n, what) in [(s.rules.len(), "rules"), (s.tilings.len(), "tilings")] {
+                if n > l.max_search_rules {
+                    return over(format!(
+                        "{n} {what} is more than {} for one call",
+                        l.max_search_rules
+                    ));
+                }
+            }
+            let soups = s.soups as u64 * s.rules.len() as u64 * s.tilings.len() as u64;
+            if soups > l.max_search_soups {
+                return over(format!(
+                    "{soups} soups is more than {}; use fewer soups, rules, or tilings",
+                    digits(l.max_search_soups)
+                ));
+            }
+            if s.gens > l.max_search_gens {
+                return over(format!(
+                    "{} generations is more than {} for one call",
+                    digits(s.gens),
+                    digits(l.max_search_gens)
+                ));
+            }
+            let cells = match s.size {
+                SizeSpec::Rect { w, h } => Some(4 * w as u64 * h as u64),
+                SizeSpec::Cells(n) => Some(n as u64),
+                SizeSpec::Level(_) => None,
+            };
+            if let Some(c) = cells
+                && soups.saturating_mul(c).saturating_mul(s.gens) > l.max_search_work
+            {
+                return over(
+                    "that search is too large for one call; use smaller grids or fewer generations"
+                        .into(),
+                );
+            }
+        }
+        "collide" => {
+            let c: CollideJobSpec = serde_json::from_value(spec.clone()).map_err(spec_err)?;
+            let phases = if c.collide.phases.is_empty() {
+                lib.get(&c.b).map_err(catalog_err)?.period.max(1)
+            } else {
+                c.collide.phases.len() as u64
+            };
+            let span = |r: [i32; 2]| (r[1] as i64 - r[0] as i64 + 1).max(0) as u64;
+            let runs = span(c.collide.dx) * span(c.collide.dy) * phases;
+            if runs > l.max_collide_runs {
+                return over(format!(
+                    "{} placements is more than {}: use smaller offsets or fewer phases",
+                    digits(runs),
+                    digits(l.max_collide_runs)
+                ));
+            }
+            if c.collide.gens > l.max_collide_gens {
+                return over(format!(
+                    "{} generations is more than {} for one call",
+                    digits(c.collide.gens),
+                    digits(l.max_collide_gens)
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// How to run a job.

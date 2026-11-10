@@ -215,6 +215,73 @@ fn background_jobs_are_followed_stopped_and_waited_for() {
 }
 
 #[test]
+fn interactive_limits_bound_searches_and_collisions_run_in_the_call() {
+    let dir = scratch("jobs-limits");
+    let cx = ctx(&dir).with_limits(jetcarp_api::Limits::INTERACTIVE);
+    let run = |strategy: &str, spec: Value| {
+        call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": strategy, "spec": spec}),
+        )
+    };
+    for (spec, words) in [
+        (
+            json!({"rules": ["B3/S23", "B36/S23", "B2/S", "B34/S34", "B35/S236"]}),
+            "5 rules is more than 4",
+        ),
+        (
+            json!({"rules": ["B3/S23"], "tilings": "square,hex,triangle,trihex,snubsq"}),
+            "5 tilings is more than 4",
+        ),
+        (
+            json!({"rules": ["B3/S23", "B36/S23"], "soups": 200}),
+            "400 soups is more than 256",
+        ),
+        (
+            json!({"rules": ["B3/S23"], "gens": 5000}),
+            "5,000 generations is more than 4,000",
+        ),
+        (
+            json!({"rules": ["B3/S23"], "soups": 64, "size": "128x128", "gens": 4000}),
+            "too large for one call",
+        ),
+    ] {
+        let e = fails(run("search", spec), ErrorKind::Limit);
+        assert!(e.message.contains(words), "{e}");
+    }
+    // None of them made a job; one within the limits does, and stores a block and a glider.
+    let jobs = call_json(&cx, "jobs.list", json!({})).unwrap();
+    assert_eq!(jobs["jobs"].as_array().unwrap().len(), 0, "{jobs}");
+    let ok = run(
+        "search",
+        json!({"rules": ["B3/S23"], "soups": 24, "gens": 1500}),
+    )
+    .unwrap();
+    assert_eq!(ok["status"], "done", "{ok}");
+    // A glider has four phases: 41 x 41 offsets x 4 is over 5,000 placements.
+    let e = fails(
+        run(
+            "collide",
+            json!({"a": "block", "b": "glider", "offsets": 20}),
+        ),
+        ErrorKind::Limit,
+    );
+    assert!(
+        e.message.contains("6,724 placements is more than 5,000"),
+        "{e}"
+    );
+    let e = fails(
+        run(
+            "collide",
+            json!({"a": "block", "b": "glider", "offsets": 3, "gens": 5000}),
+        ),
+        ErrorKind::Limit,
+    );
+    assert!(e.message.contains("more than 4,096"), "{e}");
+}
+
+#[test]
 fn bounded_searches_collisions_and_censuses_give_their_results_and_files() {
     let dir = scratch("jobs-results");
     let cx = ctx(&dir);

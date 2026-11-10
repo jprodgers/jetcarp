@@ -36,10 +36,25 @@ pub struct Limits {
     pub max_ants: u32,
     /// Longest script run, in seconds.
     pub max_script_seconds: f64,
+    /// A bounded soup search run in the call (`search.start` without `background` or
+    /// `detach`): most rules it may take, and most tilings.
+    pub max_search_rules: usize,
+    /// Most soups such a search may run, over all its rules and tilings.
+    pub max_search_soups: u64,
+    /// Most generations each of its soups may run.
+    pub max_search_gens: u64,
+    /// Most cell updates it may make, counted as soups x cells x generations (a grid of W x H
+    /// unit cells counts as 4 W H cells).
+    pub max_search_work: u64,
+    /// A collision run in the call: most placements it may try (x offsets x y offsets x phases
+    /// of the moving pattern).
+    pub max_collide_runs: u64,
+    /// Most generations each of its placements may run.
+    pub max_collide_gens: u64,
 }
 
 impl Limits {
-    /// No limits beyond the engine's own (the command line, scripts the user runs).
+    /// No limits beyond the engine's own (the command line, scripts the user runs, the app).
     pub const NONE: Limits = Limits {
         max_cells: u64::MAX,
         max_grid_side: u32::MAX,
@@ -49,8 +64,14 @@ impl Limits {
         max_set: usize::MAX,
         max_ants: 100_000,
         max_script_seconds: f64::INFINITY,
+        max_search_rules: usize::MAX,
+        max_search_soups: u64::MAX,
+        max_search_gens: u64::MAX,
+        max_search_work: u64::MAX,
+        max_collide_runs: u64::MAX,
+        max_collide_gens: u64::MAX,
     };
-    /// The MCP server's limits: each call finishes in seconds and stays in memory.
+    /// The MCP server's limits: each call finishes in seconds to a minute and stays in memory.
     pub const INTERACTIVE: Limits = Limits {
         max_cells: 4_000_000,
         max_grid_side: 4096,
@@ -60,6 +81,12 @@ impl Limits {
         max_set: 200_000,
         max_ants: 10_000,
         max_script_seconds: 600.0,
+        max_search_rules: 4,
+        max_search_soups: 256,
+        max_search_gens: 4000,
+        max_search_work: 4_000_000_000,
+        max_collide_runs: 5000,
+        max_collide_gens: 4096,
     };
 }
 

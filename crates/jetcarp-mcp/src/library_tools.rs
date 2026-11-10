@@ -5,9 +5,11 @@
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
 //! it once. Listing, reading, curation, and promotion are the operations `library.*` and
-//! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`).
+//! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`),
+//! bounded by the server's limits (`Limits::INTERACTIVE`, which the operation checks).
 
 use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool};
+use jetcarp_api::Limits;
 use jetcarp_api::op::{self, Callbacks, Op, Quiet, Report, WorldOp};
 use jetcarp_api::ops::library::{
     GetIn, LibraryGet, LibraryQuery, LibraryUpdate, QueryIn, UpdateIn,
@@ -18,6 +20,7 @@ use jetcarp_api::ops::quickstart::{
 use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
+use jetcarp_core::dashboard::digits;
 use jetcarp_core::jobs::search::SearchResult;
 use jetcarp_core::library::{self, Library, PatternRecord};
 use serde_json::{Value, json};
@@ -31,11 +34,6 @@ pub const NAMES: &[&str] = &[
     "library_promote",
     "library_collide",
 ];
-
-/// Most soups one library_search call may run (over all rules and tilings).
-pub const MAX_SEARCH_SOUPS: u64 = 256;
-/// Most cell updates one library_search call may run.
-pub const MAX_SEARCH_WORK: u64 = 4_000_000_000;
 
 pub fn handles(name: &str) -> bool {
     NAMES.contains(&name)
@@ -89,14 +87,20 @@ pub fn definitions() -> Vec<Value> {
             "library_search",
             "Search soups for patterns",
             false,
-            "Runs random soups with the given rules on the given tilings, finds the still lifes, oscillators, and spaceships left at the end, verifies each exactly, and adds them to the catalog as one search job (store: false only reports). Bounded: at most 4 rules x 4 tilings, 256 soups in total, grids up to 128 x 128 unit cells, 4,000 generations, 4 billion cell updates; takes seconds to a minute. Returns per rule and tiling the soup outcomes, object counts by class, the distinct patterns (id, label, count, new or already known). Example: {\"rules\": [\"B2/S34\"], \"tilings\": [\"hex\"], \"soups\": 16}.",
+            &format!(
+                "Runs random soups with the given rules on the given tilings, finds the still lifes, oscillators, and spaceships left at the end, verifies each exactly, and adds them to the catalog as one search job (store: false only reports). Bounded: at most {r} rules x {r} tilings, {s} soups in total, grids up to 128 x 128 unit cells, {g} generations, {w} cell updates; takes seconds to a minute. Returns per rule and tiling the soup outcomes, object counts by class, the distinct patterns (id, label, count, new or already known). Example: {{\"rules\": [\"B2/S34\"], \"tilings\": [\"hex\"], \"soups\": 16}}.",
+                r = Limits::INTERACTIVE.max_search_rules,
+                s = Limits::INTERACTIVE.max_search_soups,
+                g = digits(Limits::INTERACTIVE.max_search_gens),
+                w = billions(Limits::INTERACTIVE.max_search_work)
+            ),
             json!({"type": "object", "properties": {
                 "rules": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Rule notations, e.g. [\"B3/S23\", \"B2/S34\"]. Life-like and Generations rules without B0."},
                 "tilings": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Tiling ids: \"square\", \"hex\", \"triangle\", \"oct\", \"trihex\", catalog ids like \"k2-001\" (default [\"square\"])."},
                 "soups": {"type": "integer", "minimum": 1, "maximum": 64, "description": "Soups per rule and tiling (default 16)."},
                 "width": {"type": "integer", "minimum": 16, "maximum": 128, "description": "Grid width in unit cells (default 48)."},
                 "height": {"type": "integer", "minimum": 16, "maximum": 128, "description": "Grid height (default 48)."},
-                "gens": {"type": "integer", "minimum": 10, "maximum": 4000, "description": "Generations per soup (default 1000)."},
+                "gens": {"type": "integer", "minimum": 10, "maximum": Limits::INTERACTIVE.max_search_gens, "description": "Generations per soup (default 1000)."},
                 "density": {"type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Soup density (default 0.37)."},
                 "seed": {"type": "integer", "minimum": 0, "description": "Soup s uses RNG state seed + s (default 1)."},
                 "store": {"type": "boolean", "description": "Add what is found to the library (default true)."},
@@ -155,7 +159,11 @@ pub fn definitions() -> Vec<Value> {
             "library_collide",
             "Collide two patterns",
             false,
-            "Collides pattern `b` into pattern `a` at every offset in a range and every phase of b, in a rule both work in, and classes each run (both survive, both die, one survives, new objects, unsettled, explodes, overlap). New objects are verified and stored in the catalog (store: false only reports). Bounded: at most 5,000 placements and 4,096 generations. Example: {\"a\": \"block\", \"b\": \"glider\", \"offsets\": 4}.",
+            &format!(
+                "Collides pattern `b` into pattern `a` at every offset in a range and every phase of b, in a rule both work in, and classes each run (both survive, both die, one survives, new objects, unsettled, explodes, overlap). New objects are verified and stored in the catalog (store: false only reports). Bounded: at most {p} placements and {g} generations. Example: {{\"a\": \"block\", \"b\": \"glider\", \"offsets\": 4}}.",
+                p = digits(Limits::INTERACTIVE.max_collide_runs),
+                g = digits(Limits::INTERACTIVE.max_collide_gens)
+            ),
             json!({"type": "object", "properties": {
                 "a": {"type": "string", "description": "Pattern id, prefix, or name (the target)."},
                 "b": {"type": "string", "description": "Pattern id, prefix, or name (moved over the offsets)."},
@@ -165,7 +173,7 @@ pub fn definitions() -> Vec<Value> {
                 "phases": {"type": "array", "items": {"type": "integer"}, "description": "B's phases to try (default all)."},
                 "orientation_a": {"type": "integer", "minimum": 0, "maximum": 11, "description": "A's orientation (index into the tiling's symmetries)."},
                 "orientation_b": {"type": "integer", "minimum": 0, "maximum": 11, "description": "B's orientation."},
-                "gens": {"type": "integer", "minimum": 16, "maximum": 4096, "description": "Generations per run (default 1024)."},
+                "gens": {"type": "integer", "minimum": 16, "maximum": Limits::INTERACTIVE.max_collide_gens, "description": "Generations per run (default 1024)."},
                 "rule": {"type": "string", "description": "The rule to run (both must work in it; default: A's or B's)."},
                 "store": {"type": "boolean", "description": "Store new objects (default true)."},
             }, "required": ["a", "b"], "additionalProperties": false}),
@@ -454,6 +462,9 @@ fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res
     let l = lib();
     let a = l.get(string(args, "a")?.ok_or("give pattern `a`")?)?;
     let b = l.get(string(args, "b")?.ok_or("give pattern `b`")?)?;
+    // The bounds on one call (placements, generations) are the context's limits, checked by
+    // the operation.
+    let max_gens = ctx().limits.max_collide_gens;
     let n = int(args, "offsets")?.unwrap_or(6).clamp(0, 30) as i32;
     let range = |k: &str| -> Result<[i32; 2], String> {
         match args.get(k) {
@@ -474,18 +485,6 @@ fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res
         _ => vec![],
     };
     let (dx, dy) = (range("dx")?, range("dy")?);
-    let places = (dx[1] - dx[0] + 1).max(0) as u64
-        * (dy[1] - dy[0] + 1).max(0) as u64
-        * if phases.is_empty() {
-            b.period.max(1)
-        } else {
-            phases.len() as u64
-        };
-    if places > 5000 {
-        return Err(format!(
-            "{places} placements is more than 5,000: use smaller offsets or fewer phases"
-        ));
-    }
     let spec = CollideIn {
         a: a.id,
         b: b.id,
@@ -494,7 +493,7 @@ fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res
         phases: Some(json!(phases)),
         orientation_a: Some(int(args, "orientation_a")?.unwrap_or(0).max(0) as u32),
         orientation_b: Some(int(args, "orientation_b")?.unwrap_or(0).max(0) as u32),
-        gens: Some(int(args, "gens")?.unwrap_or(1024).clamp(16, 4096) as u64),
+        gens: Some((int(args, "gens")?.unwrap_or(1024).max(16) as u64).min(max_gens)),
         rule: string(args, "rule")?.map(String::from),
         store: Some(args.get("store").and_then(|v| v.as_bool()).unwrap_or(true)),
         ..Default::default()
@@ -532,34 +531,20 @@ fn search_tool(
         ],
     )?;
     let rules = strings(args.get("rules"), "rules")?;
-    if rules.is_empty() || rules.len() > 4 {
-        return Err("give 1 to 4 `rules`, e.g. [\"B3/S23\"]".into());
+    if rules.is_empty() {
+        return Err("give the `rules`, e.g. [\"B3/S23\"]".into());
     }
     let mut tl = strings(args.get("tilings"), "tilings")?;
     if tl.is_empty() {
         tl.push("square".into());
     }
-    let tilings = library::tiling_list(&tl.join(","))?;
-    if tilings.len() > 4 {
-        return Err("at most 4 tilings per call".into());
-    }
+    // The bounds on one call (rules, tilings, soups in all, generations, cell updates) are the
+    // context's limits, checked by the operation.
+    let max_gens = ctx().limits.max_search_gens;
     let soups = int(args, "soups")?.unwrap_or(16).clamp(1, 64) as u32;
     let w = int(args, "width")?.unwrap_or(48).clamp(16, 128) as u32;
     let h = int(args, "height")?.unwrap_or(48).clamp(16, 128) as u32;
-    let gens = int(args, "gens")?.unwrap_or(1000).clamp(10, 4000) as u64;
-    let total_soups = soups as u64 * rules.len() as u64 * tilings.len() as u64;
-    if total_soups > MAX_SEARCH_SOUPS {
-        return Err(format!(
-            "{total_soups} soups is more than {MAX_SEARCH_SOUPS}; use fewer soups, rules, or tilings"
-        ));
-    }
-    // Multi-type tilings have several cells per unit cell; allow for up to 12.
-    let work = total_soups * (w * h) as u64 * 12 * gens;
-    if work > MAX_SEARCH_WORK * 3 {
-        return Err(
-            "that search is too large for one call; use smaller grids or fewer generations".into(),
-        );
-    }
+    let gens = (int(args, "gens")?.unwrap_or(1000).max(10) as u64).min(max_gens);
     let store = args
         .get("store")
         .map(|_| boolean(args, "store"))
@@ -791,4 +776,14 @@ fn quickstart_list(args: &Value) -> Res {
         "shown": shown.len(),
         "newest_first": shown,
     })))
+}
+
+/// `4 billion`, `1.5 billion`.
+fn billions(n: u64) -> String {
+    let b = n as f64 / 1e9;
+    if b.fract() == 0.0 {
+        format!("{b:.0} billion")
+    } else {
+        format!("{b} billion")
+    }
 }
