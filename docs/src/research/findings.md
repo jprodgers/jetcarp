@@ -80,8 +80,8 @@ skeptical pass and then a looser congruence test examined:
 | of which single ships (6 of them contain a perturbed phase of a smaller ship) | 47 |
 | of which derivative: a smaller ship with a passenger that it pulls along unchanged, or a bound pair of gliders | 13 |
 | Flag A: most likely already known or noticed by others | 11 |
-| Flag B: check before claiming | 13 |
-| Unflagged | 36, of which 29 are single ships |
+| Flag B: check before claiming | 17 |
+| Unflagged | 32, of which 25 are single ships |
 
 The checks are described in the box on [What is new in JETCARP](contributions.md#how-we-checked).
 No ship depended on dead edges or on the size of the patch, no period or displacement was misreported,
@@ -120,7 +120,14 @@ and the ships built on Guttesen's gliders (`2ba58828`, `98a3c53b` in Life on 3.3
 seen these; we found no report, and do not write "to our knowledge" for them. **Flag B** marks ships
 that run in a well-known rule on an Archimedean tiling (HighLife, Pedestrian Life, or the
 `B2/S34` rule of the 4.8.8 hunts, which is Hexagonal Life without its `H`), that contain a phase of one
-of Guttesen's gliders, or that were very common in their search.
+of Guttesen's gliders, or that were very common in their search. Four more joined Flag B after a second
+search of the ConwayLife forums found EricG's 2013 exploration of the Archimedean tilings
+([EricG 2013](bibliography.md#ericg2013tiling2)): `c4c00098` and `9cee5c6a` run in `B2/S2` on 4.8.8,
+where EricG found "many of the B2 rules" to have spaceships, and `852ea9ff` and `a0229739` run in
+`B26` rules on 3.12.12, next to the `B2/S2` and `B26/S3569` rules in which he reported many ships.
+He did not list his ships, and his pattern files are no longer online, so these four wait for a
+comparison with them. The claimed ships on 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 run in none of the rules
+he named (see [What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
 
 Life itself (`B3/S23`), the rule Guttesen searched, deserves a separate word. All eleven candidates
 that run in Life turned out to be made of Guttesen's gliders: on 3.6.3.6 every one is a pair of his
@@ -157,15 +164,15 @@ with a clip of it moving.
 | 8 | [`7c5b3e65`](#ship-7c5b3e65) | 4.8.8 | 4 | (0, −2) | 10–15 | `B2/S3` (64) | 54 | derivative: `0ed091c9` with a tag-along | B |
 | 9 | [`938f9833`](#ship-938f9833) | 4.8.8 | 4 | (0, −2) | 5–6 | `B2/S2` (256) | 406 | single | A |
 | 10 | [`c2f4f14a`](#ship-c2f4f14a) | 4.8.8 | 4 | (0, −2) | 8–9 | `B2/S2` (256) | 3 | derivative: `c4c00098` with a tag-along |  |
-| 11 | [`c4c00098`](#ship-c4c00098) | 4.8.8 | 4 | (0, −2) | 7 | `B2/S2` (512) | 9 | single, contains a phase of `69c9912a`, `938f9833` |  |
-| 12 | [`9cee5c6a`](#ship-9cee5c6a) | 4.8.8 | 6 | (0, 2) | 7–13 | `B2/S2` (128) | 11 | single |  |
+| 11 | [`c4c00098`](#ship-c4c00098) | 4.8.8 | 4 | (0, −2) | 7 | `B2/S2` (512) | 9 | single, contains a phase of `69c9912a`, `938f9833` | B |
+| 12 | [`9cee5c6a`](#ship-9cee5c6a) | 4.8.8 | 6 | (0, 2) | 7–13 | `B2/S2` (128) | 11 | single | B |
 | 13 | [`25969982`](#ship-25969982) | 4.8.8 | 12 | (6, 0) | 12–18 | `B2/S34` (64) | 2 | derivative: `0ed091c9` with a tag-along | B |
 | 14 | [`07ab1946`](#ship-07ab1946) | 4.8.8 | 16 | (0, 8) | 19–26 | `B2/S34` (16) | 1 | derivative: `0ed091c9` with a tag-along | B |
 | 15 | [`bdc1c8c7`](#ship-bdc1c8c7) | 4.8.8 | 16 | (0, 8) | 14–20 | `B2/S34` (32) | 95 | derivative: `0ed091c9` with a tag-along | B |
 | 16 | [`fff1b887`](#ship-fff1b887) | 4.8.8 | 16 | (0, 8) | 14–28 | `B2/S34` (32) | 271 | single | B |
 | 17 | [`7e51c0d1`](#ship-7e51c0d1) | 4.8.8 | 24 | (12, 0) | 14–21 | `B2/S3` (128) | 1 | single | B |
-| 18 | [`852ea9ff`](#ship-852ea9ff) | 3.12.12 | 2 | (0, −1) | 6–9 | `B26/S2` (32,768) | 39 | single, contains a phase of `c78ceb01` |  |
-| 19 | [`a0229739`](#ship-a0229739) | 3.12.12 | 2 | (0, −1) | 7–9 | `B26/S2` (16,384) | 6 | single, contains a phase of `852ea9ff`, `c78ceb01` |  |
+| 18 | [`852ea9ff`](#ship-852ea9ff) | 3.12.12 | 2 | (0, −1) | 6–9 | `B26/S2` (32,768) | 39 | single, contains a phase of `c78ceb01` | B |
+| 19 | [`a0229739`](#ship-a0229739) | 3.12.12 | 2 | (0, −1) | 7–9 | `B26/S2` (16,384) | 6 | single, contains a phase of `852ea9ff`, `c78ceb01` | B |
 | 20 | [`c78ceb01`](#ship-c78ceb01) | 3.12.12 | 2 | (0, 1) | 4–5 | `B2/S2` (65,536) | 1,742 | single | A |
 | 21 | [`b2c790bb`](#ship-b2c790bb) | 3.12.12 | 6 | (−2, 4) | 5–8 | `B2/S2` (32,768) | 1,585 | single | A |
 | 22 | [`5e1adb91`](#ship-5e1adb91) | 3.12.12 | 8 | (4, 0) | 12–23 | `B26/S26` (1,024) | 1 | derivative: `852ea9ff` with a tag-along |  |
@@ -222,7 +229,8 @@ object, as Life catalogues keep tag-alongs, but it is not counted as a separate 
   (`f338d60a`).
 - **Guttesen's gliders.** His glider g on 3.6.3.6 and his period-8 glider on 3.3.4.3.4, both in Life,
   were found by JETCARP's searches independently; they are his
-  ([Guttesen 2026](bibliography.md#guttesen2026game)). JETCARP's 4-to-5-cell kagome ship is exactly
+  ([Guttesen 2026](bibliography.md#guttesen2026game)). EricG had already reported spaceships in Life
+  on both tilings in 2013, without describing them ([EricG 2013](bibliography.md#ericg2013tiling2)). JETCARP's 4-to-5-cell kagome ship is exactly
   his Fig. 4 glider (the same cells in one phase), and its snub-square ship matches his Fig. 5 by eye;
   a cell-for-cell check awaits his published configurations. His large kagome glider G (period 40) was
   not found. Glider g also runs in corridors of kagome tiles inside the 3-uniform tilings k3-030,
@@ -245,76 +253,12 @@ motion, the clip is replaced by a still of a few of its positions, older ones fa
 are in `docs/scenes/findings/`, one per object, and `docs/tools/render-animations.sh findings/`
 makes the clips again.
 
-#### Single ships with no flag (29)
+#### Single ships with no flag (25)
 
-The 29 single ships that carry no flag. These are the only candidates that [What is new in
+The 25 single ships that carry no flag. These are the only candidates that [What is new in
 JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our knowledge.
 
 <div class="ship-gallery">
-<div class="ship-card" id="ship-c4c00098">
-<picture>
-  <source srcset="../images/findings/c4c00098-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c4c00098.webp" alt="Spaceship c4c00098 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
-</picture>
-<p class="ship-name"><code>c4c00098</code> <a class="ship-n" href="#the-60-objects">table row 11</a></p>
-<dl>
-<dt>Tiling</dt><dd>4.8.8</dd>
-<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
-<dt>Cells</dt><dd>7</dd>
-<dt>Rules</dt><dd><code>B2/S2</code> to <code>B245678/S25678</code> (512 rules)</dd>
-<dt>Seen</dt><dd>9 times</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag; contains a perturbed phase of <a href="#ship-69c9912a"><code>69c9912a</code></a> and <a href="#ship-938f9833"><code>938f9833</code></a>.</dd>
-</dl>
-<p class="ship-clip">Clip: generations 0 to 40.</p>
-</div>
-<div class="ship-card" id="ship-9cee5c6a">
-<picture>
-  <source srcset="../images/findings/9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9cee5c6a.webp" alt="Spaceship 9cee5c6a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
-</picture>
-<p class="ship-name"><code>9cee5c6a</code> <a class="ship-n" href="#the-60-objects">table row 12</a></p>
-<dl>
-<dt>Tiling</dt><dd>4.8.8</dd>
-<dt>Period</dt><dd>6, moving 2 lattice steps per period (c/3)</dd>
-<dt>Cells</dt><dd>7–13</dd>
-<dt>Rules</dt><dd><code>B2/S2</code> to <code>B2578/S25678</code> (128 rules)</dd>
-<dt>Seen</dt><dd>11 times</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
-</dl>
-<p class="ship-clip">Clip: generations 2 to 44.</p>
-</div>
-<div class="ship-card" id="ship-852ea9ff">
-<picture>
-  <source srcset="../images/findings/852ea9ff-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/852ea9ff.webp" alt="Spaceship 852ea9ff moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
-</picture>
-<p class="ship-name"><code>852ea9ff</code> <a class="ship-n" href="#the-60-objects">table row 18</a></p>
-<dl>
-<dt>Tiling</dt><dd>3.12.12</dd>
-<dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
-<dt>Cells</dt><dd>6–9</dd>
-<dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,4,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (32,768 rules)</dd>
-<dt>Seen</dt><dd>39 times</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag; contains a perturbed phase of <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
-</dl>
-<p class="ship-clip">Clip: generations 1 to 32.</p>
-</div>
-<div class="ship-card" id="ship-a0229739">
-<picture>
-  <source srcset="../images/findings/a0229739-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a0229739.webp" alt="Spaceship a0229739 moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
-</picture>
-<p class="ship-name"><code>a0229739</code> <a class="ship-n" href="#the-60-objects">table row 19</a></p>
-<dl>
-<dt>Tiling</dt><dd>3.12.12</dd>
-<dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
-<dt>Cells</dt><dd>7–9</dd>
-<dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (16,384 rules)</dd>
-<dt>Seen</dt><dd>6 times</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag; contains a perturbed phase of <a href="#ship-852ea9ff"><code>852ea9ff</code></a> and <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
-</dl>
-<p class="ship-clip">Clip: generations 1 to 31.</p>
-</div>
 <div class="ship-card" id="ship-aa7e7357">
 <picture>
   <source srcset="../images/findings/aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
@@ -1022,11 +966,12 @@ them, so they are not claimed.
 </div>
 </div>
 
-#### Flag B: check before claiming (13)
+#### Flag B: check before claiming (17)
 
 Ships that run in a well-known rule on an Archimedean tiling, contain a phase of one of Guttesen's
-gliders, or were very common in their search. We found no earlier report of them, but others may
-well have seen them, so they are not claimed.
+gliders, were very common in their search, or run on 4.8.8 or 3.12.12 in the rules where EricG
+reported many spaceships in 2013 without listing them. We found no earlier report of them, but
+others may well have seen them, so they are not claimed.
 
 <div class="ship-gallery">
 <div class="ship-card" id="ship-0ed091c9">
@@ -1060,6 +1005,38 @@ well have seen them, so they are not claimed.
 <dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-0ed091c9"><code>0ed091c9</code></a> with a tag-along.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="ship-c4c00098">
+<picture>
+  <source srcset="../images/findings/c4c00098-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/c4c00098.webp" alt="Spaceship c4c00098 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>c4c00098</code> <a class="ship-n" href="#the-60-objects">table row 11</a></p>
+<dl>
+<dt>Tiling</dt><dd>4.8.8</dd>
+<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
+<dt>Cells</dt><dd>7</dd>
+<dt>Rules</dt><dd><code>B2/S2</code> to <code>B245678/S25678</code> (512 rules)</dd>
+<dt>Seen</dt><dd>9 times</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S2</code> on 4.8.8, among the B2 rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-69c9912a"><code>69c9912a</code></a> and <a href="#ship-938f9833"><code>938f9833</code></a>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="ship-9cee5c6a">
+<picture>
+  <source srcset="../images/findings/9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9cee5c6a.webp" alt="Spaceship 9cee5c6a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>9cee5c6a</code> <a class="ship-n" href="#the-60-objects">table row 12</a></p>
+<dl>
+<dt>Tiling</dt><dd>4.8.8</dd>
+<dt>Period</dt><dd>6, moving 2 lattice steps per period (c/3)</dd>
+<dt>Cells</dt><dd>7–13</dd>
+<dt>Rules</dt><dd><code>B2/S2</code> to <code>B2578/S25678</code> (128 rules)</dd>
+<dt>Seen</dt><dd>11 times</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S2</code> on 4.8.8, among the B2 rules where EricG (2013) reported many spaceships without listing them. Single ship.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 44.</p>
 </div>
 <div class="ship-card" id="ship-25969982">
 <picture>
@@ -1140,6 +1117,38 @@ well have seen them, so they are not claimed.
 <dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Single ship.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 6 to 46.</p>
+</div>
+<div class="ship-card" id="ship-852ea9ff">
+<picture>
+  <source srcset="../images/findings/852ea9ff-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/852ea9ff.webp" alt="Spaceship 852ea9ff moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>852ea9ff</code> <a class="ship-n" href="#the-60-objects">table row 18</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.12.12</dd>
+<dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
+<dt>Cells</dt><dd>6–9</dd>
+<dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,4,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (32,768 rules)</dd>
+<dt>Seen</dt><dd>39 times</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 32.</p>
+</div>
+<div class="ship-card" id="ship-a0229739">
+<picture>
+  <source srcset="../images/findings/a0229739-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/a0229739.webp" alt="Spaceship a0229739 moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>a0229739</code> <a class="ship-n" href="#the-60-objects">table row 19</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.12.12</dd>
+<dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
+<dt>Cells</dt><dd>7–9</dd>
+<dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (16,384 rules)</dd>
+<dt>Seen</dt><dd>6 times</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-852ea9ff"><code>852ea9ff</code></a> and <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 31.</p>
 </div>
 <div class="ship-card" id="ship-0ccbe694">
 <picture>

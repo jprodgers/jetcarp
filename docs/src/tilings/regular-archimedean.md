@@ -84,8 +84,14 @@ include the GomJau-Hogg notation ([Gomez-Jauregui et al. 2021](../research/bibli
 Cellular automata on these tilings have their own history. Carter Bays studied Life-like rules on the
 triangular tiling ([Bays 1994](../research/bibliography.md#bays1994cellular)) and on hexagons and Cairo
 pentagons ([Bays 2005](../research/bibliography.md#bays2005note)), and wrote an overview
-([Bays 2009](../research/bibliography.md#bays2009cellular)). H. S. Guttesen ran Life on six of the mixed
-Archimedean tilings and found gliders on 3.6.3.6 and 3.3.4.3.4 and a glider gun on 3.6.3.6
+([Bays 2009](../research/bibliography.md#bays2009cellular)). In June 2013 EricG emulated all eight
+mixed Archimedean tilings and their duals in Golly, with cells that share an edge or a vertex as
+neighbours, and reported spaceships in Life-like rules on every one of the eight, in Life itself on
+3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 ([EricG 2013](../research/bibliography.md#ericg2013tiling2)); he named
+rules but did not list the ships, and his pattern files are no longer online. A 2014 Code Golf
+challenge ran Life on several non-square tilings; Peter Taylor found only oscillators on 3.4.6.4
+([Code Golf 2014](../research/bibliography.md#codegolf2014life)). H. S. Guttesen ran Life on six of the
+mixed Archimedean tilings, described gliders on 3.6.3.6 and 3.3.4.3.4 and built a glider gun on 3.6.3.6
 ([Guttesen 2026](../research/bibliography.md#guttesen2026game)).
 
 <figure class="pair">
@@ -124,17 +130,20 @@ version of the hexagon tiling, `hex_flat`, exists for the three-parent
 
 The tilings are classical. On them, JETCARP's searches have found spaceships in Life-like rules on
 4.8.8, 3.12.12, 4.6.12, 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6, and on 3.6.3.6 in rules other than Life. After
-the checks described in [What is new in JETCARP](../research/contributions.md#how-we-checked), ten
-single ships with no flag remain on these tilings, two on 4.8.8, two on 3.12.12, four on 3.3.3.4.4 and
-one each on 3.4.6.4 and 3.3.3.3.6, and to our knowledge they have not been reported before. Three of
-the four on 3.3.3.4.4 were found in strips of squares and triangles inside 2- and 3-uniform tilings;
-their live tiles evolve the same way on the elongated triangular tiling itself, so they are listed
-there. Four of the ten are below.
+the checks described in [What is new in JETCARP](../research/contributions.md#how-we-checked), six
+single ships with no flag remain on these tilings, four on 3.3.3.4.4 and one each on 3.4.6.4 and
+3.3.3.3.6. They run in none of the rules in which EricG reported ships, and to our knowledge they have
+not been reported before. Three of the four on 3.3.3.4.4 were found in strips of squares and triangles
+inside 2- and 3-uniform tilings; their live tiles evolve the same way on the elongated triangular tiling
+itself, so they are listed there. Two ships on 4.8.8 and two on 3.12.12 passed the same checks but run in
+the `B2` and `B26` rules where EricG saw many ships, so they are flagged until his patterns can be
+compared. Four ships are below.
 
 The others on these tilings are described rather than claimed. On 4.8.8, 3.12.12, 4.6.12, 3.6.3.6 and
 3.3.3.4.4 the rest are small ships that turn up often in soups, ships in well-known rules such as HighLife or
 `B2/S34`, or a smaller ship with a passenger, and others may well have seen them. Guttesen's Life
-gliders on 3.6.3.6 and 3.3.4.3.4, which JETCARP also found, are his, and so are the pairs of them that
+gliders on 3.6.3.6 and 3.3.4.3.4 (on tilings where EricG had seen Life spaceships in 2013), which
+JETCARP also found, are his, and so are the pairs of them that
 JETCARP's catalogue first listed as separate ships. In Life on 3.3.4.3.4, JETCARP also found two larger
 ships built around his glider, of periods 16 and 24; we found no earlier report of them. Every ship is
 listed in [Findings](../research/findings.md#the-60-objects).
@@ -166,7 +175,8 @@ each ship pass through shapes that look nothing alike before it repeats one plac
 </picture></div>
 <figcaption>Left: <code>a13d3fbf</code> on 3.3.3.4.4, period 8, two lattice steps along the rows per
 period, in the 1,024 rules from <code>B46/S3458</code> up. Right: <code>9cee5c6a</code> on 4.8.8,
-period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code> up. Scenes
+period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code> up; it is one of the
+flagged 4.8.8 ships, since EricG found many ships in <code>B2</code> rules there. Scenes
 <code>docs/scenes/tilings/ship-a13d3fbf.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
 </figure>
 
@@ -190,4 +200,6 @@ period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code>
 - [Bays 1994](../research/bibliography.md#bays1994cellular);
   [Bays 2005](../research/bibliography.md#bays2005note);
   [Bays 2009](../research/bibliography.md#bays2009cellular);
+  [EricG 2013](../research/bibliography.md#ericg2013tiling2);
+  [Code Golf 2014](../research/bibliography.md#codegolf2014life);
   [Guttesen 2026](../research/bibliography.md#guttesen2026game)

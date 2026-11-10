@@ -23,8 +23,11 @@ search*. Only the last two can support a claim, and we word such claims "to our 
 The search has known weaknesses:
 
 - **Forums.** The ConwayLife.com site refuses automated reading, so LifeWiki and the forums were read
-  through a mirror, and forum coverage is the weakest part of the search. Hobbyists may well have found
-  some of the things below without publishing them in papers.
+  through a mirror, and forum coverage is the weakest part of the search. A second pass over the forum
+  boards, Code Golf Stack Exchange and code hosts in November 2026 found EricG's 2013 exploration of
+  Life-like rules on the Archimedean tilings, which changed the spaceship claims below; its pattern
+  files are no longer online. Hobbyists may well have found other things below without publishing
+  them in papers.
 - **Unread full texts.** For a few papers only abstracts or search excerpts could be read; where a
   statement rests on an excerpt, the page that makes it says so.
 - **A fast-moving field.** Several closely related works appeared between August and October 2026
@@ -88,27 +91,33 @@ family as hexagon rules.
 
 ### 4. Spaceships on non-square tilings
 
-**Claim (to our knowledge).** JETCARP's soup searches have found spaceships in Life-like rules on
-Archimedean and k-uniform tilings that we have not found reported before. Of 72 candidates, 60
-distinct objects survived the checks in the box below. We claim, to our knowledge, only the 29 of
-them that are single ships and carry no flag: ten on Archimedean tilings (4.8.8, 3.12.12, 3.4.6.4,
-3.3.3.4.4 and 3.3.3.3.6), thirteen on 2-uniform tilings and six on 3-uniform tilings. Every one is
-listed, with its rule range, in [Findings](findings.md#the-60-objects). Each runs the same way in a
-whole range of rules; none runs in Life itself.
+**Claim (to our knowledge).** JETCARP's soup searches have found particular spaceships in Life-like
+rules on Archimedean and k-uniform tilings that we have not found reported before. Spaceships on these
+tilings are not new in themselves: EricG found ships in Life-like rules on every Archimedean tiling in
+2013 ([EricG 2013](bibliography.md#ericg2013tiling2)), and Martin Büttner found one on a tiling of
+hexagons, squares and triangles in 2014 ([Code Golf 2014](bibliography.md#codegolf2014life)). Of 72
+candidates, 60 distinct objects survived the checks in the box below. We claim, to our knowledge, only
+the 25 of them that are single ships, carry no flag, and run in none of the rules in which EricG
+reported ships: six on Archimedean tilings (3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6), thirteen on 2-uniform
+tilings and six on 3-uniform tilings. Every one is listed, with its rule range, in
+[Findings](findings.md#the-60-objects). Each runs the same way in a whole range of rules; none runs in
+Life itself.
 
-The other 31 are described, not claimed:
+The other 35 are described, not claimed:
 
-- **Flagged, 24.** Eleven are flagged as most likely already known: eight small ships that turn up
+- **Flagged, 28.** Eleven are flagged as most likely already known: eight small ships that turn up
   often in soups and run in many rules on an Archimedean tiling (on 4.8.8, 3.12.12, 4.6.12, 3.6.3.6 and
-  3.3.3.4.4), and three built on Guttesen's gliders. Thirteen are flagged to check before claiming: they run in a
-  well-known rule (HighLife, Pedestrian Life, or `B2/S34` on 4.8.8), contain a phase of one of
-  Guttesen's gliders, or were very common in their search. We found no earlier report
-  of any of them, but others may well have seen them.
+  3.3.3.4.4), and three built on Guttesen's gliders. Seventeen are flagged to check before claiming:
+  they run in a well-known rule (HighLife, Pedestrian Life, or `B2/S34` on 4.8.8), contain a phase of
+  one of Guttesen's gliders, were very common in their search, or run on 4.8.8 or 3.12.12 in the
+  `B2` and `B26` rules where EricG reported many ships in 2013 without listing them. We found no
+  earlier report of any of them, but others may well have seen them.
 - **Derivative, 13, six of them also flagged.** A smaller ship that pulls a passenger along
   unchanged, or a bound pair of gliders. They are kept as distinct objects with the core named, as
   Life catalogues keep tag-alongs, but they are not counted as discoveries.
 
-The four strongest candidates, single ships with no flag that the checks confirmed on every count:
+The strongest candidates, single ships with no flag that the checks confirmed on every count (the
+fourth, on 4.8.8, is now flagged):
 
 <figure class="pair">
 <div><picture>
@@ -142,7 +151,9 @@ more 2- and 3-uniform tilings. Scenes
 cells, one lattice step along a row per period (c/27), in about a million rules from
 <code>B37/S2,5,6,10</code> up. Right: <code>9cee5c6a</code> on 4.8.8, period 6, 7 to 13 cells, 2 lattice
 steps per period (c/3), in the 128 rules from <code>B2/S2</code> up: the only surviving 4.8.8 candidate
-that does not move at c/2, and it contains no smaller ship. Scenes
+that does not move at c/2, and it contains no smaller ship. It was among the four strongest until we
+read EricG's 2013 report that many <code>B2</code> rules on 4.8.8 have spaceships; his patterns are not
+online, so it is flagged until they can be compared. Scenes
 <code>docs/scenes/tilings/ship-acd0fa8b.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
 </figure>
 
@@ -166,15 +177,46 @@ rules on an Archimedean tiling, it is now flagged as most likely already known. 
 **Evidence.** Gliders on triangles, hexagons and Cairo pentagons go back to Carter Bays
 ([Bays 1994](bibliography.md#bays1994cellular); [Bays 2005](bibliography.md#bays2005note);
 [Kerekrety 2020](bibliography.md#kerekrety2020game)), and hexagonal Life (`B2/S34H`) has known
-spaceships ([drc, Hickerson and wildmyron 2016](bibliography.md#drc2016b2s34h)). H. S. Guttesen studied
-Life (`B3/S23`) on six Archimedean lattices and found no gliders on 4.8.8, 4.6.12, 3.12.12 or 3.3.3.3.6
-([Guttesen 2026](bibliography.md#guttesen2026game)); JETCARP's ships there are in other rules. No
-Life-like spaceship on a k-uniform tiling with k of 2 or more was found in the literature.
+spaceships ([drc, Hickerson and wildmyron 2016](bibliography.md#drc2016b2s34h)).
+
+The closest earlier work is EricG's, posted on the ConwayLife forums on 12 June 2013
+([EricG 2013](bibliography.md#ericg2013tiling2); pentagonal tilings in
+[EricG 2013](bibliography.md#ericg2013tiling1)). He emulated the eight composite Archimedean tilings and
+their eight duals in Golly, with the same neighbours as JETCARP's (cells sharing an edge or a vertex:
+octagons 8 and squares 4 on 4.8.8, squares 12 and triangles 9 on 3.3.3.4.4), and found spaceships in
+Life-like rules on 14 of the 16, among them every Archimedean tiling. He named the rules but not the
+ships: on 4.8.8, "many of the B2 rules" and `B2/S346`; on 3.12.12, `B2/S2` ("generates lots of
+spaceships") and `B26/S3569` and its variants; on 4.6.12, `B2/S2`; on 3.4.6.4, `B3468/S239` and
+`B346/S239`; on 3.3.3.4.4, `B3/S23` and other `B3` rules, `B36/S23` and `B3/S2489`; on 3.3.3.3.6, rules
+such as `B37/S247,10`; and on 3.6.3.6 and 3.3.4.3.4, Life itself. His pattern files were shared from a
+Google Drive folder that no longer opens. JETCARP's six claimed Archimedean ships run in none of his
+named rules: the 3.4.6.4 ship needs `S5` and cannot have `B4` or `B6`, the 3.3.3.4.4 ships need births
+on 4 and his are all `B3` rules, and the 3.3.3.3.6 ship needs `S5` and `S6` and cannot have `S4`. The
+4.8.8 and 3.12.12 ships do run in the `B2` and `B26` rules he describes, so they are flagged.
+
+In 2014 a Code Golf challenge asked for Life (`B3/S23`) on any grid but a regular one, with
+vertex-sharing neighbours ([Code Golf 2014](bibliography.md#codegolf2014life)). Peter Taylor found only
+oscillators on 3.4.6.4. Kevin L ran a tiling of hexagons, squares and triangles whose repeating unit, by
+its code, is one hexagon, two squares and two triangles, as in the 2-uniform tiling
+[3.4<sup>2</sup>.6; 3.6.3.6], and posted a period-20 spaceship found by Martin Büttner. The page does
+not name the tiling, and its rule is stated only in a comment copied from an earlier answer, but the
+challenge asked for Life. A JETCARP hunt of 500,000 Life soups on each of the two tilings of that type
+found no ship on k2-006 and, on k2-007, a period-20 spaceship of 8 cells moving one lattice step per
+period (c/20) in about one soup in nine, so Büttner's tiling was very likely k2-007 and his ship very
+likely this one. It is the earliest spaceship on a k-uniform tiling (k of 2 or more) that we know of.
+JETCARP's claimed ships on k2-006 and k2-007 are of other periods and run in other rules.
+
+H. S. Guttesen studied Life (`B3/S23`) on six Archimedean lattices and found no gliders on 4.8.8,
+4.6.12, 3.12.12 or 3.3.3.3.6 ([Guttesen 2026](bibliography.md#guttesen2026game)); JETCARP's ships there
+are in other rules. We found no other report of Life-like spaceships on k-uniform tilings.
 
 **Not claimed.**
 
-- **Guttesen's gliders.** The small Life gliders on the kagome (3.6.3.6) and snub square tilings are
-  Guttesen's, who also built a kagome glider gun ([Guttesen 2026](bibliography.md#guttesen2026game)).
+- **Guttesen's gliders.** EricG reported spaceships in Life on the kagome (3.6.3.6) and snub square
+  tilings in 2013 ([EricG 2013](bibliography.md#ericg2013tiling2)) without describing them. Guttesen
+  described the small gliders themselves and built a kagome glider gun
+  ([Guttesen 2026](bibliography.md#guttesen2026game)), and we call them Guttesen's gliders after his
+  description.
   JETCARP's searches found both independently: its kagome ship is exactly his glider g, and its
   snub-square ship matches his figure. Ten catalogue entries turned out to be pairs of ships flying side
   by side without touching: eight pairs of his glider g, one pair of his snub-square glider and one
@@ -325,7 +367,10 @@ of known rules to known graphs, and we do not count them as discoveries. See
   [Rowett: LifeViewer](bibliography.md#rowettnd_lifeviewer)).
 - **The two-parent hexagon rules** (`HexW`, `HexW3`): Wolfram's ([Wolfram 2002](bibliography.md#wolfram2002new)).
 - **Life gliders on the kagome and snub square tilings**, and the pairs of them that JETCARP's
-  catalogue first listed as ships: Guttesen's ([Guttesen 2026](bibliography.md#guttesen2026game)).
+  catalogue first listed as ships: reported by EricG in 2013 and described by Guttesen in 2026
+  ([EricG 2013](bibliography.md#ericg2013tiling2); [Guttesen 2026](bibliography.md#guttesen2026game)).
+- **Spaceships on Archimedean tilings as such**: EricG found them on every Archimedean tiling in 2013.
+  Only particular ships are claimed.
 - **Spaceships on isohedral tilings**: all are known ships of the square or triangular grid.
 - **The hat glider**: it is James Edmond's hat glider B in another table. With B's states renamed, the
   two tables give the same evolution cell for cell; JETCARP's search found it again, and JETCARP's
@@ -345,7 +390,11 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
 [Findings](findings.md)). Before the claims above are final, and before the paper:
 
 - Ask on the ConwayLife forums, when the results are posted there, whether any of the spaceship
-  candidates have been seen before.
+  candidates have been seen before, and ask EricG whether his 2013 Tiling Project patterns can be
+  shared again, so the flagged 4.8.8 and 3.12.12 ships, and the claimed Archimedean ones, can be
+  compared with his.
+- Find Martin Büttner's 2014 period-20 ship, confirm its tiling and rule, and add it to the
+  catalogue with his credit.
 - Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once he
   publishes them.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.

@@ -203,10 +203,15 @@ listed there. A looser test, which asks only that the live tiles evolve the same
 neighbour counts of the empty tiles around them, found two more catalogue entries that are the same
 ship as another, and eight ships that run on a simpler tiling than the one they were found on. That
 leaves 60 distinct objects. Thirteen are a smaller ship with a passenger, or a
-bound pair, and are listed with the smaller ship. Twenty-four, six of those thirteen among them, carry a
-flag: they are small and turn up often in soups, run in a well-known rule, or are built on Guttesen's
-gliders, so others may well have seen them, although we found no report. To our knowledge, the remaining 29 single ships, on 4.8.8, 3.12.12, 3.4.6.4, 3.3.3.4.4,
-3.3.3.3.6 and on 2- and 3-uniform tilings, have not been reported before. Only two of the 60 run in
+bound pair, and are listed with the smaller ship. Twenty-eight, six of those thirteen among them, carry a
+flag: they are small and turn up often in soups, run in a well-known rule, are built on Guttesen's
+gliders, or run on 4.8.8 or 3.12.12 in the rules where EricG reported many unlisted spaceships in 2013
+([EricG 2013](../research/bibliography.md#ericg2013tiling2)), so others may well have seen them,
+although we found no report. To our knowledge, the remaining 25 single ships, on 3.4.6.4, 3.3.3.4.4,
+3.3.3.3.6 and on 2- and 3-uniform tilings, have not been reported before. Spaceships on these tilings
+are not new as such: EricG found ships in Life-like rules on every Archimedean tiling, and Martin
+Büttner found one in Life on a 2-uniform tiling in 2014 ([Code Golf 2014](../research/bibliography.md#codegolf2014life));
+only these particular ships are claimed. Only two of the 60 run in
 Life itself: both are on the snub square tiling, both are built around Guttesen's glider, and both are
 flagged. The rest are in other rules.
 

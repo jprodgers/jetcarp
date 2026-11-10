@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 257 works cited across the JETCARP documentation. Every entry was
+These are the 260 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -70,6 +70,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="codd1968cellular"></span>Codd, Edgar F. (1968). *Cellular Automata*. ACM Monograph Series. New York: Academic Press. ISBN 978-1-4832-0014-9. <small>`codd1968cellular`</small>
 
+<span id="codegolf2014life"></span>Code Golf Stack Exchange (2014). “Implement the game of life on anything but a regular grid”. Code Golf Stack Exchange, question 35827. <https://codegolf.stackexchange.com/questions/35827>; accessed 2026-11-10. <small>`codegolf2014life`</small>
+
 <span id="cook2004universality"></span>Cook, Matthew (2004). “Universality in elementary cellular automata”. *Complex Systems* 15(1): 1–40. doi:[10.25088/ComplexSystems.15.1.1](https://doi.org/10.25088/ComplexSystems.15.1.1). <small>`cook2004universality`</small>
 
 <span id="creutz1991abelian"></span>Creutz, Michael (1991). “Abelian sandpiles”. *Computers in Physics* 5(2): 198–203. doi:[10.1063/1.168408](https://doi.org/10.1063/1.168408). <small>`creutz1991abelian`</small>
@@ -115,6 +117,10 @@ BibTeX key, so you can link to it directly.
 <span id="edmond2026gliders"></span>Edmond, James (2026). “Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre”. [arXiv:2609.22579](https://arxiv.org/abs/2609.22579). <small>`edmond2026gliders`</small>
 
 <span id="eppstein2010growth"></span>Eppstein, David (2010). “Growth and decay in life-like cellular automata”. In Adamatzky, Andrew (ed.), *Game of Life Cellular Automata*, pp. 71–98. Springer. doi:[10.1007/978-1-84996-217-9_6](https://doi.org/10.1007/978-1-84996-217-9_6); [arXiv:0911.2890](https://arxiv.org/abs/0911.2890). <small>`eppstein2010growth`</small>
+
+<span id="ericg2013tiling1"></span>EricG (2013). “Tiling in Golly 1: Pentagonal (and HexStar & PentHex) Tiling”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?t=1123>; accessed 2026-11-10. <small>`ericg2013tiling1`</small>
+
+<span id="ericg2013tiling2"></span>EricG (2013). “Tiling in Golly 2: Uniform, Dual-Uniform, and Misc Tiling”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?t=1124>; accessed 2026-11-10. <small>`ericg2013tiling2`</small>
 
 <span id="evans1996larger"></span>Evans, Kellie Michele (1996). *Larger than Life: It's So Nonlinear*. Thesis, University of Wisconsin–Madison. <http://www.csun.edu/~kme52026/thesis.html>; accessed 2026-11-10. <small>`evans1996larger`</small>
 
