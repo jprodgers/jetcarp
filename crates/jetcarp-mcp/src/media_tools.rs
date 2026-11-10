@@ -1,10 +1,12 @@
 //! MCP tools for catalog media and the website export: `media_render` renders frames, an
 //! animation (GIF or animated WebP), a poster, and a thumbnail and returns their paths (and,
-//! on request, the poster inline); `site_export` writes the incremental website export. The
-//! argument handling is shared with the script functions (`jetcarp_script::media`).
+//! on request, the poster inline); `site_export` writes the incremental website export. Both are
+//! operations (`media.render`, `site.export`), with their options read from the tool's arguments
+//! as the scripts read them ([`MediaRenderIn::from_map`], [`SiteIn::from_map`]).
 
-use crate::tools::{Res, ToolOutput, boolean, check_unknown, string, tool};
-use jetcarp_core::library::Library;
+use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, string, tool};
+use jetcarp_api::op::{self, Op, Quiet};
+use jetcarp_api::ops::media::{MediaRender, MediaRenderIn, SiteExport, SiteIn};
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &["media_render", "site_export"];
@@ -59,21 +61,21 @@ pub fn definitions() -> Vec<Value> {
 }
 
 pub fn call(name: &str, args: &Value) -> Res {
-    let lib = Library::open_default();
     match name {
-        "media_render" => render(&lib, args),
-        "site_export" => export(&lib, args),
+        "media_render" => render(args),
+        "site_export" => export(args),
         _ => Err(format!("unknown tool {name}")),
     }
 }
 
-fn render(lib: &Library, args: &Value) -> Res {
+fn render(args: &Value) -> Res {
     let mut a = args.clone();
     let poster = boolean(args, "poster")?;
     if let Some(o) = a.as_object_mut() {
         o.remove("poster");
     }
-    let r = jetcarp_script::media::media_into(lib, &a)?;
+    let input = MediaRenderIn::from_map(&a)?;
+    let r = op::to_value(&MediaRender::run(ctx(), input, &Quiet).map_err(err)?);
     let mut content =
         vec![json!({"type": "text", "text": serde_json::to_string_pretty(&r).unwrap_or_default()})];
     if poster && let Some(p) = r["done"][0]["files"]["poster"].as_str() {
@@ -90,7 +92,7 @@ fn render(lib: &Library, args: &Value) -> Res {
     })
 }
 
-fn export(lib: &Library, args: &Value) -> Res {
+fn export(args: &Value) -> Res {
     check_unknown(
         args,
         &[
@@ -107,6 +109,7 @@ fn export(lib: &Library, args: &Value) -> Res {
     )?;
     let to = string(args, "to")?.ok_or("give `to`, the export folder")?;
     let dir = std::path::absolute(to).map_err(|e| format!("bad path {to}: {e}"))?;
-    let r = jetcarp_script::media::site_into(lib, args, &dir)?;
-    Ok(ToolOutput::json(&r))
+    let input = SiteIn::from_map(args, &dir.display().to_string())?;
+    let r = SiteExport::run(ctx(), input, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(&op::to_value(&r)))
 }

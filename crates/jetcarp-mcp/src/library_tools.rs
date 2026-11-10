@@ -3,17 +3,22 @@
 //! entries ("My finds").
 //!
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
-//! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`.
+//! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
+//! it once. Listing, reading, curation, and promotion are the operations `library.*` and
+//! `quickstart.*`; the soup search and collisions move to the job operations in step 5.
 
-use crate::tools::{Res, ToolOutput, boolean, check_unknown, err, given, int, string, tool};
-use jetcarp_api::op::{Quiet, Report, WorldOp};
+use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool};
+use jetcarp_api::op::{self, Op, Quiet, Report, WorldOp};
+use jetcarp_api::ops::library::{
+    GetIn, LibraryGet, LibraryQuery, LibraryUpdate, QueryIn, UpdateIn,
+};
+use jetcarp_api::ops::quickstart::{
+    AddIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartUpdate, StatusIn,
+};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
 use jetcarp_core::library::search::SearchSpec;
-use jetcarp_core::library::{
-    self, CurationState, DiscoveredBy, Library, PatternClass, PatternRecord, QsStatus, Query,
-    Update,
-};
+use jetcarp_core::library::{self, Library, PatternRecord};
 use jetcarp_core::{Boundary, SizeSpec};
 use serde_json::{Value, json};
 
@@ -36,8 +41,9 @@ pub fn handles(name: &str) -> bool {
     NAMES.contains(&name)
 }
 
+/// The catalog: the server's one connection to it.
 fn lib() -> Library {
-    Library::open_default()
+    ctx().library()
 }
 
 pub fn definitions() -> Vec<Value> {
@@ -256,54 +262,28 @@ pub(crate) fn ant_json(r: &library::AntRow) -> Value {
     })
 }
 
-fn list_ants(args: &Value) -> Res {
-    check_unknown(args, &["outcome", "tiling", "rule", "job", "sort", "limit"])?;
-    let q = library::AntQuery {
-        outcome: string(args, "outcome")?
-            .map(jetcarp_core::ants::run::Outcome::parse)
-            .transpose()?,
-        tiling: string(args, "tiling")?.map(String::from),
-        rule: string(args, "rule")?.map(String::from),
-        job: int(args, "job")?,
-        sort: string(args, "sort")?.map(String::from),
-        limit: Some(int(args, "limit")?.unwrap_or(20).clamp(1, 100) as usize),
-    };
-    let l = lib();
-    let rows = l.ants(&q)?;
-    Ok(ToolOutput::json(&json!({
-        "catalog": l.path().display().to_string(),
-        "census": l.ant_census(q.job)?,
-        "shown": rows.len(),
-        "ants": rows.iter().map(ant_json).collect::<Vec<_>>(),
-    })))
+fn text(args: &Value, key: &str) -> Result<Option<String>, String> {
+    Ok(string(args, key)?.map(String::from))
 }
 
-fn promote_ant(args: &Value, id: &str) -> Res {
-    let l = lib();
-    let r = l.ant(id)?;
-    let mut sc = jetcarp_core::ants::media::build_scene(&r)?;
-    if let Some(t) = string(args, "title")? {
-        sc.name = t.to_string();
-    }
-    if let Some(d) = string(args, "description")? {
-        sc.description = d.to_string();
-    }
-    let mut q = library::QuickStartRow::for_scene(&r.id, "scene", sc.clone());
-    q.behaviour = r.outcome.name().into();
-    q.score = Some(r.score);
-    l.put_quickstart(&q)?;
-    l.update_ant(
-        &r.id,
-        &library::AntUpdate {
-            state: Some("promoted".into()),
-            ..Default::default()
-        },
-    )?;
+fn list_ants(args: &Value) -> Res {
+    check_unknown(args, &["outcome", "tiling", "rule", "job", "sort", "limit"])?;
+    let q = QueryIn {
+        kind: Some("ant".into()),
+        outcome: text(args, "outcome")?,
+        tiling: text(args, "tiling")?,
+        rule: text(args, "rule")?,
+        job: int(args, "job")?,
+        sort: text(args, "sort")?,
+        limit: Some(int(args, "limit")?.unwrap_or(20).clamp(1, 100) as usize),
+        ..Default::default()
+    };
+    let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
     Ok(ToolOutput::json(&json!({
-        "promoted": sc.name,
-        "description": sc.description,
-        "entry": format!("find:{}", r.id),
-        "note": "It appears in the JETCARP app's Quick Start under \"My finds\": the run from step 0.",
+        "catalog": out.catalog,
+        "census": out.census,
+        "shown": out.ants.len(),
+        "ants": out.ants.iter().map(ant_json).collect::<Vec<_>>(),
     })))
 }
 
@@ -326,32 +306,26 @@ fn list_patterns(args: &Value) -> Res {
         ],
     )?;
     let limit = int(args, "limit")?.unwrap_or(20).clamp(1, 100) as usize;
-    let mut q = Query {
-        rule: string(args, "rule")?.map(String::from),
-        works_in: string(args, "works_in")?.map(String::from),
-        order: string(args, "order")?.map(String::from),
+    let q = QueryIn {
+        rule: text(args, "rule")?,
+        works_in: text(args, "works_in")?,
+        order: text(args, "order")?,
         offset: int(args, "offset")?.map(|x| x.max(0) as usize),
-        tiling: string(args, "tiling")?.map(String::from),
-        class: string(args, "class")?
-            .map(PatternClass::parse)
-            .transpose()?,
-        state: string(args, "state")?
-            .map(CurationState::parse)
-            .transpose()?,
+        tiling: text(args, "tiling")?,
+        class: text(args, "class")?,
+        state: text(args, "state")?,
         min_period: int(args, "min_period")?.map(|x| x.max(1) as u64),
         min_score: args.get("min_score").and_then(|v| v.as_f64()),
-        tag: string(args, "tag")?.map(String::from),
-        text: string(args, "text")?.map(String::from),
-        limit: None,
+        tag: text(args, "tag")?,
+        text: text(args, "text")?,
+        limit: Some(limit),
         ..Default::default()
     };
-    let l = lib();
-    let matching = l.count(&q)?;
-    q.limit = Some(limit);
-    let shown: Vec<Value> = l.query(&q)?.iter().map(summary).collect();
+    let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
+    let shown: Vec<Value> = out.patterns.iter().map(summary).collect();
     Ok(ToolOutput::json(&json!({
-        "catalog": l.path().display().to_string(),
-        "matching": matching,
+        "catalog": out.catalog,
+        "matching": out.matching,
         "shown": shown.len(),
         "patterns": shown,
     })))
@@ -360,26 +334,37 @@ fn list_patterns(args: &Value) -> Res {
 fn get(args: &Value) -> Res {
     check_unknown(args, &["id", "kind", "phases", "record"])?;
     let id = string(args, "id")?.ok_or("give the record's `id`")?;
-    let l = lib();
-    match kind_of(args, id)? {
-        "pattern" => {}
-        "ant" => {
-            let r = l.ant(id)?;
-            let mut out = ToolOutput::text(r.line());
-            out.content.push(json!({"type": "text", "text": serde_json::to_string_pretty(&r).unwrap_or_default()}));
-            return Ok(out);
-        }
+    let kind = kind_of(args, id)?;
+    match kind {
+        "pattern" | "ant" => {}
         "quickstart" => {
-            let q = l.get_quickstart(id.trim_start_matches("find:"))?;
-            return Ok(ToolOutput::json(
-                &serde_json::to_value(&q).unwrap_or_default(),
-            ));
+            let q = QuickstartGet::run(ctx(), IdIn { id: id.into() }, &Quiet).map_err(err)?;
+            return Ok(ToolOutput::json(&op::to_value(&q)));
         }
         k => return Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
-
-    let r = l.get(id)?;
-    let n = int(args, "phases")?.unwrap_or(1).clamp(1, 16) as u64;
+    let n = if kind == "pattern" {
+        int(args, "phases")?.unwrap_or(1).clamp(1, 16) as u64
+    } else {
+        1
+    };
+    let a = GetIn {
+        id: id.into(),
+        kind: Some(kind.into()),
+        phases: Some(n),
+        bare: false,
+    };
+    let v = LibraryGet::run(ctx(), a, &Quiet).map_err(err)?;
+    if let Some(r) = &v.ant {
+        let mut out = ToolOutput::text(r.line());
+        out.content.push(
+            json!({"type": "text", "text": serde_json::to_string_pretty(r).unwrap_or_default()}),
+        );
+        return Ok(out);
+    }
+    let Some(r) = &v.pattern else {
+        return Err(format!("no record '{id}'"));
+    };
     let mut text = format!("{} ({})\n", r.label(), r.id);
     text.push_str(&format!(
         "verified in: {}\n",
@@ -392,22 +377,20 @@ fn get(args: &Value) -> Res {
     if let Some(x) = &r.range {
         text.push_str(&format!("works in: {}\n", x.describe()));
     }
-    let sightings = l.sightings(&r.id)?;
-    if !sightings.is_empty() {
+    if !v.sightings.is_empty() {
         text.push_str(&format!(
             "sightings: {}\n",
-            sightings
+            v.sightings
                 .iter()
                 .map(|s| format!("{} x{} (job {})", s.rule, s.count, s.job))
                 .collect::<Vec<_>>()
                 .join(", ")
         ));
     }
-    let moves = library::orientation_moves(&r)?;
-    if !moves.is_empty() {
+    if !v.orientations.is_empty() {
         text.push_str(&format!(
             "moves per period by paste orientation: {}\n",
-            moves
+            v.orientations
                 .iter()
                 .enumerate()
                 .map(|(k, v)| format!("{k}: ({}, {})", v[0], v[1]))
@@ -415,14 +398,8 @@ fn get(args: &Value) -> Res {
                 .join(", ")
         ));
     }
-    for t in 0..n.min(r.period.max(1)) {
-        match library::ascii(&r, t)? {
-            Some(s) => text.push_str(&format!("phase {t}:\n{s}")),
-            None => text.push_str(&format!(
-                "phase {t}: {}\n",
-                r.phases[(t % r.period.max(1)) as usize]
-            )),
-        }
+    for p in v.phases.iter().take(n.min(r.period.max(1)) as usize) {
+        text.push_str(&p.text());
     }
     let mut out = ToolOutput::text(text);
     if args.get("record").and_then(|v| v.as_bool()).unwrap_or(true) {
@@ -676,32 +653,33 @@ fn update(args: &Value) -> Res {
         "pattern" => update_pattern(&rest),
         "ant" => {
             check_unknown(&rest, &["id", "name", "notes", "rating", "state"])?;
-            let r = lib().update_ant(
-                &id,
-                &library::AntUpdate {
-                    name: string(&rest, "name")?.map(String::from),
-                    notes: string(&rest, "notes")?.map(String::from),
-                    rating: rest
-                        .get("rating")
-                        .and_then(|v| v.as_f64())
-                        .map(|x| x.round() as i64),
-                    state: string(&rest, "state")?.map(String::from),
-                },
-            )?;
-            Ok(ToolOutput::json(&ant_json(&r)))
+            let a = UpdateIn {
+                id,
+                kind: Some("ant".into()),
+                name: text(&rest, "name")?,
+                notes: text(&rest, "notes")?,
+                rating: rest.get("rating").and_then(|v| v.as_f64()),
+                state: text(&rest, "state")?,
+                ..Default::default()
+            };
+            let r = LibraryUpdate::run(ctx(), a, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(
+                &r.ant.as_ref().map(ant_json).unwrap_or_default(),
+            ))
         }
         "quickstart" => {
             check_unknown(&rest, &["id", "decision"])?;
-            let st = match string(&rest, "decision")? {
-                Some("approve") => QsStatus::Approved,
-                Some("reject") => QsStatus::Rejected,
+            let status = match string(&rest, "decision")? {
+                Some("approve") => "approved",
+                Some("reject") => "rejected",
                 _ => return Err("give `decision`: approve or reject".into()),
             };
-            let qid = id.trim_start_matches("find:");
-            lib().set_quickstart_status(qid, st)?;
-            Ok(ToolOutput::json(
-                &json!({"id": format!("find:{qid}"), "status": st}),
-            ))
+            let a = StatusIn {
+                id,
+                status: status.into(),
+            };
+            let r = QuickstartUpdate::run(ctx(), a, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(&json!({"id": r.id, "status": r.status})))
         }
         k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
@@ -724,27 +702,30 @@ fn update_pattern(args: &Value) -> Res {
         ],
     )?;
     let id = string(args, "id")?.ok_or("give the pattern `id`")?;
-    let u = Update {
-        name: string(args, "name")?.map(String::from),
+    let a = UpdateIn {
+        id: id.into(),
+        kind: Some("pattern".into()),
+        name: text(args, "name")?,
         tags: args
             .get("tags")
             .map(|v| strings(Some(v), "tags"))
             .transpose()?,
         add_tags: strings(args.get("add_tags"), "add_tags")?,
         remove_tags: strings(args.get("remove_tags"), "remove_tags")?,
-        notes: string(args, "notes")?.map(String::from),
-        append_notes: string(args, "append_notes")?.map(String::from),
-        rating: int(args, "rating")?.map(|x| x.clamp(0, 255) as u8),
-        state: string(args, "state")?
-            .map(CurationState::parse)
-            .transpose()?,
-        discovered_by: string(args, "discovered_by")?
-            .map(DiscoveredBy::parse)
-            .transpose()?,
+        notes: text(args, "notes")?,
+        append_notes: text(args, "append_notes")?,
+        rating: int(args, "rating")?.map(|x| x.clamp(0, 255) as f64),
+        state: text(args, "state")?,
+        discovered_by: text(args, "discovered_by")?,
     };
-    let r = lib().update(id, &u)?;
-    Ok(ToolOutput::json(&summary(&r)))
+    let r = LibraryUpdate::run(ctx(), a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(
+        &r.pattern.as_ref().map(summary).unwrap_or_default(),
+    ))
 }
+
+/// Where a promoted entry shows up.
+const IN_THE_APP: &str = "It appears in the JETCARP app's Quick Start under \"My finds\" (the app refreshes when you return to the Quick Start).";
 
 fn promote(args: &Value) -> Res {
     check_unknown(args, &["id", "folder", "run", "title", "description"])?;
@@ -757,65 +738,60 @@ fn promote(args: &Value) -> Res {
         }
         let run = string(args, "run")?
             .ok_or("give `run`: the rule text, \"#index\", or \"n=number\" of a row in the folder's manifest")?;
-        let p = jetcarp_script::results::promote_folder_run(
-            std::path::Path::new(folder),
-            run,
-            &lib(),
-            string(args, "title")?,
-            string(args, "description")?,
-        )?;
+        let a = AddIn {
+            folder: Some(folder.into()),
+            run: Some(run.into()),
+            title: text(args, "title")?,
+            note: text(args, "description")?,
+            ..Default::default()
+        };
+        let p = QuickstartAdd::run(ctx(), a, &Quiet).map_err(err)?;
         return Ok(ToolOutput::json(&json!({
             "promoted": p.title,
             "rule": p.rule,
-            "run": p.index,
-            "entry": format!("find:{}", p.id),
-            "note": "It appears in the JETCARP app's Quick Start under \"My finds\" (the app refreshes when you return to the Quick Start).",
+            "run": p.run,
+            "entry": p.entry,
+            "note": IN_THE_APP,
         })));
     }
     let id = string(args, "id")?
         .ok_or("give the pattern `id` (or `folder` and `run` for a sweep run)")?;
-    if id.starts_with("ant-") {
-        return promote_ant(args, id);
-    }
-    let (sc, entry) = library::promote::promote(
-        &lib(),
-        id,
-        string(args, "title")?,
-        string(args, "description")?,
-    )?;
+    let ant = id.starts_with("ant-");
+    let a = AddIn {
+        pattern: (!ant).then(|| id.to_string()),
+        ant: ant.then(|| id.to_string()),
+        title: text(args, "title")?,
+        description: text(args, "description")?,
+        ..Default::default()
+    };
+    let p = QuickstartAdd::run(ctx(), a, &Quiet).map_err(err)?;
     Ok(ToolOutput::json(&json!({
-        "promoted": sc.name,
-        "description": sc.description,
-        "entry": format!("find:{entry}"),
-        "note": "It appears in the JETCARP app's Quick Start under \"My finds\" (the app refreshes when you return to the Quick Start).",
+        "promoted": p.title,
+        "description": p.description,
+        "entry": p.entry,
+        "note": if ant {
+            "It appears in the JETCARP app's Quick Start under \"My finds\": the run from step 0."
+        } else {
+            IN_THE_APP
+        },
     })))
 }
 
 fn quickstart_list(args: &Value) -> Res {
     check_unknown(args, &["status", "limit"])?;
-    let st = match string(args, "status")? {
-        Some(s) => vec![QsStatus::parse(s)?],
-        None => vec![],
-    };
+    let status = text(args, "status")?;
     let limit = int(args, "limit")?.unwrap_or(50).clamp(1, 200) as usize;
-    let l = lib();
-    let all = l.quickstart(&st)?;
-    let shown: Vec<Value> = all
+    let out = QuickstartList::run(ctx(), ListIn { status }, &Quiet).map_err(err)?;
+    let shown: Vec<Value> = out
+        .entries
         .iter()
         .rev()
         .take(limit)
-        .map(|q| {
-            json!({
-                "id": format!("find:{}", q.id), "title": q.title, "description": q.description,
-                "grid": q.grid, "rule": q.rule, "rule_family": q.rule_family,
-                "behaviour": q.behaviour, "source_kind": q.source_kind, "source_id": q.source_id,
-                "score": q.score, "status": q.status, "created": q.created,
-            })
-        })
+        .map(op::to_value)
         .collect();
     Ok(ToolOutput::json(&json!({
-        "catalog": l.path().display().to_string(),
-        "entries": all.len(),
+        "catalog": out.catalog,
+        "entries": out.entries.len(),
         "shown": shown.len(),
         "newest_first": shown,
     })))
