@@ -2,7 +2,9 @@
 //! rhombs).
 //!
 //! Written in JETCARP from the geometry of Robinson's half-tiles (see Grünbaum and Shephard, *Tilings
-//! and Patterns*, §10.3). Each tile is two mirror-image golden triangles. The triangles deflate
+//! and Patterns*, §10.3; de Bruijn 1981). The P3 deflation and seed were rewritten clean-room in
+//! November 2026 from the mathematics alone, after an audit found the earlier version followed
+//! another program's unlicensed code. Each tile is two mirror-image golden triangles. The triangles deflate
 //! exactly; after the last deflation each triangle is joined to its mirror partner across their
 //! shared edge, and triangles whose partner fell outside the patch are dropped.
 //!
@@ -34,46 +36,130 @@ fn deg(d: f64) -> P {
     [c, s]
 }
 
-/// P3: legs are rhomb edges, partners meet across the base. The acute triangle is half a thin
-/// rhomb, the obtuse one half a thick rhomb.
+/// Starting patch for the Penrose rhomb (P3) tiling: a "sun" of five thick rhombs whose 72°
+/// corners all meet at the origin, cut into ten obtuse Robinson triangles (kind 1).
+///
+/// `scale_s` is the rhomb edge length, i.e. the triangles' leg length. `deg(d)` returns the unit
+/// vector at `d` degrees; only multiples of 36° are asked for, so any rotation the caller puts
+/// inside `deg` turns the whole patch rigidly.
+///
+/// Rhomb j (j = 0..4) has its long diagonal on the ray at 72·j degrees, from the origin to its far
+/// 72° corner at distance φ·scale_s. Its two 108° corners lie at distance scale_s, at 72·j − 36 and
+/// 72·j + 36 degrees. Each corner point is shared with the neighbouring rhomb, so it is computed
+/// once and reused: neighbours then agree on it to the last bit, and [`deflate_p3`] keeps that
+/// property for every point it creates.
+///
+/// The rhomb is cut along its long diagonal; each half is an obtuse triangle with apex a = a 108°
+/// corner, b = the far tip and c = the origin. In the vertex convention of [`deflate_p3`] that
+/// makes all five spokes at the origin "split" edges (a–c) of the triangles on both sides of them,
+/// so the edge markings agree all the way round. This centre is a legal Penrose vertex (one of de
+/// Bruijn's eight P3 vertex types): four deflations give it back exactly.
+///
+/// Nesting: one deflation turns this sun into a smaller sun with the same five axes but with the
+/// "whole" edges (a–b) at the centre; a second deflation turns that into a copy of this seed
+/// rotated by 36°. So two deflations of the seed at size φ²·s contain, triangle for triangle, the
+/// seed at size s turned by 36°, and [`generate`] turns the seed by 36° on alternate levels so that
+/// each level's patch contains the previous one. No five-fold seed can nest without that turn.
+///
+/// Written for JETCARP from the geometry of Robinson triangles (Grünbaum and Shephard, *Tilings
+/// and Patterns*, §10.3; de Bruijn 1981), without reference to other Penrose tiling code.
+fn p3_seed(scale_s: f64, deg: impl Fn(f64) -> P) -> Vec<Tri> {
+    let origin: P = [0.0, 0.0];
+    let corner: Vec<P> = (0..5)
+        .map(|j| scale(deg(36.0 + 72.0 * j as f64), scale_s))
+        .collect();
+    let mut out = Vec::with_capacity(10);
+    for j in 0..5 {
+        let tip = scale(deg(72.0 * j as f64), scale_s * PHI);
+        for a in [corner[(j + 4) % 5], corner[j]] {
+            out.push(Tri {
+                kind: 1,
+                a,
+                b: tip,
+                c: origin,
+            });
+        }
+    }
+    out
+}
+
+/// One Robinson-triangle deflation step for the Penrose rhomb (P3) tiling.
+///
+/// Each triangle is replaced by smaller Robinson triangles whose sides are 1/φ times the parent's,
+/// so the patch keeps its overall size and the number of tiles grows by about φ² per step.
+///
+/// Vertex order carries the handedness. In a triangle (a; b, c) the two legs a–b and a–c are rhomb
+/// edges of the same length L, but they are different kinds of edge, and the substitution treats
+/// them differently:
+///   * a–b, the "whole" edge, becomes the long side of a single child obtuse triangle (so a child
+///     thick rhomb straddles it);
+///   * a–c, the "split" edge, gets a new point at distance L/φ from one of its ends: from a in an
+///     acute triangle, from c in an obtuse one.
+///
+/// The other half of a triangle's rhomb shares b and c in the same roles (so the two halves have
+/// opposite orientation), and the two halves deflate as mirror images of each other. The edge
+/// kinds and their directions are Penrose's arrow markings on the rhombs. Each child is listed
+/// with its own a, b, c chosen so that tiles meeting along an edge again agree on the kind and
+/// direction of that edge, which is what makes the result a Penrose tiling and not just some rhomb
+/// tiling.
+///
+/// Acute triangle (kind 0, 36° at a, legs L, base L/φ) becomes 2 triangles. Let d be the point on
+/// a–c at distance L/φ from a. Then:
+///   * acute (b; c, d): its apex is the old base corner b and its base d–c is the short end of the
+///     split edge;
+///   * obtuse (d; a, b): its long side is the whole edge a–b.
+///
+/// Obtuse triangle (kind 1, 108° at a, legs L, base φL) becomes 3 triangles. Let e be the point on
+/// the base at distance L from c (L/φ from b), and d the point on a–c at distance L/φ from c. Then:
+///   * obtuse (e; a, b): its long side is the whole edge a–b;
+///   * obtuse (d; c, e): its long side c–e lies on the parent's base, so with its mirror partner it
+///     makes a complete small thick rhomb filling the parent rhomb's 72° corner at c;
+///   * acute (e; a, d): its base a–d is the short end of the split edge.
+///
+/// (Areas: acute = acute + obtuse and obtuse = acute + 2 obtuse at 1/φ scale, which is why
+/// thick:thin tends to φ.)
+///
+/// Every new point lies on an edge or base and is computed from that edge's ends in the same order
+/// by both triangles that share it, so shared points come out bit-for-bit identical as long as the
+/// input's shared points are.
 fn deflate_p3(ts: &[Tri]) -> Vec<Tri> {
+    let t = 1.0 / PHI;
     let mut out = Vec::with_capacity(ts.len() * 3);
-    for t in ts {
-        let (a, b, c) = (t.a, t.b, t.c);
-        if t.kind == 0 {
-            let p = lerp(a, b, 1.0 / PHI);
+    for &Tri { kind, a, b, c } in ts {
+        if kind == 0 {
+            let d = lerp(a, c, t);
             out.push(Tri {
                 kind: 0,
-                a: c,
-                b: p,
-                c: b,
+                a: b,
+                b: c,
+                c: d,
             });
             out.push(Tri {
                 kind: 1,
-                a: p,
-                b: c,
-                c: a,
+                a: d,
+                b: a,
+                c: b,
             });
         } else {
-            let q = lerp(b, a, 1.0 / PHI);
-            let r = lerp(b, c, 1.0 / PHI);
+            let e = lerp(c, b, t);
+            let d = lerp(c, a, t);
             out.push(Tri {
                 kind: 1,
-                a: r,
-                b: c,
-                c: a,
-            });
-            out.push(Tri {
-                kind: 1,
-                a: q,
-                b: r,
+                a: e,
+                b: a,
                 c: b,
             });
             out.push(Tri {
+                kind: 1,
+                a: d,
+                b: c,
+                c: e,
+            });
+            out.push(Tri {
                 kind: 0,
-                a: r,
-                b: q,
-                c: a,
+                a: e,
+                b: a,
+                c: d,
             });
         }
     }
@@ -183,21 +269,9 @@ pub fn generate(kind: Penrose, k: u32) -> Vec<(u16, Affine)> {
     let mut ts: Vec<Tri> = Vec::new();
     match kind {
         Penrose::P3 => {
-            // Ten acute triangles with apexes at the centre: half thin rhombs whose partners lie
-            // outside. Alternate the mirror image so neighbours meet as in a Penrose tiling.
-            for i in 0..10 {
-                let mut b = scale(deg((2 * i - 1) as f64 * 18.0), s);
-                let mut c = scale(deg((2 * i + 1) as f64 * 18.0), s);
-                if i % 2 == 0 {
-                    std::mem::swap(&mut b, &mut c);
-                }
-                ts.push(Tri {
-                    kind: 0,
-                    a: o,
-                    b,
-                    c,
-                });
-            }
+            // A sun of five thick rhombs (see [`p3_seed`]). Exact coordinates draw P3 through a
+            // −18° turn ([`exact_frame`]), so the float seed sits at −18° + 36°·k to match.
+            ts = p3_seed(s, |d| deg(d - 18.0));
         }
         Penrose::P2 => {
             // Five kites with their heads at the centre (the "sun" vertex), long edges φ^depth.
@@ -293,17 +367,18 @@ fn xdeflate(kind: Penrose, t: &XTri, out: &mut Vec<XTri>) {
     let (a, b, c) = (t.a, t.b, t.c);
     let tri = |kind, a, b, c| XTri { kind, a, b, c };
     match (kind, t.kind) {
+        // [`deflate_p3`], exactly: division points measured from the same ends.
         (Penrose::P3, 0) => {
-            let p = xlerp(a, b);
-            out.push(tri(0, c, p, b));
-            out.push(tri(1, p, c, a));
+            let d = xlerp(a, c);
+            out.push(tri(0, b, c, d));
+            out.push(tri(1, d, a, b));
         }
         (Penrose::P3, _) => {
-            let q = xlerp(b, a);
-            let r = xlerp(b, c);
-            out.push(tri(1, r, c, a));
-            out.push(tri(1, q, r, b));
-            out.push(tri(0, r, q, a));
+            let e = xlerp(c, b);
+            let d = xlerp(c, a);
+            out.push(tri(1, e, a, b));
+            out.push(tri(1, d, c, e));
+            out.push(tri(0, e, a, d));
         }
         (Penrose::P2, 0) => {
             let d = xlerp(a, b);
@@ -421,17 +496,17 @@ fn generate_kept(
     let mut seeds = Vec::new();
     match kind {
         Penrose::P3 => {
-            for i in 0..10i64 {
-                let (mut b, mut c) = (unit(i), unit(i + 1));
-                if i % 2 == 0 {
-                    std::mem::swap(&mut b, &mut c);
+            // [`p3_seed`], exactly: 108° corners at s·ζ^(2j+1), tips at φ·s·ζ^(2j).
+            for j in 0..5i64 {
+                let tip = Z10::mul(unit(2 * j), PHI_Z);
+                for corner in [unit(2 * j - 1), unit(2 * j + 1)] {
+                    seeds.push(XTri {
+                        kind: 1,
+                        a: corner,
+                        b: tip,
+                        c: o,
+                    });
                 }
-                seeds.push(XTri {
-                    kind: 0,
-                    a: o,
-                    b,
-                    c,
-                });
             }
         }
         Penrose::P2 => {

@@ -25,14 +25,14 @@ jaca:k3-blast3-loops	873a9bae6c6a697d gen 48
 jaca:oct-city	86cdf7710584d43e gen 48
 jaca:oct-crystal	b1b492dc7a8fa4c5 gen 48
 jaca:oct-rainbow	a686e23b02089953 gen 48
-jaca:penrose-crystal-falls	9f1d64ac71e2599c gen 48
+jaca:penrose-crystal-falls	5549e46da06cec02 gen 48
 jaca:penrose-kd-bands	a37dc6e189e3539c gen 48
 jaca:penrose-kd-lines	26a33495e278ca48 gen 48
 jaca:penrose-kd-rainbow	c3de91392e3949cd gen 48
-jaca:penrose-one-front	90304bbcac35e7a5 gen 48
-jaca:penrose-pink-bands	538d95fbfd9b8182 gen 48
-jaca:penrose-rainbow	d371d3770d174676 gen 48
-jaca:penrose-rainbow-vs-sparkle	d79bb2129ae69ea4 gen 48
+jaca:penrose-one-front	a6b657a82e66c875 gen 48
+jaca:penrose-pink-bands	4bc790b3bc840522 gen 48
+jaca:penrose-rainbow	e2a32bbcfd5a3a6e gen 48
+jaca:penrose-rainbow-vs-sparkle	028cf34594ca3a62 gen 48
 jaca:pyth-rainbow	49418685fed1de0e gen 48
 jaca:rhombitrihex-bubbles	18dd4ce25913c107 gen 48
 jaca:rhombitrihex-maze	9eab57042c7cb50a gen 48
@@ -83,7 +83,7 @@ life-not	bb1dab9604009182 gen 48
 life-or	1eeb5e2b45e2faa4 gen 48
 life-triangle	43a6541bae37afd6 gen 48
 penrose-kd-sandpile	66dc7ff8bf2f8eb9 gen 48
-penrose-rhomb-brain	452b92fa790f48be gen 48
+penrose-rhomb-brain	68c0534463b02c75 gen 48
 rule30-life-ants	4b804bed13787079 gen 48
 rule:Ant RL	d107e11526e88d2a gen 48
 rule:B0123478/S01234678	e1669af25e068cad gen 48
@@ -310,7 +310,7 @@ sandpile:ih81	a2570ea9ea0710b1 gen 48
 sandpile:ih90	b25aa7ecab8a5e59 gen 48
 sandpile:lizard	e74d50ecffdac8b1 gen 48
 sandpile:oct	3c49132ed1dc1fdd gen 48
-sandpile:penrose-rhomb	5ddb6756e4a98c81 gen 48
+sandpile:penrose-rhomb	cc05ca2a04b0d5b1 gen 48
 sandpile:pyth	0ee80f932e6966fd gen 48
 sandpile:quad	e97ac8b8e8b67f1d gen 48
 sandpile:rhombitrihex	a80d646e1844e331 gen 48
@@ -348,7 +348,7 @@ tiling:ih90	2003c6cdcade1d54 gen 48
 tiling:lizard	733b64ae56620b4e gen 48
 tiling:oct	83f5f863806b56e2 gen 48
 tiling:penrose-kd	b6c2174fecb203f0 gen 48
-tiling:penrose-rhomb	7dcedd9a6e6f4a1e gen 48
+tiling:penrose-rhomb	441e24120f061602 gen 48
 tiling:pyth	e8ab103d9a66c0a7 gen 48
 tiling:quad	f35a7dc61739023c gen 48
 tiling:rhombitrihex	019a47fe781f18da gen 48

@@ -93,14 +93,14 @@ ih93 c26744e8b92112e8 eff835f56f785630 920
 lenia:cairo f0b3fd4acda05d4c
 lenia:hex cf70533e543a0cbf
 lenia:oct 207d9d5bab31a6aa
-lenia:penrose-rhomb 7b1a069184a28068
+lenia:penrose-rhomb aca34db9b58ccb62
 lenia:snubhex ce5e7afc95a869a9
 lenia:spectre 305efa87af835702
 lenia:triangle 9a5b76f945b08548
 lizard 675a2e21bf96aa0d 9136f5d579625425 912
 oct d381a54d610d66df 2d9997936745115d 882
 penrose-kd 542ab259dc009529 6c9cb89158792d9b 500
-penrose-rhomb 147928e0a2d888a9 39dbb7f0c5ab04c2 500
+penrose-rhomb ed9e6452d1142d70 8918233d7d21651c 500
 periodic:elongtri d0c8c60f7c702865 8495e355381da1bc 936
 periodic:k1-001 e261f33adca6c62e dfe3ef111168e9ed 896
 periodic:k1-002 d381a54d610d66df 2d9997936745115d 882
