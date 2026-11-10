@@ -113,8 +113,8 @@ claims more than its evidence: novelty only as set out in
 - Tests live beside the code (`#[cfg(test)]`) and in each crate's `tests/` folder. A new rule, tiling
   or search should come with tests, including one showing that its result does not depend on the
   thread count.
-- Most files follow rustfmt's default style; keep formatting changes out of code you are not otherwise
-  changing.
+- The code follows rustfmt's default style: run `cargo fmt --all` before committing. CI checks it with
+  `cargo fmt --all -- --check`.
 - Commit messages start with a short summary, often prefixed by the area (`cli:`, `jobs:`, `Docs:`),
   followed by a paragraph on what changed and why.
 
