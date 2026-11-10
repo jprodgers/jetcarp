@@ -24,8 +24,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const STAGE1_SCRIPT: &str = include_str!("../../../scripts/stage1-all.rhai");
-const STAGE2_SCRIPT: &str = include_str!("../../../scripts/stage2-hunt.rhai");
+const STAGE1_SCRIPT: &str = include_str!("../../jetcarp-script/scripts/stage1-all.rhai");
+const STAGE2_SCRIPT: &str = include_str!("../../jetcarp-script/scripts/stage2-hunt.rhai");
 const SITE_INDEX: &str = include_str!("../../../tools/site-example/index.html");
 
 #[derive(clap::Args)]

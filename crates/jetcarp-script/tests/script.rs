@@ -309,7 +309,7 @@ fn script_five_matches_the_json_scene() {
     let root = temp_root("five");
     let mut o = opts(&root);
     o.params.insert("ant_gens".into(), "300".into());
-    let s = ok(include_str!("../../../scripts/script-five.rhai"), o);
+    let s = ok(include_str!("../scripts/script-five.rhai"), o);
     // "stage k: name: G generations (why), now at N, P live"
     let stages: Vec<(u64, u64)> = s
         .log
@@ -543,7 +543,7 @@ fn scripts_catalog_and_promote_library_patterns() {
     o.params.insert("size".into(), "48".into());
     o.params.insert("rule".into(), "B3/S23".into());
     o.params.insert("promote".into(), "false".into());
-    let s = ok(include_str!("../../../scripts/catalog-hunt.rhai"), o);
+    let s = ok(include_str!("../scripts/catalog-hunt.rhai"), o);
     assert!(
         s.log.iter().any(|l| l.contains("new patterns")),
         "{:?}",

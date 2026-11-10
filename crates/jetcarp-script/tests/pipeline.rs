@@ -1,4 +1,4 @@
-//! The catalog pipeline's scripts: `scripts/stage1-all.rhai` and `scripts/stage2-hunt.rhai` in
+//! The catalog pipeline's scripts: `crates/jetcarp-script/scripts/stage1-all.rhai` and `stage2-hunt.rhai` in
 //! test mode, labelled jobs found again (a rerun starts nothing new), censuses as jobs, and rule
 //! neighbours.
 
@@ -40,7 +40,7 @@ fn ok(src: &str, o: RunOptions) -> Summary {
 fn script(name: &str) -> String {
     std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../scripts")
+            .join("scripts")
             .join(name),
     )
     .unwrap()

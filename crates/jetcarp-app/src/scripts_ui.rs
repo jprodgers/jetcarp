@@ -17,33 +17,8 @@ use std::time::Instant;
 /// This window's key in `crate::popout` and the settings file.
 pub const KEY: &str = "scripts";
 
-/// Example scripts (the files in `scripts/`).
-pub const EXAMPLES: &[(&str, &str)] = &[
-    (
-        "hexw3-atlas.rhai",
-        include_str!("../../../scripts/hexw3-atlas.rhai"),
-    ),
-    (
-        "hexw-all.rhai",
-        include_str!("../../../scripts/hexw-all.rhai"),
-    ),
-    (
-        "wolfram-all.rhai",
-        include_str!("../../../scripts/wolfram-all.rhai"),
-    ),
-    (
-        "soup-hunt.rhai",
-        include_str!("../../../scripts/soup-hunt.rhai"),
-    ),
-    (
-        "catalog-hunt.rhai",
-        include_str!("../../../scripts/catalog-hunt.rhai"),
-    ),
-    (
-        "script-five.rhai",
-        include_str!("../../../scripts/script-five.rhai"),
-    ),
-];
+/// Example scripts (shipped in `jetcarp-script`).
+pub const EXAMPLES: &[(&str, &str)] = jetcarp_script::EXAMPLES;
 
 const NEW_SCRIPT: &str = "// A JETCARP script (Rhai). Ctrl+Enter runs it; the Function reference tab lists what you can call.\n\
 let w = world(#{ tiling: \"hex\", size: \"screen\", boundary: \"dead\" });\n\
