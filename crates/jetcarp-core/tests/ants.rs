@@ -4,11 +4,12 @@
 //! catalog jobs.
 
 use jetcarp_core::ants::job::{
-    AntOptions, AntSpec, Soups, parse_rule, rules_for, run_job, run_one, start, status,
+    AntOptions, AntSpec, Soups, parse_rule, rules_for, run_one, start, status,
 };
 use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};
+use jetcarp_core::jobs::ants::run as run_job;
 use jetcarp_core::library::{AntQuery, AntRow, Library, tiling_list};
 use jetcarp_core::topology::{Boundary, TilingSpec};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
@@ -376,7 +377,7 @@ fn search_is_independent_of_threads_and_batches() {
     let pa = run_job(
         &a,
         ja,
-        &AntOptions {
+        AntOptions {
             threads: 1,
             batch: 7,
             ..Default::default()
@@ -385,7 +386,7 @@ fn search_is_independent_of_threads_and_batches() {
     .unwrap();
     let b = temp_lib("threads-all");
     let jb = start(&b, &small_spec()).unwrap();
-    let pb = run_job(&b, jb, &AntOptions::default()).unwrap();
+    let pb = run_job(&b, jb, AntOptions::default()).unwrap();
     assert_eq!(pa.status, "done");
     assert_eq!(pa.runs_done, pa.runs_total);
     assert_eq!(pa.by_outcome, pb.by_outcome);
@@ -410,7 +411,7 @@ fn search_resumed_equals_uninterrupted() {
     });
     let a = temp_lib("straight");
     let ja = start(&a, &spec).unwrap();
-    let pa = run_job(&a, ja, &AntOptions::default()).unwrap();
+    let pa = run_job(&a, ja, AntOptions::default()).unwrap();
 
     let b = temp_lib("resumed");
     let jb = start(&b, &spec).unwrap();
@@ -418,7 +419,7 @@ fn search_resumed_equals_uninterrupted() {
     let p1 = run_job(
         &b,
         jb,
-        &AntOptions {
+        AntOptions {
             limit: Some(half),
             batch: 5,
             ..Default::default()
@@ -431,7 +432,7 @@ fn search_resumed_equals_uninterrupted() {
     let b2 = Library::open(b.path());
     let (_, st) = status(&b2, jb).unwrap();
     assert_eq!(st.runs_done, p1.runs_done);
-    let p2 = run_job(&b2, jb, &AntOptions::default()).unwrap();
+    let p2 = run_job(&b2, jb, AntOptions::default()).unwrap();
     assert_eq!(p2.status, "done");
     assert_eq!(p2.by_outcome, pa.by_outcome);
     assert_eq!(p2.groups, pa.groups);

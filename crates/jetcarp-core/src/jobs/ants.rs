@@ -1,13 +1,15 @@
-//! Ant searches (`jobs.kind` `ants`): `crate::ants::job`'s loop wrapped as it is. Results and
-//! stored rows are exactly those of `ants::job::run_job`.
+//! Ant searches (`jobs.kind` `ants`): `crate::ants::job`, run in steps of one batch of runs
+//! each. The runs, their merge, and the stored rows are those of the search's loop before it ran
+//! in steps (and its checkpoints read as they were).
 
 use super::{
-    Budget, RunCx, RunOptions, Runner, Strategy, StrategyKind, base_summary, eta, short_list, typed,
+    Budget, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta,
+    short_list, status_name, typed,
 };
 use crate::ants::job::{self as job, AntOptions, AntProgress, AntSpec, ProgressHook};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{Library, tiling_display_name};
+use crate::library::{JobStatus, Library, tiling_display_name};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
@@ -103,54 +105,70 @@ impl StrategyKind for AntsKind {
     }
 }
 
-/// An ant search run: `ants::job::run_job` with the runner's threads, stop flag, and item
-/// budget (as its session `limit`), and the caller's batch size and hooks.
-#[derive(Clone, Default)]
+/// An ant search run in steps ([`job::AntSearch`]): one batch of runs per step on the runner's
+/// threads, stopping exactly at the item budget (runs in this session), with the caller's
+/// batch size and hooks.
+#[derive(Default)]
 pub struct AntsRun {
     /// Runs per batch (0: adapt).
     pub batch: u64,
+    /// Called with the progress after every write.
     pub on_progress: Option<ProgressHook>,
     /// The caller's live progress, kept up to date too.
     pub live: Option<Arc<Mutex<AntProgress>>>,
+    search: Option<job::AntSearch>,
 }
 
+const NOT_OPEN: &str = "the ant search was not restored";
+
 impl Strategy for AntsRun {
-    fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
-        let live = self
-            .live
-            .clone()
-            .unwrap_or_else(|| Arc::new(Mutex::new(AntProgress::default())));
-        {
-            let mut l = live.lock().unwrap();
-            if let Ok((_, p)) = job::status(cx.lib, cx.job) {
-                *l = p;
-            }
-            l.job = cx.job;
-            l.status = "running".into();
+    fn restore(&mut self, cx: &RunCx<'_>, checkpoint: Option<&[u8]>) -> Result<(), String> {
+        if self.on_progress.is_some() || self.live.is_some() {
+            let (hook, live) = (self.on_progress.clone(), self.live.clone());
+            cx.live.observe(move |v| {
+                let p: AntProgress = typed(v);
+                if let Some(l) = &live {
+                    *l.lock().unwrap() = p.clone();
+                }
+                if let Some(h) = &hook {
+                    h(&p);
+                }
+            });
         }
-        let l2 = live.clone();
-        cx.live
-            .follow(move || serde_json::to_value(&*l2.lock().unwrap()).unwrap_or_default());
-        let opts = AntOptions {
-            threads: cx.threads,
-            stop: cx.stop.clone(),
-            limit: cx.items,
-            live: Some(live),
-            on_progress: self.on_progress.clone(),
-            batch: self.batch,
-        };
-        job::run_job(cx.lib, cx.job, &opts)
-            .and_then(|p| serde_json::to_value(p).map_err(|e| e.to_string()))
+        self.search = Some(job::AntSearch::open(cx, checkpoint, self.batch)?);
+        Ok(())
+    }
+    fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<Step, String> {
+        let s = self.search.as_mut().ok_or(NOT_OPEN)?;
+        Ok(if s.step(cx, sink)? {
+            Step::Done
+        } else {
+            Step::More
+        })
+    }
+    fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {
+        self.search.as_ref().map(|s| s.checkpoint()).transpose()
+    }
+    fn progress(&self, status: JobStatus) -> Value {
+        match &self.search {
+            Some(s) => serde_json::to_value(s.progress(status_name(status))).unwrap_or_default(),
+            None => Value::Null,
+        }
+    }
+    fn items(&self) -> u64 {
+        self.search.as_ref().map_or(0, |s| s.runs_run())
     }
 }
 
 /// Run (or resume) an ant search here, on this thread, under the runner (its lease and
-/// heartbeat): `ants::job::run_job` with these options, as before.
+/// heartbeat), with these options: its threads, stop flag, session limit (the item budget),
+/// batch size, and hooks.
 pub fn run(lib: &Library, job: i64, opts: AntOptions) -> Result<AntProgress, String> {
     let mut s = AntsRun {
         batch: opts.batch,
         on_progress: opts.on_progress.clone(),
         live: opts.live.clone(),
+        search: None,
     };
     let o = RunOptions {
         threads: opts.threads,

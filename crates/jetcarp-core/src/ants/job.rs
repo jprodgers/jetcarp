@@ -14,11 +14,14 @@
 //! A search stops at the next batch when its stop flag is set, when another process marks the
 //! job `paused` ([`request_stop`]), or when a session limit is reached.
 //!
-//! The job runner (`crate::jobs::ants`) runs [`run_job`] as it is, under its lease.
+//! The job runner (`crate::jobs::ants`) runs a search in steps, one batch each
+//! ([`AntSearch`]), under its lease; it writes each batch's rows with the progress and
+//! checkpoint.
 
 use super::plane::Lattice;
 use super::run::{Limits, Outcome, Start, run};
 use super::search::{Strings, Tables, strings, tables};
+use crate::jobs::{RunCx, Sink};
 use crate::library::{
     AntRow, JobStatus, Library, ant_id, ant_score, now_utc, tiling_display_name, tiling_key,
 };
@@ -28,7 +31,7 @@ use crate::turmite::Mite;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -350,7 +353,7 @@ pub struct AntOptions {
 
 pub const KIND: &str = "ants";
 
-/// Create a search job (status `paused` until [`run_job`] starts it). Returns the job id.
+/// Create a search job (status `paused` until a runner starts it). Returns the job id.
 pub fn start(lib: &Library, spec: &AntSpec) -> Result<i64, String> {
     spec.check()?;
     // Fail early on bad rules or tilings.
@@ -407,132 +410,173 @@ struct Group {
     first: u64,
 }
 
-/// Run (or resume) a search job until it is done or stopped. Returns its final progress.
-pub fn run_job(lib: &Library, job: i64, opts: &AntOptions) -> Result<AntProgress, String> {
-    let (j, spec) = job_spec(lib, job)?;
-    if j.status == JobStatus::Done {
-        return status(lib, job).map(|x| x.1);
-    }
-    spec.check()?;
-    let mut cp: Checkpoint = match lib.job_checkpoint(job)? {
-        Some(b) => serde_json::from_slice(&b).map_err(|e| format!("job {job} checkpoint: {e}"))?,
-        None => Checkpoint::default(),
-    };
-    let fresh = cp.groups.is_empty();
-    if !fresh && cp.groups.len() != spec.tilings.len() {
-        return Err(format!("job {job}: the checkpoint does not match its spec"));
-    }
-    let soups = spec.soups();
-    let mut groups: Vec<Option<Group>> = Vec::new();
-    let mut first = 0u64;
-    for (ti, t) in spec.tilings.iter().enumerate() {
-        let made = Lattice::new(t).and_then(|lat| {
-            let rules = rules_for(&spec, &lat)?;
-            Ok((lat, rules))
-        });
-        if fresh {
-            cp.groups.push(GroupTotals {
-                tiling: tiling_display_name(t),
-                tiling_key: tiling_key(t),
-                ..Default::default()
+/// An ant search run in steps by the job runner (`crate::jobs::ants`): each step runs one
+/// batch of consecutive runs in parallel (about two seconds of work), merges it into the totals
+/// in run order, and puts its rows in the sink, which the runner writes with the progress and
+/// checkpoint in one transaction.
+pub struct AntSearch {
+    job: i64,
+    spec: AntSpec,
+    cp: Checkpoint,
+    groups: Vec<Option<Group>>,
+    /// Runs in all, and per rule.
+    total: u64,
+    soups: u64,
+    lim: Limits,
+    pool: rayon::ThreadPool,
+    threads: usize,
+    /// Runs per batch, and whether it adapts.
+    batch: u64,
+    adapt: bool,
+    session: Instant,
+    session_start: u64,
+    session_steps: u64,
+    base_elapsed: f64,
+}
+
+impl AntSearch {
+    /// Open the run's ant search (on its threads; `batch` runs per batch, 0: adapt) from its
+    /// checkpoint, if it has one (its format is unchanged since searches became jobs).
+    pub fn open(
+        cx: &RunCx<'_>,
+        checkpoint: Option<&[u8]>,
+        batch: u64,
+    ) -> Result<AntSearch, String> {
+        let (j, job) = (cx.row, cx.job);
+        if j.kind != KIND {
+            return Err(format!("job {job} is a {} job, not an ant search", j.kind));
+        }
+        let spec: AntSpec =
+            serde_json::from_value(j.spec.clone()).map_err(|e| format!("job {job} spec: {e}"))?;
+        spec.check()?;
+        let mut cp: Checkpoint = match checkpoint {
+            Some(b) => {
+                serde_json::from_slice(b).map_err(|e| format!("job {job} checkpoint: {e}"))?
+            }
+            None => Checkpoint::default(),
+        };
+        let fresh = cp.groups.is_empty();
+        if !fresh && cp.groups.len() != spec.tilings.len() {
+            return Err(format!("job {job}: the checkpoint does not match its spec"));
+        }
+        let soups = spec.soups();
+        let mut groups: Vec<Option<Group>> = Vec::new();
+        let mut first = 0u64;
+        for (ti, t) in spec.tilings.iter().enumerate() {
+            let made = Lattice::new(t).and_then(|lat| {
+                let rules = rules_for(&spec, &lat)?;
+                Ok((lat, rules))
             });
-        }
-        match made {
-            Ok((lat, rules)) => {
-                cp.groups[ti].rules = rules.len() as u64;
-                let n = rules.len() as u64 * soups;
-                groups.push(Some(Group { lat, rules, first }));
-                first += n;
+            if fresh {
+                cp.groups.push(GroupTotals {
+                    tiling: tiling_display_name(t),
+                    tiling_key: tiling_key(t),
+                    ..Default::default()
+                });
             }
-            Err(e) => {
-                cp.groups[ti].error = Some(e);
-                groups.push(None);
+            match made {
+                Ok((lat, rules)) => {
+                    cp.groups[ti].rules = rules.len() as u64;
+                    let n = rules.len() as u64 * soups;
+                    groups.push(Some(Group { lat, rules, first }));
+                    first += n;
+                }
+                Err(e) => {
+                    cp.groups[ti].error = Some(e);
+                    groups.push(None);
+                }
             }
         }
+        if groups.iter().all(|g| g.is_none()) {
+            let msg = cp
+                .groups
+                .iter()
+                .find_map(|g| g.error.clone())
+                .unwrap_or_default();
+            return Err(format!("ant search {job}: no tiling can run: {msg}"));
+        }
+        let threads = if cx.threads == 0 {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        } else {
+            cx.threads
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .map_err(|e| e.to_string())?;
+        Ok(AntSearch {
+            job,
+            lim: spec.limits(),
+            spec,
+            session_start: cp.next,
+            base_elapsed: cp.elapsed_s,
+            cp,
+            groups,
+            total: first,
+            soups,
+            pool,
+            threads,
+            batch: if batch > 0 {
+                batch
+            } else {
+                (threads as u64 * 4).max(16)
+            },
+            adapt: batch == 0,
+            session: Instant::now(),
+            session_steps: 0,
+        })
     }
-    let total = first;
-    if groups.iter().all(|g| g.is_none()) {
-        let msg = cp
-            .groups
-            .iter()
-            .find_map(|g| g.error.clone())
-            .unwrap_or_default();
-        lib.update_job(job, Some(JobStatus::Failed), None, None)?;
-        return Err(format!("ant search {job}: no tiling can run: {msg}"));
-    }
-    let threads = if opts.threads == 0 {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
-    } else {
-        opts.threads
-    };
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build()
-        .map_err(|e| e.to_string())?;
-    lib.update_job(job, Some(JobStatus::Running), None, None)?;
-    let lim = spec.limits();
-    let session = Instant::now();
-    let session_start = cp.next;
-    let base_elapsed = cp.elapsed_s;
-    let mut session_steps = 0u64;
-    let mut batch = if opts.batch > 0 {
-        opts.batch
-    } else {
-        (threads as u64 * 4).max(16)
-    };
-    let locate = |u: u64| -> Option<(usize, usize, u64)> {
-        for (gi, g) in groups.iter().enumerate() {
+
+    /// The group, rule, and soup of run `u`.
+    fn locate(&self, u: u64) -> Option<(usize, usize, u64)> {
+        for (gi, g) in self.groups.iter().enumerate() {
             let Some(g) = g else { continue };
-            let n = g.rules.len() as u64 * soups;
+            let n = g.rules.len() as u64 * self.soups;
             if u >= g.first && u < g.first + n {
                 let k = u - g.first;
-                return Some((gi, (k / soups) as usize, k % soups));
+                return Some((gi, (k / self.soups) as usize, k % self.soups));
             }
         }
         None
-    };
-    let status;
-    loop {
-        if cp.next >= total {
-            status = JobStatus::Done;
-            break;
+    }
+
+    /// One batch of runs (none past the end or the item budget), merged in run order, its
+    /// rows put in the sink. `Ok(true)`: the search has run its last run.
+    pub fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<bool, String> {
+        if self.cp.next >= self.total {
+            return Ok(true);
         }
-        if opts.stop.load(Ordering::SeqCst)
-            || opts.limit.is_some_and(|l| cp.next >= session_start + l)
-            || lib.job(job).map(|j| j.status) == Ok(JobStatus::Paused)
-        {
-            status = JobStatus::Paused;
-            break;
-        }
-        let a = cp.next;
-        let mut b = (a + batch).min(total);
-        if let Some(l) = opts.limit {
-            b = b.min(session_start + l);
+        let a = self.cp.next;
+        let mut b = (a + self.batch).min(self.total);
+        if let Some(l) = cx.items {
+            b = b.min(self.session_start + l);
         }
         let t0 = Instant::now();
-        let rows: Vec<(usize, AntRow)> = pool.install(|| {
+        let (spec, lim, groups) = (&self.spec, &self.lim, &self.groups);
+        let rows: Vec<(usize, AntRow)> = self.pool.install(|| {
             (a..b)
                 .collect::<Vec<u64>>()
                 .into_par_iter()
                 .with_max_len(1)
                 .filter_map(|u| {
-                    let (gi, ri, s) = locate(u)?;
+                    let (gi, ri, s) = self.locate(u)?;
                     let g = groups[gi].as_ref()?;
                     let m = &g.rules[ri];
                     let start = spec.start(s);
-                    let r = run(&g.lat, m, &start, &lim);
-                    Some((gi, row(m, &g.lat, &start, &lim, r)))
+                    let r = run(&g.lat, m, &start, lim);
+                    Some((gi, row(m, &g.lat, &start, lim, r)))
                 })
                 .collect()
         });
         // Merge in run order.
+        let cp = &mut self.cp;
         for (k, (gi, r)) in rows.iter().enumerate() {
             let g = &mut cp.groups[*gi];
             g.runs += 1;
             g.steps += r.steps;
-            session_steps += r.steps;
+            self.session_steps += r.steps;
             *g.by_outcome.entry(r.outcome.name().into()).or_default() += 1;
             if r.outcome == Outcome::Highway {
                 let o = r.onset.unwrap_or(0);
@@ -563,92 +607,54 @@ pub fn run_job(lib: &Library, job: i64, opts: &AntOptions) -> Result<AntProgress
             }
         }
         cp.next = b;
-        cp.elapsed_s = base_elapsed + session.elapsed().as_secs_f64();
-        let progress = make_progress(
-            job,
-            total,
-            &cp,
-            threads,
-            session,
-            session_start,
-            session_steps,
-            "running",
-        );
-        let pj = serde_json::to_value(&progress).unwrap_or_default();
-        let cj = serde_json::to_vec(&cp).unwrap_or_default();
-        let only: Vec<AntRow> = rows.into_iter().map(|x| x.1).collect();
-        if let Err(e) = lib.ants_flush(job, &only, Some(&pj), Some(&cj)) {
-            let _ = lib.update_job(job, Some(JobStatus::Failed), None, None);
-            return Err(e);
-        }
-        if let Some(live) = &opts.live {
-            *live.lock().unwrap() = progress.clone();
-        }
-        if let Some(f) = &opts.on_progress {
-            f(&progress);
-        }
-        if opts.batch == 0 {
+        cp.elapsed_s = self.base_elapsed + self.session.elapsed().as_secs_f64();
+        sink.ants.extend(rows.into_iter().map(|x| x.1));
+        if self.adapt {
             let per = t0.elapsed().as_secs_f64() / (b - a).max(1) as f64;
             let want = (2.0 / per.max(1e-6)) as u64;
-            batch = want.clamp(16, (batch * 4).max(16)).min(100_000);
+            self.batch = want.clamp(16, (self.batch * 4).max(16)).min(100_000);
         }
+        Ok(self.cp.next >= self.total)
     }
-    cp.elapsed_s = base_elapsed + session.elapsed().as_secs_f64();
-    let progress = make_progress(
-        job,
-        total,
-        &cp,
-        threads,
-        session,
-        session_start,
-        session_steps,
-        status_name(status),
-    );
-    let pj = serde_json::to_value(&progress).map_err(|e| e.to_string())?;
-    lib.update_job(job, Some(status), Some(&pj), None)?;
-    if let Some(live) = &opts.live {
-        *live.lock().unwrap() = progress.clone();
-    }
-    if let Some(f) = &opts.on_progress {
-        f(&progress);
-    }
-    Ok(progress)
-}
 
-#[allow(clippy::too_many_arguments)]
-fn make_progress(
-    job: i64,
-    total: u64,
-    cp: &Checkpoint,
-    threads: usize,
-    session: Instant,
-    session_start: u64,
-    session_steps: u64,
-    status: &str,
-) -> AntProgress {
-    let secs = session.elapsed().as_secs_f64().max(1e-9);
-    let mut p = AntProgress {
-        job,
-        status: status.into(),
-        runs_done: cp.next,
-        runs_total: total,
-        runs_per_s: (((cp.next - session_start) as f64 / secs) * 10.0).round() / 10.0,
-        steps_per_s: (session_steps as f64 / secs).round(),
-        elapsed_s: (cp.elapsed_s * 10.0).round() / 10.0,
-        newest: cp.newest.clone(),
-        groups: cp.groups.clone(),
-        threads,
-        updated: now_utc(),
-        ..Default::default()
-    };
-    for g in &cp.groups {
-        p.steps += g.steps;
-        for (k, v) in &g.by_outcome {
-            *p.by_outcome.entry(k.clone()).or_default() += v;
+    /// The progress with this status (`running`, `paused`, `done`, `failed`).
+    pub fn progress(&self, status: &str) -> AntProgress {
+        let cp = &self.cp;
+        let secs = self.session.elapsed().as_secs_f64().max(1e-9);
+        let elapsed = self.base_elapsed + self.session.elapsed().as_secs_f64();
+        let mut p = AntProgress {
+            job: self.job,
+            status: status.into(),
+            runs_done: cp.next,
+            runs_total: self.total,
+            runs_per_s: (((cp.next - self.session_start) as f64 / secs) * 10.0).round() / 10.0,
+            steps_per_s: (self.session_steps as f64 / secs).round(),
+            elapsed_s: (elapsed * 10.0).round() / 10.0,
+            newest: cp.newest.clone(),
+            groups: cp.groups.clone(),
+            threads: self.threads,
+            updated: now_utc(),
+            ..Default::default()
+        };
+        for g in &cp.groups {
+            p.steps += g.steps;
+            for (k, v) in &g.by_outcome {
+                *p.by_outcome.entry(k.clone()).or_default() += v;
+            }
+            if p.error.is_none() {
+                p.error = g.error.clone();
+            }
         }
-        if p.error.is_none() {
-            p.error = g.error.clone();
-        }
+        p
     }
-    p
+
+    /// The checkpoint after the last batch.
+    pub fn checkpoint(&self) -> Result<Vec<u8>, String> {
+        serde_json::to_vec(&self.cp).map_err(|e| e.to_string())
+    }
+
+    /// Runs merged in this session.
+    pub fn runs_run(&self) -> u64 {
+        self.cp.next - self.session_start
+    }
 }
