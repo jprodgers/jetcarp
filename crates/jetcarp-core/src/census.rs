@@ -146,6 +146,8 @@ pub struct RuleSummary {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CensusReport {
+    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
+    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub spec: CensusSpec,
     pub tiling: String,

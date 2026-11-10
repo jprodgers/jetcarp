@@ -126,6 +126,8 @@ pub struct CollideRun {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CollideReport {
+    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
+    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub a: String,
     pub b: String,

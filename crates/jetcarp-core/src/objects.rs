@@ -208,6 +208,8 @@ impl CountRow {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ObjectReport {
+    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
+    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub generation: u64,
     pub hash: String,

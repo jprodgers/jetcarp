@@ -151,6 +151,8 @@ pub struct Champion {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EvolveReport {
     pub spec: EvolveSpec,
+    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
+    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     /// The arena: tiles, size or level, fan margin, boundary ring.
     pub arena_tiles: usize,
