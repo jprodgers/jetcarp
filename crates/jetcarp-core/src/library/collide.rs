@@ -385,7 +385,8 @@ impl Collision {
 /// batches (a collide job's checkpoint): the runs per outcome and the products (each id once,
 /// from its first run, `seen` = the runs producing it). Once every placement is in, the products
 /// are verified (in any batches) and [`output`](Self::output) gives exactly what one whole run
-/// gives. The runs themselves (and thumbnails) are kept only when asked for.
+/// gives. The runs themselves (and thumbnails) are kept only when asked for; kept runs are in
+/// the checkpoint too (thumbnails are not).
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Collected {
     /// When the collision started (its products' provenance date).
@@ -400,7 +401,7 @@ pub struct Collected {
     failed: Vec<usize>,
     #[serde(skip)]
     at: HashMap<String, usize>,
-    #[serde(skip)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     runs: Vec<CollideRun>,
     #[serde(skip)]
     thumbs: Vec<(String, Outcome, Image)>,

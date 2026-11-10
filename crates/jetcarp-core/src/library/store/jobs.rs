@@ -9,7 +9,7 @@
 //! while it still holds the job ([`Library::job_step`]).
 //!
 //! **Whole searches.** [`Library::store_search`] stores a bounded soup search run in one call
-//! (`jetcarp library search`, MCP, Rhai) as a job of its own, done, its records and counts in
+//! (searches made before they were jobs, tests) as a job of its own, done, its records and counts in
 //! one transaction. A search run by the runner stores the same rows through its steps' writes.
 
 use super::super::search::SearchOutput;
@@ -26,6 +26,17 @@ pub(super) const MIGRATION_JOB_LEASE: &str = r#"
 ALTER TABLE jobs ADD COLUMN owner TEXT;
 ALTER TABLE jobs ADD COLUMN heartbeat INTEGER;
 "#;
+
+/// What [`Library::remove_job`] deleted.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+pub struct RemovedJob {
+    pub job: i64,
+    /// Sightings credited to the job.
+    pub sightings: u64,
+    /// With `results`: the patterns and ant runs deleted with it.
+    pub patterns: Vec<String>,
+    pub ants: Vec<String>,
+}
 
 /// What a runner's step writes (see [`Library::job_step`]): the rows its step put in its sink.
 #[derive(Clone, Debug, Default)]
@@ -171,6 +182,74 @@ impl Library {
             )
             .map_err(e)?;
             Ok(progress)
+        })
+    }
+
+    /// Delete a job and what is its alone: its row, sightings, unstored rows, and census rows
+    /// (the job's ant runs stay, with no job). With `results`, its finds go too: the ant runs it
+    /// stored, and the patterns no other job has seen that nobody has curated (state `new`, not
+    /// in the Quick Start), with their media and ratings. Patterns other jobs saw keep their
+    /// records and `seen` counts. Job 0 (the manual job) cannot be deleted.
+    pub fn remove_job(&self, id: i64, results: bool) -> Result<RemovedJob, String> {
+        if id == 0 {
+            return Err("job 0 holds the patterns added by hand and cannot be removed".into());
+        }
+        self.job(id)?;
+        self.write(|tx| {
+            let count = |sql: &str| -> Result<u64, String> {
+                tx.query_row(sql, [id], |r| r.get::<_, i64>(0))
+                    .map(|n| n as u64)
+                    .map_err(e)
+            };
+            let mut out = RemovedJob {
+                job: id,
+                sightings: count("SELECT count(*) FROM sightings WHERE job_id = ?1")?,
+                ..Default::default()
+            };
+            if results {
+                let ids = |sql: &str| -> Result<Vec<String>, String> {
+                    let mut st = tx.prepare(sql).map_err(e)?;
+                    st.query_map([id], |r| r.get::<_, String>(0))
+                        .map_err(e)?
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(e)
+                };
+                out.ants = ids("SELECT id FROM ants WHERE job_id = ?1")?;
+                out.patterns = ids(
+                    "SELECT p.id FROM patterns p WHERE p.state = 'new'
+                     AND EXISTS (SELECT 1 FROM sightings s WHERE s.pattern_id = p.id AND s.job_id = ?1)
+                     AND NOT EXISTS (SELECT 1 FROM sightings s WHERE s.pattern_id = p.id AND s.job_id != ?1)
+                     AND NOT EXISTS (SELECT 1 FROM quickstart q WHERE q.source_kind = 'pattern'
+                                     AND q.source_id = p.id)
+                     ORDER BY p.id",
+                )?;
+                for (kind, table, list) in [
+                    ("ant", "ants", &out.ants),
+                    ("pattern", "patterns", &out.patterns),
+                ] {
+                    for x in list {
+                        tx.execute(&format!("DELETE FROM {table} WHERE id = ?1"), [x])
+                            .map_err(e)?;
+                        for t in ["media", "ratings"] {
+                            tx.execute(
+                                &format!("DELETE FROM {t} WHERE target_kind = ?1 AND target_id = ?2"),
+                                params![kind, x],
+                            )
+                            .map_err(e)?;
+                        }
+                    }
+                }
+            }
+            for sql in [
+                "DELETE FROM sightings WHERE job_id = ?1",
+                "DELETE FROM unstored WHERE job_id = ?1",
+                "DELETE FROM census_rows WHERE job_id = ?1",
+                "UPDATE ants SET job_id = NULL WHERE job_id = ?1",
+                "DELETE FROM jobs WHERE id = ?1",
+            ] {
+                tx.execute(sql, [id]).map_err(e)?;
+            }
+            Ok(out)
         })
     }
 

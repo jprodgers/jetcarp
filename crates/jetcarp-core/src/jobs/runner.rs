@@ -26,6 +26,9 @@ pub struct RunOptions {
     /// The caller's own stop flag (Ctrl-C, a script's cancel): the run stops at its next
     /// checkpoint once it is set. The runner sets it too, at the end of the time budget.
     pub stop: Option<Arc<AtomicBool>>,
+    /// Told each progress the run sets (after each step's write, on the run's thread): a front
+    /// end's progress lines, whatever the kind.
+    pub observe: Option<Observer>,
 }
 
 /// Why a run stopped before the job's end.
@@ -59,7 +62,8 @@ impl Outcome {
     }
 }
 
-type Observer = Arc<dyn Fn(&Value) + Send + Sync>;
+/// A watcher of a run's live progress ([`RunOptions::observe`], [`Live::observe`]).
+pub type Observer = Arc<dyn Fn(&Value) + Send + Sync>;
 
 #[derive(Default)]
 struct LiveState {
@@ -308,6 +312,9 @@ fn execute(
     let deadline = budget
         .minutes
         .map(|m| Instant::now() + Duration::from_secs_f64(m * 60.0));
+    if let Some(f) = o.observe.clone() {
+        live.observe(move |v| f(v));
+    }
     let asked_before = stop.load(Ordering::SeqCst);
     let keeper = Keeper::start(
         lib.clone(),

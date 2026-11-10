@@ -1,20 +1,23 @@
 //! Bounded soup searches (`jobs.kind` `search`): `crate::library::search` on a finite grid of
 //! any tiling (aperiodic patches too), in steps: a batch of soups each, gathered in run order
 //! into the checkpoint, then every distinct pattern's verification in batches, then the records
-//! stored into the job with its counts, as `jetcarp library search` stores a whole run
+//! stored into the job with its counts, as `Library::store_search` stores a whole run
 //! (`Library::store_search`). A stopped search resumes from its last batch, and ends exactly as
 //! an uninterrupted one. Searches stored before they ran in steps had no checkpoint; a paused one
-//! simply starts again.
+//! simply starts again. A search whose spec says `"store": false` only reports what it found
+//! (the job is kept, its records are not stored).
 
 use super::{
     RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, prefix_until, thread_count,
 };
 use crate::dashboard::JobSummary;
-use crate::library::search::{Gathered, SearchSpec, SoupSearch};
+use crate::library::search::{Gathered, SearchReport, SearchSpec, SoupSearch};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, JobStatus, Library, now_utc};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{Read, Write};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 pub struct SearchKind;
@@ -22,9 +25,54 @@ pub(super) static KIND: SearchKind = SearchKind;
 
 pub const KIND_NAME: &str = "search";
 
+fn yes() -> bool {
+    true
+}
+fn is_yes(b: &bool) -> bool {
+    *b
+}
+
+/// A search job: the search, and whether its finds go to the catalog.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SearchJobSpec {
+    #[serde(flatten)]
+    pub search: SearchSpec,
+    /// Store the verified records in the catalog (`false`: only report them).
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    pub store: bool,
+}
+
+/// What a finished search found: its report (each find's `new` set when it was stored for the
+/// first time) and what storing did.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SearchResult {
+    pub report: SearchReport,
+    /// The distinct patterns' ids, in the report's order.
+    pub ids: Vec<String>,
+    pub stored: bool,
+    /// Patterns stored for the first time.
+    pub added: Vec<String>,
+    /// Patterns already stored (their seen counts grew).
+    pub merged: Vec<String>,
+    /// (pattern, rule) pairs verified for the first time on a pattern already stored.
+    pub new_rules: Vec<(String, String)>,
+}
+
 /// Store a search as a job (status `paused` until a runner starts it). Fails early on a bad
 /// spec.
 pub fn start(lib: &Library, spec: &SearchSpec) -> Result<i64, String> {
+    start_job(
+        lib,
+        &SearchJobSpec {
+            search: spec.clone(),
+            store: true,
+        },
+    )
+}
+
+/// [`start`] with the storing choice.
+pub fn start_job(lib: &Library, js: &SearchJobSpec) -> Result<i64, String> {
+    let spec = &js.search;
     if spec.soups == 0 || spec.gens == 0 {
         return Err("a search needs at least one soup and one generation".into());
     }
@@ -34,7 +82,7 @@ pub fn start(lib: &Library, spec: &SearchSpec) -> Result<i64, String> {
     if !(0.0..=1.0).contains(&spec.density) {
         return Err("density must be between 0 and 1".into());
     }
-    let v = serde_json::to_value(spec).map_err(|e| e.to_string())?;
+    let v = serde_json::to_value(js).map_err(|e| e.to_string())?;
     let job = lib.create_job(KIND_NAME, &v)?;
     lib.update_job(job, Some(JobStatus::Paused), None, None)?;
     Ok(job)
@@ -54,14 +102,16 @@ impl StrategyKind for SearchKind {
         Some("soups")
     }
     fn create(&self, lib: &Library, spec: &Value) -> Result<i64, String> {
-        let spec: SearchSpec =
+        let spec: SearchJobSpec =
             serde_json::from_value(spec.clone()).map_err(|e| format!("search spec: {e}"))?;
-        start(lib, &spec)
+        start_job(lib, &spec)
     }
     fn build(&self, row: &JobRow) -> Result<Box<dyn Strategy + Send>, String> {
-        let spec: SearchSpec = serde_json::from_value(row.spec.clone())
+        let spec: SearchJobSpec = serde_json::from_value(row.spec.clone())
             .map_err(|e| format!("job {} spec: {e}", row.id))?;
-        Ok(Box::new(SearchRun::new(spec)))
+        let mut s = SearchRun::new(spec.search);
+        s.store = spec.store;
+        Ok(Box::new(s))
     }
     fn summary(&self, row: &JobRow) -> JobSummary {
         other::summary(base_summary(row, self), row)
@@ -76,6 +126,10 @@ impl StrategyKind for SearchKind {
 /// the catalog) in the final progress, as `Library::store_search` stores a whole run.
 pub struct SearchRun {
     pub spec: SearchSpec,
+    /// Store the records (else only report them).
+    pub store: bool,
+    /// Where the finished search's report goes, for the caller.
+    pub result: Option<Arc<Mutex<Option<SearchResult>>>>,
     search: Option<SoupSearch>,
     state: Option<Gathered>,
     pool: Option<rayon::ThreadPool>,
@@ -86,12 +140,16 @@ pub struct SearchRun {
     /// The final counts: records stored, and new to the catalog.
     records: Option<usize>,
     added: usize,
+    /// Once finished: the report, and the records' ids and rules.
+    report: Option<(SearchReport, Vec<(String, String)>)>,
 }
 
 impl SearchRun {
     pub fn new(spec: SearchSpec) -> SearchRun {
         SearchRun {
             spec,
+            store: true,
+            result: None,
             search: None,
             state: None,
             pool: None,
@@ -99,6 +157,7 @@ impl SearchRun {
             session_start: 0,
             records: None,
             added: 0,
+            report: None,
         }
     }
 }
@@ -174,18 +233,57 @@ impl Strategy for SearchRun {
         let state = self.state.take().ok_or(NOT_OPEN)?;
         let out = state.output(&self.spec);
         self.records = Some(out.records.len());
-        let soups = out.soups.iter().map(|&s| s as u64);
-        sink.patterns.extend(out.records.into_iter().zip(soups));
+        let ids = out
+            .records
+            .iter()
+            .map(|r| (r.id.clone(), r.rule.clone()))
+            .collect();
+        self.report = Some((out.report, ids));
+        if self.store {
+            let soups = out.soups.iter().map(|&s| s as u64);
+            sink.patterns.extend(out.records.into_iter().zip(soups));
+        }
         Ok(())
     }
 
     fn stored(&mut self, outcomes: &[Result<AddOutcome, String>]) {
-        if self.records.is_some() {
-            self.added = outcomes
-                .iter()
-                .filter(|o| matches!(o, Ok(AddOutcome::Added)))
-                .count();
+        let Some((report, ids)) = &self.report else {
+            return;
+        };
+        self.added = outcomes
+            .iter()
+            .filter(|o| matches!(o, Ok(AddOutcome::Added)))
+            .count();
+        let Some(slot) = &self.result else {
+            return;
+        };
+        let (mut added, mut merged, mut new_rules) = (Vec::new(), Vec::new(), Vec::new());
+        for ((id, rule), o) in ids.iter().zip(outcomes) {
+            match o {
+                Ok(AddOutcome::Added) => added.push(id.clone()),
+                Ok(AddOutcome::Merged { new_rule, .. }) => {
+                    merged.push(id.clone());
+                    if *new_rule {
+                        new_rules.push((id.clone(), rule.clone()));
+                    }
+                }
+                Err(_) => {}
+            }
         }
+        let mut report = report.clone();
+        for g in &mut report.groups {
+            for f in &mut g.found {
+                f.new = added.contains(&f.id);
+            }
+        }
+        *slot.lock().unwrap() = Some(SearchResult {
+            report,
+            ids: ids.iter().map(|x| x.0.clone()).collect(),
+            stored: self.store,
+            added,
+            merged,
+            new_rules,
+        });
     }
 
     fn checkpoint(&self) -> Result<Option<Vec<u8>>, String> {

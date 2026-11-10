@@ -1,7 +1,7 @@
 //! Collisions (`jobs.kind` `collide`): `crate::library::collide` of two catalog patterns at
 //! every offset and phase, in steps: a batch of placements each, gathered in placement order
 //! into the checkpoint, then the products verified in batches, then (when the job stores them)
-//! stored with the job, as `jetcarp library collide` stores them. A stopped collision resumes
+//! stored with the job, as `Library::add_many` stores a whole collision. A stopped collision resumes
 //! from its last batch and ends exactly as an uninterrupted one. Collide jobs had no checkpoint
 //! before they ran in steps, so a paused one starts again; one made before collisions were
 //! strategies (its spec without `a` and `b`) cannot be run again.
@@ -11,12 +11,13 @@ use super::{
     thread_count,
 };
 use crate::dashboard::JobSummary;
-use crate::library::collide::{Collected, CollideSpec, Collision};
+use crate::library::collide::{Collected, CollideOutput, CollideSpec, Collision};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, JobStatus, Library, PatternRecord, now_utc, prepare};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 pub struct CollideKind;
@@ -102,6 +103,13 @@ impl StrategyKind for CollideKind {
 /// progress.
 pub struct CollideRun {
     pub spec: CollideJobSpec,
+    /// Keep every run (in the checkpoint too) and, at `thumb_px` above 0, a thumbnail of each
+    /// run's end (this session's only), for the caller's report, table, and contact sheet.
+    pub keep: bool,
+    pub thumb_px: u32,
+    /// Where the finished collision's output goes (its report, products, and thumbnails), with
+    /// the products new to the catalog.
+    pub result: Option<Arc<Mutex<Option<(CollideOutput, Vec<String>)>>>>,
     collision: Option<Collision>,
     got: Option<Collected>,
     pool: Option<rayon::ThreadPool>,
@@ -118,6 +126,9 @@ impl CollideRun {
     pub fn new(spec: CollideJobSpec) -> CollideRun {
         CollideRun {
             spec,
+            keep: false,
+            thumb_px: 0,
+            result: None,
             collision: None,
             got: None,
             pool: None,
@@ -186,8 +197,9 @@ impl Strategy for CollideRun {
             if let Some(n) = cx.items {
                 b = b.min(self.session_start + n as usize);
             }
-            let outs = prefix_until(pool, got.next..b, t0 + STEP, &cx.stop, |k| c.run_one(k, 0));
-            got.add(outs, false)?;
+            let px = self.thumb_px;
+            let outs = prefix_until(pool, got.next..b, t0 + STEP, &cx.stop, |k| c.run_one(k, px));
+            got.add(outs, self.keep)?;
         } else if got.verified() < got.products() {
             let n = self.checks.min(got.products() - got.verified());
             pool.install(|| got.verify(n));
@@ -226,6 +238,9 @@ impl Strategy for CollideRun {
                 .filter(|(_, o)| matches!(o, Ok(AddOutcome::Added)))
                 .map(|(id, _)| id.clone())
                 .collect();
+            if let (Some(slot), Some(got), Some(c)) = (&self.result, &self.got, &self.collision) {
+                *slot.lock().unwrap() = Some((got.clone().output(c), self.added.clone()));
+            }
         }
     }
 

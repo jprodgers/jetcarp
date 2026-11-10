@@ -86,6 +86,9 @@ impl StrategyKind for PileKind {
             Err(_) => row.progress.clone(),
         }
     }
+    fn line(&self, progress: &Value) -> String {
+        typed::<PileProgress>(progress).line()
+    }
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         job::request_stop(lib, job)
     }

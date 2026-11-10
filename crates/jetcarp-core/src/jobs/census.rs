@@ -68,6 +68,9 @@ impl StrategyKind for CensusKind {
             Err(_) => row.progress.clone(),
         }
     }
+    fn line(&self, progress: &Value) -> String {
+        typed::<CensusProgress>(progress).line()
+    }
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         census::request_stop(lib, job)
     }
@@ -134,6 +137,7 @@ pub fn run(lib: &Library, job: i64, opts: CensusJobOptions) -> Result<CensusProg
             items: opts.limit,
         },
         stop: Some(opts.stop.clone()),
+        observe: None,
     };
     Runner::new(lib.clone())
         .run_with(job, &mut s, &o)

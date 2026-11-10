@@ -122,6 +122,9 @@ impl StrategyKind for HuntKind {
             Err(_) => row.progress.clone(),
         }
     }
+    fn line(&self, progress: &Value) -> String {
+        typed::<HuntProgress>(progress).line()
+    }
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         hunt::request_stop(lib, job)
     }
@@ -271,6 +274,7 @@ pub fn run(lib: &Library, job: i64, opts: HuntOptions) -> Result<HuntProgress, S
             items: opts.limit,
         },
         stop: Some(opts.stop.clone()),
+        observe: None,
     };
     Runner::new(lib.clone())
         .run_with(job, &mut s, &o)

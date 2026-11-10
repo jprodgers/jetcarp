@@ -47,6 +47,15 @@ pub trait StrategyKind: Send + Sync {
         }
         v
     }
+    /// A progress (this kind's progress JSON) as one line for people (`hunt 3: 12,288/100,000
+    /// soups, ...`): the progress's own `line`, if it has one.
+    fn line(&self, progress: &Value) -> String {
+        progress
+            .get("line")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_default()
+    }
     /// Ask the job to stop at its next checkpoint, in whatever process runs it.
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         super::request_stop(lib, job)

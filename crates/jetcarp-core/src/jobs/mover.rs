@@ -88,6 +88,9 @@ impl StrategyKind for MoverKind {
             Err(_) => row.progress.clone(),
         }
     }
+    fn line(&self, progress: &Value) -> String {
+        typed::<MoverProgress>(progress).line()
+    }
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         job::request_stop(lib, job)
     }
