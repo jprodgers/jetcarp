@@ -4,11 +4,11 @@
 //! session and, through `use_app`, on the world in the app.
 
 use crate::tools::{
-    MAX_CELLS, Res, ToolOutput, boolean, ca_index, check_unknown, int, string, tool,
+    MAX_CELLS, Res, ToolOutput, boolean, check_unknown, err, given, int, string, tool,
 };
-use jetcarp_api::args;
+use jetcarp_api::op::{self, Quiet, WorldOp};
+use jetcarp_api::ops::world::{ReseedIn, WorldReseed};
 use jetcarp_api::world::Host;
-use jetcarp_core::reseed::{AutoReseed, ReseedMode};
 use jetcarp_core::wallpaper::{self, Fit};
 use jetcarp_core::{CaChange, Command, World};
 use serde_json::{Value, json};
@@ -64,78 +64,16 @@ pub fn call(host: &mut dyn Host, name: &str, args: &Value) -> Res {
     }
 }
 
-/// A mode from an object, a bare name, a name and a sign ("rain:pos"), or JSON text.
-fn parse_mode(v: &Value) -> Result<ReseedMode, String> {
-    args::reseed_mode(v).map_err(|e| match v {
-        Value::String(t) if t.contains(':') && !t.trim_start().starts_with('{') => {
-            format!("could not read `mode` {t}: {e}")
-        }
-        Value::String(s) => format!(
-            "`mode` is random, rain, blobs, or an object such as {{\"kind\": \"rain\", \"drops\": 30}}, not {s}"
-        ),
-        v => format!("could not read `mode` {v}: {e}"),
-    })
-}
-
-/// A policy (mode and trigger may be bare names: "rain", "settled").
-fn parse_policy(v: &Value) -> Result<AutoReseed, String> {
-    args::reseed_policy(v).map_err(|e| {
-        format!("could not read policy {v}: {e}. A policy is {{\"mode\": \"rain\" or {{\"kind\": \"rain\", ...}}, \"when\": \"settled\" or {{\"kind\": \"every\", \"gens\": 500}}, \"cooldown\": 200}}")
-    })
-}
-
-/// Policies, their status, and recent activity.
-pub fn reseed_report(w: &World, recent: usize) -> Value {
-    let hist = w.activity_history();
-    let tail: Vec<Value> = hist
-        .iter()
-        .skip(hist.len().saturating_sub(recent))
-        .map(|a| json!([a.generation, a.changed, a.fraction]))
-        .collect();
-    json!({
-        "generation": w.generation,
-        "policies": w.reseed_policies().iter().zip(w.reseed_status()).map(|(p, s)| json!({
-            "policy": p, "status": s,
-        })).collect::<Vec<_>>(),
-        "last_activity": w.last_activity(),
-        "activity": {"columns": ["generation", "changed", "fraction"], "rows": tail},
-    })
-}
-
 fn reseed(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["mode", "ca", "policies", "activity_gens"])?;
-    let mut did = Vec::new();
-    if let Some(list) = args.get("policies").filter(|v| !v.is_null()) {
-        let Value::Array(items) = list else {
-            return Err("`policies` must be a list of policy objects ([] clears them)".into());
-        };
-        let policies = items
-            .iter()
-            .map(parse_policy)
-            .collect::<Result<Vec<_>, _>>()?;
-        let n = policies.len();
-        host.exec(Command::SetReseed { policies })?;
-        did.push(format!("set {n} automatic reseed policies"));
-    }
-    if let Some(m) = args.get("mode").filter(|v| !v.is_null()) {
-        let mode = parse_mode(m)?;
-        let ca = match args.get("ca").filter(|v| !v.is_null()) {
-            Some(v) => {
-                let w = host.world();
-                Some(w.cas[ca_index(w, Some(v))?].id)
-            }
-            None => None,
-        };
-        let name = mode.name();
-        host.exec(Command::Reseed { ca, mode })?;
-        did.push(format!("reseeded ({name})"));
-    } else if args.get("ca").is_some_and(|v| !v.is_null()) {
-        return Err("`ca` goes with `mode`".into());
-    }
-    let recent = int(args, "activity_gens")?.unwrap_or(64).clamp(0, 512) as usize;
-    let mut r = reseed_report(host.world(), recent);
-    r["done"] = json!(did);
-    Ok(ToolOutput::json(&r))
+    let a = ReseedIn {
+        mode: given(args, "mode"),
+        ca: given(args, "ca"),
+        policies: given(args, "policies"),
+        activity_gens: int(args, "activity_gens")?,
+    };
+    let r = WorldReseed::run(crate::tools::ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(&op::to_value(&r)))
 }
 
 fn export(host: &mut dyn Host, args: &Value) -> Res {

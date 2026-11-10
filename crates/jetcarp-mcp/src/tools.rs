@@ -2,33 +2,40 @@
 //!
 //! Descriptions are written for a model that has never seen JETCARP: they say what the tool does,
 //! give a minimal example, and name the tool to call next.
+//!
+//! The world and reference tools read their arguments as they always have (numbers given as
+//! text, `"true"` for true) and call the operations in `jetcarp_api::ops`; an operation's text
+//! is the tool's result and its error message the tool's error. Limits are the interactive ones
+//! ([`ctx`]).
+//!
+//! [`Command`]: jetcarp_core::Command
 
 use crate::util;
-use jetcarp_api::args::mcp::{parse_ca, parse_seed, resolve_rule};
-use jetcarp_api::args::{self, rule::squash};
-use jetcarp_api::cells::{self, Grid};
+use jetcarp_api::op::{self, Callbacks, Quiet, Report, WorldOp};
+use jetcarp_api::ops::reference::{ReferenceRules, ReferenceTilings, RulesIn, TilingsIn};
+use jetcarp_api::ops::world::{
+    ApplyIn, DrawIn, InspectIn, NewWorldIn, OpenIn, ReadIn, RenderIn, SaveIn, StatusIn, StepIn,
+    WorldApply, WorldDraw, WorldInspect, WorldNew, WorldOpen, WorldRead, WorldRender, WorldSave,
+    WorldStatusOp, WorldStep,
+};
 use jetcarp_api::world::Host;
-use jetcarp_core::render::{self, RenderOptions};
-use jetcarp_core::rules::{CatalogEntry, FieldKind};
-use jetcarp_core::world::{CaInstance, CaSpec, Command};
-use jetcarp_core::*;
+use jetcarp_api::{ApiError, Ctx, Limits, Op, ops};
 use serde_json::{Value, json};
 use std::fmt::Write as _;
+use std::sync::OnceLock;
 
 /// Largest world `new_world` or `set_tiling` will build.
-pub const MAX_CELLS: u64 = 4_000_000;
+pub const MAX_CELLS: u64 = Limits::INTERACTIVE.max_cells;
 /// Most generations one call may run.
-pub const MAX_GENS: u64 = 1_000_000;
-/// How far `step` runs with `stop_when_settled` when no count is given.
-const SETTLE_GENS: i64 = 5000;
+pub const MAX_GENS: u64 = Limits::INTERACTIVE.max_gens;
 /// Most cell updates (cells x generations) one call may run.
-pub const MAX_WORK: u64 = 2_000_000_000;
+pub const MAX_WORK: u64 = Limits::INTERACTIVE.max_work;
 /// Most cells `read_cells` prints as a picture.
-pub const MAX_PICTURE: usize = 120 * 120;
+pub const MAX_PICTURE: usize = Limits::INTERACTIVE.max_picture;
 /// Most cells one `set_cells` call may write.
-pub const MAX_SET: usize = 200_000;
+pub const MAX_SET: usize = Limits::INTERACTIVE.max_set;
 /// Longest `run_script` run, in seconds.
-pub const MAX_SCRIPT_SECONDS: f64 = 600.0;
+pub const MAX_SCRIPT_SECONDS: f64 = Limits::INTERACTIVE.max_script_seconds;
 
 /// What a tool returns: MCP content blocks.
 #[derive(Clone, Debug)]
@@ -388,7 +395,7 @@ pub fn call_ctx(
         "set_cells" => set_cells(host, args),
         "read_cells" => read_cells(host, args),
         "inspect_cell" => inspect_cell(host, args),
-        "step" => step(host, args, cancel.as_deref()),
+        "step" => step(host, args, cancel.clone()),
         "render_image" => render_image(host, args),
         "apply_commands" => apply_commands(host, args),
         "get_scene" => get_scene(host, args),
@@ -442,6 +449,16 @@ pub(crate) fn string<'a>(args: &'a Value, key: &str) -> Result<Option<&'a str>, 
     }
 }
 
+/// [`string`], owned.
+fn text(args: &Value, key: &str) -> Result<Option<String>, String> {
+    Ok(string(args, key)?.map(String::from))
+}
+
+/// The value under `key`, unless it is missing or `null`.
+pub(crate) fn given(args: &Value, key: &str) -> Option<Value> {
+    args.get(key).filter(|v| !v.is_null()).cloned()
+}
+
 pub(crate) fn check_unknown(args: &Value, allowed: &[&str]) -> Result<(), String> {
     if let Some(o) = args.as_object() {
         for k in o.keys() {
@@ -456,360 +473,41 @@ pub(crate) fn check_unknown(args: &Value, allowed: &[&str]) -> Result<(), String
     Ok(())
 }
 
-/// Every named rule. (Once main's `rules::catalog()` is merged, return that: the full list.)
-fn rule_catalog() -> &'static [CatalogEntry] {
-    jetcarp_core::rules::catalog()
+/// What the tools run with: the interactive limits ([`Limits::INTERACTIVE`]) and files anywhere
+/// (paths come from the client, as they always have).
+pub fn ctx() -> &'static Ctx {
+    static CX: OnceLock<Ctx> = OnceLock::new();
+    CX.get_or_init(Ctx::interactive)
 }
 
-fn check_tiling_size(spec: &TilingSpec) -> Result<(), String> {
-    match spec.size {
-        Some(SizeSpec::Rect { w, h }) => {
-            if w < 8 || h < 8 || w > 4096 || h > 4096 {
-                return Err(format!("width and height must be 8 to 4096, got {w} x {h}"));
-            }
-            if w as u64 * h as u64 > MAX_CELLS {
-                return Err(format!(
-                    "{w} x {h} is too large; keep width x height at most {MAX_CELLS}"
-                ));
-            }
-        }
-        Some(SizeSpec::Cells(n)) if n as u64 > MAX_CELLS => {
-            return Err(format!("at most {MAX_CELLS} cells"));
-        }
-        Some(SizeSpec::Level(l)) => {
-            let hi = max_level(&spec.family);
-            if !(1..=hi).contains(&l) {
-                return Err(format!("level must be 1 to {hi}"));
-            }
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Largest aperiodic level served over MCP: the family's largest with at most [`MAX_CELLS`]
-/// tiles (Spectre 7, hat and Penrose 6).
-fn max_level(family: &str) -> u32 {
-    let (lo, hi) = jetcarp_core::aperiodic::level_range(family);
-    (lo..=hi)
-        .rev()
-        .find(|&l| {
-            jetcarp_core::aperiodic::tile_count(family, l).is_none_or(|n| n as u64 <= MAX_CELLS)
-        })
-        .unwrap_or(lo)
-}
-
-fn tiling_from_args(args: &Value) -> Result<TilingSpec, String> {
-    let id = string(args, "tiling")?.unwrap_or("square").trim();
-    let mut spec = args::tiling_by_id(id).map_err(|_| {
-        let ids: Vec<&str> = families::FAMILIES.iter().map(|f| f.id).collect();
-        format!(
-            "unknown tiling '{id}'. Tiling ids: {}. See list_tilings.",
-            ids.join(", ")
-        )
-    })?;
-    let fam = families::family(&spec.family).unwrap();
-    let aperiodic = fam.kind == families::FamilyKind::Aperiodic;
-    let (w, h, cells, level) = (
-        int(args, "width")?,
-        int(args, "height")?,
-        int(args, "cells")?,
-        int(args, "level")?,
-    );
-    spec.size = match (w, h, cells, level) {
-        (Some(_), None, _, _) | (None, Some(_), _, _) => {
-            return Err("give both width and height".into());
-        }
-        (Some(_), Some(_), Some(_), _) => return Err("give width/height or cells, not both".into()),
-        (Some(_), Some(_), _, _) if aperiodic => {
-            return Err(format!(
-                "{} is aperiodic: give `level` (1-{}) instead of width/height",
-                fam.id,
-                max_level(fam.id)
-            ));
-        }
-        (Some(w), Some(h), None, _) => {
-            if !(8..=4096).contains(&w) || !(8..=4096).contains(&h) {
-                return Err(format!("width and height must be 8 to 4096, got {w} x {h}"));
-            }
-            Some(SizeSpec::Rect {
-                w: w as u32,
-                h: h as u32,
-            })
-        }
-        (None, None, Some(c), _) => {
-            if !(64..=MAX_CELLS as i64).contains(&c) {
-                return Err(format!("cells must be 64 to {MAX_CELLS}"));
-            }
-            Some(SizeSpec::Cells(c as u32))
-        }
-        (None, None, None, Some(l)) => {
-            if !aperiodic {
-                return Err(format!(
-                    "`level` is only for aperiodic tilings; {} takes width/height or cells",
-                    fam.id
-                ));
-            }
-            let hi = max_level(fam.id) as i64;
-            if !(1..=hi).contains(&l) {
-                return Err(format!("level must be 1 to {hi}"));
-            }
-            Some(SizeSpec::Level(l as u32))
-        }
-        (None, None, None, None) if aperiodic => None,
-        (None, None, None, None) => Some(SizeSpec::Cells(4096)),
-    };
-    spec.boundary = match string(args, "boundary")?.map(|s| s.to_ascii_lowercase()) {
-        None => Boundary::Wrap,
-        Some(b) => args::parse_boundary(&b)
-            .map_err(|_| format!("boundary must be wrap, dead, or live, got '{b}'"))?,
-    };
-    if aperiodic {
-        spec.boundary = Boundary::Dead;
-    }
-    if let Some(p) = args.get("tiling_params").filter(|p| !p.is_null()) {
-        if !p.is_object() {
-            return Err("tiling_params must be an object".into());
-        }
-        let mut merged = spec.params.take().unwrap_or(json!({}));
-        for (k, v) in p.as_object().unwrap() {
-            merged[k] = v.clone();
-        }
-        spec.params = Some(merged);
-    }
-    Ok(spec)
-}
-
-/// Index into `world.cas` for a CA argument (id, name, or omitted for the first).
-pub(crate) fn ca_index(w: &World, v: Option<&Value>) -> Result<usize, String> {
-    if w.cas.is_empty() {
-        return Err("this world has no CAs yet. Create a world with new_world (e.g. cas: [\"Life\"]) or add one with apply_commands add_ca.".into());
-    }
-    let list = || {
-        w.cas
-            .iter()
-            .map(|c| format!("id {} '{}' ({})", c.id, c.name, c.notation()))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let found = match v {
-        None | Some(Value::Null) => Some(0),
-        Some(Value::Number(n)) => n
-            .as_u64()
-            .and_then(|id| w.cas.iter().position(|c| c.id as u64 == id)),
-        Some(Value::String(s)) => {
-            let s = s.trim();
-            s.parse::<u32>()
-                .ok()
-                .and_then(|id| w.cas.iter().position(|c| c.id == id))
-                .or_else(|| w.cas.iter().position(|c| c.name.eq_ignore_ascii_case(s)))
-                .or_else(|| w.cas.iter().position(|c| squash(&c.name) == squash(s)))
-                .or_else(|| {
-                    let n = resolve_rule(s).to_ascii_uppercase();
-                    w.cas
-                        .iter()
-                        .position(|c| c.notation().to_ascii_uppercase() == n)
-                })
-        }
-        Some(_) => None,
-    };
-    found.ok_or_else(|| format!("no CA {}. CAs: {}", v.unwrap(), list()))
-}
-
-fn nb_name(nb: Nb) -> &'static str {
-    match nb {
-        Nb::Touch => "touch",
-        Nb::Edge => "edge",
-    }
-}
-
-fn ca_value(c: &CaInstance) -> Value {
-    let mut v = json!({
-        "id": c.id, "name": c.name, "rule": c.notation(), "enabled": c.enabled,
-        "field": c.field, "neighborhood": nb_name(c.nb), "affects_others": c.affects_others,
-        "steps_per_gen": c.steps_per_gen, "palette": c.palette,
-    });
-    if c.rule.is_agent() {
-        v["ants"] = json!(c.agents.len());
-    }
-    if matches!(c.rule, jetcarp_core::rules::Rule::Jaca(_)) {
-        v["palette_neg"] = json!(c.palette_neg);
-        let h = c.heat.as_deref().cloned().unwrap_or_default();
-        v["annihilation"] = json!({
-            "last_touching": h.last.contacts, "last_destroyed": h.last.destroyed,
-            "last_cancelled_births": h.last.cancelled,
-            "total_touching": h.total_contacts, "total_destroyed": h.total_destroyed,
-        });
-    }
-    v
-}
-
-fn boundary_name(t: &Topology) -> &'static str {
-    if t.wraps() {
-        "wrap"
-    } else if t.live_edges() {
-        "live"
-    } else {
-        "dead"
-    }
+/// An operation's error as the tool's error text.
+pub(crate) fn err(e: ApiError) -> String {
+    e.to_string()
 }
 
 /// The `world_status` report.
 pub fn status(host: &dyn Host) -> Value {
-    let w = host.world();
-    let t = &w.topo;
-    let grid = Grid::of(t).map(|g| {
-        json!({
-            "width": g.w, "height": g.h, "tile_types_per_unit_cell": g.types,
-            "coordinates": "x = column 0..width-1, y = row 0..height-1 from the top; index = y * width + x",
-        })
-    });
-    let fields: Vec<Value> = w
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(i, f)| {
-            let users: Vec<u32> = w
-                .cas
-                .iter()
-                .filter(|c| c.field == i)
-                .map(|c| c.id)
-                .collect();
-            let mut v = json!({
-                "field": i, "kind": f.kind.name(), "shared": f.shared,
-                "population": f.population(), "ca_ids": users,
-            });
-            if f.kind == FieldKind::Height {
-                v["population_means"] = json!("total grains");
-                v["grains_lost_off_edges"] = json!(f.lost);
-                v["stable"] = json!(sandpile_stable(w, i));
-            } else {
-                v["max_state"] = json!(f.max_state());
-            }
-            if w.cas.iter().any(|c| c.field == i && matches!(c.rule, jetcarp_core::rules::Rule::Jaca(_))) {
-                let count = |s: u8| f.state.iter().filter(|&&x| x == s).count();
-                v["positive"] = json!(count(jetcarp_core::jaca::POS));
-                v["negative"] = json!(count(jetcarp_core::jaca::NEG));
-            }
-            v
-        })
-        .collect();
-    let script = w.script.as_ref().map(|s| {
-        let st = &w.script_state;
-        json!({"steps": s.steps.len(), "current_step": st.step,
-               "current_name": s.steps.get(st.step).map(|x| x.name.clone()), "finished": st.finished})
-    });
-    json!({
-        "generation": w.generation,
-        "status": status_text(w),
-        "done": w.done_reason().unwrap_or_else(|| "no: something can still change".into()),
-        "hash": w.hash_hex(),
-        "hash_note": "`hash` covers the generation number and cell ages too, so it never repeats; `cells_hash` covers only the cell states: equal cells_hash = same picture. For periods, trust `status` (an exact check).",
-        "cells_hash": format!("{:016x}", w.states_hash()),
-        "cells": t.len(),
-        "tiling": {
-            "id": t.family.id, "name": t.family.name, "boundary": boundary_name(t),
-            "grid": grid.unwrap_or(json!("none: aperiodic patch, address cells by index")),
-            "description": t.describe(),
-        },
-        "cas": w.cas.iter().map(ca_value).collect::<Vec<_>>(),
-        "fields": fields,
-        "script": script,
-        "host": host.info(),
-    })
-}
-
-/// A height field is stable when every cell (sinks aside) holds fewer grains than it has
-/// neighbours, so nothing can topple.
-fn sandpile_stable(w: &World, field: usize) -> bool {
-    let Some(ca) = w.cas.iter().find(|c| c.field == field) else {
-        return true;
-    };
-    let (t, f) = (&w.topo, &w.fields[field]);
-    (0..t.len()).all(|i| t.is_open(i) || (f.height[i] as usize) < t.degree(i, ca.nb))
-}
-
-/// The world's status in words. A world whose cells are all dead reads "Empty" even when the
-/// exact repeat check has also seen it (an empty world is trivially frozen).
-fn status_text(w: &World) -> String {
-    let dead = w.fields.iter().all(|f| f.is_empty()) && w.cas.iter().all(|c| c.agents.is_empty());
-    match w.status() {
-        Status::Repeats { seen_at, .. } if dead => {
-            format!("Empty: every cell is dead (died out by generation {seen_at})")
-        }
-        Status::Empty => "Empty: every cell is dead".into(),
-        s => s.to_string(),
-    }
-}
-
-pub(crate) fn short_status(w: &World) -> String {
-    let pops: Vec<String> = w
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(i, f)| {
-            let users: Vec<String> = w
-                .cas
-                .iter()
-                .filter(|c| c.field == i)
-                .map(|c| format!("{} (id {})", c.name, c.id))
-                .collect();
-            let what = if f.kind == FieldKind::Height {
-                if sandpile_stable(w, i) {
-                    "grains (stable: no cell can topple)"
-                } else {
-                    "grains (not yet stable: cells will topple when stepped)"
-                }
-            } else {
-                "live"
-            };
-            format!(
-                "field {i} [{}]: {} {what}",
-                users.join(", "),
-                f.population()
-            )
-        })
-        .collect();
-    format!(
-        "Generation {}. Status: {}. Hash {} (with generation and ages); cells hash {} (cell states only: equal when the cells repeat).\n{}",
-        w.generation,
-        status_text(w),
-        w.hash_hex(),
-        format_args!("{:016x}", w.states_hash()),
-        pops.join("\n")
-    )
+    op::to_value(&ops::world::world_status(host))
 }
 
 // ---------------------------------------------------------------------------------------------
-// Tools
+// Tools: each reads its arguments as the tools always have and calls an operation
+// (`jetcarp_api::ops`), whose text is the tool's result.
 
 fn list_rules(args: &Value) -> Res {
     check_unknown(args, &["family"])?;
-    let fam = string(args, "family")?.map(squash);
-    let all = rule_catalog();
-    let mut families: Vec<&str> = Vec::new();
-    for e in all {
-        if !families.contains(&e.family) {
-            families.push(e.family);
-        }
-    }
-    let picked: Vec<_> = all
-        .iter()
-        .filter(|e| {
-            fam.as_ref()
-                .is_none_or(|f| squash(e.family).contains(f.as_str()))
-        })
-        .collect();
-    if picked.is_empty() {
-        return Err(format!(
-            "no rules in that family. Families: {}",
-            families.join(", ")
-        ));
-    }
+    let out = ReferenceRules::run(
+        ctx(),
+        RulesIn {
+            family: text(args, "family")?,
+        },
+        &Quiet,
+    )
+    .map_err(err)?;
     let mut s = String::from("Named rules (use the name or the notation as `rule`):\n");
-    if picked.len() <= 80 {
+    if out.rules.len() <= 80 {
         s.push('\n');
-        for e in &picked {
+        for e in &out.rules {
             let _ = writeln!(
                 s,
                 "- {} | {} | {} | {}",
@@ -819,8 +517,9 @@ fn list_rules(args: &Value) -> Res {
     } else {
         // Long lists: names and notation only, grouped by family.
         s.push_str("(Too many to describe each; pass `family` for one-line descriptions.)\n");
-        for f in &families {
-            let names: Vec<String> = picked
+        for f in &out.families {
+            let names: Vec<String> = out
+                .rules
                 .iter()
                 .filter(|e| e.family == *f)
                 .map(|e| format!("{} ({})", e.name, e.notation))
@@ -836,79 +535,45 @@ fn list_rules(args: &Value) -> Res {
 
 fn list_tilings(args: &Value) -> Res {
     check_unknown(args, &["search"])?;
-    let Some(q) = string(args, "search")?.map(|q| q.trim().to_ascii_lowercase()) else {
-        return Ok(ToolOutput::text(tilings_text()));
-    };
-    let mut hits: Vec<String> = families::FAMILIES
-        .iter()
-        .filter(|f| f.id.contains(&q) || f.name.to_ascii_lowercase().contains(&q))
-        .map(|f| format!("- {} | {} | {}", f.id, f.name, f.group))
-        .collect();
-    hits.extend(
-        catalog::all()
-            .iter()
-            .filter(|t| families::family(&t.id).is_none())
-            .filter(|t| {
-                t.id.to_ascii_lowercase().contains(&q) || t.name.to_ascii_lowercase().contains(&q)
-            })
-            .map(|t| format!("- {} | {} | {}", t.id, t.name, t.group)),
-    );
-    hits.extend(
-        jetcarp_core::isohedral::IH_FAMILIES
-            .iter()
-            .filter(|f| f.id.contains(&q) || f.name.to_ascii_lowercase().contains(&q))
-            .map(|f| format!("- {} | {} | isohedral", f.id, f.name)),
-    );
-    let n = hits.len();
-    let mut s = format!("{n} tilings match \"{q}\"");
-    if n > 60 {
-        let _ = write!(s, " (first 60 shown; search for something narrower)");
+    let search = text(args, "search")?;
+    let out = ReferenceTilings::run(
+        ctx(),
+        TilingsIn {
+            search: search.clone(),
+            limit: None,
+        },
+        &Quiet,
+    )
+    .map_err(err)?;
+    if search.is_some() {
+        return Ok(ToolOutput::text(out.matches_text()));
     }
-    s.push_str(":\n");
-    for h in hits.into_iter().take(60) {
-        s.push_str(&h);
-        s.push('\n');
-    }
-    Ok(ToolOutput::text(s))
-}
-
-fn tilings_text() -> String {
-    use std::sync::OnceLock;
-    static TEXT: OnceLock<String> = OnceLock::new();
-    TEXT.get_or_init(|| {
-        let mut s = String::from(
-            "Tilings (id | name | group | neighbours per cell: edge-sharing / touching | note).\n\
-             Size: width x height unit cells, or `cells` (about that many); aperiodic tilings use `level`.\n\
-             Life-like rules count touching neighbours by default (Moore on squares: 8); add V to a B/S rule \
-             (B3/S23V) or neighborhood \"edge\" to count edge neighbours only.\n\n",
-        );
-        for f in families::FAMILIES {
-            let deg = match Topology::build(&TilingSpec::new(f.id)) {
-                Ok(t) => {
-                    let (e, to) = t.degree_sets();
-                    format!("{e:?} / {to:?}")
-                }
-                Err(_) => "?".into(),
-            };
-            let _ = writeln!(s, "- {} | {} | {} | {} | {}", f.id, f.name, f.group, deg, f.note);
-        }
-        // The catalog is large (over 1,300 entries): summarise it and point to `search`.
-        let extra: Vec<_> = catalog::all()
-            .iter()
-            .filter(|t| families::family(&t.id).is_none())
-            .collect();
-        let kuni = extra.iter().filter(|t| t.k > 0 && t.id.starts_with('k')).count();
+    let mut s = String::from(
+        "Tilings (id | name | group | neighbours per cell: edge-sharing / touching | note).\n\
+         Size: width x height unit cells, or `cells` (about that many); aperiodic tilings use `level`.\n\
+         Life-like rules count touching neighbours by default (Moore on squares: 8); add V to a B/S rule \
+         (B3/S23V) or neighborhood \"edge\" to count edge neighbours only.\n\n",
+    );
+    for f in &out.families {
+        let deg = match &f.error {
+            None => format!("{:?} / {:?}", f.edge, f.touch),
+            Some(_) => "?".into(),
+        };
         let _ = writeln!(
             s,
-            "\nAlso usable as `tiling` (list them with list_tilings {{\"search\": \"...\"}}): {kuni} k-uniform \
-             tilings k1-001 .. k6-673 (ids like \"k2-005\"; search \"k2-\" for all 2-uniform ones), {} other \
-             catalog tilings, and the {} isohedral tile types ih01 .. ih93.",
-            extra.len() - kuni,
-            jetcarp_core::isohedral::IH_FAMILIES.len()
+            "- {} | {} | {} | {} | {}",
+            f.id, f.name, f.group, deg, f.note
         );
-        s
-    })
-    .clone()
+    }
+    // The catalog is large (over 1,300 entries): summarise it and point to `search`.
+    let _ = writeln!(
+        s,
+        "\nAlso usable as `tiling` (list them with list_tilings {{\"search\": \"...\"}}): {} k-uniform \
+         tilings k1-001 .. k6-673 (ids like \"k2-005\"; search \"k2-\" for all 2-uniform ones), {} other \
+         catalog tilings, and the {} isohedral tile types ih01 .. ih93.",
+        out.catalog.k_uniform, out.catalog.other, out.catalog.isohedral
+    );
+    Ok(ToolOutput::text(s))
 }
 
 fn new_world(host: &mut dyn Host, args: &Value) -> Res {
@@ -927,36 +592,24 @@ fn new_world(host: &mut dyn Host, args: &Value) -> Res {
             "tiling_params",
         ],
     )?;
-    let tiling = tiling_from_args(args)?;
-    let mut scene = Scene::new(tiling);
-    scene.rng_state = int(args, "rng_seed")?.unwrap_or(1).max(0) as u64;
-    scene.name = string(args, "name")?.unwrap_or("").to_string();
-    match args.get("cas") {
-        None | Some(Value::Null) => {}
-        Some(Value::Array(items)) => {
-            for it in items {
-                scene.cas.push(parse_ca(it)?);
-            }
-        }
-        Some(Value::String(s)) => scene.cas.push(CaSpec::new(&resolve_rule(s))),
-        Some(v) => return Err(format!("cas must be a list, got {v}")),
-    }
-    if scene.cas.len() > 32 {
-        return Err("at most 32 CAs".into());
-    }
-    host.replace(scene)?;
-    let mut out = ToolOutput::text(format!(
-        "New world created.\n{}",
-        serde_json::to_string_pretty(&status(host)).unwrap_or_default()
-    ));
+    let a = NewWorldIn {
+        tiling: text(args, "tiling")?,
+        width: int(args, "width")?,
+        height: int(args, "height")?,
+        cells: int(args, "cells")?,
+        level: int(args, "level")?,
+        boundary: text(args, "boundary")?,
+        cas: given(args, "cas"),
+        rng_seed: int(args, "rng_seed")?,
+        name: text(args, "name")?,
+        tiling_params: given(args, "tiling_params"),
+    };
+    let out = WorldNew::run(ctx(), host, a, &Quiet).map_err(err)?;
+    let mut t = ToolOutput::text(out.text());
     if host.world().cas.is_empty() {
-        out.content.push(json!({"type": "text", "text": "No CAs yet: add one with apply_commands {\"op\":\"add_ca\",\"ca\":{\"rule\":\"Life\"}}."}));
+        t.content.push(json!({"type": "text", "text": "No CAs yet: add one with apply_commands {\"op\":\"add_ca\",\"ca\":{\"rule\":\"Life\"}}."}));
     }
-    Ok(out)
-}
-
-fn field_of(w: &World, i: usize) -> &jetcarp_core::world::Field {
-    &w.fields[w.cas[i].field]
+    Ok(t)
 }
 
 fn set_cells(host: &mut dyn Host, args: &Value) -> Res {
@@ -975,672 +628,108 @@ fn set_cells(host: &mut dyn Host, args: &Value) -> Res {
             "erase",
         ],
     )?;
-    let w = host.world();
-    let ci = ca_index(w, args.get("ca"))?;
-    let (id, ca_name) = (w.cas[ci].id, w.cas[ci].name.clone());
-    let field = field_of(w, ci);
-    let height = field.kind == FieldKind::Height;
-    let max_state = if height {
-        u32::MAX
-    } else {
-        field.max_state() as u32
+    let a = DrawIn {
+        ca: given(args, "ca"),
+        pattern: text(args, "pattern")?,
+        rle: text(args, "rle")?,
+        x: int(args, "x")?,
+        y: int(args, "y")?,
+        cells: given(args, "cells"),
+        indices: given(args, "indices"),
+        state: int(args, "state")?,
+        clear_first: boolean(args, "clear_first")?,
+        erase: boolean(args, "erase")?,
     };
-    let n = w.topo.len();
-    let grid = Grid::of(&w.topo);
-    let erase = boolean(args, "erase")?;
-    let clear_first = boolean(args, "clear_first")?;
-    if erase && height {
-        return Err("erase does not apply to sandpile grains; use apply_commands {\"op\":\"clear\",\"id\":..} to empty the field".into());
-    }
-    let default_state = int(args, "state")?.unwrap_or(1);
-    if default_state < 0 {
-        return Err("state must be 0 or more".into());
-    }
-    let need_grid = || {
-        grid.ok_or_else(|| {
-            "this tiling is an aperiodic patch with no x/y grid; give `indices` instead (see inspect_cell)".to_string()
-        })
-    };
-    let mut writes: Vec<[u32; 2]> = Vec::new();
-    let mut given = 0;
-    let pattern = match (string(args, "pattern")?, string(args, "rle")?) {
-        (Some(_), Some(_)) => return Err("give pattern or rle, not both".into()),
-        (Some(p), None) => Some(cells::parse_plaintext(p)?),
-        (None, Some(r)) => Some(cells::parse_rle(r)?),
-        (None, None) => None,
-    };
-    let mut placed = None;
-    if let Some(p) = pattern {
-        given += 1;
-        let g = need_grid()?;
-        if p.is_empty() {
-            return Err("the pattern has no live cells (use 'O' for live, '.' for empty)".into());
-        }
-        let pw = p.iter().map(|c| c.0).max().unwrap() + 1;
-        let ph = p.iter().map(|c| c.1).max().unwrap() + 1;
-        let ox = int(args, "x")?.unwrap_or((g.w as i64 - pw) / 2);
-        let oy = int(args, "y")?.unwrap_or((g.h as i64 - ph) / 2);
-        if p.len() > MAX_SET {
-            return Err(format!("pattern has more than {MAX_SET} cells"));
-        }
-        for (dx, dy, v) in &p {
-            let i = g.index(ox + dx, oy + dy)?;
-            writes.push([i as u32, if erase { 0 } else { *v }]);
-        }
-        placed = Some((ox, oy, pw, ph));
-    } else if args.get("x").is_some_and(|v| !v.is_null())
-        || args.get("y").is_some_and(|v| !v.is_null())
-    {
-        return Err(
-            "x and y place a `pattern` or `rle`; for single cells use cells: [[x, y]]".into(),
-        );
-    }
-    if let Some(list) = args.get("cells").filter(|v| !v.is_null()) {
-        given += 1;
-        let g = need_grid()?;
-        let items = list
-            .as_array()
-            .ok_or("cells must be a list like [[x, y], [x, y, state]]")?;
-        if items.len() > MAX_SET {
-            return Err(format!("at most {MAX_SET} cells per call"));
-        }
-        for it in items {
-            let xy: Option<Vec<i64>> = match it {
-                Value::Array(a) => a.iter().map(|v| v.as_i64()).collect(),
-                Value::Object(o) => ["x", "y", "state"]
-                    .iter()
-                    .filter_map(|k| o.get(*k))
-                    .map(|v| v.as_i64())
-                    .collect(),
-                _ => None,
-            };
-            let xy = xy
-                .filter(|v| v.len() == 2 || v.len() == 3)
-                .ok_or_else(|| format!("each cell must be [x, y] or [x, y, state], got {it}"))?;
-            let v = if erase {
-                0
-            } else {
-                xy.get(2).copied().unwrap_or(default_state)
-            };
-            if v < 0 {
-                return Err(format!("negative state in {it}"));
-            }
-            writes.push([g.index(xy[0], xy[1])? as u32, v as u32]);
-        }
-    }
-    if let Some(list) = args.get("indices").filter(|v| !v.is_null()) {
-        given += 1;
-        let items = list.as_array().ok_or("indices must be a list")?;
-        if items.len() > MAX_SET {
-            return Err(format!("at most {MAX_SET} cells per call"));
-        }
-        for it in items {
-            let (i, v) = match it {
-                Value::Number(_) => (it.as_i64(), Some(default_state)),
-                Value::Array(a) if a.len() == 2 => (a[0].as_i64(), a[1].as_i64()),
-                _ => (None, None),
-            };
-            let (Some(i), Some(v)) = (i, v) else {
-                return Err(format!(
-                    "each index must be a number or [index, state], got {it}"
-                ));
-            };
-            if i < 0 || i as usize >= n || v < 0 {
-                return Err(format!("cell index {i} is out of range (0..{})", n - 1));
-            }
-            writes.push([i as u32, if erase { 0 } else { v as u32 }]);
-        }
-    }
-    if given == 0 && !clear_first {
-        return Err(
-            "nothing to draw: give pattern, rle, cells, or indices (or clear_first: true)".into(),
-        );
-    }
-    if let Some(bad) = writes.iter().find(|c| c[1] > max_state) {
-        return Err(format!(
-            "state {} is too high: CA '{ca_name}' has states 0 to {max_state}",
-            bad[1]
-        ));
-    }
-    if clear_first {
-        host.exec(Command::Clear { id })?;
-    }
-    let count = writes.len();
-    if !writes.is_empty() {
-        host.exec(Command::SetCells { id, cells: writes })?;
-    }
-    let w = host.world();
-    let mut s = format!(
-        "{} {count} cell(s) in CA '{ca_name}' (id {id}){}.",
-        if erase { "Erased" } else { "Set" },
-        if clear_first {
-            " after clearing its field"
-        } else {
-            ""
-        }
-    );
-    if let Some((ox, oy, pw, ph)) = placed {
-        let _ = write!(
-            s,
-            " Pattern box: x {ox}..{}, y {oy}..{}.",
-            ox + pw - 1,
-            oy + ph - 1
-        );
-    }
-    let _ = write!(
-        s,
-        " Field population now {}. Generation {}.",
-        field_of(w, ci).population(),
-        w.generation
-    );
-    Ok(ToolOutput::text(s))
+    let out = WorldDraw::run(ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn read_cells(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["ca", "x", "y", "width", "height", "format"])?;
-    let w = host.world();
-    let ci = ca_index(w, args.get("ca"))?;
-    let ca = &w.cas[ci];
-    let f = field_of(w, ci);
-    let binary = f.kind == FieldKind::Binary;
-    let n = w.topo.len();
-    let list_mode = match string(args, "format")? {
-        None | Some("picture") => false,
-        Some("list") => true,
-        Some(o) => return Err(format!("format must be picture or list, got {o}")),
+    let a = ReadIn {
+        ca: given(args, "ca"),
+        x: int(args, "x")?,
+        y: int(args, "y")?,
+        width: int(args, "width")?,
+        height: int(args, "height")?,
+        format: text(args, "format")?,
     };
-    let mut s = format!(
-        "CA '{}' (id {}, {}), field {}, generation {}.\n",
-        ca.name,
-        ca.id,
-        ca.notation(),
-        ca.field,
-        w.generation
-    );
-    let nonzero: Vec<usize> = (0..n).filter(|&i| cells::value(f, i) != 0).collect();
-    let agents = |s: &mut String, g: Option<Grid>| {
-        if ca.rule.is_agent() {
-            let a: Vec<String> = ca
-                .agents
-                .iter()
-                .map(|a| match g {
-                    Some(g) => {
-                        let (x, y) = g.xy(a.cell as usize);
-                        format!("({x}, {y})")
-                    }
-                    None => format!("cell {}", a.cell),
-                })
-                .collect();
-            let _ = writeln!(s, "Ants at: {}", a.join(", "));
-        }
-    };
-    let Some(g) = Grid::of(&w.topo) else {
-        // Aperiodic patch: list cells with centre points.
-        let _ = writeln!(
-            s,
-            "Aperiodic tiling: no grid. {} non-empty of {n} cells.",
-            nonzero.len()
-        );
-        for &i in nonzero.iter().take(500) {
-            let c = w.topo.centroid(i);
-            let _ = writeln!(
-                s,
-                "index {i}: {} at ({:.2}, {:.2})",
-                cells::value(f, i),
-                c[0],
-                c[1]
-            );
-        }
-        if nonzero.len() > 500 {
-            s.push_str("... (first 500 shown)\n");
-        }
-        agents(&mut s, None);
-        return Ok(ToolOutput::text(s));
-    };
-    let bbox = (!nonzero.is_empty()).then(|| {
-        let mut b = (usize::MAX, usize::MAX, 0, 0);
-        for &i in &nonzero {
-            let (x, y) = g.xy(i);
-            b = (b.0.min(x), b.1.min(y), b.2.max(x), b.3.max(y));
-        }
-        b
-    });
-    let _ = write!(
-        s,
-        "Grid {} x {}. Non-empty cells in the whole field: {}",
-        g.w,
-        g.h,
-        nonzero.len()
-    );
-    if let Some(b) = bbox {
-        let _ = write!(
-            s,
-            "; bounding box x {}..{}, y {}..{} ({} x {})",
-            b.0,
-            b.2,
-            b.1,
-            b.3,
-            b.2 - b.0 + 1,
-            b.3 - b.1 + 1
-        );
-        if g.wrap && (b.2 - b.0 + 1 == g.w || b.3 - b.1 + 1 == g.h) {
-            s.push_str(" (spans a wrapped edge or the whole grid)");
-        }
-    }
-    s.push_str(".\n");
-    agents(&mut s, Some(g));
-    let (x, y, rw, rh) = match (int(args, "x")?, int(args, "y")?) {
-        (None, None) if args.get("width").is_none() && args.get("height").is_none() => {
-            let Some(b) = bbox else {
-                s.push_str("The field is empty.\n");
-                return Ok(ToolOutput::text(s));
-            };
-            let x0 = b.0.saturating_sub(1);
-            let y0 = b.1.saturating_sub(1);
-            let x1 = (b.2 + 1).min(g.w - 1);
-            let y1 = (b.3 + 1).min(g.h - 1);
-            (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
-        }
-        (x, y) => {
-            let x = x.unwrap_or(0);
-            let y = y.unwrap_or(0);
-            if x < 0 || y < 0 || x as usize >= g.w || y as usize >= g.h {
-                return Err(format!(
-                    "x, y must be inside the grid (0..{}, 0..{})",
-                    g.w - 1,
-                    g.h - 1
-                ));
-            }
-            let rw = int(args, "width")?.unwrap_or(40).clamp(1, 200) as usize;
-            let rh = int(args, "height")?.unwrap_or(40).clamp(1, 200) as usize;
-            let (x, y) = (x as usize, y as usize);
-            (x, y, rw.min(g.w - x), rh.min(g.h - y))
-        }
-    };
-    if list_mode {
-        let mut items = Vec::new();
-        for yy in y..y + rh {
-            for xx in x..x + rw {
-                let v = cells::value(f, yy * g.w + xx);
-                if v != 0 {
-                    items.push(json!([xx, yy, v]));
-                }
-            }
-        }
-        let total = items.len();
-        items.truncate(4000);
-        let _ = writeln!(
-            s,
-            "Non-empty cells in x {}..{}, y {}..{} as [x, y, state] ({total}{}):\n{}",
-            x,
-            x + rw - 1,
-            y,
-            y + rh - 1,
-            if total > 4000 { ", first 4000" } else { "" },
-            Value::Array(items)
-        );
-        return Ok(ToolOutput::text(s));
-    }
-    if rw * rh > MAX_PICTURE {
-        return Err(format!(
-            "{s}The region x {x}..{}, y {y}..{} ({rw} x {rh}) is too large to print. Give x, y, width, height for a region of at most {MAX_PICTURE} cells (e.g. 100 x 100), or use format \"list\".",
-            x + rw - 1,
-            y + rh - 1
-        ));
-    }
-    let _ = writeln!(
-        s,
-        "Region x {}..{}, y {}..{}. '.' = empty, {}. Row 0 is the top.",
-        x,
-        x + rw - 1,
-        y,
-        y + rh - 1,
-        if binary {
-            "'O' = live"
-        } else if f.kind == FieldKind::Height {
-            "digits/letters = grains (a = 10, ..., # = 36 or more)"
-        } else {
-            "digits = state (a = 10, ...)"
-        }
-    );
-    // Ruler: tens digit line (when wide) and units digit line.
-    let tens: String = (x..x + rw)
-        .map(|c| {
-            if c % 10 == 0 {
-                char::from(b'0' + ((c / 10) % 10) as u8)
-            } else {
-                ' '
-            }
-        })
-        .collect();
-    let units: String = (x..x + rw)
-        .map(|c| char::from(b'0' + (c % 10) as u8))
-        .collect();
-    if rw > 10 {
-        let _ = writeln!(s, "x tens  {tens}");
-    }
-    let _ = writeln!(s, "x units {units}");
-    for yy in y..y + rh {
-        let row: String = (x..x + rw)
-            .map(|xx| cells::state_char(cells::value(f, yy * g.w + xx), binary))
-            .collect();
-        let _ = writeln!(s, "y={yy:<5} {row}");
-    }
-    Ok(ToolOutput::text(s))
+    let out = WorldRead::run(ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn inspect_cell(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["x", "y", "index"])?;
-    let w = host.world();
-    let t = &w.topo;
-    let g = Grid::of(t);
-    let i = match (int(args, "index")?, int(args, "x")?, int(args, "y")?) {
-        (Some(i), None, None) => {
-            if i < 0 || i as usize >= t.len() {
-                return Err(format!("index must be 0 to {}", t.len() - 1));
-            }
-            i as usize
-        }
-        (None, Some(x), Some(y)) => g
-            .ok_or("this tiling has no x/y grid; give `index`")?
-            .index(x, y)?,
-        _ => return Err("give x and y, or index".into()),
+    let a = InspectIn {
+        x: int(args, "x")?,
+        y: int(args, "y")?,
+        index: int(args, "index")?,
     };
-    let at = |j: usize| match g {
-        Some(g) => {
-            let (x, y) = g.xy(j);
-            json!({"x": x, "y": y, "index": j})
-        }
-        None => json!({"index": j}),
-    };
-    let nbs = |nb: Nb| -> Vec<Value> {
-        (0..t.degree(i, nb))
-            .map(|k| t.slot(i, nb, k).map(at).unwrap_or(json!("past the edge")))
-            .collect()
-    };
-    let c = t.centroid(i);
-    let values: Vec<Value> = w
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(fi, f)| json!({"field": fi, "kind": f.kind.name(), "value": cells::value(f, i)}))
-        .collect();
-    let mut v = at(i);
-    v["tile_type"] = json!(g.map(|g| i % g.types).unwrap_or(t.shape_of(i)));
-    v["corners"] = json!(t.polygon(i).len());
-    v["center"] = json!([
-        (c[0] * 1000.0).round() / 1000.0,
-        (c[1] * 1000.0).round() / 1000.0
-    ]);
-    v["values"] = json!(values);
-    v["edge_neighbors_clockwise"] = json!(nbs(Nb::Edge));
-    v["touch_neighbors_clockwise"] = json!(nbs(Nb::Touch));
-    Ok(ToolOutput::json(&v))
+    let out = WorldInspect::run(ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(&op::to_value(&out)))
 }
 
-fn work_check(w: &World, gens: u64) -> Result<(), String> {
-    if gens > MAX_GENS {
-        return Err(format!("at most {MAX_GENS} generations per call"));
-    }
-    let work = gens.saturating_mul(w.topo.len() as u64);
-    if work > MAX_WORK {
-        let ok = (MAX_WORK / w.topo.len().max(1) as u64).max(1);
-        return Err(format!(
-            "{gens} generations on {} cells is too much for one call; run at most {ok} at a time",
-            w.topo.len()
-        ));
-    }
-    Ok(())
-}
-
-fn step(host: &mut dyn Host, args: &Value, cancel: Option<&std::sync::atomic::AtomicBool>) -> Res {
-    let cancelled = || cancel.is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed));
+fn step(host: &mut dyn Host, args: &Value, cancel: Option<Cancel>) -> Res {
     check_unknown(args, &["generations", "stop_when_settled"])?;
-    let settle = boolean(args, "stop_when_settled")?;
-    let gens = int(args, "generations")?.unwrap_or(if settle { SETTLE_GENS } else { 1 });
-    if gens < 1 {
-        return Err("generations must be at least 1".into());
-    }
-    let gens = gens as u64;
-    work_check(host.world(), gens)?;
-    if host.world().cas.iter().all(|c| !c.enabled) {
-        return Err("no CA is enabled, so nothing would change. Enable one with apply_commands update_ca {\"enabled\": true}, or add one.".into());
-    }
-    let g0 = host.world().generation;
-    let t0 = std::time::Instant::now();
-    if settle {
-        for _ in 0..gens {
-            host.exec(Command::Step { gens: 1 })?;
-            if host.world().status() != Status::Running || cancelled() {
-                break;
-            }
-        }
-    } else {
-        // In chunks of about a second's work, so a cancel stops it.
-        let cells = host.world().topo.len().max(1) as u64;
-        let chunk = (50_000_000 / cells).clamp(1, gens);
-        let mut left = gens;
-        while left > 0 && !cancelled() {
-            let n = chunk.min(left);
-            host.exec(Command::Step { gens: n })?;
-            left -= n;
-        }
-    }
-    let w = host.world();
-    let ran = w.generation - g0;
-    let dead = w.fields.iter().all(|f| f.is_empty()) && w.cas.iter().all(|c| c.agents.is_empty());
-    let hint = if dead {
-        "\nThe world has died out: nothing will change from here. Some rules die out on some tilings \
-         from any random start (other seeds usually behave the same). If the task asked for this run, \
-         report that it died out; otherwise try another rule, tiling, or neighbourhood."
-    } else {
-        ""
+    let a = StepIn {
+        generations: int(args, "generations")?,
+        stop_when_settled: boolean(args, "stop_when_settled")?,
     };
-    Ok(ToolOutput::text(format!(
-        "Ran {ran} generation(s) in {:.2}s{}.\n{}{hint}",
-        t0.elapsed().as_secs_f64(),
-        if cancelled() && ran < gens {
-            " (cancelled)"
-        } else if settle && ran < gens {
-            " (stopped early: settled)"
-        } else {
-            ""
-        },
-        short_status(w)
-    )))
+    let p = Callbacks {
+        on_report: None,
+        cancel,
+    };
+    let out = WorldStep::run(ctx(), host, a, &p).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn render_image(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["max_side", "outlines", "save_path"])?;
-    let side = int(args, "max_side")?.unwrap_or(640);
-    if !(64..=2048).contains(&side) {
-        return Err("max_side must be 64 to 2048".into());
-    }
-    let mut opts = RenderOptions {
-        max_side: side as u32,
-        ..Default::default()
+    let a = RenderIn {
+        max_side: int(args, "max_side")?,
+        outlines: args.get("outlines").and_then(|v| v.as_bool()),
+        save_path: text(args, "save_path")?,
     };
-    match args.get("outlines") {
-        Some(Value::Bool(true)) => opts.outline_min_px = 2.0,
-        Some(Value::Bool(false)) => opts.outline_min_px = 0.0,
-        _ => {}
-    }
-    let w = host.world();
-    let img = render::render(w, &opts);
-    let r = w.record();
-    let bytes = util::png_bytes(
-        &img,
-        &[
-            ("jetcarp:version", r.jetcarp_version.clone()),
-            ("jetcarp:generation", r.generation.to_string()),
-            ("jetcarp:hash", r.hash.clone()),
-        ],
-    )?;
-    let mut text = format!(
-        "{} x {} px picture of generation {} ({}, {} cells; hash {}).",
-        img.width,
-        img.height,
-        w.generation,
-        w.topo.family.name,
-        w.topo.len(),
-        r.hash
-    );
-    if let Some(p) = string(args, "save_path")? {
-        let path = output_path(p)?;
-        render::write_png(&path, &img, &render::png_metadata(w))?;
-        let _ = write!(text, " Saved to {}.", path.display());
-    }
+    let out = WorldRender::run(ctx(), host, a, &Quiet).map_err(err)?;
     Ok(ToolOutput {
         content: vec![
-            json!({"type": "text", "text": text}),
-            json!({"type": "image", "data": util::base64(&bytes), "mimeType": "image/png"}),
+            json!({"type": "text", "text": out.text()}),
+            json!({"type": "image", "data": util::base64(&out.png), "mimeType": "image/png"}),
         ],
         is_error: false,
     })
 }
 
-/// Rule-name and seed shorthands inside raw commands, plus size limits.
-fn prepare_command(v: &Value, w: &World) -> Result<Command, String> {
-    let mut v = v.clone();
-    let op = v
-        .get("op")
-        .and_then(|o| o.as_str())
-        .unwrap_or("")
-        .to_string();
-    if op.is_empty() {
-        return Err(format!(
-            "command {v} has no \"op\". Ops: set_tiling, set_rng_state, reset, add_ca, remove_ca, update_ca, seed, clear, set_cells, step, add_table, set_script, script_goto, set_palette, sandpile, reseed, set_reseed"
-        ));
-    }
-    if op == "add_ca"
-        && let Some(ca) = v.get("ca")
-    {
-        let spec = parse_ca(ca)?;
-        v["ca"] = serde_json::to_value(spec).map_err(|e| e.to_string())?;
-    }
-    if let Some(r) = v.pointer("/change/rule").and_then(|r| r.as_str()) {
-        v["change"]["rule"] = json!(resolve_rule(r));
-    }
-    for ptr in ["/seed", "/change/seed"] {
-        if let Some(s) = v.pointer(ptr).cloned() {
-            let seed = serde_json::to_value(parse_seed(&s)?).map_err(|e| e.to_string())?;
-            *v.pointer_mut(ptr).unwrap() = seed;
-        }
-    }
-    if op == "sandpile"
-        && let Some(a) = v.get("action").and_then(|a| a.as_str())
-    {
-        v["action"] = json!(a.to_ascii_lowercase());
-    }
-    let cmd: Command = serde_json::from_value(v.clone()).map_err(|e| {
-        format!("could not read command {v}: {e}. See the apply_commands description for the command shapes.")
-    })?;
-    match &cmd {
-        Command::Step { gens } => work_check(w, *gens)?,
-        Command::SetTiling { tiling } => check_tiling_size(tiling)?,
-        Command::SetCells { cells, .. } if cells.len() > MAX_SET => {
-            return Err(format!("at most {MAX_SET} cells per set_cells"));
-        }
-        Command::Sandpile {
-            action: jetcarp_core::world::SandpileOp::AddRandom { count },
-            ..
-        } if *count > 100_000_000 => {
-            return Err("add_random count must be at most 100,000,000".into());
-        }
-        _ => {}
-    }
-    Ok(cmd)
-}
-
 fn apply_commands(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["commands"])?;
-    let list =
-        match args.get("commands") {
-            Some(Value::Array(a)) => a.clone(),
-            Some(o @ Value::Object(_)) => vec![o.clone()],
-            Some(Value::String(s)) => match serde_json::from_str::<Value>(s) {
-                Ok(Value::Array(a)) => a,
-                Ok(o @ Value::Object(_)) => vec![o],
-                _ => return Err("commands must be a list of command objects".into()),
-            },
-            _ => return Err(
-                "commands must be a list of command objects, e.g. [{\"op\":\"step\",\"gens\":10}]"
-                    .into(),
-            ),
-        };
-    if list.is_empty() {
-        return Err("commands is empty".into());
-    }
-    let mut lines = Vec::new();
-    for (k, v) in list.iter().enumerate() {
-        let cmd = match prepare_command(v, host.world()) {
-            Ok(c) => c,
-            Err(e) => {
-                lines.push(format!("{}. not applied: {e}", k + 1));
-                return Err(format!(
-                    "{}\nStopped; later commands were not applied.\n{}",
-                    lines.join("\n"),
-                    short_status(host.world())
-                ));
-            }
-        };
-        let op = v
-            .get("op")
-            .and_then(|o| o.as_str())
-            .unwrap_or("?")
-            .to_string();
-        match host.exec(cmd) {
-            Ok(a) => lines.push(match a.new_id {
-                Some(id) => format!("{}. {op}: ok, new CA id {id}", k + 1),
-                None => format!("{}. {op}: ok", k + 1),
-            }),
-            Err(e) => {
-                lines.push(format!("{}. {op}: failed: {e}", k + 1));
-                return Err(format!(
-                    "{}\nStopped; later commands were not applied.\n{}",
-                    lines.join("\n"),
-                    short_status(host.world())
-                ));
-            }
-        }
-    }
-    Ok(ToolOutput::text(format!(
-        "{}\n{}",
-        lines.join("\n"),
-        short_status(host.world())
-    )))
+    let a = ApplyIn {
+        commands: args.get("commands").cloned().unwrap_or(Value::Null),
+    };
+    let out = WorldApply::run(ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn get_scene(host: &mut dyn Host, args: &Value) -> Res {
     check_unknown(args, &["path"])?;
-    let Some(path) = string(args, "path")? else {
-        return Ok(ToolOutput::text(host.scene().to_json()));
+    let reply = match text(args, "path")? {
+        Some(path) => WorldSave::run(ctx(), host, SaveIn { path }, &Quiet)
+            .map_err(err)?
+            .text(),
+        None => WorldStatusOp::run(ctx(), host, StatusIn { scene: true }, &Quiet)
+            .map_err(err)?
+            .text(),
     };
-    let p = output_path(path)?;
-    let json = host.scene().to_json();
-    std::fs::write(&p, &json).map_err(|e| format!("could not write {}: {e}", p.display()))?;
-    Ok(ToolOutput::text(format!(
-        "Saved the scene ({} bytes, generation {}, hash {}) to {}.",
-        json.len(),
-        host.world().generation,
-        host.world().hash_hex(),
-        p.display()
-    )))
+    Ok(ToolOutput::text(reply))
 }
 
-/// A file path to write: made absolute (relative to the server's working directory), with its
-/// folder created if missing.
-fn output_path(p: &str) -> Result<std::path::PathBuf, String> {
-    let p = p.trim();
-    if p.is_empty() {
-        return Err("the path is empty".into());
-    }
-    let path = std::path::absolute(p).map_err(|e| format!("bad path {p}: {e}"))?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|e| format!("could not create folder {}: {e}", dir.display()))?;
-    }
-    Ok(path)
+fn load_scene(host: &mut dyn Host, args: &Value) -> Res {
+    check_unknown(args, &["scene", "path"])?;
+    let a = OpenIn {
+        scene: given(args, "scene"),
+        path: text(args, "path")?,
+    };
+    let out = WorldOpen::run(ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn run_script(args: &Value, progress: Option<ProgressFn>, cancel: Option<Cancel>) -> Res {
@@ -1663,6 +752,7 @@ fn run_script(args: &Value, progress: Option<ProgressFn>, cancel: Option<Cancel>
             Err(e) => ToolOutput::error(format!("syntax error at {e}")),
         });
     }
+    let limits = &ctx().limits;
     let mut opts = jetcarp_script::RunOptions::default();
     if let Some(s) = string(args, "screen")? {
         let (w, h) = jetcarp_api::args::Screen::parse_size(s)?;
@@ -1685,8 +775,8 @@ fn run_script(args: &Value, progress: Option<ProgressFn>, cancel: Option<Cancel>
         .get("max_seconds")
         .and_then(|v| v.as_f64())
         .unwrap_or(60.0);
-    opts.limits.max_seconds = Some(secs.clamp(1.0, MAX_SCRIPT_SECONDS));
-    opts.limits.max_cells = Some(MAX_CELLS);
+    opts.limits.max_seconds = Some(secs.clamp(1.0, limits.max_script_seconds));
+    opts.limits.max_cells = Some(limits.max_cells);
     opts.limits.restrict_reads = true;
     let keep = int(args, "log_lines")?.unwrap_or(200).clamp(1, 2000) as usize;
     opts.limits.max_log_lines = 20_000;
@@ -1764,47 +854,6 @@ fn run_script(args: &Value, progress: Option<ProgressFn>, cancel: Option<Cancel>
     } else {
         ToolOutput::error(out)
     })
-}
-
-fn load_scene(host: &mut dyn Host, args: &Value) -> Res {
-    check_unknown(args, &["scene", "path"])?;
-    let scene = match (
-        args.get("scene").filter(|v| !v.is_null()),
-        string(args, "path")?,
-    ) {
-        (Some(_), Some(_)) => return Err("give scene or path, not both".into()),
-        (Some(Value::String(s)), None) => Scene::from_json(s)?,
-        (Some(v), None) => {
-            serde_json::from_value(v.clone()).map_err(|e| format!("scene JSON: {e}"))?
-        }
-        (None, Some(p)) => {
-            let text =
-                std::fs::read_to_string(p).map_err(|e| format!("could not read {p}: {e}"))?;
-            Scene::from_json(&text)?
-        }
-        (None, None) => return Err("give `scene` (JSON) or `path`".into()),
-    };
-    check_tiling_size(&scene.tiling)?;
-    let recorded = scene.record.clone();
-    host.replace(scene)?;
-    let w = host.world();
-    let check = match recorded {
-        Some(r) if r.generation == w.generation && r.hash == w.hash_hex() => {
-            " Replayed to its recorded hash.".to_string()
-        }
-        Some(r) => format!(
-            " Warning: recorded generation {} hash {}, replayed generation {} hash {}.",
-            r.generation,
-            r.hash,
-            w.generation,
-            w.hash_hex()
-        ),
-        None => String::new(),
-    };
-    Ok(ToolOutput::text(format!(
-        "Scene loaded.{check}\n{}",
-        serde_json::to_string_pretty(&status(host)).unwrap_or_default()
-    )))
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -6,6 +6,8 @@ use crate::sim::{self, Shared};
 use crate::sweep::{self, Verdict};
 use crate::{Ctx, Progress};
 use jetcarp_api::args::{self, Screen};
+use jetcarp_api::op::{NoInput, Op, Quiet};
+use jetcarp_api::ops::reference::{ReferenceIsohedral, ReferenceRules, ReferenceTilings};
 use jetcarp_api::out;
 use jetcarp_core::objects::{self, ObjClass, ObjectOptions};
 use jetcarp_core::world::CaChange;
@@ -41,6 +43,18 @@ pub fn to_json(d: &Dynamic) -> R<Value> {
 /// JSON → Rhai value.
 pub fn from_json(v: &Value) -> Dynamic {
     rhai::serde::to_dynamic(v).unwrap_or(Dynamic::UNIT)
+}
+
+/// The context of the reference operations (they read no files and have no limits).
+fn ref_ctx() -> jetcarp_api::Ctx {
+    jetcarp_api::Ctx::new()
+}
+
+/// An operation's error as a script error.
+impl<T> OrErr<T> for Result<T, jetcarp_api::ApiError> {
+    fn or_err(self) -> R<T> {
+        self.map_err(|e| e.to_string().into())
+    }
 }
 
 fn map_json(m: &Map) -> R<Value> {
@@ -584,12 +598,14 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     e.register_fn("jetcarp_version", || jetcarp_core::VERSION.to_string());
 
-    // Catalogs.
-    e.register_fn("tilings", || -> Array {
-        families::FAMILIES
-            .iter()
-            .map(|f| Dynamic::from(f.id.to_string()))
-            .collect()
+    // Catalogs: the reference operations (`reference.tilings`, `.isohedral`, `.rules`).
+    e.register_fn("tilings", || -> R<Array> {
+        let out = ReferenceTilings::run(&ref_ctx(), Default::default(), &Quiet).or_err()?;
+        Ok(out
+            .families
+            .into_iter()
+            .map(|f| Dynamic::from(f.id))
+            .collect())
     });
     e.register_fn("catalog_tilings", || -> Array {
         catalog::all()
@@ -604,15 +620,15 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
             .map(|t| Dynamic::from(t.id.clone()))
             .collect()
     });
-    e.register_fn("isohedral_tilings", || -> Array {
-        jetcarp_core::isohedral::IH_TYPES
-            .iter()
-            .map(|t| Dynamic::from(format!("ih{:02}", t.num)))
-            .collect()
+    e.register_fn("isohedral_tilings", || -> R<Array> {
+        let out = ReferenceIsohedral::run(&ref_ctx(), NoInput {}, &Quiet).or_err()?;
+        Ok(out.types.into_iter().map(|t| Dynamic::from(t.id)).collect())
     });
-    e.register_fn("named_rules", || -> Array {
-        rules::catalog()
-            .iter()
+    e.register_fn("named_rules", || -> R<Array> {
+        let out = ReferenceRules::run(&ref_ctx(), Default::default(), &Quiet).or_err()?;
+        Ok(out
+            .rules
+            .into_iter()
             .map(|r| {
                 let mut m = Map::new();
                 m.insert("name".into(), r.name.into());
@@ -620,7 +636,7 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
                 m.insert("family".into(), r.family.into());
                 Dynamic::from_map(m)
             })
-            .collect()
+            .collect())
     });
     e.register_fn("series", |rules: Dynamic| -> R<Array> {
         series_array(&json!({"rules": to_json(&rules)?}))

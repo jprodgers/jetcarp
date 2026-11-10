@@ -5,16 +5,16 @@
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
 //! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`.
 
-use crate::tools::{
-    Res, ToolOutput, boolean, ca_index, check_unknown, int, short_status, string, tool,
-};
+use crate::tools::{Res, ToolOutput, boolean, check_unknown, err, given, int, string, tool};
+use jetcarp_api::op::{Quiet, Report, WorldOp};
+use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
 use jetcarp_core::library::search::SearchSpec;
 use jetcarp_core::library::{
-    self, CurationState, DiscoveredBy, Library, PasteAt, PatternClass, PatternRecord, QsStatus,
-    Query, Update,
+    self, CurationState, DiscoveredBy, Library, PatternClass, PatternRecord, QsStatus, Query,
+    Update,
 };
-use jetcarp_core::{Boundary, Command, SizeSpec};
+use jetcarp_core::{Boundary, SizeSpec};
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &[
@@ -649,67 +649,20 @@ fn paste(host: &mut dyn Host, args: &Value) -> Res {
         args,
         &["id", "ca", "x", "y", "index", "at", "orientation", "phase"],
     )?;
-    let id = string(args, "id")?.ok_or("give the pattern `id`")?;
-    let rec = lib().get(id)?;
-    let w = host.world();
-    let ci = ca_index(w, args.get("ca"))?;
-    let ca_id = w.cas[ci].id;
-    let at = match (
-        int(args, "x")?,
-        int(args, "y")?,
-        int(args, "index")?,
-        string(args, "at")?,
-    ) {
-        (Some(x), Some(y), None, None) => PasteAt::Cell {
-            x: x as i32,
-            y: y as i32,
-        },
-        (None, None, Some(i), None) => PasteAt::Index {
-            cell: i.max(0) as u32,
-        },
-        (None, None, None, Some("original")) => PasteAt::Original,
-        (None, None, None, Some("center")) => PasteAt::Center,
-        (None, None, None, None) => {
-            if rec.site.is_some() {
-                PasteAt::Original
-            } else {
-                PasteAt::Center
-            }
-        }
-        _ => {
-            return Err(
-                "give x and y, or index, or at (\"center\"/\"original\"), not several".into(),
-            );
-        }
+    let a = PasteIn {
+        id: string(args, "id")?
+            .ok_or("give the pattern `id`")?
+            .to_string(),
+        ca: given(args, "ca"),
+        x: int(args, "x")?,
+        y: int(args, "y")?,
+        index: int(args, "index")?,
+        at: string(args, "at")?.map(String::from),
+        orientation: int(args, "orientation")?,
+        phase: int(args, "phase")?,
     };
-    let phase = int(args, "phase")?.unwrap_or(0).max(0) as u64;
-    let orientation = int(args, "orientation")?.unwrap_or(0).max(0) as u32;
-    let mut warn = String::new();
-    let ca_rule = w.cas[ci].notation();
-    if w.cas[ci].nb != rec.neighborhood || !rec.works_in(&ca_rule) {
-        warn = format!(
-            "\nNote: the pattern runs as stored in {}{}; this CA runs {ca_rule}, so it may behave differently.",
-            rec.rule,
-            rec.range
-                .as_ref()
-                .map(|x| format!(" ({})", x.describe()))
-                .unwrap_or_default(),
-        );
-    }
-    host.exec(Command::PastePattern {
-        id: ca_id,
-        pattern: library::paste::source_from_record(&rec, phase),
-        at,
-        orientation,
-        phase: 0,
-    })?;
-    Ok(ToolOutput::text(format!(
-        "Pasted {} ({}, {} cells) into CA {ca_id}.{warn}\n{}",
-        rec.label(),
-        rec.id,
-        rec.phase(phase)?.len(),
-        short_status(host.world())
-    )))
+    let out = WorldPaste::run(crate::tools::ctx(), host, a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(out.text()))
 }
 
 fn update(args: &Value) -> Res {
