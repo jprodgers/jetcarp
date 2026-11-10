@@ -87,9 +87,8 @@ pub struct JetcarpApp {
     screen: Screen,
     /// The Quick Start menu (built-in entries, My finds, search picks).
     menu: start::Menu,
-    /// The *Hunts…* dashboard and the Quick Start approval queue.
+    /// The *Hunts…* dashboard.
     dash: crate::dash_ui::DashWindow,
-    queue: crate::queue_ui::QueueWindow,
     world: World,
     scene_name: String,
     scene_desc: String,
@@ -232,7 +231,6 @@ impl JetcarpApp {
             screen: Screen::Start,
             menu: start::Menu::new(),
             dash: Default::default(),
-            queue: Default::default(),
             world,
             scene_name: String::new(),
             scene_desc: String::new(),

@@ -11,7 +11,6 @@ pub(super) enum ToolWin {
     Results,
     Library,
     Hunts,
-    Queue,
     CatalogTools,
     Ants,
     Sandpile,
@@ -26,12 +25,11 @@ pub(super) enum ToolWin {
 }
 
 impl ToolWin {
-    pub const ALL: [ToolWin; 16] = [
+    pub const ALL: [ToolWin; 15] = [
         ToolWin::Scripts,
         ToolWin::Results,
         ToolWin::Library,
         ToolWin::Hunts,
-        ToolWin::Queue,
         ToolWin::CatalogTools,
         ToolWin::Ants,
         ToolWin::Sandpile,
@@ -52,7 +50,6 @@ impl ToolWin {
             ToolWin::Results => crate::results::KEY,
             ToolWin::Library => crate::library_ui::KEY,
             ToolWin::Hunts => crate::dash_ui::KEY,
-            ToolWin::Queue => crate::queue_ui::KEY,
             ToolWin::CatalogTools => crate::catalog_tools_ui::KEY,
             ToolWin::Ants => crate::ants_ui::KEY,
             ToolWin::Sandpile => crate::pile_ui::KEY,
@@ -78,7 +75,6 @@ impl ToolWin {
             ToolWin::Results => "Sweep results…",
             ToolWin::Library => "Pattern library…",
             ToolWin::Hunts => "Hunts…",
-            ToolWin::Queue => "Approval queue…",
             ToolWin::CatalogTools => "Catalog tools…",
             ToolWin::Ants => "Ants and turmites…",
             ToolWin::Sandpile => "Large sandpile…",
@@ -103,7 +99,6 @@ impl ToolWin {
             ToolWin::Hunts => {
                 "Every hunt and stage 1 search in the catalog: progress, heat map, finds, ratings"
             }
-            ToolWin::Queue => "Quick Start candidates waiting for approval",
             ToolWin::CatalogTools => {
                 "Collide patterns, export and import records, remove a record, run the evolutionary glider search"
             }
@@ -511,7 +506,6 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             Sep,
             A(A_::Tool(ToolWin::Library)),
             A(A_::Tool(ToolWin::Hunts)),
-            A(A_::Tool(ToolWin::Queue)),
             A(A_::Tool(ToolWin::CatalogTools)),
             Sep,
             A(A_::Tool(ToolWin::Ants)),
@@ -575,7 +569,6 @@ impl JetcarpApp {
             ToolWin::Results => self.results.open,
             ToolWin::Library => self.library.open,
             ToolWin::Hunts => self.dash.open,
-            ToolWin::Queue => self.queue.open,
             ToolWin::CatalogTools => self.catalog_tools.open,
             ToolWin::Ants => self.ants.open,
             ToolWin::Sandpile => self.pile.open,
@@ -598,7 +591,6 @@ impl JetcarpApp {
                 ToolWin::Results => self.results.open = false,
                 ToolWin::Library => self.library.open = false,
                 ToolWin::Hunts => self.dash.open = false,
-                ToolWin::Queue => self.queue.open = false,
                 ToolWin::CatalogTools => self.catalog_tools.open = false,
                 ToolWin::Ants => self.ants.open = false,
                 ToolWin::Sandpile => self.pile.open = false,
@@ -621,7 +613,6 @@ impl JetcarpApp {
                 self.library.reload();
             }
             ToolWin::Hunts => self.dash.open = true,
-            ToolWin::Queue => self.queue.open_window(),
             ToolWin::CatalogTools => self.catalog_tools.open = true,
             ToolWin::Ants => self.ants.open = true,
             ToolWin::Sandpile => self.pile.open = true,
@@ -879,11 +870,6 @@ impl JetcarpApp {
             && self.dash.busy()
         {
             label.push_str(" ●");
-        }
-        if let Action::Tool(ToolWin::Queue) = a
-            && self.menu.queued > 0
-        {
-            label = format!("Approval queue ({})…", self.menu.queued);
         }
         if let Action::Tool(ToolWin::AiControl) = a
             && self.ai_port().is_some()
@@ -1305,7 +1291,6 @@ mod tests {
             ("Results…", Tool(ToolWin::Results)),
             ("Library…", Tool(ToolWin::Library)),
             ("Hunts…", Tool(ToolWin::Hunts)),
-            ("Queue…", Tool(ToolWin::Queue)),
             ("Catalog tools…", Tool(ToolWin::CatalogTools)),
             ("Ants…", Tool(ToolWin::Ants)),
             ("Sandpile…", Tool(ToolWin::Sandpile)),

@@ -16,9 +16,7 @@ use crate::thumbs;
 use jetcarp_core::explore::atlas;
 use jetcarp_core::library::Library;
 use jetcarp_core::qsmenu::{self, Facets, Filter, Item, Origin, Sort};
-use jetcarp_core::quickstart;
-use jetcarp_core::render::{RenderOptions, render};
-use jetcarp_core::{Scene, Status, World};
+use jetcarp_core::Scene;
 use eframe::egui::{self, Color32, Rect, RichText, Sense};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
@@ -26,88 +24,6 @@ use std::time::Instant;
 
 /// Cards in each opening row.
 pub const ROW_LEN: usize = 12;
-
-/// A scene running small for a card (the approval queue's large preview).
-#[derive(Default)]
-pub struct Preview {
-    world: Option<World>,
-    texture: Option<egui::TextureHandle>,
-    last: f64,
-    /// The palette the running world was given (`None`: the scene's own).
-    palette: Option<String>,
-}
-
-impl Preview {
-    /// Advance and re-render a few times per second, with every CA in `palette` (`None`: the
-    /// scene's own); a new palette starts the preview over.
-    pub fn tick_in(
-        &mut self,
-        ctx: &egui::Context,
-        key: &str,
-        scene: &Scene,
-        side: u32,
-        now: f64,
-        palette: Option<&str>,
-    ) {
-        if self.palette.as_deref() != palette {
-            self.world = None;
-            self.last = 0.0;
-            self.palette = palette.map(String::from);
-        }
-        if now - self.last < 0.12 {
-            return;
-        }
-        self.last = now;
-        if self.world.is_none() {
-            let cells = quickstart::preview_cells(scene, 6000).unwrap_or(6000);
-            let mut sc = quickstart::preview_scene(scene, cells);
-            if let Some(p) = palette {
-                jetcarp_core::render::recolor_scene(&mut sc, p);
-            }
-            self.world = World::from_scene(&sc).ok();
-        }
-        let Some(w) = &mut self.world else { return };
-        let budget = std::time::Instant::now();
-        while budget.elapsed().as_millis() < 3 {
-            w.step();
-            if w.generation % 2 == 0 {
-                break;
-            }
-        }
-        let stale = w.generation > 3000
-            || (w.status() == Status::Empty && w.generation > 30)
-            || matches!(w.status(), Status::Repeats { seen_at, .. } if w.generation > seen_at + 400);
-        let img = render(
-            w,
-            &RenderOptions {
-                max_side: side,
-                outline_min_px: 0.0,
-                ..Default::default()
-            },
-        );
-        if stale {
-            // Start over so the card keeps showing the rule at work.
-            self.world = None;
-        }
-        let ci = egui::ColorImage::from_rgba_unmultiplied(
-            [img.width as usize, img.height as usize],
-            &img.rgba,
-        );
-        match &mut self.texture {
-            Some(t) => t.set(ci, egui::TextureOptions::NEAREST),
-            None => {
-                self.texture =
-                    Some(ctx.load_texture(format!("qs-{key}"), ci, egui::TextureOptions::NEAREST))
-            }
-        }
-    }
-    pub fn texture(&self) -> Option<&egui::TextureHandle> {
-        self.texture.as_ref()
-    }
-    pub fn clear(&mut self) {
-        *self = Preview::default();
-    }
-}
 
 /// Sort and filter state of the menu.
 pub struct View {
@@ -139,7 +55,7 @@ pub enum MenuAction {
 pub struct Menu {
     pub items: Vec<Item>,
     pub view: View,
-    loading: Option<Receiver<(Vec<Item>, usize)>>,
+    loading: Option<Receiver<Vec<Item>>>,
     /// The catalog's Quick Start stamp the entries were loaded at, and the atlas file's.
     stamp: String,
     atlas_stamp: Option<(PathBuf, u64, Option<std::time::SystemTime>)>,
@@ -158,8 +74,6 @@ pub struct Menu {
     last_check: f64,
     lib: Library,
     facets: Option<(u64, Filter, std::sync::Arc<Facets>)>,
-    /// Candidates waiting in the approval queue (from the last load).
-    pub queued: usize,
 }
 
 fn stamp(lib: &Library) -> String {
@@ -237,7 +151,6 @@ impl Menu {
             last_check: 0.0,
             lib,
             facets: None,
-            queued: 0,
         };
         m.rows();
         m.reload();
@@ -257,13 +170,9 @@ impl Menu {
             .name("jetcarp-qs-load".into())
             .spawn(move || {
                 let lib = Library::open(path);
-                let queued = lib
-                    .quickstart(&[jetcarp_core::library::QsStatus::Candidate])
-                    .map(|v| v.len())
-                    .unwrap_or(0);
                 let mut items = qsmenu::load(&lib);
                 qsmenu::shuffle(&mut items, seed);
-                let _ = tx.send((items, queued));
+                let _ = tx.send(items);
             })
             .ok();
         self.loading = Some(rx);
@@ -291,9 +200,8 @@ impl Menu {
 
     fn poll(&mut self) {
         let Some(rx) = &self.loading else { return };
-        if let Ok((items, queued)) = rx.try_recv() {
+        if let Ok(items) = rx.try_recv() {
             self.loading = None;
-            self.queued = queued;
             self.items = items;
             self.rev += 1;
             self.order_key = None;

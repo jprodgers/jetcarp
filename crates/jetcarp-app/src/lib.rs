@@ -23,7 +23,6 @@ mod palette_pick;
 mod pile_ui;
 mod popout;
 mod previews;
-mod queue_ui;
 mod results;
 mod rhai_edit;
 mod scripts_ui;

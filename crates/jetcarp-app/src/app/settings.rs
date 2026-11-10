@@ -38,7 +38,7 @@ pub(super) struct AppSettings {
     pub reseed: reseed_ui::ReseedSettings,
     /// The last wallpaper export choices.
     pub wallpaper: wallpaper_ui::WallpaperSettings,
-    /// Each tool window's palette (sandpile, ants, HashLife view, library, hunts, queue).
+    /// Each tool window's palette (sandpile, ants, HashLife view, library, hunts).
     #[serde(deserialize_with = "lenient")]
     pub tool_palettes: crate::palette_pick::ToolPalettes,
 }
@@ -432,8 +432,7 @@ mod tests {
             ants: Some("Glacier".into()),
             hashlife: Some("Mine".into()),
             library: Some("Candy".into()),
-            hunts: None,
-            queue: Some("Lava".into()),
+            hunts: Some("Lava".into()),
         };
         let back = AppSettings::from_json(&s.to_json());
         assert_eq!(back.tool_palettes, s.tool_palettes);

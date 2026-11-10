@@ -373,17 +373,19 @@ pub enum AddOutcome {
     Merged { seen: u64, new_rule: bool },
 }
 
-/// Status of a stage 1 setting or a Quick Start entry.
+/// Status of a Quick Start entry: `auto` and `approved` are shown in the menu, `candidate` and
+/// `rejected` hidden.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QsStatus {
-    /// Above the score threshold: shown without review.
+    /// Shown, picked by a search.
     Auto,
-    /// Below it: waits in the approval queue.
+    /// Hidden until approved.
     Candidate,
     /// Shown (approved by the user, or added by hand).
     #[default]
     Approved,
+    /// Hidden by the user.
     Rejected,
 }
 

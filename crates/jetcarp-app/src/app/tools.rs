@@ -1,5 +1,5 @@
 //! Tool windows: Scripts, Results, Library, Catalog tools, Ants, Sandpile, HashLife view, Hunts,
-//! Queue, palettes, editors, AI control, help. Each can float or pop out (`crate::popout`).
+//! palettes, editors, AI control, help. Each can float or pop out (`crate::popout`).
 
 use super::*;
 
@@ -112,12 +112,6 @@ impl JetcarpApp {
         self.pile.show(ctx);
         self.hlview.show(ctx);
         self.dash.show(ctx);
-        for a in self.queue.show(ctx) {
-            match a {
-                crate::queue_ui::QueueAction::Open(sc) => self.load_scene_bg(&sc),
-                crate::queue_ui::QueueAction::Changed => self.menu.reload(),
-            }
-        }
         self.catalog_windows(ctx);
         self.shortcuts_window(ctx);
         self.about_window(ctx);
@@ -162,7 +156,6 @@ impl JetcarpApp {
             hashlife: self.hlview.palette.clone(),
             library: self.library.palette.clone(),
             hunts: self.dash.palette.clone(),
-            queue: self.queue.palette.clone(),
         }
     }
 
@@ -175,7 +168,6 @@ impl JetcarpApp {
         self.hlview.palette = p.hashlife;
         self.library.palette = p.library;
         self.dash.palette = p.hunts;
-        self.queue.palette = p.queue;
     }
 
     /// `JETCARP_TOOL_PALETTE=<name>` (headless checks): every tool window in that palette;
@@ -189,8 +181,7 @@ impl JetcarpApp {
                 ants: o.clone(),
                 hashlife: o.clone(),
                 library: o.clone(),
-                hunts: o.clone(),
-                queue: o,
+                hunts: o,
             });
         }
     }

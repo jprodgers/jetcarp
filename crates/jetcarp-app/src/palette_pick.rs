@@ -25,8 +25,6 @@ pub struct ToolPalettes {
     pub library: Option<String>,
     /// Hunts dashboard finds and its *Render media* (`None`: the house style).
     pub hunts: Option<String>,
-    /// Approval queue preview (`None`: the entry's own palette).
-    pub queue: Option<String>,
 }
 
 impl Default for ToolPalettes {
@@ -38,7 +36,6 @@ impl Default for ToolPalettes {
             hashlife: None,
             library: None,
             hunts: None,
-            queue: None,
         }
     }
 }
@@ -50,12 +47,7 @@ impl ToolPalettes {
         if Palette::builtin(&self.sandpile).is_none() {
             self.sandpile = "Ember".into();
         }
-        for f in [
-            &mut self.ants,
-            &mut self.library,
-            &mut self.hunts,
-            &mut self.queue,
-        ] {
+        for f in [&mut self.ants, &mut self.library, &mut self.hunts] {
             if !ok(f) {
                 *f = None;
             }

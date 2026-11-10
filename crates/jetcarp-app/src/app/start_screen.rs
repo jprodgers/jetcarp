@@ -57,14 +57,6 @@ impl JetcarpApp {
                 {
                     self.dash.open = !self.dash.open;
                 }
-                let q = self.menu.queued;
-                if ui
-                    .button(if q > 0 { format!("Approval queue ({q})…") } else { "Approval queue…".into() })
-                    .on_hover_text("Quick Start candidates waiting for approval")
-                    .clicked()
-                {
-                    self.queue.open_window();
-                }
             });
             if let Some((m, err)) = &self.message {
                 ui.colored_label(

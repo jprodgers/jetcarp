@@ -1,13 +1,13 @@
 //! The Quick Start menu: every entry the app can open, from three sources, with the categories,
-//! search, sorting, opening rows, and approval-queue actions the Quick Start screen uses.
+//! search, sorting, opening rows, and ratings the Quick Start screen uses.
 //!
 //! **Sources** ([`Origin`]): the **Atlas** (`explore::atlas`, the published result of the long
 //! search: only its metadata is held, a card reads its preview by id when it is on screen and
 //! an open reads the full scene by id); **My finds** (catalog `quickstart` rows made from
 //! patterns, sweep runs, and scenes, status `auto` or `approved`); and **Classics** (the
 //! built-in entries, `quickstart::entries()`, kept only for rules the atlas does not cover, and
-//! always for the hand-made featured scenes, so every named rule is reachable). Candidates wait
-//! in the approval queue ([`candidates`]) and rejected rows are hidden.
+//! always for the hand-made featured scenes, so every named rule is reachable). Catalog rows
+//! with any other status (`candidate`, `rejected`) are hidden.
 //!
 //! **Categories**: the behaviour (the atlas's category; a built-in or a find gets the nearest
 //! one, or "Classics" / "My finds"), the grid group ([`grid_group`]: squares, hexagons,
@@ -29,9 +29,7 @@
 
 use crate::explore::atlas::{self, AtlasMeta};
 use crate::explore::space::Fam;
-use crate::library::{
-    Library, QsStatus, QuickStartRow, SettingStatus, UsageRow, tiling_display_name,
-};
+use crate::library::{Library, QsStatus, QuickStartRow, UsageRow};
 use crate::quickstart::{self, QuickStart};
 use crate::rng::Rng;
 use crate::rules::Rule;
@@ -861,14 +859,7 @@ pub fn facets(items: &[Item], key: impl Fn(&Item) -> &str) -> Vec<(String, usize
 }
 
 // ---------------------------------------------------------------------------------------------
-// The approval queue
-
-/// Entries waiting for approval, best score first.
-pub fn candidates(lib: &Library) -> Result<Vec<QuickStartRow>, String> {
-    let mut v = lib.quickstart(&[QsStatus::Candidate])?;
-    v.sort_by(|a, b| cmp_f(a.score, b.score).then(a.id.cmp(&b.id)));
-    Ok(v)
-}
+// Ratings
 
 /// Rate an entry as the user, 1 to 5 (see [`rating_target`]).
 pub fn rate_entry(lib: &Library, row: &QuickStartRow, stars: u8) -> Result<(), String> {
@@ -879,47 +870,5 @@ pub fn rate_entry(lib: &Library, row: &QuickStartRow, stars: u8) -> Result<(), S
     match kind.as_str() {
         "pattern" => lib.rate_pattern(&id, stars, "").map(|_| ()),
         _ => lib.rate(&kind, &id, "user", stars as f64, "").map(|_| ()),
-    }
-}
-
-/// Approve a candidate: it is shown in the menu, and the approval counts as a user rating
-/// (`stars`, default 4).
-pub fn approve(lib: &Library, row: &QuickStartRow, stars: Option<u8>) -> Result<(), String> {
-    if row.source_kind == "setting" {
-        let id = row.source_id.clone().unwrap_or_else(|| row.id.clone());
-        return lib
-            .review_setting(
-                &id,
-                SettingStatus::Approved,
-                Some(stars.unwrap_or(4) as f64),
-                "",
-            )
-            .map(|_| ());
-    }
-    lib.set_quickstart_status(&row.id, QsStatus::Approved)?;
-    rate_entry(lib, row, stars.unwrap_or(4))
-}
-
-/// Reject a candidate (hidden from the menu and the queue), rated only when `stars` is given.
-pub fn reject(lib: &Library, row: &QuickStartRow, stars: Option<u8>) -> Result<(), String> {
-    if row.source_kind == "setting" {
-        let id = row.source_id.clone().unwrap_or_else(|| row.id.clone());
-        return lib
-            .review_setting(&id, SettingStatus::Rejected, stars.map(|s| s as f64), "")
-            .map(|_| ());
-    }
-    lib.set_quickstart_status(&row.id, QsStatus::Rejected)?;
-    match stars {
-        Some(s) => rate_entry(lib, row, s),
-        None => Ok(()),
-    }
-}
-
-/// The grid name of a catalog row's scene (for the queue).
-pub fn row_grid(row: &QuickStartRow) -> String {
-    if row.grid.is_empty() {
-        tiling_display_name(&row.scene.tiling)
-    } else {
-        row.grid.clone()
     }
 }

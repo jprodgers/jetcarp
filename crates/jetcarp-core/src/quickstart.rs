@@ -605,7 +605,7 @@ pub const MY_FINDS: &str = "My finds";
 
 /// The catalog's shown Quick Start entries (status `auto` or `approved`; promoted patterns and
 /// sweep runs, "My finds"), oldest first, under the family "My finds" and marked featured, with
-/// ids `find:<id>`. Candidates waiting for approval and rejected entries are left out.
+/// ids `find:<id>`. Candidates and rejected entries are left out.
 pub fn user_finds(lib: &crate::library::Library) -> Vec<QuickStart> {
     use crate::library::QsStatus;
     let rows = lib

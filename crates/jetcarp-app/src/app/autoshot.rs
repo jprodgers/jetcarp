@@ -142,10 +142,7 @@ impl JetcarpApp {
         if let Ok(what) = std::env::var("JETCARP_DASHBOARD") {
             self.dash.open_env(&what);
         }
-        // `JETCARP_QUEUE=1` opens the approval queue; `JETCARP_QS_SEARCH=text` searches the menu.
-        if std::env::var("JETCARP_QUEUE").is_ok() {
-            self.queue.open_window();
-        }
+        // `JETCARP_QS_SEARCH=text` searches the menu.
         if let Ok(t) = std::env::var("JETCARP_QS_SEARCH") {
             self.menu.view.filter.text = t;
         }

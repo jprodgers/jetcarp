@@ -1,6 +1,6 @@
 //! The hunt dashboard's and the Quick Start menu's logic (Phase 4, deliverables 7 and 8): job
 //! summaries, stop and resume across catalog handles, the heat map's binning, finds, ratings,
-//! the opening rows, search and filters, and the approval queue's catalog writes.
+//! the opening rows, search and filters, and an entry's ratings and opens.
 
 use jetcarp_core::dashboard::{self, HeatColour, Target};
 use jetcarp_core::hunt::job::{self as hunt, HuntOptions, HuntSpec};
@@ -298,7 +298,7 @@ fn menu_has_every_source_categories_and_search() {
         .unwrap();
     let mut items = qsmenu::load_with(&lib, None);
     let n_built = jetcarp_core::quickstart::entries().len();
-    // One approved scene and the built-ins; the candidate waits; stage 1 settings are gone.
+    // One approved scene and the built-ins; the candidate is hidden; stage 1 settings are gone.
     assert_eq!(items.len(), n_built + 1);
     assert!(items.iter().all(|i| i.q.id != "find:waiting"));
     assert!(items.iter().all(|i| i.q.id.strip_prefix("find:").is_none_or(|x| x == "my-life")));
@@ -349,6 +349,24 @@ fn menu_has_every_source_categories_and_search() {
     assert_eq!(feat.len(), items.len());
     qsmenu::shuffle(&mut items, 7);
     assert_eq!(feat, qsmenu::select(&items, &all, Sort::Featured));
+
+    // A user rating of an entry and its opens show in the next load.
+    let row = lib.get_quickstart("my-life").unwrap();
+    qsmenu::rate_entry(&lib, &row, 5).unwrap();
+    assert!(qsmenu::rate_entry(&lib, &row, 6).is_err());
+    let r = lib.ratings(Some("quickstart")).unwrap();
+    assert_eq!(
+        (r.len(), r[0].target_id.as_str(), r[0].rating, r[0].rater.as_str()),
+        (1, "my-life", 5.0, "user")
+    );
+    lib.note_quickstart_open("find:my-life").unwrap();
+    lib.note_quickstart_open("find:my-life").unwrap();
+    let items = qsmenu::load_with(&lib, None);
+    let top = &items[qsmenu::popular(&items, 1)[0]];
+    assert_eq!(
+        (top.q.id.as_str(), top.opens, top.rating),
+        ("find:my-life", 2, Some(5.0))
+    );
 }
 
 fn usage(id: &str, opens: u64, last: &str) -> UsageRow {
@@ -417,92 +435,6 @@ fn popular_recent_and_random_rows() {
         .collect();
     assert_eq!(r, a);
     assert_eq!(qsmenu::random(&items, 1, 100_000).len(), items.len());
-}
-
-#[test]
-fn queue_actions_write_status_and_ratings() {
-    let lib = temp_lib("queue");
-    let ids = with_settings(&lib);
-    lib.put_quickstart(&scene_row("waiting", "Waiting", QsStatus::Candidate))
-        .unwrap();
-    lib.put_quickstart(&scene_row("dull", "Dull", QsStatus::Candidate))
-        .unwrap();
-    let q = qsmenu::candidates(&lib).unwrap();
-    assert_eq!(q.len(), 5, "three settings and two scenes");
-    assert_eq!(q[0].score, Some(65.0), "best score first");
-    // Approving a setting goes through review_setting: status and a user rating of 4.
-    let set = q[0].clone();
-    qsmenu::approve(&lib, &set, None).unwrap();
-    let sid = set.source_id.clone().unwrap();
-    assert_eq!(lib.setting(&sid).unwrap().status, SettingStatus::Approved);
-    assert_eq!(
-        lib.get_quickstart(&set.id).unwrap().status,
-        QsStatus::Approved
-    );
-    let r = lib.ratings(Some("setting")).unwrap();
-    assert_eq!(
-        (r.len(), r[0].target_id.as_str(), r[0].rating),
-        (1, sid.as_str(), 4.0)
-    );
-    // Rating a setting's entry rates the setting.
-    qsmenu::rate_entry(&lib, &q[1], 2).unwrap();
-    let r = lib.ratings(Some("setting")).unwrap();
-    assert_eq!((r.len(), r[1].rating), (2, 2.0));
-    // Rejecting with a rating.
-    qsmenu::reject(&lib, &q[2], Some(1)).unwrap();
-    assert_eq!(
-        lib.setting(&q[2].source_id.clone().unwrap())
-            .unwrap()
-            .status,
-        SettingStatus::Rejected
-    );
-    assert_eq!(lib.ratings(Some("setting")).unwrap().len(), 3);
-    // A scene entry: approval sets the row's status and rates the entry (here 5 stars).
-    let scene = q.iter().find(|r| r.id == "waiting").unwrap();
-    qsmenu::approve(&lib, scene, Some(5)).unwrap();
-    assert_eq!(
-        lib.get_quickstart("waiting").unwrap().status,
-        QsStatus::Approved
-    );
-    let r = lib.ratings(Some("quickstart")).unwrap();
-    assert_eq!(
-        (
-            r.len(),
-            r[0].target_id.as_str(),
-            r[0].rating,
-            r[0].rater.as_str()
-        ),
-        (1, "waiting", 5.0, "user")
-    );
-    // Rejecting without a rating writes no rating.
-    let dull = q.iter().find(|r| r.id == "dull").unwrap();
-    qsmenu::reject(&lib, dull, None).unwrap();
-    assert_eq!(
-        lib.get_quickstart("dull").unwrap().status,
-        QsStatus::Rejected
-    );
-    assert_eq!(lib.ratings(Some("quickstart")).unwrap().len(), 1);
-    // Only the setting that was rated but not decided still waits.
-    let left = qsmenu::candidates(&lib).unwrap();
-    assert_eq!(left.len(), 1);
-    assert_eq!(left[0].id, q[1].id);
-    // The menu now shows the approved scene with its rating; approved settings stay out of it.
-    let items = qsmenu::load_with(&lib, None);
-    let w = items.iter().find(|i| i.q.id == "find:waiting").unwrap();
-    assert_eq!(w.rating, Some(5.0));
-    assert!(
-        items
-            .iter()
-            .all(|i| i.q.id != format!("find:{}", set.id))
-    );
-    assert!(ids.len() == 12);
-    // Usage: a note in the catalog shows up in the next load.
-    lib.note_quickstart_open("find:waiting").unwrap();
-    lib.note_quickstart_open("find:waiting").unwrap();
-    let items = qsmenu::load_with(&lib, None);
-    let top = qsmenu::popular(&items, 1);
-    assert_eq!(items[top[0]].q.id, "find:waiting");
-    assert_eq!(items[top[0]].opens, 2);
 }
 
 #[test]
