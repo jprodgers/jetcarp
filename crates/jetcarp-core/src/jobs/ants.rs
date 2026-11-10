@@ -3,10 +3,10 @@
 //! in steps (and its checkpoints read as they were).
 
 use super::{
-    Budget, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta,
     short_list, status_name, typed,
 };
-use crate::ants::job::{self as job, AntOptions, AntProgress, AntSpec, ProgressHook};
+use crate::ants::job::{self as job, AntProgress, AntSpec, ProgressHook};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library, tiling_display_name};
@@ -163,27 +163,3 @@ impl Strategy for AntsRun {
     }
 }
 
-/// Run (or resume) an ant search here, on this thread, under the runner (its lease and
-/// heartbeat), with these options: its threads, stop flag, session limit (the item budget),
-/// batch size, and hooks.
-pub fn run(lib: &Library, job: i64, opts: AntOptions) -> Result<AntProgress, String> {
-    let mut s = AntsRun {
-        batch: opts.batch,
-        on_progress: opts.on_progress.clone(),
-        live: opts.live.clone(),
-        search: None,
-    };
-    let o = RunOptions {
-        threads: opts.threads,
-        gpu: None,
-        budget: Budget {
-            minutes: None,
-            items: opts.limit,
-        },
-        stop: Some(opts.stop.clone()),
-        observe: None,
-    };
-    Runner::new(lib.clone())
-        .run_with(job, &mut s, &o)
-        .map(|out| out.progress_as())
-}

@@ -304,6 +304,14 @@ impl Collision {
         })
     }
 
+    /// Pattern A (stays at the origin), in the rule the collision runs in.
+    pub fn a(&self) -> &PatternRecord {
+        &self.a
+    }
+    /// Pattern B (placed at each offset), in that rule.
+    pub fn b(&self) -> &PatternRecord {
+        &self.b
+    }
     /// Placements in all.
     pub fn placements(&self) -> usize {
         self.jobs.len()

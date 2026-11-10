@@ -3,9 +3,33 @@
 
 use jetcarp_core::board::Board;
 use jetcarp_core::census::*;
-use jetcarp_core::jobs::census::run as run_job;
+use jetcarp_core::jobs::census::CensusRun;
+use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::*;
 use std::sync::Arc;
+
+/// Run (or resume) a census job here on the job runner: `chunk` rules per chunk (0: adapt),
+/// stopping (paused) after `limit` rules in this session.
+fn run_job(
+    lib: &jetcarp_core::library::Library,
+    job: i64,
+    chunk: u64,
+    limit: Option<u64>,
+) -> CensusProgress {
+    let o = RunOptions {
+        budget: Budget {
+            minutes: None,
+            items: limit,
+        },
+        ..Default::default()
+    };
+    let mut s = CensusRun::default();
+    s.chunk = chunk;
+    Runner::new(lib.clone())
+        .run_with(job, &mut s, &o)
+        .unwrap()
+        .progress_as()
+}
 
 fn spec(rules: &[&str], soups: u32, gens: u64) -> CensusSpec {
     CensusSpec {
@@ -238,21 +262,12 @@ fn census_jobs_resume_to_the_same_report() {
     let straight = run_census(&s, &CensusOptions::default(), None).unwrap();
     let job = start_job(&lib, &s).unwrap();
     for limit in [5, 7] {
-        let p = run_job(
-            &Library::open(&dir),
-            job,
-            CensusJobOptions {
-                limit: Some(limit),
-                chunk: 3,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let p = run_job(&Library::open(&dir), job, 3, Some(limit));
         assert_eq!(p.status, "paused");
     }
     assert_eq!(lib.job(job).unwrap().status, JobStatus::Paused);
     assert_eq!(job_report(&lib, job).unwrap().rules.len(), 12);
-    let p = run_job(&Library::open(&dir), job, CensusJobOptions::default()).unwrap();
+    let p = run_job(&Library::open(&dir), job, 0, None);
     assert_eq!((p.status.as_str(), p.rules_done), ("done", 33));
     let r = job_report(&lib, job).unwrap();
     let mut a = straight.report.clone();

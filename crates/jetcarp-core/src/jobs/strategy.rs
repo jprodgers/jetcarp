@@ -168,6 +168,14 @@ impl RunCx<'_> {
     pub fn paused_elsewhere(&self) -> bool {
         self.lib.job(self.job).map(|j| j.status) == Ok(JobStatus::Paused)
     }
+    /// Someone watches the run's live state ([`super::Viewer`]): show it then, not otherwise.
+    pub fn viewing(&self) -> bool {
+        self.live.viewing()
+    }
+    /// Show the viewers the run's live state, as this strategy's own type (lent for the call).
+    pub fn show(&self, state: &dyn std::any::Any) {
+        self.live.show(state);
+    }
     /// Show (and save) the progress part way through a long step: the job's progress is
     /// written, only while this runner holds the job, and the live progress set.
     pub fn publish(&self, progress: Value) {

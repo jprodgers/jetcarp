@@ -17,7 +17,10 @@
 //! hooks), and runs it within the budget: after the budget's minutes, or once its items have
 //! run, the job stops at its next checkpoint, paused and resumable. [`Runner::spawn`] runs it on
 //! a new thread and returns a [`JobHandle`]: live progress, stop at the next checkpoint, wait.
-//! The [`Registry`] ([`registry`], one per process) keeps the handles of the jobs running here.
+//! Its [`Live`] tells observers each progress the run sets, and shows viewers ([`Viewer`]) what
+//! a strategy draws of itself as it runs (a sandpile's board), so a front end can draw a run it
+//! started through an operation. The [`Registry`] ([`registry`], one per process) keeps the
+//! handles of the jobs running here.
 //! A job is also stopped from any process by marking it `paused` ([`StrategyKind::request_stop`]);
 //! the run sees that at its next checkpoint.
 //!
@@ -81,7 +84,7 @@ pub mod search;
 
 pub use lease::{Lease, lock_path, owner_id};
 pub use registry::{Registry, registry};
-pub use runner::{JobHandle, Live, Outcome, RunOptions, Runner, Stopped};
+pub use runner::{JobHandle, Live, Observer, Outcome, RunOptions, Runner, Stopped, Viewer};
 pub use sink::Sink;
 pub use strategy::{RunCx, Step, Strategy, StrategyKind, drive};
 

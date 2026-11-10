@@ -1,7 +1,9 @@
 //! The hunt's storage policy (large one-off still lifes and oscillators kept as `unstored`
 //! rows), compressed pattern bodies, and pruning a catalog to the policy.
 
-use jetcarp_core::hunt::job::{self, HuntOptions, HuntSpec, StorePolicy};
+use jetcarp_core::hunt::job::{self, HuntSpec, StorePolicy};
+use jetcarp_core::jobs::hunt::HuntRun;
+use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::library::{Library, PatternRecord, Query};
 use jetcarp_core::topology::TilingSpec;
 use std::collections::BTreeSet;
@@ -70,19 +72,32 @@ fn snapshot(lib: &Library, job: i64) -> Snap {
     (rows, lib.job_sightings(job).unwrap(), unstored)
 }
 
+/// Run (or resume) a hunt here on the job runner: on `threads` threads (0: all), `batch` soups
+/// per batch (0: adapt), stopping (paused) after `limit` soups per group in this session.
+fn run_hunt(
+    lib: &Library,
+    jid: i64,
+    threads: usize,
+    batch: u64,
+    limit: Option<u64>,
+) -> job::HuntProgress {
+    let o = RunOptions {
+        threads,
+        budget: Budget {
+            minutes: None,
+            items: limit,
+        },
+        ..Default::default()
+    };
+    Runner::new(lib.clone())
+        .run_with(jid, &mut HuntRun::with_batch(batch), &o)
+        .unwrap()
+        .progress_as()
+}
+
 fn run(lib: &Library, s: &HuntSpec, threads: usize, batch: u64) -> (i64, job::HuntProgress) {
     let jid = job::start(lib, s).unwrap();
-    let p = jetcarp_core::jobs::hunt::run(
-        lib,
-        jid,
-        HuntOptions {
-            threads,
-            batch,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    (jid, p)
+    (jid, run_hunt(lib, jid, threads, batch, None))
 }
 
 #[test]
@@ -170,19 +185,10 @@ fn policy_hunt_resumed_equals_uninterrupted() {
     let (ja, pa) = run(&a, &s, 0, 0);
     let b = temp_lib("r-halves");
     let jb = job::start(&b, &s).unwrap();
-    let half = jetcarp_core::jobs::hunt::run(
-        &b,
-        jb,
-        HuntOptions {
-            limit: Some(120),
-            batch: 40,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let half = run_hunt(&b, jb, 0, 40, Some(120));
     assert_eq!(half.status, "paused");
     let b2 = Library::open(b.path());
-    let pb = jetcarp_core::jobs::hunt::run(&b2, jb, HuntOptions::default()).unwrap();
+    let pb = run_hunt(&b2, jb, 0, 0, None);
     assert_eq!(pb.status, "done");
     assert_eq!(pa.groups, pb.groups);
     assert_eq!(pa.newest, pb.newest);

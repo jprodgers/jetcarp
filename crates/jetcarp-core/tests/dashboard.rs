@@ -4,7 +4,7 @@
 //! entry's ratings and opens.
 
 use jetcarp_core::dashboard::{self, HeatColour, Target};
-use jetcarp_core::hunt::job::{self as hunt, HuntOptions, HuntSpec};
+use jetcarp_core::hunt::job::{self as hunt, HuntSpec};
 use jetcarp_core::jobs::{self, RunOptions, Runner};
 use jetcarp_core::library::{
     CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
@@ -27,15 +27,11 @@ fn small_hunt(lib: &Library, soups: u64) -> i64 {
         ..Default::default()
     };
     let job = hunt::start(lib, &spec).unwrap();
-    jetcarp_core::jobs::hunt::run(
-        lib,
-        job,
-        HuntOptions {
-            threads: 2,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let o = RunOptions {
+        threads: 2,
+        ..Default::default()
+    };
+    Runner::new(lib.clone()).run(job, &o).unwrap();
     job
 }
 

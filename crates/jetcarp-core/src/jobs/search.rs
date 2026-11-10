@@ -1,8 +1,8 @@
 //! Bounded soup searches (`jobs.kind` `search`): `crate::library::search` on a finite grid of
 //! any tiling (aperiodic patches too), in steps: a batch of soups each, gathered in run order
 //! into the checkpoint, then every distinct pattern's verification in batches, then the records
-//! stored into the job with its counts, as `Library::store_search` stores a whole run
-//! (`Library::store_search`). A stopped search resumes from its last batch, and ends exactly as
+//! stored into the job with its counts, each pattern's copies and soups as its sightings.
+//! A stopped search resumes from its last batch, and ends exactly as
 //! an uninterrupted one. Searches stored before they ran in steps had no checkpoint; a paused one
 //! simply starts again. A search whose spec says `"store": false` only reports what it found
 //! (the job is kept, its records are not stored).
@@ -10,7 +10,7 @@
 use super::{
     RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, prefix_until, thread_count,
 };
-use crate::dashboard::JobSummary;
+use crate::dashboard::{JobSummary, digits};
 use crate::library::search::{Gathered, SearchReport, SearchSpec, SoupSearch};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, JobStatus, Library, now_utc};
@@ -113,8 +113,28 @@ impl StrategyKind for SearchKind {
         s.store = spec.store;
         Ok(Box::new(s))
     }
+    /// Soups done of the soups, then the distinct patterns verified, then the records stored
+    /// and those new to the catalog.
     fn summary(&self, row: &JobRow) -> JobSummary {
-        other::summary(base_summary(row, self), row)
+        let mut s = base_summary(row, self);
+        s.title = other::summary(base_summary(row, self), row).title;
+        let p = &row.progress;
+        let num = |k: &str| p.get(k).and_then(|v| v.as_u64());
+        s.unit = "soups".into();
+        s.done = num("soups_done").unwrap_or(0);
+        s.total = num("soups");
+        for (k, label) in [
+            ("distinct", "distinct"),
+            ("verified", "verified"),
+            ("records", "patterns stored"),
+            ("added", "new to the catalog"),
+        ] {
+            if let Some(n) = num(k) {
+                s.counters.push((label.into(), digits(n)));
+            }
+        }
+        s.error = p.get("error").and_then(|v| v.as_str()).map(String::from);
+        s
     }
 }
 
@@ -123,7 +143,7 @@ impl StrategyKind for SearchKind {
 /// into the checkpoint
 /// ([`Gathered`]), then the distinct patterns verified a batch per step, then the verified
 /// records stored into the job with their soups, and its counts (`added`: the records new to
-/// the catalog) in the final progress, as `Library::store_search` stores a whole run.
+/// the catalog) in the final progress.
 pub struct SearchRun {
     pub spec: SearchSpec,
     /// Store the records (else only report them).

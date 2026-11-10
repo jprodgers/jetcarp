@@ -297,19 +297,6 @@ impl CensusProgress {
 /// Called with a census job's progress after every chunk.
 pub type CensusHook = Arc<dyn Fn(&CensusProgress) + Send + Sync>;
 
-/// How to run a census job (none of this changes its results).
-#[derive(Clone, Default)]
-pub struct CensusJobOptions {
-    /// Worker threads (0: all cores).
-    pub threads: usize,
-    pub stop: Arc<std::sync::atomic::AtomicBool>,
-    /// Stop (paused) after this many rules in this session.
-    pub limit: Option<u64>,
-    /// Rules per chunk (0: adapt to a few seconds).
-    pub chunk: u64,
-    pub on_progress: Option<CensusHook>,
-}
-
 /// Store a census as a job (status `paused` until a runner starts it).
 pub fn start_job(lib: &crate::library::Library, spec: &CensusSpec) -> Result<i64, String> {
     check_spec(spec)?;

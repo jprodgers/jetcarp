@@ -4,15 +4,41 @@
 //! catalog jobs.
 
 use jetcarp_core::ants::job::{
-    AntOptions, AntSpec, Soups, parse_rule, rules_for, run_one, start, status,
+    AntProgress, AntSpec, Soups, parse_rule, rules_for, run_one, start, status,
 };
 use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables};
-use jetcarp_core::jobs::ants::run as run_job;
+use jetcarp_core::jobs::ants::AntsRun;
+use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::library::{AntQuery, AntRow, Library, tiling_list};
 use jetcarp_core::topology::{Boundary, TilingSpec};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
+
+/// Run (or resume) an ant search here on the job runner: on `threads` threads (0: all), `batch`
+/// runs per batch (0: adapt), stopping (paused) after `limit` runs in this session.
+fn run_job(
+    lib: &Library,
+    job: i64,
+    threads: usize,
+    batch: u64,
+    limit: Option<u64>,
+) -> AntProgress {
+    let o = RunOptions {
+        threads,
+        budget: Budget {
+            minutes: None,
+            items: limit,
+        },
+        ..Default::default()
+    };
+    let mut s = AntsRun::default();
+    s.batch = batch;
+    Runner::new(lib.clone())
+        .run_with(job, &mut s, &o)
+        .unwrap()
+        .progress_as()
+}
 
 fn tiling(t: &str) -> TilingSpec {
     tiling_list(t).unwrap().remove(0)
@@ -374,19 +400,10 @@ fn small_spec() -> AntSpec {
 fn search_is_independent_of_threads_and_batches() {
     let a = temp_lib("threads-1");
     let ja = start(&a, &small_spec()).unwrap();
-    let pa = run_job(
-        &a,
-        ja,
-        AntOptions {
-            threads: 1,
-            batch: 7,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let pa = run_job(&a, ja, 1, 7, None);
     let b = temp_lib("threads-all");
     let jb = start(&b, &small_spec()).unwrap();
-    let pb = run_job(&b, jb, AntOptions::default()).unwrap();
+    let pb = run_job(&b, jb, 0, 0, None);
     assert_eq!(pa.status, "done");
     assert_eq!(pa.runs_done, pa.runs_total);
     assert_eq!(pa.by_outcome, pb.by_outcome);
@@ -411,28 +428,19 @@ fn search_resumed_equals_uninterrupted() {
     });
     let a = temp_lib("straight");
     let ja = start(&a, &spec).unwrap();
-    let pa = run_job(&a, ja, AntOptions::default()).unwrap();
+    let pa = run_job(&a, ja, 0, 0, None);
 
     let b = temp_lib("resumed");
     let jb = start(&b, &spec).unwrap();
     let half = pa.runs_total / 2;
-    let p1 = run_job(
-        &b,
-        jb,
-        AntOptions {
-            limit: Some(half),
-            batch: 5,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let p1 = run_job(&b, jb, 0, 5, Some(half));
     assert_eq!(p1.status, "paused");
     assert!(p1.runs_done >= half);
     // A newly opened catalog continues at the checkpoint.
     let b2 = Library::open(b.path());
     let (_, st) = status(&b2, jb).unwrap();
     assert_eq!(st.runs_done, p1.runs_done);
-    let p2 = run_job(&b2, jb, AntOptions::default()).unwrap();
+    let p2 = run_job(&b2, jb, 0, 0, None);
     assert_eq!(p2.status, "done");
     assert_eq!(p2.by_outcome, pa.by_outcome);
     assert_eq!(p2.groups, pa.groups);

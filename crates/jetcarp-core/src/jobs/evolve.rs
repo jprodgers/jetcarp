@@ -12,7 +12,7 @@
 //! `best_ever`, the first eight `champions` (rule and fitness), the count of verified `gliders`,
 //! the `movers` stored, and the `folder`.
 
-use super::{Outcome, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind};
+use super::{RunCx, Sink, Step, Strategy, StrategyKind};
 use super::{base_summary, eta, short_list};
 use crate::dashboard::JobSummary;
 use crate::evolve::catalog::{FoundMover, glider_records, not_cataloged};
@@ -396,22 +396,3 @@ fn done_progress(job: i64, spec: Option<&EvolveJobSpec>, d: &Finished) -> Value 
     })
 }
 
-/// Run (or resume) an evolve job here, on this thread, under the runner: a generation per
-/// step, checkpointed. `on_generation` sees each generation. Returns how the run ended and,
-/// when the search finished, its report, the verified gliders' fate, and the files written.
-pub fn run(
-    lib: &Library,
-    job: i64,
-    on_generation: Option<GenHook>,
-    o: &RunOptions,
-) -> Result<(Outcome, Option<EvolveResult>), String> {
-    let slot = Arc::new(Mutex::new(None));
-    let mut s = EvolveRun {
-        on_generation,
-        result: Some(slot.clone()),
-        ..Default::default()
-    };
-    let out = Runner::new(lib.clone()).run_with(job, &mut s, o)?;
-    let res = slot.lock().unwrap().take();
-    Ok((out, res))
-}

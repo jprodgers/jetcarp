@@ -58,7 +58,7 @@ pub use site::Site;
 pub use store::prepare;
 pub use store::{
     AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsStatus, QuickStartRow,
-    RatingRow, Sighting, SightingRow, StoredSearch, ant_id, ant_score,
+    RatingRow, Sighting, SightingRow, ant_id, ant_score,
 };
 pub use store::{FindRow, HeatQuery, HeatRow, PruneReport, UnstoredFlush, UnstoredRow, UsageRow};
 pub use symmetry::CellMap;

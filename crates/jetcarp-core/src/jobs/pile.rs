@@ -3,7 +3,7 @@
 //! those of the job's loop before it ran in steps.
 
 use super::{
-    RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, drive,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, drive,
     status_name, typed,
 };
 use crate::dashboard::{JobSummary, digits};
@@ -12,7 +12,6 @@ use crate::library::{JobStatus, Library, tiling_display_name};
 use crate::pile::Toppler;
 use crate::pile::job::{self as job, PileJobSpec, PileProgress};
 use serde_json::Value;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 pub struct PileKind;
@@ -38,6 +37,7 @@ pub fn summary(base: JobSummary, spec: Option<&PileJobSpec>, p: &PileProgress) -
     } else {
         0.0
     };
+    s.eta_s = p.eta_s.filter(|_| s.status == "running");
     s.counters
         .push(("grains so far".into(), digits(p.grains_done)));
     s.counters
@@ -169,22 +169,3 @@ impl Strategy for PileRun {
     }
 }
 
-/// Run (or resume) a pile job here, on this thread, under the runner (its lease and
-/// heartbeat): a doubling step at a time on this toppler (`None`: the CPU), stopping at the
-/// stop flag, with the caller's live progress kept up to date.
-pub fn run(
-    lib: &Library,
-    job: i64,
-    stop: Arc<AtomicBool>,
-    toppler: Option<Box<dyn Toppler>>,
-    live: Option<Arc<Mutex<PileProgress>>>,
-) -> Result<PileProgress, String> {
-    let mut s = PileRunOn::new(toppler, live);
-    let o = RunOptions {
-        stop: Some(stop),
-        ..Default::default()
-    };
-    Runner::new(lib.clone())
-        .run_with(job, &mut s, &o)
-        .map(|out| out.progress_as())
-}

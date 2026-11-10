@@ -31,8 +31,7 @@ use crate::turmite::Mite;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Seeded soups to start from instead of an empty field.
@@ -256,7 +255,7 @@ pub struct AntFind {
 }
 
 /// Progress of a search, written to the job's `progress` at every flush and kept live in
-/// memory for a dashboard (`AntOptions::live`; the job runner's
+/// memory for a dashboard (`crate::jobs::ants::AntsRun::live`; the job runner's
 /// `crate::jobs::JobHandle::progress`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct AntProgress {
@@ -336,20 +335,6 @@ pub struct Checkpoint {
 }
 
 pub type ProgressHook = Arc<dyn Fn(&AntProgress) + Send + Sync>;
-
-/// How to run a search (none of this changes its results).
-#[derive(Clone, Default)]
-pub struct AntOptions {
-    /// Worker threads (0: all cores).
-    pub threads: usize,
-    pub stop: Arc<AtomicBool>,
-    /// Stop (paused) after this many runs in this session.
-    pub limit: Option<u64>,
-    pub live: Option<Arc<Mutex<AntProgress>>>,
-    pub on_progress: Option<ProgressHook>,
-    /// Runs per batch (0: adapt to about two seconds).
-    pub batch: u64,
-}
 
 pub const KIND: &str = "ants";
 

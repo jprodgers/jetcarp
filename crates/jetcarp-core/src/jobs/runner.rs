@@ -1,5 +1,5 @@
 //! Running a job in this process: the [`Runner`], its [`RunOptions`] and [`Outcome`], a run on
-//! its own thread ([`JobHandle`]), and a run's live progress ([`Live`]).
+//! its own thread ([`JobHandle`]), and a run's live progress and live state ([`Live`]).
 
 use super::lease::HEARTBEAT_S;
 use super::{Budget, Lease, RunCx, Strategy, kind, now_seconds, status_name, status_of, typed};
@@ -9,6 +9,7 @@ use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library};
 use serde::Serialize;
 use serde_json::Value;
+use std::any::Any;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -29,6 +30,8 @@ pub struct RunOptions {
     /// Told each progress the run sets (after each step's write, on the run's thread): a front
     /// end's progress lines, whatever the kind.
     pub observe: Option<Observer>,
+    /// Shown the run's live state, for a front end that draws it ([`Viewer`]).
+    pub view: Option<Viewer>,
 }
 
 /// Why a run stopped before the job's end.
@@ -65,15 +68,26 @@ impl Outcome {
 /// A watcher of a run's live progress ([`RunOptions::observe`], [`Live::observe`]).
 pub type Observer = Arc<dyn Fn(&Value) + Send + Sync>;
 
+/// A watcher of a run's live state ([`RunOptions::view`], [`Live::on_view`]): what a strategy
+/// shows of itself as it runs beyond its progress JSON (a sandpile's board, each second and
+/// after each step), as the strategy's own types. A viewer that knows them downcasts
+/// (`state.downcast_ref::<LatticeBoard>()`) and draws or copies what it needs at once, on the
+/// run's thread: the state is lent only for the call. A strategy shows its state only while
+/// someone watches ([`Live::viewing`]).
+pub type Viewer = Arc<dyn Fn(&dyn Any) + Send + Sync>;
+
 #[derive(Default)]
 struct LiveState {
     value: Value,
     observers: Vec<Observer>,
+    viewers: Vec<Viewer>,
 }
 
 /// A run's live progress, readable from any thread: the value the run sets after each step's
 /// write (or part way through a long step, [`RunCx::publish`](super::RunCx::publish)), and the
-/// observers told of each value set (a front end's progress lines and live views).
+/// observers told of each value set (a front end's progress lines and live views). Also the
+/// viewers shown the run's live state ([`Viewer`]). A front end watches a run started on a
+/// thread of this process through its handle ([`JobHandle::live`]).
 #[derive(Clone, Default)]
 pub struct Live(Arc<Mutex<LiveState>>);
 
@@ -96,6 +110,21 @@ impl Live {
     }
     pub fn get(&self) -> Value {
         self.0.lock().unwrap().value.clone()
+    }
+    /// Call `f` with the run's live state each time the strategy shows it ([`Viewer`]).
+    pub fn on_view(&self, f: impl Fn(&dyn Any) + Send + Sync + 'static) {
+        self.0.lock().unwrap().viewers.push(Arc::new(f));
+    }
+    /// Someone watches the run's live state: a strategy shows it only then.
+    pub fn viewing(&self) -> bool {
+        !self.0.lock().unwrap().viewers.is_empty()
+    }
+    /// Show the viewers the run's live state (the strategy's own type).
+    pub fn show(&self, state: &dyn Any) {
+        let viewers = self.0.lock().unwrap().viewers.clone();
+        for f in viewers {
+            f(state);
+        }
     }
     /// Replace the progress without telling the observers (the run's end, as the runner
     /// reports it).
@@ -315,6 +344,9 @@ fn execute(
     if let Some(f) = o.observe.clone() {
         live.observe(move |v| f(v));
     }
+    if let Some(f) = o.view.clone() {
+        live.on_view(move |s| f(s));
+    }
     let asked_before = stop.load(Ordering::SeqCst);
     let keeper = Keeper::start(
         lib.clone(),
@@ -425,6 +457,11 @@ impl JobHandle {
     /// The live progress (its kind's progress JSON).
     pub fn progress(&self) -> Value {
         self.live.get()
+    }
+    /// The run's live progress and state, to read or watch from any thread; it keeps the last
+    /// progress (with the run's final status) after the run has ended.
+    pub fn live(&self) -> &Live {
+        &self.live
     }
     /// The live progress as its kind's own type (`HuntProgress`, `AntProgress`, ...).
     pub fn progress_as<T: serde::de::DeserializeOwned + Default>(&self) -> T {

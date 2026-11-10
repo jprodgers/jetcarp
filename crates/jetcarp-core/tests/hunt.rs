@@ -2,7 +2,9 @@
 //! tiling, soups, determinism, resume, and guns.
 
 use jetcarp_core::hunt::bits::{Plan, Universe};
-use jetcarp_core::hunt::job::{self, HuntOptions, HuntSpec};
+use jetcarp_core::hunt::job::{self, HuntSpec};
+use jetcarp_core::jobs::hunt::HuntRun;
+use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::hunt::separate::{Cache, Census};
 use jetcarp_core::hunt::soup::{Layout, continue_soup, prefix_cpu, run_soup, soup_state};
 use jetcarp_core::library::{JobStatus, Library, PatternRecord, Query};
@@ -62,6 +64,29 @@ fn small_spec() -> HuntSpec {
     }
 }
 
+
+/// Run (or resume) a hunt here on the job runner: on `threads` threads (0: all), `batch` soups
+/// per batch (0: adapt), stopping (paused) after `limit` soups per group in this session.
+fn run_hunt(
+    lib: &Library,
+    jid: i64,
+    threads: usize,
+    batch: u64,
+    limit: Option<u64>,
+) -> job::HuntProgress {
+    let o = RunOptions {
+        threads,
+        budget: Budget {
+            minutes: None,
+            items: limit,
+        },
+        ..Default::default()
+    };
+    Runner::new(lib.clone())
+        .run_with(jid, &mut HuntRun::with_batch(batch), &o)
+        .unwrap()
+        .progress_as()
+}
 #[test]
 fn hunt_is_independent_of_threads_and_batches() {
     let spec = small_spec();
@@ -70,16 +95,7 @@ fn hunt_is_independent_of_threads_and_batches() {
     for (name, threads, batch) in [("t1", 1, 7), ("tall", 0, 0), ("t3", 3, 64)] {
         let lib = temp_lib(name);
         let jid = job::start(&lib, &spec).unwrap();
-        let p = jetcarp_core::jobs::hunt::run(
-            &lib,
-            jid,
-            HuntOptions {
-                threads,
-                batch,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let p = run_hunt(&lib, jid, threads, batch, None);
         assert_eq!(p.status, "done");
         assert_eq!(p.soups_done, 240);
         assert!(p.objects > 1000, "{}", p.line());
@@ -106,25 +122,16 @@ fn hunt_resumed_equals_uninterrupted() {
     spec.soups = Some(400);
     let a = temp_lib("whole");
     let ja = job::start(&a, &spec).unwrap();
-    let pa = jetcarp_core::jobs::hunt::run(&a, ja, HuntOptions::default()).unwrap();
+    let pa = run_hunt(&a, ja, 0, 0, None);
     let b = temp_lib("halves");
     let jb = job::start(&b, &spec).unwrap();
-    let half = jetcarp_core::jobs::hunt::run(
-        &b,
-        jb,
-        HuntOptions {
-            limit: Some(200),
-            batch: 50,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let half = run_hunt(&b, jb, 0, 50, Some(200));
     assert_eq!(half.status, "paused");
     assert_eq!(half.soups_done, 200);
     assert_eq!(b.job(jb).unwrap().status, JobStatus::Paused);
     // A new process would open the catalog afresh.
     let b2 = Library::open(b.path());
-    let pb = jetcarp_core::jobs::hunt::run(&b2, jb, HuntOptions::default()).unwrap();
+    let pb = run_hunt(&b2, jb, 0, 0, None);
     assert_eq!(pb.status, "done");
     assert_eq!(pa.groups, pb.groups);
     assert_eq!(pa.newest, pb.newest);

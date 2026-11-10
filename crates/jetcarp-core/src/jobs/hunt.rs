@@ -3,11 +3,11 @@
 //! loop before it ran in steps (and its checkpoints read as they were).
 
 use super::{
-    RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, short_list,
     status_name, typed,
 };
 use crate::dashboard::{FindItem, Finds, HeatSpace, JobSummary, Target, digits};
-use crate::hunt::job::{self as hunt, HuntOptions, HuntProgress, HuntSpec, ProgressHook};
+use crate::hunt::job::{self as hunt, HuntProgress, HuntSpec, ProgressHook};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, HeatQuery, JobStatus, Library, tiling_display_name};
 use crate::rules::Rule;
@@ -256,27 +256,3 @@ impl Strategy for HuntRun {
     }
 }
 
-/// Run (or resume) a hunt here, on this thread, under the runner (its lease and heartbeat),
-/// with these options: its threads, GPU, stop flag, session limit (the item budget), batch
-/// size, and hooks.
-pub fn run(lib: &Library, job: i64, opts: HuntOptions) -> Result<HuntProgress, String> {
-    let mut s = HuntRun {
-        batch: opts.batch,
-        on_progress: opts.on_progress.clone(),
-        live: opts.live.clone(),
-        hunt: None,
-    };
-    let o = RunOptions {
-        threads: opts.threads,
-        gpu: opts.gpu.clone(),
-        budget: super::Budget {
-            minutes: None,
-            items: opts.limit,
-        },
-        stop: Some(opts.stop.clone()),
-        observe: None,
-    };
-    Runner::new(lib.clone())
-        .run_with(job, &mut s, &o)
-        .map(|out| out.progress_as())
-}

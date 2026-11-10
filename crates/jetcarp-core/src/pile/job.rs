@@ -4,12 +4,24 @@
 //! The pile itself already resumes from its folder: every finished doubling step is saved to
 //! `steps/step-KK.pile`. The job row holds the spec and folder, and its progress (the steps
 //! done, grains, topplings, the step in flight) is written after every step and every second
-//! inside one; a resumed job loads the folder's latest step file. A stop request (the job marked
-//! `paused`, or the stop flag) cancels the step in flight, which the next run repeats. The job
-//! runner (`crate::jobs::pile`) runs a job a doubling step at a time ([`PileJob`]).
+//! inside one, with the time left once two steps have run; a resumed job loads the folder's
+//! latest step file. A stop request (the job marked `paused`, or the stop flag) cancels the step
+//! in flight, which the next run repeats. The job runner (`crate::jobs::pile`) runs a job a
+//! doubling step at a time ([`PileJob`]).
+//!
+//! **Watching.** While someone watches the run's live state (`crate::jobs::Viewer`: the app's
+//! Sandpile window), the job shows its board every second and after each step, as a
+//! [`super::lattice::LatticeBoard`] or [`super::patch::PatchBoard`]
+//! ([`super::BoardRef::from_any`]), the GPU copying it back for each.
+//!
+//! **Colours.** The export takes its palette and direction from the folder's `look.json`
+//! (written when the job is made, from its spec), so whoever changes them while the pile builds
+//! (the Sandpile window) gets the export in the new colours.
 
 use super::export::ExportOptions;
-use super::{Ctl, Pile, PileSpec, RunOptions, Toppler, file, latest_step_file, write_growth};
+use super::{
+    Ctl, Pile, PileSpec, RunOptions, StepRecord, Toppler, file, latest_step_file, write_growth,
+};
 use crate::library::{JobStatus, Library, now_utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -64,8 +76,15 @@ pub struct PileProgress {
     pub png: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
+    /// What topples it: a GPU's name, or `cpu, N threads`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<String>,
+    /// Seconds left, while a step runs and two have run before it ([`super::eta_seconds`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eta_s: Option<f64>,
+    /// The last finished step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_step: Option<StepRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub updated: String,
@@ -121,6 +140,7 @@ fn progress_of(job: i64, pile: &Pile, spec: &PileJobSpec, status: &str) -> PileP
         in_step: [0.0; 3],
         folder: spec.folder.display().to_string(),
         backend: pile.records.last().map(|r| r.backend.clone()),
+        last_step: pile.records.last().cloned(),
         updated: now_utc(),
         ..Default::default()
     }
@@ -179,6 +199,8 @@ pub struct PileJob {
     pile: Pile,
     /// A step was cancelled part way: the pile is reloaded from its folder before the next.
     stale: bool,
+    /// What topples it in this run (set at its first step).
+    backend: Option<String>,
     done: Option<PileProgress>,
 }
 
@@ -197,6 +219,7 @@ impl PileJob {
             spec,
             pile,
             stale: false,
+            backend: None,
             done: None,
         })
     }
@@ -214,18 +237,33 @@ impl PileJob {
         if self.pile.finished() {
             return Ok(true);
         }
-        let base = progress_of(self.job, &self.pile, &self.spec, "running");
+        let backend = self
+            .backend
+            .get_or_insert_with(|| match &toppler {
+                Some(t) => t.name(),
+                None => format!("cpu, {} threads", rayon::current_num_threads()),
+            })
+            .clone();
+        let mut base = self.progress("running");
+        base.backend = Some(backend);
+        let records = self.pile.records.clone();
         let cancel = AtomicBool::new(false);
         let mut last_check = Instant::now();
         let r = {
             let mut ctl = Ctl {
                 cancel: Some(&cancel),
                 tick_every: 1.0,
-                on_tick: Some(Box::new(|_, t, _| {
+                // A watcher draws the board: the GPU copies it back for each tick.
+                needs_board: cx.viewing(),
+                on_tick: Some(Box::new(|_, t, b| {
                     let mut p = base.clone();
                     p.in_step = [t.sweeps as f64, t.topplings as f64, t.seconds];
+                    p.eta_s = super::eta_seconds(&records, p.steps, t.seconds);
                     p.updated = now_utc();
                     cx.publish(serde_json::to_value(&p).unwrap_or_default());
+                    if cx.viewing() {
+                        cx.show(b.as_any());
+                    }
                     let mut stop = cx.stopped();
                     if !stop && last_check.elapsed().as_secs_f64() >= 2.0 {
                         last_check = Instant::now();
@@ -247,6 +285,9 @@ impl PileJob {
                     .join(format!("steps/step-{:02}.pile", self.pile.done));
                 file::save(&self.pile, &f)?;
                 write_growth(&self.pile, &self.spec.folder)?;
+                if cx.viewing() {
+                    cx.show(self.pile.board.as_ref().as_any());
+                }
                 Ok(self.pile.finished())
             }
             Err(_) if cancel.load(Ordering::SeqCst) => {
@@ -257,15 +298,19 @@ impl PileJob {
         }
     }
 
-    /// Export the finished pile (`pile.png`, `preview.png`, `pile.json`).
+    /// Export the finished pile (`pile.png`, `preview.png`, `pile.json`), in the colours of the
+    /// folder's `look.json` (else the spec's).
     pub fn finish(&mut self) -> Result<Vec<PathBuf>, String> {
         let spec = &self.spec;
+        let (palette, reverse) = super::export::read_look_file(&spec.folder)
+            .filter(|(p, _)| crate::render::builtin_palette(p).is_ok())
+            .unwrap_or_else(|| (spec.palette.clone(), spec.reverse));
         let opts = RunOptions {
             export: ExportOptions {
                 px_per_cell: spec.px_per_cell,
                 margin: spec.margin,
-                palette: spec.palette.clone(),
-                reverse: spec.reverse,
+                palette,
+                reverse,
                 preview_side: spec.preview_side,
                 png: spec.png,
             },
@@ -281,7 +326,7 @@ impl PileJob {
         };
         let mut quiet = Ctl::default();
         let s = super::run_to_dir(&mut self.pile, &spec.folder, None, &mut quiet, &opts)?;
-        let mut p = progress_of(self.job, &self.pile, spec, "done");
+        let mut p = self.progress("done");
         p.png = s.png.as_ref().map(|x| x.display().to_string());
         p.preview = s.preview.as_ref().map(|x| x.display().to_string());
         self.done = Some(p);
@@ -292,7 +337,13 @@ impl PileJob {
     pub fn progress(&self, status: &str) -> PileProgress {
         match &self.done {
             Some(p) => p.clone(),
-            None => progress_of(self.job, &self.pile, &self.spec, status),
+            None => {
+                let mut p = progress_of(self.job, &self.pile, &self.spec, status);
+                if self.backend.is_some() {
+                    p.backend = self.backend.clone();
+                }
+                p
+            }
         }
     }
 }

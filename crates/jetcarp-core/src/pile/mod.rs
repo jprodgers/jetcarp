@@ -147,6 +147,24 @@ pub enum BoardRef<'a> {
     Patch(&'a PatchBoard),
 }
 
+impl<'a> BoardRef<'a> {
+    /// The board as a job's live state (`crate::jobs::Viewer`): the pile job shows its board
+    /// this way each second and after each step.
+    pub fn as_any(&self) -> &'a dyn std::any::Any {
+        match *self {
+            BoardRef::Lattice(b) => b,
+            BoardRef::Patch(b) => b,
+        }
+    }
+    /// A board shown as a job's live state, if that is what `state` is.
+    pub fn from_any(state: &'a dyn std::any::Any) -> Option<BoardRef<'a>> {
+        state
+            .downcast_ref::<LatticeBoard>()
+            .map(BoardRef::Lattice)
+            .or_else(|| state.downcast_ref::<PatchBoard>().map(BoardRef::Patch))
+    }
+}
+
 /// The progress callback: step, progress in the step, and the board (for drawing).
 pub type OnTick<'a> = Box<dyn FnMut(&StepInfo, &Tick, BoardRef) + 'a>;
 

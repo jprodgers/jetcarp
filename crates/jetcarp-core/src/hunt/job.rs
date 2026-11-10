@@ -221,7 +221,7 @@ pub struct Find {
 }
 
 /// Progress of a hunt, written to the job's `progress` at every flush and kept live in memory
-/// for a dashboard (`HuntOptions::live`; the job runner's `crate::jobs::JobHandle::progress`).
+/// for a dashboard (`crate::jobs::hunt::HuntRun::live`; `crate::jobs::JobHandle::progress`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct HuntProgress {
     pub job: i64,
@@ -350,26 +350,7 @@ pub trait SoupBatcher: Send + Sync {
 /// Called with the progress after every batch.
 pub type ProgressHook = Arc<dyn Fn(&HuntProgress) + Send + Sync>;
 
-/// How to run a hunt (none of this changes its results).
-#[derive(Clone, Default)]
-pub struct HuntOptions {
-    /// Worker threads (0: all cores).
-    pub threads: usize,
-    /// Set to stop at the next batch.
-    pub stop: Arc<AtomicBool>,
-    /// Stop (paused) after this many soup indices in this session.
-    pub limit: Option<u64>,
-    /// Run soup prefixes here when it supports the group.
-    pub gpu: Option<Arc<dyn SoupBatcher>>,
-    /// Updated after every batch.
-    pub live: Option<Arc<Mutex<HuntProgress>>>,
-    /// Called after every batch.
-    pub on_progress: Option<ProgressHook>,
-    /// Soups per batch (0: adapt to about a second).
-    pub batch: u64,
-}
-
-/// Create a hunt job (status `paused` until [`run`] starts it). Returns the job id.
+/// Create a hunt job (status `paused` until a runner starts it). Returns the job id.
 pub fn start(lib: &Library, spec: &HuntSpec) -> Result<i64, String> {
     spec.check()?;
     let v = serde_json::to_value(spec).map_err(|e| e.to_string())?;

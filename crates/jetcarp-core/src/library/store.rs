@@ -519,19 +519,6 @@ pub struct SightingRow {
     pub last_seen: String,
 }
 
-/// What [`Library::store_search`] did.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct StoredSearch {
-    pub job: i64,
-    /// Patterns stored for the first time.
-    pub added: Vec<String>,
-    /// Patterns already stored (their seen counts grew).
-    pub merged: Vec<String>,
-    /// (pattern, rule) pairs verified for the first time on a pattern already stored.
-    pub new_rules: Vec<(String, String)>,
-    pub failed: Vec<(String, String)>,
-}
-
 /// Row counts and the schema version (`jetcarp library info`).
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct CatalogInfo {
@@ -1136,14 +1123,6 @@ impl Library {
             }
             Ok(out)
         })
-    }
-
-    /// Store a soup search's verified records as one job (`kind` `search`, the spec, progress
-    /// done), with each pattern's copies and soups as sightings.
-    pub fn store_search(&self, out: &super::search::SearchOutput) -> Result<StoredSearch, String> {
-        let spec = serde_json::to_value(&out.report.spec).unwrap_or(Value::Null);
-        let job = self.create_job("search", &spec)?;
-        self.store_search_in(job, out)
     }
 
     /// Is a pattern with this exact id stored?

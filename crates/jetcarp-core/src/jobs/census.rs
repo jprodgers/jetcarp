@@ -3,10 +3,10 @@
 //! steps (and its checkpoints read as they were).
 
 use super::{
-    Budget, RunCx, RunOptions, Runner, Sink, Step, Strategy, StrategyKind, base_summary, eta,
+    RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta,
     status_name, typed,
 };
-use crate::census::{self, CensusHook, CensusJobOptions, CensusProgress, CensusSpec};
+use crate::census::{self, CensusHook, CensusProgress, CensusSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library, tiling_display_name};
@@ -120,26 +120,3 @@ impl Strategy for CensusRun {
     }
 }
 
-/// Run (or resume) a census job here, on this thread, under the runner (its lease and
-/// heartbeat), with these options: its threads, stop flag, session limit (the item budget),
-/// chunk size, and hook.
-pub fn run(lib: &Library, job: i64, opts: CensusJobOptions) -> Result<CensusProgress, String> {
-    let mut s = CensusRun {
-        chunk: opts.chunk,
-        on_progress: opts.on_progress.clone(),
-        census: None,
-    };
-    let o = RunOptions {
-        threads: opts.threads,
-        gpu: None,
-        budget: Budget {
-            minutes: None,
-            items: opts.limit,
-        },
-        stop: Some(opts.stop.clone()),
-        observe: None,
-    };
-    Runner::new(lib.clone())
-        .run_with(job, &mut s, &o)
-        .map(|out| out.progress_as())
-}

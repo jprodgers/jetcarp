@@ -5,12 +5,16 @@
 //! from its last batch and ends exactly as an uninterrupted one. Collide jobs had no checkpoint
 //! before they ran in steps, so a paused one starts again; one made before collisions were
 //! strategies (its spec without `a` and `b`) cannot be run again.
+//!
+//! The progress names the patterns and the rule (`a`, `b`, `rule`) and counts the runs; at the
+//! end it has the runs per outcome, the products (`found`: the first [`FOUND`] with their ids,
+//! labels, runs, and whether they are new to the catalog), and how many were added.
 
 use super::{
     RunCx, Sink, Step, Strategy, StrategyKind, base_summary, other, prefix_until, status_name,
     thread_count,
 };
-use crate::dashboard::JobSummary;
+use crate::dashboard::{JobSummary, digits};
 use crate::library::collide::{Collected, CollideOutput, CollideSpec, Collision};
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, JobStatus, Library, PatternRecord, now_utc, prepare};
@@ -82,15 +86,52 @@ impl StrategyKind for CollideKind {
         })?;
         Ok(Box::new(CollideRun::new(spec)))
     }
+    /// Runs done of the placements, the products and those new to the catalog, and the runs
+    /// per outcome as bars. A job made before collisions were strategies gets the generic one.
     fn summary(&self, row: &JobRow) -> JobSummary {
-        let mut s = other::summary(base_summary(row, self), row);
-        if let (Some(a), Some(b)) = (
-            row.spec.get("a").and_then(|v| v.as_str()),
-            row.spec.get("b").and_then(|v| v.as_str()),
-        ) && s.title.is_empty()
-        {
-            s.title = format!("{a} x {b}");
+        if !self.runnable(row) {
+            return other::summary(base_summary(row, self), row);
         }
+        let mut s = base_summary(row, self);
+        let p = &row.progress;
+        let text = |k: &str| p.get(k).and_then(|v| v.as_str());
+        let num = |k: &str| p.get(k).and_then(|v| v.as_u64());
+        let (a, b) = match (text("a"), text("b")) {
+            (Some(a), Some(b)) => (a.to_string(), b.to_string()),
+            _ => {
+                let id = |k: &str| {
+                    let v = row.spec.get(k).and_then(|v| v.as_str()).unwrap_or("?");
+                    v[..v.len().min(10)].to_string()
+                };
+                (id("a"), id("b"))
+            }
+        };
+        s.title = match text("rule") {
+            Some(r) => format!("{b} into {a} in {r}"),
+            None => format!("{b} into {a}"),
+        };
+        s.unit = "runs".into();
+        s.total = num("runs");
+        s.done = num("runs_done")
+            .or(num("runs").filter(|_| p.get("outcomes").is_some()))
+            .unwrap_or(0);
+        if let Some(n) = num("products") {
+            s.counters.push(("products".into(), digits(n)));
+        }
+        if let Some(n) = num("verified") {
+            s.counters.push(("verified".into(), digits(n)));
+        }
+        if let Some(n) = num("added") {
+            s.counters.push(("new to the catalog".into(), digits(n)));
+        }
+        if let Some(o) = p.get("outcomes").and_then(|v| v.as_object()) {
+            s.bars_title = "Runs by outcome".into();
+            s.bars = o
+                .iter()
+                .map(|(k, v)| (k.replace('_', " "), v.as_u64().unwrap_or(0)))
+                .collect();
+        }
+        s.error = text("error").map(String::from);
         s
     }
 }
@@ -117,10 +158,13 @@ pub struct CollideRun {
     checks: usize,
     /// Placements gathered when this session began.
     session_start: usize,
-    /// Once finished: the products' ids, and those new to the catalog.
-    products: Option<Vec<String>>,
+    /// Once finished: the products (id, label, runs), and the ids new to the catalog.
+    products: Option<Vec<(String, String, u64)>>,
     added: Vec<String>,
 }
+
+/// Most products listed in a finished collision's progress (`found`).
+pub const FOUND: usize = 100;
 
 impl CollideRun {
     pub fn new(spec: CollideJobSpec) -> CollideRun {
@@ -215,7 +259,12 @@ impl Strategy for CollideRun {
     fn finish(&mut self, _cx: &RunCx<'_>, sink: &mut Sink) -> Result<(), String> {
         let got = self.got.as_ref().ok_or(NOT_OPEN)?;
         let records = got.records();
-        self.products = Some(records.iter().map(|r| r.id.clone()).collect());
+        self.products = Some(
+            records
+                .iter()
+                .map(|r| (r.id.clone(), r.label(), r.seen))
+                .collect(),
+        );
         if self.spec.store && !records.is_empty() {
             // Made ready to store here, so a product that cannot be stored fails the job before
             // anything is written.
@@ -236,7 +285,7 @@ impl Strategy for CollideRun {
                 .iter()
                 .zip(outcomes)
                 .filter(|(_, o)| matches!(o, Ok(AddOutcome::Added)))
-                .map(|(id, _)| id.clone())
+                .map(|(p, _)| p.0.clone())
                 .collect();
             if let (Some(slot), Some(got), Some(c)) = (&self.result, &self.got, &self.collision) {
                 *slot.lock().unwrap() = Some((got.clone().output(c), self.added.clone()));
@@ -263,20 +312,29 @@ impl Strategy for CollideRun {
         let Some(got) = &self.got else {
             return json!({"status": status, "runs": total, "runs_done": 0});
         };
-        match &self.products {
-            Some(ids) => json!({
+        let mut v = match &self.products {
+            Some(ps) => json!({
                 "status": status,
                 "runs": total,
                 "outcomes": got.counts,
-                "products": ids.len(),
+                "products": ps.len(),
                 "added": self.added.len(),
                 "new": self.added,
+                "found": ps.iter().take(FOUND).map(|(id, label, runs)| json!({
+                    "id": id, "label": label, "runs": runs, "new": self.added.contains(id),
+                })).collect::<Vec<_>>(),
             }),
             None if got.next == total => json!({
                 "status": status, "runs": total, "runs_done": total,
                 "products": got.products(), "verified": got.verified(),
             }),
             None => json!({"status": status, "runs": total, "runs_done": got.next}),
+        };
+        if let Some(c) = &self.collision {
+            v["a"] = c.a().label().into();
+            v["b"] = c.b().label().into();
+            v["rule"] = c.a().rule.clone().into();
         }
+        v
     }
 }

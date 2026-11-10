@@ -472,20 +472,31 @@ fn pile_export_and_jobs_keep_the_palette() {
     let mut old = serde_json::to_value(&spec).unwrap();
     old.as_object_mut().unwrap().remove("reverse");
     assert!(!serde_json::from_value::<PileJobSpec>(old).unwrap().reverse);
-    let done = jetcarp_core::jobs::pile::run(
-        &lib,
-        job,
-        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        None,
-        None,
-    )
-    .unwrap();
+    let run = |job: i64| -> jetcarp_core::pile::job::PileProgress {
+        let o = jetcarp_core::jobs::RunOptions::default();
+        jetcarp_core::jobs::Runner::new(lib.clone())
+            .run(job, &o)
+            .unwrap()
+            .progress_as()
+    };
+    let meta_of = |folder: &std::path::Path| -> serde_json::Value {
+        serde_json::from_str(&std::fs::read_to_string(folder.join("pile.json")).unwrap()).unwrap()
+    };
+    let done = run(job);
     assert_eq!(done.status, "done");
-    let meta: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(spec.folder.join("pile.json")).unwrap())
-            .unwrap();
+    let meta = meta_of(&spec.folder);
     assert_eq!(meta["image"]["palette"], "Lava");
     assert_eq!(meta["image"]["reverse"], true);
+    // The export takes the colours look.json has when the pile is done (the Sandpile window
+    // changes them while the pile builds).
+    let mut spec2 = spec.clone();
+    spec2.folder = dir.join("job-recoloured");
+    let job2 = pilejob::start(&lib, &spec2).unwrap();
+    write_look_file(&spec2.folder, "Glacier", false).unwrap();
+    assert_eq!(run(job2).status, "done");
+    let meta = meta_of(&spec2.folder);
+    assert_eq!(meta["image"]["palette"], "Glacier");
+    assert_eq!(meta["image"]["reverse"], false);
     spec.palette = "Nope".into();
     spec.folder = dir.join("bad");
     let e = pilejob::start(&lib, &spec).unwrap_err();

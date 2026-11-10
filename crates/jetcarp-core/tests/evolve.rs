@@ -27,6 +27,28 @@ fn small(tiling: &str, pop: usize, gens: usize, seed: u64) -> EvolveSpec {
     }
 }
 
+
+/// Run (or resume) an evolve job here on the job runner, `on_generation` seeing each generation;
+/// with the search's result when it finished.
+fn run_evolve(
+    lib: &Library,
+    job: i64,
+    on_generation: Option<jetcarp_core::jobs::evolve::GenHook>,
+    o: &jetcarp_core::jobs::RunOptions,
+) -> (
+    jetcarp_core::jobs::Outcome,
+    Option<jetcarp_core::jobs::evolve::EvolveResult>,
+) {
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let mut s = jetcarp_core::jobs::evolve::EvolveRun::default();
+    s.on_generation = on_generation;
+    s.result = Some(slot.clone());
+    let out = jetcarp_core::jobs::Runner::new(lib.clone())
+        .run_with(job, &mut s, o)
+        .unwrap();
+    let res = slot.lock().unwrap().take();
+    (out, res)
+}
 #[test]
 fn search_is_identical_at_any_thread_count() {
     for tiling in ["spectre", "square"] {
@@ -154,7 +176,7 @@ fn square_search_finds_an_exact_spaceship() {
         ..EvolveJobSpec::new(spec.clone())
     };
     let j = job::start(&jlib, &js).unwrap();
-    let (out, res) = job::run(&jlib, j, None, &RunOptions::default()).unwrap();
+    let (out, res) = run_evolve(&jlib, j, None, &RunOptions::default());
     let res = res.unwrap();
     assert_eq!(res.report.fingerprint(), rep.fingerprint());
     let ids = |found: &[catalog::FoundMover]| {
@@ -267,7 +289,7 @@ fn evolve_job_resumed_equals_uninterrupted() {
     // Three generations, then four more from a new catalog handle (as another process would),
     // then the rest.
     for (n, upto) in [(3, 2), (4, 6)] {
-        let (out, res) = job::run(
+        let (out, res) = run_evolve(
             &Library::open(lib.path()),
             j,
             Some(hook.clone()),
@@ -275,8 +297,7 @@ fn evolve_job_resumed_equals_uninterrupted() {
                 budget: Budget::items(n),
                 ..Default::default()
             },
-        )
-        .unwrap();
+        );
         assert!(res.is_none());
         assert_eq!(
             (out.status, out.stopped),
@@ -290,7 +311,7 @@ fn evolve_job_resumed_equals_uninterrupted() {
         )[0];
         assert!(s.can_resume() && s.done == upto && s.total == Some(10));
     }
-    let (out, res) = job::run(&lib, j, Some(hook), &RunOptions::default()).unwrap();
+    let (out, res) = run_evolve(&lib, j, Some(hook), &RunOptions::default());
     assert_eq!((out.status, out.stopped), (JobStatus::Done, None));
     assert_eq!(*seen.lock().unwrap(), (0..10).collect::<Vec<usize>>());
     let res = res.unwrap();

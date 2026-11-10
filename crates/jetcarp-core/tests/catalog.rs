@@ -1,5 +1,6 @@
 //! Phase 4: the SQLite catalog, rule-free pattern identity, and rule ranges.
 
+use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
 use jetcarp_core::library::search::{SearchSpec, search};
 use jetcarp_core::library::{
     self, AddOutcome, DiscoveredBy, Library, PatternClass, PatternRecord, Provenance, Query,
@@ -368,13 +369,30 @@ fn catalog_store_search_jobs_and_sightings() {
         ..Default::default()
     };
     let out = search(&spec, None).unwrap();
-    let st = lib.store_search(&out).unwrap();
-    assert!(st.job > 0 && st.failed.is_empty());
+    // The search as a job on the runner, its finds stored with the job's last write.
+    let js = jetcarp_core::jobs::JobSpec {
+        strategy: "search".into(),
+        spec: serde_json::to_value(SearchJobSpec {
+            search: spec.clone(),
+            store: true,
+        })
+        .unwrap(),
+        ..Default::default()
+    };
+    let jid = jetcarp_core::jobs::create(&lib, &js).unwrap();
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let mut run = SearchRun::new(spec.clone());
+    run.result = Some(slot.clone());
+    jetcarp_core::jobs::Runner::new(lib.clone())
+        .run_with(jid, &mut run, &Default::default())
+        .unwrap();
+    let st: SearchResult = slot.lock().unwrap().take().unwrap();
+    assert!(st.stored && !st.added.is_empty());
     // Life and HighLife share their common objects: fewer patterns than records.
     let n = lib.list().unwrap().len();
     assert!(n < out.records.len(), "{n} vs {}", out.records.len());
     assert!(!st.new_rules.is_empty());
-    let job = lib.job(st.job).unwrap();
+    let job = lib.job(jid).unwrap();
     assert_eq!(job.status, library::JobStatus::Done);
     assert_eq!(job.kind, "search");
     let block = lib
@@ -386,7 +404,7 @@ fn catalog_store_search_jobs_and_sightings() {
         .remove(0);
     let s = lib.sightings(&block.id).unwrap();
     assert_eq!(s.len(), 2); // one per rule, both in the job
-    assert!(s.iter().all(|x| x.job == st.job && x.soups > 0));
+    assert!(s.iter().all(|x| x.job == jid && x.soups > 0));
     assert_eq!(block.seen, s.iter().map(|x| x.count).sum::<u64>());
     // A job's checkpoint round-trips.
     let j = lib

@@ -513,7 +513,7 @@ fn a_runner_that_lost_its_job_writes_nothing_more() {
 
 #[test]
 fn bounded_searches_resumed_store_what_one_whole_search_stores() {
-    use jetcarp_core::library::search::{SearchSpec, search};
+    use jetcarp_core::library::search::SearchSpec;
     let spec = SearchSpec {
         rules: vec!["B3/S23".into(), "B36/S23".into()],
         tilings: vec![TilingSpec::new("square"), TilingSpec::new("hex")],
@@ -522,8 +522,11 @@ fn bounded_searches_resumed_store_what_one_whole_search_stores() {
         gens: 500,
         ..Default::default()
     };
+    // Uninterrupted, as one session.
     let a = temp_lib("search-whole");
-    let st = a.store_search(&search(&spec, None).unwrap()).unwrap();
+    let ja = jobs::search::start(&a, &spec).unwrap();
+    let out = Runner::new(a.clone()).run(ja, &opts(3)).unwrap();
+    assert_eq!((out.status, out.stopped), (JobStatus::Done, None));
     // Five soups a session, each from a new catalog handle (as another process would), then
     // the verification and the store.
     let b = temp_lib("search-sessions");
@@ -550,9 +553,9 @@ fn bounded_searches_resumed_store_what_one_whole_search_stores() {
         assert!(b.job_checkpoint(job).unwrap().is_some());
     }
     assert_eq!(sessions, 6);
-    let (ra, rb) = (a.job(st.job).unwrap(), b.job(job).unwrap());
+    let (ra, rb) = (a.job(ja).unwrap(), b.job(job).unwrap());
     assert_eq!(ra.progress, rb.progress);
-    assert_eq!(snapshot(&a, st.job), snapshot(&b, job));
+    assert_eq!(snapshot(&a, ja), snapshot(&b, job));
 }
 
 /// A block and a glider (records from a world), and a collision of the glider into the block
@@ -672,10 +675,8 @@ fn bounded_searches_and_collisions_store_what_their_calls_store() {
         gens: 600,
         ..Default::default()
     };
-    // Directly, as `Library::store_search` stores a whole run.
-    let a = temp_lib("search-direct");
+    // The search itself (`library::search`): what the job must store.
     let out = search(&spec, None).unwrap();
-    let st = a.store_search(&out).unwrap();
     // As a job.
     let b = temp_lib("search-job");
     let job = jobs::create(
@@ -690,10 +691,27 @@ fn bounded_searches_and_collisions_store_what_their_calls_store() {
     assert_eq!(b.job(job).unwrap().status, JobStatus::Paused);
     let res = Runner::new(b.clone()).run(job, &opts(2)).unwrap();
     assert_eq!(res.status, JobStatus::Done);
-    assert_eq!(res.progress["added"].as_u64(), Some(st.added.len() as u64));
-    let (ra, rb) = (a.job(st.job).unwrap(), b.job(job).unwrap());
-    assert_eq!(ra.progress, rb.progress);
-    assert_eq!(snapshot(&a, st.job), snapshot(&b, job));
+    // Every record of the search stored, each new to this catalog, with its copies and soups
+    // as the job's sightings.
+    let n = out.records.len() as u64;
+    assert_eq!(res.progress["records"].as_u64(), Some(n));
+    assert_eq!(res.progress["added"].as_u64(), Some(n));
+    let mut stored: Vec<(String, u64, u64)> = b
+        .job_sightings(job)
+        .unwrap()
+        .into_iter()
+        .map(|s| (s.0, s.2, s.3))
+        .collect();
+    stored.sort();
+    let mut want: Vec<(String, u64, u64)> = out
+        .records
+        .iter()
+        .zip(&out.soups)
+        .map(|(r, &soups)| (r.id.clone(), r.seen, soups as u64))
+        .collect();
+    want.sort();
+    assert_eq!(stored, want);
+    let rb = b.job(job).unwrap();
     let s = &dashboard::summaries(&[rb], dashboard::now_seconds())[0];
     assert_eq!(
         (s.kind_label.as_str(), s.title.as_str()),
@@ -775,7 +793,6 @@ fn pile_jobs_stopped_part_way_and_resumed_equal_uninterrupted() {
     use jetcarp_core::pile::job::{self as pilejob, PileJobSpec, PileProgress};
     use jetcarp_core::pile::{Centre, PileSpec};
     use jetcarp_core::topology::Nb;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     let dir = std::env::temp_dir().join(format!("jetcarp-jobs-test-pile-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -804,17 +821,32 @@ fn pile_jobs_stopped_part_way_and_resumed_equal_uninterrupted() {
     assert_eq!(out.status, JobStatus::Done);
     let steps = out.progress_as::<PileProgress>().steps;
     // Stopped once a few doubling steps are saved (the step in flight is cancelled), then
-    // resumed from the folder by a new catalog handle.
+    // resumed from the folder by a new catalog handle. A viewer of the run sees its board (each
+    // finished step, and each second of a long one).
     let jb = pilejob::start(&lib, &spec("stopped")).unwrap();
-    let stop = Arc::new(AtomicBool::new(false));
-    let live = Arc::new(Mutex::new(PileProgress::default()));
-    let (l2, s2, live2) = (lib.clone(), stop.clone(), live.clone());
-    let t =
-        std::thread::spawn(move || jetcarp_core::jobs::pile::run(&l2, jb, s2, None, Some(live2)));
-    wait_for("four steps", || live.lock().unwrap().step >= 4);
-    stop.store(true, Ordering::SeqCst);
-    let p = t.join().unwrap().unwrap();
+    let boards = Arc::new(Mutex::new(Vec::<u64>::new()));
+    let b2 = boards.clone();
+    let o = RunOptions {
+        view: Some(Arc::new(move |state: &dyn std::any::Any| {
+            if let Some(b) = jetcarp_core::pile::BoardRef::from_any(state) {
+                let cells = match b {
+                    jetcarp_core::pile::BoardRef::Lattice(l) => l.cells(),
+                    jetcarp_core::pile::BoardRef::Patch(p) => p.cells(),
+                };
+                b2.lock().unwrap().push(cells);
+            }
+        })),
+        ..Default::default()
+    };
+    let h = Runner::new(lib.clone()).spawn(jb, o).unwrap();
+    wait_for("four steps", || h.progress_as::<PileProgress>().step >= 4);
+    h.stop();
+    let p: PileProgress = h.wait().unwrap().progress_as();
     assert_eq!(p.status, "paused", "{p:?}");
+    let seen = boards.lock().unwrap().clone();
+    assert!(!seen.is_empty(), "the viewer saw no board");
+    assert!(seen.windows(2).all(|w| w[0] <= w[1]), "{seen:?}");
+    assert_eq!(p.last_step.as_ref().map(|r| r.step), Some(p.step));
     assert!(p.step >= 4 && p.step < steps, "{} of {steps}", p.step);
     let b2 = Library::open(lib.path());
     let out = Runner::new(b2).run(jb, &RunOptions::default()).unwrap();

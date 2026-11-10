@@ -7,15 +7,10 @@
 //! not shown as stalled. What keeps two runners off one job is the runner's lock file
 //! (`crate::jobs`); these columns make the hold visible and let a runner's step write only
 //! while it still holds the job ([`Library::job_step`]).
-//!
-//! **Whole searches.** [`Library::store_search`] stores a bounded soup search run in one call
-//! (searches made before they were jobs, tests) as a job of its own, done, its records and counts in
-//! one transaction. A search run by the runner stores the same rows through its steps' writes.
 
-use super::super::search::SearchOutput;
 use super::{
-    AddOutcome, AntRow, JobStatus, Library, PatternRecord, Sighting, StoredSearch, UnstoredFlush,
-    add_in, ants::put_ant, census, e, name_of, now_utc, prepare, sightings_in, unstored,
+    AddOutcome, AntRow, JobStatus, Library, PatternRecord, Sighting, UnstoredFlush, add_in,
+    ants::put_ant, census, e, name_of, now_utc, prepare, sightings_in, unstored,
 };
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, params};
@@ -250,61 +245,6 @@ impl Library {
                 tx.execute(sql, [id]).map_err(e)?;
             }
             Ok(out)
-        })
-    }
-
-    /// Store a soup search's verified records into an existing job (each pattern's copies and
-    /// soups as its sightings), and mark the job done with its counts, in one transaction.
-    pub(super) fn store_search_in(
-        &self,
-        job: i64,
-        out: &SearchOutput,
-    ) -> Result<StoredSearch, String> {
-        let soups_total: u64 = out.report.groups.iter().map(|g| g.soups as u64).sum();
-        let ready: Vec<Result<PatternRecord, String>> =
-            out.records.par_iter().map(|r| prepare(r.clone())).collect();
-        let soups = out
-            .soups
-            .iter()
-            .map(|&s| s as u64)
-            .chain(std::iter::repeat(0));
-        let now = now_utc();
-        self.write(|tx| {
-            let mut st = StoredSearch {
-                job,
-                ..Default::default()
-            };
-            for ((r, o), soups) in out.records.iter().zip(ready).zip(soups) {
-                let o = match o {
-                    Ok(rec) => Ok(add_in(tx, rec, job, soups)?),
-                    Err(x) => Err(x),
-                };
-                match o {
-                    Ok(AddOutcome::Added) => st.added.push(r.id.clone()),
-                    Ok(AddOutcome::Merged { new_rule, .. }) => {
-                        if new_rule {
-                            st.new_rules.push((r.id.clone(), r.rule.clone()));
-                        }
-                        st.merged.push(r.id.clone())
-                    }
-                    Err(x) => st.failed.push((r.id.clone(), x)),
-                }
-            }
-            let progress = serde_json::json!({
-                "soups": soups_total, "soups_done": soups_total,
-                "records": out.records.len(), "added": st.added.len(),
-            });
-            let n = tx
-                .execute(
-                    "UPDATE jobs SET updated = ?2, status = 'done', progress = ?3, finished = ?2
-                     WHERE id = ?1",
-                    params![job, now, progress.to_string()],
-                )
-                .map_err(e)?;
-            if n == 0 {
-                return Err(format!("no job {job}"));
-            }
-            Ok(st)
         })
     }
 }
