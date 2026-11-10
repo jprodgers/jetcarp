@@ -1,0 +1,7 @@
+{
+  "name": "Langton's ant on Cairo pentagons",
+  "description": "The same RL ant on the Cairo pentagon tiling. A turn is one slot of the tile's clockwise list of five edge neighbours, and 'straight on' is rounded because a pentagon has no opposite side.",
+  "tiling": {"family": "cairo", "size": {"cells": 20000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Ant RL", "steps_per_gen": 100, "seed": {"ants": {"count": 1}}, "palette": "Prism"}]
+}

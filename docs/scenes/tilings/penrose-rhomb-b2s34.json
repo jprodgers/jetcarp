@@ -1,0 +1,7 @@
+{
+  "name": "B2/S34 on Penrose rhombs",
+  "description": "B2/S34 with touch neighbours on a patch of about 4,000 Penrose rhombs, where each rhomb touches 7 to 11 others.",
+  "tiling": {"family": "penrose-rhomb", "size": {"level": 4}},
+  "rng_state": 3,
+  "cas": [{"rule": "B2/S34", "seed": {"random": {"density": 0.3}}, "palette": "Synthwave"}]
+}

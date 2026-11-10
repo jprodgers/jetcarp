@@ -1,0 +1,7 @@
+{
+  "name": "Layered parity on the spectre",
+  "description": "Layer 2/01 grown outward from one tile of the aperiodic spectre tiling: each tile in a new layer is the parity (XOR) of its parents, the touching tiles in the layer before. On squares the same rule gives Pascal's triangle mod 2.",
+  "tiling": {"family": "spectre", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Layer 2/01", "neighborhood": "touch", "seed": "center", "palette": "Prism", "color_by": "row"}]
+}

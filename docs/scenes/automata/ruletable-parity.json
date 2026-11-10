@@ -1,0 +1,7 @@
+{
+  "name": "Parity rule table",
+  "description": "The built-in rule table 'parity': each cell becomes the XOR of its four edge neighbours, written as a positional table with rotation symmetry. Started from one live cell, every pattern replicates, so the single cell becomes copies of growing motifs; after 47 generations there are four checkerboard diamonds.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 161, "h": 161}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Table parity", "seed": "center", "palette": "Ember"}]
+}

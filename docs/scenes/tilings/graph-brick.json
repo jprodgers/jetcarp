@@ -1,0 +1,7 @@
+{
+  "name": "Touch neighbours on the Brick tiling",
+  "description": "One live tile in the middle and, after one generation of B1/S012345678 with touch neighbours, every tile that shares an edge or a corner with it.",
+  "tiling": {"family": "brick", "size": {"rect": {"w": 8, "h": 8}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "B1/S012345678", "neighborhood": "touch", "seed": "center", "palette": "Prism"}]
+}

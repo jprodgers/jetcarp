@@ -1,0 +1,7 @@
+{
+  "name": "Three-parent hexagon rule HexT3 sum 588",
+  "description": "On flat-top hexagons each cell has three parents: NW and NE half a row up and N a full row up. HexT3 sum 588 writes NW + N + NE mod 3, and from one cell grows nested diamonds.",
+  "tiling": {"family": "hex_flat", "size": {"rect": {"w": 60, "h": 50}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "HexT3 sum 588", "seed": "top_center", "palette": "Prism"}]
+}

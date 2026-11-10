@@ -1,0 +1,7 @@
+{
+  "name": "Brian's Brain",
+  "description": "B2/S/C3: a ready cell fires when exactly two neighbours are firing, a firing cell becomes refractory, and a refractory cell becomes ready again. Gliders stream in every direction.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 2,
+  "cas": [{"rule": "B2/S/C3", "seed": {"random": {"density": 0.25}}, "palette": "Prism"}]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Layered sum mod 3 on Cairo pentagons",
+  "description": "Layer 3/012: three states, and each tile is the sum of its parents mod 3, grown in layers of graph distance from the central pentagon over edge neighbours.",
+  "tiling": {"family": "cairo", "size": {"cells": 6000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Layer 3/012", "neighborhood": "edge", "seed": "center", "palette": "Prism"}]
+}

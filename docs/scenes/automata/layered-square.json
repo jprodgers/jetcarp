@@ -1,0 +1,7 @@
+{
+  "name": "Layered parity on squares",
+  "description": "Layer 2/01 on the square grid with edge neighbours, grown from the centre: the layers are diamonds, and the parity rule draws Pascal's triangle mod 2 in each quarter.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 129, "h": 129}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Layer 2/01", "neighborhood": "edge", "seed": "center", "palette": "Ember"}]
+}

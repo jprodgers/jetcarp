@@ -1,0 +1,7 @@
+{
+  "name": "Orbium (Lenia)",
+  "description": "Bert Chan's Lenia with the parameters of Orbium unicaudatus (R=13, T=10, b=1, m=0.15, s=0.015), seeded with Orbium from Chan's data. The creature glides across the wrapped grid, keeping its shape.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 64, "h": 48}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Lenia R=13,T=10,b=1,m=0.15,s=0.015", "seed": {"lenia": {"name": "orbium", "scale": 1.0}}, "palette": "Ember"}]
+}

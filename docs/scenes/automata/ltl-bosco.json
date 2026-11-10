@@ -1,0 +1,7 @@
+{
+  "name": "Bosco's Rule",
+  "description": "Kellie Evans's range-5 Larger than Life rule R5,C2,S33-57,B34-45: each cell counts the live cells in the 11 x 11 box around it. Hollow blobs called bugs crawl through chaotic debris.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 200, "h": 125}}, "boundary": "wrap"},
+  "rng_state": 4,
+  "cas": [{"rule": "R5,C2,S33-57,B34-45", "seed": {"random": {"density": 0.5}}, "palette": "Aurora"}]
+}

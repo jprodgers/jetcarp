@@ -1,0 +1,7 @@
+{
+  "name": "Greenberg-Hastings waves on Cairo pentagons",
+  "description": "GH 10/1 with edge neighbours: a resting cell fires when at least one neighbour is excited, then passes through eight refractory stages before it can fire again. Waves spread from many small spiral cores and annihilate where they meet.",
+  "tiling": {"family": "cairo", "size": {"cells": 15000}, "boundary": "wrap"},
+  "rng_state": 3,
+  "cas": [{"rule": "GH 10/1", "neighborhood": "edge", "seed": "random_states", "palette": "Deep Sea"}]
+}

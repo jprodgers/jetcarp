@@ -1,0 +1,7 @@
+{
+  "name": "Life on the 12-neighbour triangle grid",
+  "description": "B3/S23 on triangles with touching neighbours, where each triangle touches twelve others. The rule is Life's, but with twelve neighbours instead of eight it makes different objects.",
+  "tiling": {"family": "triangle", "size": {"rect": {"w": 120, "h": 60}}, "boundary": "wrap"},
+  "rng_state": 8,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.37}}, "palette": "Prism"}]
+}

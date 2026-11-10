@@ -1,0 +1,7 @@
+{
+  "name": "Single Rotation",
+  "description": "The Single Rotation rule: every 2x2 block with exactly one live cell turns 90 degrees clockwise, and every other block is unchanged. From a random blob, spaceships fly off in all directions.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 120, "h": 90}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Margolus SingleRotation", "seed": {"blob": {"radius": 0.15, "density": 0.4}}, "palette": "Prism"}]
+}

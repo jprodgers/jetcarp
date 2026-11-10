@@ -1,0 +1,7 @@
+{
+  "name": "Lenia on the hat",
+  "description": "The Orbium parameters (R=13, T=10, b=1, m=0.15, s=0.015) on a patch of about 35,000 hat tiles, from a dense random blob. Lenia's kernel uses straight-line distances between tile centres in units of the mean tile size, so it runs on aperiodic tilings too; here the blob breaks up into worms and dots.",
+  "tiling": {"family": "hat", "size": {"level": 5}},
+  "rng_state": 4,
+  "cas": [{"rule": "Lenia R=13,T=10,b=1,m=0.15,s=0.015", "seed": {"blob": {"radius": 0.4, "density": 0.8}}, "palette": "Ember"}]
+}

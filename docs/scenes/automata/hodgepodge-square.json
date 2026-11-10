@@ -1,0 +1,7 @@
+{
+  "name": "Hodgepodge machine",
+  "description": "Hodgepodge 200/3/3/28 from random states: healthy, infected and ill cells organise into rotating spiral waves like those of the Belousov-Zhabotinsky reaction.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 180, "h": 120}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Hodgepodge 200/3/3/28", "seed": "random_states", "palette": "Tide"}]
+}

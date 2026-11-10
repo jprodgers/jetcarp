@@ -1,0 +1,27 @@
+{
+  "name": "JACA war on the hat tiling",
+  "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found with jaca_search. (JETCARP Quick Start preset \"hat-war\".)",
+  "tiling": {
+    "boundary": "dead",
+    "family": "hat",
+    "size": {
+      "level": 5
+    }
+  },
+  "rng_state": 28,
+  "cas": [
+    {
+      "enabled": true,
+      "palette": "Tide",
+      "palette_neg": "Ember",
+      "rule": "JACA B27/S013",
+      "seed": {
+        "signed": {
+          "density": 0.2,
+          "negative": 0.5
+        }
+      },
+      "steps_per_gen": 1
+    }
+  ]
+}

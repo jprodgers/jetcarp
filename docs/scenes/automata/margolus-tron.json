@@ -1,0 +1,7 @@
+{
+  "name": "Tron",
+  "description": "Toffoli and Margolus's Tron on the Margolus neighbourhood: a 2x2 block whose four cells agree is complemented, and every other block is left alone. The empty background therefore flashes on and off, and a small random blob grows into a rectilinear pattern. Shown after an odd number of generations, when the background is dark.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 120}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Margolus Tron", "seed": {"blob": {"radius": 0.05, "density": 0.5}}, "palette": "Neon"}]
+}

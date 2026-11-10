@@ -1,0 +1,7 @@
+{
+  "name": "Cyclic CA",
+  "description": "Cyclic 16/1 with edge neighbours: sixteen colours on a wheel, and a cell advances to the next colour when at least one neighbour already has it. From a random start, spirals form and take over.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 180, "h": 120}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Cyclic 16/1", "neighborhood": "edge", "seed": "random_states", "palette": "Prism"}]
+}

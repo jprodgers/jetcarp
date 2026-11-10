@@ -1,0 +1,7 @@
+{
+  "name": "Edge neighbours on Cairo pentagons",
+  "description": "The same start with the edge neighbourhood (B1/S012345678V): only the five tiles that share a side with the centre are born.",
+  "tiling": {"family": "cairo", "size": {"rect": {"w": 8, "h": 8}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "B1/S012345678V", "seed": "center", "palette": "Prism"}]
+}

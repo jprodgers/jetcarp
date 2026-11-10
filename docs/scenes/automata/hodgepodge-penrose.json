@@ -1,0 +1,7 @@
+{
+  "name": "Hodgepodge machine on Penrose kites and darts",
+  "description": "The same Hodgepodge 200/3/3/28 on a patch of Penrose kites and darts, where each tile touches eight to ten others.",
+  "tiling": {"family": "penrose-kd", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Hodgepodge 200/3/3/28", "seed": "random_states", "palette": "Tide"}]
+}

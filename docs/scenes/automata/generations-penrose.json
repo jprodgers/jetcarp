@@ -1,0 +1,7 @@
+{
+  "name": "Brian's Brain on Penrose rhombs",
+  "description": "The same rule on the aperiodic Penrose rhomb tiling, where each rhomb touches seven to eleven others. Waves of firing cells keep crossing the patch.",
+  "tiling": {"family": "penrose-rhomb", "size": {"level": 4}},
+  "rng_state": 2,
+  "cas": [{"rule": "B2/S/C3", "seed": {"random": {"density": 0.2}}, "palette": "Prism"}]
+}

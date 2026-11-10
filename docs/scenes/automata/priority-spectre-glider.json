@@ -1,0 +1,7 @@
+{
+  "name": "Spectre glider",
+  "description": "James Edmond's four-state priority rule (arXiv:2609.22579, Table 7) on touching neighbours. A two-tile seed at the centre launches a pair of gliders on lanes 120 degrees apart; each moves one ring of tiles every two generations.",
+  "tiling": {"family": "spectre", "size": {"level": 4}},
+  "rng_state": 5,
+  "cas": [{"rule": "SpectreGlider", "seed": "glider_pair", "palette": "Ember"}]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Touch neighbours on the Penrose rhombs tiling",
+  "description": "One live tile in the middle and, after one generation of B1/S012345678 with touch neighbours, every tile that shares an edge or a corner with it.",
+  "tiling": {"family": "penrose-rhomb", "size": {"level": 2}},
+  "rng_state": 1,
+  "cas": [{"rule": "B1/S012345678", "neighborhood": "touch", "seed": "center", "palette": "Prism"}]
+}

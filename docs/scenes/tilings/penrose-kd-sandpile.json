@@ -1,0 +1,7 @@
+{
+  "name": "Sandpile on Penrose kites and darts",
+  "description": "30,000 grains dropped on the centre of a patch of Penrose kites and darts and toppled until stable. Every kite and dart has four edge neighbours, so every tile topples at four grains, as on the square grid; the pile grows into a nearly circular disc.",
+  "tiling": {"family": "penrose-kd", "size": {"level": 5}},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 20, "seed": {"pile": {"grains": 30000}}, "palette": "Prism"}]
+}

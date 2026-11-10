@@ -1,0 +1,7 @@
+{
+  "name": "B2/S23V on the spectre",
+  "description": "B2/S23 with edge neighbours on a patch of about 4,000 spectres, where each tile shares edges with four to seven others.",
+  "tiling": {"family": "spectre", "size": {"level": 4}},
+  "rng_state": 3,
+  "cas": [{"rule": "B2/S23V", "seed": {"random": {"density": 0.3}}, "palette": "Ember"}]
+}

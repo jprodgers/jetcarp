@@ -1,0 +1,7 @@
+{
+  "name": "Four-colour turmite LLRR",
+  "description": "A turmite with four colours: on colour 0 turn left, on 1 left, on 2 right, on 3 right, then advance the colour by one. It grows a blob that keeps returning to bilateral symmetry.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 100, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "Turmite LLRR", "steps_per_gen": 200, "seed": {"ants": {"count": 1}}, "palette": "Prism"}]
+}

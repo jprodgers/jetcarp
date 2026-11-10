@@ -1,0 +1,7 @@
+{
+  "name": "Rock-paper-scissors",
+  "description": "RPS 3/3: each cell is rock, paper or scissors, and is taken over by its predator when more than three of its eight neighbours are that predator.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 180, "h": 120}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "RPS 3/3", "seed": "random_states", "palette": "Prism"}]
+}

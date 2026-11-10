@@ -1,0 +1,26 @@
+{
+  "name": "B2/S34 on a 3-uniform tiling",
+  "description": "B2/S34 with touch neighbours on the 3-uniform tiling [3.4^2.6; 3.6.3.6; 4^4] #1 (Galebach's k3-011), which mixes triangles, squares and hexagons in three kinds of vertex.",
+  "tiling": {
+    "family": "periodic",
+    "params": {
+      "catalog": "k3-011"
+    },
+    "size": {
+      "cells": 2000
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 2,
+  "cas": [
+    {
+      "rule": "B2/S34",
+      "seed": {
+        "random": {
+          "density": 0.3
+        }
+      },
+      "palette": "Ember"
+    }
+  ]
+}

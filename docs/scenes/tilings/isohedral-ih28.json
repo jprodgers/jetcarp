@@ -1,0 +1,7 @@
+{
+  "name": "B2/S34 on isohedral type IH28",
+  "description": "B2/S34 with touch neighbours on Grünbaum and Shephard's isohedral type IH28, a pentagon tiling of the same kind as the Cairo tiling, with Tactile's default shape.",
+  "tiling": {"family": "ih28", "size": {"cells": 6000}, "boundary": "wrap"},
+  "rng_state": 2,
+  "cas": [{"rule": "B2/S34", "seed": {"random": {"density": 0.3}}, "palette": "Aurora"}]
+}

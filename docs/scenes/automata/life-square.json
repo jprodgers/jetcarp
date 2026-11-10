@@ -1,0 +1,7 @@
+{
+  "name": "Life on the square grid",
+  "description": "Conway's Game of Life (B3/S23) from a random soup on a wrapped grid. Colour shows how long each cell has been alive, so still lifes stand out from the moving debris.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 128, "h": 80}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "B3/S23", "seed": {"random": {"density": 0.35}}, "palette": "Tide"}]
+}

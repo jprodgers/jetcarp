@@ -1,0 +1,7 @@
+{
+  "name": "Distance layers on the hat",
+  "description": "A Greenberg-Hastings wave (GH 14/1) started from one excited hat tile. The wave front moves one step of the touch neighbour graph per generation and leaves a trail of refractory states behind it, so after 9 generations each colour band is one graph distance from the centre.",
+  "tiling": {"family": "hat", "size": {"level": 3}},
+  "rng_state": 1,
+  "cas": [{"rule": "GH 14/1", "neighborhood": "touch", "seed": "center", "palette": "Prism", "color_by": "state"}]
+}

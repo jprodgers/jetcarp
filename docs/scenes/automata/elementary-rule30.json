@@ -1,0 +1,7 @@
+{
+  "name": "Rule 30",
+  "description": "Wolfram's rule 30 grown from one live cell, one row per generation: a regular left edge and a chaotic right side.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 241, "h": 120}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "W30", "seed": "top_center", "palette": "Ember"}]
+}

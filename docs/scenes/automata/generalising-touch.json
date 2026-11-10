@@ -1,0 +1,7 @@
+{
+  "name": "Touch neighbours on Cairo pentagons",
+  "description": "One live pentagon in the middle and, after one generation of B1/S012345678, every tile that touches it: seven neighbours, five across an edge and two at a corner only.",
+  "tiling": {"family": "cairo", "size": {"rect": {"w": 8, "h": 8}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "B1/S012345678", "neighborhood": "touch", "seed": "center", "palette": "Prism"}]
+}

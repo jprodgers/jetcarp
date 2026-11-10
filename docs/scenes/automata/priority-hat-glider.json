@@ -1,0 +1,32 @@
+{
+  "name": "A hat glider from JETCARP's evolutionary search",
+  "description": "A four-state priority rule found on the hat by JETCARP's reimplementation of James Edmond's evolutionary glider search, seeded with two tiles. After relabelling its states it differs from Edmond's hat glider B on about 5% of its inputs, its heading matches one of the six directions Edmond's hat gliders take, and it is very probably the same mechanism. It moves one ring of tiles every two generations.",
+  "tiling": {
+    "family": "hat",
+    "size": {
+      "level": 4
+    }
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "rule": "Priority 4: 3|n2>=1->2; 0|n3>=2->0; 0|n2>=1->3; 0|n1>=1->2",
+      "neighborhood": "touch",
+      "seed": {
+        "cells": {
+          "cells": [
+            [
+              0,
+              1
+            ],
+            [
+              3,
+              2
+            ]
+          ]
+        }
+      },
+      "palette": "Ember"
+    }
+  ]
+}

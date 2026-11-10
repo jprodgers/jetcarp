@@ -1,0 +1,7 @@
+{
+  "name": "Hexagonal Life",
+  "description": "B2/S34 on hexagons, where every cell has six neighbours: born with exactly two live neighbours, survives with three or four.",
+  "tiling": {"family": "hex", "size": {"rect": {"w": 80, "h": 52}}, "boundary": "wrap"},
+  "rng_state": 3,
+  "cas": [{"rule": "B2/S34H", "seed": {"random": {"density": 0.3}}, "palette": "Ember"}]
+}

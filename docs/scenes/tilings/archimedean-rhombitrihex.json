@@ -1,0 +1,7 @@
+{
+  "name": "B2/S34 on the 3.4.6.4 tiling",
+  "description": "B2/S34 with touch neighbours on the rhombitrihexagonal tiling 3.4.6.4, where triangles touch 6 tiles, squares 8 and hexagons 12, so the same rule acts differently on each kind of tile.",
+  "tiling": {"family": "rhombitrihex", "size": {"cells": 9000}, "boundary": "wrap"},
+  "rng_state": 2,
+  "cas": [{"rule": "B2/S34", "seed": {"random": {"density": 0.3}}, "palette": "Tide"}]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "A Bosco-like rule on the hat",
+  "description": "Range 5 on the hat, where 'within five' means within five steps of the touch neighbour graph. Bosco's thresholds are scaled by three quarters (R5,C2,S25-43,B26-34) to suit the smaller neighbourhood, and hollow, bug-like blobs appear.",
+  "tiling": {"family": "hat", "size": {"level": 4}},
+  "rng_state": 4,
+  "cas": [{"rule": "R5,C2,S25-43,B26-34", "seed": {"random": {"density": 0.5}}, "palette": "Aurora"}]
+}

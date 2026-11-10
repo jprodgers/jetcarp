@@ -1,0 +1,7 @@
+{
+  "name": "Forest fire",
+  "description": "Drossel-Schwabl forest fire, ForestFire 0.002/0.00001: empty ground grows a tree with probability p = 0.002 per generation, a tree is struck by lightning with probability f = 0.00001, and fire spreads to neighbouring trees and burns out in one step. Coloured by age, so the dark patches are recently burned ground and the brightest trees are new growth.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 240, "h": 160}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [{"rule": "ForestFire 0.002/0.00001", "seed": {"random": {"density": 0.5}}, "palette": "Moss", "color_by": "age"}]
+}

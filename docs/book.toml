@@ -1,0 +1,28 @@
+[book]
+title = "JETCARP"
+description = "Jimmie's Euclidean Tilings and Cellular Automata Research Program: cellular automata on almost any tiling of the plane."
+authors = ["Jimmie Rodgers"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/jprodgers/jetcarp"
+edit-url-template = "https://github.com/jprodgers/jetcarp/edit/main/docs/{path}"
+mathjax-support = true
+additional-css = ["theme/jetcarp.css"]
+default-theme = "light"
+preferred-dark-theme = "navy"
+
+[output.html.search]
+enable = true
+limit-results = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3

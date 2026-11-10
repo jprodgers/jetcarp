@@ -1,0 +1,7 @@
+{
+  "name": "A single-source sandpile on the hat",
+  "description": "Grains dropped on one hat tile and toppled until stable. Each hat has four to six edge neighbours, so the toppling threshold varies from tile to tile, and the pile grows with an irregular but nearly round outline.",
+  "tiling": {"family": "hat", "size": {"level": 4}},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 50, "seed": {"pile": {"grains": 10000}}, "palette": "Ember"}]
+}

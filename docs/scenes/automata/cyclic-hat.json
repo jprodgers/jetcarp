@@ -1,0 +1,7 @@
+{
+  "name": "Cyclic CA on the hat",
+  "description": "Cyclic 14/1 with edge neighbours on a patch of the aperiodic hat tiling. Spirals still form, though the tiling has no repeating pattern.",
+  "tiling": {"family": "hat", "size": {"level": 5}},
+  "rng_state": 2,
+  "cas": [{"rule": "Cyclic 14/1", "neighborhood": "edge", "seed": "random_states", "palette": "Prism"}]
+}

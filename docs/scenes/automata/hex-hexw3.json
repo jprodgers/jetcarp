@@ -1,0 +1,7 @@
+{
+  "name": "Ternary hexagon rule 8229",
+  "description": "A two-parent rule on hexagons with three states: each cell reads the two hexagons touching it in the row above. HexW3 8229 adds them mod 3, which draws Pascal's triangle mod 3 from one cell.",
+  "tiling": {"family": "hex", "size": {"rect": {"w": 161, "h": 81}}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "HexW3 8229", "seed": "top_center", "palette": "Prism"}]
+}

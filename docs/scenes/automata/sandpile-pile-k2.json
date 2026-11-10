@@ -1,0 +1,7 @@
+{
+  "name": "A single-source sandpile on a 2-uniform tiling",
+  "description": "20,000 grains dropped on one tile of the 2-uniform tiling [3.4.6.4; 4.6.12] (Galebach's k2-001) and toppled until stable. Triangles, squares, hexagons and dodecagons topple at 3, 4, 6 and 12 grains, and the pile grows a twelve-sided outline.",
+  "tiling": {"family": "periodic", "params": {"catalog": "k2-001"}, "size": {"cells": 16000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "steps_per_gen": 50, "seed": {"pile": {"grains": 20000}}, "palette": "Prism"}]
+}

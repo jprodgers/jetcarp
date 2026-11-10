@@ -1,0 +1,30 @@
+{
+  "name": "JACA bead borders (square, blast 1)",
+  "description": "Blast 1: islands ringed by glowing beads shrink until one sign holds the grid. Found with jaca_search. (JETCARP Quick Start preset \"square-beads\".)",
+  "tiling": {
+    "boundary": "wrap",
+    "family": "square",
+    "size": {
+      "rect": {
+        "h": 126,
+        "w": 190
+      }
+    }
+  },
+  "rng_state": 23,
+  "cas": [
+    {
+      "enabled": true,
+      "palette": "Tide",
+      "palette_neg": "Ember",
+      "rule": "JACA B16/S1378 blast 1",
+      "seed": {
+        "signed": {
+          "density": 0.3,
+          "negative": 0.5
+        }
+      },
+      "steps_per_gen": 1
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Rule 110 from a random row",
+  "description": "Rule 110, proved universal by Matthew Cook, from a random first row on a wrapped grid: localised structures travel through a periodic background and collide.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 240, "h": 150}}, "boundary": "wrap"},
+  "rng_state": 7,
+  "cas": [{"rule": "W110", "seed": {"top_random": {"density": 0.5}}, "palette": "Tide"}]
+}

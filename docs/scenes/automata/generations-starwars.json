@@ -1,0 +1,7 @@
+{
+  "name": "Star Wars",
+  "description": "Mirek Wójtowicz's Star Wars (B2/S345/C4): four states, with fast-moving ships among slowly decaying debris.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 3,
+  "cas": [{"rule": "B2/S345/C4", "seed": {"random": {"density": 0.3}}, "palette": "Ember"}]
+}

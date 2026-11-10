@@ -1,0 +1,8 @@
+{
+  "name": "Sandpile identity on Cairo pentagons",
+  "description": "The identity element of the sandpile group on a patch of Cairo pentagons with sink edges, computed as stab(2m - stab(2m)), where m is the pile with every tile one grain short of toppling.",
+  "tiling": {"family": "cairo", "size": {"cells": 8000}, "boundary": "dead"},
+  "rng_state": 1,
+  "cas": [{"rule": "Sandpile", "seed": "empty", "palette": "Prism"}],
+  "commands": [{"op": "sandpile", "id": 1, "action": "identity"}]
+}
