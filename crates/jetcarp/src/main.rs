@@ -286,19 +286,16 @@ fn main() -> Result<()> {
             if let Some(text) = &reseed {
                 let v: serde_json::Value =
                     serde_json::from_str(text).context("--reseed: not JSON")?;
-                let list = if v.is_array() {
-                    v
-                } else {
-                    serde_json::json!([v])
-                };
-                let policies: Vec<jetcarp_core::reseed::AutoReseed> =
-                    serde_json::from_value(list).context("--reseed: not a reseed policy")?;
+                let policies = jetcarp_api::args::reseed_policies(&v)
+                    .map_err(anyhow::Error::msg)
+                    .context("--reseed: not a reseed policy")?;
                 w.apply(Command::SetReseed { policies })
                     .map_err(anyhow::Error::msg)?;
             }
             if let Some(text) = &reseed_now {
-                let mode: jetcarp_core::reseed::ReseedMode =
-                    serde_json::from_str(text).context("--reseed-now: not a reseed mode")?;
+                let mode = jetcarp_api::args::reseed_mode(&serde_json::json!(text))
+                    .map_err(anyhow::Error::msg)
+                    .context("--reseed-now: not a reseed mode")?;
                 w.apply(Command::Reseed { ca: None, mode })
                     .map_err(anyhow::Error::msg)?;
             }

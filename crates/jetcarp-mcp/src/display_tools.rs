@@ -6,6 +6,7 @@
 use crate::tools::{
     MAX_CELLS, Res, ToolOutput, boolean, ca_index, check_unknown, int, string, tool,
 };
+use jetcarp_api::args;
 use jetcarp_api::world::Host;
 use jetcarp_core::reseed::{AutoReseed, ReseedMode};
 use jetcarp_core::wallpaper::{self, Fit};
@@ -63,28 +64,22 @@ pub fn call(host: &mut dyn Host, name: &str, args: &Value) -> Res {
     }
 }
 
-/// A mode from an object or a bare name.
+/// A mode from an object, a bare name, a name and a sign ("rain:pos"), or JSON text.
 fn parse_mode(v: &Value) -> Result<ReseedMode, String> {
-    match v {
-        Value::String(s) => match s.as_str() {
-            "random" => Ok(ReseedMode::random()),
-            "rain" => Ok(ReseedMode::rain()),
-            "blobs" => Ok(ReseedMode::blobs()),
-            t if t.contains(':') && !t.trim_start().starts_with('{') => {
-                serde_json::from_value(jetcarp_core::reseed::mode_json(t))
-                    .map_err(|e| format!("could not read `mode` {t}: {e}"))
-            }
-            _ => serde_json::from_str(s).map_err(|_| {
-                format!("`mode` is random, rain, blobs, or an object such as {{\"kind\": \"rain\", \"drops\": 30}}, not {s}")
-            }),
-        },
-        v => serde_json::from_value(v.clone()).map_err(|e| format!("could not read `mode` {v}: {e}")),
-    }
+    args::reseed_mode(v).map_err(|e| match v {
+        Value::String(t) if t.contains(':') && !t.trim_start().starts_with('{') => {
+            format!("could not read `mode` {t}: {e}")
+        }
+        Value::String(s) => format!(
+            "`mode` is random, rain, blobs, or an object such as {{\"kind\": \"rain\", \"drops\": 30}}, not {s}"
+        ),
+        v => format!("could not read `mode` {v}: {e}"),
+    })
 }
 
 /// A policy (mode and trigger may be bare names: "rain", "settled").
 fn parse_policy(v: &Value) -> Result<AutoReseed, String> {
-    serde_json::from_value(v.clone()).map_err(|e| {
+    args::reseed_policy(v).map_err(|e| {
         format!("could not read policy {v}: {e}. A policy is {{\"mode\": \"rain\" or {{\"kind\": \"rain\", ...}}, \"when\": \"settled\" or {{\"kind\": \"every\", \"gens\": 500}}, \"cooldown\": 200}}")
     })
 }

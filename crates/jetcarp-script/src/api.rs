@@ -842,11 +842,10 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     // Reseeding (see README "Reseeding"): now, automatic policies, and their status.
     let reseed = |s: &mut Shared, mode: Dynamic, ca: Option<INT>| -> R<()> {
         let v = match mode.clone().try_cast::<String>() {
-            Some(t) => jetcarp_core::reseed::mode_json(&t),
+            Some(t) => Value::String(t),
             None => to_json(&mode)?,
         };
-        let mode: jetcarp_core::reseed::ReseedMode =
-            serde_json::from_value(v).map_err(|e| format!("reseed: bad mode: {e}"))?;
+        let mode = args::reseed_mode(&v).map_err(|e| format!("reseed: bad mode: {e}"))?;
         let cmd = Command::Reseed {
             ca: ca.map(|c| c as u32),
             mode,
@@ -861,8 +860,8 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     e.register_fn("set_reseed", |s: &mut Shared, list: Array| -> R<()> {
         let v = to_json(&Dynamic::from_array(list))?;
-        let policies: Vec<jetcarp_core::reseed::AutoReseed> =
-            serde_json::from_value(v).map_err(|e| format!("set_reseed: bad policy: {e}"))?;
+        let policies =
+            args::reseed_policies(&v).map_err(|e| format!("set_reseed: bad policy: {e}"))?;
         s.lock()
             .world
             .apply(Command::SetReseed { policies })
