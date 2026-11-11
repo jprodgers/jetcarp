@@ -63,8 +63,10 @@ The long exploratory search this book reports on ran in CART, JETCARP's predeces
 runs were brought into a JETCARP search folder once, before this release, by an import that is no
 longer part of JETCARP: it was removed once the import was made, and is in the repository's history
 up to commit `f3492e8`. The import copied the runs into segments under their own ids, rebuilt the
-search's archive from them, and moved their reviews to the library (with source `import:<database>`;
-see [Library format](library-format.md#ratings-of-search-runs)).
+search's archive from them, and kept the database's file name, never its folder. CART's own reviews
+table was empty: the 1,043 human ratings of the search's runs came from the four taste rounds' rating
+files, and are in the library with sources `ratings:ratings1` to `ratings:ratings4` (see
+[Library format](library-format.md#ratings-of-search-runs)).
 
 The runs had been measured by the engine of their day, and where something had changed since (a
 tiling's geometry, the way a rule runs) they no longer replayed to the measures stored with them. So
@@ -75,6 +77,13 @@ and compared exactly with what was stored: fate, settling generation, period, ev
 and behaviour class. Every run of a tiling whose differing sampled runs were in two or more rule
 families was then run again and stored with its new measures; when they were all of one family, only
 that family's runs on the tiling were. The other runs were copied as they were.
+
+In the import made for this release, 36 of the 40,928 runs sampled on 1,279 tilings measured
+differently. Every run on the Penrose rhombs was run again (538,373 runs: JETCARP lays out their tiles
+differently from CART), and so were the row rules on the square, hexagonal and flat hexagonal grids (5,293,
+5,446 and 5,665 runs), which CART's first versions let run past the grid's bottom edge. Of those
+554,777 runs, 529,867 measured differently; none failed. The sampled runs of every other tiling
+reproduced exactly.
 
 The manifest's `remeasure` records what was done:
 
