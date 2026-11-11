@@ -519,6 +519,54 @@ fn provenance_row_0_is_written_once_and_never_rewritten() {
     }
 }
 
+// A record someone else found (what a pack's import needs): row 0 credits the finder at the
+// moment of the find, from the record's own source and engine; row 1 is the import.
+#[test]
+fn a_record_found_elsewhere_keeps_its_finder_and_find_date() {
+    use jetcarp_store::library::Origin;
+    let lib = temp_lib("found-elsewhere");
+    let mut g = one("B3/S23", GLIDER);
+    g.provenance.source = "hunt".into();
+    g.provenance.jetcarp_version = "an earlier engine".into();
+    g.provenance.date = "2026-11-06T18:00:00Z".into();
+    g.created = "2026-11-06T17:09:38Z".into();
+    g.seen = 5;
+    let origin = Origin::found_elsewhere(
+        " Jimmie Rodgers ",
+        "0009-0003-8775-6483",
+        "catalog a.sqlite",
+    );
+    let out = lib.add_many_as(vec![g.clone()], 0, &origin).unwrap();
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0], Ok(AddOutcome::Added));
+    let h = lib.provenance("pattern", &g.id).unwrap();
+    assert_eq!(h.len(), 2, "{h:?}");
+    let (f, i) = (&h[0], &h[1]);
+    assert_eq!(
+        (f.seq, f.kind.as_str(), f.finder.as_str(), f.orcid.as_str()),
+        (0, "found", "Jimmie Rodgers", "0009-0003-8775-6483")
+    );
+    // The earlier of its own date and when it was stored where it was found.
+    assert_eq!(f.date, "2026-11-06T17:09:38Z");
+    assert_eq!(
+        (f.source.as_str(), f.engine_version.as_str()),
+        ("hunt", "an earlier engine")
+    );
+    assert_eq!(f.geometry_pin, g.geometry_pin);
+    assert_eq!(f.machine, "");
+    assert_eq!(
+        (
+            i.seq,
+            i.kind.as_str(),
+            i.source.as_str(),
+            i.engine_version.as_str()
+        ),
+        (1, "imported", "catalog a.sqlite", VERSION)
+    );
+    // Its seen count comes with it.
+    assert_eq!(lib.get(&g.id).unwrap().seen, 5);
+}
+
 // The identity bug: one record written from each generation of its period imports as one
 // pattern (it used to give one ship as many ids as it has phases).
 #[test]
