@@ -143,7 +143,7 @@ fn jobs_ants_piles_files_and_cancel_over_mcp() {
         assert_eq!(r["isError"], true, "{bad}: {}", text(&r));
     }
     let c = call(&mut s, &mut h, "files_list", json!({"root": "catalog"}));
-    assert!(c.to_string().contains("catalog.sqlite"), "{c}");
+    assert!(c.to_string().contains("library.sqlite"), "{c}");
 
     // A big pile, stopped, then resumed.
     let r = call(

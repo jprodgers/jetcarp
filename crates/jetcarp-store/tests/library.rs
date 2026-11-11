@@ -19,7 +19,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// A fresh catalog (`catalog.sqlite` in a fresh folder).
+/// A fresh catalog (`library.sqlite` in a fresh folder).
 fn temp_lib(name: &str) -> Library {
     Library::open(temp_dir(name))
 }

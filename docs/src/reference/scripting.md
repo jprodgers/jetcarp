@@ -230,7 +230,7 @@ row_shift, periodic_from, distinct_rows, row_class, row_entropy, row_hint, png_b
 ### Pattern library
 
 The library is the SQLite catalog: `JETCARP_LIBRARY` if set (a folder, or a `.sqlite` file), else
-`<data>/catalog.sqlite` (see [The pattern library](../guides/pattern-library.md) and [Folders](folders.md#environment-variables)). Records are
+`<data>/library.sqlite` (see [The pattern library](../guides/pattern-library.md) and [Folders](folders.md#environment-variables)). Records are
 verified exactly before they are stored. A pattern's id does not depend on the rule: the same evolution
 found in several rules is one pattern, with `rules` (every rule it was verified in) and, for B/S
 and Generations rules, `range` (`min_rule`, `max_rule`, bitmasks, `states_min`/`states_max`:

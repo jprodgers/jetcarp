@@ -12,12 +12,11 @@ pub mod ants;
 
 use crate::{Library, QsStatus};
 use jetcarp_core::media::{
-    Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, fnv, hex,
+    Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, frames_hash,
     pattern_animation, scene_animation,
 };
 use jetcarp_core::pattern::{PatternClass, PatternRecord};
 use jetcarp_core::render::Image;
-use jetcarp_core::rng::Fnv;
 use jetcarp_core::world::Scene;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -463,11 +462,9 @@ fn write_files(
             .par_iter()
             .map(encode::png)
             .collect::<Result<_, _>>()?;
-        let mut h_all = Fnv::default();
         let mut total = 0u64;
         for (k, b) in pngs.iter().enumerate() {
             put(&format!("frames/{k:04}.png"), b)?;
-            h_all.u64(fnv(b));
             total += b.len() as u64;
         }
         rows.push(row(
@@ -477,7 +474,7 @@ fn write_files(
             h,
             pngs.len() as u32,
             total,
-            hex(h_all.0),
+            frames_hash(pngs.iter().map(|b| b.as_slice())),
         ));
     }
     let name = format!("anim.{}", fmt.name());

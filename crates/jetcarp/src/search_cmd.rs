@@ -69,8 +69,8 @@ enum Strategy {
 /// What every search takes.
 #[derive(clap::Args)]
 pub struct JobFlags {
-    /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY,
-    /// else <data>/catalog.sqlite).
+    /// Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY,
+    /// else <data>/library.sqlite).
     #[arg(long)]
     library: Option<PathBuf>,
     /// A name to find the job by (`jetcarp jobs list --label`).

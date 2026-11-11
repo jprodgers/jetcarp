@@ -22,24 +22,6 @@ use rusqlite::{Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
-/// Version 6: hunts' unstored objects.
-pub(super) const MIGRATION_UNSTORED: &str = r#"
-CREATE TABLE unstored (
-    job_id INTEGER NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
-    rule_id INTEGER NOT NULL REFERENCES rules (id),
-    pattern_id TEXT NOT NULL,
-    class TEXT NOT NULL,
-    period INTEGER NOT NULL,
-    cells INTEGER NOT NULL,
-    count INTEGER NOT NULL,
-    soups INTEGER NOT NULL,
-    first_soup INTEGER NOT NULL,
-    rng_state INTEGER NOT NULL,
-    generation INTEGER NOT NULL,
-    PRIMARY KEY (job_id, rule_id, pattern_id)
-) WITHOUT ROWID;
-"#;
-
 /// One unstored object of a job in a rule.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UnstoredRow {
@@ -304,6 +286,14 @@ impl Library {
                 [],
             )
             .map_err(e)?;
+            for sql in [
+                "DELETE FROM provenance WHERE target_kind = 'pattern'
+                 AND target_id IN (SELECT id FROM prune_ids)",
+                "DELETE FROM id_aliases WHERE target_kind = 'pattern'
+                 AND id IN (SELECT id FROM prune_ids)",
+            ] {
+                tx.execute(sql, []).map_err(e)?;
+            }
             rep.deleted = tx
                 .execute(
                     "DELETE FROM patterns WHERE id IN (SELECT id FROM prune_ids)",

@@ -40,7 +40,6 @@ use crate::objects::{LCell, Phase};
 use crate::pattern::verify::{Frame, envelope, lattice_info, rule_world};
 use crate::pattern::{PatternClass, PatternRecord};
 use crate::render::{self, Colorer, Image, Palette, RenderOptions, Rgba, ViewColors};
-use crate::rng::Fnv;
 use crate::rules::{FieldKind, Rule};
 use crate::world::{Command, Scene, World};
 use serde::{Deserialize, Serialize};
@@ -163,9 +162,10 @@ impl MediaStyle {
         self.palette = Some(p.name);
         Ok(())
     }
-    /// FNV-1a 64 of the style's JSON, as 16 hex digits.
+    /// The style's hash: 16 hex digits of SHA-256 of its JSON (part of every render key, and
+    /// in the website manifest).
     pub fn hash(&self) -> String {
-        hex(fnv(serde_json::to_string(self).unwrap().as_bytes()))
+        crate::sha256::sha256_hex(serde_json::to_string(self).unwrap().as_bytes())[..16].to_string()
     }
     fn rgba(c: [u8; 3]) -> Rgba {
         [c[0], c[1], c[2], 0xff]
@@ -946,19 +946,18 @@ pub fn pattern_thumbnail(rec: &PatternRecord, style: &MediaStyle) -> Result<Imag
 // ---------------------------------------------------------------------------------------------
 // Hashes
 
-/// FNV-1a 64 of bytes.
-pub fn fnv(b: &[u8]) -> u64 {
-    let mut h = Fnv::default();
-    h.bytes(b);
-    h.0
-}
-
-/// A 64-bit hash as 16 hex digits.
-pub fn hex(v: u64) -> String {
-    format!("{v:016x}")
-}
-
-/// FNV-1a 64 of bytes as 16 hex digits (the content hashes of media and the website export).
+/// SHA-256 of bytes as 64 hex digits: the content hashes of media files and of the website
+/// export's items (what an incremental export compares, and what content-addressed media files
+/// will be named by).
 pub fn content_hash(b: &[u8]) -> String {
-    hex(fnv(b))
+    crate::sha256::sha256_hex(b)
+}
+
+/// The content hash of a frame folder: SHA-256 over its frames' content hashes, in order.
+pub fn frames_hash<'a>(frames: impl IntoIterator<Item = &'a [u8]>) -> String {
+    let mut h = crate::sha256::Sha256::new();
+    for f in frames {
+        h.text(&content_hash(f));
+    }
+    h.finish_hex()
 }

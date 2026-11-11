@@ -42,7 +42,7 @@ fn temp_lib(name: &str) -> Library {
         .join(format!("jetcarp-ants-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
-    Library::open(d.join("catalog.sqlite"))
+    Library::open(d.join("library.sqlite"))
 }
 
 /// A world of `w` x `h` unit cells with one ant at the centre, and the centre's unsheared

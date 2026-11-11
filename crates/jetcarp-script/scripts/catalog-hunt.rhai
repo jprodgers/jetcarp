@@ -3,7 +3,7 @@
 // copies only raise its seen count), then promote the best-scoring new spaceship to the Quick
 // Start ("My finds").
 //
-// The catalog is JETCARP_LIBRARY if set, else <Documents>/jetcarp-out/catalog.sqlite. Try it on a scratch
+// The catalog is JETCARP_LIBRARY if set, else <Documents>/jetcarp-out/library.sqlite. Try it on a scratch
 // library first:
 //
 // Run:   JETCARP_LIBRARY=/tmp/jetcarp-lib jetcarp script scripts/catalog-hunt.rhai

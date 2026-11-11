@@ -437,10 +437,7 @@ fn catalog_store_search_jobs_and_sightings() {
     .unwrap();
     assert_eq!(lib.get(&block.id).unwrap().seen, block.seen + 5);
     let info = lib.info().unwrap();
-    assert_eq!(
-        info.schema_version,
-        jetcarp_store::library::MIGRATIONS.len() as i64
-    );
+    assert_eq!(info.schema_version, jetcarp_store::library::SCHEMA_VERSION);
     assert_eq!(info.patterns as usize, n);
     // A second handle (as another process would) sees the same data.
     let other = Library::open(lib.path());
@@ -490,20 +487,34 @@ fn phase3_json_library_imports_with_its_quick_start() {
 fn catalog_speed_100k_sightings() {
     let lib = temp_lib("speed");
     let base = one("B3/S23", "oo/oo");
-    // 2,000 distinct patterns (fake ids, verified as given), 100 rules.
+    // 2,000 distinct patterns, 100 rules: two blocks at offsets (dx, dy) with dx >= dy >= 0 (one
+    // of each pair of mirror images) and dx >= 4 (too far apart to touch), so every one is a
+    // still life with its own content id (the library computes ids from the cells, so they
+    // cannot be made up).
     let mut recs = Vec::new();
-    for i in 0..2000 {
-        let mut r = base.clone();
-        r.id = format!("{:016x}", 0x1000_0000u64 + i);
-        r.class = [
-            PatternClass::StillLife,
-            PatternClass::Oscillator,
-            PatternClass::Spaceship,
-        ][i as usize % 3];
-        r.cells = 4 + (i as usize % 30);
-        r.seen = 1;
-        recs.push(r);
+    'all: for dx in 4..64 {
+        for dy in 0..=dx {
+            if recs.len() == 2000 {
+                break 'all;
+            }
+            let mut r = base.clone();
+            r.phases = vec![format!(
+                "0,0,0,1 1,0,0,1 0,1,0,1 1,1,0,1 {dx},{dy},0,1 {},{dy},0,1 {dx},{},0,1 {},{},0,1",
+                dx + 1,
+                dy + 1,
+                dx + 1,
+                dy + 1
+            )];
+            r.seen = 1;
+            r.canonicalize().unwrap();
+            recs.push(r);
+        }
     }
+    let ids: Vec<String> = recs.iter().map(|r| r.id.clone()).collect();
+    assert_eq!(
+        ids.iter().collect::<std::collections::HashSet<_>>().len(),
+        2000
+    );
     let t = std::time::Instant::now();
     let res = lib.add_many(recs, None).unwrap();
     assert!(res.iter().all(|r| r.is_ok()));
@@ -531,7 +542,7 @@ fn catalog_speed_100k_sightings() {
         let v: Vec<Sighting> = chunk
             .iter()
             .map(|&i| Sighting {
-                pattern_id: format!("{:016x}", 0x1000_0000u64 + (i % 2000) as u64),
+                pattern_id: ids[i % 2000].clone(),
                 rule_id: rules[(i / 2000) % 100],
                 count: 1 + (i % 7) as u64,
                 soups: 1,
@@ -544,7 +555,8 @@ fn catalog_speed_100k_sightings() {
     let t = std::time::Instant::now();
     let top = lib
         .query(&Query {
-            class: Some(PatternClass::Spaceship),
+            class: Some(PatternClass::StillLife),
+            min_score: Some(0.0),
             limit: Some(20),
             ..Default::default()
         })
@@ -572,7 +584,7 @@ fn catalog_speed_100k_sightings() {
     let q4 = t.elapsed().as_secs_f64();
     println!(
         "catalog speed: {} patterns added in {:.3} s; {n} sightings in {:.3} s ({:.0}/s); \
-         top 20 spaceships {:.1} ms; count works_in B3/S23 ({in_rule}) {:.1} ms; \
+         top 20 still lifes {:.1} ms; count works_in B3/S23 ({in_rule}) {:.1} ms; \
          sightings of one pattern ({}) {:.2} ms; 20 rarest {:.1} ms",
         res.len(),
         add_s,

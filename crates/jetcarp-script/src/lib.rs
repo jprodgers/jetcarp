@@ -95,7 +95,7 @@ pub struct RunOptions {
     /// Otherwise `show` only logs a line.
     pub live_view: bool,
     /// The pattern catalog `library()` opens (default: `JETCARP_LIBRARY`, else
-    /// `<data>/catalog.sqlite`; a folder means `<folder>/catalog.sqlite`).
+    /// `<data>/library.sqlite`; a folder means `<folder>/library.sqlite`).
     pub library: Option<PathBuf>,
 }
 

@@ -1,33 +1,47 @@
-//! The catalog: one SQLite file holding every pattern, the rules they work in, sightings, jobs,
-//! census results, the Quick Start entries, ratings, ant runs, and media.
+//! The library: one SQLite file holding every pattern, the rules they work in, sightings, jobs,
+//! census results, the Quick Start entries, ratings, ant runs, media, and each record's
+//! provenance and geometry pin.
 //!
 //! **File.** `JETCARP_LIBRARY` if set (a folder, or a `.sqlite` file), else
-//! `<data>/catalog.sqlite`. A folder means `<folder>/catalog.sqlite`. The file is
+//! `<data>/library.sqlite`. A folder means `<folder>/library.sqlite`. The file is
 //! opened in WAL mode with a 30 s busy timeout, so the app, the CLI, scripts, and MCP servers can
 //! read while a long hunt writes. Writes go through `BEGIN IMMEDIATE` transactions; batch them
 //! ([`Library::add_many`], [`Library::add_sightings`]) for speed.
 //!
-//! **Schema versions.** `PRAGMA user_version` counts the migrations applied; [`MIGRATIONS`] is the
-//! ordered list. Opening a catalog applies the missing ones (each in its own transaction). A later
-//! change adds a migration at the end (`ALTER TABLE ... ADD COLUMN`, `CREATE TABLE ...`); never
-//! edit one that has shipped. A catalog newer than this build is refused.
+//! **Schema.** Version 1 ([`schema`]): `PRAGMA user_version` = 1 and the application id `JETC`.
+//! A library from a newer JETCARP is refused, and so is a catalog from before schema 1 (CART's,
+//! or an early JETCARP's, `catalog.sqlite`): there is no migration from those.
+//!
+//! **Ids.** Patterns and ants have content ids: 32 hex digits of SHA-256 over the record's
+//! canonical identity and its tiling's geometry pin (`jetcarp_core::pattern::range`; ants
+//! [`ant_id`]). Lookups ([`Library::get`], [`Library::ant`]) take a whole id, a unique prefix
+//! (4+ digits; the first 8 are the short id), a name, or an alias from `id_aliases`.
 //!
 //! | Table | One row per | Key columns |
 //! | --- | --- | --- |
+//! | `meta` | library fact | `key`, `value`: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
+//! | `engine_pins` | pin key in use | `pin_key` (the tiling identity JSON, or for an aperiodic patch its spec with the level), the running engine's `pin`, `polygon_hash`, `neighbour_hash`, `engine_version` (the engine that computed it), `checked` |
 //! | `rules` | rule as run (notation, neighbourhood, steps per generation) | `id`, `notation`, `neighborhood`, `steps_per_gen`, `family` (`lifelike`, `generations`, `wireworld`, `table`, `priority`, ...), `states`, `birth`/`survive` bitmasks (B/S and Generations) |
-//! | `patterns` | rule-free pattern (`jetcarp_core::pattern::range::identity`) | `id`, `model`, `tiling` (identity JSON), `tiling_id` (family or catalog id), `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
-//! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `first_seen` |
+//! | `patterns` | rule-free pattern | `id` (content id), `model`, `tiling` (identity JSON), `tiling_key` (family or catalog id), `tiling_name`, `pin_key`, `geometry_pin`, `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `emits` (a gun's ship), `needs_reverify`, `engine_version`, `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
+//! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `engine_version`, `first_seen` |
 //! | `sightings` | (pattern, rule, job) | `count` (copies), `soups` (soups it appeared in), `first_seen`, `last_seen`; job 0 is "manual" (adds outside a job) |
-//! | `jobs` | search or hunt | `kind`, `spec` (JSON), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB), `owner` (`host:pid` running it) and `heartbeat` (seconds since 1970; [`jobs`]) |
-//! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON) |
-//! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`) |
+//! | `unstored` | (job, rule, pattern) a hunt counted but did not store ([`unstored`]) | class, period, cells, copies, soups, first find |
+//! | `jobs` | search or hunt | `uuid` (the search id, for folders and provenance), `kind`, `spec` (JSON, with its `label`), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB), `owner` (`host:pid` running it) and `heartbeat` (seconds since 1970; [`jobs`]), `engine_version` |
+//! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON); read by the census results, the job report, and Rhai's `lib.census_rows` |
+//! | `provenance` | event in a record's history | (`target_kind`, `target_id`, `seq`); `kind` (`found`, `imported`, `reverified`), `finder` and `orcid` (`JETCARP_FINDER`, `JETCARP_ORCID`), `search_kind` and `job_uuid`, `pack_hash`, `machine` (OS and CPU architecture), `engine_version`, `geometry_pin`, `source`, `date`. Row 0 is written once and never rewritten (a trigger refuses it); later rows append ([`provenance`]) |
+//! | `id_aliases` | old id of a record | `alias`, `target_kind`, `id`, `reason` (`cart-fnv`, `geometry-change`, `canonicalised`) |
+//! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`), `pin_key`, `geometry_pin`, `needs_reverify`, `engine_version` |
 //! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
-//! | `ratings` | rating of a pattern, an ant run, or a Quick Start entry | `target_kind`, `target_id`, `rater` (`user` or `model:<name>`), `rating` (1-5), `note` |
-//! | `ants` | ant or turmite run: rule, tiling, start ([`ants`]) | `id` (`ant-<hash>`), `rule`, `kind` (`string`, `table`), `states`, `colors`, `tiling`, `tiling_id`, `start`, `outcome` (`highway`, `periodic`, `symmetric`, `bounded`, `chaotic`), `period`, `dx`/`dy`, `speed`, `onset`, `steps`, `cells`, `body` (JSON: the run with its proof, and the limits), `score`, curation, `job_id` |
-//! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `path` (relative to the catalog's folder), `from_seed`, `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale), `hash` (content hash) |
+//! | `ratings` | rating of a pattern, an ant run, a Quick Start entry, or a search run | `target_kind`, `target_id`, `rater` (`user` or `model:<name>`), `rating` (1-5), `note` |
+//! | `ants` | ant or turmite run: rule, tiling, start ([`ants`]) | `id` (`ant-` and a content id), `rule`, `kind` (`string`, `table`), `states`, `colors`, `tiling`, `tiling_key`, `pin_key`, `geometry_pin`, `start`, `outcome` (`highway`, `periodic`, `symmetric`, `bounded`, `chaotic`), `period`, `dx`/`dy`, `speed`, `onset`, `steps`, `cells`, `body` (JSON: the run with its proof, and the limits), `score`, curation, `job_id`, `needs_reverify`, `engine_version` |
+//! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `path` (relative to the library's folder), `from_seed`, `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale), `hash` (SHA-256 of the file) |
 //!
-//! The tables `settings` and `score_models` of the old stage 1 settings search (migration 3) are
-//! still created, but nothing reads or writes them; the schema v1 of the data layer drops them.
+//! Gone since the catalog: the stage 1 tables `settings` and `score_models`, and the `setting`
+//! targets of media and ratings.
+//!
+//! **Geometry pins.** Every pattern, ant run and Quick Start row stores the pin of the tiling it
+//! was verified on. Opening a library flags (`needs_reverify`) the records whose pin is not the
+//! running engine's ([`schema`]); [`Library::reverified`] stores what checking them again found.
 //!
 //! "Every pattern that works in rule R" is [`Query::works_in`](Query): the range test on
 //! the bitmasks (`birth_min & ~B = 0`, `B & ~birth_max = 0`, the same for S, and the state count
@@ -56,295 +70,27 @@ mod ants;
 mod census;
 mod dashboard;
 mod jobs;
+pub mod provenance;
 mod query;
-pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
+pub mod schema;
+pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_identity, ant_score};
 mod ratings;
+mod reverify;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
+pub use provenance::{AliasRow, Origin, ProvenanceRow};
 pub use query::{Query, Update, sort_records};
 pub use ratings::RatingRow;
+pub use reverify::{Reverified, ReverifyCounts, ReverifyTarget};
+pub use schema::{PinCheck, SCHEMA_VERSION, new_uuid};
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 
-/// The catalog's file name inside a folder.
-pub const FILE: &str = "catalog.sqlite";
-
-/// Schema migrations, in order. `PRAGMA user_version` = how many have been applied.
-pub const MIGRATIONS: &[&str] = &[
-    MIGRATION_1,
-    MIGRATION_2,
-    MIGRATION_3,
-    MIGRATION_MEDIA,
-    ants::MIGRATION_ANTS,
-    unstored::MIGRATION_UNSTORED,
-    jobs::MIGRATION_JOB_LEASE,
-];
-
-/// Version 3 (Phase 4 stage 1): versions of the settings score (`score_models`), census jobs'
-/// per-rule results (`census_rows`), and `settings` rebuilt with the setting itself (`spec`,
-/// JSON), the score model, the search pass, the behaviour, and a `stored` status for settings
-/// below the candidate threshold (SQLite cannot change a CHECK in place).
-const MIGRATION_3: &str = r#"
-CREATE TABLE score_models (
-    id INTEGER PRIMARY KEY,
-    target TEXT NOT NULL DEFAULT 'setting',
-    source TEXT NOT NULL,
-    model TEXT NOT NULL,
-    ratings INTEGER NOT NULL DEFAULT 0,
-    active INTEGER NOT NULL DEFAULT 1,
-    created TEXT NOT NULL
-);
-CREATE INDEX score_models_active ON score_models (target, active, id);
-
-CREATE TABLE settings_v3 (
-    id INTEGER PRIMARY KEY,
-    rule_id INTEGER NOT NULL REFERENCES rules (id),
-    tiling TEXT NOT NULL,
-    tiling_name TEXT NOT NULL,
-    density REAL NOT NULL,
-    soup_size TEXT NOT NULL,
-    grid_size TEXT NOT NULL,
-    boundary TEXT NOT NULL,
-    generations INTEGER NOT NULL,
-    soups INTEGER NOT NULL DEFAULT 1,
-    seed INTEGER NOT NULL DEFAULT 1,
-    spec TEXT NOT NULL DEFAULT '{}',
-    descriptors TEXT NOT NULL DEFAULT '{}',
-    score REAL,
-    qs_status TEXT NOT NULL DEFAULT 'stored'
-        CHECK (qs_status IN ('stored', 'auto', 'candidate', 'approved', 'rejected')),
-    model_id INTEGER REFERENCES score_models (id) ON DELETE SET NULL,
-    pass TEXT NOT NULL DEFAULT '',
-    behaviour TEXT NOT NULL DEFAULT '',
-    job_id INTEGER REFERENCES jobs (id) ON DELETE SET NULL,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL,
-    UNIQUE (rule_id, tiling, density, soup_size, grid_size, boundary, generations)
-);
-INSERT INTO settings_v3 (id, rule_id, tiling, tiling_name, density, soup_size, grid_size,
-    boundary, generations, soups, seed, descriptors, score, qs_status, job_id, created, updated)
-    SELECT id, rule_id, tiling, tiling_name, density, soup_size, grid_size, boundary,
-        generations, soups, seed, descriptors, score, qs_status, job_id, created, updated
-    FROM settings;
-DROP TABLE settings;
-ALTER TABLE settings_v3 RENAME TO settings;
-CREATE INDEX settings_score ON settings (score DESC);
-CREATE INDEX settings_status ON settings (qs_status, score DESC);
-CREATE INDEX settings_tiling ON settings (tiling);
-CREATE INDEX settings_job ON settings (job_id, score DESC);
-CREATE INDEX settings_rule ON settings (rule_id);
-
-CREATE TABLE census_rows (
-    job_id INTEGER NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
-    idx INTEGER NOT NULL,
-    rule TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    PRIMARY KEY (job_id, idx)
-) WITHOUT ROWID;
-"#;
-
-/// Version 2 (Phase 4 hunter): guns record the spaceship they emit (`emits`, its pattern id),
-/// so "every gun that emits this ship" is one indexed query.
-const MIGRATION_2: &str = r#"
-ALTER TABLE patterns ADD COLUMN emits TEXT;
-CREATE INDEX patterns_emits ON patterns (emits) WHERE emits IS NOT NULL;
-"#;
-
-/// Media (Phase 4 wave 3, `crate::media`): each file's render key (a hash of the inputs, the
-/// options, and the house style; a different key means the file is stale) and its content hash
-/// (FNV-1a 64; for a frame folder, of every frame's hash), which the website export compares.
-const MIGRATION_MEDIA: &str = r#"
-ALTER TABLE media ADD COLUMN key TEXT;
-ALTER TABLE media ADD COLUMN hash TEXT;
-ALTER TABLE media ADD COLUMN updated TEXT;
-"#;
-
-const MIGRATION_1: &str = r#"
-CREATE TABLE rules (
-    id INTEGER PRIMARY KEY,
-    notation TEXT NOT NULL,
-    neighborhood TEXT NOT NULL,
-    steps_per_gen INTEGER NOT NULL DEFAULT 1,
-    family TEXT NOT NULL,
-    states INTEGER NOT NULL,
-    birth INTEGER,
-    survive INTEGER,
-    created TEXT NOT NULL,
-    UNIQUE (notation, neighborhood, steps_per_gen)
-);
-CREATE INDEX rules_family ON rules (family);
-
-CREATE TABLE patterns (
-    id TEXT PRIMARY KEY,
-    model TEXT NOT NULL,
-    tiling TEXT NOT NULL,
-    tiling_id TEXT NOT NULL,
-    tiling_name TEXT NOT NULL,
-    tile_types INTEGER NOT NULL,
-    neighborhood TEXT NOT NULL,
-    steps_per_gen INTEGER NOT NULL,
-    class TEXT NOT NULL,
-    period INTEGER NOT NULL,
-    dx INTEGER,
-    dy INTEGER,
-    speed TEXT,
-    cells INTEGER NOT NULL,
-    min_cells INTEGER NOT NULL,
-    max_cells INTEGER NOT NULL,
-    canonical TEXT NOT NULL,
-    rule TEXT NOT NULL,
-    range_bits INTEGER,
-    birth_min INTEGER,
-    birth_max INTEGER,
-    survive_min INTEGER,
-    survive_max INTEGER,
-    states_min INTEGER,
-    states_max INTEGER,
-    seen INTEGER NOT NULL DEFAULT 0,
-    score REAL NOT NULL DEFAULT 0,
-    rating INTEGER,
-    state TEXT NOT NULL DEFAULT 'new',
-    name TEXT,
-    label TEXT NOT NULL,
-    tags TEXT NOT NULL DEFAULT '[]',
-    notes TEXT NOT NULL DEFAULT '',
-    discovered_by TEXT NOT NULL,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL,
-    body TEXT NOT NULL
-);
-CREATE INDEX patterns_class ON patterns (class, score DESC);
-CREATE INDEX patterns_tiling ON patterns (tiling_id, class);
-CREATE INDEX patterns_score ON patterns (score DESC);
-CREATE INDEX patterns_seen ON patterns (seen DESC);
-CREATE INDEX patterns_state ON patterns (state);
-CREATE INDEX patterns_range ON patterns (model, tiling, neighborhood);
-CREATE INDEX patterns_name ON patterns (name COLLATE NOCASE);
-CREATE INDEX patterns_created ON patterns (created);
-
-CREATE TABLE pattern_rules (
-    pattern_id TEXT NOT NULL REFERENCES patterns (id) ON DELETE CASCADE,
-    rule_id INTEGER NOT NULL REFERENCES rules (id),
-    verified TEXT NOT NULL,
-    periods INTEGER NOT NULL,
-    first_seen TEXT NOT NULL,
-    PRIMARY KEY (pattern_id, rule_id)
-) WITHOUT ROWID;
-CREATE INDEX pattern_rules_rule ON pattern_rules (rule_id);
-
-CREATE TABLE jobs (
-    id INTEGER PRIMARY KEY,
-    kind TEXT NOT NULL,
-    spec TEXT NOT NULL DEFAULT '{}',
-    status TEXT NOT NULL DEFAULT 'running'
-        CHECK (status IN ('running', 'paused', 'done', 'failed')),
-    progress TEXT NOT NULL DEFAULT '{}',
-    checkpoint BLOB,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL,
-    finished TEXT
-);
-CREATE INDEX jobs_status ON jobs (status);
-INSERT INTO jobs (id, kind, spec, status, created, updated)
-    VALUES (0, 'manual', '{}', 'running', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
-            strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
-
-CREATE TABLE sightings (
-    pattern_id TEXT NOT NULL REFERENCES patterns (id) ON DELETE CASCADE,
-    rule_id INTEGER NOT NULL REFERENCES rules (id),
-    job_id INTEGER NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
-    count INTEGER NOT NULL,
-    soups INTEGER NOT NULL DEFAULT 0,
-    first_seen TEXT NOT NULL,
-    last_seen TEXT NOT NULL,
-    PRIMARY KEY (pattern_id, rule_id, job_id)
-) WITHOUT ROWID;
-CREATE INDEX sightings_rule ON sightings (rule_id);
-CREATE INDEX sightings_job ON sightings (job_id);
-
-CREATE TABLE settings (
-    id INTEGER PRIMARY KEY,
-    rule_id INTEGER NOT NULL REFERENCES rules (id),
-    tiling TEXT NOT NULL,
-    tiling_name TEXT NOT NULL,
-    density REAL NOT NULL,
-    soup_size TEXT NOT NULL,
-    grid_size TEXT NOT NULL,
-    boundary TEXT NOT NULL,
-    generations INTEGER NOT NULL,
-    soups INTEGER NOT NULL DEFAULT 1,
-    seed INTEGER NOT NULL DEFAULT 1,
-    descriptors TEXT NOT NULL DEFAULT '{}',
-    score REAL,
-    qs_status TEXT NOT NULL DEFAULT 'candidate'
-        CHECK (qs_status IN ('auto', 'candidate', 'approved', 'rejected')),
-    job_id INTEGER REFERENCES jobs (id) ON DELETE SET NULL,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL,
-    UNIQUE (rule_id, tiling, density, soup_size, grid_size, boundary, generations)
-);
-CREATE INDEX settings_score ON settings (score DESC);
-CREATE INDEX settings_status ON settings (qs_status, score DESC);
-CREATE INDEX settings_tiling ON settings (tiling);
-
-CREATE TABLE quickstart (
-    id TEXT PRIMARY KEY,
-    source_kind TEXT NOT NULL CHECK (source_kind IN ('pattern', 'setting', 'sweep', 'scene')),
-    source_id TEXT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    grid TEXT NOT NULL,
-    tiling TEXT,
-    rule TEXT NOT NULL,
-    rule_family TEXT NOT NULL,
-    behaviour TEXT NOT NULL DEFAULT '',
-    scene TEXT NOT NULL,
-    score REAL,
-    status TEXT NOT NULL DEFAULT 'approved'
-        CHECK (status IN ('auto', 'candidate', 'approved', 'rejected')),
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL
-);
-CREATE INDEX quickstart_status ON quickstart (status, score DESC);
-CREATE INDEX quickstart_source ON quickstart (source_kind, source_id);
-
-CREATE TABLE quickstart_usage (
-    entry_id TEXT PRIMARY KEY,
-    opens INTEGER NOT NULL DEFAULT 0,
-    first_opened TEXT,
-    last_opened TEXT
-);
-
-CREATE TABLE ratings (
-    id INTEGER PRIMARY KEY,
-    target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'setting', 'quickstart')),
-    target_id TEXT NOT NULL,
-    rater TEXT NOT NULL,
-    rating REAL NOT NULL,
-    note TEXT NOT NULL DEFAULT '',
-    created TEXT NOT NULL
-);
-CREATE INDEX ratings_target ON ratings (target_kind, target_id);
-
-CREATE TABLE media (
-    id INTEGER PRIMARY KEY,
-    target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'setting', 'quickstart')),
-    target_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    path TEXT NOT NULL,
-    from_seed INTEGER NOT NULL DEFAULT 0,
-    render TEXT NOT NULL DEFAULT '{}',
-    width INTEGER,
-    height INTEGER,
-    frames INTEGER,
-    bytes INTEGER,
-    created TEXT NOT NULL,
-    UNIQUE (target_kind, target_id, kind, from_seed)
-);
-"#;
+/// The library's file name inside a folder.
+pub const FILE: &str = "library.sqlite";
 
 fn e(x: rusqlite::Error) -> String {
-    format!("catalog: {x}")
+    format!("library: {x}")
 }
 
 /// A serde unit enum as its name (`still_life`, `touch`).
@@ -357,7 +103,7 @@ fn name_of<T: Serialize>(t: &T) -> String {
 
 fn parse_name<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
     serde_json::from_value(Value::String(s.to_string()))
-        .map_err(|x| format!("catalog: bad value '{s}': {x}"))
+        .map_err(|x| format!("library: bad value '{s}': {x}"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -489,6 +235,9 @@ pub struct JobRow {
     /// The runner's last heartbeat, seconds since 1970.
     #[serde(skip)]
     pub heartbeat: Option<i64>,
+    /// The job's uuid (the search id: folders and provenance name it).
+    #[serde(skip)]
+    pub uuid: String,
 }
 
 impl JobRow {
@@ -536,6 +285,9 @@ pub struct CatalogInfo {
     pub ratings: i64,
     pub media: i64,
     pub ants: i64,
+    /// Records flagged for re-verification (their geometry pin is not the engine's): patterns,
+    /// ants, and Quick Start entries.
+    pub needs_reverify: i64,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -575,7 +327,8 @@ const PCOLS: &str = "p.id, p.name, p.rule, p.neighborhood, p.steps_per_gen, p.ti
     p.created, p.updated, p.body, p.range_bits, p.birth_min, p.birth_max, p.survive_min, \
     p.survive_max, p.states_min, p.states_max, \
     (SELECT group_concat(r.notation, char(10) ORDER BY pr.first_seen, r.id) \
-       FROM pattern_rules pr JOIN rules r ON r.id = pr.rule_id WHERE pr.pattern_id = p.id)";
+       FROM pattern_rules pr JOIN rules r ON r.id = pr.rule_id WHERE pr.pattern_id = p.id), \
+    p.geometry_pin, p.engine_version, p.needs_reverify";
 
 fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord, String>> {
     let g_i = |i: usize| -> rusqlite::Result<i64> { row.get::<_, i64>(i) };
@@ -602,9 +355,9 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
     let rating: Option<i64> = row.get(21)?;
     let parts = (|| -> Result<PatternRecord, String> {
         let text =
-            unstored::unpack_body(body).map_err(|x| format!("catalog: pattern {id}: {x}"))?;
+            unstored::unpack_body(body).map_err(|x| format!("library: pattern {id}: {x}"))?;
         let b: Body =
-            serde_json::from_str(&text).map_err(|x| format!("catalog: pattern {id}: {x}"))?;
+            serde_json::from_str(&text).map_err(|x| format!("library: pattern {id}: {x}"))?;
         Ok(PatternRecord {
             format: b.format,
             id: id.clone(),
@@ -644,15 +397,17 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
                 .map(|s| s.lines().map(String::from).collect())
                 .unwrap_or_default(),
             range,
-            geometry_pin: String::new(),
-            engine_version: String::new(),
-            needs_reverify: false,
+            geometry_pin: row.get(34).map_err(e)?,
+            engine_version: row.get(35).map_err(e)?,
+            needs_reverify: row.get::<_, i64>(36).map_err(e)? != 0,
         })
     })();
     Ok(parts)
 }
 
-fn tiling_id(t: &TilingSpec) -> String {
+/// The short key of a tiling (its family, or its catalog id: `square`, `k3-019`), the
+/// `tiling_key` columns.
+fn short_tiling_key(t: &TilingSpec) -> String {
     t.params
         .as_ref()
         .and_then(|p| p.get("catalog"))
@@ -662,9 +417,11 @@ fn tiling_id(t: &TilingSpec) -> String {
 }
 
 /// Write every column of a pattern row (insert or replace the values, keeping the row so its
-/// `pattern_rules` and `sightings` stay).
+/// `pattern_rules` and `sightings` stay). The pin key is the record's pin's; the engine's pin for
+/// it is put in `engine_pins` when missing.
 fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
     let rule = Rule::parse(&r.rule)?.0;
+    let (pin_key, _) = schema::pin_for(tx, record_pin_spec(r))?;
     let body = serde_json::to_string(&Body {
         format: r.format,
         tiling: r.tiling.clone(),
@@ -683,16 +440,17 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
     let rg = r.range.as_ref();
     let mut st = tx
         .prepare_cached(
-            "INSERT INTO patterns (id, model, tiling, tiling_id, tiling_name, tile_types,
+            "INSERT INTO patterns (id, model, tiling, tiling_key, tiling_name, tile_types,
                 neighborhood, steps_per_gen, class, period, dx, dy, speed, cells, min_cells,
                 max_cells, canonical, rule, range_bits, birth_min, birth_max, survive_min,
                 survive_max, states_min, states_max, seen, score, rating, state, name, label,
-                tags, notes, discovered_by, created, updated, body, emits)
+                tags, notes, discovered_by, created, updated, body, emits, pin_key,
+                geometry_pin, needs_reverify, engine_version)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                 ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
-                ?34, ?35, ?36, ?37, ?38)
+                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42)
              ON CONFLICT (id) DO UPDATE SET model = excluded.model, tiling = excluded.tiling,
-                tiling_id = excluded.tiling_id, tiling_name = excluded.tiling_name,
+                tiling_key = excluded.tiling_key, tiling_name = excluded.tiling_name,
                 tile_types = excluded.tile_types, neighborhood = excluded.neighborhood,
                 steps_per_gen = excluded.steps_per_gen, class = excluded.class,
                 period = excluded.period, dx = excluded.dx, dy = excluded.dy,
@@ -706,14 +464,16 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
                 state = excluded.state, name = excluded.name, label = excluded.label,
                 tags = excluded.tags, notes = excluded.notes,
                 discovered_by = excluded.discovered_by, updated = excluded.updated,
-                body = excluded.body, emits = excluded.emits",
+                body = excluded.body, emits = excluded.emits, pin_key = excluded.pin_key,
+                geometry_pin = excluded.geometry_pin, needs_reverify = excluded.needs_reverify,
+                engine_version = excluded.engine_version",
         )
         .map_err(e)?;
     st.execute(params![
         r.id,
         range::cell_model(&rule),
         tiling_key(&r.tiling),
-        tiling_id(&r.tiling),
+        short_tiling_key(&r.tiling),
         r.tiling_name,
         r.tile_types as i64,
         name_of(&r.neighborhood),
@@ -748,9 +508,19 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
         r.updated,
         body,
         r.gun.as_ref().map(|g| g.ship.clone()),
+        pin_key,
+        r.geometry_pin,
+        r.needs_reverify as i64,
+        r.engine_version,
     ])
     .map_err(e)?;
     Ok(())
+}
+
+/// The tiling a record's pin is the pin of: its site's patch on aperiodic tilings, else its
+/// tiling.
+fn record_pin_spec(r: &PatternRecord) -> &TilingSpec {
+    r.site.as_ref().map(|s| &s.patch).unwrap_or(&r.tiling)
 }
 
 fn load(c: &Connection, id: &str) -> Result<Option<PatternRecord>, String> {
@@ -865,6 +635,7 @@ fn add_in(
     mut rec: PatternRecord,
     job: i64,
     soups: u64,
+    origin: &Origin,
 ) -> Result<AddOutcome, String> {
     let now = now_utc();
     let rid = rule_id_in(tx, &rec.rule, rec.neighborhood, rec.steps_per_gen)?;
@@ -881,6 +652,16 @@ fn add_in(
             rec.rules = vec![];
             rec.rescore();
             put_pattern(tx, &rec)?;
+            provenance::first_in(
+                tx,
+                "pattern",
+                &rec.id,
+                origin,
+                job,
+                &rec.geometry_pin,
+                &rec.provenance.source,
+                &rec.provenance.date,
+            )?;
             AddOutcome::Added
         }
         Some(mut old) => {
@@ -917,34 +698,65 @@ fn add_in(
             }
         }
     };
-    tx.prepare_cached(
-        "INSERT INTO pattern_rules (pattern_id, rule_id, verified, periods, first_seen)
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (pattern_id, rule_id) DO UPDATE SET
-            verified = CASE WHEN excluded.periods > periods THEN excluded.verified ELSE verified END,
-            periods = max(periods, excluded.periods)",
-    )
-    .map_err(e)?
-    .execute(params![
-        id,
-        rid,
-        serde_json::to_string(&verified).unwrap_or_default(),
-        verified.periods as i64,
-        now
-    ])
-    .map_err(e)?;
+    put_pattern_rule(tx, &id, rid, &verified, &now)?;
     if count > 0 {
         put_sighting(tx, &id, rid, job, count, soups, &now)?;
     }
     Ok(out)
 }
 
-/// A record as the catalog stores it: verified (if not yet verified) and given its rule range
-/// (if missing). Adding a record does this first; a job that must know a record can be stored
-/// before it writes (its write is then only the store) does it itself.
+/// A `pattern_rules` row: a rule a pattern was verified in (the longer verification kept).
+fn put_pattern_rule(
+    tx: &Transaction,
+    id: &str,
+    rid: i64,
+    verified: &Verification,
+    now: &str,
+) -> Result<(), String> {
+    tx.prepare_cached(
+        "INSERT INTO pattern_rules (pattern_id, rule_id, verified, periods, engine_version,
+            first_seen) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT (pattern_id, rule_id) DO UPDATE SET
+            verified = CASE WHEN excluded.periods > periods THEN excluded.verified ELSE verified END,
+            engine_version = CASE WHEN excluded.periods > periods THEN excluded.engine_version
+                ELSE engine_version END,
+            periods = max(periods, excluded.periods)",
+    )
+    .map_err(e)?
+    .execute(params![
+        id,
+        rid,
+        serde_json::to_string(verified).unwrap_or_default(),
+        verified.periods as i64,
+        if verified.jetcarp_version.is_empty() {
+            jetcarp_core::VERSION
+        } else {
+            verified.jetcarp_version.as_str()
+        },
+        now
+    ])
+    .map_err(e)?;
+    Ok(())
+}
+
+/// A record as the library stores it: in canonical form with this engine's geometry pin and its
+/// content id ([`PatternRecord::canonicalize`]), verified (if not yet verified, or verified on
+/// another geometry: a stored pin that is not this engine's), and given its rule range (if
+/// missing). Adding a record does this first; a job that must know a record can be stored before
+/// it writes (its write is then only the store) does it itself.
 pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
-    if rec.verified.periods == 0 {
+    let had_pin = std::mem::take(&mut rec.geometry_pin);
+    rec.canonicalize()?;
+    if rec.verified.periods == 0
+        || rec.needs_reverify
+        || (!had_pin.is_empty() && had_pin != rec.geometry_pin)
+    {
         rec.verified = verify(&rec, default_periods(rec.period))?;
+        rec.engine_version = jetcarp_core::VERSION.into();
+    }
+    rec.needs_reverify = false;
+    if rec.engine_version.is_empty() {
+        rec.engine_version = jetcarp_core::VERSION.into();
     }
     if rec.range.is_none() {
         rec.range = range::rule_range(&rec)?;
@@ -952,55 +764,10 @@ pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
     Ok(rec)
 }
 
-fn open_db(path: &Path) -> Result<Connection, String> {
-    if let Some(d) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        std::fs::create_dir_all(d).map_err(|x| format!("creating {}: {x}", d.display()))?;
-    }
-    let mut c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
-    c.busy_timeout(std::time::Duration::from_secs(30))
-        .map_err(e)?;
-    c.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))
-        .map_err(e)?;
-    c.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")
-        .map_err(e)?;
-    migrate(&mut c).map_err(|x| format!("{}: {x}", path.display()))?;
-    Ok(c)
-}
-
-/// Apply the migrations this catalog lacks.
-fn migrate(c: &mut Connection) -> Result<(), String> {
-    let have: i64 = c
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .map_err(e)?;
-    if have as usize > MIGRATIONS.len() {
-        return Err(format!(
-            "the catalog has schema version {have}, newer than this JETCARP ({}); update JETCARP",
-            MIGRATIONS.len()
-        ));
-    }
-    for (i, sql) in MIGRATIONS.iter().enumerate().skip(have as usize) {
-        let tx = c
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(e)?;
-        // Another process may have migrated while we waited for the lock.
-        let now: i64 = tx
-            .query_row("PRAGMA user_version", [], |r| r.get(0))
-            .map_err(e)?;
-        if now as usize > i {
-            continue;
-        }
-        tx.execute_batch(sql).map_err(e)?;
-        tx.execute_batch(&format!("PRAGMA user_version = {}", i + 1))
-            .map_err(e)?;
-        tx.commit().map_err(e)?;
-    }
-    Ok(())
-}
-
 type Guard<'a> = MutexGuard<'a, Option<Connection>>;
 
 impl Library {
-    /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/catalog.sqlite`
+    /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/library.sqlite`
     /// ([`jetcarp_core::paths::data_dir`]).
     pub fn default_path() -> PathBuf {
         if let Some(p) = std::env::var_os("JETCARP_LIBRARY").filter(|p| !p.is_empty()) {
@@ -1009,8 +776,8 @@ impl Library {
         jetcarp_core::paths::data_dir().join(FILE)
     }
 
-    /// The catalog file for a path: itself if it names a `.sqlite`/`.db` file, else
-    /// `<path>/catalog.sqlite`.
+    /// The library file for a path: itself if it names a `.sqlite`/`.db` file, else
+    /// `<path>/library.sqlite`.
     pub fn file_for(p: PathBuf) -> PathBuf {
         let is_file = p
             .extension()
@@ -1024,7 +791,7 @@ impl Library {
         Library::open(Library::default_path())
     }
 
-    /// A catalog at `path`: a `.sqlite` file, or a folder holding `catalog.sqlite`. Nothing is
+    /// A library at `path`: a `.sqlite` file, or a folder holding `library.sqlite`. Nothing is
     /// created until the first write.
     pub fn open(path: impl Into<PathBuf>) -> Library {
         Library {
@@ -1052,7 +819,7 @@ impl Library {
             if !create && !self.path.exists() {
                 return Ok(None);
             }
-            *g = Some(open_db(&self.path)?);
+            *g = Some(schema::open_db(&self.path)?);
         }
         Ok(Some(g))
     }
@@ -1098,7 +865,7 @@ impl Library {
     /// [`add`](Self::add) with the sighting credited to a job.
     pub fn add_in_job(&self, rec: PatternRecord, job: i64) -> Result<AddOutcome, String> {
         let rec = prepare(rec)?;
-        self.write(|tx| add_in(tx, rec, job, 0))
+        self.write(|tx| add_in(tx, rec, job, 0, &Origin::found()))
     }
 
     /// Add many records in one transaction (verification and ranges computed in parallel first).
@@ -1108,13 +875,18 @@ impl Library {
         recs: Vec<PatternRecord>,
         job: Option<i64>,
     ) -> Result<Vec<Result<AddOutcome, String>>, String> {
-        self.add_batch(recs.into_iter().map(|r| (r, 0)).collect(), job.unwrap_or(0))
+        self.add_batch(
+            recs.into_iter().map(|r| (r, 0)).collect(),
+            job.unwrap_or(0),
+            &Origin::found(),
+        )
     }
 
     fn add_batch(
         &self,
         recs: Vec<(PatternRecord, u64)>,
         job: i64,
+        origin: &Origin,
     ) -> Result<Vec<Result<AddOutcome, String>>, String> {
         let ready: Vec<(Result<PatternRecord, String>, u64)> =
             recs.into_par_iter().map(|(r, s)| (prepare(r), s)).collect();
@@ -1122,7 +894,7 @@ impl Library {
             let mut out = Vec::with_capacity(ready.len());
             for (r, soups) in ready {
                 out.push(match r {
-                    Ok(r) => Ok(add_in(tx, r, job, soups)?),
+                    Ok(r) => Ok(add_in(tx, r, job, soups, origin)?),
                     Err(x) => Err(x),
                 });
             }
@@ -1140,7 +912,9 @@ impl Library {
         })
     }
 
-    /// A record by id, unique id prefix (4+ characters), or exact name (case-insensitive).
+    /// A record by id, unique id prefix (4+ characters; the first 8 are the short id), exact
+    /// name (case-insensitive), or an old id or prefix kept in `id_aliases`. A prefix that
+    /// matches both a record's id and an alias of another record is ambiguous.
     pub fn get(&self, key: &str) -> Result<PatternRecord, String> {
         let key = key.trim();
         if key.is_empty() {
@@ -1169,6 +943,13 @@ impl Library {
                     "p.id >= ?1 AND p.id < ?1 || 'g' ORDER BY p.id",
                     key.to_ascii_lowercase(),
                 )?;
+            }
+            for id in provenance::alias_ids(c, "pattern", key)? {
+                if !v.iter().any(|r| r.id == id)
+                    && let Some(r) = load(c, &id)?
+                {
+                    v.push(r);
+                }
             }
             if v.is_empty() {
                 v = run("p.name = ?1 COLLATE NOCASE ORDER BY p.id", key.to_string())?;
@@ -1249,6 +1030,7 @@ impl Library {
                 [&r.id],
             )
             .map_err(e)?;
+            provenance::forget_in(tx, "pattern", &r.id)?;
             Ok(())
         })?;
         Ok(r)
@@ -1336,14 +1118,21 @@ impl Library {
     // -----------------------------------------------------------------------------------------
     // Jobs
 
-    /// A new job row (status `running`). Returns its id.
+    /// A new job row (status `running`) with a new uuid (the spec's `uuid` when it has one: an
+    /// explore search's folder name). Returns its id.
     pub fn create_job(&self, kind: &str, spec: &Value) -> Result<i64, String> {
         let now = now_utc();
+        let uuid = spec
+            .get("uuid")
+            .and_then(|u| u.as_str())
+            .filter(|u| !u.is_empty())
+            .map(String::from)
+            .unwrap_or_else(new_uuid);
         self.write(|tx| {
             tx.execute(
-                "INSERT INTO jobs (kind, spec, status, created, updated)
-                 VALUES (?1, ?2, 'running', ?3, ?3)",
-                params![kind, spec.to_string(), now],
+                "INSERT INTO jobs (uuid, kind, spec, status, engine_version, created, updated)
+                 VALUES (?1, ?2, ?3, 'running', ?4, ?5, ?5)",
+                params![uuid, kind, spec.to_string(), jetcarp_core::VERSION, now],
             )
             .map_err(e)?;
             Ok(tx.last_insert_rowid())
@@ -1429,7 +1218,7 @@ impl Library {
             let mut st = c
                 .prepare(&format!(
                     "SELECT id, kind, spec, status, progress, checkpoint IS NOT NULL, created,
-                        updated, finished, owner, heartbeat FROM jobs {filter} ORDER BY id"
+                        updated, finished, owner, heartbeat, uuid FROM jobs {filter} ORDER BY id"
                 ))
                 .map_err(e)?;
             let rows = st
@@ -1446,6 +1235,7 @@ impl Library {
                         r.get::<_, Option<String>>(8)?,
                         r.get::<_, Option<String>>(9)?,
                         r.get::<_, Option<i64>>(10)?,
+                        r.get::<_, String>(11)?,
                     ))
                 })
                 .map_err(e)?
@@ -1465,6 +1255,7 @@ impl Library {
                         finished: x.8,
                         owner: x.9,
                         heartbeat: x.10,
+                        uuid: x.11,
                     })
                 })
                 .collect()
@@ -1622,6 +1413,7 @@ impl Library {
         self.write(|tx| {
             tx.execute("DELETE FROM quickstart WHERE id = ?1", [id])
                 .map_err(e)?;
+            provenance::forget_in(tx, "quickstart", id)?;
             Ok(())
         })
     }
@@ -1680,8 +1472,10 @@ impl Library {
     }
 
     /// Merge patterns from JSON record files (a file, or a folder of them; a Phase 3 library
-    /// folder with `patterns/` and `quickstart/` works too) or from another catalog file. Ids
-    /// are recomputed and every record is verified again in each of its rules. Phase 3
+    /// folder with `patterns/` and `quickstart/` works too) or from another library file. Every
+    /// record is put in canonical form (so a record stored from another phase or orientation
+    /// merges with the one already here), given this engine's pin and its content id, and
+    /// verified again in each of its rules; its first provenance row says `imported`. Phase 3
     /// Quick Start scenes come along as `quickstart` rows.
     pub fn import(&self, src: &Path) -> Result<Vec<(String, AddOutcome)>, String> {
         let recs: Vec<PatternRecord> = if src.is_file()
@@ -1744,7 +1538,8 @@ impl Library {
             .collect();
         let checked: Vec<PatternRecord> = checked.into_iter().collect::<Result<_, _>>()?;
         let ids: Vec<String> = checked.iter().map(|r| r.id.clone()).collect();
-        let res = self.add_many(checked, None)?;
+        let origin = Origin::imported(&format!("import {}", src.display()));
+        let res = self.add_batch(checked.into_iter().map(|r| (r, 0)).collect(), 0, &origin)?;
         let mut out = Vec::new();
         for (id, r) in ids.into_iter().zip(res) {
             out.push((id, r?));
@@ -1810,6 +1605,15 @@ impl Library {
                 ratings: n("ratings")?,
                 media: n("media")?,
                 ants: n("ants")?,
+                needs_reverify: c
+                    .query_row(
+                        "SELECT (SELECT count(*) FROM patterns WHERE needs_reverify = 1)
+                            + (SELECT count(*) FROM ants WHERE needs_reverify = 1)
+                            + (SELECT count(*) FROM quickstart WHERE needs_reverify = 1)",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .map_err(e)?,
             })
         })
     }
@@ -1817,17 +1621,27 @@ impl Library {
 
 /// Insert or replace a Quick Start entry (keeping its creation date), inside a transaction.
 pub(super) fn quickstart_in(tx: &Transaction, q: &QuickStartRow) -> Result<(), String> {
+    let (pin_key, pin) = schema::pin_for(tx, &q.scene.tiling)?;
+    let new = !tx
+        .prepare_cached("SELECT 1 FROM quickstart WHERE id = ?1")
+        .map_err(e)?
+        .exists([&q.id])
+        .map_err(e)?;
     tx.execute(
         "INSERT INTO quickstart (id, source_kind, source_id, title, description, grid,
-                tiling, rule, rule_family, behaviour, scene, score, status, created, updated)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                tiling, rule, rule_family, behaviour, scene, score, status, created, updated,
+                pin_key, geometry_pin, needs_reverify, engine_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                0, ?18)
              ON CONFLICT (id) DO UPDATE SET source_kind = excluded.source_kind,
                 source_id = excluded.source_id, title = excluded.title,
                 description = excluded.description, grid = excluded.grid,
                 tiling = excluded.tiling, rule = excluded.rule,
                 rule_family = excluded.rule_family, behaviour = excluded.behaviour,
                 scene = excluded.scene, score = excluded.score, status = excluded.status,
-                updated = excluded.updated",
+                updated = excluded.updated, pin_key = excluded.pin_key,
+                geometry_pin = excluded.geometry_pin, needs_reverify = 0,
+                engine_version = excluded.engine_version",
         params![
             q.id,
             q.source_kind,
@@ -1844,9 +1658,24 @@ pub(super) fn quickstart_in(tx: &Transaction, q: &QuickStartRow) -> Result<(), S
             q.status.name(),
             q.created,
             now_utc(),
+            pin_key,
+            pin,
+            jetcarp_core::VERSION,
         ],
     )
     .map_err(e)?;
+    if new {
+        provenance::first_in(
+            tx,
+            "quickstart",
+            &q.id,
+            &Origin::found(),
+            0,
+            &pin,
+            &q.source_kind,
+            &q.created,
+        )?;
+    }
     Ok(())
 }
 
@@ -1933,7 +1762,7 @@ fn where_clause(q: &Query) -> Result<(String, Vec<Sql>), String> {
         if jetcarp_core::families::family(&t).is_some() || jetcarp_core::catalog::get(&qc).is_some()
         {
             let a = arg(&mut v, Sql::Text(qc));
-            w.push(format!("p.tiling_id = {a} COLLATE NOCASE"));
+            w.push(format!("p.tiling_key = {a} COLLATE NOCASE"));
         } else {
             let a = arg(&mut v, Sql::Text(t));
             w.push(format!("instr(lower(p.tiling_name), {a}) > 0"));

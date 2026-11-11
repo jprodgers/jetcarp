@@ -1241,7 +1241,7 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
     let c = ctx.clone();
     e.register_fn("library", move |path: &str| -> R<LibHandle> {
-        // Another catalog (a folder holding catalog.sqlite, or a .sqlite file): it must be
+        // Another catalog (a folder holding library.sqlite, or a .sqlite file): it must be
         // somewhere the script may write to.
         let file = Library::file_for(std::path::PathBuf::from(path));
         let dir = file

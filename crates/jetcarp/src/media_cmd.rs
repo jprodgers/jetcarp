@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(clap::Args)]
 pub struct MediaArgs {
-    /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <data>/catalog.sqlite). Media files go under its folder.
+    /// Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else
+    /// <data>/library.sqlite). Media files go under its folder.
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]

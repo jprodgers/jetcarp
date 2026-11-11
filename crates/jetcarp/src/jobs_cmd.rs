@@ -20,8 +20,8 @@ use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct JobsArgs {
-    /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY,
-    /// else <data>/catalog.sqlite).
+    /// Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY,
+    /// else <data>/library.sqlite).
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]

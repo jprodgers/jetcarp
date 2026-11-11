@@ -309,7 +309,7 @@ enum QuickstartSub {
         min_score: f64,
         #[arg(long, default_value_t = 12_000)]
         max_entries: usize,
-        /// Catalog: a .sqlite file, or a folder holding catalog.sqlite.
+        /// Catalog: a .sqlite file, or a folder holding library.sqlite.
         #[arg(long)]
         library: Option<PathBuf>,
     },

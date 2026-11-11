@@ -50,7 +50,7 @@ Two options also delete JETCARP's folders:
 | `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries of your own, the exploratory search's databases and the atlas. **This cannot be undone** |
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you
-want to keep your pattern library, copy `catalog.sqlite` (and its `media` folder) out of the data
+want to keep your pattern library, copy `library.sqlite` (and its `media` folder) out of the data
 folder first; `jetcarp doctor` shows where it is. If you moved the library elsewhere with
 `JETCARP_LIBRARY`, `--data` does not delete it. Like every JETCARP command, `jetcarp uninstall` uses
 the folders that `JETCARP_CONFIG_DIR`, `JETCARP_DATA_DIR` and `JETCARP_OUT` point to when they are

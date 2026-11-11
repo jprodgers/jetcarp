@@ -299,8 +299,8 @@ pub struct Ctx {
     pub platform: Arc<dyn Platform>,
     /// Output root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
     pub out_root: Option<PathBuf>,
-    /// Catalog instead of `$JETCARP_LIBRARY` or `<data>/catalog.sqlite` (a folder means
-    /// `<folder>/catalog.sqlite`). Set it before the first operation that reads the catalog
+    /// Catalog instead of `$JETCARP_LIBRARY` or `<data>/library.sqlite` (a folder means
+    /// `<folder>/library.sqlite`). Set it before the first operation that reads the catalog
     /// ([`Ctx::with_library`]): the catalog is opened once.
     pub library: Option<PathBuf>,
     /// The catalog, opened on first use and shared by every operation on this context (one
@@ -357,7 +357,7 @@ impl Ctx {
         self.platform = p;
         self
     }
-    /// Use this catalog (a `.sqlite` file, or a folder holding `catalog.sqlite`) instead of
+    /// Use this catalog (a `.sqlite` file, or a folder holding `library.sqlite`) instead of
     /// `$JETCARP_LIBRARY` or the default.
     pub fn with_library(mut self, path: Option<PathBuf>) -> Ctx {
         self.library = path;
@@ -416,7 +416,7 @@ impl Ctx {
     }
 
     /// The catalog: opened on first use (`library`, else `$JETCARP_LIBRARY`, else
-    /// `<data>/catalog.sqlite`), then the same handle every time. Nothing is created until the
+    /// `<data>/library.sqlite`), then the same handle every time. Nothing is created until the
     /// first write.
     pub fn library(&self) -> Library {
         self.store

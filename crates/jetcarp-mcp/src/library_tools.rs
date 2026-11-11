@@ -3,7 +3,7 @@
 //! entries ("My finds").
 //!
 //! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
-//! `<data>/catalog.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
+//! `<data>/library.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
 //! it once. Listing, reading, curation, and promotion are the operations `library.*` and
 //! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`),
 //! bounded by the server's limits (`Limits::INTERACTIVE`, which the operation checks).

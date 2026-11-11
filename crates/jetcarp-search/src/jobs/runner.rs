@@ -509,6 +509,7 @@ impl JobHandle {
             finished: None,
             owner: None,
             heartbeat: None,
+            uuid: String::new(),
         };
         let mut s = kind(&self.kind).summary(&row);
         s.here = !self.is_finished();

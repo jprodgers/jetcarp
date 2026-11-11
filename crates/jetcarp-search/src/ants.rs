@@ -187,6 +187,11 @@ pub fn row(
         job: None,
         created: String::new(),
         updated: String::new(),
+        geometry_pin: jetcarp_core::pin::geometry_pin(&lat.tiling)
+            .map(|p| p.pin)
+            .unwrap_or_default(),
+        engine_version: jetcarp_core::VERSION.into(),
+        needs_reverify: false,
         rule,
     }
 }

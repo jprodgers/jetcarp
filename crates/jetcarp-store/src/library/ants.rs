@@ -10,88 +10,22 @@
 //! Ants are their own kind of record rather than a pattern class: a pattern is a set of cells
 //! that recurs under a CA rule, while an ant's highway is the trail of one agent, with no rule
 //! range, phases, or sightings. Media and ratings name them with `target_kind = 'ant'`.
+//!
+//! **Ids.** An ant record's id is `ant-` and a content id ([`ant_id`]): 32 hex digits of
+//! SHA-256 over its identity text and its tiling's geometry pin, as patterns have. The identity
+//! text (`jetcarp-ant-v1`) is these lines joined by `\n`:
+//!
+//! ```text
+//! jetcarp-ant-v1
+//! rule=<rule notation: Ant RL, Turmite 1R1,1L0/1R1,0N0>
+//! tiling=<tiling key: compact JSON of {family, params, edges, boundary: "dead"}>
+//! start=<start JSON: "empty", or the start cells>
+//! ```
+//!
+//! An ant and its mirror image (`RL`, `LR`) are two records, as the searches store them.
 
 use super::*;
 use jetcarp_core::ants::run::{AntRun, Outcome, Start};
-
-/// Ants (Phase 4 wave 4): the `ants` table, and `media` and `ratings` rebuilt so their
-/// `target_kind` may be `ant` (SQLite cannot change a CHECK in place).
-pub(super) const MIGRATION_ANTS: &str = r#"
-CREATE TABLE ants (
-    id TEXT PRIMARY KEY,
-    rule TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('string', 'table')),
-    states INTEGER NOT NULL,
-    colors INTEGER NOT NULL,
-    tiling TEXT NOT NULL,
-    tiling_id TEXT NOT NULL,
-    tiling_name TEXT NOT NULL,
-    start TEXT NOT NULL,
-    start_label TEXT NOT NULL,
-    outcome TEXT NOT NULL
-        CHECK (outcome IN ('highway', 'periodic', 'symmetric', 'bounded', 'chaotic')),
-    period INTEGER,
-    dx INTEGER,
-    dy INTEGER,
-    speed REAL,
-    onset INTEGER,
-    steps INTEGER NOT NULL,
-    cells INTEGER NOT NULL,
-    body TEXT NOT NULL,
-    score REAL NOT NULL DEFAULT 0,
-    rating INTEGER,
-    state TEXT NOT NULL DEFAULT 'new',
-    name TEXT,
-    notes TEXT NOT NULL DEFAULT '',
-    job_id INTEGER REFERENCES jobs (id) ON DELETE SET NULL,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL
-);
-CREATE INDEX ants_outcome ON ants (outcome, tiling_id, score DESC);
-CREATE INDEX ants_tiling ON ants (tiling, outcome);
-CREATE INDEX ants_rule ON ants (rule);
-CREATE INDEX ants_job ON ants (job_id);
-
-CREATE TABLE media_v5 (
-    id INTEGER PRIMARY KEY,
-    target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'setting', 'quickstart', 'ant')),
-    target_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    path TEXT NOT NULL,
-    from_seed INTEGER NOT NULL DEFAULT 0,
-    render TEXT NOT NULL DEFAULT '{}',
-    width INTEGER,
-    height INTEGER,
-    frames INTEGER,
-    bytes INTEGER,
-    created TEXT NOT NULL,
-    key TEXT,
-    hash TEXT,
-    updated TEXT,
-    UNIQUE (target_kind, target_id, kind, from_seed)
-);
-INSERT INTO media_v5 (id, target_kind, target_id, kind, path, from_seed, render, width, height,
-    frames, bytes, created, key, hash, updated)
-    SELECT id, target_kind, target_id, kind, path, from_seed, render, width, height, frames,
-        bytes, created, key, hash, updated FROM media;
-DROP TABLE media;
-ALTER TABLE media_v5 RENAME TO media;
-
-CREATE TABLE ratings_v5 (
-    id INTEGER PRIMARY KEY,
-    target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'setting', 'quickstart', 'ant')),
-    target_id TEXT NOT NULL,
-    rater TEXT NOT NULL,
-    rating REAL NOT NULL,
-    note TEXT NOT NULL DEFAULT '',
-    created TEXT NOT NULL
-);
-INSERT INTO ratings_v5 (id, target_kind, target_id, rater, rating, note, created)
-    SELECT id, target_kind, target_id, rater, rating, note, created FROM ratings;
-DROP TABLE ratings;
-ALTER TABLE ratings_v5 RENAME TO ratings;
-CREATE INDEX ratings_target ON ratings (target_kind, target_id);
-"#;
 
 /// One ant run as stored.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -135,6 +69,19 @@ pub struct AntRow {
     pub created: String,
     #[serde(default)]
     pub updated: String,
+    /// The geometry pin of the tiling it ran on (part of its id).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub geometry_pin: String,
+    /// The JETCARP version that ran it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub engine_version: String,
+    /// Its pin differs from the running engine's: run it again (`jetcarp library reverify`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub needs_reverify: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl AntRow {
@@ -165,16 +112,24 @@ impl AntRow {
     }
 }
 
-/// The catalog id of a (rule, tiling, start).
-pub fn ant_id(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
-    let key = format!(
-        "{rule}|{}|{}",
+/// The identity text of a (rule, tiling, start) (see the module notes).
+pub fn ant_identity(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
+    format!(
+        "jetcarp-ant-v1\nrule={rule}\ntiling={}\nstart={}",
         tiling_key(tiling),
         serde_json::to_string(start).unwrap_or_default()
-    );
+    )
+}
+
+/// The library id of a (rule, tiling, start): `ant-` and the content id of its identity on its
+/// tiling's geometry pin.
+pub fn ant_id(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
+    let pin = jetcarp_core::pin::geometry_pin(tiling)
+        .map(|p| p.pin)
+        .unwrap_or_default();
     format!(
         "ant-{}",
-        &jetcarp_core::media::content_hash(key.as_bytes())[..12]
+        jetcarp_core::pattern::content_id(&ant_identity(rule, tiling, start), &pin)
     )
 }
 
@@ -269,6 +224,9 @@ fn row_of(r: &rusqlite::Row) -> rusqlite::Result<AntRow> {
         job: r.get("job_id")?,
         created: r.get("created")?,
         updated: r.get("updated")?,
+        geometry_pin: r.get("geometry_pin")?,
+        engine_version: r.get("engine_version")?,
+        needs_reverify: r.get::<_, i64>("needs_reverify")? != 0,
     })
 }
 
@@ -296,17 +254,25 @@ pub(super) fn put_ant(tx: &Transaction, a: &AntRow, job: i64, now: &str) -> Resu
         }
     }
     let body = serde_json::json!({"run": a.run, "limits": a.limits}).to_string();
-    let tid = tiling_id(&a.tiling);
+    let tid = short_tiling_key(&a.tiling);
+    let (pin_key, pin) = schema::pin_for(tx, &a.tiling)?;
+    let pin = if a.geometry_pin.is_empty() {
+        pin
+    } else {
+        a.geometry_pin.clone()
+    };
     tx.execute(
-        "INSERT INTO ants (id, rule, kind, states, colors, tiling, tiling_id, tiling_name, start,
+        "INSERT INTO ants (id, rule, kind, states, colors, tiling, tiling_key, tiling_name, start,
             start_label, outcome, period, dx, dy, speed, onset, steps, cells, body, score, job_id,
-            created, updated)
+            created, updated, pin_key, geometry_pin, needs_reverify, engine_version)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-            ?19, ?20, ?21, ?22, ?22)
+            ?19, ?20, ?21, ?22, ?22, ?23, ?24, ?25, ?26)
          ON CONFLICT (id) DO UPDATE SET outcome = excluded.outcome, period = excluded.period,
             dx = excluded.dx, dy = excluded.dy, speed = excluded.speed, onset = excluded.onset,
             steps = excluded.steps, cells = excluded.cells, body = excluded.body,
-            score = excluded.score, job_id = excluded.job_id, updated = excluded.updated",
+            score = excluded.score, job_id = excluded.job_id, updated = excluded.updated,
+            pin_key = excluded.pin_key, geometry_pin = excluded.geometry_pin,
+            needs_reverify = excluded.needs_reverify, engine_version = excluded.engine_version",
         params![
             a.id,
             a.rule,
@@ -330,9 +296,20 @@ pub(super) fn put_ant(tx: &Transaction, a: &AntRow, job: i64, now: &str) -> Resu
             a.score,
             job,
             now,
+            pin_key,
+            pin,
+            a.needs_reverify as i64,
+            if a.engine_version.is_empty() {
+                jetcarp_core::VERSION
+            } else {
+                a.engine_version.as_str()
+            },
         ],
     )
     .map_err(e)?;
+    if old.is_none() {
+        provenance::first_in(tx, "ant", &a.id, &Origin::found(), job, &pin, "search", now)?;
+    }
     Ok(true)
 }
 
@@ -368,7 +345,7 @@ impl Library {
         })
     }
 
-    /// One ant record by id (or unique id prefix, or name).
+    /// One ant record by id (or unique id prefix, name, or an alias of an old id).
     pub fn ant(&self, key: &str) -> Result<AntRow, String> {
         let key = key.trim();
         let rows = self.read(Vec::new(), |c| {
@@ -378,14 +355,28 @@ impl Library {
                      ORDER BY id = ?1 DESC LIMIT 3",
                 )
                 .map_err(e)?;
-            st.query_map(params![key, format!("{key}%")], row_of)
+            let mut v = st
+                .query_map(params![key, format!("{key}%")], row_of)
                 .map_err(e)?
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(e)
+                .map_err(e)?;
+            if v.first().is_none_or(|a| a.id != key) {
+                for id in provenance::alias_ids(c, "ant", key)? {
+                    if !v.iter().any(|a| a.id == id) {
+                        let mut one = c
+                            .prepare_cached("SELECT * FROM ants WHERE id = ?1")
+                            .map_err(e)?;
+                        if let Some(a) = one.query_row([&id], row_of).optional().map_err(e)? {
+                            v.push(a);
+                        }
+                    }
+                }
+            }
+            Ok(v)
         })?;
         match rows.len() {
             0 => Err(format!(
-                "no ant record '{key}' (ids look like ant-1a2b3c4d5e6f)"
+                "no ant record '{key}' (ids look like ant-1a2b3c4d)"
             )),
             1 => Ok(rows.into_iter().next().unwrap()),
             _ if rows[0].id == key => Ok(rows.into_iter().next().unwrap()),
@@ -411,7 +402,7 @@ impl Library {
             let n = args.len();
             args.push(Sql::Text(t.trim().to_string()));
             wh.push(format!(
-                "(tiling_id = ?{n} OR tiling_name = ?{} COLLATE NOCASE)",
+                "(tiling_key = ?{n} OR tiling_name = ?{} COLLATE NOCASE)",
                 n + 1
             ));
         }
@@ -544,6 +535,7 @@ impl Library {
             ] {
                 tx.execute(sql, [&a.id]).map_err(e)?;
             }
+            provenance::forget_in(tx, "ant", &a.id)?;
             Ok(())
         })?;
         Ok(a)

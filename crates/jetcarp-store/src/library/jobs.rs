@@ -9,18 +9,13 @@
 //! while it still holds the job ([`Library::job_step`]).
 
 use super::{
-    AddOutcome, AntRow, JobStatus, Library, PatternRecord, Sighting, UnstoredFlush, add_in,
-    ants::put_ant, census, e, name_of, now_utc, prepare, sightings_in, unstored,
+    AddOutcome, AntRow, JobStatus, Library, Origin, PatternRecord, Reverified, Sighting,
+    UnstoredFlush, add_in, ants::put_ant, census, e, name_of, now_utc, prepare, provenance,
+    reverify, sightings_in, unstored,
 };
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
-
-/// Version 7: who runs a job, and when it last said so.
-pub(super) const MIGRATION_JOB_LEASE: &str = r#"
-ALTER TABLE jobs ADD COLUMN owner TEXT;
-ALTER TABLE jobs ADD COLUMN heartbeat INTEGER;
-"#;
 
 /// What [`Library::remove_job`] deleted.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
@@ -50,6 +45,8 @@ pub struct StepWrite {
     pub ants: Vec<AntRow>,
     /// Census rule summaries: (rule index, rule, summary).
     pub census: Vec<(usize, String, Value)>,
+    /// What re-verifying records found (the `reverify` job).
+    pub reverified: Vec<Reverified>,
     pub status: Option<JobStatus>,
     /// The heartbeat to record (seconds since 1970).
     pub heartbeat: i64,
@@ -138,9 +135,10 @@ impl Library {
                 Some(_) => {}
             }
             let mut out = Vec::with_capacity(ready.len() + w.verified.len());
+            let found = Origin::found();
             for (r, soups) in ready {
                 out.push(match r {
-                    Ok(r) => Ok(add_in(tx, r, job, soups)?),
+                    Ok(r) => Ok(add_in(tx, r, job, soups, &found)?),
                     Err(x) => Err(x),
                 });
             }
@@ -148,7 +146,7 @@ impl Library {
                 out.push(if r.verified.periods == 0 {
                     Err(format!("{}: not verified", r.id))
                 } else {
-                    Ok(add_in(tx, r, job, soups)?)
+                    Ok(add_in(tx, r, job, soups, &found)?)
                 });
             }
             sightings_in(tx, job, &w.sightings, &now)?;
@@ -157,6 +155,7 @@ impl Library {
                 put_ant(tx, a, job, &now)?;
             }
             census::rows_in(tx, job, &w.census)?;
+            reverify::reverified_in(tx, job, &w.reverified)?;
             let (progress, checkpoint) = end(&out)?;
             tx.execute(
                 "UPDATE jobs SET updated = ?2,
@@ -232,6 +231,7 @@ impl Library {
                             )
                             .map_err(e)?;
                         }
+                        provenance::forget_in(tx, kind, x)?;
                     }
                 }
             }

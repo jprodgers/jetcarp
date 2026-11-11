@@ -1,7 +1,7 @@
 //! Where a step puts its results ([`Sink`]).
 
 use jetcarp_core::pattern::PatternRecord;
-use jetcarp_store::library::StepWrite;
+use jetcarp_store::library::{Reverified, StepWrite};
 use jetcarp_store::{AntRow, JobStatus, Sighting, UnstoredFlush};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -28,6 +28,8 @@ pub struct Sink {
     pub ants: Vec<AntRow>,
     /// Census rule summaries: (rule index, rule, summary).
     pub census: Vec<(usize, String, Value)>,
+    /// What checking records again found (the `reverify` job).
+    pub reverified: Vec<Reverified>,
     /// Files the run wrote (pictures, reports), for the caller.
     pub files: Vec<PathBuf>,
 }
@@ -42,6 +44,7 @@ impl Sink {
             && self.unstored.remove.is_empty()
             && self.ants.is_empty()
             && self.census.is_empty()
+            && self.reverified.is_empty()
     }
 
     /// The rows to write, taken out (the files stay).
@@ -53,6 +56,7 @@ impl Sink {
             unstored: std::mem::take(&mut self.unstored),
             ants: std::mem::take(&mut self.ants),
             census: std::mem::take(&mut self.census),
+            reverified: std::mem::take(&mut self.reverified),
             status,
             heartbeat,
         }

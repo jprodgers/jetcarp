@@ -74,7 +74,7 @@ in plane units. There are two ways to follow one.
 
 ```text
 $ jetcarp search mover --rule SpectreGlider --tiling spectre --rings 200 --store
-mover job 1 in /home/ada/.local/share/jetcarp/catalog.sqlite
+mover job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 start: 4071:1,4097:3
 mover 1: 200 rings of 200 (634 units) after 404 of 40000 generations, 11757 gens/s, 5821 rings/s, level 7, 603 tiles | verified to distance 200 edge rings (200 touching-neighbour steps, 633.6 units) over 404 generations on a sliding window of spectre (supertile level 7, at most 1009 tiles), population 2-12; stopped at the requested distance
 library: 4b70f6b289a68075

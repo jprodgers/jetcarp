@@ -525,5 +525,6 @@ fn a_palette_override_recolours_and_marks_media_stale() {
     );
 }
 
-/// `MediaStyle::default().hash()` (pinned: a change re-renders every stored media file).
-const HOUSE_STYLE_HASH: &str = "2d4c184a932ee8ba";
+/// `MediaStyle::default().hash()` (pinned: a change re-renders every stored media file). 16 hex
+/// digits of SHA-256 of the style's JSON.
+const HOUSE_STYLE_HASH: &str = "86fdb8c4566d9a22";

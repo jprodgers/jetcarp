@@ -18,7 +18,7 @@
 //!                                        [`write_page`]; `jetcarp site export` does)
 //! ```
 //!
-//! **Incremental.** The manifest records a content hash (FNV-1a 64) for every item and media
+//! **Incremental.** The manifest records a content hash (SHA-256) for every item and media
 //! file, and it is the export's state: an export reads the old manifest, writes only items
 //! whose JSON changed and media files whose hash changed (or that are missing), deletes the
 //! files of items that are no longer public, and rewrites the manifest only when something

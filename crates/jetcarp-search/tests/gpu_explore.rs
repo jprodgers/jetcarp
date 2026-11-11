@@ -25,7 +25,7 @@ fn explore_runs_measured_on_the_gpu_match_the_cpu() {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("explore-gpu-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let lib = Library::open(dir.join("catalog.sqlite"));
+    let lib = Library::open(dir.join("library.sqlite"));
     let job = jobs::create(
         &lib,
         &JobSpec {

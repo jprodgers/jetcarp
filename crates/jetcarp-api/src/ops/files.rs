@@ -224,7 +224,7 @@ impl Op for FilesList {
                     "pile.json",
                     "favourites.json",
                     "growth.csv",
-                    "catalog.sqlite",
+                    "library.sqlite",
                     "index.html",
                 ]
                 .into_iter()

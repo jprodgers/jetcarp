@@ -129,7 +129,7 @@ fn progress(v: &Value) -> ExploreProgress {
 #[test]
 fn explore_jobs_stop_and_continue_from_their_archive() {
     let dir = scratch("continue");
-    let lib = Library::open(dir.join("catalog.sqlite"));
+    let lib = Library::open(dir.join("library.sqlite"));
     let job = make(&lib, small(json!({})));
     let row = lib.job(job).unwrap();
     assert_eq!(
@@ -223,7 +223,7 @@ fn explore_jobs_stop_and_continue_from_their_archive() {
 #[test]
 fn resume_reads_the_saved_state_not_every_run() {
     let dir = scratch("saved-state");
-    let lib = Library::open(dir.join("catalog.sqlite"));
+    let lib = Library::open(dir.join("library.sqlite"));
     let job = make(&lib, small(json!({})));
     let out = Runner::new(lib.clone())
         .run(job, &opts(2, Budget::items(300)))
@@ -273,7 +273,7 @@ fn resume_reads_the_saved_state_not_every_run() {
 #[test]
 fn the_gpu_loop_runs_on_a_backend() {
     let dir = scratch("backend");
-    let lib = Library::open(dir.join("catalog.sqlite"));
+    let lib = Library::open(dir.join("library.sqlite"));
     let job = make(&lib, small(json!({"gpu": true})));
     let mut run = ExploreRun::with_backend(Box::new(CpuBatch));
     let out = Runner::new(lib.clone())
@@ -323,7 +323,7 @@ fn an_old_database_is_imported_then_searched_on() {
     let dir = scratch("import");
     // An old search's database: a job's runs, as CART's explore databases hold them (its own
     // tables but `runs`, `reviews`, and `meta` dropped).
-    let lib0 = Library::open(dir.join("old").join("catalog.sqlite"));
+    let lib0 = Library::open(dir.join("old").join("library.sqlite"));
     let j0 = make(&lib0, small(json!({})));
     let out = Runner::new(lib0.clone())
         .run(j0, &opts(2, Budget::items(250)))
@@ -347,7 +347,7 @@ fn an_old_database_is_imported_then_searched_on() {
         )
         .unwrap();
     }
-    let lib = Library::open(dir.join("new").join("catalog.sqlite"));
+    let lib = Library::open(dir.join("new").join("library.sqlite"));
     let job = make(
         &lib,
         small(json!({"import": old.display().to_string(), "import_only": true})),
@@ -425,7 +425,7 @@ fn an_old_database_is_imported_then_searched_on() {
 #[test]
 fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
     let dir = scratch("rescore");
-    let lib = Library::open(dir.join("catalog.sqlite"));
+    let lib = Library::open(dir.join("library.sqlite"));
     let job = make(&lib, small(json!({})));
     let out = Runner::new(lib.clone())
         .run(job, &opts(2, Budget::items(200)))

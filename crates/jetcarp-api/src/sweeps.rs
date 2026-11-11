@@ -318,11 +318,10 @@ pub fn promote_run_with(
     }
     sc.view = Some(json!({ "speed": 30.0 }));
     let key = format!("{}:{}", m.name(), r["index"]);
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in key.bytes() {
-        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
-    }
-    let id = format!("sweep-{h:016x}");
+    let id = format!(
+        "sweep-{}",
+        &jetcarp_core::sha256::sha256_hex(key.as_bytes())[..32]
+    );
     let mut q = jetcarp_store::QuickStartRow::for_scene(&id, "sweep", sc);
     q.source_id = Some(key);
     q.behaviour = r
