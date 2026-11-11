@@ -1291,7 +1291,7 @@ impl EvolveIn {
 // ---------------------------------------------------------------------------------------------
 // Explore searches
 
-/// The broad exploratory search (strategy `explore`): MAP-Elites over tiling, rule family, rule, and seed. It keeps the best few runs of each niche (family, tiling group, behaviour), breeds from them, confirms the best on bigger grids, and stores every run in its own database (`searches/<uuid>/search.sqlite` beside the catalog). It runs until stopped or out of budget, and is not deterministic: a stopped search continues from its archive.
+/// The broad exploratory search (strategy `explore`): MAP-Elites over tiling, rule family, rule, and seed. It keeps the best few runs of each niche (family, tiling group, behaviour), breeds from them, confirms the best on bigger grids, and stores every run in its own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). It runs until stopped or out of budget, and is not deterministic: a stopped search continues from its archive.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExploreIn {
@@ -1330,7 +1330,7 @@ pub struct ExploreIn {
     /// Stop (paused, resumable) when the process uses more memory than this many GB.
     #[serde(default)]
     pub max_rss_gb: Option<f64>,
-    /// An old explore database (CART's search.sqlite) to import first: its runs and reviews are copied and the archive, coverage, and seen set rebuilt from them once.
+    /// An old explore database (CART's search.sqlite) to import first: its runs are copied into sealed segments, its reviews into the library, and the archive, coverage, and seen set rebuilt from them once.
     #[serde(default)]
     pub import: Option<String>,
     /// With `import`: stop (paused) once the import is done, instead of searching on.

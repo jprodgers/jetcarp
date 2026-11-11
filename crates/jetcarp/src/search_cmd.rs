@@ -57,9 +57,10 @@ enum Strategy {
     /// library.
     Evolve(Box<EvolveArgs>),
     /// The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until
-    /// stopped or out of budget, every run kept in the job's own database
-    /// (`searches/<uuid>/search.sqlite` beside the catalog). Not deterministic: a stopped search
-    /// continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore` read it.
+    /// stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside
+    /// the library: Parquet segments of a million runs, and a working database). Not
+    /// deterministic: a stopped search continues from its archive.
+    /// `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it.
     Explore(Box<ExploreArgs>),
     /// Run one configuration now on the CPU, measured as the explore search measures its runs:
     /// fate, measures, score, and a picture (not a job).
@@ -574,7 +575,8 @@ pub struct ExploreArgs {
     #[arg(long)]
     max_rss_gb: Option<f64>,
     /// Import an old explore database first (CART's search.sqlite, opened read only): its runs
-    /// and reviews are copied and the archive rebuilt from them once.
+    /// are copied into sealed segments, its reviews into the library, and the archive rebuilt
+    /// from them once.
     #[arg(long)]
     import: Option<PathBuf>,
     /// With --import: stop once the import is done (`jetcarp jobs resume JOB` searches on).
