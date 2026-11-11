@@ -52,7 +52,7 @@ pub fn definitions() -> Vec<Value> {
                 "minutes": {"type": "number", "description": "Minutes to run, instead of hours."},
                 "gpu": {"type": "boolean", "description": "Use the GPU when there is one (default true)."},
                 "cpu_threads": {"type": "integer", "minimum": 1, "description": "Worker threads (default: all cores)."},
-                "tilings": {"type": "string", "description": "Only these tiling keys, comma separated (default all, about 940)."},
+                "tilings": {"type": "string", "description": "Only these tiling keys, comma separated (default all: 1,359 today; the progress counts them)."},
                 "families": {"type": "string", "description": "Only these rule families, comma separated (default all)."},
                 "screen_cells": {"type": "integer", "minimum": 64, "description": "Cells of a screening run (default 16000)."},
                 "screen_gens": {"type": "integer", "minimum": 1, "description": "Generations of a screening run (default 1024)."},

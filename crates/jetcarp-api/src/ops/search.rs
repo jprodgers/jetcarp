@@ -1293,7 +1293,7 @@ impl EvolveIn {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExploreIn {
-    /// Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, about 940).
+    /// Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them).
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub tilings: Option<Value>,

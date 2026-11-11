@@ -539,7 +539,7 @@ pub struct ExploreArgs {
     #[arg(long)]
     hours: Option<f64>,
     /// Only these tilings: keys, comma separated (square,hex,trihex,ih28,catalog:k2-001; default:
-    /// every tiling the search knows, about 940).
+    /// every tiling the search knows, 1,359 today; the progress line counts them).
     #[arg(long)]
     tilings: Option<String>,
     /// Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps,
@@ -1095,4 +1095,25 @@ fn evolve(a: EvolveArgs, json: bool) -> Result<()> {
     };
     let i = start_in("evolve", spec(&s), &a.job)?;
     start(&a.job, i, json).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    /// The --tilings help names how many tilings the search knows; keep it true.
+    #[test]
+    fn the_tilings_help_gives_the_real_count() {
+        use clap::CommandFactory;
+        let n = jetcarp_core::explore::space::all_tilings().len();
+        let count = format!("{},{:03}", n / 1000, n % 1000);
+        #[derive(clap::Parser)]
+        struct Wrap {
+            #[command(flatten)]
+            a: super::ExploreArgs,
+        }
+        let help = Wrap::command().render_long_help().to_string();
+        assert!(
+            help.contains(&format!("knows, {count} today")),
+            "{count}: {help}"
+        );
+    }
 }
