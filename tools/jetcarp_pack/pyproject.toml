@@ -1,0 +1,14 @@
+[project]
+name = "jetcarp-pack"
+version = "0.1.0"
+description = "An independent reader for JETCARP pack format 1.0, written from the specification alone"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pyarrow"]
+license = "Unlicense OR MIT"
+
+[project.scripts]
+jetcarp-pack = "jetcarp_pack.cli:main"
+
+[tool.setuptools]
+packages = ["jetcarp_pack"]
