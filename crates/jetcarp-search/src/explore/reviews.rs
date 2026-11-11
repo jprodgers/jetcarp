@@ -1,9 +1,9 @@
 //! Reviews of an explore search's runs: the verdicts (keep, maybe, drop) people give runs, kept
 //! as ratings in the library ([`jetcarp_store::library::RunReview`]; target kind `search_run`,
 //! target id `<search uuid>:<run id>`), so they outlive the search's folder. One at a time
-//! ([`add_review`]), from a folder of rating files ([`import_ratings`]), or from an old database
-//! ([`import_old`]); counted per verdict ([`review_counts`]); and turned into a run filter
-//! ([`resolve`]).
+//! ([`add_review`]), from a folder of rating files ([`import_ratings`]), or moved from a working
+//! database of format 1 ([`move_old`]); counted per verdict ([`review_counts`]); and turned into a
+//! run filter ([`resolve`]).
 
 use crate::explore::runs::{RunFilter, Runs};
 use jetcarp_store::Library;
@@ -148,43 +148,33 @@ pub fn import_ratings(
     Ok(out)
 }
 
-/// Record an old database's reviews (CART's, or a search's working database from before reviews
-/// moved to the library) for search `search`, with `source` for those that name none. Reviews
-/// recorded already (every field the same) are skipped, so doing it twice records them once.
-/// Returns how many were recorded.
-pub fn import_old(
-    lib: &Library,
-    search: &str,
-    reviews: &[crate::explore::store::OldReview],
-    source: &str,
-) -> Result<u64, String> {
-    let list: Vec<RunReview> = reviews
-        .iter()
-        .filter(|r| VERDICTS.contains(&r.1.as_str()))
-        .map(|(run, verdict, note, ts, rater, src)| RunReview {
-            search: search.to_string(),
-            run: *run,
-            verdict: verdict.clone(),
-            note: note.clone(),
-            rater: rater.clone(),
-            source: if src.is_empty() {
-                source.to_string()
-            } else {
-                src.clone()
-            },
-            created: utc(*ts),
-        })
-        .collect();
-    Ok(lib.add_run_reviews(&list, Dedupe::Exact)?.0)
-}
-
-/// Move a search's working-database reviews (format 1) into the library, then drop the table.
+/// Move a search's working-database reviews (format 1, from before reviews moved to the library)
+/// into the library, with source `review` for those that name none, then drop the table. Reviews
+/// recorded already (every field the same) are skipped, so a move cut short and done again records
+/// each once. Returns how many were recorded.
 pub fn move_old(lib: &Library, runs: &Runs) -> Result<u64, String> {
-    let old = crate::explore::store::old_reviews(&runs.db)?;
     if !crate::explore::store::has_table(&runs.db, "reviews")? {
         return Ok(0);
     }
-    let n = import_old(lib, &runs.uuid(), &old, "review")?;
+    let search = runs.uuid();
+    let list: Vec<RunReview> = crate::explore::store::old_reviews(&runs.db)?
+        .into_iter()
+        .filter(|r| VERDICTS.contains(&r.1.as_str()))
+        .map(|(run, verdict, note, ts, rater, source)| RunReview {
+            search: search.clone(),
+            run,
+            verdict,
+            note,
+            rater,
+            source: if source.is_empty() {
+                "review".into()
+            } else {
+                source
+            },
+            created: utc(ts),
+        })
+        .collect();
+    let n = lib.add_run_reviews(&list, Dedupe::Exact)?.0;
     crate::explore::store::drop_old_reviews(&runs.db)?;
     Ok(n)
 }

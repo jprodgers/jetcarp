@@ -12,8 +12,7 @@
 //!
 //! **Sealing.** A search's newest runs go to the working database; once [`SEAL_ROWS`] of them
 //! are there, the oldest [`SEAL_ROWS`] are sealed into the next segment ([`Runs::seal_full`]).
-//! An import ([`Runs::begin_segment`]) writes segments straight from the old database. Stopping
-//! a search seals nothing: its newest runs (fewer than [`SEAL_ROWS`]) stay in the working
+//! Stopping a search seals nothing: its newest runs (fewer than [`SEAL_ROWS`]) stay in the working
 //! database, where the next session adds to them, so every segment but the last holds
 //! [`SEAL_ROWS`] runs and a search stopped and continued a thousand times still has one segment
 //! per [`SEAL_ROWS`] runs. [`Runs::seal_all`] seals the rest on request (before sharing a folder;
@@ -24,9 +23,8 @@
 //! renamed over the old one), and only then are its runs deleted from the working database.
 //! Opening a search for writing ([`Runs::open`]) recovers from a crash at any of those points:
 //! temporary files are removed, a segment file the manifest does not list is removed when the
-//! working database still holds its runs (or when an import will write it again), runs that a
-//! listed segment holds are deleted from the working database, and an import's segments past
-//! its committed progress are dropped. Doing it twice changes nothing.
+//! working database still holds its runs, and runs that a listed segment holds are deleted from
+//! the working database. Doing it twice changes nothing.
 //!
 //! **Readers** open a read transaction on the working database before they read the manifest,
 //! and skip working-database runs with ids the manifest's segments cover, so a seal under way in
@@ -295,10 +293,10 @@ pub enum SealStop {
     BeforeDelete,
 }
 
-/// A segment being written straight from runs that are not in the working database (an import).
+/// A segment being written from the working database's oldest runs.
 ///
 /// The file is encoded on a thread of its own, so reading the runs and encoding them overlap.
-pub struct Building {
+struct Building {
     tx: Option<std::sync::mpsc::SyncSender<Vec<RunRec>>>,
     worker: Option<std::thread::JoinHandle<Result<SegmentWriter, String>>>,
     buf: Vec<RunRec>,
@@ -344,7 +342,7 @@ impl Building {
         }
     }
 
-    pub fn push(&mut self, r: RunRec) -> Result<(), String> {
+    fn push(&mut self, r: RunRec) -> Result<(), String> {
         if self.rows > 0 && r.id <= self.last {
             return Err(format!(
                 "run {} comes after run {} in a segment",
@@ -387,18 +385,14 @@ impl Building {
         }
     }
 
-    pub fn rows(&self) -> u64 {
+    fn rows(&self) -> u64 {
         self.rows
-    }
-    /// The last id pushed.
-    pub fn last_id(&self) -> i64 {
-        self.last
     }
 }
 
 impl Drop for Building {
-    /// A segment left unfinished (a search stopped part way through an import): its writer
-    /// finishes what it was handed, and the temporary file stays for recovery to remove.
+    /// A segment left unfinished (a seal that failed part way): its writer finishes what it was
+    /// handed, and the temporary file stays for recovery to remove.
     fn drop(&mut self) {
         self.tx = None;
         if let Some(h) = self.worker.take() {
@@ -460,40 +454,6 @@ fn uuid_of(dir: &Path) -> String {
     dir.file_name()
         .map(|f| f.to_string_lossy().into_owned())
         .unwrap_or_default()
-}
-
-/// The spec as the manifest keeps it. A manifest travels with a shared search folder, so it never
-/// names the publisher's folders: the import file is kept by its file name only (cut at `/` or
-/// `\`, whichever system wrote it). Nothing reads the spec back from the manifest; the job's own
-/// spec, with the full path, stays in the library.
-pub fn shareable_spec(spec: &Value) -> Value {
-    let mut v = spec.clone();
-    if let Some(Value::String(p)) = v.get_mut("import") {
-        *p = p.rsplit(['/', '\\']).next().unwrap_or_default().to_string();
-    }
-    v
-}
-
-#[cfg(test)]
-mod shareable_tests {
-    use super::shareable_spec;
-    use serde_json::json;
-
-    #[test]
-    fn a_manifest_names_the_import_file_but_not_its_folder() {
-        for (path, name) in [
-            ("/home/someone/data/full-15m.sqlite", "full-15m.sqlite"),
-            (r"C:\Users\someone\cart\search.sqlite", "search.sqlite"),
-            ("search.sqlite", "search.sqlite"),
-        ] {
-            let s = json!({"import": path, "seed": 0, "rule": "/2/3"});
-            assert_eq!(
-                shareable_spec(&s),
-                json!({"import": name, "seed": 0, "rule": "/2/3"})
-            );
-        }
-        assert_eq!(shareable_spec(&json!({"seed": 1})), json!({"seed": 1}));
-    }
 }
 
 fn is_tmp(p: &Path) -> bool {
@@ -572,11 +532,10 @@ impl Runs {
         uuid_of(&self.dir)
     }
 
-    /// Record the job's spec in the manifest (written when it changed), as [`shareable_spec`].
+    /// Record the job's spec in the manifest (written when it changed).
     pub fn set_spec(&mut self, spec: &Value) -> Result<(), String> {
-        let spec = shareable_spec(spec);
-        if self.manifest.spec != spec {
-            self.manifest.spec = spec;
+        if &self.manifest.spec != spec {
+            self.manifest.spec = spec.clone();
             self.manifest.write(&self.dir)?;
         }
         Ok(())
@@ -594,26 +553,9 @@ impl Runs {
     // Recovery
 
     fn recover(&mut self) -> Result<(), String> {
-        let importing = store::meta_get(&self.db, "import_done")?.is_some_and(|v| v == "0");
-        let import_last: i64 = store::meta_get(&self.db, "import_last")?
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
         // Temporary files: never complete.
         let _ = std::fs::remove_file(self.dir.join(format!("{MANIFEST}.tmp")));
         let mut changed = false;
-        // An import's segments past the progress it committed are written again.
-        if importing {
-            while self
-                .manifest
-                .segments
-                .last()
-                .is_some_and(|s| s.last_id > import_last)
-            {
-                let s = self.manifest.segments.pop().unwrap();
-                let _ = std::fs::remove_file(self.dir.join(&s.file));
-                changed = true;
-            }
-        }
         let runs_dir = self.dir.join("runs");
         let mut listed: HashSet<String> = self
             .manifest
@@ -663,7 +605,7 @@ impl Runs {
                     |r| r.get(0),
                 )
                 .map_err(e)?;
-            if (importing && last > import_last) || held as u64 == rows {
+            if held as u64 == rows {
                 std::fs::remove_file(&p).map_err(|x| io(&p, x))?;
             } else if first > self.manifest.last_id() {
                 // Its runs are nowhere else: keep it.
@@ -802,9 +744,9 @@ impl Runs {
         Ok(Some(entry))
     }
 
-    /// Start the next segment, to be filled with runs that are not in the working database (an
-    /// import) and ended by [`finish_segment`](Self::finish_segment).
-    pub fn begin_segment(&self) -> Result<Building, String> {
+    /// Start the next segment, to be filled with runs and ended by
+    /// [`finish_segment`](Self::finish_segment).
+    fn begin_segment(&self) -> Result<Building, String> {
         self.need_write()?;
         let name = segment_name(self.manifest.segments.len() + 1);
         let tmp = self.dir.join(format!("{name}.tmp"));
@@ -821,7 +763,7 @@ impl Runs {
     }
 
     /// Finish a segment: footer, sync, check, rename, manifest.
-    pub fn finish_segment(
+    fn finish_segment(
         &mut self,
         b: Building,
         stop: Option<SealStop>,

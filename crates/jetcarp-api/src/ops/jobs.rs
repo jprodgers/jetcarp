@@ -188,22 +188,6 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                 digits(p.seen),
                 format_args!("{:.2}", p.rss_gb)
             );
-            if let Some(i) = &p.import {
-                let _ = writeln!(
-                    s,
-                    "  import of {}: {}",
-                    i.from,
-                    if i.done {
-                        "done".to_string()
-                    } else {
-                        format!(
-                            "run {} of {}",
-                            digits(i.last.max(0) as u64),
-                            digits(i.max.max(0) as u64)
-                        )
-                    }
-                );
-            }
             if let Some(l) = &p.loaded {
                 let _ = writeln!(
                     s,

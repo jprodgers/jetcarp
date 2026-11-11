@@ -144,7 +144,7 @@ fn explore_searches_start_stop_and_continue_through_the_ops() {
     for (spec, want) in [
         (json!({"families": "nonesuch"}), "no rule family 'nonesuch'"),
         (json!({"tilings": "nowhere"}), "no tiling 'nowhere'"),
-        (json!({"import_only": true}), "import_only needs an import"),
+        (json!({"import": "search.sqlite"}), "unknown field `import`"),
         (json!({"bogus": 1}), "unknown field `bogus`"),
     ] {
         let e = call_json(

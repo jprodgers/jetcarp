@@ -574,14 +574,6 @@ pub struct ExploreArgs {
     /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
     max_rss_gb: Option<f64>,
-    /// Import an old explore database first (CART's search.sqlite, opened read only): its runs
-    /// are copied into sealed segments, its reviews into the library, and the archive rebuilt
-    /// from them once.
-    #[arg(long)]
-    import: Option<PathBuf>,
-    /// With --import: stop once the import is done (`jetcarp jobs resume JOB` searches on).
-    #[arg(long)]
-    import_only: bool,
 }
 
 #[derive(clap::Args)]
@@ -783,8 +775,6 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         seed: Some(a.seed),
         gpu: Some(a.gpu),
         max_rss_gb: a.max_rss_gb,
-        import: a.import.as_deref().map(path),
-        import_only: a.import_only,
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
     i.gpu = a.gpu;

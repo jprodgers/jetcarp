@@ -7,8 +7,7 @@
 //! - [`job`]: the search ([`job::Search`]), run in steps.
 //! - [`runs`]: its run records, sealed Parquet segments ([`segments`]) and the newest runs in
 //!   its working database ([`store`], `searches/<uuid>/search.sqlite` beside the library, with
-//!   the search's state, so a stopped search carries on without reading its runs again); and
-//!   importing an old CART explore database.
+//!   the search's state, so a stopped search carries on without reading its runs again).
 //! - [`reviews`]: verdicts on runs, kept as ratings in the library.
 //! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and publishing the atlas Quick
 //!   Start reads.

@@ -1330,19 +1330,13 @@ pub struct ExploreIn {
     /// Stop (paused, resumable) when the process uses more memory than this many GB.
     #[serde(default)]
     pub max_rss_gb: Option<f64>,
-    /// An old explore database (CART's search.sqlite) to import first: its runs are copied into sealed segments, its reviews into the library, and the archive, coverage, and seen set rebuilt from them once.
-    #[serde(default)]
-    pub import: Option<String>,
-    /// With `import`: stop (paused) once the import is done, instead of searching on.
-    #[serde(default)]
-    pub import_only: bool,
 }
 
 /// The rule families, for hints.
 const FAMILIES: &str = "families: life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider";
 
 impl ExploreIn {
-    fn spec(&self, cx: &Ctx) -> Result<ExploreSpec, ApiError> {
+    fn spec(&self) -> Result<ExploreSpec, ApiError> {
         use jetcarp_search::explore::job::Settings;
         use jetcarp_search::explore::store::fam_named;
         let d = Settings::default();
@@ -1354,10 +1348,6 @@ impl ExploreIn {
                 fam_named(f).ok_or_else(|| invalid(format!("no rule family '{f}'")).hint(FAMILIES))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let import = match &self.import {
-            Some(p) => Some(cx.fs.readable(p)?),
-            None => None,
-        };
         Ok(ExploreSpec {
             search: Settings {
                 screen_cells: self.screen_cells.unwrap_or(d.screen_cells),
@@ -1372,8 +1362,6 @@ impl ExploreIn {
             },
             gpu: self.gpu.unwrap_or(false),
             max_rss_gb: self.max_rss_gb,
-            import,
-            import_only: self.import_only,
             uuid: String::new(),
             seal_rows: None,
         })
@@ -1469,7 +1457,7 @@ fn build(
         "pile" => return read_spec::<PileIn>(kind, spec)?.build(cx, lib, p),
         "collide" => to_json(&read_spec::<CollideIn>(kind, spec)?.spec(lib)?)?,
         "evolve" => to_json(&read_spec::<EvolveIn>(kind, spec)?.spec(cx)?)?,
-        "explore" => to_json(&read_spec::<ExploreIn>(kind, spec)?.spec(cx)?)?,
+        "explore" => to_json(&read_spec::<ExploreIn>(kind, spec)?.spec()?)?,
         k => return Err(invalid(format!("no strategy '{k}'"))),
     }))
 }

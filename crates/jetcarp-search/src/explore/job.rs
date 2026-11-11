@@ -11,7 +11,7 @@
 //! searches with the same settings try different candidates.
 
 use crate::explore::archive::{self, Archive, Eval};
-use crate::explore::store::{Delta, FamStat, OldRun, RunOut, Saved};
+use crate::explore::store::{Delta, FamStat, RunOut, Saved};
 use jetcarp_core::explore::batch::{Backend, BatchJob, BatchWorld, WorldTrace, trace_world};
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features, frames_for, measure_run};
@@ -512,43 +512,6 @@ impl Search {
             elites,
             confirmed: p.confirmed,
             meta,
-        }
-    }
-
-    /// Take in runs of an old database being imported: their identities, and for the screened
-    /// ones coverage, family totals, and the archive; the confirmation runs mark their elites
-    /// confirmed. (Their rows are copied as they are.)
-    pub fn import(&self, rows: &[OldRun]) {
-        let mut a = self.archive.lock().unwrap();
-        let mut seen = self.seen.lock().unwrap();
-        let mut cov = self.coverage.lock().unwrap();
-        let mut fams = self.family_totals.lock().unwrap();
-        let mut p = self.pending.lock().unwrap();
-        for r in rows {
-            self.next_id.fetch_max(r.id + 1, Ordering::Relaxed);
-            let Some(ev) = &r.ev else { continue };
-            seen.insert(ev.cand.id_hash());
-            if r.stage != 1 {
-                self.confirmed.fetch_add(1, Ordering::Relaxed);
-                if let Some(parent) = r.parent
-                    && a.confirmed.insert(parent)
-                {
-                    p.confirmed.push(parent);
-                }
-                continue;
-            }
-            self.screened.fetch_add(1, Ordering::Relaxed);
-            let kind = r.seed_kind.clone().unwrap_or_default();
-            let c = &ev.cand;
-            if let Some(i) = self.tiling_index(&c.tiling) {
-                *cov.entry((i, c.fam, kind.clone())).or_insert(0) += 1;
-            }
-            *p.coverage
-                .entry((c.tiling.clone(), c.fam, kind))
-                .or_insert(0) += 1;
-            fams.entry(c.fam).or_default().add(ev.score as f64);
-            p.families.entry(c.fam).or_default().add(ev.score as f64);
-            a.offer(r.id, ev.clone(), self.group(&c.tiling));
         }
     }
 

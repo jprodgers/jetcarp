@@ -24,25 +24,18 @@
 //! CPU rounds on the run's threads. A GPU that fails three steps in a row is restarted; one that
 //! cannot be, or fails forty times, is dropped and the CPU takes its families. Past `max_rss_gb`
 //! of memory the run stops (paused). The item budget counts screened runs.
-//!
-//! **Importing.** A job made with `import` (an old CART explore database) first copies that
-//! database's runs into sealed segments of its own, in steps of a few seconds, rebuilding the
-//! archive, coverage, and seen set from them once, as the old search did on every restart; its
-//! progress is committed with each segment, so an import stopped part way goes on from its last
-//! segment. Its reviews go to the library. With `import_only` it then stops (paused), else it
-//! searches on from the imported archive.
 
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
 use crate::dashboard::JobSummary;
 use crate::explore::job::{FamilyLine, Search, Settings, StepLimits};
-use crate::explore::runs::{Building, Runs, SEAL_ROWS};
-use crate::explore::store::{self, Import, LoadStats};
+use crate::explore::runs::{Runs, SEAL_ROWS};
+use crate::explore::store::{self, LoadStats};
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_store::library::JobRow;
 use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -53,8 +46,6 @@ pub const KIND_NAME: &str = "explore";
 
 /// Seconds of rounds a step runs (a round under way runs to its end).
 pub const STEP_S: f64 = 2.0;
-/// Old runs read per import batch (a step reads batches for about [`STEP_S`]).
-const IMPORT_BATCH: usize = 5000;
 
 /// An explore job: the search's settings, and how to run it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -68,28 +59,12 @@ pub struct ExploreSpec {
     /// Stop (paused) when the process uses more memory than this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_rss_gb: Option<f64>,
-    /// An old explore database (CART's) to import first.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub import: Option<PathBuf>,
-    /// Stop (paused) once the import is done.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub import_only: bool,
     /// The search's folder, `searches/<uuid>` beside the catalog (made with the job).
     #[serde(default)]
     pub uuid: String,
     /// Runs per sealed segment (default a million; smaller only for tests).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seal_rows: Option<u64>,
-}
-
-/// An import under way, as the progress shows it.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct ImportProgress {
-    pub from: String,
-    /// The last old run id copied, and the largest.
-    pub last: i64,
-    pub max: i64,
-    pub done: bool,
 }
 
 /// An explore job's progress (`jobs.progress`).
@@ -120,12 +95,11 @@ pub struct ExploreProgress {
     pub rss_gb: f64,
     /// Per family: screened runs, mean and best score, elites.
     pub families: Vec<FamilyLine>,
-    pub import: Option<ImportProgress>,
     /// What loading the saved state read this session.
     pub loaded: Option<LoadStats>,
     /// The search's folder.
     pub folder: String,
-    /// Why it stopped, when it stopped itself (memory, an import done).
+    /// Why it stopped, when it stopped itself (memory).
     pub note: Option<String>,
     /// Candidates whose run panicked (skipped).
     pub panics: u64,
@@ -190,11 +164,6 @@ pub fn start(lib: &Library, spec: &ExploreSpec) -> Result<i64, String> {
     {
         return Err(format!("max_rss_gb must be above 0, not {m}"));
     }
-    if let Some(p) = &spec.import {
-        Import::open(p, 0)?;
-    } else if spec.import_only {
-        return Err("import_only needs an import".into());
-    }
     if spec.seal_rows == Some(0) {
         return Err("seal_rows must be at least 1".into());
     }
@@ -245,12 +214,6 @@ impl StrategyKind for ExploreKind {
         s.per_s = p.per_s;
         s.elapsed_s = p.elapsed_s;
         let d = crate::dashboard::digits;
-        if let Some(i) = p.import.as_ref().filter(|i| !i.done) {
-            s.counters.push((
-                "importing".into(),
-                format!("{} of {}", d(i.last.max(0) as u64), d(i.max.max(0) as u64)),
-            ));
-        }
         for (k, v) in [
             ("elites", p.elites),
             ("niches", p.niches),
@@ -318,13 +281,9 @@ struct Running {
     spec: ExploreSpec,
     search: Search,
     runs: Runs,
-    /// An import's segment being written.
-    building: Option<Building>,
     pool: rayon::ThreadPool,
     folder: PathBuf,
     job: i64,
-    import: Option<Import>,
-    import_progress: Option<ImportProgress>,
     elapsed_before: f64,
     t0: Instant,
     /// Runs screened by this session's search steps (the item budget).
@@ -354,86 +313,10 @@ impl ExploreRun {
             (None, None) => "cpu only".into(),
         }
     }
-
-    fn running(&mut self) -> Result<&mut Running, String> {
-        self.st
-            .as_mut()
-            .ok_or_else(|| "the search was not restored".into())
-    }
-
-    /// Copy old runs into sealed segments for about a step, committing the import's progress
-    /// with each segment; at the end the last segment, the reviews (to the library), and (with
-    /// `import_only`) a stop. A stop part way leaves the segment being written unfinished: the
-    /// next session writes it again from the last segment committed.
-    fn import_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
-        let r = self.running()?;
-        let t = Instant::now();
-        r.rss = rss_gb();
-        let seal = r.spec.seal_rows.unwrap_or(SEAL_ROWS).max(1);
-        let Some(imp) = r.import.as_mut() else {
-            return Ok(());
-        };
-        loop {
-            let have = r.building.as_ref().map_or(0, |b| b.rows());
-            let rows = imp.next((seal - have.min(seal)).clamp(1, IMPORT_BATCH as u64) as usize)?;
-            let end = rows.is_empty();
-            if !end {
-                r.search.import(&rows);
-                if r.building.is_none() {
-                    r.building = Some(r.runs.begin_segment()?);
-                }
-                let b = r.building.as_mut().unwrap();
-                for row in rows {
-                    b.push(row.rec)?;
-                }
-                if let Some(p) = r.import_progress.as_mut() {
-                    p.last = imp.last;
-                }
-            }
-            let full = r.building.as_ref().is_some_and(|b| b.rows() >= seal);
-            if (full || end)
-                && let Some(b) = r.building.take()
-            {
-                let last = b.last_id();
-                r.runs.finish_segment(b, None)?;
-                let mut d = r.search.take_delta();
-                d.meta.push(("import_last".into(), last.to_string()));
-                d.meta
-                    .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
-                r.runs.write(&d)?;
-            }
-            if end {
-                let reviews = imp.reviews()?;
-                let source = format!("import:{}", imp.file_name());
-                crate::explore::reviews::import_old(cx.lib, &r.runs.uuid(), &reviews, &source)?;
-                let mut d = r.search.take_delta();
-                d.meta.push(("import_done".into(), "1".into()));
-                d.meta
-                    .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
-                r.runs.write(&d)?;
-                r.import = None;
-                if let Some(p) = r.import_progress.as_mut() {
-                    p.done = true;
-                }
-                if r.spec.import_only {
-                    r.note = Some("the import is done".into());
-                    cx.stop.store(true, Ordering::SeqCst);
-                }
-                return Ok(());
-            }
-            if t.elapsed().as_secs_f64() >= STEP_S || cx.stopped() {
-                return Ok(());
-            }
-        }
-    }
 }
 
 fn elapsed(r: &Running) -> f64 {
     r.elapsed_before + r.t0.elapsed().as_secs_f64()
-}
-
-fn elapsed_now(before: f64, t0: Instant) -> String {
-    (before + t0.elapsed().as_secs_f64()).to_string()
 }
 
 impl Strategy for ExploreRun {
@@ -445,44 +328,12 @@ impl Strategy for ExploreRun {
         let mut runs = Runs::open(&path)?;
         crate::explore::reviews::move_old(cx.lib, &runs)?;
         runs.set_spec(&cx.row.spec)?;
-        if let Some(from) = &spec.import
-            && store::meta_get(&runs.db, "import_done")?.is_none()
-        {
-            store::begin_import(&runs.db, from)?;
-        }
         let mut saved = store::load(&mut runs.db)?;
         saved.next_id = saved.next_id.max(runs.max_id()? + 1);
         let loaded = saved.stats.clone();
         let elapsed_before = saved.meta_f64("elapsed_s");
-        let importing = saved.meta.get("import_done").is_some_and(|v| v == "0");
-        let import_last: i64 = saved
-            .meta
-            .get("import_last")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
         let search = Search::new(spec.search.clone(), saved)?;
         search.can_run(self.backend.is_some())?;
-        let (import, import_progress) = match (&spec.import, importing) {
-            (Some(from), true) => {
-                let imp = Import::open(from, import_last)?;
-                let p = ImportProgress {
-                    from: from.display().to_string(),
-                    last: imp.last,
-                    max: imp.max,
-                    done: false,
-                };
-                (Some(imp), Some(p))
-            }
-            (Some(from), false) => (
-                None,
-                Some(ImportProgress {
-                    from: from.display().to_string(),
-                    done: true,
-                    ..Default::default()
-                }),
-            ),
-            _ => (None, None),
-        };
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(thread_count(cx.threads))
             .thread_name(move |i| format!("explore-{i}"))
@@ -493,12 +344,9 @@ impl Strategy for ExploreRun {
             spec,
             search,
             runs,
-            building: None,
             pool,
             folder,
             job: cx.job,
-            import,
-            import_progress,
             elapsed_before,
             t0: Instant::now(),
             items: 0,
@@ -514,10 +362,6 @@ impl Strategy for ExploreRun {
     }
 
     fn step(&mut self, cx: &RunCx<'_>, _sink: &mut Sink) -> Result<Step, String> {
-        if self.running()?.import.is_some() {
-            self.import_step(cx)?;
-            return Ok(Step::More);
-        }
         let r = self.st.as_mut().ok_or("the search was not restored")?;
         r.rss = rss_gb();
         if let Some(cap) = r.spec.max_rss_gb
@@ -601,7 +445,6 @@ impl Strategy for ExploreRun {
             gpu_error: r.gpu_error.clone(),
             rss_gb: r.rss,
             families: r.search.families(),
-            import: r.import_progress.clone(),
             loaded: Some(r.loaded.clone()),
             folder: r.folder.display().to_string(),
             note: r.note.clone(),
@@ -621,20 +464,6 @@ impl Strategy for ExploreRun {
 /// The progress as one line: `explore 7: 12,345 runs (230/s), 1,204 elites in 980 niches, ...`.
 pub fn line(p: &ExploreProgress) -> String {
     let d = crate::dashboard::digits;
-    if let Some(i) = p.import.as_ref().filter(|i| !i.done) {
-        let file = Path::new(&i.from)
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        return format!(
-            "explore {}: importing {file} (run {} of {}), {} elites in {} niches",
-            p.job,
-            d(i.last.max(0) as u64),
-            d(i.max.max(0) as u64),
-            d(p.elites),
-            d(p.niches)
-        );
-    }
     format!(
         "explore {}: {} runs ({:.0}/s), {} elites in {} niches, {} confirmed, {} of {} tilings; {}",
         p.job,

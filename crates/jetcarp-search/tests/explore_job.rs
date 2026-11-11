@@ -1,7 +1,6 @@
 //! Explore searches as catalog jobs (`jetcarp_search::jobs::explore`): started, stopped (by the
 //! budget and by the handle), and continued from the archive saved in their working database;
-//! a resumed search reads its saved state, not its runs; the GPU loop on a backend; an old
-//! explore database imported into sealed segments, its reviews into the library; rescoring
+//! a resumed search reads its saved state, not its runs; the GPU loop on a backend; rescoring
 //! rebuilding the archive; reviews in the library.
 
 use jetcarp_core::explore::batch::CpuBatch;
@@ -335,118 +334,6 @@ fn the_gpu_loop_runs_on_a_backend() {
         assert_eq!(store::feat_blob(&ev.feat), r.feats, "run {}", r.id);
         assert!((ev.score as f64 - r.score).abs() < 1e-6, "run {}", r.id);
     }
-}
-
-#[test]
-fn an_old_database_is_imported_then_searched_on() {
-    let dir = scratch("import");
-    // An old search's database: a job's runs, as CART's explore databases hold them (its own
-    // tables but `runs` and `meta` dropped, and a `reviews` table).
-    let lib0 = Library::open(dir.join("old").join("library.sqlite"));
-    let j0 = make(&lib0, small(json!({})));
-    let out = Runner::new(lib0.clone())
-        .run(j0, &opts(2, Budget::items(250)))
-        .unwrap();
-    let p0 = progress(&out.progress);
-    let src = db_path(&lib0, &lib0.job(j0).unwrap()).unwrap();
-    let old = dir.join("old.sqlite");
-    {
-        let c = Connection::open(&src).unwrap();
-        c.execute("VACUUM INTO ?1", [old.display().to_string()])
-            .unwrap();
-    }
-    {
-        let c = Connection::open(&old).unwrap();
-        c.execute_batch(
-            "DROP TABLE elites; DROP TABLE confirmed; DROP TABLE coverage; DROP TABLE families;
-             DROP TABLE seen; DELETE FROM meta;
-             CREATE TABLE reviews(run_id INT, verdict TEXT, note TEXT, ts INT);
-             INSERT INTO reviews SELECT id, 'keep', 'nice', 5 FROM runs WHERE stage = 1 LIMIT 3;",
-        )
-        .unwrap();
-    }
-    let lib = Library::open(dir.join("new").join("library.sqlite"));
-    // Segments of 100 runs, so the import writes several.
-    let job = make(
-        &lib,
-        small(json!({"import": old.display().to_string(), "import_only": true, "seal_rows": 100})),
-    );
-    let out = Runner::new(lib.clone())
-        .run(job, &opts(2, Budget::default()))
-        .unwrap();
-    assert_eq!(
-        (out.status, out.stopped),
-        (JobStatus::Paused, Some(Stopped::Asked))
-    );
-    let p = progress(&out.progress);
-    assert_eq!(p.note.as_deref(), Some("the import is done"));
-    assert!(p.import.as_ref().unwrap().done);
-    // The rebuilt state is the old search's (the seen set holds the runs, of every candidate
-    // the old search tried).
-    assert_eq!(
-        (p.screened, p.confirmed, p.elites, p.niches),
-        (p0.screened, p0.confirmed, p0.elites, p0.niches)
-    );
-    assert!(p.seen <= p0.seen && p.seen >= p.screened + p.confirmed);
-    let c = db(&lib, job);
-    consistent(&c, &p);
-    // Every run went straight into segments of 100 (the last one shorter).
-    let n = p.screened + p.confirmed;
-    assert_eq!(c.manifest.rows(), n);
-    assert_eq!(c.manifest.segments.len() as u64, n.div_ceil(100));
-    assert!(
-        c.manifest
-            .segments
-            .iter()
-            .rev()
-            .skip(1)
-            .all(|s| s.rows == 100)
-    );
-    assert_eq!(count(&c.db, "SELECT COUNT(*) FROM runs"), 0);
-    // The reviews went to the library.
-    let rv = lib.run_reviews(&c.uuid()).unwrap();
-    assert_eq!(rv.len(), 3);
-    assert!(
-        rv.iter()
-            .all(|r| r.source.starts_with("import:") && r.verdict == "keep")
-    );
-    drop(c);
-    // Searched on from the imported archive: new ids follow the old ones.
-    let out = Runner::new(lib.clone())
-        .run(job, &opts(2, Budget::items(60)))
-        .unwrap();
-    let p2 = progress(&out.progress);
-    assert!(p2.screened >= p.screened + 60);
-    assert_eq!(p2.loaded.as_ref().unwrap().elites, p.elites);
-    let c = db(&lib, job);
-    consistent(&c, &p2);
-    let old_max = count(&Connection::open(&old).unwrap(), "SELECT MAX(id) FROM runs");
-    let newer: Vec<i64> = c
-        .scan(1 << col::ID, &|_, _, _| true, &|b, out| {
-            out.extend((0..b.len).map(|i| b.id(i)).filter(|i| *i > old_max))
-        })
-        .unwrap();
-    assert_eq!(
-        newer.len() as u64,
-        (p2.screened - p.screened) + (p2.confirmed - p.confirmed)
-    );
-    // A job cannot import what is not an explore database.
-    let bad = dir.join("not-explore.sqlite");
-    Connection::open(&bad)
-        .unwrap()
-        .execute_batch("CREATE TABLE x(a)")
-        .unwrap();
-    let e = jobs::create(
-        &lib,
-        &JobSpec {
-            strategy: "explore".into(),
-            spec: small(json!({"import": bad.display().to_string()})),
-            label: None,
-            budget: Budget::default(),
-        },
-    )
-    .unwrap_err();
-    assert!(e.contains("not an explore database"), "{e}");
 }
 
 #[test]

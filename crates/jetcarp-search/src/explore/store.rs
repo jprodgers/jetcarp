@@ -10,7 +10,7 @@
 //! | `coverage` | screened runs per tiling, family, and seed kind (where the search tries next) |
 //! | `families` | screened runs per family, with their score sum and best score |
 //! | `seen` | the identities of every candidate tried ([`jetcarp_core::explore::cand::Cand::id_hash`]), as blobs of little-endian `u64`, one per step, merged when a search is loaded |
-//! | `meta` | counters (`screened`, `confirmed`, `elapsed_s`), the random states, the format, and an import's progress |
+//! | `meta` | counters (`screened`, `confirmed`, `elapsed_s`), the random states, and the format |
 //!
 //! Each step of a search writes its runs and what they changed in all of these in one
 //! transaction ([`write`]), so the database always holds a state the search reached. Loading
@@ -19,9 +19,6 @@
 //!
 //! Reviews of runs are not here: they are ratings in the library (target kind `search_run`; see
 //! [`crate::explore::reviews`]), so a search folder can be deleted or shared without them.
-//!
-//! The `runs` table has the columns of CART's explore databases; [`Import`] reads such a
-//! database for a new search, which writes its runs straight into sealed segments.
 
 use crate::explore::archive::{Archive, Eval};
 use crate::explore::segments::RunRec;
@@ -32,7 +29,7 @@ use jetcarp_core::topology::Nb;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// What `meta.format` says. Format 1 (before sealed segments) kept every run in `runs`, the
 /// reviews in `reviews`, and only ids in `elites`; [`open`] brings such a database up to 2 and
@@ -202,7 +199,7 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     Ok(c)
 }
 
-/// Open a working database (or an old CART explore database) for reading only.
+/// Open a working database for reading only.
 pub fn open_read(path: &Path) -> Result<Connection, String> {
     if !path.is_file() {
         return Err(format!("no search database at {}", path.display()));
@@ -686,12 +683,12 @@ pub fn load(c: &mut Connection) -> Result<Saved, String> {
 // ---------------------------------------------------------------------------------------------
 // Reviews of a format 1 database
 
-/// A review as an old database holds it: run, verdict, note, time (seconds since 1970), rater,
+/// A review as a format 1 database holds it: run, verdict, note, time (seconds since 1970), rater,
 /// source.
 pub type OldReview = (i64, String, String, i64, String, String);
 
-/// The reviews of a database from before reviews moved to the library (format 1, or CART's),
-/// if it still has its `reviews` table.
+/// The reviews of a format 1 database, if it still has its `reviews` table (`rater` and `source`
+/// read as empty where the table has no such column, as the earliest builds' tables had not).
 pub fn old_reviews(c: &Connection) -> Result<Vec<OldReview>, String> {
     if !has_table(c, "reviews")? {
         return Ok(vec![]);
@@ -739,108 +736,12 @@ pub fn drop_old_reviews(c: &Connection) -> Result<(), String> {
         .map_err(e)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Importing an old database
-
-/// One row of an old database's `runs`, with its candidate and measures when they read.
-pub struct OldRun {
-    pub id: i64,
-    pub stage: i64,
-    pub parent: Option<i64>,
-    pub seed_kind: Option<String>,
-    pub ev: Option<Eval>,
-    /// The row, to store as it is.
-    pub rec: RunRec,
-}
-
-/// An old explore database being imported, read in id order.
-pub struct Import {
-    pub path: PathBuf,
-    old: Connection,
-    /// The last id read.
-    pub last: i64,
-    /// The largest id in the old database.
-    pub max: i64,
-}
-
-impl Import {
-    /// Open an old database (read only), to go on after run `last`.
-    pub fn open(path: &Path, last: i64) -> Result<Import, String> {
-        let old = open_read(path)?;
-        if !has_table(&old, "runs")? {
-            return Err(format!(
-                "{} is not an explore database (it has no runs table)",
-                path.display()
-            ));
-        }
-        let max = old
-            .query_row("SELECT COALESCE(MAX(id), 0) FROM runs", [], |r| r.get(0))
-            .map_err(e)?;
-        Ok(Import {
-            path: path.to_path_buf(),
-            old,
-            last,
-            max,
-        })
-    }
-
-    /// The next `n` runs (none when the import is done).
-    pub fn next(&mut self, n: usize) -> Result<Vec<OldRun>, String> {
-        let mut st = self
-            .old
-            .prepare_cached(&format!(
-                "SELECT {RUN_COLS} FROM runs WHERE id > ?1 ORDER BY id LIMIT ?2"
-            ))
-            .map_err(e)?;
-        let mut rows = st.query(params![self.last, n as i64]).map_err(e)?;
-        let mut out = Vec::new();
-        while let Some(r) = rows.next().map_err(e)? {
-            let rec = rec_at(r, 0).map_err(e)?;
-            out.push(OldRun {
-                id: rec.id,
-                stage: rec.stage,
-                parent: rec.parent,
-                seed_kind: r.get(8).map_err(e)?,
-                ev: eval_of(&rec),
-                rec,
-            });
-        }
-        if let Some(l) = out.last() {
-            self.last = l.id;
-        }
-        Ok(out)
-    }
-
-    /// The old database's reviews.
-    pub fn reviews(&self) -> Result<Vec<OldReview>, String> {
-        old_reviews(&self.old)
-    }
-
-    /// The file's name (without its folder), as provenance names it.
-    pub fn file_name(&self) -> String {
-        file_name(&self.path)
-    }
-}
-
 /// A path's file name, as provenance names a file (never the folders it was in on this disk).
 pub fn file_name(p: &Path) -> String {
     let name = |p: &Path| p.file_name().map(|f| f.to_string_lossy().into_owned());
     name(p)
         .or_else(|| std::fs::canonicalize(p).ok().and_then(|c| name(&c)))
         .unwrap_or_else(|| p.display().to_string())
-}
-
-/// Start importing `from` into a new search: `meta` says what is being imported (by its file
-/// name: the working database travels with a shared search folder).
-pub fn begin_import(c: &Connection, from: &Path) -> Result<(), String> {
-    for (k, v) in [
-        ("import_from", file_name(from)),
-        ("import_done", "0".into()),
-        ("import_last", "0".into()),
-    ] {
-        meta_set(c, k, &v)?;
-    }
-    Ok(())
 }
 
 /// Rebuild `elites` from an archive (every elite, with its run).

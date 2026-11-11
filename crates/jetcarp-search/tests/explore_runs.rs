@@ -2,8 +2,8 @@
 //! (`jetcarp_search::explore::runs`): sealing, recovery from a crash at every step of a seal,
 //! queries over segments matching the same runs unsealed, rescoring into sidecars without
 //! rewriting segments, a database from before segments sealed on open, the manifest's record of
-//! the search imported from CART kept, an import's unfinished segments dropped, and reviews kept
-//! in the library when the search's folder is deleted.
+//! the search imported from CART kept, and reviews kept in the library when the search's folder
+//! is deleted.
 
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features};
@@ -548,48 +548,6 @@ fn the_remeasure_record_of_the_search_imported_from_cart_is_read_and_kept() {
     let text: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(text["remeasure"], rec);
-}
-
-#[test]
-fn an_imports_segments_past_its_committed_progress_are_dropped() {
-    let dir = scratch("import-crash");
-    let mut r = Runs::open(&dir.join("search.sqlite")).unwrap();
-    store::begin_import(&r.db, Path::new("/old.sqlite")).unwrap();
-    let rec = |i: i64| RunRec {
-        id: i,
-        stage: 1,
-        tiling: "square".into(),
-        fam: "life_like".into(),
-        rule: "B3/S23".into(),
-        seed: "\"empty\"".into(),
-        steps: 1,
-        ..Default::default()
-    };
-    // Segment 1, committed.
-    let mut b = r.begin_segment().unwrap();
-    for i in 1..=10 {
-        b.push(rec(i)).unwrap();
-    }
-    r.finish_segment(b, None).unwrap();
-    store::meta_set(&r.db, "import_last", "10").unwrap();
-    // Segment 2 in the manifest, segment 3 renamed: neither committed.
-    let mut b = r.begin_segment().unwrap();
-    for i in 11..=20 {
-        b.push(rec(i)).unwrap();
-    }
-    r.finish_segment(b, None).unwrap();
-    let mut b = r.begin_segment().unwrap();
-    for i in 21..=30 {
-        b.push(rec(i)).unwrap();
-    }
-    assert!(r.finish_segment(b, Some(SealStop::BeforeManifest)).is_err());
-    assert!(dir.join("runs/part-000003.parquet").is_file());
-    drop(r);
-    let r = Runs::open(&dir.join("search.sqlite")).unwrap();
-    assert_eq!(r.manifest.segments.len(), 1);
-    assert_eq!(r.max_id().unwrap(), 10);
-    assert!(!dir.join("runs/part-000002.parquet").exists());
-    assert!(!dir.join("runs/part-000003.parquet").exists());
 }
 
 #[test]
