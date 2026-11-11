@@ -98,10 +98,13 @@ fn job_specs_make_jobs_with_labels_and_budgets() {
     assert_eq!(
         names,
         [
-            "hunt", "search", "ants", "census", "mover", "pile", "collide", "evolve"
+            "hunt", "search", "ants", "census", "mover", "pile", "collide", "evolve", "explore"
         ]
     );
-    assert!(jobs::kinds().iter().all(|k| k.deterministic()));
+    // Every kind but explore resumes exactly; an explore search continues from its archive.
+    for k in jobs::kinds() {
+        assert_eq!(k.deterministic(), k.kind() != "explore", "{}", k.kind());
+    }
     assert_eq!(jobs::kind("bench").label(), "Job");
     assert!(!jobs::kind("bench").runnable(&row));
     // Bad requests.

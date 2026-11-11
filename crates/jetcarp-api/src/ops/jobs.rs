@@ -6,7 +6,9 @@
 //!
 //! Every kind is the job runner's (`jetcarp_core::jobs`): what is kind-specific (its summary,
 //! progress line, stop, finds) comes from the kind, so one status and one stop serve hunts, ant
-//! searches, censuses, movers, piles, bounded searches, collisions, and evolve searches alike.
+//! searches, censuses, movers, piles, bounded searches, collisions, evolve searches, and explore
+//! searches alike. A deterministic job resumes exactly (it ends as an uninterrupted run would);
+//! an explore search continues from its saved archive, and the status says which.
 
 use super::library::catalog_err;
 use super::search::{FilesIn, How, SearchStarted, line_of, run_job};
@@ -16,7 +18,8 @@ use crate::op::{Op, Progress, Report};
 use jetcarp_core::ants::job::AntProgress;
 use jetcarp_core::dashboard::{self, JobSummary, Target, digits, duration};
 use jetcarp_core::hunt::job::HuntProgress;
-use jetcarp_core::jobs::{self, Budget, status_name};
+use jetcarp_core::jobs::explore::ExploreProgress;
+use jetcarp_core::jobs::{self, status_name};
 use jetcarp_core::library::store::JobRow;
 use jetcarp_core::library::{JobStatus, Library, PatternClass, PatternRecord};
 use schemars::JsonSchema;
@@ -33,7 +36,18 @@ pub fn noun(kind: &str) -> &str {
         "ants" => "ant search",
         "collide" => "collision",
         "evolve" => "evolve search",
+        "explore" => "explore search",
         k => k,
+    }
+}
+
+/// What resuming a job does, in words: `resumes it exactly` or (an explore search) `continues it
+/// from its archive`.
+pub fn resume_words(kind: &str) -> &'static str {
+    if jobs::kind(kind).deterministic() {
+        "resumes it exactly"
+    } else {
+        "continues it from its archive (not run for run: the search is not deterministic)"
     }
 }
 
@@ -161,6 +175,73 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                 }
             }
         }
+        "explore" => {
+            let p: ExploreProgress = jobs_typed(progress);
+            let _ = writeln!(s, "{line}");
+            let _ = writeln!(
+                s,
+                "  status {}, {} run over every session, {} confirmation runs, {} candidates tried, {} GB",
+                p.status,
+                duration(p.elapsed_s),
+                digits(p.confirmed),
+                digits(p.seen),
+                format_args!("{:.2}", p.rss_gb)
+            );
+            if let Some(i) = &p.import {
+                let _ = writeln!(
+                    s,
+                    "  import of {}: {}",
+                    i.from,
+                    if i.done {
+                        "done".to_string()
+                    } else {
+                        format!(
+                            "run {} of {}",
+                            digits(i.last.max(0) as u64),
+                            digits(i.max.max(0) as u64)
+                        )
+                    }
+                );
+            }
+            if let Some(l) = &p.loaded {
+                let _ = writeln!(
+                    s,
+                    "  loaded {} elites, {} identities, {} coverage rows in {:.2} s (no other runs read)",
+                    digits(l.elites),
+                    digits(l.seen),
+                    digits(l.coverage_rows),
+                    l.seconds
+                );
+            }
+            if !p.families.is_empty() {
+                let _ = writeln!(
+                    s,
+                    "  {:<20} {:>10} {:>6} {:>6} {:>7}",
+                    "family", "runs", "mean", "best", "elites"
+                );
+                for f in &p.families {
+                    let _ = writeln!(
+                        s,
+                        "  {:<20} {:>10} {:>6.2} {:>6.2} {:>7}",
+                        f.family,
+                        digits(f.runs),
+                        f.mean,
+                        f.best,
+                        digits(f.elites)
+                    );
+                }
+            }
+            for (k, v) in [
+                ("folder", Some(p.folder.clone())),
+                ("note", p.note.clone()),
+                ("GPU error", p.gpu_error.clone()),
+                ("error", p.error.clone()),
+            ] {
+                if let Some(v) = v.filter(|v| !v.is_empty()) {
+                    let _ = writeln!(s, "  {k}: {v}");
+                }
+            }
+        }
         _ => {
             let _ = writeln!(s, "{line}");
             let text = |k: &str| progress.get(k).and_then(|v| v.as_str());
@@ -215,7 +296,7 @@ pub(crate) fn live_progress(cx: &Ctx, lib: &Library, row: &JobRow) -> (Value, bo
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ListIn {
-    /// Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve (strategy aliases work too).
+    /// Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore (strategy aliases work too).
     #[serde(default)]
     pub kind: Option<String>,
     /// Only jobs with this status: running, paused, done, failed.
@@ -455,7 +536,7 @@ pub struct JobView {
     pub stale: bool,
     /// This program can carry it on.
     pub resumable: bool,
-    /// Stopped and resumed, it ends exactly as an uninterrupted run.
+    /// Stopped and resumed, it ends exactly as an uninterrupted run; otherwise (an explore search) a resumed run continues from its saved state.
     pub deterministic: bool,
     /// What it searches.
     pub title: String,
@@ -490,7 +571,18 @@ pub struct JobView {
 impl Report for JobView {
     fn text(&self) -> String {
         let mut s = progress_text(&self.kind, &self.progress, &self.line);
-        if !matches!(self.kind.as_str(), "hunt" | "ants") {
+        if self.resumable
+            && !self.here
+            && (matches!(self.status.as_str(), "paused" | "failed") || self.stale)
+        {
+            let _ = writeln!(
+                s,
+                "  `jetcarp jobs resume {}` {}",
+                self.job,
+                resume_words(&self.kind)
+            );
+        }
+        if !matches!(self.kind.as_str(), "hunt" | "ants" | "explore") {
             let _ = writeln!(
                 s,
                 "  {} {}: {}, {}",
@@ -772,10 +864,7 @@ impl Op for JobsResume {
             gpu: a.gpu,
             budget: a
                 .budget
-                .map(|b| Budget {
-                    minutes: b.minutes,
-                    items: b.items,
-                })
+                .map(super::search::BudgetIn::budget)
                 .unwrap_or_default(),
             background: a.background,
             detach: a.detach,
@@ -796,7 +885,7 @@ impl Op for JobsResume {
 pub struct RemoveIn {
     /// The job id.
     pub job: i64,
-    /// Delete its finds too: the ant runs it stored, and the patterns no other job has seen that nobody has curated.
+    /// Delete its finds too: the ant runs it stored, the patterns no other job has seen that nobody has curated, and its working folder (an explore search's runs and archive).
     #[serde(default)]
     pub delete_results: bool,
 }
@@ -811,6 +900,9 @@ pub struct Removed {
     /// With `delete_results`: the patterns and ant runs deleted.
     pub patterns: Vec<String>,
     pub ants: Vec<String>,
+    /// Its working folder (an explore search's), deleted with `delete_results`, else left.
+    pub folder: Option<String>,
+    pub folder_deleted: bool,
 }
 
 impl Report for Removed {
@@ -830,6 +922,13 @@ impl Report for Removed {
             );
         }
         s.push_str(")\n");
+        if let Some(f) = &self.folder {
+            if self.folder_deleted {
+                let _ = writeln!(s, "deleted its folder {f}");
+            } else {
+                let _ = writeln!(s, "left its folder {f} (delete_results deletes it)");
+            }
+        }
         s
     }
 }
@@ -855,16 +954,27 @@ impl Op for JobsRemove {
             )));
         }
         let _ = cx.registry().wait(&lib, a.job);
+        let folder = jobs::kind(&row.kind)
+            .work_dir(&lib, &row)
+            .filter(|d| d.exists());
         let r = lib
             .remove_job(a.job, a.delete_results)
             .map_err(catalog_err)?;
         let _ = std::fs::remove_file(jobs::lock_path(&lib, a.job));
+        let mut folder_deleted = false;
+        if let Some(d) = folder.as_ref().filter(|_| a.delete_results) {
+            std::fs::remove_dir_all(d)
+                .map_err(|e| ApiError::io(format!("deleting {}: {e}", d.display())))?;
+            folder_deleted = true;
+        }
         Ok(Removed {
             job: a.job,
             kind: row.kind,
             sightings: r.sightings,
             patterns: r.patterns,
             ants: r.ants,
+            folder: folder.map(|d| d.display().to_string()),
+            folder_deleted,
         })
     }
 }
@@ -1281,6 +1391,35 @@ fn report(
             for m in p["movers"].as_array().into_iter().flatten() {
                 let _ = writeln!(o, "  - {}", cell(m["summary"].as_str().unwrap_or("")));
             }
+        }
+    }
+    // Explore searches: what they covered, and their families.
+    if of("explore").next().is_some() {
+        let _ = writeln!(
+            o,
+            "\n## Explore searches\n\n| Job | Runs | Confirmation runs | Elites | Niches | Confirmed elites | Tilings | Families (runs, best score) |\n| --- | --- | --- | --- | --- | --- | --- | --- |"
+        );
+        for j in of("explore") {
+            let (p, _) = live_progress(cx, lib, j);
+            let ep: ExploreProgress = jobs_typed(&p);
+            let fams: Vec<String> = ep
+                .families
+                .iter()
+                .map(|f| format!("{} {} ({:.2})", f.family, digits(f.runs), f.best))
+                .collect();
+            let _ = writeln!(
+                o,
+                "| {} | {} | {} | {} | {} | {} | {} of {} | {} |",
+                j.id,
+                digits(ep.screened),
+                digits(ep.confirmed),
+                digits(ep.elites),
+                digits(ep.niches),
+                digits(ep.confirmed_elites),
+                digits(ep.tilings_tried),
+                digits(ep.tilings),
+                cell(&cap(fams, top))
+            );
         }
     }
     // Movers and piles: their summaries.

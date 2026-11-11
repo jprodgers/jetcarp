@@ -900,3 +900,112 @@ pub fn scene_source(cx: &Ctx, source: &str) -> Result<Scene, ApiError> {
         "'{source}' is neither a scene file nor a Quick Start id (see `jetcarp quickstart`)"
     )))
 }
+
+// ---------------------------------------------------------------------------------------------
+// quickstart.publish
+
+fn per_niche_default() -> usize {
+    12
+}
+fn min_score_default() -> f64 {
+    1.25
+}
+fn max_entries_default() -> usize {
+    12_000
+}
+
+/// What to publish from an explore job, and where.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PublishIn {
+    /// The explore job (default: the newest).
+    #[serde(default)]
+    pub job: Option<i64>,
+    /// The atlas file to write (default: where the Quick Start menu reads it, `$JETCARP_ATLAS` when set, else `<data>/explore/atlas.sqlite`); it is replaced.
+    #[serde(default)]
+    pub out: Option<String>,
+    /// Entries per category, family, and tiling (default 12).
+    #[serde(default = "per_niche_default")]
+    pub per_niche: usize,
+    /// Lowest confirmed score, the worst of an elite's confirmation runs (default 1.25; contrast picks are exempt).
+    #[serde(default = "min_score_default")]
+    pub min_score: f64,
+    /// Most entries (default 12,000).
+    #[serde(default = "max_entries_default")]
+    pub max_entries: usize,
+}
+
+/// An atlas published.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct Published {
+    pub job: i64,
+    pub entries: usize,
+    /// The atlas file.
+    pub file: String,
+    /// The Quick Start menu reads this file now.
+    pub in_quick_start: bool,
+}
+
+impl Report for Published {
+    fn text(&self) -> String {
+        format!(
+            "{} entries from explore job {} in {}{}\n",
+            self.entries,
+            self.job,
+            self.file,
+            if self.in_quick_start {
+                " (the Quick Start menu reads it)"
+            } else {
+                ""
+            }
+        )
+    }
+}
+
+/// `quickstart.publish`.
+pub struct QuickstartPublish;
+impl Op for QuickstartPublish {
+    const NAME: &'static str = "quickstart.publish";
+    const SUMMARY: &'static str = "Publish an explore job's confirmed best runs as the atlas the Quick Start menu offers: chosen per category, family, and tiling, each with its palette and a mature state.";
+    const READ_ONLY: bool = false;
+    type In = PublishIn;
+    type Out = Published;
+    fn run(cx: &Ctx, a: PublishIn, _: &dyn Progress) -> Result<Published, ApiError> {
+        use jetcarp_core::explore::atlas;
+        let (_, row, path) = super::explore::explore_job(cx, a.job)?;
+        let conn = jetcarp_core::explore::store::open_read(&path).map_err(ApiError::not_found)?;
+        if a.per_niche == 0 || a.max_entries == 0 {
+            return Err(ApiError::invalid(
+                "per_niche and max_entries must be at least 1",
+            ));
+        }
+        let out = match &a.out {
+            Some(o) => cx.fs.writable(o)?,
+            None => {
+                let env = std::env::var_os("JETCARP_ATLAS").filter(|v| !v.is_empty());
+                let p = match env {
+                    Some(v) => std::path::PathBuf::from(v),
+                    None => cx.paths().data.join("explore").join("atlas.sqlite"),
+                };
+                cx.fs.writable(&p.display().to_string())?
+            }
+        };
+        let opts = atlas::AtlasOpts {
+            per_niche: a.per_niche,
+            min_score: a.min_score,
+            max_entries: a.max_entries,
+        };
+        // Built beside it and moved over it, so a reader never sees half an atlas.
+        let tmp = out.with_extension("sqlite.part");
+        let n = atlas::build(&conn, &tmp, &opts).map_err(ApiError::engine)?;
+        std::fs::rename(&tmp, &out).map_err(|e| ApiError::io(format!("{}: {e}", out.display())))?;
+        let in_qs = atlas::locate()
+            .is_some_and(|p| std::fs::canonicalize(&p).ok() == std::fs::canonicalize(&out).ok());
+        Ok(Published {
+            job: row.id,
+            entries: n,
+            file: out.display().to_string(),
+            in_quick_start: in_qs,
+        })
+    }
+}

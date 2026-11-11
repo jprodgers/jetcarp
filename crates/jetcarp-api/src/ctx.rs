@@ -1,13 +1,14 @@
 //! What an operation runs with: [`Ctx`] holds the folders, the limits of the front end that
 //! started it, the file-system policy, the pattern catalog (opened once, on first use), the jobs
 //! running in this process ([`Registry`]), and what the program knows about the machine
-//! ([`Platform`]: graphics adapters, the GPU simulator and soup hunter, desktop integration, and
-//! how to start a job in a process of its own).
+//! ([`Platform`]: graphics adapters, the GPU simulator, soup hunter, and batch stepper, desktop
+//! integration, and how to start a job in a process of its own).
 
 use crate::error::ApiError;
 use crate::out::{self, Guard};
 use crate::world::Session;
 use jetcarp_core::World;
+use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::job::SoupBatcher;
 use jetcarp_core::jobs::Registry;
 use jetcarp_core::library::Library;
@@ -252,11 +253,20 @@ pub trait Platform: Send + Sync {
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
         Err("this program was built without the GPU soup hunter".into())
     }
+    /// The GPU batch stepper for explore searches (`jetcarp_gpu::batch::BatchSim`), a new one
+    /// for each run.
+    fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
+        Err("this program was built without the GPU batch stepper".into())
+    }
     /// Run (or resume) job `job` of `catalog` in a new process of its own that outlives this one
     /// (`jetcarp jobs resume JOB`), with these extra arguments (`--threads 4`, `--gpu`,
     /// `--minutes 30`).
     fn spawn_job(&self, _catalog: &Path, _job: i64, _args: &[String]) -> Result<(), String> {
         Err("this program cannot start a job in a process of its own".into())
+    }
+    /// Can [`spawn_job`](Self::spawn_job) start a process (the `jetcarp` program can)?
+    fn can_detach(&self) -> bool {
+        false
     }
 }
 

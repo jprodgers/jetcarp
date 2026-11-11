@@ -338,9 +338,7 @@ fn execute(
         o.budget
     };
     budget.check(k)?;
-    let deadline = budget
-        .minutes
-        .map(|m| Instant::now() + Duration::from_secs_f64(m * 60.0));
+    let deadline = budget.deadline();
     if let Some(f) = o.observe.clone() {
         live.observe(move |v| f(v));
     }

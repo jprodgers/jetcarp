@@ -12,7 +12,6 @@ mod ants_cmd;
 mod api_cmd;
 mod app_cmd;
 mod demo_cmd;
-mod explore_cmd;
 mod hashlife_cmd;
 mod host_cmd;
 mod jobs_cmd;
@@ -135,14 +134,11 @@ enum Cmd {
     /// movers.
     Library(library::LibraryArgs),
     /// Start or carry on a search as a resumable catalog job: `hunt` (soup), `bounded`, `ants`,
-    /// `census`, `mover`, `pile`, `collide`, `evolve`.
+    /// `census`, `mover`, `pile`, `collide`, `evolve`, `explore`; or `try` one configuration.
     Search(search_cmd::SearchArgs),
     /// The catalog's jobs, whatever started them: `list`, `status`, `stop`, `resume`, `report`,
-    /// `remove`.
+    /// `remove`; an explore job's `runs`, `sheet`, `scene`, `review`, `clips`, `rescore`.
     Jobs(jobs_cmd::JobsArgs),
-    /// Broad search over tilings, rules, seeds and palettes: a GPU+CPU search kept in SQLite,
-    /// with contact sheets for reviewing the results.
-    Explore(Box<explore_cmd::ExploreArgs>),
     /// Jump a pattern (unbounded plane) or a wrap-edge world (power-of-two torus) far ahead
     /// with HashLife; export a region as a scene or PNG.
     Hashlife(Box<hashlife_cmd::HashlifeArgs>),
@@ -213,8 +209,12 @@ enum Cmd {
     /// `call OP [JSON]` (the result as JSON).
     #[command(hide = true)]
     Api(api_cmd::ApiArgs),
-    /// Quick Start examples: list them, check that each one works, or render a contact sheet.
+    /// Quick Start examples: list them, check that each one works, or render a contact sheet;
+    /// `publish` an explore job's best runs as the atlas the menu offers.
+    #[command(args_conflicts_with_subcommands = true)]
     Quickstart {
+        #[command(subcommand)]
+        sub: Option<QuickstartSub>,
         /// Run each example (at preview size) and report whether it is alive and changing.
         #[arg(long)]
         check: bool,
@@ -287,9 +287,32 @@ impl Progress for ProgressLine {
 }
 
 /// Commands that print no result of their own, so `--json` means nothing to them.
+#[derive(Subcommand)]
+enum QuickstartSub {
+    /// Publish an explore job's confirmed best runs as the atlas the Quick Start menu offers
+    /// (JOB default: the newest explore job).
+    Publish {
+        job: Option<i64>,
+        /// The atlas file (default: where the menu reads it, $JETCARP_ATLAS when set, else
+        /// <data>/explore/atlas.sqlite); it is replaced.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Entries per category, family, and tiling.
+        #[arg(long, default_value_t = 12)]
+        per_niche: usize,
+        /// Lowest confirmed score (contrast picks are exempt).
+        #[arg(long, default_value_t = 1.25)]
+        min_score: f64,
+        #[arg(long, default_value_t = 12_000)]
+        max_entries: usize,
+        /// Catalog: a .sqlite file, or a folder holding catalog.sqlite.
+        #[arg(long)]
+        library: Option<PathBuf>,
+    },
+}
+
 fn without_json(cmd: &Cmd) -> Option<&'static str> {
     Some(match cmd {
-        Cmd::Explore(_) => "explore",
         Cmd::Demo(_) => "demo",
         Cmd::Mcp { .. } => "mcp",
         _ => return None,
@@ -424,7 +447,6 @@ fn main() -> Result<()> {
         Cmd::Script(a) => script_cmd::script(a)?,
         Cmd::Objects(a) => research::objects(a)?,
         Cmd::Library(a) => library::run(a, json)?,
-        Cmd::Explore(a) => explore_cmd::run(*a)?,
         Cmd::Search(a) => search_cmd::run(a, json)?,
         Cmd::Jobs(a) => jobs_cmd::run(a, json)?,
         Cmd::Hashlife(a) => hashlife_cmd::run(*a)?,
@@ -452,6 +474,30 @@ fn main() -> Result<()> {
             json,
         )?,
         Cmd::Quickstart {
+            sub:
+                Some(QuickstartSub::Publish {
+                    job,
+                    out,
+                    per_niche,
+                    min_score,
+                    max_entries,
+                    library,
+                }),
+            ..
+        } => {
+            let cx =
+                platform::ctx().with_library(library.map(jetcarp_core::library::Library::file_for));
+            let a = quickstart::PublishIn {
+                job,
+                out: out.map(|p| p.display().to_string()),
+                per_niche,
+                min_score,
+                max_entries,
+            };
+            show(&quickstart::QuickstartPublish::run(&cx, a, &Quiet)?, json)?;
+        }
+        Cmd::Quickstart {
+            sub: None,
             check,
             survey,
             survey_tilings,

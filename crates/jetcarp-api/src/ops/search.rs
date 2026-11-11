@@ -13,6 +13,7 @@
 //! | `pile` (`sandpile`) | `pile` | a large sandpile, built by doubling | [`PileIn`] |
 //! | `collide` | `collide` | one pattern into another at every offset | [`CollideIn`] |
 //! | `evolve` | `evolve` | the evolutionary glider search | [`EvolveIn`] |
+//! | `explore` | `explore` | the broad quality-diversity search over tilings, families, rules, seeds (not deterministic: a stopped one continues from its archive) | [`ExploreIn`] |
 //!
 //! Each spec reads the forms every front end wrote (lists or text, `"WxH"` or `[w, h]`, ...) and
 //! makes the strategy's own spec, so a search means the same from the command line, MCP, Rhai,
@@ -41,6 +42,7 @@ use jetcarp_core::hunt::job::{HuntSpec, StorePolicy};
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
 use jetcarp_core::jobs::collide::{CollideJobSpec, CollideRun};
 use jetcarp_core::jobs::evolve::{EvolveJobSpec, EvolveResult, EvolveRun};
+use jetcarp_core::jobs::explore::{ExploreRun, ExploreSpec};
 use jetcarp_core::jobs::pile::PileRunOn;
 use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
 use jetcarp_core::jobs::{
@@ -1285,6 +1287,124 @@ impl EvolveIn {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Explore searches
+
+/// The broad exploratory search (strategy `explore`): MAP-Elites over tiling, rule family, rule, and seed. It keeps the best few runs of each niche (family, tiling group, behaviour), breeds from them, confirms the best on bigger grids, and stores every run in its own database (`searches/<uuid>/search.sqlite` beside the catalog). It runs until stopped or out of budget, and is not deterministic: a stopped search continues from its archive.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExploreIn {
+    /// Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, about 940).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub tilings: Option<Value>,
+    /// Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub families: Option<Value>,
+    /// About this many cells in a screening run's grid (default 16,000).
+    #[serde(default)]
+    pub screen_cells: Option<u32>,
+    /// Generations of a screening run (default 1024).
+    #[serde(default)]
+    pub screen_gens: Option<u32>,
+    /// Cells of a confirmation run, on a bigger grid (default 64,000).
+    #[serde(default)]
+    pub confirm_cells: Option<u32>,
+    /// Generations of a confirmation run (default 4096).
+    #[serde(default)]
+    pub confirm_gens: Option<u32>,
+    /// Seeds an elite is confirmed with (default 3).
+    #[serde(default)]
+    pub confirm_seeds: Option<u32>,
+    /// Most worlds in a GPU batch (default 1024).
+    #[serde(default)]
+    pub batch: Option<usize>,
+    /// Where the random draws start (default 0).
+    #[serde(default)]
+    pub seed: Option<u64>,
+    /// Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything).
+    #[serde(default)]
+    pub gpu: Option<bool>,
+    /// Stop (paused, resumable) when the process uses more memory than this many GB.
+    #[serde(default)]
+    pub max_rss_gb: Option<f64>,
+    /// An old explore database (CART's search.sqlite) to import first: its runs and reviews are copied and the archive, coverage, and seen set rebuilt from them once.
+    #[serde(default)]
+    pub import: Option<String>,
+    /// With `import`: stop (paused) once the import is done, instead of searching on.
+    #[serde(default)]
+    pub import_only: bool,
+}
+
+/// The rule families, for hints.
+const FAMILIES: &str = "families: life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider";
+
+impl ExploreIn {
+    fn spec(&self, cx: &Ctx) -> Result<ExploreSpec, ApiError> {
+        use jetcarp_core::explore::job::Settings;
+        use jetcarp_core::explore::store::fam_named;
+        let d = Settings::default();
+        let seps = &[',', ' ', ';', '\t', '\n'];
+        let tilings = texts(self.tilings.as_ref(), "tilings", seps)?;
+        let families = texts(self.families.as_ref(), "families", seps)?
+            .iter()
+            .map(|f| {
+                fam_named(f).ok_or_else(|| invalid(format!("no rule family '{f}'")).hint(FAMILIES))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let import = match &self.import {
+            Some(p) => Some(cx.fs.readable(p)?),
+            None => None,
+        };
+        Ok(ExploreSpec {
+            search: Settings {
+                screen_cells: self.screen_cells.unwrap_or(d.screen_cells),
+                screen_gens: self.screen_gens.unwrap_or(d.screen_gens),
+                confirm_cells: self.confirm_cells.unwrap_or(d.confirm_cells),
+                confirm_gens: self.confirm_gens.unwrap_or(d.confirm_gens),
+                confirm_seeds: self.confirm_seeds.unwrap_or(d.confirm_seeds),
+                batch: self.batch.unwrap_or(d.batch),
+                seed: self.seed.unwrap_or(d.seed),
+                tilings,
+                families,
+            },
+            gpu: self.gpu.unwrap_or(false),
+            max_rss_gb: self.max_rss_gb,
+            import,
+            import_only: self.import_only,
+            uuid: String::new(),
+        })
+    }
+}
+
+/// An explore run with the platform's GPU backend when the job or the run asks for one (and a
+/// note, logged, when there is none: it runs on the CPU only).
+pub(crate) fn explore_run(
+    cx: &Ctx,
+    row: &JobRow,
+    gpu: bool,
+    p: &dyn Progress,
+) -> Result<ExploreRun, ApiError> {
+    let spec: ExploreSpec = serde_json::from_value(row.spec.clone())
+        .map_err(|e| ApiError::engine(format!("job {}: {e}", row.id)))?;
+    if !(spec.gpu || gpu) || row.status == JobStatus::Done {
+        return Ok(ExploreRun::default());
+    }
+    Ok(match cx.platform.explore_backend() {
+        Ok(b) => {
+            p.log(&format!("GPU: {}", b.name()));
+            ExploreRun::with_backend(b)
+        }
+        Err(e) => {
+            p.log(&format!("no GPU ({e}): running on the CPU only"));
+            let mut r = ExploreRun::default();
+            r.no_gpu = Some(e);
+            r
+        }
+    })
+}
+
 /// Every strategy's spec, for the schema.
 #[derive(JsonSchema)]
 #[serde(untagged)]
@@ -1298,6 +1418,7 @@ enum AnySpec {
     Pile(PileIn),
     Collide(CollideIn),
     Evolve(EvolveIn),
+    Explore(ExploreIn),
 }
 
 fn to_json<T: Serialize>(t: &T) -> Result<Value, ApiError> {
@@ -1315,9 +1436,10 @@ pub fn strategy_kind(name: &str) -> Result<&'static str, ApiError> {
         "pile" | "sandpile" => "pile",
         "collide" | "collision" | "collisions" => "collide",
         "evolve" => "evolve",
+        "explore" => "explore",
         x => {
             return Err(invalid(format!("no strategy '{x}'")).hint(
-                "strategies: hunt (soup), search (bounded), ants, census, mover, pile, collide, evolve",
+                "strategies: hunt (soup), search (bounded), ants, census, mover, pile, collide, evolve, explore",
             ));
         }
     })
@@ -1345,6 +1467,7 @@ fn build(
         "pile" => return read_spec::<PileIn>(kind, spec)?.build(cx, lib, p),
         "collide" => to_json(&read_spec::<CollideIn>(kind, spec)?.spec(lib)?)?,
         "evolve" => to_json(&read_spec::<EvolveIn>(kind, spec)?.spec(cx)?)?,
+        "explore" => to_json(&read_spec::<ExploreIn>(kind, spec)?.spec(cx)?)?,
         k => return Err(invalid(format!("no strategy '{k}'"))),
     }))
 }
@@ -1359,15 +1482,19 @@ pub struct BudgetIn {
     /// Stop at the next checkpoint after this many minutes.
     #[serde(default)]
     pub minutes: Option<f64>,
+    /// Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed.
+    #[serde(default)]
+    pub until: Option<u64>,
     /// Stop at the next checkpoint after this many units in this run: soups (per rule and tiling for hunts), runs, rules, or generations.
     #[serde(default)]
     pub items: Option<u64>,
 }
 
 impl BudgetIn {
-    fn budget(self) -> Budget {
+    pub(crate) fn budget(self) -> Budget {
         Budget {
             minutes: self.minutes,
+            until: self.until,
             items: self.items,
         }
     }
@@ -1404,10 +1531,10 @@ impl FilesIn {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SearchStartIn {
-    /// The strategy: hunt (also soup), search (also bounded), ants, census, mover (also movers), pile, collide, or evolve. With `resume`, it may be left out.
+    /// The strategy: hunt (also soup), search (also bounded), ants, census, mover (also movers), pile, collide, evolve, or explore. With `resume`, it may be left out.
     #[serde(default)]
     pub strategy: Option<String>,
-    /// The strategy's settings (HuntIn, BoundedIn, AntsIn, CensusIn, MoverIn, PileIn, CollideIn, EvolveIn); missing keys take the defaults. Ignored with `resume`.
+    /// The strategy's settings (HuntIn, BoundedIn, AntsIn, CensusIn, MoverIn, PileIn, CollideIn, EvolveIn, ExploreIn); missing keys take the defaults. Ignored with `resume`.
     #[serde(default)]
     #[schemars(schema_with = "spec_schema")]
     pub spec: Value,
@@ -1426,7 +1553,7 @@ pub struct SearchStartIn {
     /// Worker threads (default 0: all cores; results do not depend on them).
     #[serde(default)]
     pub threads: Option<usize>,
-    /// Hunts: run the start of each soup on the GPU (results are identical). Piles: topple on the GPU (periodic tilings).
+    /// Hunts: run the start of each soup on the GPU (results are identical). Piles: topple on the GPU (periodic tilings). Explore: run the rules a GPU can run on it, when there is one.
     #[serde(default)]
     pub gpu: bool,
     /// Run on a thread of this process and answer at once (jobs.status follows it, jobs.stop stops it).
@@ -1504,16 +1631,19 @@ impl Report for SearchStarted {
     }
     fn notes(&self) -> String {
         if self.status == "paused" && self.mode == "here" {
-            let why = match self.stopped.as_deref() {
-                Some("budget") => "at its budget",
-                Some("lost_lease") => "another runner took it over",
+            let note = self.progress.get("note").and_then(|v| v.as_str());
+            let why = match (self.stopped.as_deref(), note) {
+                (Some("budget"), _) => "at its budget",
+                (Some("lost_lease"), _) => "another runner took it over",
+                (_, Some(n)) => n,
                 _ => "as asked",
             };
             return format!(
-                "{} {} paused ({why}); `jetcarp jobs resume {}` continues\n",
+                "{} {} paused ({why}); `jetcarp jobs resume {}` {}\n",
                 noun(&self.kind),
                 self.job,
-                self.job
+                self.job,
+                super::jobs::resume_words(&self.kind)
             );
         }
         if self.status == "failed" {
@@ -1544,7 +1674,7 @@ impl Op for SearchStart {
             (None, Some(_)) => None,
             (None, None) => {
                 return Err(invalid("give the `strategy`").hint(
-                    "strategies: hunt (soup), search (bounded), ants, census, mover, pile, collide, evolve",
+                    "strategies: hunt (soup), search (bounded), ants, census, mover, pile, collide, evolve, explore",
                 ));
             }
         };
@@ -1704,6 +1834,7 @@ enum Slot {
 
 /// The strategy for a run here, with the hooks that give its result.
 fn strategy_here(
+    cx: &Ctx,
     row: &JobRow,
     how: &How,
     p: &dyn Progress,
@@ -1744,6 +1875,7 @@ fn strategy_here(
             s.result = Some(slot.clone());
             (Box::new(s), Slot::Evolve(slot))
         }
+        "explore" => (Box::new(explore_run(cx, row, how.gpu, p)?), Slot::None),
         "pile" => {
             let js: PileJobSpec = serde_json::from_value(row.spec.clone()).map_err(spec_err)?;
             let toppler = if (js.gpu || how.gpu) && row.status != JobStatus::Done {
@@ -1855,6 +1987,9 @@ pub(crate) fn run_job(
         if let Some(m) = how.budget.minutes {
             args.extend(["--minutes".to_string(), m.to_string()]);
         }
+        if let Some(u) = how.budget.until {
+            args.extend(["--until".to_string(), u.to_string()]);
+        }
         if let Some(n) = how.budget.items {
             args.extend(["--limit".to_string(), n.to_string()]);
         }
@@ -1870,8 +2005,13 @@ pub(crate) fn run_job(
     if how.background {
         // A catalog handle of its own, so the run's writes never wait on the caller's reads.
         let own = Library::open(lib.path());
+        // An explore run takes the platform's GPU backend with it.
+        let s: Option<Box<dyn Strategy + Send>> = match row.kind.as_str() {
+            "explore" => Some(Box::new(explore_run(cx, &row, how.gpu, p)?)),
+            _ => None,
+        };
         cx.registry()
-            .start(own, job, o)
+            .start_with(own, job, s, o)
             .map_err(ApiError::conflict)?;
         out.mode = "background".into();
         out.status = "running".into();
@@ -1892,7 +2032,7 @@ pub(crate) fn run_job(
         let start: Vec<String> = cells.iter().map(|c| format!("{}:{}", c[0], c[1])).collect();
         p.log(&format!("start: {}", start.join(",")));
     }
-    let (mut s, slot) = strategy_here(&row, how, p)?;
+    let (mut s, slot) = strategy_here(cx, &row, how, p)?;
     let ended = run_here(lib, &row, &mut *s, o, p).map_err(ApiError::engine)?;
     out.status = status_name(ended.status).into();
     out.stopped = ended.stopped.map(|s| {

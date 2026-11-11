@@ -67,6 +67,9 @@ pub struct JobSummary {
     pub error: Option<String>,
     /// The kind can run it here (pause, then resume).
     pub resumable: bool,
+    /// Stopped and resumed, it ends exactly as an uninterrupted run; otherwise (an explore
+    /// search) a resumed run continues from its saved state.
+    pub deterministic: bool,
 }
 
 impl JobSummary {

@@ -1,8 +1,8 @@
 //! Contact sheets of search results.
 
 use super::cand::Cand;
-use super::job::feat_from_blob;
 use super::space::{ALL_FAMS, Fam, sized_spec};
+use super::store::feat_from_blob;
 use crate::render::{Image, RenderOptions, render_fitted};
 use crate::sheet::{Label, labelled_sheet_scaled};
 use crate::topology::Nb;
@@ -14,6 +14,11 @@ use rusqlite::Connection;
 #[derive(Clone, Debug)]
 pub struct RunRow {
     pub id: i64,
+    /// 1 screened, 2 a confirmation run of `parent` on a bigger grid.
+    pub stage: i64,
+    pub parent: Option<i64>,
+    /// The kind of starting pattern (`random`, `blob`, `point`, `mutated`, `confirm`, ...).
+    pub seed_kind: String,
     pub cand: Cand,
     pub fate: String,
     pub score: f64,
@@ -33,8 +38,8 @@ pub fn query_runs(conn: &Connection, sql: &str) -> Result<Vec<RunRow>, String> {
     let mut out = Vec::with_capacity(ids.len());
     let mut st = conn
         .prepare(
-            "SELECT tiling,nb,fam,rule,seed,cells,gens,steps,rng,origin,fate,score,bin,feats
-             FROM runs WHERE id=?",
+            "SELECT tiling,nb,fam,rule,seed,cells,gens,steps,rng,origin,fate,score,bin,feats,
+             stage,parent,seed_kind FROM runs WHERE id=?",
         )
         .map_err(e)?;
     for id in ids {
@@ -66,11 +71,19 @@ pub fn query_runs(conn: &Connection, sql: &str) -> Result<Vec<RunRow>, String> {
                 r.get::<_, f64>(11)?,
                 r.get::<_, i64>(12)?,
                 r.get::<_, Vec<u8>>(13)?,
+                (
+                    r.get::<_, Option<i64>>(14)?.unwrap_or(1),
+                    r.get::<_, Option<i64>>(15)?,
+                    r.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                ),
             ))
         });
-        if let Ok((cand, fate, score, bin, feats)) = row {
+        if let Ok((cand, fate, score, bin, feats, (stage, parent, seed_kind))) = row {
             out.push(RunRow {
                 id,
+                stage,
+                parent,
+                seed_kind,
                 cand,
                 fate,
                 score,

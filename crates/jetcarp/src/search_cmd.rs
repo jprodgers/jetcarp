@@ -1,17 +1,19 @@
 //! `jetcarp search <strategy>`: start (or carry on) a search as a catalog job, through the
 //! operation `search.start`. Each strategy keeps the flags of the command it replaces (`hunt`,
 //! `library search`, `ants search`, `census`, `movers track --window --job`, `pile`, `library
-//! collide`, `evolve`); `jetcarp pile` is the same as `jetcarp search pile`. The job runs here
-//! until it ends, Ctrl-C stops it at its next checkpoint (resumable with `jetcarp jobs resume
-//! JOB`), or its budget (`--minutes`, `--limit`) runs out; `--detach` runs it in a process of its
-//! own.
+//! collide`, `evolve`, `explore run`); `jetcarp pile` is the same as `jetcarp search pile`. The
+//! job runs here until it ends, Ctrl-C stops it at its next checkpoint (resumable with `jetcarp
+//! jobs resume JOB`), or its budget (`--minutes`, `--until`, `--limit`) runs out; `--detach` runs
+//! it in a process of its own. `jetcarp search try` runs one configuration now, measured as the
+//! explore search measures its runs (`search.try`; not a job).
 
 use crate::show;
 use anyhow::{Context, Result, bail};
 use jetcarp_api::op::{Op, Progress};
+use jetcarp_api::ops::explore::{SearchTry, TryIn};
 use jetcarp_api::ops::search::{
-    AntsIn, BoundedIn, BudgetIn, CensusIn, CollideIn, EvolveIn, FilesIn, HuntIn, MoverIn, PileIn,
-    SearchStart, SearchStartIn, SearchStarted,
+    AntsIn, BoundedIn, BudgetIn, CensusIn, CollideIn, EvolveIn, ExploreIn, FilesIn, HuntIn,
+    MoverIn, PileIn, SearchStart, SearchStartIn, SearchStarted,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -54,6 +56,14 @@ enum Strategy {
     /// Evolutionary glider search (Edmond's method) on any tiling; verified movers go to the
     /// library.
     Evolve(Box<EvolveArgs>),
+    /// The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until
+    /// stopped or out of budget, every run kept in the job's own database
+    /// (`searches/<uuid>/search.sqlite` beside the catalog). Not deterministic: a stopped search
+    /// continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore` read it.
+    Explore(Box<ExploreArgs>),
+    /// Run one configuration now on the CPU, measured as the explore search measures its runs:
+    /// fate, measures, score, and a picture (not a job).
+    Try(Box<TryArgs>),
 }
 
 /// What every search takes.
@@ -73,6 +83,10 @@ pub struct JobFlags {
     /// Stop at the next checkpoint after this many minutes; the job stays resumable.
     #[arg(long)]
     minutes: Option<f64>,
+    /// Stop at the next checkpoint after this Unix time (seconds since 1970): the same end
+    /// however often the job is resumed.
+    #[arg(long)]
+    until: Option<u64>,
     /// Stop after this many units in this session (soups per rule and tiling, runs, rules,
     /// generations); the job stays resumable.
     #[arg(long)]
@@ -517,6 +531,91 @@ pub struct EvolveArgs {
     track_gens: u64,
 }
 
+#[derive(clap::Args)]
+pub struct ExploreArgs {
+    #[command(flatten)]
+    job: JobFlags,
+    /// Hours to run (the same as --minutes 60 x HOURS).
+    #[arg(long)]
+    hours: Option<f64>,
+    /// Only these tilings: keys, comma separated (square,hex,trihex,ih28,catalog:k2-001; default:
+    /// every tiling the search knows, about 940).
+    #[arg(long)]
+    tilings: Option<String>,
+    /// Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps,
+    /// greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram,
+    /// hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann,
+    /// spectre_glider; default: all).
+    #[arg(long)]
+    families: Option<String>,
+    /// About this many cells in a screening run's grid.
+    #[arg(long, default_value_t = 16000)]
+    screen_cells: u32,
+    #[arg(long, default_value_t = 1024)]
+    screen_gens: u32,
+    /// Cells of a confirmation run (the best runs again, on a bigger grid).
+    #[arg(long, default_value_t = 64000)]
+    confirm_cells: u32,
+    #[arg(long, default_value_t = 4096)]
+    confirm_gens: u32,
+    /// Seeds an elite is confirmed with.
+    #[arg(long, default_value_t = 3)]
+    confirm_seeds: u32,
+    /// Most worlds in a GPU batch.
+    #[arg(long, default_value_t = 1024)]
+    batch: usize,
+    #[arg(long, default_value_t = 0)]
+    seed: u64,
+    /// Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the
+    /// job); without one, or without this, the CPU runs everything.
+    #[arg(long)]
+    gpu: bool,
+    /// Stop (paused, resumable) if the process uses more memory than this many GB.
+    #[arg(long)]
+    max_rss_gb: Option<f64>,
+    /// Import an old explore database first (CART's search.sqlite, opened read only): its runs
+    /// and reviews are copied and the archive rebuilt from them once.
+    #[arg(long)]
+    import: Option<PathBuf>,
+    /// With --import: stop once the import is done (`jetcarp jobs resume JOB` searches on).
+    #[arg(long)]
+    import_only: bool,
+}
+
+#[derive(clap::Args)]
+pub struct TryArgs {
+    /// Tiling key (square, hex, trihex, spectre, catalog:k2-001, ih28, ...).
+    #[arg(long, default_value = "square")]
+    tiling: String,
+    /// Rule notation.
+    #[arg(long)]
+    rule: String,
+    /// Starting pattern: a seed shorthand ("random:0.3", "pattern:blobs:0.4:by_region") or JSON
+    /// (default: the rule's own).
+    #[arg(long)]
+    seed: Option<String>,
+    /// touch or edge (default: touch, or what the notation says).
+    #[arg(long)]
+    nb: Option<String>,
+    /// About this many cells.
+    #[arg(long, default_value_t = 16000)]
+    cells: u32,
+    #[arg(long, default_value_t = 1024)]
+    gens: u32,
+    /// Random seed.
+    #[arg(long, default_value_t = 1)]
+    rng: u64,
+    /// Picture size in pixels.
+    #[arg(long, default_value_t = 420)]
+    px: u32,
+    /// Write a picture of the run's end here.
+    #[arg(long)]
+    png: Option<PathBuf>,
+    /// Save the scene that replays the run here.
+    #[arg(long)]
+    save: Option<PathBuf>,
+}
+
 fn path(p: &Path) -> String {
     p.display().to_string()
 }
@@ -598,6 +697,19 @@ impl Progress for CliProgress {
     }
 }
 
+/// A run's budget from its flags (`None`: none given).
+pub(crate) fn budget(
+    minutes: Option<f64>,
+    until: Option<u64>,
+    items: Option<u64>,
+) -> Option<BudgetIn> {
+    (minutes.is_some() || until.is_some() || items.is_some()).then_some(BudgetIn {
+        minutes,
+        until,
+        items,
+    })
+}
+
 /// The input every strategy shares.
 fn start_in(strategy: &str, spec: Value, j: &JobFlags) -> Result<SearchStartIn> {
     let resume = match &j.resume {
@@ -612,10 +724,7 @@ fn start_in(strategy: &str, spec: Value, j: &JobFlags) -> Result<SearchStartIn> 
         spec,
         label: j.label.clone(),
         resume,
-        budget: (j.minutes.is_some() || j.limit.is_some()).then_some(BudgetIn {
-            minutes: j.minutes,
-            items: j.limit,
-        }),
+        budget: budget(j.minutes, j.until, j.limit),
         threads: j.threads,
         detach: j.detach,
         ..Default::default()
@@ -651,7 +760,61 @@ pub fn run(a: SearchArgs, json: bool) -> Result<()> {
         Strategy::Pile(p) => pile(*p, json),
         Strategy::Collide(c) => collide(*c, json),
         Strategy::Evolve(e) => evolve(*e, json),
+        Strategy::Explore(e) => explore(*e, json),
+        Strategy::Try(t) => try_one(*t, json),
     }
+}
+
+fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
+    if let Some(h) = a.hours {
+        if a.job.minutes.is_some() {
+            bail!("give --hours or --minutes, not both");
+        }
+        a.job.minutes = Some(h * 60.0);
+    }
+    let s = ExploreIn {
+        tilings: a.tilings.map(Value::String),
+        families: a.families.map(Value::String),
+        screen_cells: Some(a.screen_cells),
+        screen_gens: Some(a.screen_gens),
+        confirm_cells: Some(a.confirm_cells),
+        confirm_gens: Some(a.confirm_gens),
+        confirm_seeds: Some(a.confirm_seeds),
+        batch: Some(a.batch),
+        seed: Some(a.seed),
+        gpu: Some(a.gpu),
+        max_rss_gb: a.max_rss_gb,
+        import: a.import.as_deref().map(path),
+        import_only: a.import_only,
+    };
+    let mut i = start_in("explore", spec(&s), &a.job)?;
+    i.gpu = a.gpu;
+    start(&a.job, i, json).map(|_| ())
+}
+
+fn try_one(a: TryArgs, json: bool) -> Result<()> {
+    let seed = a
+        .seed
+        .map(|s| serde_json::from_str::<Value>(&s).unwrap_or(Value::String(s)));
+    let t = TryIn {
+        tiling: a.tiling,
+        rule: a.rule,
+        seed,
+        nb: a.nb,
+        cells: Some(a.cells),
+        gens: Some(a.gens),
+        rng: Some(a.rng),
+        px: Some(a.px),
+        png: a.png.as_deref().map(path),
+    };
+    let cx = crate::platform::ctx();
+    let out = SearchTry::run(&cx, t, &jetcarp_api::Quiet)?;
+    if let Some(p) = &a.save {
+        let text = serde_json::to_string_pretty(&out.scene)? + "\n";
+        std::fs::write(p, text).with_context(|| format!("writing {}", p.display()))?;
+        eprintln!("scene: {}", p.display());
+    }
+    show(&out, json)
 }
 
 fn hunt(a: HuntArgs, json: bool) -> Result<()> {
@@ -870,10 +1033,7 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         spec: spec(&s),
         label: a.job.label.clone(),
         resume: a.job.resume.as_ref().and_then(|r| r.parse::<i64>().ok()),
-        budget: (a.job.minutes.is_some() || a.job.limit.is_some()).then_some(BudgetIn {
-            minutes: a.job.minutes,
-            items: a.job.limit,
-        }),
+        budget: budget(a.job.minutes, a.job.until, a.job.limit),
         threads: a.job.threads,
         detach: a.job.detach,
         ..Default::default()

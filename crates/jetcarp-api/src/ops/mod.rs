@@ -8,13 +8,15 @@
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
 //! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.export`, `library.import`, `library.paste`, `library.verify`, `library.prune` |
-//! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check` |
+//! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
 //! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
 //! | [`search`] | `search.start` |
+//! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
 //! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 
+pub mod explore;
 pub mod files;
 pub mod jobs;
 pub mod library;
@@ -74,6 +76,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<quickstart::QuickstartUpdate>::NEW,
     &Plain::<quickstart::QuickstartRemove>::NEW,
     &Plain::<quickstart::QuickstartCheck>::NEW,
+    &Plain::<quickstart::QuickstartPublish>::NEW,
     &Plain::<media::MediaRender>::NEW,
     &Plain::<media::MediaListOp>::NEW,
     &Plain::<media::SiteExport>::NEW,
@@ -82,6 +85,13 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<sheet::SheetSweep>::NEW,
     &Plain::<sheet::SheetIsohedral>::NEW,
     &Plain::<search::SearchStart>::NEW,
+    &Plain::<explore::SearchRuns>::NEW,
+    &Plain::<explore::SearchSheet>::NEW,
+    &Plain::<explore::SearchRunScene>::NEW,
+    &Plain::<explore::SearchTry>::NEW,
+    &Plain::<explore::SearchReview>::NEW,
+    &Plain::<explore::SearchRescore>::NEW,
+    &Plain::<explore::SearchClips>::NEW,
     &Plain::<jobs::JobsList>::NEW,
     &Plain::<jobs::JobsStatus>::NEW,
     &Plain::<jobs::JobsStop>::NEW,

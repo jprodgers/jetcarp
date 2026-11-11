@@ -46,18 +46,24 @@ impl Cand {
         Rule::parse(&self.rule).ok().map(|(r, _)| r)
     }
 
-    /// A 64-bit identity for deduplication.
+    /// A 64-bit identity for deduplication: FNV-1a over the tiling, neighbourhood, rule, seed,
+    /// size, and random state, stable across platforms and Rust versions (the search keeps the
+    /// identities it has tried in its working database).
     pub fn id_hash(&self) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        self.tiling.hash(&mut h);
-        (self.nb as u8).hash(&mut h);
-        self.rule.hash(&mut h);
-        serde_json::to_string(&self.seed)
-            .unwrap_or_default()
-            .hash(&mut h);
-        self.cells.hash(&mut h);
-        self.rng.hash(&mut h);
-        h.finish()
+        let mut h = crate::rng::Fnv::default();
+        let text = |h: &mut crate::rng::Fnv, s: &str| {
+            h.bytes(s.as_bytes());
+            h.bytes(&[0xff]);
+        };
+        text(&mut h, &self.tiling);
+        h.bytes(&[self.nb as u8]);
+        text(&mut h, &self.rule);
+        text(
+            &mut h,
+            &serde_json::to_string(&self.seed).unwrap_or_default(),
+        );
+        h.bytes(&self.cells.to_le_bytes());
+        h.u64(self.rng);
+        h.0
     }
 }

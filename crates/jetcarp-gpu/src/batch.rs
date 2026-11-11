@@ -8,9 +8,11 @@
 //! that, large worlds run several times slower. Generations run in short submissions (75 ms by
 //! default, see [`BatchSim::set_target_secs`]); a generation too large for one submission is
 //! split into ranges of worlds, so the driver never sees a long-running dispatch.
+//!
+//! [`BatchSim`] is an explore search's GPU backend (`jetcarp_core::explore::batch::Backend`).
 
 use jetcarp_core::Topology;
-use jetcarp_core::explore::batch::{BatchJob, WorldTrace, mix, neighbor_csr};
+use jetcarp_core::explore::batch::{Backend, BatchJob, WorldTrace, mix, neighbor_csr};
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, LtlRule, Reach};
 use jetcarp_core::rules::Rule;
@@ -1044,5 +1046,30 @@ impl BatchSim {
                 tr.frames.push(frame);
             });
         })
+    }
+}
+
+/// The explore search's GPU loop runs its batches here; a lost device is replaced by a new one.
+impl Backend for BatchSim {
+    fn name(&self) -> String {
+        BatchSim::name(self).to_string()
+    }
+    fn supports(&self, rule: &Rule) -> bool {
+        BatchSim::supports(rule)
+    }
+    fn max_cells(&self) -> usize {
+        BatchSim::max_cells(self)
+    }
+    fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
+        BatchSim::run(self, job)
+    }
+    fn reset(&mut self) -> bool {
+        match BatchSim::headless() {
+            Ok(s) => {
+                *self = s;
+                true
+            }
+            Err(_) => false,
+        }
     }
 }

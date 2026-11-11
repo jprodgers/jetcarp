@@ -21,8 +21,8 @@ fn run_job(lib: &Library, job: i64, threads: usize, batch: u64, limit: Option<u6
     let o = RunOptions {
         threads,
         budget: Budget {
-            minutes: None,
             items: limit,
+            ..Default::default()
         },
         ..Default::default()
     };

@@ -60,6 +60,11 @@ pub trait StrategyKind: Send + Sync {
     fn request_stop(&self, lib: &Library, job: i64) -> Result<(), String> {
         super::request_stop(lib, job)
     }
+    /// The folder of the job's own working state beside the catalog (an explore job's
+    /// `searches/<uuid>`), if its kind keeps one. Removing a job with its results removes it.
+    fn work_dir(&self, _lib: &Library, _row: &JobRow) -> Option<std::path::PathBuf> {
+        None
+    }
     /// The heat maps this job feeds (none by default).
     fn heat_spaces(&self, _row: &JobRow) -> Vec<HeatSpace> {
         vec![]

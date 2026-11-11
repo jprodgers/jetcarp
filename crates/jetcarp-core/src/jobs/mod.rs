@@ -44,6 +44,7 @@
 //! | `pile` | a large sandpile | `crate::pile::job` | a doubling step | – |
 //! | `collide` | two patterns at every offset | `crate::library::collide` | runs, then checks | runs |
 //! | `evolve` | the evolutionary glider search | `crate::evolve` | a generation | generations |
+//! | `explore` | the broad search over tilings, families, rules, seeds | `crate::explore` | two seconds of rounds | runs |
 //!
 //! Batches adapt to a few seconds of work: a hunt's to about three (with the next batch already
 //! running, so the slow soups at a batch's end, its merge, and its write overlap it), an ant
@@ -54,8 +55,14 @@
 //! doubling step is cancelled within a second of a stop and run again on resume.
 //!
 //! Any other kind (and the `collide` jobs stored before collisions were strategies) is listed
-//! and can be stopped, but not run. Every kind here is deterministic: a job stopped and resumed,
-//! in any process, ends exactly as an uninterrupted one ([`StrategyKind::deterministic`]).
+//! and can be stopped, but not run. Every kind here but `explore` is deterministic: a job
+//! stopped and resumed, in any process, ends exactly as an uninterrupted one
+//! ([`StrategyKind::deterministic`]). An explore search shares its archive between its GPU and
+//! CPU rounds as they run, so a stopped one *continues* from its saved archive instead.
+//!
+//! **Working folders.** A kind may keep a job's working state in a folder of its own beside the
+//! catalog ([`StrategyKind::work_dir`]): an explore job's `searches/<uuid>/search.sqlite` holds
+//! its runs and its archive, coverage, and seen set, and is its checkpoint.
 //!
 //! **Checkpoints.** Hunts, ant searches, censuses, and movers keep the checkpoints they had
 //! before they ran in steps (the next soup, run, or rule index with the totals; a mover's window
@@ -76,6 +83,7 @@ pub mod ants;
 pub mod census;
 pub mod collide;
 pub mod evolve;
+pub mod explore;
 pub mod hunt;
 pub mod mover;
 pub mod other;
@@ -108,32 +116,52 @@ pub struct JobSpec {
 }
 
 /// How long one run of a job may go on: it stops at its next checkpoint, paused and resumable,
-/// after `minutes` of wall time or once `items` units (soups, runs, rules, generations: see the
-/// module table) have run in this session. Empty: until the job ends or is stopped.
+/// after `minutes` of wall time, at the Unix time `until` (the same end for every run, however
+/// often the job is resumed), or once `items` units (soups, runs, rules, generations: see the
+/// module table) have run in this session; whichever comes first. Empty: until the job ends or
+/// is stopped.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Budget {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minutes: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items: Option<u64>,
 }
 
 impl Budget {
     pub fn is_empty(&self) -> bool {
-        self.minutes.is_none() && self.items.is_none()
+        self.minutes.is_none() && self.until.is_none() && self.items.is_none()
     }
     /// Only minutes.
     pub fn minutes(m: f64) -> Budget {
         Budget {
             minutes: Some(m),
-            items: None,
+            ..Default::default()
         }
     }
     /// Only items.
     pub fn items(n: u64) -> Budget {
         Budget {
-            minutes: None,
             items: Some(n),
+            ..Default::default()
+        }
+    }
+    /// When the run must stop by its minutes or its `until`, from now.
+    pub fn deadline(&self) -> Option<std::time::Instant> {
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let by_minutes = self
+            .minutes
+            .map(|m| now + Duration::from_secs_f64(m * 60.0));
+        let by_until = self.until.map(|u| {
+            let t = now_seconds().max(0) as u64;
+            now + Duration::from_secs(u.saturating_sub(t))
+        });
+        match (by_minutes, by_until) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
         }
     }
     /// Can a job of this kind run within it?
@@ -160,7 +188,7 @@ impl Budget {
     }
 }
 
-static KINDS: [&dyn StrategyKind; 8] = [
+static KINDS: [&dyn StrategyKind; 9] = [
     &hunt::KIND,
     &search::KIND,
     &ants::KIND,
@@ -169,6 +197,7 @@ static KINDS: [&dyn StrategyKind; 8] = [
     &pile::KIND,
     &collide::KIND,
     &evolve::KIND,
+    &explore::KIND,
 ];
 
 /// Every kind with a strategy, in the module table's order.
@@ -276,6 +305,7 @@ pub(crate) fn base_summary(row: &JobRow, k: &dyn StrategyKind) -> JobSummary {
         created: row.created.clone(),
         updated: row.updated.clone(),
         resumable: k.runnable(row),
+        deterministic: k.deterministic(),
         ..Default::default()
     }
 }

@@ -1,8 +1,10 @@
 //! Batch runs: many worlds on one topology, each with its own rule and starting states, stepped
 //! together and measured every generation.
 //!
-//! [`run_cpu`] is the reference implementation. A backend (the GPU batch stepper in `jetcarp-gpu`)
-//! must produce exactly the same [`WorldTrace`] for every world it accepts.
+//! [`run_cpu`] is the reference implementation. A [`Backend`] (the GPU batch stepper in
+//! `jetcarp-gpu`) must produce exactly the same [`WorldTrace`] for every world it accepts. The
+//! trait lives here, with the batch types, so the GPU crate implements it without depending on the
+//! search itself; [`CpuBatch`] is [`run_cpu`] as a backend (tests run the search's GPU loop with it).
 
 use crate::ltl::{Hood, Reach};
 use crate::rules::{FieldKind, Rule};
@@ -10,6 +12,44 @@ use crate::topology::{Csr, Nb, Storage, Topology};
 use crate::world::{CaSpec, Field, SeedSpec, World};
 use rayon::prelude::*;
 use std::sync::Arc;
+
+/// Another way to run a batch: the GPU batch stepper (`jetcarp_gpu::batch::BatchSim`). For every
+/// world of a job whose rule it [`supports`](Backend::supports) it returns the [`WorldTrace`]
+/// [`run_cpu`] would.
+pub trait Backend: Send {
+    /// The device, for reports (`NVIDIA ... (Vulkan)`).
+    fn name(&self) -> String;
+    /// Can it run this rule?
+    fn supports(&self, rule: &Rule) -> bool;
+    /// Most cells (over every world) one batch may hold.
+    fn max_cells(&self) -> usize;
+    /// Run the batch: one trace per world, in order.
+    fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String>;
+    /// Start over after errors (a lost device). Returns false if that is impossible.
+    fn reset(&mut self) -> bool {
+        false
+    }
+}
+
+/// [`run_cpu`] as a [`Backend`]: every rule whose cells hold plain states (not sandpile heights
+/// or continuous values), up to a million cells a batch.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CpuBatch;
+
+impl Backend for CpuBatch {
+    fn name(&self) -> String {
+        "CPU batches".into()
+    }
+    fn supports(&self, rule: &Rule) -> bool {
+        !matches!(rule.field_kind(), FieldKind::Height | FieldKind::Continuous)
+    }
+    fn max_cells(&self) -> usize {
+        1 << 20
+    }
+    fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
+        run_cpu(job)
+    }
+}
 
 /// The per-cell constant of the generation hash.
 #[inline]

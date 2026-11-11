@@ -18,8 +18,8 @@ fn run_job(
 ) -> CensusProgress {
     let o = RunOptions {
         budget: Budget {
-            minutes: None,
             items: limit,
+            ..Default::default()
         },
         ..Default::default()
     };

@@ -62,7 +62,8 @@ pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
 }
 
 /// How much people liked runs like this one, 0 to 3: a logistic fit to 829 field-rule clips rated
-/// by eye over four rounds (keep 1, maybe 0.45, drop 0; ridge penalty 8, family terms penalty 5;
+/// by eye over four rounds, most of them by Emily Teich (keep 1, maybe 0.45, drop 0; ridge penalty
+/// 8, family terms penalty 5;
 /// row rules and WireWorld circuits are judged elsewhere). Fitted to the first three rounds, it
 /// reached AUC 0.84 for keep against drop on the fourth, which it had not seen. The ratings favour
 /// runs that settle late, start busy, and build large connected structures rather than dust, and
@@ -176,9 +177,51 @@ pub struct Archive {
     /// Index into `order` for sampling elites uniformly by niche.
     pub order: Vec<Niche>,
     pub confirmed: std::collections::HashSet<i64>,
+    /// The tiling group of each elite (the niche's second part), for saving.
+    groups: HashMap<i64, u8>,
+    /// Elites added (`true`) and dropped (`false`) by [`offer`](Self::offer) since the last
+    /// [`take_changes`](Self::take_changes), in order.
+    changes: Vec<(i64, bool)>,
 }
 
 impl Archive {
+    /// Put an elite back as it was saved (no checks: a saved archive is already one).
+    pub fn insert(&mut self, id: i64, ev: Eval, group: u8) {
+        let key: Niche = (ev.cand.fam, group, ev.bin);
+        let list = match self.cells.entry(key) {
+            std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+            std::collections::hash_map::Entry::Vacant(v) => {
+                self.order.push(key);
+                v.insert(Vec::new())
+            }
+        };
+        list.push((id, ev.score));
+        list.sort_by(|a, b| b.1.total_cmp(&a.1));
+        self.groups.insert(id, group);
+        self.runs.insert(id, ev);
+    }
+
+    /// The elites added and dropped since the last call, as each one's last state: its tiling
+    /// group when it is an elite now, `None` when it was dropped.
+    pub fn take_changes(&mut self) -> Vec<(i64, Option<u8>)> {
+        let mut last: HashMap<i64, bool> = HashMap::new();
+        let mut order = Vec::new();
+        for (id, added) in std::mem::take(&mut self.changes) {
+            if last.insert(id, added).is_none() {
+                order.push(id);
+            }
+        }
+        order
+            .into_iter()
+            .map(|id| {
+                (
+                    id,
+                    last[&id].then(|| self.groups.get(&id).copied()).flatten(),
+                )
+            })
+            .collect()
+    }
+
     /// Try to place a run. Returns `true` if it became an elite.
     pub fn offer(&mut self, id: i64, ev: Eval, group: u8) -> bool {
         let fam = ev.cand.fam;
@@ -203,6 +246,8 @@ impl Archive {
             }
             let (old, _) = list.remove(p);
             self.runs.remove(&old);
+            self.groups.remove(&old);
+            self.changes.push((old, false));
         }
         if list.len() >= PER_NICHE && list.iter().all(|&(_, s)| s >= score) {
             return false;
@@ -212,8 +257,12 @@ impl Archive {
         while list.len() > PER_NICHE {
             let (old, _) = list.pop().unwrap();
             self.runs.remove(&old);
+            self.groups.remove(&old);
+            self.changes.push((old, false));
         }
         self.runs.insert(id, ev);
+        self.groups.insert(id, group);
+        self.changes.push((id, true));
         true
     }
 

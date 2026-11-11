@@ -89,8 +89,8 @@ fn start(
         label,
         resume: get_u64(v, "resume")?.map(|j| j as i64),
         budget: limit.map(|n| jetcarp_api::ops::search::BudgetIn {
-            minutes: None,
             items: Some(n),
+            ..Default::default()
         }),
         threads: get_u64(v, "threads")?.map(|t| t as usize),
         ..Default::default()

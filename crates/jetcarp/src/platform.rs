@@ -2,13 +2,15 @@
 //! graphics adapters and the GPU simulator (`jetcarp-gpu`), and the desktop integration (the
 //! background host, start at login, the GNOME Shell extension, the screen savers). The
 //! operations `system.doctor`, `system.uninstall`, and `scene.run` (with `gpu`) ask for them
-//! through [`jetcarp_api::Platform`]; so do `search.start` with `gpu` (the GPU soup hunter) and
-//! with `detach` (a job in a process of its own, `jetcarp jobs resume JOB`).
+//! through [`jetcarp_api::Platform`]; so do `search.start` with `gpu` (the GPU soup hunter for
+//! hunts, the GPU batch stepper for explore searches) and with `detach` (a job in a process of
+//! its own, `jetcarp jobs resume JOB`).
 
 use clap::Args;
 use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuStepper, GpuSteps, UndoStep};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
+use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::job::SoupBatcher;
 use jetcarp_display::{autostart, gnome, saver};
 use jetcarp_mcp::link::host_call;
@@ -46,6 +48,14 @@ fn host_running() -> bool {
 impl Platform for Machine {
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
         jetcarp_gpu::hunt::GpuHunter::headless().map(|g| Arc::new(g) as Arc<dyn SoupBatcher>)
+    }
+
+    fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
+        jetcarp_gpu::batch::BatchSim::headless().map(|g| Box::new(g) as Box<dyn Backend>)
+    }
+
+    fn can_detach(&self) -> bool {
+        true
     }
 
     fn spawn_job(&self, catalog: &Path, job: i64, args: &[String]) -> Result<(), String> {

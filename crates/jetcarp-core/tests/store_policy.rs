@@ -84,8 +84,8 @@ fn run_hunt(
     let o = RunOptions {
         threads,
         budget: Budget {
-            minutes: None,
             items: limit,
+            ..Default::default()
         },
         ..Default::default()
     };
