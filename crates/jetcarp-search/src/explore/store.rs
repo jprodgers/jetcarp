@@ -815,12 +815,83 @@ impl Import {
     pub fn reviews(&self) -> Result<Vec<OldReview>, String> {
         old_reviews(&self.old)
     }
+
+    /// The file's name (without its folder), as provenance names it.
+    pub fn file_name(&self) -> String {
+        file_name(&self.path)
+    }
+
+    /// Up to `n` runs after run `after`, in id order, by what a sample is drawn on: id, stage,
+    /// tiling, family, seed kind. Does not move the import on.
+    pub fn keys(&self, after: i64, n: usize) -> Result<Vec<RunKey>, String> {
+        let mut st = self
+            .old
+            .prepare_cached(
+                "SELECT id, stage, tiling, fam, seed_kind FROM runs WHERE id > ?1 ORDER BY id
+                 LIMIT ?2",
+            )
+            .map_err(e)?;
+        st.query_map(params![after, n as i64], |r| {
+            Ok(RunKey {
+                id: r.get(0)?,
+                stage: r.get::<_, Option<i64>>(1)?.unwrap_or(1),
+                tiling: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                fam: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                seed_kind: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+            })
+        })
+        .map_err(e)?
+        .collect::<Result<_, _>>()
+        .map_err(e)
+    }
+
+    /// The runs at these ids, in id order (ids that are not runs left out).
+    pub fn get(&self, ids: &[i64]) -> Result<Vec<RunRec>, String> {
+        let mut ids = ids.to_vec();
+        ids.sort_unstable();
+        ids.dedup();
+        let mut out = Vec::with_capacity(ids.len());
+        for chunk in ids.chunks(500) {
+            let list: Vec<String> = chunk.iter().map(i64::to_string).collect();
+            let mut st = self
+                .old
+                .prepare(&format!(
+                    "SELECT {RUN_COLS} FROM runs WHERE id IN ({}) ORDER BY id",
+                    list.join(",")
+                ))
+                .map_err(e)?;
+            let mut rows = st.query([]).map_err(e)?;
+            while let Some(r) = rows.next().map_err(e)? {
+                out.push(rec_at(r, 0).map_err(e)?);
+            }
+        }
+        Ok(out)
+    }
 }
 
-/// Start importing `from` into a new search: `meta` says what is being imported.
+/// What a run's sample stratum is drawn on ([`Import::keys`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RunKey {
+    pub id: i64,
+    pub stage: i64,
+    pub tiling: String,
+    pub fam: String,
+    pub seed_kind: String,
+}
+
+/// A path's file name, as provenance names a file (never the folders it was in on this disk).
+pub fn file_name(p: &Path) -> String {
+    let name = |p: &Path| p.file_name().map(|f| f.to_string_lossy().into_owned());
+    name(p)
+        .or_else(|| std::fs::canonicalize(p).ok().and_then(|c| name(&c)))
+        .unwrap_or_else(|| p.display().to_string())
+}
+
+/// Start importing `from` into a new search: `meta` says what is being imported (by its file
+/// name: the working database travels with a shared search folder).
 pub fn begin_import(c: &Connection, from: &Path) -> Result<(), String> {
     for (k, v) in [
-        ("import_from", from.display().to_string()),
+        ("import_from", file_name(from)),
         ("import_done", "0".into()),
         ("import_last", "0".into()),
     ] {

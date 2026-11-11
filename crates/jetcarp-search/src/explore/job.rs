@@ -1309,6 +1309,98 @@ fn evaluate(grid: &Grid, c: &Cand, t: &WorldTrace) -> (Fate, Features, f32, u32)
     (fate, f, score, bin)
 }
 
+/// What measuring a run gives: its fate, features, score, and behaviour bin.
+pub type Measured = (Fate, Features, f32, u32);
+
+/// Run a candidate on the CPU on `grid` (its tiling at its size) and measure it, as the search's
+/// CPU loop does; `None` when it does not run (its seed does not read, or the run panicked).
+pub fn measure_on(grid: &Grid, c: &Cand) -> Option<Measured> {
+    catch_unwind(AssertUnwindSafe(|| {
+        let mut world = prepare(grid, c).ok()?;
+        let window = if c.fam.is_rows() { 1 } else { WINDOW };
+        let t = trace_world(&mut world, c.gens, &frames_for(c.gens, window)).ok()?;
+        Some(evaluate(grid, c, &t))
+    }))
+    .ok()
+    .flatten()
+}
+
+/// The batch a candidate can share on a GPU: its neighbourhood, generations, and (Larger than
+/// Life) neighbourhood shape and range. `None` when `be` cannot run its rule.
+pub fn batch_key(be: &dyn Backend, c: &Cand) -> Option<(Nb, u32, Option<(Hood, u8)>)> {
+    let r = c.rule()?;
+    if !be.supports(&r) || c.fam.is_rows() {
+        return None;
+    }
+    let l = match &r {
+        Rule::Ltl(l) => Some((l.hood, l.range)),
+        _ => None,
+    };
+    Some((c.nb, c.gens, l))
+}
+
+/// Run candidates of one [`batch_key`] on `grid` as GPU batches on `be`, as the search's GPU
+/// loop does, and measure each (`None` for one that does not run).
+pub fn measure_batch(
+    be: &mut dyn Backend,
+    grid: &Grid,
+    cands: &[&Cand],
+) -> Result<Vec<Option<Measured>>, String> {
+    let Some(first) = cands.first() else {
+        return Ok(vec![]);
+    };
+    let (nb, gens) = (first.nb, first.gens);
+    let per = (be.max_cells() / grid.topo.len().next_multiple_of(256)).max(1);
+    let mut out = Vec::with_capacity(cands.len());
+    for chunk in cands.chunks(per) {
+        let inits: Vec<Option<BatchWorld>> = chunk
+            .par_iter()
+            .map(|c| {
+                catch_unwind(AssertUnwindSafe(|| {
+                    let world = prepare(grid, c).ok()?;
+                    Some(BatchWorld {
+                        rule: c.rule()?,
+                        init: jetcarp_core::explore::batch::field_bytes(world.fields.first()?),
+                    })
+                }))
+                .ok()
+                .flatten()
+            })
+            .collect();
+        let at: Vec<usize> = (0..chunk.len()).filter(|&i| inits[i].is_some()).collect();
+        let job = BatchJob {
+            topo: grid.topo.clone(),
+            nb,
+            worlds: inits.into_iter().flatten().collect(),
+            gens,
+            frames_at: frames_for(gens, WINDOW),
+        };
+        let traces = if job.worlds.is_empty() {
+            vec![]
+        } else {
+            be.run(&job)?
+        };
+        if traces.len() != at.len() {
+            return Err(format!(
+                "the GPU returned {} traces for {} worlds",
+                traces.len(),
+                at.len()
+            ));
+        }
+        let measured: Vec<Option<Measured>> = at
+            .par_iter()
+            .zip(traces.par_iter())
+            .map(|(&i, t)| catch_unwind(AssertUnwindSafe(|| evaluate(grid, chunk[i], t))).ok())
+            .collect();
+        let mut got: Vec<Option<Measured>> = vec![None; chunk.len()];
+        for (&i, m) in at.iter().zip(measured) {
+            got[i] = m;
+        }
+        out.extend(got);
+    }
+    Ok(out)
+}
+
 /// Run one candidate on the CPU now and measure it.
 pub fn try_one(c: Cand) -> Result<Eval, String> {
     let grid = Grid::build(&c.tiling, c.cells)?;

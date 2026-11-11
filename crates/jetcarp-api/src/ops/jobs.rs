@@ -204,6 +204,25 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                     }
                 );
             }
+            if let Some(m) = &p.remeasure {
+                let _ = writeln!(
+                    s,
+                    "  re-measuring ({}, {}): {} of {} tilings checked, {} sampled runs, {} differ; {} runs re-measured ({:.0}/s), {} changed; {}",
+                    m.mode,
+                    m.phase,
+                    digits(m.checked_tilings),
+                    digits(m.tilings),
+                    digits(m.sampled),
+                    digits(m.differ),
+                    digits(m.runs),
+                    m.per_s,
+                    digits(m.changed),
+                    m.backend
+                );
+                for (t, why) in &m.tilings_remeasured {
+                    let _ = writeln!(s, "    {t}: {why}");
+                }
+            }
             if let Some(l) = &p.loaded {
                 let _ = writeln!(
                     s,
@@ -1421,6 +1440,32 @@ fn report(
                 digits(ep.tilings),
                 cell(&cap(fams, top))
             );
+        }
+        // Imports: the old runs checked on this engine, and the tilings run again.
+        for j in of("explore") {
+            let (p, _) = live_progress(cx, lib, j);
+            let ep: ExploreProgress = jobs_typed(&p);
+            let Some(m) = &ep.remeasure else { continue };
+            let _ = writeln!(
+                o,
+                "\n### Job {}: imported runs re-measured\n\nMode {}, {}: {} of {} tilings checked, {} sampled runs run again, {} measured differently; {} runs re-measured, {} of them changed ({}).\n",
+                j.id,
+                m.mode,
+                m.phase,
+                digits(m.checked_tilings),
+                digits(m.tilings),
+                digits(m.sampled),
+                digits(m.differ),
+                digits(m.runs),
+                digits(m.changed),
+                cell(&m.backend)
+            );
+            if !m.tilings_remeasured.is_empty() {
+                let _ = writeln!(o, "| Tiling | Why |\n| --- | --- |");
+                for (t, why) in &m.tilings_remeasured {
+                    let _ = writeln!(o, "| {} | {} |", cell(t), cell(why));
+                }
+            }
         }
     }
     // Movers and piles: their summaries.

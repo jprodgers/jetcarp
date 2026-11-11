@@ -1336,6 +1336,9 @@ pub struct ExploreIn {
     /// With `import`: stop (paused) once the import is done, instead of searching on.
     #[serde(default)]
     pub import_only: bool,
+    /// With `import`: which old runs are run again on this engine before they are stored, keeping their ids: `auto` (the default) runs a sample of every tiling's runs again and re-measures every run of a tiling whose sample does not measure as stored; `all` re-measures every run; `none` copies them as they are. What was checked and re-measured, and why, is in the search's manifest and the job's progress.
+    #[serde(default)]
+    pub remeasure: Option<String>,
 }
 
 /// The rule families, for hints.
@@ -1358,6 +1361,10 @@ impl ExploreIn {
             Some(p) => Some(cx.fs.readable(p)?),
             None => None,
         };
+        let remeasure = match &self.remeasure {
+            Some(m) => jetcarp_search::explore::remeasure::Remeasure::parse(m).map_err(invalid)?,
+            None => Default::default(),
+        };
         Ok(ExploreSpec {
             search: Settings {
                 screen_cells: self.screen_cells.unwrap_or(d.screen_cells),
@@ -1374,6 +1381,7 @@ impl ExploreIn {
             max_rss_gb: self.max_rss_gb,
             import,
             import_only: self.import_only,
+            remeasure,
             uuid: String::new(),
             seal_rows: None,
         })

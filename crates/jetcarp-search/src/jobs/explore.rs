@@ -31,17 +31,29 @@
 //! progress is committed with each segment, so an import stopped part way goes on from its last
 //! segment. Its reviews go to the library. With `import_only` it then stops (paused), else it
 //! searches on from the imported archive.
+//!
+//! **Re-measuring.** Before it copies anything, an import checks the old runs on this engine
+//! ([`crate::explore::remeasure`], `remeasure` auto): a stratified sample of every tiling's runs is
+//! run again and compared exactly with what is stored, and every run of a tiling whose sample
+//! differs is run again as it is copied, keeping its id (on the GPU, for the rules it runs, when
+//! the job has one and it measured the sample as the CPU did). The check and the tilings
+//! re-measured, with why, go in the search's manifest, the progress, and the working database (so
+//! a stopped import goes on with the same decision); `remeasure` all runs every run again, none
+//! copies them as they are.
 
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
 use crate::dashboard::JobSummary;
 use crate::explore::job::{FamilyLine, Search, Settings, StepLimits};
+use crate::explore::remeasure::{self, Remeasure, Sampler, TilingCheck};
 use crate::explore::runs::{Building, Runs, SEAL_ROWS};
+use crate::explore::segments::RunRec;
 use crate::explore::store::{self, Import, LoadStats};
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_store::library::JobRow;
 use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -55,6 +67,13 @@ pub const KIND_NAME: &str = "explore";
 pub const STEP_S: f64 = 2.0;
 /// Old runs read per import batch (a step reads batches for about [`STEP_S`]).
 const IMPORT_BATCH: usize = 5000;
+/// Old runs read per batch while some tilings are re-measured (a batch's re-measuring runs in
+/// parallel), and while every run is.
+const REMEASURE_BATCH: usize = 20_000;
+const REMEASURE_ALL_BATCH: usize = 2000;
+/// Old runs read per step of the check's sampling, and tilings checked at a time.
+const SAMPLE_READ: usize = 250_000;
+const CHECK_TILINGS: usize = 24;
 
 /// An explore job: the search's settings, and how to run it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -74,6 +93,10 @@ pub struct ExploreSpec {
     /// Stop (paused) once the import is done.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub import_only: bool,
+    /// With `import`: which old runs to run again on this engine before they are stored (auto:
+    /// every run of each tiling whose checked sample does not reproduce; all; none).
+    #[serde(default, skip_serializing_if = "Remeasure::is_auto")]
+    pub remeasure: Remeasure,
     /// The search's folder, `searches/<uuid>` beside the catalog (made with the job).
     #[serde(default)]
     pub uuid: String,
@@ -90,6 +113,33 @@ pub struct ImportProgress {
     pub last: i64,
     pub max: i64,
     pub done: bool,
+}
+
+/// An import's check and re-measuring, as the progress shows it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RemeasureProgress {
+    /// `auto`, `all`, or `none`.
+    pub mode: String,
+    /// `sampling` (reading the old runs for the check's sample), `checking` (running the sample
+    /// again), `copying`, `done`.
+    pub phase: String,
+    /// Old runs read for the sample, the tilings among them, the tilings checked, the sampled
+    /// runs run again, and those that measured differently.
+    pub scanned: u64,
+    pub tilings: u64,
+    pub checked_tilings: u64,
+    pub sampled: u64,
+    pub differ: u64,
+    /// The tilings whose every run is run again, with why.
+    pub tilings_remeasured: Vec<(String, String)>,
+    /// Runs re-measured so far, those whose measures changed, and runs re-measured per second.
+    pub runs: u64,
+    pub changed: u64,
+    pub per_s: f64,
+    /// What runs the rules a GPU can run: `cpu`, or the GPU (when it measured the sample as the
+    /// CPU did).
+    pub backend: String,
 }
 
 /// An explore job's progress (`jobs.progress`).
@@ -121,6 +171,8 @@ pub struct ExploreProgress {
     /// Per family: screened runs, mean and best score, elites.
     pub families: Vec<FamilyLine>,
     pub import: Option<ImportProgress>,
+    /// An import's check of the old runs on this engine, and its re-measuring.
+    pub remeasure: Option<RemeasureProgress>,
     /// What loading the saved state read this session.
     pub loaded: Option<LoadStats>,
     /// The search's folder.
@@ -194,6 +246,8 @@ pub fn start(lib: &Library, spec: &ExploreSpec) -> Result<i64, String> {
         Import::open(p, 0)?;
     } else if spec.import_only {
         return Err("import_only needs an import".into());
+    } else if !spec.remeasure.is_auto() {
+        return Err("remeasure needs an import".into());
     }
     if spec.seal_rows == Some(0) {
         return Err("seal_rows must be at least 1".into());
@@ -250,6 +304,37 @@ impl StrategyKind for ExploreKind {
                 "importing".into(),
                 format!("{} of {}", d(i.last.max(0) as u64), d(i.max.max(0) as u64)),
             ));
+        }
+        if let Some(m) = &p.remeasure {
+            if matches!(m.phase.as_str(), "sampling" | "checking") {
+                s.counters.push((
+                    "checking".into(),
+                    format!(
+                        "{} of {} tilings, {} sampled runs, {} differ",
+                        d(m.checked_tilings),
+                        d(m.tilings),
+                        d(m.sampled),
+                        d(m.differ)
+                    ),
+                ));
+            } else if m.mode != "none" {
+                let t: Vec<String> = m.tilings_remeasured.iter().map(|x| x.0.clone()).collect();
+                s.counters.push((
+                    "re-measured".into(),
+                    format!(
+                        "{} runs ({} changed) of {}",
+                        d(m.runs),
+                        d(m.changed),
+                        if m.mode == "all" {
+                            "every tiling".to_string()
+                        } else if t.is_empty() {
+                            "no tiling".to_string()
+                        } else {
+                            short_list(&t, 4)
+                        }
+                    ),
+                ));
+            }
         }
         for (k, v) in [
             ("elites", p.elites),
@@ -325,6 +410,16 @@ struct Running {
     job: i64,
     import: Option<Import>,
     import_progress: Option<ImportProgress>,
+    /// An import's check of the old runs, while it is under way.
+    check: Option<Check>,
+    /// An import's re-measuring: the decision, and the counts of the segments committed.
+    remeasure: Option<remeasure::State>,
+    /// The re-measuring counts of the segment being written.
+    pending: BTreeMap<String, (u64, u64, u64)>,
+    grids: remeasure::Grids,
+    /// Which runs the GPU re-measures (the check chose; none: the CPU runs them all).
+    remeasure_gpu: Option<remeasure::OnGpu>,
+    remeasure_progress: Option<RemeasureProgress>,
     elapsed_before: f64,
     t0: Instant,
     /// Runs screened by this session's search steps (the item budget).
@@ -336,6 +431,18 @@ struct Running {
     rss: f64,
     rate: (Instant, u64),
     per_s: f64,
+}
+
+/// An import's check under way: the sample being drawn from the old runs, then run again a few
+/// tilings at a time.
+struct Check {
+    sampler: Sampler,
+    /// The last old run read for the sample.
+    last: i64,
+    /// Once every old run is read: the tilings still to check (tiling, its runs, its sample).
+    todo: Option<VecDeque<(String, u64, Vec<i64>)>>,
+    done: Vec<TilingCheck>,
+    t0: Instant,
 }
 
 impl ExploreRun {
@@ -361,23 +468,180 @@ impl ExploreRun {
             .ok_or_else(|| "the search was not restored".into())
     }
 
-    /// Copy old runs into sealed segments for about a step, committing the import's progress
-    /// with each segment; at the end the last segment, the reviews (to the library), and (with
+    /// One step of an import's check: read old runs for the sample, or run the sample of a few
+    /// tilings again; once every tiling is checked, decide which are re-measured and record it.
+    fn check_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
+        let ExploreRun { backend, st, .. } = self;
+        let r = st.as_mut().ok_or("the search was not restored")?;
+        let t = Instant::now();
+        let (Some(imp), Some(ck)) = (r.import.as_ref(), r.check.as_mut()) else {
+            return Ok(());
+        };
+        let p = r.remeasure_progress.get_or_insert_with(Default::default);
+        while ck.todo.is_none() {
+            let keys = imp.keys(ck.last, SAMPLE_READ)?;
+            for k in &keys {
+                ck.sampler.offer(k);
+            }
+            match keys.last() {
+                Some(k) => ck.last = k.id,
+                None => {
+                    ck.todo = Some(ck.sampler.picks().into());
+                    p.phase = "checking".into();
+                }
+            }
+            p.scanned = ck.sampler.seen;
+            p.tilings = ck.sampler.tilings() as u64;
+            if t.elapsed().as_secs_f64() >= STEP_S || cx.stopped() {
+                return Ok(());
+            }
+        }
+        let todo = ck.todo.as_mut().unwrap();
+        while !todo.is_empty() {
+            let chunk: Vec<(String, u64, Vec<i64>)> =
+                todo.drain(..CHECK_TILINGS.min(todo.len())).collect();
+            let ids: Vec<i64> = chunk.iter().flat_map(|c| c.2.iter().copied()).collect();
+            let mut by: BTreeMap<String, Vec<RunRec>> = BTreeMap::new();
+            for rec in imp.get(&ids)? {
+                by.entry(rec.tiling.clone()).or_default().push(rec);
+            }
+            let tilings: Vec<(String, u64, Vec<RunRec>)> = chunk
+                .into_iter()
+                .map(|(t, n, _)| {
+                    let v = by.remove(&t).unwrap_or_default();
+                    (t, n, v)
+                })
+                .collect();
+            let gpu = backend.as_mut().map(|b| &mut **b as &mut dyn Backend);
+            let grids = &r.grids;
+            let checks = r
+                .pool
+                .install(|| remeasure::check_many(&tilings, grids, gpu))?;
+            for c in checks {
+                p.checked_tilings += 1;
+                p.sampled += c.sampled;
+                p.differ += c.differ;
+                if c.remeasure() {
+                    p.tilings_remeasured.push((c.tiling.clone(), c.why()));
+                }
+                ck.done.push(c);
+            }
+            // Only the grids of the tilings to re-measure are wanted again.
+            let differ: HashSet<String> =
+                p.tilings_remeasured.iter().map(|x| x.0.clone()).collect();
+            r.grids.keep_only(&|t| differ.contains(t));
+            if t.elapsed().as_secs_f64() >= STEP_S || cx.stopped() {
+                return Ok(());
+            }
+        }
+        // Decided: recorded in the working database and the manifest.
+        let ck = r.check.take().unwrap();
+        let mut state = remeasure::State::new(Remeasure::Auto);
+        state.decide(&ck.done);
+        // The GPU measures what it can when it measured the sample as the CPU does; else only
+        // Larger than Life, which a search never runs on the CPU.
+        let gpu_runs: u64 = ck.done.iter().map(|c| c.gpu_runs).sum();
+        let gpu_differ: u64 = ck.done.iter().map(|c| c.gpu_differ).sum();
+        state.gpu = backend.as_ref().map(|_| {
+            if gpu_differ == 0 {
+                remeasure::OnGpu::Every
+            } else {
+                remeasure::OnGpu::LtlOnly
+            }
+        });
+        state.record.backend = match backend {
+            Some(b) if gpu_differ == 0 => format!(
+                "{} (it measured all {gpu_runs} sampled runs it ran that the CPU checked as the CPU \
+                 does)",
+                b.name()
+            ),
+            Some(b) => format!(
+                "{}, for Larger than Life only (it measured {gpu_differ} of {gpu_runs} sampled \
+                 runs unlike the CPU); the CPU for the rest",
+                b.name()
+            ),
+            None => "cpu".into(),
+        };
+        r.remeasure_gpu = state.gpu;
+        state.record.check_seconds = ck.t0.elapsed().as_secs_f64();
+        let mut d = store::Delta::default();
+        d.meta.push((
+            "remeasure_checks".into(),
+            serde_json::to_string(&ck.done).map_err(|e| e.to_string())?,
+        ));
+        d.meta.push((
+            "remeasure".into(),
+            serde_json::to_string(&state).map_err(|e| e.to_string())?,
+        ));
+        r.runs.write(&d)?;
+        r.runs.set_remeasure(&state.record)?;
+        r.grids.keep_only(&|t| state.wants(t));
+        let p = r.remeasure_progress.get_or_insert_with(Default::default);
+        p.phase = "copying".into();
+        p.backend = state.record.backend.clone();
+        r.remeasure = Some(state);
+        Ok(())
+    }
+
+    /// Copy old runs into sealed segments for about a step, re-measuring the runs of the tilings
+    /// chosen, and committing the import's progress (and the re-measuring counts) with each
+    /// segment; at the end the last segment, the reviews (to the library), and (with
     /// `import_only`) a stop. A stop part way leaves the segment being written unfinished: the
     /// next session writes it again from the last segment committed.
     fn import_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
-        let r = self.running()?;
+        if self.st.as_ref().is_some_and(|r| r.check.is_some()) {
+            return self.check_step(cx);
+        }
+        let ExploreRun { backend, st, .. } = self;
+        let r = st.as_mut().ok_or("the search was not restored")?;
         let t = Instant::now();
         r.rss = rss_gb();
         let seal = r.spec.seal_rows.unwrap_or(SEAL_ROWS).max(1);
         let Some(imp) = r.import.as_mut() else {
             return Ok(());
         };
+        let batch = match &r.remeasure {
+            Some(m) if m.record.mode == "all" => REMEASURE_ALL_BATCH,
+            Some(m) if !m.is_empty() => REMEASURE_BATCH,
+            _ => IMPORT_BATCH,
+        };
         loop {
             let have = r.building.as_ref().map_or(0, |b| b.rows());
-            let rows = imp.next((seal - have.min(seal)).clamp(1, IMPORT_BATCH as u64) as usize)?;
+            let mut rows = imp.next((seal - have.min(seal)).clamp(1, batch as u64) as usize)?;
             let end = rows.is_empty();
             if !end {
+                if let Some(m) = r.remeasure.as_mut().filter(|m| !m.is_empty()) {
+                    let t1 = Instant::now();
+                    let idx: Vec<usize> = (0..rows.len())
+                        .filter(|&i| m.wants(&rows[i].rec.tiling))
+                        .collect();
+                    let refs: Vec<&RunRec> = idx.iter().map(|&i| &rows[i].rec).collect();
+                    let gpu = match r.remeasure_gpu {
+                        Some(on) => backend.as_mut().map(|b| (&mut **b as &mut dyn Backend, on)),
+                        None => None,
+                    };
+                    let grids = &r.grids;
+                    let got = r.pool.install(|| remeasure::measure(&refs, grids, gpu))?;
+                    let p = r.remeasure_progress.get_or_insert_with(Default::default);
+                    for (&i, got) in idx.iter().zip(got) {
+                        let row = &mut rows[i];
+                        let e = r.pending.entry(row.rec.tiling.clone()).or_default();
+                        e.0 += 1;
+                        p.runs += 1;
+                        let Some(got) = got else {
+                            e.2 += 1;
+                            continue;
+                        };
+                        if remeasure::diff(&row.rec, &got).any() {
+                            e.1 += 1;
+                            p.changed += 1;
+                        }
+                        remeasure::apply(&mut row.rec, &got);
+                        row.ev = store::eval_of(&row.rec);
+                    }
+                    m.record.remeasure_seconds += t1.elapsed().as_secs_f64();
+                    p.per_s = p.runs as f64 / m.record.remeasure_seconds.max(1e-9);
+                }
                 r.search.import(&rows);
                 if r.building.is_none() {
                     r.building = Some(r.runs.begin_segment()?);
@@ -400,20 +664,44 @@ impl ExploreRun {
                 d.meta.push(("import_last".into(), last.to_string()));
                 d.meta
                     .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
+                if let Some(m) = r.remeasure.as_mut() {
+                    m.commit(&std::mem::take(&mut r.pending));
+                    d.meta.push((
+                        "remeasure".into(),
+                        serde_json::to_string(&*m).map_err(|e| e.to_string())?,
+                    ));
+                }
                 r.runs.write(&d)?;
+                if let Some(m) = &r.remeasure {
+                    r.runs.set_remeasure(&m.record)?;
+                }
             }
             if end {
                 let reviews = imp.reviews()?;
-                let source = format!("import:{}", imp.path.display());
+                let source = format!("import:{}", imp.file_name());
                 crate::explore::reviews::import_old(cx.lib, &r.runs.uuid(), &reviews, &source)?;
                 let mut d = r.search.take_delta();
                 d.meta.push(("import_done".into(), "1".into()));
                 d.meta
                     .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
+                if let Some(m) = r.remeasure.as_mut() {
+                    m.record.done = true;
+                    d.meta.push((
+                        "remeasure".into(),
+                        serde_json::to_string(&*m).map_err(|e| e.to_string())?,
+                    ));
+                }
                 r.runs.write(&d)?;
+                if let Some(m) = &r.remeasure {
+                    r.runs.set_remeasure(&m.record)?;
+                }
+                r.grids.keep_only(&|_| false);
                 r.import = None;
                 if let Some(p) = r.import_progress.as_mut() {
                     p.done = true;
+                }
+                if let Some(p) = r.remeasure_progress.as_mut() {
+                    p.phase = "done".into();
                 }
                 if r.spec.import_only {
                     r.note = Some("the import is done".into());
@@ -430,6 +718,33 @@ impl ExploreRun {
 
 fn elapsed(r: &Running) -> f64 {
     r.elapsed_before + r.t0.elapsed().as_secs_f64()
+}
+
+/// The progress of a re-measuring decided earlier.
+fn remeasure_progress(st: &remeasure::State) -> RemeasureProgress {
+    let r = &st.record;
+    RemeasureProgress {
+        mode: r.mode.clone(),
+        phase: if r.done { "done" } else { "copying" }.into(),
+        scanned: 0,
+        tilings: r.tilings,
+        checked_tilings: r.tilings,
+        sampled: r.sampled,
+        differ: r.sampled_differ,
+        tilings_remeasured: st
+            .tilings
+            .iter()
+            .map(|(t, w)| (t.clone(), w.clone()))
+            .collect(),
+        runs: r.runs,
+        changed: r.changed,
+        per_s: if r.remeasure_seconds > 0.0 {
+            r.runs as f64 / r.remeasure_seconds
+        } else {
+            0.0
+        },
+        backend: r.backend.clone(),
+    }
 }
 
 fn elapsed_now(before: f64, t0: Instant) -> String {
@@ -460,6 +775,54 @@ impl Strategy for ExploreRun {
             .get("import_last")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
+        // The import's re-measuring: the decision made (and its counts), else a check to make
+        // (auto) or the mode's own decision (all, none).
+        let decided: Option<remeasure::State> = saved
+            .meta
+            .get("remeasure")
+            .and_then(|v| serde_json::from_str(v).ok());
+        let (check, decided) = match (&spec.import, importing, decided) {
+            (Some(_), _, Some(st)) => (None, Some(st)),
+            (Some(_), true, None) if spec.remeasure.is_auto() => (
+                Some(Check {
+                    sampler: Sampler::default(),
+                    last: 0,
+                    todo: None,
+                    done: Vec::new(),
+                    t0: Instant::now(),
+                }),
+                None,
+            ),
+            (Some(_), true, None) => {
+                // Without a check nothing shows that a GPU measures as the CPU does: the CPU
+                // runs every run.
+                let mut st = remeasure::State::new(spec.remeasure);
+                st.record.backend = "cpu".into();
+                st.commit(&BTreeMap::new());
+                store::meta_set(
+                    &runs.db,
+                    "remeasure",
+                    &serde_json::to_string(&st).map_err(|e| e.to_string())?,
+                )?;
+                runs.set_remeasure(&st.record)?;
+                (None, Some(st))
+            }
+            _ => (None, None),
+        };
+        // The GPU the check chose, if this run has it.
+        let remeasure_gpu = match (&decided, &self.backend) {
+            (Some(st), Some(b)) if st.record.backend.starts_with(&b.name()) => st.gpu,
+            _ => None,
+        };
+        let remeasure_progress = match (&check, &decided) {
+            (Some(_), _) => Some(RemeasureProgress {
+                mode: "auto".into(),
+                phase: "sampling".into(),
+                ..Default::default()
+            }),
+            (None, Some(st)) => Some(remeasure_progress(st)),
+            _ => None,
+        };
         let search = Search::new(spec.search.clone(), saved)?;
         search.can_run(self.backend.is_some())?;
         let (import, import_progress) = match (&spec.import, importing) {
@@ -499,6 +862,12 @@ impl Strategy for ExploreRun {
             job: cx.job,
             import,
             import_progress,
+            check,
+            remeasure: decided,
+            pending: BTreeMap::new(),
+            grids: remeasure::Grids::default(),
+            remeasure_gpu,
+            remeasure_progress,
             elapsed_before,
             t0: Instant::now(),
             items: 0,
@@ -602,6 +971,7 @@ impl Strategy for ExploreRun {
             rss_gb: r.rss,
             families: r.search.families(),
             import: r.import_progress.clone(),
+            remeasure: r.remeasure_progress.clone(),
             loaded: Some(r.loaded.clone()),
             folder: r.folder.display().to_string(),
             note: r.note.clone(),
@@ -622,13 +992,48 @@ impl Strategy for ExploreRun {
 pub fn line(p: &ExploreProgress) -> String {
     let d = crate::dashboard::digits;
     if let Some(i) = p.import.as_ref().filter(|i| !i.done) {
+        let file = Path::new(&i.from)
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if let Some(m) = &p.remeasure {
+            match m.phase.as_str() {
+                "sampling" => {
+                    return format!(
+                        "explore {}: checking {file} on this engine: reading its runs for a sample \
+                         ({} runs, {} tilings so far)",
+                        p.job,
+                        d(m.scanned),
+                        d(m.tilings)
+                    );
+                }
+                "checking" => {
+                    return format!(
+                        "explore {}: checking {file} on this engine: {} of {} tilings, {} sampled \
+                         runs run again, {} differ ({} tilings to re-measure)",
+                        p.job,
+                        d(m.checked_tilings),
+                        d(m.tilings),
+                        d(m.sampled),
+                        d(m.differ),
+                        m.tilings_remeasured.len()
+                    );
+                }
+                _ => {}
+            }
+        }
+        let rm = match &p.remeasure {
+            Some(m) if m.runs > 0 => format!(
+                ", {} runs re-measured ({:.0}/s, {} changed)",
+                d(m.runs),
+                m.per_s,
+                d(m.changed)
+            ),
+            _ => String::new(),
+        };
         return format!(
-            "explore {}: importing {} (run {} of {}), {} elites in {} niches",
+            "explore {}: importing {file} (run {} of {}){rm}, {} elites in {} niches",
             p.job,
-            Path::new(&i.from)
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or_default(),
             d(i.last.max(0) as u64),
             d(i.max.max(0) as u64),
             d(p.elites),

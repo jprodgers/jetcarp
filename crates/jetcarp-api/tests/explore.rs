@@ -145,6 +145,11 @@ fn explore_searches_start_stop_and_continue_through_the_ops() {
         (json!({"families": "nonesuch"}), "no rule family 'nonesuch'"),
         (json!({"tilings": "nowhere"}), "no tiling 'nowhere'"),
         (json!({"import_only": true}), "import_only needs an import"),
+        (json!({"remeasure": "all"}), "remeasure needs an import"),
+        (
+            json!({"remeasure": "most"}),
+            "remeasure is auto, all, or none, not 'most'",
+        ),
         (json!({"bogus": 1}), "unknown field `bogus`"),
     ] {
         let e = call_json(

@@ -126,6 +126,9 @@ pub struct Manifest {
     /// In id order: each one's runs come after the one before's.
     pub segments: Vec<SegmentEntry>,
     pub scores: Vec<ScoreSet>,
+    /// An import's check of the old runs on this engine, and the tilings it re-measured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remeasure: Option<crate::explore::remeasure::Record>,
 }
 
 #[cfg(unix)]
@@ -155,6 +158,7 @@ impl Manifest {
             spec: Value::Null,
             segments: Vec::new(),
             scores: Vec::new(),
+            remeasure: None,
         }
     }
 
@@ -521,6 +525,16 @@ impl Runs {
         let spec = shareable_spec(spec);
         if self.manifest.spec != spec {
             self.manifest.spec = spec;
+            self.manifest.write(&self.dir)?;
+        }
+        Ok(())
+    }
+
+    /// Record an import's check and re-measuring in the manifest (written when it changed).
+    pub fn set_remeasure(&mut self, r: &crate::explore::remeasure::Record) -> Result<(), String> {
+        self.need_write()?;
+        if self.manifest.remeasure.as_ref() != Some(r) {
+            self.manifest.remeasure = Some(r.clone());
             self.manifest.write(&self.dir)?;
         }
         Ok(())

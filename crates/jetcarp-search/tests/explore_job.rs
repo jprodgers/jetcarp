@@ -7,7 +7,7 @@
 use jetcarp_core::explore::batch::CpuBatch;
 use jetcarp_search::explore::reviews;
 use jetcarp_search::explore::runs::{RunFilter, Runs};
-use jetcarp_search::explore::segments::{col, cols};
+use jetcarp_search::explore::segments::{RunRec, col, cols};
 use jetcarp_search::explore::store;
 use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner, Stopped};
@@ -447,6 +447,286 @@ fn an_old_database_is_imported_then_searched_on() {
     )
     .unwrap_err();
     assert!(e.contains("not an explore database"), "{e}");
+}
+
+/// An old database from a small search's runs (CART's layout: no archive tables, a `reviews`
+/// table), with `tamper` applied to it. Returns its path and its runs as they were measured.
+fn old_database(dir: &std::path::Path, tamper: &str) -> (PathBuf, Vec<RunRec>) {
+    let lib0 = Library::open(dir.join("old").join("library.sqlite"));
+    let j0 = make(&lib0, small(json!({})));
+    Runner::new(lib0.clone())
+        .run(j0, &opts(2, Budget::items(240)))
+        .unwrap();
+    let src = db_path(&lib0, &lib0.job(j0).unwrap()).unwrap();
+    let old = dir.join("old.sqlite");
+    {
+        let c = Connection::open(&src).unwrap();
+        c.execute("VACUUM INTO ?1", [old.display().to_string()])
+            .unwrap();
+    }
+    let c = Connection::open(&old).unwrap();
+    c.execute_batch(
+        "DROP TABLE elites; DROP TABLE confirmed; DROP TABLE coverage; DROP TABLE families;
+         DROP TABLE seen; DELETE FROM meta;
+         CREATE TABLE reviews(run_id INT, verdict TEXT, note TEXT, ts INT);",
+    )
+    .unwrap();
+    let measured = old_runs(&c);
+    c.execute_batch(tamper).unwrap();
+    (old, measured)
+}
+
+/// The runs as text, every field (so a NaN measure compares equal to itself).
+fn text(r: &[RunRec]) -> Vec<String> {
+    r.iter().map(|x| format!("{x:?}")).collect()
+}
+
+fn old_runs(c: &Connection) -> Vec<RunRec> {
+    let mut st = c
+        .prepare(&format!("SELECT {} FROM runs ORDER BY id", store::RUN_COLS))
+        .unwrap();
+    st.query_map([], |r| store::rec_at(r, 0))
+        .unwrap()
+        .map(|x| x.unwrap())
+        .collect()
+}
+
+/// Every run of an imported search, in id order.
+fn imported(lib: &Library, job: i64) -> Vec<RunRec> {
+    let c = db(lib, job);
+    let mut ids = c
+        .scan(1 << col::ID, &|_, _, _| true, &|b, out| {
+            out.extend((0..b.len).map(|i| b.id(i)))
+        })
+        .unwrap();
+    ids.sort_unstable();
+    c.get(&ids).unwrap()
+}
+
+#[test]
+fn an_import_re_measures_the_tilings_whose_runs_do_not_reproduce() {
+    let dir = scratch("remeasure");
+    // As if an older engine had measured the hex runs: their scores and settling times are off.
+    let (old, measured) = old_database(
+        &dir,
+        "UPDATE runs SET score = score + 0.25, settle = settle + 1 WHERE tiling = 'hex';",
+    );
+    let tampered = old_runs(&Connection::open(&old).unwrap());
+    let hex = measured.iter().filter(|r| r.tiling == "hex").count() as u64;
+    assert!(hex > 20 && hex < measured.len() as u64);
+    let lib = Library::open(dir.join("new").join("library.sqlite"));
+    let job = make(
+        &lib,
+        small(json!({"import": old.display().to_string(), "import_only": true, "seal_rows": 100})),
+    );
+    let out = Runner::new(lib.clone())
+        .run(job, &opts(2, Budget::default()))
+        .unwrap();
+    let p = progress(&out.progress);
+    assert_eq!(p.note.as_deref(), Some("the import is done"));
+    let m = p.remeasure.clone().unwrap();
+    assert_eq!((m.mode.as_str(), m.phase.as_str()), ("auto", "done"));
+    assert_eq!(m.tilings, 2);
+    assert_eq!(
+        m.tilings_remeasured
+            .iter()
+            .map(|x| x.0.as_str())
+            .collect::<Vec<_>>(),
+        ["hex"]
+    );
+    assert_eq!((m.runs, m.changed), (hex, hex));
+    assert!(m.tilings_remeasured[0].1.contains("measured differently"));
+    // The manifest says what was checked and re-measured.
+    let r = db(&lib, job).manifest.remeasure.clone().unwrap();
+    assert_eq!((r.mode.as_str(), r.tilings, r.done), ("auto", 2, true));
+    assert!(r.sampled > 32 && r.sampled <= 64 && r.sampled_differ > 0);
+    assert_eq!(r.remeasured.len(), 1);
+    assert_eq!(
+        (r.remeasured[0].tiling.as_str(), r.remeasured[0].runs),
+        ("hex", hex)
+    );
+    assert_eq!((r.runs, r.changed, r.backend.as_str()), (hex, hex, "cpu"));
+    // The same ids; the square runs copied as they were, the hex runs measured again: as their
+    // search first measured them, the tampering undone.
+    let got = imported(&lib, job);
+    assert_eq!(got.len(), measured.len());
+    let (g, was, t) = (text(&got), text(&measured), text(&tampered));
+    for (i, r) in got.iter().enumerate() {
+        assert_eq!(r.id, measured[i].id);
+        if r.tiling == "hex" {
+            assert_ne!(t[i], was[i], "run {}", r.id);
+            assert_eq!(g[i], was[i], "run {}", r.id);
+        } else {
+            assert_eq!(g[i], t[i], "run {}", r.id);
+        }
+    }
+    // The archive was rebuilt from the measures as they are now.
+    consistent(&db(&lib, job), &p);
+}
+
+#[test]
+fn an_import_can_re_measure_every_run_or_none_and_on_a_batch_backend() {
+    let dir = scratch("remeasure-modes");
+    let (old, measured) = old_database(&dir, "UPDATE runs SET settle = settle + 1;");
+    let tampered = old_runs(&Connection::open(&old).unwrap());
+    let n = measured.len() as u64;
+    let run = |name: &str, mode: &str, gpu: bool| {
+        let lib = Library::open(dir.join(name).join("library.sqlite"));
+        let job = make(
+            &lib,
+            small(
+                json!({"import": old.display().to_string(), "import_only": true,
+                         "remeasure": mode, "gpu": gpu}),
+            ),
+        );
+        let mut r = if gpu {
+            ExploreRun::with_backend(Box::new(CpuBatch))
+        } else {
+            ExploreRun::default()
+        };
+        let out = Runner::new(lib.clone())
+            .run_with(job, &mut r, &opts(2, Budget::default()))
+            .unwrap();
+        (lib, job, progress(&out.progress))
+    };
+    // None: as they were.
+    let (lib, job, p) = run("none", "none", false);
+    assert_eq!(p.remeasure.as_ref().map(|m| m.runs), Some(0));
+    assert_eq!(text(&imported(&lib, job)), text(&tampered));
+    assert_eq!(
+        db(&lib, job).manifest.remeasure.unwrap().mode.as_str(),
+        "none"
+    );
+    // All: every run, on the CPU (no check has shown the backend measures as the CPU does).
+    let (lib, job, p) = run("all", "all", true);
+    let m = p.remeasure.unwrap();
+    assert_eq!((m.runs, m.changed), (n, n));
+    assert_eq!(text(&imported(&lib, job)), text(&measured));
+    let r = db(&lib, job).manifest.remeasure.unwrap();
+    assert_eq!((r.backend.as_str(), r.runs), ("cpu", n));
+    assert_eq!(
+        r.remeasured
+            .iter()
+            .map(|x| x.tiling.as_str())
+            .collect::<Vec<_>>(),
+        ["hex", "square"]
+    );
+    // Auto with a batch backend: it measures the sample as the CPU does, so it re-measures the
+    // rules it runs.
+    let (lib, job, p) = run("auto-gpu", "auto", true);
+    let m = p.remeasure.unwrap();
+    assert_eq!((m.runs, m.changed), (n, n));
+    assert!(
+        m.backend.starts_with("CPU batches (it measured all"),
+        "{}",
+        m.backend
+    );
+    assert_eq!(text(&imported(&lib, job)), text(&measured));
+    // A remeasure mode needs an import.
+    let e = jobs::create(
+        &lib,
+        &JobSpec {
+            strategy: "explore".into(),
+            spec: small(json!({"remeasure": "all"})),
+            label: None,
+            budget: Budget::default(),
+        },
+    )
+    .unwrap_err();
+    assert!(e.contains("remeasure needs an import"), "{e}");
+}
+
+/// Still lifes and oscillators of Life, as records to add to a library.
+fn life_records() -> Vec<jetcarp_core::pattern::PatternRecord> {
+    use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+    use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
+    use jetcarp_core::*;
+    let prov = Provenance {
+        source: "another importer".into(),
+        jetcarp_version: VERSION.into(),
+        date: jetcarp_core::pattern::now_utc(),
+        ..Default::default()
+    };
+    let mut out = Vec::new();
+    for rows in ["oo/oo", "ooo", ".o./o.o/.o."] {
+        let mut w = World::new(TilingSpec::rect("square", 64, 64, Boundary::Wrap), 1).unwrap();
+        let g = w.topo.lattice().unwrap().clone();
+        let cells = place_rows(&g, rows, 20, 20);
+        w.apply(Command::AddCa {
+            ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells }),
+        })
+        .unwrap();
+        let found = find_objects(&w, &ObjectOptions::default()).unwrap();
+        out.extend(
+            found
+                .objects
+                .iter()
+                .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+                .map(|o| {
+                    record_from_object(&w, w.cas[0].id, o, prov.clone(), DiscoveredBy::User)
+                        .unwrap()
+                }),
+        );
+    }
+    out
+}
+
+#[test]
+fn an_import_and_another_importer_share_a_library() {
+    let dir = scratch("two-importers");
+    let (old, measured) = old_database(
+        &dir,
+        "UPDATE runs SET settle = settle + 1 WHERE tiling = 'square';
+         INSERT INTO reviews SELECT id, 'keep', '', 5 FROM runs WHERE stage = 1 LIMIT 4;",
+    );
+    let recs = life_records();
+    assert_eq!(recs.len(), 3);
+    let path = dir.join("shared").join("library.sqlite");
+    let lib = Library::open(&path);
+    let job = make(
+        &lib,
+        small(json!({"import": old.display().to_string(), "import_only": true, "seal_rows": 50})),
+    );
+    // Another process's importer, as another connection to the same file, adding patterns (each
+    // add its own write transaction) the whole time the import runs.
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let other = {
+        let (done, path, recs) = (done.clone(), path.clone(), recs.clone());
+        std::thread::spawn(move || {
+            let lib2 = Library::open(&path);
+            let mut adds = 0;
+            while !done.load(std::sync::atomic::Ordering::SeqCst) || adds < 30 {
+                for r in &recs {
+                    lib2.add(r.clone()).unwrap();
+                    adds += 1;
+                }
+            }
+            adds
+        })
+    };
+    let out = Runner::new(lib.clone())
+        .run(job, &opts(2, Budget::default()))
+        .unwrap();
+    done.store(true, std::sync::atomic::Ordering::SeqCst);
+    let adds = other.join().unwrap();
+    let p = progress(&out.progress);
+    assert_eq!(p.note.as_deref(), Some("the import is done"));
+    // Both landed: every run (the square ones measured again), the reviews, and the patterns.
+    let m = p.remeasure.unwrap();
+    let square = measured.iter().filter(|r| r.tiling == "square").count() as u64;
+    assert_eq!((m.runs, m.changed), (square, square));
+    assert_eq!(text(&imported(&lib, job)), text(&measured));
+    let c = db(&lib, job);
+    assert_eq!(lib.run_reviews(&c.uuid()).unwrap().len(), 4);
+    assert!(
+        lib.run_reviews(&c.uuid())
+            .unwrap()
+            .iter()
+            .all(|r| r.source == "import:old.sqlite")
+    );
+    assert!(adds >= 30);
+    let q = lib.query(&jetcarp_store::Query::default()).unwrap();
+    assert_eq!(q.len(), 3);
 }
 
 #[test]
