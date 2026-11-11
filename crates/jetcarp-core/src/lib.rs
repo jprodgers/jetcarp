@@ -20,6 +20,7 @@ pub mod hat;
 pub mod hunt;
 pub mod isohedral;
 pub mod jaca;
+pub mod jcs;
 pub mod lenia;
 pub mod looks;
 pub mod ltl;

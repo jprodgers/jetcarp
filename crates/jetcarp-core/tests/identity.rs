@@ -361,6 +361,70 @@ fn identity_text_and_ids_are_pinned() {
     assert_eq!(g.id, GLIDER_ID, "the Life glider's id");
 }
 
+/// The tilings at their default shapes: every family, every Archimedean and k-uniform catalog
+/// tiling, every isohedral type (the list `geometry_pins` pins).
+fn default_tilings() -> Vec<TilingSpec> {
+    let mut out = vec![];
+    for f in jetcarp_core::families::FAMILIES {
+        if f.id != "periodic" {
+            out.push(TilingSpec::new(f.id));
+        }
+    }
+    for t in jetcarp_core::catalog::all() {
+        let mut s = TilingSpec::new("periodic");
+        s.params = Some(serde_json::json!({ "catalog": t.id }));
+        out.push(s);
+    }
+    for n in 1..=93 {
+        if let Some(id) = jetcarp_core::isohedral::id_for(n) {
+            out.push(TilingSpec::new(id));
+        }
+    }
+    out
+}
+
+// The `tiling=` line is RFC 8785 canonical JSON in the members' fixed order (`tests/jcs_vectors.rs`
+// checks it against an independent implementation). On every tiling at its default shape it is
+// the text serde_json wrote before RFC 8785 was adopted, so no id of such a tiling changed;
+// numbers in a reshaped tiling's parameters get their one RFC 8785 spelling.
+#[test]
+fn the_tiling_line_is_canonical_and_unchanged_on_default_shapes() {
+    let all = default_tilings();
+    assert!(all.len() > 1300, "{} tilings", all.len());
+    for t in &all {
+        let before = serde_json::to_string(&pattern::identity_tiling(t)).unwrap();
+        assert_eq!(pattern::identity_key(t), before, "{}", t.family);
+        // Sized, wrapped and on a patch level: the same line.
+        let sized = t
+            .clone()
+            .with_size(SizeSpec::Cells(4096))
+            .with_boundary(Boundary::Wrap);
+        assert_eq!(pattern::identity_key(&sized), before, "{}", t.family);
+    }
+    assert_eq!(
+        pattern::identity_key(&patch_at("spectre", 3, true)),
+        r#"{"family":"spectre","boundary":"dead"}"#
+    );
+    let mut t = TilingSpec::new("cairo");
+    t.params = Some(serde_json::json!({ "b": 1.0, "a": [1e-7, 0.000001, -0.0, 2.5e21] }));
+    assert_eq!(
+        pattern::identity_key(&t),
+        r#"{"family":"cairo","params":{"a":[1e-7,0.000001,0,2.5e+21],"b":1},"boundary":"dead"}"#
+    );
+    t.edges = Some(vec![jetcarp_core::edges::EdgeShape {
+        mode: jetcarp_core::edges::EdgeMode::J,
+        curved: true,
+        nodes: vec![jetcarp_core::edges::Node { t: 0.5, d: -1.0 }],
+    }]);
+    assert!(
+        pattern::identity_key(&t).ends_with(
+            r#""edges":[{"curved":true,"mode":"J","nodes":[{"d":-1,"t":0.5}]}],"boundary":"dead"}"#
+        ),
+        "{}",
+        pattern::identity_key(&t)
+    );
+}
+
 /// A patch of `family` at `level`, the level given as the size or (`param`) as a parameter, as
 /// the Spectre's default parameters and the app's sweeps give it.
 fn patch_at(family: &str, level: u32, param: bool) -> TilingSpec {

@@ -629,9 +629,35 @@ pub fn identity_tiling(t: &TilingSpec) -> TilingSpec {
 }
 
 /// The JSON of [`identity_tiling`]: the `tiling=` line of an identity text and the key of a
-/// geometry pin. The same as [`tiling_key`] except on aperiodic families given a level parameter.
+/// geometry pin, such as `{"family":"square","boundary":"dead"}` or
+/// `{"family":"periodic","params":{"catalog":"k3-019"},"boundary":"dead"}`.
+///
+/// Its own members come in the fixed order of [`TilingSpec`]'s fields, `family`, `params` (if
+/// set), `edges` (if set), `boundary` (always `"dead"`), as ids have always written them. Every
+/// value in it is RFC 8785 canonical JSON ([`crate::jcs`]): keys sorted at every depth, no
+/// whitespace, numbers as ECMAScript writes them (`1`, not `1.0`). So the line has one spelling,
+/// which an independent implementation can write too. On tilings at their default shapes (no
+/// numbers in their parameters) it is the same text as [`tiling_key`] without an aperiodic
+/// family's level.
 pub fn identity_key(t: &TilingSpec) -> String {
-    serde_json::to_string(&identity_tiling(t)).unwrap_or_default()
+    let s = identity_tiling(t);
+    let mut out = String::from("{\"family\":");
+    crate::jcs::write_str(&mut out, &s.family);
+    if let Some(p) = &s.params {
+        out.push_str(",\"params\":");
+        crate::jcs::write(&mut out, p);
+    }
+    if let Some(e) = &s.edges {
+        out.push_str(",\"edges\":");
+        crate::jcs::write(&mut out, &serde_json::to_value(e).unwrap_or_default());
+    }
+    out.push_str(",\"boundary\":");
+    crate::jcs::write(
+        &mut out,
+        &serde_json::to_value(s.boundary).unwrap_or_default(),
+    );
+    out.push('}');
+    out
 }
 
 /// A tiling's display name: the family name, or the catalog name for `periodic` catalog tilings.

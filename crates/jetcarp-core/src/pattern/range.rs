@@ -19,8 +19,9 @@
 //! model=<cell-state model: lifelike, wireworld, table, priority, spectre_glider, ...>
 //! nb=<touch | edge>
 //! steps=<steps per generation>
-//! tiling=<identity key: compact JSON of {family, params, edges, boundary: "dead"}, keys sorted;
-//!         an aperiodic family's "level" parameter left out ([`super::identity_key`])>
+//! tiling=<identity key: JSON of {family, params, edges, boundary: "dead"} in that order, each
+//!         value RFC 8785 canonical JSON; an aperiodic family's "level" parameter left out
+//!         ([`super::identity_key`])>
 //! class=<still_life | oscillator | spaceship | puffer | mover | gun | other>
 //! period=<period>
 //! d=<di>,<dj>          (lattice displacement per period, canonical orientation; 0,0 if none)

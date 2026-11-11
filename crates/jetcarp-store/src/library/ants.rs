@@ -18,7 +18,7 @@
 //! ```text
 //! jetcarp-ant-v1
 //! rule=<rule notation: Ant RL, Turmite 1R1,1L0/1R1,0N0>
-//! tiling=<identity key: compact JSON of {family, params, edges, boundary: "dead"}>
+//! tiling=<identity key: as a pattern's (`jetcarp_core::pattern::identity_key`)>
 //! start=<start JSON: "empty", or the start cells>
 //! ```
 //!
