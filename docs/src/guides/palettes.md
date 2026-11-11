@@ -50,9 +50,8 @@ opens the scene sees your colours. To use it in another scene, copy its entry fr
 
 You can also write colours directly wherever a palette is named in a scene or a script: `#4fc3ff` is
 one colour, and `#103050-#4fc3ff` a ramp from the first to the last, with any number of stops between.
-The same works for the `--palette` options of `jetcarp sheet`, `jetcarp hashlife`, `jetcarp pile` and
-`jetcarp media render`. `jetcarp wallpaper --palette`, in this release, takes only a palette name: a
-built-in one or one of the scene's.
+The same works for the `--palette` options of `jetcarp wallpaper`, `jetcarp sheet`,
+`jetcarp hashlife`, `jetcarp pile` and `jetcarp media render`.
 
 ## Choose how cells are coloured
 

@@ -56,7 +56,9 @@ pub struct MediaRenderIn {
     /// A catalog pattern: id, unique id prefix, or name.
     #[serde(default)]
     pub pattern: Option<String>,
-    /// A Quick Start entry of the catalog, by id.
+    /// A Quick Start entry: one of the catalog's (`find:...`, its media stored in the catalog),
+    /// or a built-in one by id (`life`) or number in `jetcarp quickstart`, rendered from its
+    /// seed like `scene` (into `out`, default `<catalog folder>/media/scenes/<id>`).
     #[serde(default)]
     pub quickstart: Option<String>,
     /// An ant run (`ant-...`): a highway's moving loop alone, or the build-up from the seed.
@@ -102,11 +104,13 @@ pub struct MediaRenderIn {
     /// Render even when up to date.
     #[serde(default)]
     pub force: bool,
-    /// Colour the media with this built-in palette instead of the house style (part of the
-    /// render key: media stored in another palette render again).
+    /// Colour the media with this palette instead of the house style: a built-in name or hex
+    /// colours like `#103050-#4fc3ff` (part of the render key: media stored in another palette
+    /// render again).
     #[serde(default)]
     pub palette: Option<String>,
-    /// With `scene`: the output folder (default `<catalog folder>/media/scenes/<scene name>`).
+    /// With `scene` or a built-in Quick Start entry: the output folder (default
+    /// `<catalog folder>/media/scenes/<scene name>`).
     #[serde(default)]
     pub out: Option<String>,
     /// Worker threads (default: all cores; the files do not depend on it).
@@ -368,17 +372,30 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
         let r = media::render_missing(&lib, &filter, &o).map_err(catalog_err)?;
         return Ok(MediaReport::of(r));
     }
-    if let Some(v) = &a.scene {
-        let sc = read_scene(cx, Some(v), None)?;
+    // A scene, or a built-in Quick Start entry (not in the catalog: its media go in a folder,
+    // as a scene's do).
+    let scene = match (&a.scene, &a.quickstart) {
+        (Some(v), _) => {
+            let sc = read_scene(cx, Some(v), None)?;
+            let name = if sc.name.is_empty() {
+                "scene".to_string()
+            } else {
+                sc.name.clone()
+            };
+            Some((sc, name))
+        }
+        (None, Some(q)) => builtin_entry(&lib, q)?.map(|e| (e.scene, e.id)),
+        (None, None) => None,
+    };
+    if let Some((sc, name)) = scene {
         let dir = match &a.out {
             Some(d) => cx.fs.writable_dir(d)?,
             None => {
-                let name = crate::out::sanitize(if sc.name.is_empty() {
-                    "scene"
-                } else {
-                    &sc.name
-                });
-                let d = lib.folder().join("media").join("scenes").join(name);
+                let d = lib
+                    .folder()
+                    .join("media")
+                    .join("scenes")
+                    .join(crate::out::sanitize(&name));
                 cx.fs.writable_dir(&d.display().to_string())?
             }
         };
@@ -408,6 +425,28 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
     };
     let r = media::render_many(&lib, &[t], &o).map_err(catalog_err)?;
     Ok(MediaReport::of(r))
+}
+
+/// The built-in Quick Start entry `q` names (its id, or its number in `jetcarp quickstart`), if
+/// it is not one of the catalog's own (`find:...`, or an id the catalog has), which come first.
+/// None for a catalog entry; an error if it is neither.
+fn builtin_entry(
+    lib: &jetcarp_core::library::Library,
+    q: &str,
+) -> Result<Option<jetcarp_core::quickstart::QuickStart>, ApiError> {
+    let q = q.trim();
+    if q.starts_with("find:") || lib.get_quickstart(q).is_ok() {
+        return Ok(None);
+    }
+    let all = jetcarp_core::quickstart::entries();
+    let by_number = q.parse::<usize>().ok().and_then(|k| all.get(k));
+    match all.iter().find(|e| e.id == q).or(by_number) {
+        Some(e) => Ok(Some(e.clone())),
+        None => Err(ApiError::not_found(format!(
+            "no Quick Start entry '{q}': neither a built-in one (`jetcarp quickstart` lists their \
+             ids and numbers) nor one of the catalog's (`jetcarp library quickstart`)"
+        ))),
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

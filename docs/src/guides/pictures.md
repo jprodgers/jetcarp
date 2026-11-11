@@ -98,14 +98,15 @@ thumb  llrr/thumb.png
 ```
 
 - **What to render.** `--scene FILE` renders any scene from its first generation; without `--out`, the
-  files go to `media/<scene name>` in the output folder. The other targets come from the
+  files go to `media/scenes/<file name>` beside the pattern library. `--quickstart ID` with a built-in
+  Quick Start entry's id or number (as `jetcarp quickstart` lists them) renders that entry's scene the
+  same way, into `media/scenes/<id>` without `--out`. The other targets come from the
   [pattern library](pattern-library.md): `--pattern ID` (a catalogued pattern, shown alone),
-  `--quickstart ID` (one of the library's own Quick Start entries, under *My finds*; for a built-in
-  entry, render its scene file instead), `--ant ID` (an ant run) and `--missing` (everything in the
-  library whose media are missing or out of date, limited with `--class`, `--only-patterns`,
-  `--only-quickstart` and `--limit`). Their media are kept in the library's `media` folder and
-  rendered again only when something has changed (`--force` renders anyway); `jetcarp media list KIND
-  ID` lists them.
+  `--quickstart find:ID` (one of the library's own Quick Start entries, under *My finds*), `--ant ID`
+  (an ant run) and `--missing` (everything in the library whose media are missing or out of date,
+  limited with `--class`, `--only-patterns`, `--only-quickstart` and `--limit`). Their media are kept
+  in the library's `media` folder and rendered again only when something has changed (`--force`
+  renders anyway); `jetcarp media list KIND ID` lists them.
 - **How.** A pattern *alone* is shown on an empty field for `--periods` full periods (default 1), so
   the animation loops seamlessly; a spaceship's window moves with it. *From the seed*, the whole grid
   runs for `--gens` generations (default 200; row rules one frame per row), with a frame every

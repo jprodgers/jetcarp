@@ -40,7 +40,8 @@ struct RenderArgs {
     /// A catalog pattern (id, unique prefix, or name).
     #[arg(long)]
     pattern: Option<String>,
-    /// A Quick Start entry by id.
+    /// A Quick Start entry: a built-in one by id or number (`jetcarp quickstart` lists them),
+    /// written like --scene, or one of the catalog's (`find:...`, `jetcarp library quickstart`).
     #[arg(long)]
     quickstart: Option<String>,
     /// An ant run by id (`jetcarp library ants list`): a highway's moving loop alone, the build-up from the
@@ -85,12 +86,13 @@ struct RenderArgs {
     /// Render even when up to date.
     #[arg(long)]
     force: bool,
-    /// Colour the media with this built-in palette (its background, stage, and stops) instead
-    /// of the house style (`jetcarp palettes` lists them). The palette is part of the render key,
-    /// so media stored in another palette render again.
+    /// Colour the media with this palette (its background, stage, and stops) instead of the
+    /// house style: a name (`jetcarp palettes` lists them) or hex colours like `#103050-#4fc3ff`.
+    /// The palette is part of the render key, so media stored in another palette render again.
     #[arg(long)]
     palette: Option<String>,
-    /// --scene: output folder (default <Pictures>/JETCARP/media/<scene name>).
+    /// --scene or a built-in --quickstart entry: output folder (default
+    /// `<catalog folder>/media/scenes/<scene file's name, or the entry's id>`).
     #[arg(long)]
     out: Option<PathBuf>,
     /// Worker threads (default: all cores).
@@ -159,6 +161,12 @@ fn render(cx: &jetcarp_api::Ctx, a: RenderArgs, json: bool) -> Result<()> {
     }
     let mut input = MediaRenderIn {
         pattern: a.pattern,
+        // A built-in entry is written like a scene, to --out if given.
+        out: a
+            .quickstart
+            .as_ref()
+            .and(a.out.as_ref())
+            .map(|d| d.display().to_string()),
         quickstart: a.quickstart,
         ant: a.ant,
         missing: a.missing,
@@ -195,17 +203,17 @@ fn render(cx: &jetcarp_api::Ctx, a: RenderArgs, json: bool) -> Result<()> {
         out_dir = Some(dir);
     }
     let out = MediaRender::run(cx, input, &Quiet)?;
-    if let (Some(given), Some(dir)) = (out_dir, &out.folder) {
-        // A scene: its files, as they have always printed.
+    if let Some(dir) = &out.folder {
+        // A scene or a built-in Quick Start entry: its files, as they have always printed.
         if json {
             println!("{}", serde_json::to_string_pretty(&out.rows)?);
         } else {
             for r in &out.rows {
-                println!(
-                    "{:<6} {}",
-                    r.kind,
-                    as_given(&r.abs_path, dir, &given).display()
-                );
+                let shown = match &out_dir {
+                    Some(given) => as_given(&r.abs_path, dir, given),
+                    None => r.abs_path.clone(),
+                };
+                println!("{:<6} {}", r.kind, shown.display());
             }
         }
         return Ok(());
@@ -273,7 +281,7 @@ struct ExportArgs {
     /// Do not render missing media first.
     #[arg(long)]
     no_render: bool,
-    /// Render missing media in this built-in palette instead of the house style.
+    /// Render missing media in this palette (a name or hex colours) instead of the house style.
     #[arg(long)]
     palette: Option<String>,
     /// Do not write the viewer page (index.html, a grid of every item over manifest.json).

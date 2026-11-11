@@ -100,6 +100,31 @@ fn media_for_patterns_scenes_and_what_is_missing() {
     assert_eq!(s.frames_count, Some(5));
     assert!(s.files.as_ref().unwrap()["anim"].is_string());
     assert!(s.text().starts_with("webp ") || s.text().starts_with("gif "));
+    // A built-in Quick Start entry, by id or by its number in `jetcarp quickstart`: from its
+    // seed, like a scene, into `out` or a folder named after its id; and in a hex palette.
+    for (q, folder) in [("langtons-ant", None), ("7", Some(dir.join("ant-media")))] {
+        let b = MediaRender::run(
+            &cx,
+            MediaRenderIn {
+                quickstart: Some(q.into()),
+                out: folder.as_ref().map(|f| f.display().to_string()),
+                gens: Some(3),
+                frames: Some(false),
+                palette: Some("#103050-#4fc3ff".into()),
+                ..Default::default()
+            },
+            &Quiet,
+        )
+        .unwrap();
+        let expect = folder.unwrap_or_else(|| lib.folder().join("media/scenes/langtons-ant"));
+        assert_eq!(b.folder.as_deref(), Some(expect.as_path()), "{q}");
+        assert_eq!(b.frames_count, Some(4));
+    }
+    let e = fails(
+        render(&cx, json!({"quickstart": "nonesuch"})),
+        ErrorKind::NotFound,
+    );
+    assert!(e.message.contains("`jetcarp quickstart`"), "{e}");
     // A target that does not exist is a failure in the report, and the check fails.
     let bad = render(&cx, json!({"pattern": "nonesuch"})).unwrap();
     assert_eq!((bad.done.len(), bad.failed.len()), (0, 1));
