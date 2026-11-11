@@ -215,6 +215,25 @@ fn no_local_paths_reach_a_store() {
     let store = dir.join("store");
     run(&lib, &p, &mut b, &options("paths", &store));
     assert_no_paths(&store, &dir.display().to_string());
+    // An export of it too (its README, citation, views and every file).
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
+    let ex = dir.join("export");
+    jetcarp_pack::export::export(&src, &v, &ex).unwrap();
+    let root = dir.display().to_string();
+    for (name, bytes) in files(&ex) {
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(!text.contains(&root), "export {name} holds {root}");
+        assert!(
+            jetcarp_pack::paths::find_absolute(&bytes).is_none(),
+            "export {name} holds a local path"
+        );
+    }
+    // The export reads and checks as a store does.
+    let e = Source::open(&ex).unwrap();
+    let ev = e.version(&e.default_manifest(None).unwrap()).unwrap();
+    assert!(ev.signed.by_publisher, "{:?}", ev.signed);
+    assert_eq!(ev.hash, v.hash);
 }
 
 /// No file of a store, and no cell of any table in it, holds a local path.

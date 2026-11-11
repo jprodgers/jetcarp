@@ -210,7 +210,13 @@ impl Source {
         let msg = unsigned_bytes(&b)?;
         let fp = sign::verify(&r.signature, sign::NS_REF, &msg)
             .map_err(|e| format!("refs/{feed}.json: {e}"))?;
-        if key.revoked || !authorised(&key.statement, &fp) {
+        if key.revoked {
+            return Err(format!(
+                "refs/{feed}.json: its publisher's key {} is revoked",
+                r.publisher
+            ));
+        }
+        if !authorised(&key.statement, &fp) {
             return Err(format!(
                 "refs/{feed}.json is signed by {fp}, not by its publisher {}",
                 r.publisher
