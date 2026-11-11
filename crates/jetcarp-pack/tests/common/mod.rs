@@ -60,6 +60,19 @@ pub fn one(rule: &str, rows: &str) -> PatternRecord {
     v.into_iter().next().unwrap()
 }
 
+/// An ant or turmite run on the square grid from the empty start, as an ants search stores it
+/// (`RL` is Langton's ant, a highway from step 9,977, found by 20,000 steps).
+pub fn ant(rule: &str, steps: u64) -> jetcarp_store::AntRow {
+    let m = jetcarp_core::ants::search::parse_rule(rule).unwrap();
+    let t = jetcarp_core::pattern::tiling_list("square").unwrap();
+    let lim = jetcarp_core::ants::run::Limits {
+        steps,
+        max_period: 2000,
+        symmetry: true,
+    };
+    jetcarp_search::ants::run_one(&m, &t[0], &jetcarp_core::ants::run::Start::Empty, &lim).unwrap()
+}
+
 /// The fixed publisher of the tests: a key from a seed, named.
 pub fn publisher(seed: u8, name: &str) -> Publisher {
     Publisher {

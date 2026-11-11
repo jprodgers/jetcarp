@@ -340,6 +340,49 @@ fn records_that_do_not_hash_to_their_ids_are_refused() {
     );
 }
 
+/// An ant whose `run` cannot be read is left out on its own, with a note naming it and the
+/// member that is wrong; the rest of the pack, another ant included, imports.
+#[test]
+fn an_ant_that_cannot_be_read_is_left_out_alone() {
+    let dir = temp("bad-ant");
+    let lib = small_library(&dir);
+    lib.ants_flush(0, &[ant("RL", 12_000), ant("RLR", 2_000)], None, None)
+        .unwrap();
+    let p = publisher(9, "Test Publisher");
+    let mut b = book(&[]);
+    let s = dir.join("store");
+    let h = run(&lib, &p, &mut b, &options("hostile", &s)).manifest;
+    let st = Store::open(&s).unwrap();
+    let src = Source::open(&s).unwrap();
+    let v = src.version(&h).unwrap();
+    let mut rows = vec![];
+    src.table_rows(&v, "ants", |_, r| {
+        rows.extend(r);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(rows.len(), 2);
+    // Another writer's run, without the members JETCARP reads.
+    let bad = rows[0]["id"].as_str().unwrap().to_string();
+    rows[0]["run"] = json!(r#"{"steps":12000}"#);
+    let def = tables::table("ants").unwrap();
+    let parts = parquet_io::write_table(&st, def, rows, u64::MAX).unwrap();
+    let mut m = manifest(&s, &h);
+    m.tables.insert(
+        "ants".into(),
+        jetcarp_pack::publish::write_index(&st, def, parts).unwrap(),
+    );
+    let r = import_from(&s, &put_manifest(&s, &m), &dir.join("lib-a")).unwrap();
+    assert_eq!((r.ants, r.patterns_added), (1, 3), "{r:?}");
+    assert!(
+        r.notes
+            .iter()
+            .any(|n| n.contains(&bad) && n.contains("no member run")),
+        "{:?}",
+        r.notes
+    );
+}
+
 #[test]
 fn unsigned_and_badly_signed_versions_are_refused() {
     let (dir, s, h) = store("signatures");

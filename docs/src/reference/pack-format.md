@@ -621,10 +621,38 @@ interest score, which it computes again.*
 | `states: int32`, `colors: int32` | |
 | `start: string` | the start, as in the identity (JSON) |
 | `outcome: string` | `highway`, `periodic`, `symmetric`, `bounded`, `chaotic` |
-| `period: int64?`, `dx: int32?`, `dy: int32?`, `onset: int64?`, `speed: float64?` | highways and periodic runs |
-| `steps: int64`, `cells: int64` | how long it was run, and the cells visited |
-| `run: string` | the run with its proof and limits (JSON) |
+| `period: int64?`, `dx: int32?`, `dy: int32?`, `onset: int64?`, `speed: float64?` | highways and periodic runs: the period in steps, the displacement per period in lattice steps, the first step of the periodic tail, and (highways) the distance per step in cell sizes (world units over the square root of a tile's mean area, to 6 decimals) |
+| `steps: int64`, `cells: int64` | how many steps it was run, and its coloured (non-zero) cells at the end |
+| `run: string` | the run with its proof and limits (JSON, below) |
 | `tiling_group: string` | partition column |
+
+`run` is a JSON object with two members, each an object:
+
+```text
+{"limits": {"max_period", "steps", "symmetry"},
+ "run":    {"outcome", "steps", "cells", "reach", "period"?, "d"?, "onset"?, "speed"?,
+            "proof"?: {"at", "period", "d", "cells"},
+            "symmetry"?: {"count", "first_step", "last_step", "last_cells", "reflection",
+                          "translation"}}}
+```
+
+- `limits`: how the run looked. `steps`, the steps it ran before it was classed as it is (a
+  highway test under way may add one period); `max_period`, the longest highway or orbit period
+  it looked for; `symmetry`, whether it tested fields for mirror symmetry (true when absent).
+- `run`: what it found. `outcome`, `steps` and `cells` as the columns; `reach`, the unit cells the
+  ant reached, `[i0, j0, i1, j1]` relative to its start. A highway or periodic run adds `period`,
+  `d` (`[dx, dy]`), `onset` and (a highway) `speed`, as the columns, and `proof`, the exact test
+  that succeeded: the step `at` which it started, the `period`, the displacement `d`, and the
+  `cells` it compared. A run that saw mirror-symmetric fields with the ant on its start cell adds
+  `symmetry`: how many (`count`), the `first_step` and `last_step`, the last one's coloured cells
+  (`last_cells`), its `reflection` `[a, b, c, d]` (a matrix in lattice coordinates) and its
+  `translation` `[x, y]`.
+- Members that do not apply are absent. Integers are integers and `speed` a number. A reader
+  ignores members it does not know, as everywhere.
+
+*An importer that cannot read one ant's `run`, `start` or `outcome` leaves that ant out, with a
+note naming it and the member, and imports the rest of the pack (an id that does not hash still
+refuses the pack, as a pattern's does).*
 
 ### `quickstart` (facts, sorted by `id`; partitioned by `tiling_group`)
 

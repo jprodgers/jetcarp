@@ -599,7 +599,9 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         (k.to_string(), id)
     };
 
-    // Ant runs and Quick Start entries.
+    // Ant runs and Quick Start entries. An ant whose id does not hash refuses the pack, as a
+    // pattern's does; one whose start, outcome or run cannot be read is left out on its own,
+    // with a note naming it.
     let mut ant_rows = vec![];
     for (_, a) in rows_of::<AntPackRow>(&src, &v, "ants")? {
         let pin_ok = crate::hash::hex(format!("{}\n{}", a.identity, a.pin).as_bytes());
@@ -609,7 +611,13 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         if retracted.contains(format!("ant:{}", a.id).as_str()) {
             continue;
         }
-        let mut row = rows::ant_of(&a)?;
+        let mut row = match rows::ant_of(&a) {
+            Ok(r) => r,
+            Err(e) => {
+                out.notes.push(format!("left out: {e}"));
+                continue;
+            }
+        };
         let tg = format!("ant:{}", a.id);
         if let Some(f) = fields.get(&tg) {
             row.name = f.get("name").and_then(Value::as_str).map(String::from);

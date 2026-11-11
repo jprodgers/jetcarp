@@ -684,27 +684,33 @@ pub fn ant_row(a: &jetcarp_store::AntRow, pin_key: &str) -> Result<AntPackRow, S
     })
 }
 
-/// A pack's ant run as a library row.
+/// A pack's ant run as a library row. An error names the ant and the column or `run` member
+/// that is wrong (`ant ant-...: run.limits: missing field max_period`).
 pub fn ant_of(r: &AntPackRow) -> Result<jetcarp_store::AntRow, String> {
+    let bad = |what: &str, e: &dyn std::fmt::Display| format!("ant {}: {what}: {e}", r.id);
     let tiling = tiling_of_key(
         r.identity
             .lines()
             .find_map(|l| l.strip_prefix("tiling="))
-            .ok_or("ant identity without a tiling= line")?,
-    )?;
-    let start = serde_json::from_str(&r.start).map_err(|e| format!("ant start: {e}"))?;
-    let body: Value = serde_json::from_str(&r.run).map_err(|e| format!("ant run: {e}"))?;
-    let run = serde_json::from_value(body["run"].clone()).map_err(|e| format!("ant run: {e}"))?;
-    let limits =
-        serde_json::from_value(body["limits"].clone()).map_err(|e| format!("ant limits: {e}"))?;
-    let outcome = serde_json::from_value(Value::String(r.outcome.clone()))
-        .map_err(|e| format!("ant outcome: {e}"))?;
+            .ok_or_else(|| bad("identity", &"no tiling= line"))?,
+    )
+    .map_err(|e| bad("identity's tiling", &e))?;
+    let start = serde_json::from_str(&r.start).map_err(|e| bad("start", &e))?;
+    let body: Value = serde_json::from_str(&r.run).map_err(|e| bad("run", &e))?;
+    let member = |k: &str| match body.get(k) {
+        Some(v) => Ok(v.clone()),
+        None => Err(bad("run", &format!("no member {k}"))),
+    };
+    let run = serde_json::from_value(member("run")?).map_err(|e| bad("run.run", &e))?;
+    let limits = serde_json::from_value(member("limits")?).map_err(|e| bad("run.limits", &e))?;
+    let outcome =
+        serde_json::from_value(Value::String(r.outcome.clone())).map_err(|e| bad("outcome", &e))?;
     Ok(jetcarp_store::AntRow {
         id: r.id.clone(),
         rule: r.rule.clone(),
         kind: r.kind.clone(),
-        states: u8::try_from(r.states).map_err(|_| "ant states")?,
-        colors: u8::try_from(r.colors).map_err(|_| "ant colours")?,
+        states: u8::try_from(r.states).map_err(|e| bad("states", &e))?,
+        colors: u8::try_from(r.colors).map_err(|e| bad("colors", &e))?,
         tiling_name: pattern::tiling_display_name(&tiling),
         tiling,
         start,

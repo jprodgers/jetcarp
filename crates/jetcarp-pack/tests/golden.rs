@@ -46,6 +46,7 @@ fn every_golden_pack_reads_and_checks() {
         "searches",
         "media",
         "aperiodic",
+        "ants",
         "export",
     ] {
         assert!(packs.iter().any(|p| p.0 == want), "no golden pack {want}");
@@ -67,7 +68,12 @@ fn every_golden_pack_reads_and_checks() {
             ..Default::default()
         };
         let r = import::import(&lib, &o, &|_| {}).unwrap_or_else(|e| panic!("{name}: {e}"));
-        assert!(r.patterns_added > 0, "{name}: {r:?}");
+        assert!(r.patterns_added > 0 || name == "ants", "{name}: {r:?}");
+        assert!(
+            !r.notes.iter().any(|n| n.starts_with("left out")),
+            "{name}: {:?}",
+            r.notes
+        );
         assert!(r.sample.failures.is_empty(), "{name}: {:?}", r.sample);
         assert_eq!(r.sample.checked, r.patterns_added - r.flagged, "{name}");
         assert_eq!(r.flagged, 0, "{name}");
@@ -88,6 +94,26 @@ fn every_golden_pack_reads_and_checks() {
             "aperiodic" => {
                 let t = &v.tables["tilings"];
                 assert!(!t.parts.is_empty());
+            }
+            "ants" => {
+                // Every ant imported, and run again here it gives the pack's run exactly.
+                assert_eq!(r.ants, 2, "{r:?}");
+                let ants = lib.ants(&Default::default()).unwrap();
+                assert_eq!(ants.len(), 2);
+                for a in &ants {
+                    let m = jetcarp_core::ants::search::parse_rule(&a.rule).unwrap();
+                    let again =
+                        jetcarp_search::ants::run_one(&m, &a.tiling, &a.start, &a.limits).unwrap();
+                    assert_eq!(again.run, a.run, "{}", a.id);
+                    assert_eq!(again.id, a.id);
+                }
+                let langton = ants.iter().find(|a| a.rule.ends_with(" RL")).unwrap();
+                assert_eq!(langton.name.as_deref(), Some("Langton's ant"));
+                assert_eq!(
+                    (langton.outcome.name(), langton.period, langton.onset),
+                    ("highway", Some(104), Some(9977))
+                );
+                assert!(ants.iter().any(|a| a.run.symmetry.is_some()));
             }
             _ => {}
         }
@@ -232,7 +258,8 @@ fn fix_library(lib: &Library) {
          UPDATE sightings SET first_seen = '{FIXED}', last_seen = '{FIXED}';
          UPDATE ratings SET created = '{FIXED}';
          UPDATE provenance SET machine = 'linux-x86_64' WHERE machine != '';
-         UPDATE provenance SET date = '{FIXED}' WHERE kind != 'found';
+         UPDATE provenance SET date = '{FIXED}' WHERE kind != 'found' OR target_kind = 'ant';
+         UPDATE ants SET created = '{FIXED}', updated = '{FIXED}';
          UPDATE jobs SET created = '{FIXED}', updated = '{FIXED}';
          UPDATE media SET created = '{FIXED}', updated = '{FIXED}';"
     ))
@@ -333,6 +360,30 @@ fn library_a(dir: &Path) -> Library {
     lib
 }
 
+/// Publisher A's ant runs on the square grid: Langton's ant (a highway, named) and LLRR
+/// (symmetric growth).
+fn library_ants(dir: &Path) -> Library {
+    let lib = Library::open(dir.join("lib-ants"));
+    lib.ants_flush(0, &[ant("RL", 20_000), ant("LLRR", 20_000)], None, None)
+        .unwrap();
+    let langton = lib
+        .ants(&Default::default())
+        .unwrap()
+        .into_iter()
+        .find(|a| a.rule.ends_with(" RL"))
+        .unwrap();
+    lib.update_ant(
+        &langton.id,
+        &jetcarp_store::AntUpdate {
+            name: Some("Langton's ant".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    fix_library(&lib);
+    lib
+}
+
 fn opts(feed: &str, to: &Path, title: &str) -> publish::Options {
     publish::Options {
         feed: feed.into(),
@@ -370,6 +421,7 @@ fn write_golden_packs() {
         "searches",
         "media",
         "aperiodic",
+        "ants",
         "export",
     ] {
         let _ = std::fs::remove_dir_all(out.join(n));
@@ -522,6 +574,18 @@ fn write_golden_packs() {
             PUBLISHER_A,
             "Golden Publisher A",
             &opts("golden-ap", &out.join("aperiodic"), "aperiodic"),
+        ),
+    );
+
+    // ants: two ant runs, one named.
+    let an = library_ants(&work);
+    put(
+        "ants",
+        publish_into(
+            &an,
+            PUBLISHER_A,
+            "Golden Publisher A",
+            &opts("golden-ants", &out.join("ants"), "ants"),
         ),
     );
 
