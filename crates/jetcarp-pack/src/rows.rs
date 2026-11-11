@@ -348,6 +348,19 @@ pub fn verification_of(v: &VerificationRow) -> Verification {
     }
 }
 
+/// A rule as JETCARP's library writes it for a neighbourhood: the notation, with `V` on B/S and
+/// Generations rules (and JACA's edge form) for edge neighbours, as a CA reports its rule. The
+/// pack's `rules` table writes the neighbourhood apart.
+pub fn library_spelling(notation: &str, nb: Nb) -> Result<String, String> {
+    let rule = Rule::parse(notation)?.0;
+    let n = rule.notation();
+    Ok(match &rule {
+        Rule::LifeLike { .. } | Rule::Generations { .. } if nb == Nb::Edge => format!("{n}V"),
+        Rule::Jaca(j) if nb == Nb::Edge => j.notation_with(true),
+        _ => n,
+    })
+}
+
 /// A pack's pattern as a library record (curation and counts are filled in by the importer).
 pub fn record_of(
     p: &PatternRow,
@@ -367,8 +380,8 @@ pub fn record_of(
     let neighborhood = parse_nb(&p.neighbourhood)?;
     let site = p.site.as_ref().map(site_of).transpose()?;
     let rule = match (&p.rule, main) {
-        (Some(r), _) if !r.is_empty() => r.clone(),
-        (_, Some(v)) => v.rule.clone(),
+        (Some(r), _) if !r.is_empty() => library_spelling(r, neighborhood)?,
+        (_, Some(v)) => library_spelling(&v.rule, neighborhood)?,
         _ => return Err(format!("pattern {}: no rule to run it in", p.id)),
     };
     let phases: Vec<String> = p

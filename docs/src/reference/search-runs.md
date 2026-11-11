@@ -181,6 +181,17 @@ target kind `search_run` and target id `<uuid>:<run id>` (see
 [Library format](library-format.md#ratings-of-search-runs)), so a search folder can be deleted or
 shared without them.
 
+## A search from a pack
+
+A search imported from a [pack](pack-format.md#search-runs) arrives as its sealed segments, score
+sidecars and manifest; the pack holds no working database. JETCARP rebuilds one from the runs
+(the archive of elites offered in id order with each run's newest score, coverage, family totals,
+the identities tried, and the elites confirmed by the confirmation runs) and makes the search a
+paused job with its own settings, so `jetcarp jobs status`, `jobs runs`, `jobs report` and
+`quickstart publish` read it as a stopped search, and `jetcarp jobs resume` carries it on. What a
+pack does not carry starts again: the time it ran (0) and its random states (from its seed; the
+identities tried keep it from repeating a candidate).
+
 ## Reading the runs
 
 **DuckDB.** The glob reads every segment (and never a `.tmp` file):

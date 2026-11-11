@@ -34,21 +34,56 @@ pub struct Exported {
     pub manifest: String,
     pub files: u64,
     pub bytes: u64,
+    /// Files hard-linked to the store's objects, and files copied.
+    pub linked: u64,
+    pub copied: u64,
 }
 
-fn link_or_copy(from: &Path, to: &Path) -> Result<u64, String> {
+/// How an export places a store's file: `std::fs::hard_link` by default.
+pub type LinkFn = fn(&Path, &Path) -> std::io::Result<()>;
+
+/// Place a store's file in an export: a hard link (no copy), or a copy when linking fails
+/// (another file system, `EXDEV`; a file system without hard links). The placed file must have
+/// the source's size. Returns its size and whether it was linked.
+pub fn link_or_copy_with(from: &Path, to: &Path, link: LinkFn) -> Result<(u64, bool), String> {
     if let Some(d) = to.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
     }
     let _ = std::fs::remove_file(to);
-    if std::fs::hard_link(from, to).is_err() {
-        std::fs::copy(from, to).map_err(|e| format!("{}: {e}", to.display()))?;
+    let linked = match link(from, to) {
+        Ok(()) => true,
+        Err(_) => {
+            let _ = std::fs::remove_file(to);
+            std::fs::copy(from, to).map_err(|e| format!("{}: {e}", to.display()))?;
+            false
+        }
+    };
+    let want = std::fs::metadata(from)
+        .map_err(|e| format!("{}: {e}", from.display()))?
+        .len();
+    let got = std::fs::metadata(to)
+        .map_err(|e| format!("{}: {e}", to.display()))?
+        .len();
+    if got != want {
+        return Err(format!("{}: {got} bytes placed of {want}", to.display()));
     }
-    Ok(std::fs::metadata(to).map(|m| m.len()).unwrap_or(0))
+    Ok((got, linked))
 }
 
-/// Export a version of a store into the folder `to` (made; files in it are replaced).
+/// Export a version of a store into the folder `to` (made; files in it are replaced), its
+/// tables, segments, media and reference patches hard-linked to the store's objects where the
+/// file system allows, else copied.
 pub fn export(src: &Source, v: &Version, to: &Path) -> Result<Exported, String> {
+    export_with(src, v, to, |a, b| std::fs::hard_link(a, b))
+}
+
+/// [`export`] placing files with `link` (a test forces the copy).
+pub fn export_with(
+    src: &Source,
+    v: &Version,
+    to: &Path,
+    link_fn: LinkFn,
+) -> Result<Exported, String> {
     let Source::Store(store) = src else {
         return Err("export from a store".into());
     };
@@ -83,9 +118,16 @@ pub fn export(src: &Source, v: &Version, to: &Path) -> Result<Exported, String> 
     }
     let mut files = 0u64;
     let mut bytes = 0u64;
+    let (mut linked, mut copied) = (0u64, 0u64);
     let mut link = |from: &Path, rel: &str| -> Result<(), String> {
-        bytes += link_or_copy(from, &to.join(rel))?;
+        let (n, l) = link_or_copy_with(from, &to.join(rel), link_fn)?;
+        bytes += n;
         files += 1;
+        if l {
+            linked += 1;
+        } else {
+            copied += 1;
+        }
         Ok(())
     };
     for (name, tp) in &v.tables {
@@ -150,6 +192,8 @@ pub fn export(src: &Source, v: &Version, to: &Path) -> Result<Exported, String> 
     put("LICENSE", licence(&v.manifest).as_bytes())?;
     out.files += files;
     out.bytes += bytes;
+    out.linked = linked;
+    out.copied = copied;
     Ok(out)
 }
 

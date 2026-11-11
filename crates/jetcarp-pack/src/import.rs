@@ -111,6 +111,8 @@ pub struct Imported {
     pub aliases: u64,
     pub media: u64,
     pub searches: Vec<String>,
+    /// The searches whose working databases were rebuilt.
+    pub rebuilt: Vec<jetcarp_search::jobs::explore::Rebuilt>,
     pub retracted: u64,
     pub objects_checked: u64,
     pub bytes_checked: u64,
@@ -479,6 +481,25 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         lib.add_rule_verifications(&other_rules)?;
     }
 
+    // Search runs, before the sightings (which name searches by uuid): copied into the
+    // library's searches folder, each a paused job with its own settings and its working
+    // database rebuilt from its runs.
+    for (uuid, sp) in &v.searches {
+        if !opts.dry_run {
+            log(&format!(
+                "search {uuid}: copying its segments and rebuilding its state"
+            ));
+            if let Some(r) = import_search(lib, uuid, sp, &h)? {
+                out.notes.push(format!(
+                    "search {uuid}: {} runs, {} elites in {} niches, rebuilt in {} s",
+                    r.runs, r.elites, r.niches, r.seconds
+                ));
+                out.rebuilt.push(r);
+            }
+        }
+        out.searches.push(uuid.clone());
+    }
+
     // Sightings: per pattern, rule and search, the larger of the publishers' totals.
     log("merging sightings");
     let mut totals: BTreeMap<
@@ -716,14 +737,6 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     }
     if !opts.dry_run && !ratings.is_empty() {
         out.ratings = lib.import_ratings(&ratings)?.0;
-    }
-
-    // Search runs: copied into the library's searches folder.
-    for (uuid, sp) in &v.searches {
-        if !opts.dry_run {
-            import_search(lib, uuid, sp, &h)?;
-        }
-        out.searches.push(uuid.clone());
     }
 
     // Retractions, as flags.
@@ -977,13 +990,13 @@ fn import_search(
     uuid: &str,
     sp: &read::SearchParts,
     manifest: &str,
-) -> Result<(), String> {
+) -> Result<Option<jetcarp_search::jobs::explore::Rebuilt>, String> {
     use jetcarp_search::explore::runs::{Manifest, ScoreFile, ScoreSet, SegmentEntry};
     let dir = lib.folder().join("searches").join(uuid);
     let mf = dir.join("manifest.json");
     if mf.exists() {
         // The library has this search already (its own folder): leave it.
-        return Ok(());
+        return Ok(None);
     }
     let ix = &sp.index;
     let copy = |from: &PathBuf, obj: &str, rel: &str| -> Result<(String, u64), String> {
@@ -1052,12 +1065,32 @@ fn import_search(
         remeasure: ix
             .remeasure
             .clone()
-            .and_then(|r| serde_json::from_value(r).ok()),
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| format!("search {uuid}: its remeasure record: {e}"))?,
     };
     let text = serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?;
     crate::store::write_atomic(&mf, text.as_bytes())?;
-    lib.job_for_uuid(uuid, &ix.kind, manifest)?;
-    Ok(())
+    let explore = ix.kind == jetcarp_search::jobs::explore::KIND_NAME;
+    let mut spec = ix.spec.clone();
+    if explore {
+        // The settings' numbers as numbers again (a pack's documents write decimals as
+        // strings), every other member kept as it came (its label among them).
+        let typed: jetcarp_search::jobs::explore::ExploreSpec =
+            serde_json::from_value(spec.clone())
+                .map_err(|e| format!("search {uuid}: its settings: {e}"))?;
+        if let (Value::Object(m), Ok(Value::Object(t))) = (&mut spec, serde_json::to_value(&typed))
+        {
+            for (k, v) in t {
+                m.insert(k, v);
+            }
+        }
+    }
+    let job = lib.job_for_uuid_with(uuid, &ix.kind, manifest, Some(&spec))?;
+    if !explore {
+        return Ok(None);
+    }
+    jetcarp_search::jobs::explore::rebuild(lib, job).map(Some)
 }
 
 /// Verify a sample of the new patterns again (the flagged ones are left to `library reverify`).

@@ -13,13 +13,18 @@ use jetcarp_store::Library;
 fn a_library_round_trips_through_a_pack() {
     let dir = temp("round-trip");
     let lib = small_library(&dir);
+    // A block on edge neighbours: JETCARP spells its rule `B3/S23V`, which must come back so.
+    let mut v = one("B3/S23V", BLOCK);
+    v.provenance.date = "2026-11-02T10:00:00Z".into();
+    lib.add(v).unwrap();
+    assert!(lib.list().unwrap().iter().any(|r| r.rule == "B3/S23V"));
     let p = publisher(1, "Test Publisher");
     let mut b = book(&[]);
     let store = dir.join("store");
     let out = run(&lib, &p, &mut b, &options("test", &store));
     assert!(out.notes.is_empty(), "{:?}", out.notes);
     assert_eq!(out.seq, 1);
-    assert_eq!(out.tables["patterns"].0, 3, "{:?}", out.tables);
+    assert_eq!(out.tables["patterns"].0, 4, "{:?}", out.tables);
     // The publisher was added to the rater book, with consent, on its first publish.
     assert_eq!(b.raters.len(), 1);
 
@@ -58,11 +63,11 @@ fn a_library_round_trips_through_a_pack() {
     let r = import::import(&lib2, &opts, &|_| {}).unwrap();
     assert_eq!(
         (r.patterns_added, r.patterns_merged, r.flagged),
-        (3, 0, 0),
+        (4, 0, 0),
         "{r:?}"
     );
-    assert_eq!(r.sample.checked, 3, "{:?}", r.sample);
-    assert_eq!(r.sample.passed, 3, "{:?}", r.sample);
+    assert_eq!(r.sample.checked, 4, "{:?}", r.sample);
+    assert_eq!(r.sample.passed, 4, "{:?}", r.sample);
     assert_eq!(r.signed, "publisher");
     for a in lib.list().unwrap() {
         let c = lib2.get(&a.id).unwrap();
@@ -139,7 +144,7 @@ fn a_library_round_trips_through_a_pack() {
 
     // Importing again changes nothing.
     let r2 = import::import(&lib2, &opts, &|_| {}).unwrap();
-    assert_eq!((r2.patterns_added, r2.patterns_merged), (0, 3));
+    assert_eq!((r2.patterns_added, r2.patterns_merged), (0, 4));
     for a in lib.list().unwrap() {
         assert_eq!(lib2.get(&a.id).unwrap().seen, a.seen);
         assert_eq!(lib2.pack_sightings(&a.id), lib.pack_sightings(&a.id));
@@ -264,4 +269,49 @@ pub fn assert_no_paths(store: &std::path::Path, root: &str) {
         .unwrap();
     }
     assert!(cells > 0);
+}
+
+// An export hard-links the store's files where it can, and copies them when linking fails
+// (another file system, EXDEV; Windows without links): forced here.
+#[test]
+fn an_export_copies_when_it_cannot_link() {
+    let dir = temp("export-copy");
+    let lib = small_library(&dir);
+    let p = publisher(4, "Test Publisher");
+    let mut b = book(&[]);
+    let store = dir.join("store");
+    run(&lib, &p, &mut b, &options("copy", &store));
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
+    fn no_link(_: &std::path::Path, _: &std::path::Path) -> std::io::Result<()> {
+        Err(std::io::Error::from_raw_os_error(18))
+    }
+    let copy = dir.join("copied");
+    let e = jetcarp_pack::export::export_with(&src, &v, &copy, no_link).unwrap();
+    assert_eq!(e.linked, 0);
+    assert!(e.copied > 0);
+    let linked = dir.join("linked");
+    let l = jetcarp_pack::export::export(&src, &v, &linked).unwrap();
+    assert_eq!(l.linked + l.copied, e.copied);
+    // The same files either way, and both read as signed by their publisher.
+    assert_eq!(files(&copy), files(&linked));
+    for d in [&copy, &linked] {
+        let s = Source::open(d).unwrap();
+        assert!(s.version(&v.hash).unwrap().signed.by_publisher);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let (_, path) = &v.tables["patterns"].parts[0];
+        let rel = jetcarp_pack::read::export_path(
+            "patterns",
+            &v.tables["patterns"].parts[0].0.partition,
+            1,
+        );
+        let ino = |p: &std::path::Path| std::fs::metadata(p).unwrap().ino();
+        assert_ne!(ino(&copy.join(&rel)), ino(path), "a copy, not a link");
+        if l.linked > 0 {
+            assert_eq!(ino(&linked.join(&rel)), ino(path), "a link");
+        }
+    }
 }

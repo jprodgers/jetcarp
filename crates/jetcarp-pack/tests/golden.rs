@@ -78,7 +78,12 @@ fn every_golden_pack_reads_and_checks() {
                 assert_eq!(lib.retractions().unwrap().len(), 1);
             }
             "merge" => assert_eq!(v.manifest.parents.len(), 2),
-            "searches" => assert_eq!(r.searches.len(), 1),
+            "searches" => {
+                assert_eq!(r.searches.len(), 1);
+                // Its working database is rebuilt from its six runs.
+                assert_eq!(r.rebuilt.len(), 1, "{r:?}");
+                assert_eq!(r.rebuilt[0].runs, 6);
+            }
             "media" => assert!(r.media > 0),
             "aperiodic" => {
                 let t = &v.tables["tilings"];

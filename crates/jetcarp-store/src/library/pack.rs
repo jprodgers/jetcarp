@@ -429,6 +429,18 @@ impl Library {
     /// finished job of that kind made now (its spec says which pack it came from). Sightings
     /// imported for that search are credited to it.
     pub fn job_for_uuid(&self, uuid: &str, kind: &str, pack: &str) -> Result<i64, String> {
+        self.job_for_uuid_with(uuid, kind, pack, None)
+    }
+
+    /// [`job_for_uuid`](Self::job_for_uuid) with the job's spec when it is made (an imported
+    /// search's own settings, so it can be resumed): a made job is paused rather than done.
+    pub fn job_for_uuid_with(
+        &self,
+        uuid: &str,
+        kind: &str,
+        pack: &str,
+        spec: Option<&Value>,
+    ) -> Result<i64, String> {
         let uuid = uuid.trim();
         if uuid.is_empty() || uuid.len() > 64 {
             return Err(format!("bad search uuid '{uuid}'"));
@@ -445,12 +457,25 @@ impl Library {
             {
                 return Ok(id);
             }
-            let spec = serde_json::json!({"uuid": uuid, "imported_from": pack}).to_string();
+            let mut v = spec
+                .cloned()
+                .filter(Value::is_object)
+                .unwrap_or_else(|| serde_json::json!({}));
+            v["uuid"] = Value::String(uuid.to_string());
+            v["imported_from"] = Value::String(pack.to_string());
+            let status = if spec.is_some() { "paused" } else { "done" };
             tx.execute(
                 "INSERT INTO jobs (uuid, kind, spec, status, progress, engine_version, created,
                     updated, finished)
-                 VALUES (?1, ?2, ?3, 'done', '{}', ?4, ?5, ?5, ?5)",
-                params![uuid, kind, spec, jetcarp_core::VERSION, now],
+                 VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, ?6, ?6)",
+                params![
+                    uuid,
+                    kind,
+                    v.to_string(),
+                    status,
+                    jetcarp_core::VERSION,
+                    now
+                ],
             )
             .map_err(e)?;
             Ok(tx.last_insert_rowid())

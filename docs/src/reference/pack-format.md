@@ -699,7 +699,15 @@ in the manifest maps a search's uuid to its **search index**:
 - `scores`: each rescore, with the sidecar of each segment it changed. A run's score is the one in
   its segment's newest sidecar, or the segment's own.
 - `spec` and `remeasure`: the search's settings and import record, copied from its folder's manifest
-  with every local path stripped and every non-integer number written as a string.
+  with every local path stripped and every non-integer number written as a string (as ECMAScript
+  writes it). A reader that needs the numbers reads such a string back as a number: JETCARP does,
+  for the settings it knows to be numbers and for the record's seconds.
+- **What a search carries.** Its runs (every sealed segment and score sidecar), its settings and its
+  record, and nothing of its working database: everything a stopped search needs is rebuilt from
+  the runs (its archive of elites, offered in id order with each run's newest score; coverage and
+  family totals; the identities tried; the elites confirmed, from the confirmation runs'
+  `parent`). Not carried: the time it ran and its random-number states, so a resumed import starts
+  its random states again from its seed (the identities tried keep it from repeating a candidate).
 - `children` lists further search indexes of the same search whose `parts` and `scores` add to these
   (the same limits as table indexes).
 - Every object a search index names is Parquet (`.parquet`). Runs not yet sealed are never in a pack.
@@ -733,8 +741,13 @@ naming the manifest. Its curation is the latest annotations of the manifest's pu
 others for fields still empty. Sightings are kept per search (a job made for each uuid), the larger
 of the publishers' totals, so importing a pack again changes nothing; copies counted without a
 search add to the record's seen count. Ratings are kept under the rater's display name when the
-rater chose one (a group's: its members' names joined by ` & `), else the rater id. Search runs are
-copied into the library's search folders. Retractions are kept in `pack_retractions`, the result in
+rater chose one (a group's: its members' names joined by ` & `), else the rater id. A pattern's
+rule is written as the library writes rules: the notation with `V` for B/S and Generations rules
+(and JACA's edge form) on edge neighbours (`B2/S23V`), as a search that found it here would write
+it. A search's segments and sidecars are copied into the library's search folders, and it becomes
+a paused explore job with the search's own settings, its working database rebuilt from its runs
+([what a search carries](#search-runs)), so its status, runs, report and atlas read as a stopped
+search's and it can be resumed. Retractions are kept in `pack_retractions`, the result in
 `pack_imports` ([Library format](library-format.md#tables)); no receipt is written.
 
 ## Exports
@@ -764,6 +777,9 @@ LICENSE, README.md, CITATION.cff                  made from the manifest
   sees each twice with the same value; read the files without it, or drop one.
 - The indexes give every file's hash, and media rows and `tilings` rows the rest, so an export is
   checked exactly like a store. Importers accept a store or an export.
+- *JETCARP makes an export's data files as hard links to the store's objects when both are on one
+  file system, and copies them otherwise (another file system, or one without hard links). A
+  hard-linked export shares its files with the store: do not edit them in place.*
 
 ## Limits
 
@@ -936,6 +952,10 @@ written from the design alone. Each is part of the rules above.
 | Quick Start ids | `qs-` and the hash of the scene's text and pin |
 | `first`/`last` of several sort columns | the first sort column's value, as text |
 | Sort order | within each part; text by UTF-8 bytes, integers by value |
+| A rule's spelling on import | the pack's `rules` table writes the notation and the neighbourhood apart; the importer writes the library's spelling (`B2/S23V` on edge neighbours) |
+| A search's working database | not in a pack: rebuilt on import from the runs; the time it ran and its random states are not carried |
+| Decimals in a search's settings and record | strings in the pack, numbers again in JETCARP |
+| Exports made of hard links | links where the file system allows, else copies |
 | Partition keys and columns | keys named as their columns (`class_group`, `tiling_group`); `class_group` is the class; ants and Quick Start by `tiling_group` only; Hive folders name the same columns |
 | `family` and `semantics` | on `patterns`, `rules`, `ants`, `quickstart` and every verification |
 | `created_by` and key-value metadata | `created_by` free (JETCARP's `jetcarp-pack 1`); writers SHOULD write no key-value metadata, readers ignore it |
