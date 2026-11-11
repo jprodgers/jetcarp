@@ -93,14 +93,17 @@ fn known_life_objects() {
         c => panic!("glider: {c:?}"),
     }
     let g = class_of(&r, "glider");
-    assert_eq!(g.speed().unwrap(), "c/4 diagonal");
+    assert_eq!(g.speed_in(r.lattice).unwrap(), "c/4 diagonal");
     match class_of(&r, "LWSS") {
         ObjClass::Spaceship { period: 4, dx, dy } => {
             assert_eq!((dx.abs(), dy.abs()), (2, 0))
         }
         c => panic!("LWSS: {c:?}"),
     }
-    assert_eq!(class_of(&r, "LWSS").speed().unwrap(), "c/2 orthogonal");
+    assert_eq!(
+        class_of(&r, "LWSS").speed_in(r.lattice).unwrap(),
+        "c/2 orthogonal"
+    );
     assert!(line.contains("glider (c/4) x 2"), "{line}");
     assert!(line.contains("blinker (p2) x 2"), "{line}");
     // Every live cell belongs to exactly one object.
@@ -292,4 +295,111 @@ fn every_phase_is_recognised() {
         }
         w.apply(Command::Step { gens: 1 }).unwrap();
     }
+}
+
+/// Speed directions are named in each lattice's own terms: on a hexagonal lattice JETCARP's
+/// basis vectors are 60° apart, so `(1, -1)` is a shortest step (orthogonal) and `(1, 1)` lies
+/// halfway between two (diagonal), where the square grid's words said the opposite.
+#[test]
+fn speed_directions_follow_the_lattice() {
+    use jetcarp_core::objects::{LatticeShape, direction, reduce_basis};
+    let basis = |id: &str| {
+        let topo = Topology::build(&TilingSpec::rect(id, 8, 8, Boundary::Wrap)).unwrap();
+        let g = topo.lattice().unwrap();
+        (g.a1, g.a2)
+    };
+    let (a1, a2) = basis("square");
+    assert_eq!(reduce_basis(a1, a2).0, LatticeShape::Square);
+    for (d, w) in [
+        ([1, 0], "orthogonal"),
+        ([0, -2], "orthogonal"),
+        ([1, 1], "diagonal"),
+        ([-3, 3], "diagonal"),
+        ([2, 1], "oblique"),
+    ] {
+        assert_eq!(direction(d, a1, a2), Some(w), "square {d:?}");
+    }
+    for id in ["hex", "trihex", "triangle", "oct"] {
+        let (a1, a2) = basis(id);
+        if id == "oct" {
+            assert_eq!(reduce_basis(a1, a2).0, LatticeShape::Square, "{id}");
+            continue;
+        }
+        assert_eq!(reduce_basis(a1, a2).0, LatticeShape::Hexagonal, "{id}");
+        for (d, w) in [
+            ([1, 0], "orthogonal"),
+            ([0, 1], "orthogonal"),
+            ([1, -1], "orthogonal"),
+            ([-2, 2], "orthogonal"),
+            ([1, 1], "diagonal"),
+            ([-3, -3], "diagonal"),
+            ([2, -1], "diagonal"),
+            ([-1, 2], "diagonal"),
+            ([2, 1], "oblique"),
+        ] {
+            assert_eq!(direction(d, a1, a2), Some(w), "{id} {d:?}");
+        }
+        let ship = ObjClass::Spaceship {
+            period: 12,
+            dx: -3,
+            dy: 3,
+        };
+        assert_eq!(ship.speed_in(Some((a1, a2))).unwrap(), "c/4 orthogonal");
+        assert_eq!(ship.tag().unwrap(), "c/4");
+    }
+    // A rectangle's axes are its only directions with a name, and so are a centred lattice's
+    // (a rhombus, or rows offset by half a step, as on the elongated triangular tiling); an
+    // oblique lattice has none.
+    let (r1, r2) = ([2.0, 0.0], [0.0, 1.0]);
+    assert!(matches!(
+        reduce_basis(r1, r2).0,
+        LatticeShape::Rectangular { .. }
+    ));
+    assert_eq!(direction([3, 0], r1, r2), Some("orthogonal"));
+    assert_eq!(direction([1, 1], r1, r2), Some("oblique"));
+    let (h1, h2) = ([1.0, 0.0], [0.5, 1.9]);
+    assert!(matches!(
+        reduce_basis(h1, h2).0,
+        LatticeShape::Rectangular { .. }
+    ));
+    assert_eq!(direction([2, 0], h1, h2), Some("orthogonal"));
+    assert_eq!(
+        direction([-1, 2], h1, h2),
+        Some("orthogonal"),
+        "straight up"
+    );
+    assert_eq!(direction([0, 1], h1, h2), Some("oblique"));
+    let (m1, m2) = ([1.0, 0.0], [0.4, 0.916_515_138_991_168]);
+    assert!(matches!(
+        reduce_basis(m1, m2).0,
+        LatticeShape::Rectangular { .. }
+    ));
+    assert_eq!(direction([1, 1], m1, m2), Some("orthogonal"));
+    assert_eq!(direction([1, -1], m1, m2), Some("orthogonal"));
+    assert_eq!(direction([1, 0], m1, m2), Some("oblique"));
+    let (e1, e2) = basis("elongtri");
+    assert!(matches!(
+        reduce_basis(e1, e2).0,
+        LatticeShape::Rectangular { .. }
+    ));
+    assert_eq!(
+        direction([2, 0], e1, e2),
+        Some("orthogonal"),
+        "along the rows"
+    );
+    let (o1, o2) = ([1.0, 0.0], [0.3, 1.1]);
+    assert_eq!(reduce_basis(o1, o2).0, LatticeShape::Other);
+    assert_eq!(direction([1, 0], o1, o2), None);
+    let ship = ObjClass::Spaceship {
+        period: 4,
+        dx: 1,
+        dy: 0,
+    };
+    assert_eq!(ship.speed_in(Some((o1, o2))).unwrap(), "c/4");
+    // A basis given in another form names the same directions: the square grid's, sheared.
+    assert_eq!(
+        direction([1, -1], [1.0, 0.0], [1.0, 1.0]),
+        Some("orthogonal")
+    );
+    assert_eq!(direction([0, 1], [1.0, 0.0], [1.0, 1.0]), Some("diagonal"));
 }

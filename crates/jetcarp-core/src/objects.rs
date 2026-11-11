@@ -107,8 +107,24 @@ impl ObjClass {
             ObjClass::Other { .. } => None,
         }
     }
-    /// Spaceship speed in lattice steps, like `c/4 diagonal` or `c/2 orthogonal`.
-    pub fn speed(&self) -> Option<String> {
+    /// Spaceship speed in lattice steps, like `c/4 diagonal` or `c/2 orthogonal`, on a lattice
+    /// with basis `lattice` (`dx`, `dy` count its vectors). The fraction is the larger of `|dx|`
+    /// and `|dy|` over the period. The direction is named in the lattice's own terms
+    /// ([`direction`]), or left out where the lattice has no axes to name it by; `None` names
+    /// it on the square grid's basis.
+    pub fn speed_in(&self, lattice: Option<(P, P)>) -> Option<String> {
+        let (ObjClass::Spaceship { dx, dy, .. } | ObjClass::Puffer { dx, dy, .. }) = self else {
+            return None;
+        };
+        let s = self.fraction()?;
+        let (a1, a2) = lattice.unwrap_or(([1.0, 0.0], [0.0, 1.0]));
+        Some(match direction([*dx, *dy], a1, a2) {
+            Some(dir) => format!("{s} {dir}"),
+            None => s,
+        })
+    }
+    /// The speed's fraction alone: `c/4`, `2c/5`.
+    fn fraction(&self) -> Option<String> {
         let (ObjClass::Spaceship { period, dx, dy } | ObjClass::Puffer { period, dx, dy }) = self
         else {
             return None;
@@ -121,23 +137,13 @@ impl ObjClass {
         } else {
             format!("{a}c")
         };
-        let s = if b == 1 { num } else { format!("{num}/{b}") };
-        let dir = if *dx == 0 || *dy == 0 {
-            "orthogonal"
-        } else if dx.abs() == dy.abs() {
-            "diagonal"
-        } else {
-            "oblique"
-        };
-        Some(format!("{s} {dir}"))
+        Some(if b == 1 { num } else { format!("{num}/{b}") })
     }
     /// Short tag for summaries: `p2`, `c/4`, or nothing.
     pub fn tag(&self) -> Option<String> {
         match self {
             ObjClass::Oscillator { period } => Some(format!("p{period}")),
-            ObjClass::Spaceship { .. } | ObjClass::Puffer { .. } => self
-                .speed()
-                .map(|s| s.split(' ').next().unwrap_or("").to_string()),
+            ObjClass::Spaceship { .. } | ObjClass::Puffer { .. } => self.fraction(),
             _ => None,
         }
     }
@@ -154,6 +160,128 @@ impl ObjClass {
 
 fn gcd(a: u64, b: u64) -> u64 {
     if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// The shape of a lattice, from its shortest translations: what a spaceship's direction can be
+/// named by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LatticeShape {
+    /// Two equal shortest translations at right angles: the square grid's lattice.
+    Square,
+    /// Three equal shortest translations 60° apart: hexagons, triangles, kagome and the many
+    /// tilings with six-fold or three-fold symmetry.
+    Hexagonal,
+    /// Two perpendicular axes of mirror symmetry and no more: a rectangular lattice (its shortest
+    /// translations at right angles) or a centred one (a rhombus, or rows offset by half a step,
+    /// as in the elongated triangular tiling). `axes` are the two directions, as combinations of
+    /// the reduced basis `u`, `v` ([`reduce_basis`]).
+    Rectangular { axes: [[i64; 2]; 2] },
+    /// An oblique lattice: no axes of symmetry to name a direction by.
+    Other,
+}
+
+/// `a1`, `a2` reduced (Gauss, as integer combinations of them) to the lattice's shortest
+/// translations `u`, `v`: `|u| <= |v|`, the angle between them at least 60°, and on a hexagonal
+/// lattice 120°, so that `u`, `v` and `u + v` are the three shortest. Returns the shape and the
+/// combinations (`u = m[0][0] a1 + m[0][1] a2`, `v = m[1][0] a1 + m[1][1] a2`).
+pub fn reduce_basis(a1: P, a2: P) -> (LatticeShape, [[i64; 2]; 2]) {
+    let dot = |p: P, q: P| p[0] * q[0] + p[1] * q[1];
+    let comb = |m: [i64; 2]| -> P {
+        [
+            m[0] as f64 * a1[0] + m[1] as f64 * a2[0],
+            m[0] as f64 * a1[1] + m[1] as f64 * a2[1],
+        ]
+    };
+    let (mut mu, mut mv) = ([1i64, 0], [0i64, 1]);
+    for _ in 0..64 {
+        let (u, v) = (comb(mu), comb(mv));
+        if dot(u, u) > dot(v, v) * (1.0 + 1e-9) {
+            std::mem::swap(&mut mu, &mut mv);
+            continue;
+        }
+        let r = dot(u, v) / dot(u, u);
+        if r.abs() <= 0.5 + 1e-9 {
+            break;
+        }
+        let k = r.round() as i64;
+        mv = [mv[0] - k * mu[0], mv[1] - k * mu[1]];
+    }
+    let (u, v) = (comb(mu), comb(mv));
+    let (uu, vv) = (dot(u, u), dot(v, v));
+    let tol = 1e-6 * uu;
+    if dot(u, v) > tol {
+        // An obtuse angle (120° rather than 60° on a hexagonal lattice), so that u + v is the
+        // third shortest translation.
+        mv = [-mv[0], -mv[1]];
+    }
+    let uv = dot(u, comb(mv));
+    let equal = (vv - uu).abs() <= tol;
+    let right = uv.abs() <= tol;
+    let half = (uv.abs() - uu / 2.0).abs() <= tol;
+    let shape = match (equal, right, half) {
+        (true, true, _) => LatticeShape::Square,
+        (true, false, true) => LatticeShape::Hexagonal,
+        (false, true, _) => LatticeShape::Rectangular {
+            axes: [[1, 0], [0, 1]],
+        },
+        // A rhombus: mirrors along its diagonals.
+        (true, false, false) => LatticeShape::Rectangular {
+            axes: [[1, 1], [1, -1]],
+        },
+        // Rows offset by half a step (u . v = -|u|^2 / 2): mirrors along u and u + 2v.
+        (false, false, true) => LatticeShape::Rectangular {
+            axes: [[1, 0], [1, 2]],
+        },
+        (false, false, false) => LatticeShape::Other,
+    };
+    (shape, [mu, mv])
+}
+
+/// The direction of a displacement `d` (in the basis `a1`, `a2`) in the lattice's own terms:
+///
+/// | Lattice | orthogonal | diagonal | oblique |
+/// | --- | --- | --- | --- |
+/// | square | along a shortest translation | halfway between two | anything else |
+/// | hexagonal | along one of the three shortest translations | halfway between two (30° off) | anything else |
+/// | rectangular or centred rectangular | along one of its two mirror axes | (none) | anything else |
+///
+/// An oblique lattice has no such axes, and gets no word (`None`). The square grid's words were
+/// once used on every lattice, in its basis' coordinates, which on a hexagonal lattice (whose
+/// basis vectors are 60° apart) called the shortest step `(1, -1)` diagonal.
+pub fn direction(d: [i32; 2], a1: P, a2: P) -> Option<&'static str> {
+    let (shape, m) = reduce_basis(a1, a2);
+    // d = x u + y v: solve with the inverse of the (unimodular) integer matrix.
+    let (dx, dy) = (d[0] as i64, d[1] as i64);
+    let det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+    if det == 0 {
+        return None;
+    }
+    let x = (dx * m[1][1] - dy * m[1][0]) / det;
+    let y = (dy * m[0][0] - dx * m[0][1]) / det;
+    match shape {
+        LatticeShape::Square => Some(if x == 0 || y == 0 {
+            "orthogonal"
+        } else if x.abs() == y.abs() {
+            "diagonal"
+        } else {
+            "oblique"
+        }),
+        LatticeShape::Hexagonal => Some(if x == 0 || y == 0 || x == y {
+            "orthogonal"
+        } else if x == 2 * y || y == 2 * x || x == -y {
+            "diagonal"
+        } else {
+            "oblique"
+        }),
+        LatticeShape::Rectangular { axes } => {
+            Some(if axes.iter().any(|[p, q]| x * q - y * p == 0) {
+                "orthogonal"
+            } else {
+                "oblique"
+            })
+        }
+        LatticeShape::Other => None,
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -225,6 +353,9 @@ pub struct ObjectReport {
     pub symmetries: usize,
     pub counts: Vec<CountRow>,
     pub objects: Vec<Object>,
+    /// The tiling's lattice basis, which spaceship speeds are named in ([`ObjClass::speed_in`]).
+    #[serde(skip)]
+    pub lattice: Option<(P, P)>,
 }
 
 impl ObjectReport {
@@ -1062,6 +1193,7 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
         symmetries: ctx.syms.len(),
         counts: rows,
         objects,
+        lattice: topo.lattice().map(|g| (g.a1, g.a2)),
     })
 }
 

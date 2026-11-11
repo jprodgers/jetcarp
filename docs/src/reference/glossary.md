@@ -278,7 +278,10 @@ rebuilt as it travels.
 **Soup.** A random starting pattern, usually a small square of random cells.
 
 **Spaceship.** A pattern that returns to its starting shape after a period, moved by a lattice vector.
-Its speed is written as a fraction of one lattice step per generation, such as c/4.
+Its speed is written as a fraction of one lattice step per generation, such as c/4, and its direction
+in the lattice's own terms: *orthogonal* along one of the lattice's shortest steps (on a rectangular
+lattice, one of its two mirror axes), *diagonal* halfway between two of them (square and hexagonal
+lattices only), and *oblique* otherwise. A lattice with no mirror axes gets no word.
 
 **Stage.** A palette's colour for the area outside the tiling.
 

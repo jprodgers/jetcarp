@@ -245,7 +245,8 @@ pub struct PatternRecord {
     /// The same displacement in world units (tile edges are about 1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub displacement_xy: Option<[f64; 2]>,
-    /// `c/4 diagonal`, `c/2 orthogonal`, in lattice steps.
+    /// `c/4 diagonal`, `c/2 orthogonal`, in lattice steps, the direction named in the lattice's
+    /// own terms ([`crate::objects::direction`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed: Option<String>,
     /// Live cells in phase 0, and the fewest and most over all phases.
@@ -899,7 +900,7 @@ pub fn build_record_with(
                 dx: d[0],
                 dy: d[1],
             }
-            .speed()
+            .speed_in(topo.lattice().map(|g| (g.a1, g.a2)))
         })
         .flatten();
     let mut rec = PatternRecord {

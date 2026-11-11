@@ -214,7 +214,10 @@ fn objects_map(r: &objects::ObjectReport) -> Map {
             );
             m.insert(
                 "speed".into(),
-                c.class.speed().map(Dynamic::from).unwrap_or(Dynamic::UNIT),
+                c.class
+                    .speed_in(r.lattice)
+                    .map(Dynamic::from)
+                    .unwrap_or(Dynamic::UNIT),
             );
             m.insert("key".into(), c.key.clone().into());
             Dynamic::from_map(m)
@@ -237,7 +240,10 @@ fn objects_map(r: &objects::ObjectReport) -> Map {
             );
             m.insert(
                 "speed".into(),
-                o.class.speed().map(Dynamic::from).unwrap_or(Dynamic::UNIT),
+                o.class
+                    .speed_in(r.lattice)
+                    .map(Dynamic::from)
+                    .unwrap_or(Dynamic::UNIT),
             );
             if let ObjClass::Spaceship { dx, dy, .. } = o.class {
                 m.insert("dx".into(), (dx as INT).into());

@@ -31,7 +31,7 @@ use crate::library::{
     GunInfo, PatternClass, PatternRecord, canonical_choice, decode_cells, encode_cells, now_utc,
     orient,
 };
-use crate::objects::{LCell, ObjClass, Phase};
+use crate::objects::{LCell, Phase};
 use crate::world::Command;
 use std::sync::Arc;
 
@@ -204,13 +204,8 @@ fn fit(c: &Census, cache: &mut Cache, cells: &[LCell], gens: u64, p: u64) -> Opt
         let mut rec = c.record(PatternClass::Gun, p, [0, 0], &phases).ok()?;
         let (mi, _) = canonical_choice(&phases, &c.syms)?;
         let m = &c.syms[mi];
-        let speed = ObjClass::Spaceship {
-            period: first.period,
-            dx: first.found.record.displacement.map_or(0, |d| d[0]),
-            dy: first.found.record.displacement.map_or(0, |d| d[1]),
-        }
-        .speed()
-        .unwrap_or_default();
+        // The ship's own record names its speed on this tiling's lattice.
+        let speed = first.found.record.speed.clone().unwrap_or_default();
         rec.gun = Some(GunInfo {
             ship: first.found.id.clone(),
             ship_label: first.found.label.clone(),

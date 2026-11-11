@@ -131,7 +131,7 @@ pub fn objects(a: ObjectsArgs) -> Result<()> {
             },
             c.label(),
             c.class
-                .speed()
+                .speed_in(r.lattice)
                 .map(|s| format!(", {s}"))
                 .unwrap_or_default()
         );
