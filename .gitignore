@@ -2,6 +2,7 @@
 /out
 *.png
 !/docs/**/*.png
+!/crates/jetcarp-pack/tests/golden/**/*.png
 .DS_Store
 __pycache__/
 .claude/
