@@ -1378,7 +1378,10 @@ candidates above:
 
 1. JETCARP ran it alone on a large wrapped patch, on a smaller one and with dead edges, and its
    object finder saw one spaceship each time, with the recorded period and displacement; a scratch
-   catalog recomputed the same range of rules.
+   catalog recomputed the same range of rules. The object finder cannot do this for a ship whose
+   parts lie too far apart to be grouped (it sees the parts of a bound pair as two ships, and the
+   pieces of one large k3-055 ship, `0af25862`, as debris); for those, JETCARP's engine was checked
+   to repeat the ship, translated, for 12 periods.
 2. Every phase was split into groups and each group run alone, to find **compounds**: two or more
    smaller ships flying together without influencing each other.
 3. Every smaller ship of the same tiling was searched for inside it, to find **derivatives**: a
