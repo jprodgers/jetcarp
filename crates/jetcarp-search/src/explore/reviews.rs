@@ -64,8 +64,11 @@ pub struct RatingsRead {
 }
 
 /// Record the ratings in a folder of rating files, as the clip-rating page saves them:
-/// `<run id>.json` holding `{"verdict": "keep", "ts": <ms>}` (or that inside `data`), with an
-/// optional `note`. A rating already recorded from the same folder is skipped.
+/// `<run id>.json` holding `{"verdict": "keep", "ts": <ms>}` (or that inside `data`; without a
+/// time, the file's), with an optional `note`. Their source is `ratings:<folder name>` (the name
+/// only, never where the folder is on this disk). A rating recorded already (the same run,
+/// verdict, note, rater, time, and source) is skipped, so reading a folder again records only
+/// what is new in it.
 pub fn import_ratings(
     lib: &Library,
     runs: &Runs,
@@ -73,7 +76,7 @@ pub fn import_ratings(
     rater: &str,
 ) -> Result<RatingsRead, String> {
     let rd = std::fs::read_dir(dir).map_err(|x| format!("{}: {x}", dir.display()))?;
-    let source = format!("ratings:{}", dir.display());
+    let source = format!("ratings:{}", crate::explore::store::file_name(dir));
     let mut out = RatingsRead::default();
     let mut files: Vec<PathBuf> = rd
         .flatten()
@@ -113,6 +116,11 @@ pub fn import_ratings(
             .get("ts")
             .and_then(|x| x.as_i64())
             .map(|t| if t > 100_000_000_000 { t / 1000 } else { t })
+            .or_else(|| {
+                let m = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;
+                let s = m.duration_since(std::time::UNIX_EPOCH).ok()?;
+                Some(s.as_secs() as i64)
+            })
             .unwrap_or_else(crate::explore::store::now);
         read.push((run, verdict.to_string(), note.to_string(), ts));
     }
@@ -134,7 +142,7 @@ pub fn import_ratings(
             created: utc(ts),
         });
     }
-    let (done, skipped) = lib.add_run_reviews(&list, Dedupe::SameSource)?;
+    let (done, skipped) = lib.add_run_reviews(&list, Dedupe::Exact)?;
     out.recorded = done;
     out.already = skipped;
     Ok(out)

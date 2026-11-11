@@ -814,5 +814,40 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
         .unwrap();
     assert_eq!(drop.created, jetcarp_core::pattern::utc_of(1794168214));
     assert_eq!(drop.run, id + 1);
+    // A folder is named by its name only, never where it is on this disk.
+    assert_eq!(drop.source, "ratings:ratings");
+    // Another folder of the same name, with a rating of the same run made later: recorded; the
+    // first folder read again: nothing new.
+    let rd2 = dir.join("round2").join("ratings");
+    std::fs::create_dir_all(&rd2).unwrap();
+    std::fs::write(
+        rd2.join(format!("{}.json", id + 1)),
+        r#"{"ts": 1794200000000, "verdict": "keep"}"#,
+    )
+    .unwrap();
+    let second = reviews::import_ratings(&lib, c, &rd2, "Emily Teich").unwrap();
+    assert_eq!((second.recorded, second.already), (1, 0));
+    let again = reviews::import_ratings(&lib, c, &rd, "").unwrap();
+    assert_eq!((again.recorded, again.already), (0, 2));
+    // Every rating's target names its run: `<search uuid>:<run id>`, and that run is this one.
+    let rows = lib.ratings(Some("search_run")).unwrap();
+    assert_eq!(rows.len(), 4);
+    for row in &rows {
+        let (search, run) = row.target_id.split_once(':').unwrap();
+        assert_eq!(search, c.uuid());
+        let run: i64 = run.parse().unwrap();
+        let got = c.get(&[run]).unwrap();
+        assert_eq!(got.len(), 1, "{}", row.target_id);
+        assert_eq!(got[0].id, run);
+    }
+    let later = rows.iter().find(|r| r.rater == "Emily Teich").unwrap();
+    assert_eq!(
+        (
+            later.target_id.clone(),
+            later.verdict.as_deref(),
+            later.rating
+        ),
+        (format!("{}:{}", c.uuid(), id + 1), Some("keep"), 5.0)
+    );
     let _ = store::FORMAT;
 }

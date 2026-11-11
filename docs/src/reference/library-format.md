@@ -270,10 +270,11 @@ library when the search's folder is deleted or shared:
 | `rating` | the rating that stands for the verdict: keep 5, maybe 3, drop 1 |
 | `rater` | who judged: a name, `user` or `model:<name>` |
 | `note` | what was seen, in a sentence |
-| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page), `import:<database>` (an old CART database) |
-| `created` | when (UTC) |
+| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page), `import:<database>` (an old CART database); a folder or database by its name only, never where it was on the disk |
+| `created` | when (UTC): the rating file's time, or the file's own when it holds none |
 
-Reading a folder of rating files again records only the ratings not already recorded from it.
+Reading a folder of rating files again records only the ratings not already recorded (the same run,
+verdict, note, rater, time and source).
 
 ## Media files
 
