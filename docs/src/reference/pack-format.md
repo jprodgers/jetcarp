@@ -571,7 +571,7 @@ as JSON (`level` among them when the patch gave its level that way).
 | `sites: int32?` | aperiodic: the sites it was run at |
 | `engine_version: string`, `pin: string`, `semantics: string` | what checked it |
 | `date: string` | when |
-| `range: string?` | on the main row of B/S and Generations patterns: the rule range as JSON (`bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`: every rule whose masks lie between the bounds runs the pattern as stored) |
+| `range: string?` | on the main row of B/S and Generations patterns: the rule range as JSON (`bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`: every rule whose masks lie between the bounds runs the pattern as stored; `min_rule` and `max_rule`: the two bounding rules in notation, for people) |
 | `mover: string?` | on the main row of aperiodic movers: how far the tracker followed it (JSON) |
 
 ### `sightings` (events, sorted by `pattern_id`, `rule`, `publisher`, `source`)
@@ -862,7 +862,8 @@ LICENSE, README.md, CITATION.cff                  made from the manifest
 ```
 
 - A table's parts are numbered from 1 within each partition folder, in the order its index lists
-  them (children in order); partition folders are `<key>=<value>` in the partition's key order
+  them: an index's own parts first, then each child index's parts in the order `children` lists
+  them, depth first; partition folders are `<key>=<value>` in the partition's key order
   (`class_group=spaceship/tiling_group=k3`). The partition columns are also in the files, so a tool
   that adds folder names as columns (DuckDB's `hive_partitioning`, pyarrow's `partitioning="hive"`)
   sees each twice with the same value; read the files without it, or drop one.
@@ -922,7 +923,8 @@ data never carries attribution duties; other publishers may choose any open lice
 ## Versions and compatibility
 
 - **Format `major.minor`.** A reader MUST refuse an unknown major, and MUST read a higher minor,
-  ignoring unknown members, tables and columns.
+  ignoring unknown members, tables and columns. Unknown members are ignored in every JSON object:
+  documents, and the JSON held in table cells (`range`, `gun`, `ants.run`, `site`, ...) alike.
 - **`requires`** is how a minor version adds something a reader must not ignore: the feature's name
   goes in `requires`, and a reader that does not know it refuses the pack.
 - **Upgrades.** A new format version is written as a new version whose parent is the old manifest;
