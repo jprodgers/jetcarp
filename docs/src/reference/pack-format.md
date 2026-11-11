@@ -332,7 +332,11 @@ of each, which every row of the part repeats in its own columns.
   the empty start is `start="empty"`. The `ants.id` column holds `ant-<hex>`, and a target names it
   `ant:ant-<hex>`.
 - **A Quick Start entry's id** is `qs-` and the first 32 hex digits of SHA-256 over its `scene`
-  column's text, `"\n"`, and its `pin`.
+  column's text, `"\n"`, and its `pin`. Every target that names an entry (in `provenance`, `media`,
+  `ratings`, `annotations` and `retracts`) is `quickstart:qs-<hex>`, never a library's own name for
+  it. *JETCARP's library keys its entries by name (a pattern's id, a scene's file stem): a publish
+  writes the pack id in its place (a selection or retraction may name either), and an import maps
+  it back, to the entry the library has with that pack id or else to a new entry kept under it.*
 - A reader checks an id with one hash. In Python:
   `hashlib.sha256((identity + "\n" + pin).encode()).hexdigest()[:32] == id`.
 - That proves the id matches the stated identity. That the identity is the canonical form of a real

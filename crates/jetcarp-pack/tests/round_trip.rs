@@ -175,6 +175,101 @@ impl Sightings for Library {
     }
 }
 
+/// The library keys a Quick Start entry by name; a pack only by its pack id (`qs-...`). Every
+/// row about the entry names `quickstart:<pack id>`, and an import maps it back: to the entry
+/// the library has, or to a new entry under the pack id.
+#[test]
+fn quick_start_entries_go_by_their_pack_ids() {
+    let dir = temp("qs-ids");
+    let lib = small_library(&dir);
+    let mut scene = jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+        "square",
+        32,
+        32,
+        jetcarp_core::Boundary::Wrap,
+    ));
+    scene.name = "Glider".into();
+    scene.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
+    lib.put_quickstart(&jetcarp_store::QuickStartRow::for_scene(
+        "my-glider",
+        "scene",
+        scene,
+    ))
+    .unwrap();
+    lib.rate("quickstart", "my-glider", "user", 5.0, "a good start")
+        .unwrap();
+    let p = publisher(4, "Test Publisher");
+    let mut b = book(&[]);
+    let store = dir.join("store");
+    run(&lib, &p, &mut b, &options("qs", &store));
+
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
+    let rows = |table: &str| -> Vec<serde_json::Value> {
+        let mut out = vec![];
+        src.table_rows(&v, table, |_, r| {
+            out.extend(r);
+            Ok(())
+        })
+        .unwrap();
+        out
+    };
+    let qs = rows("quickstart");
+    assert_eq!(qs.len(), 1);
+    let id = qs[0]["id"].as_str().unwrap().to_string();
+    assert!(id.starts_with("qs-"), "{id}");
+    let tg = format!("quickstart:{id}");
+    let prov: Vec<_> = rows("provenance")
+        .into_iter()
+        .filter(|r| r["target"].as_str().unwrap().starts_with("quickstart:"))
+        .collect();
+    assert!(!prov.is_empty());
+    assert!(prov.iter().all(|r| r["target"] == tg.as_str()), "{prov:?}");
+    let rated: Vec<_> = rows("ratings")
+        .into_iter()
+        .filter(|r| r["target"].as_str().unwrap().starts_with("quickstart:"))
+        .collect();
+    assert_eq!(rated.len(), 1);
+    assert_eq!(rated[0]["target"], tg.as_str());
+
+    // A fresh library keeps the entry under its pack id, with its history and rating.
+    let lib2 = Library::open(dir.join("lib2"));
+    let opts = import::Options {
+        path: store.clone(),
+        verify: VerifyMode::None,
+        ..Default::default()
+    };
+    let r = import::import(&lib2, &opts, &|_| {}).unwrap();
+    assert_eq!(r.quickstart, 1);
+    lib2.get_quickstart(&id).unwrap();
+    let h = lib2.provenance("quickstart", &id).unwrap();
+    assert_eq!(h[0].kind, "found", "{h:?}");
+    let rq = lib2.ratings(Some("quickstart")).unwrap();
+    assert_eq!(rq.len(), 1);
+    assert_eq!(rq[0].target_id, id);
+
+    // The publisher's own library has the entry: no second copy, and its rating stays on it.
+    let before = lib.quickstart(&[]).unwrap().len();
+    let r = import::import(&lib, &opts, &|_| {}).unwrap();
+    assert_eq!(r.quickstart, 0);
+    assert_eq!(lib.quickstart(&[]).unwrap().len(), before);
+    assert!(lib.get_quickstart(&id).is_err());
+    assert!(
+        lib.ratings(Some("quickstart"))
+            .unwrap()
+            .iter()
+            .all(|x| x.target_id == "my-glider")
+    );
+
+    // A retraction by the library's id names the pack id.
+    let mut o = options("qs", &store);
+    o.retract = vec![("quickstart:my-glider".into(), "a test".into())];
+    let out = run(&lib, &p, &mut b, &o);
+    let v2 = src.version(&out.manifest).unwrap();
+    assert_eq!(v2.manifest.retracts.len(), 1);
+    assert_eq!(v2.manifest.retracts[0].target, tg);
+}
+
 #[test]
 fn the_same_library_gives_the_same_store() {
     let dir = temp("determinism");

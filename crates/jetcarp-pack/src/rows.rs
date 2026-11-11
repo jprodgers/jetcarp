@@ -755,16 +755,11 @@ pub fn quickstart_row(
     q: &jetcarp_store::library::pack::PackQuickstart,
 ) -> Result<QuickstartPackRow, String> {
     self_contained(&q.row.scene).map_err(|e| format!("Quick Start {}: {e}", q.row.id))?;
-    let scene = serde_json::to_value(&q.row.scene).map_err(|e| e.to_string())?;
-    let scene = crate::paths::strip_json(scene);
     let (family, semantics) =
         jetcarp_core::semantics::of_notation(&q.row.rule).unwrap_or(("", "1"));
-    if q.pin.is_empty() {
-        return Err(format!("Quick Start {}: no geometry pin", q.row.id));
-    }
-    let scene_text = jetcarp_core::jcs::to_string(&scene);
+    let (id, scene_text) = quickstart_pack_id(q)?;
     Ok(QuickstartPackRow {
-        id: quickstart_id(&scene_text, &q.pin),
+        id,
         title: q.row.title.clone(),
         description: q.row.description.clone(),
         source: match (q.row.source_kind.as_str(), &q.row.source_id) {
@@ -788,6 +783,20 @@ pub fn quickstart_row(
 /// scene's text (the `scene` column), a newline and its pin, as a pattern's id is made.
 pub fn quickstart_id(scene: &str, pin: &str) -> String {
     format!("qs-{}", content_id(scene, pin))
+}
+
+/// A library Quick Start entry's pack id, and its `scene` column's text. The library keys its
+/// entries by name (a pattern's id, a scene's file stem, a sweep's id); a pack only by this id,
+/// so its provenance, media and ratings name `quickstart:<this id>`.
+pub fn quickstart_pack_id(
+    q: &jetcarp_store::library::pack::PackQuickstart,
+) -> Result<(String, String), String> {
+    if q.pin.is_empty() {
+        return Err(format!("Quick Start {}: no geometry pin", q.row.id));
+    }
+    let scene = serde_json::to_value(&q.row.scene).map_err(|e| e.to_string())?;
+    let scene_text = jetcarp_core::jcs::to_string(&crate::paths::strip_json(scene));
+    Ok((quickstart_id(&scene_text, &q.pin), scene_text))
 }
 
 /// A pack's Quick Start entry as a library row (approved: a pack is chosen by its reader).

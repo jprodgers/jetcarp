@@ -339,7 +339,16 @@ impl Library {
 
     /// Quick Start entries shown in the menu (`auto`, `approved`), with their pins and history.
     pub fn pack_quickstart(&self) -> Result<Vec<PackQuickstart>, String> {
-        let rows = self.quickstart(&[QsStatus::Auto, QsStatus::Approved])?;
+        self.pack_quickstart_with(&[QsStatus::Auto, QsStatus::Approved])
+    }
+
+    /// Quick Start entries with one of these statuses (every one when empty), with their pins
+    /// and history.
+    pub fn pack_quickstart_with(
+        &self,
+        statuses: &[QsStatus],
+    ) -> Result<Vec<PackQuickstart>, String> {
+        let rows = self.quickstart(statuses)?;
         self.read(vec![], |c| {
             let mut out = vec![];
             for row in rows {

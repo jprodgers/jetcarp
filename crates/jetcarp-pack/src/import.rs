@@ -580,6 +580,25 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         lib.merge_sightings(&merged, &extra)?;
     }
 
+    // A pack names a Quick Start entry by its pack id (`qs-...`), the library by its own name:
+    // an entry the library has already is that entry (its pack id computed as a publish would),
+    // and a new one is kept under its pack id.
+    let mut qs_lib: HashMap<String, String> = HashMap::new();
+    for q in lib.pack_quickstart_with(&[])? {
+        if let Ok((p, _)) = rows::quickstart_pack_id(&q) {
+            qs_lib.entry(p).or_insert(q.row.id);
+        }
+    }
+    let local_qs = |id: &str| qs_lib.get(id).cloned().unwrap_or_else(|| id.to_string());
+    let local = |(k, id): (&str, &str)| -> (String, String) {
+        let id = if k == "quickstart" {
+            local_qs(id)
+        } else {
+            id.to_string()
+        };
+        (k.to_string(), id)
+    };
+
     // Ant runs and Quick Start entries.
     let mut ant_rows = vec![];
     for (_, a) in rows_of::<AntPackRow>(&src, &v, "ants")? {
@@ -620,7 +639,8 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
                 q.id
             ));
         }
-        let row = rows::quickstart_of(&q)?;
+        let mut row = rows::quickstart_of(&q)?;
+        row.id = local_qs(&q.id);
         let tg = format!("quickstart:{}", q.id);
         let (origin, _) = origin_of(prov.get(&tg), &m.publisher, &h)?;
         qs.push((row, origin, q.pin.clone()));
@@ -654,13 +674,13 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         let b = src.object(&mr.object, ext, &rel, 256 << 20)?;
         out.objects_checked += 1;
         out.bytes_checked += b.len() as u64;
-        let (tk, tid) = split_target(&mr.target)?;
+        let (tk, tid) = local(split_target(&mr.target)?);
         if !opts.dry_run {
             jetcarp_store::media::put_file(&lib.folder(), &b, ext)?;
         }
         media.push(PackMedia {
-            target_kind: tk.into(),
-            target_id: tid.into(),
+            target_kind: tk,
+            target_id: tid,
             kind: mr.kind.clone(),
             from_seed: mr.from_seed,
             hash: crate::hash::hex_of(&mr.object)?.into(),
@@ -702,7 +722,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
                 .join(" & "),
             _ => name_of(&r.rater),
         };
-        let (tk, tid) = split_target(&r.target)?;
+        let (tk, tid) = local(split_target(&r.target)?);
         let (rating, verdict) = match r.scale.as_str() {
             "keep-maybe-drop 1" => (
                 jetcarp_store::library::verdict_rating(&r.verdict)
@@ -725,8 +745,8 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         };
         ratings.push(jetcarp_store::RatingRow {
             id: 0,
-            target_kind: tk.into(),
-            target_id: tid.into(),
+            target_kind: tk,
+            target_id: tid,
             rater,
             rating,
             verdict,
@@ -744,10 +764,10 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         .retracts
         .iter()
         .filter_map(|r: &Retract| {
-            let (k, id) = split_target(&r.target).ok()?;
+            let (k, id) = local(split_target(&r.target).ok()?);
             Some(RetractionRow {
-                target_kind: k.into(),
-                target_id: id.into(),
+                target_kind: k,
+                target_id: id,
                 publisher: if r.publisher.is_empty() {
                     m.publisher.clone()
                 } else {

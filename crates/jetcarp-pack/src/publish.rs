@@ -49,7 +49,8 @@ pub struct Publisher {
 /// What a publish takes from the library.
 #[derive(Clone, Debug)]
 pub struct Selection {
-    /// Patterns, ant runs and Quick Start entries by id (`None`: every one).
+    /// Patterns, ant runs and Quick Start entries by id (`None`: every one); a Quick Start entry
+    /// by its library id or its pack id (`qs-...`).
     pub ids: Option<HashSet<String>>,
     /// Explore searches by uuid (`None`: every one with a sealed folder).
     pub searches: Option<Vec<String>>,
@@ -86,7 +87,8 @@ pub struct Options {
     /// The version's time (default: now); fixed for reproducible packs.
     pub created: Option<String>,
     pub selection: Selection,
-    /// Records to withdraw: `pattern:<id>`, `ant:<id>`, `quickstart:<id>`, with a reason.
+    /// Records to withdraw: `pattern:<id>`, `ant:<id>`, `quickstart:<id>`, with a reason (a
+    /// Quick Start entry by either id; the manifest names its pack id).
     pub retract: Vec<(String, String)>,
     /// Other versions to merge (a store, or a store and manifest hash): each becomes a parent.
     pub merge: Vec<(PathBuf, Option<String>)>,
@@ -844,29 +846,44 @@ pub fn publish(
         }
     }
 
-    // Quick Start entries.
-    if sel.quickstart {
-        for q in lib.pack_quickstart()? {
-            if ids.is_some_and(|s| !s.contains(&q.row.id))
-                || retracted.contains(&target("quickstart", &q.row.id))
-            {
-                continue;
-            }
-            match rows::quickstart_row(&q) {
-                Ok(r) => {
-                    pin_keys.insert(r.pin_key.clone());
-                    published.insert(q.row.id.clone());
-                    t.get_mut("quickstart").unwrap().push(&inh, &r)?;
-                    for p in &q.provenance {
-                        t.get_mut("provenance")
-                            .unwrap()
-                            .push(&inh, &provenance_row("quickstart", &q.row.id, p, &me, None))?;
-                    }
+    // Quick Start entries, under their pack ids (`qs-` and the hash of the scene and pin): the
+    // library keys them by name, and every row about one names `quickstart:<pack id>`. A
+    // selection or a retraction may name either.
+    let mut qs_pack_ids: HashMap<String, String> = HashMap::new();
+    let mut qs_published: HashMap<String, String> = HashMap::new();
+    for q in lib.pack_quickstart()? {
+        let pack_id = rows::quickstart_pack_id(&q).ok().map(|x| x.0);
+        if let Some(p) = &pack_id {
+            qs_pack_ids.insert(q.row.id.clone(), p.clone());
+        }
+        let mut names = std::iter::once(&q.row.id).chain(&pack_id);
+        if !sel.quickstart
+            || ids.is_some_and(|s| !names.clone().any(|i| s.contains(i)))
+            || names.any(|i| retracted.contains(&target("quickstart", i)))
+        {
+            continue;
+        }
+        match rows::quickstart_row(&q) {
+            Ok(r) => {
+                pin_keys.insert(r.pin_key.clone());
+                qs_published.insert(q.row.id.clone(), r.id.clone());
+                t.get_mut("quickstart").unwrap().push(&inh, &r)?;
+                for p in &q.provenance {
+                    t.get_mut("provenance")
+                        .unwrap()
+                        .push(&inh, &provenance_row("quickstart", &r.id, p, &me, None))?;
                 }
-                Err(e) => out.notes.push(format!("left out: {e}")),
             }
+            Err(e) => out.notes.push(format!("left out: {e}")),
         }
     }
+    // The target a row about a published record names (none for a record left out).
+    let pack_target = |kind: &str, id: &str| -> Option<String> {
+        match kind {
+            "quickstart" => qs_published.get(id).map(|p| target(kind, p)),
+            _ => published.contains(id).then(|| target(kind, id)),
+        }
+    };
 
     // Tilings (each aperiodic family with its reference patch) and rules.
     for k in &pin_keys {
@@ -945,9 +962,9 @@ pub fn publish(
     let mut media_n = 0u64;
     if sel.media {
         for m in lib.pack_media()? {
-            if !published.contains(&m.target_id) {
+            let Some(tg) = pack_target(&m.target_kind, &m.target_id) else {
                 continue;
-            }
+            };
             let src_file = lib
                 .folder()
                 .join(jetcarp_store::media::rel_path(&m.hash, &m.ext));
@@ -968,7 +985,7 @@ pub fn publish(
             t.get_mut("media").unwrap().push(
                 &inh,
                 &MediaPackRow {
-                    target: target(&m.target_kind, &m.target_id),
+                    target: tg,
                     kind: m.kind.clone(),
                     from_seed: m.from_seed,
                     object: obj,
@@ -994,16 +1011,17 @@ pub fn publish(
         let mut used: BTreeMap<String, RaterEntry> = BTreeMap::new();
         let mut left_out: BTreeMap<String, u64> = BTreeMap::new();
         for r in lib.ratings(None)? {
-            let included = match r.target_kind.as_str() {
+            let tg = match r.target_kind.as_str() {
                 "search_run" => r
                     .target_id
                     .split_once(':')
-                    .is_some_and(|(u, _)| search_uuids.contains(u) || sel.searches.is_none()),
-                _ => published.contains(&r.target_id),
+                    .is_some_and(|(u, _)| search_uuids.contains(u) || sel.searches.is_none())
+                    .then(|| target(&r.target_kind, &r.target_id)),
+                k => pack_target(k, &r.target_id),
             };
-            if !included {
+            let Some(tg) = tg else {
                 continue;
-            }
+            };
             let Some(entry) = book.resolve(&r.rater, &publisher.name) else {
                 *left_out.entry(r.rater.clone()).or_default() += 1;
                 continue;
@@ -1016,7 +1034,7 @@ pub fn publish(
                 &inh,
                 &RatingPackRow {
                     rater: entry.id.clone(),
-                    target: target(&r.target_kind, &r.target_id),
+                    target: tg,
                     scale: scale.into(),
                     verdict,
                     note: (entry.notes && !r.note.is_empty()).then(|| crate::paths::strip(&r.note)),
@@ -1097,9 +1115,14 @@ pub fn publish(
                 "retract '{tg}': pattern:<id>, ant:<id> or quickstart:<id>"
             ));
         }
-        if !retracts.iter().any(|r| &r.target == tg) {
+        // A Quick Start entry is retracted by its pack id, whichever id names it here.
+        let tg = match qs_pack_ids.get(id) {
+            Some(p) if k == "quickstart" => target(k, p),
+            _ => tg.clone(),
+        };
+        if !retracts.iter().any(|r| r.target == tg) {
             retracts.push(Retract {
-                target: tg.clone(),
+                target: tg,
                 publisher: me.clone(),
                 reason: reason.clone(),
                 date: created.clone(),
