@@ -15,11 +15,20 @@
 //!   of the unit cell its shape index and its polygon's corners (placed in the unit cell); the
 //!   neighbour hash covers the offset table (for each neighbourhood, edge then touch, and each
 //!   tile type: its slots in order, each `(di, dj, k)`). Floats are hashed by their exact bits.
-//! - *Aperiodic tilings* (hat, Spectre, Penrose): there is no unit cell, and a record is tied
-//!   to the patch it was found on, so the pin hashes that patch, named by its spec (family,
-//!   parameters, edges and substitution level; [`pin_spec`]): every tile's shape index and
-//!   corners, in tile order, then each neighbourhood's neighbour lists and the open-boundary
-//!   flags. Two levels of one family are two patches with two pins.
+//! - *Aperiodic tilings* (hat, Spectre, Penrose): there is no unit cell, so the pin hashes one
+//!   fixed **reference patch** of the family ([`REFERENCE_LEVELS`]: level 4 of each, 4,000 to
+//!   4,401 tiles), whatever level the record was found on: every tile's shape index and corners,
+//!   in tile order, then each neighbourhood's neighbour lists and the open-boundary flags. The
+//!   level is the size of an aperiodic patch, so it is no more part of the pin than a lattice
+//!   grid's size: a pattern's identity on these tilings is already free of its position (a
+//!   pattern graph or a site), the same pattern found on two levels is one pattern, and the
+//!   record keeps the patch it was found on (its site) for re-verification. Level 4 is the
+//!   smallest level that holds every local configuration of the next level (each tile's area,
+//!   handedness relative to the patch, and neighbour counts, with its neighbours' and theirs, two
+//!   steps out, away from the patch's edge), for all four families; level 3 holds fewer (a test
+//!   checks both). A change to any tile's geometry or neighbours therefore shows in the pin. The
+//!   levels are fixed here, not taken from the families' default levels, so changing a default
+//!   never changes a pin.
 //!
 //! The bytes hashed, in order (integers little-endian, `u32` unless marked, floats as `u64`
 //! bits):
@@ -27,7 +36,7 @@
 //! ```text
 //! polygon_hash   = SHA-256("jetcarp-geometry-v1 polygons\n" + body)
 //!   periodic:  "lattice" a1.x a1.y a2.x a2.y ntypes, then per tile type: shape, n, n × (x, y)
-//!   aperiodic: "patch" cells, then per tile: shape, n, n × (x, y)
+//!   aperiodic: "patch" cells, then per tile: shape, n, n × (x, y), on the reference patch
 //! neighbour_hash = SHA-256("jetcarp-geometry-v1 neighbours\n" + body)
 //!   periodic:  for nb in [edge, touch], per tile type: slots, slots × (di i32, dj i32, k)
 //!   aperiodic: for nb in [edge, touch], per tile: degree, degree × neighbour; then per tile: open u8
@@ -61,39 +70,53 @@ pub struct GeometryPin {
     pub neighbour_hash: String,
 }
 
-/// Is this tiling family aperiodic (pinned by its patch, not a unit cell)?
+/// Is this tiling family aperiodic (pinned by its reference patch, not a unit cell)?
 pub fn is_aperiodic(t: &TilingSpec) -> bool {
     families::family(&t.family).is_some_and(|f| f.kind == FamilyKind::Aperiodic)
 }
 
-/// The spec a pin is computed from: the tiling's identity (family, parameters, edges; no size,
-/// dead edges) for periodic tilings; for aperiodic ones the identity with the patch's
-/// substitution level (the spec's `level` size, else its `level` parameter, else the family's
-/// default level, as [`Topology::build`] reads it).
+/// The level of the patch each aperiodic family is pinned on (see the module notes). Fixed: a
+/// change here changes every pin on that family, and so every id.
+pub const REFERENCE_LEVELS: [(&str, u32); 4] = [
+    ("hat", 4),
+    ("spectre", 4),
+    ("penrose-kd", 4),
+    ("penrose-rhomb", 4),
+];
+
+/// The reference level of an aperiodic family (level 4 for one not listed).
+pub fn reference_level(family: &str) -> u32 {
+    REFERENCE_LEVELS
+        .iter()
+        .find(|(f, _)| *f == family)
+        .map(|x| x.1)
+        .unwrap_or(4)
+}
+
+/// The spec a pin is computed from: the tiling's identity without an aperiodic family's level
+/// ([`crate::pattern::identity_tiling`]), and for aperiodic families the reference level as its
+/// size.
 pub fn pin_spec(t: &TilingSpec) -> TilingSpec {
-    let mut s = crate::pattern::tiling_identity(t);
+    let mut s = crate::pattern::identity_tiling(t);
     if is_aperiodic(t) {
-        let level = match t.size {
-            Some(SizeSpec::Level(l)) => l,
-            _ => t
-                .params
-                .as_ref()
-                .and_then(|p| p.get("level"))
-                .and_then(|v| v.as_u64())
-                .map(|l| l as u32)
-                .unwrap_or_else(|| crate::aperiodic::default_level(&t.family)),
-        };
-        s.size = Some(SizeSpec::Level(level));
+        s.size = Some(SizeSpec::Level(reference_level(&t.family)));
     }
     s
 }
 
-/// The key of a tiling's pin: the JSON of [`pin_spec`]. For a periodic tiling this is the
-/// tiling key the library uses everywhere ([`crate::pattern::tiling_key`]); for an aperiodic
-/// one it also names the patch's level.
+/// The key of a tiling's pin, a library's `engine_pins` key: the tiling's identity key
+/// ([`crate::pattern::identity_key`]: the tiling key, without an aperiodic family's level).
 pub fn pin_key(t: &TilingSpec) -> String {
-    serde_json::to_string(&pin_spec(t)).unwrap_or_default()
+    crate::pattern::identity_key(t)
 }
+
+/// The reference patches built for pins in this process (their specs as JSON), for tests and
+/// for knowing what opening a library costs.
+pub fn built_patches() -> Vec<String> {
+    BUILT.lock().unwrap().clone()
+}
+
+static BUILT: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn f(h: &mut Sha256, x: f64) {
     h.update(&x.to_bits().to_le_bytes());
@@ -183,7 +206,7 @@ pub fn pin_of(topo: &Topology, key: String) -> GeometryPin {
 
 /// The geometry pin of a tiling (see the module notes), computed once per [`pin_key`] in this
 /// process. Periodic tilings are built on a small grid (the pin covers only the unit cell);
-/// aperiodic ones as the patch their spec names.
+/// aperiodic ones as their family's reference patch, whatever level the spec names.
 pub fn geometry_pin(t: &TilingSpec) -> Result<GeometryPin, String> {
     static CACHE: OnceLock<Mutex<HashMap<String, GeometryPin>>> = OnceLock::new();
     let key = pin_key(t);
@@ -193,7 +216,12 @@ pub fn geometry_pin(t: &TilingSpec) -> Result<GeometryPin, String> {
     }
     let mut spec = pin_spec(t);
     let pin = if is_aperiodic(&spec) {
-        let topo = crate::pattern::site::patch_topology(&spec)?;
+        // Built and dropped here (not kept in the patch cache): a pin is all that is needed.
+        let topo = Topology::build(&spec)?;
+        BUILT
+            .lock()
+            .unwrap()
+            .push(serde_json::to_string(&spec).unwrap_or_default());
         pin_of(&topo, key.clone())
     } else {
         spec.size = Some(SizeSpec::Rect { w: 8, h: 8 });
@@ -258,20 +286,115 @@ mod tests {
         assert_eq!(pins.len(), 5);
     }
 
-    // An aperiodic pin names its patch: the level is part of it, and an explicit level equals
-    // the default one when they agree.
+    // An aperiodic pin is its family's reference patch's: the same for every level, given as a
+    // size or as a parameter, and building the pin of a level-7 spec builds only the reference.
     #[test]
-    fn aperiodic_pins_name_the_patch() {
-        let l = |n| TilingSpec::new("hat").with_size(SizeSpec::Level(n));
-        let p3 = geometry_pin(&l(3)).unwrap();
-        let p4 = geometry_pin(&l(4)).unwrap();
-        assert_ne!(p3.pin, p4.pin);
-        assert_ne!(p3.key, p4.key);
-        let d = crate::aperiodic::default_level("hat");
-        assert_eq!(
-            geometry_pin(&TilingSpec::new("hat")).unwrap(),
-            geometry_pin(&l(d)).unwrap()
-        );
-        assert!(p3.key.contains("\"level\":3"), "{}", p3.key);
+    fn aperiodic_pins_ignore_the_level() {
+        for fam in ["hat", "spectre", "penrose-kd", "penrose-rhomb"] {
+            let at = |n| TilingSpec::new(fam).with_size(SizeSpec::Level(n));
+            let mut param = TilingSpec::new(fam);
+            param.params = Some(serde_json::json!({ "level": 5 }));
+            let p = geometry_pin(&at(3)).unwrap();
+            for spec in [at(4), at(5), at(7), param, TilingSpec::new(fam)] {
+                assert_eq!(geometry_pin(&spec).unwrap(), p, "{fam} {spec:?}");
+            }
+            assert!(!p.key.contains("level"), "{}", p.key);
+            // The reference patch built from scratch has that pin.
+            let r = TilingSpec::new(fam).with_size(SizeSpec::Level(reference_level(fam)));
+            assert_eq!(pin_of(&Topology::build(&r).unwrap(), p.key.clone()), p);
+        }
+        // Only reference patches were built for pins (never level 7's millions of tiles).
+        for b in built_patches() {
+            assert!(b.contains("\"level\":4"), "{b}");
+        }
+        // Every aperiodic family has its reference level listed.
+        for f in families::FAMILIES {
+            if f.kind == FamilyKind::Aperiodic {
+                assert!(REFERENCE_LEVELS.iter().any(|x| x.0 == f.id), "{}", f.id);
+            }
+        }
+    }
+
+    /// The local configurations of a patch away from its edge: each tile's area, handedness and
+    /// neighbour counts with those of its neighbours, and theirs, to two steps.
+    fn configurations(topo: &Topology) -> std::collections::BTreeSet<String> {
+        let n = topo.len();
+        let mut dist = vec![u32::MAX; n];
+        let mut q = std::collections::VecDeque::new();
+        for x in (0..n).filter(|&x| topo.is_open(x)) {
+            dist[x] = 0;
+            q.push_back(x);
+        }
+        while let Some(x) = q.pop_front() {
+            let d = dist[x];
+            topo.for_each_neighbor(x, Nb::Touch, |y| {
+                if dist[y] == u32::MAX {
+                    dist[y] = d + 1;
+                    q.push_back(y);
+                }
+            });
+        }
+        // Handedness relative to most of the patch (a Spectre patch is the mirror image of the
+        // level before it).
+        let mirrored = (0..n).filter(|&x| topo.transform(x).det() < 0.0).count() * 2 > n;
+        let sig = |y: usize| {
+            let p = topo.polygon(y);
+            let m = p.len();
+            let a: f64 = (0..m)
+                .map(|i| p[i][0] * p[(i + 1) % m][1] - p[(i + 1) % m][0] * p[i][1])
+                .sum();
+            format!(
+                "{}:{}:{}:{}",
+                (a.abs() * 500.0).round(),
+                (topo.transform(y).det() < 0.0) != mirrored,
+                topo.degree(y, Nb::Touch),
+                topo.degree(y, Nb::Edge)
+            )
+        };
+        let nbrs = |y: usize| {
+            let mut v = vec![];
+            topo.for_each_neighbor(y, Nb::Touch, |z| v.push(z));
+            v
+        };
+        (0..n)
+            .filter(|&x| dist[x] >= 4)
+            .map(|x| {
+                let mut ring: Vec<String> = nbrs(x)
+                    .into_iter()
+                    .map(|y| {
+                        let mut v: Vec<String> = nbrs(y).into_iter().map(sig).collect();
+                        v.sort();
+                        format!("{}[{}]", sig(y), v.join(","))
+                    })
+                    .collect();
+                ring.sort();
+                format!("{} {}", sig(x), ring.join(" "))
+            })
+            .collect()
+    }
+
+    // The reference patch holds every local configuration (to two steps) of the next level, so a
+    // change to any tile's geometry or neighbours shows in the pin; the level below does not.
+    #[test]
+    fn reference_patches_hold_every_local_configuration() {
+        for (fam, level) in REFERENCE_LEVELS {
+            let at = |l| Topology::build(&TilingSpec::new(fam).with_size(SizeSpec::Level(l)));
+            let reference = configurations(&at(level).unwrap());
+            let next = configurations(&at(level + 1).unwrap());
+            let below = configurations(&at(level - 1).unwrap());
+            let missing: Vec<&String> = next.difference(&reference).collect();
+            assert!(
+                missing.is_empty(),
+                "{fam}: level {level} misses {} of {}, e.g. {:?}",
+                missing.len(),
+                next.len(),
+                &missing[..missing.len().min(2)]
+            );
+            assert!(
+                below.len() < reference.len(),
+                "{fam}: level {} would do",
+                level - 1
+            );
+        }
     }
 }

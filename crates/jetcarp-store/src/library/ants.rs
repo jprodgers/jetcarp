@@ -18,7 +18,7 @@
 //! ```text
 //! jetcarp-ant-v1
 //! rule=<rule notation: Ant RL, Turmite 1R1,1L0/1R1,0N0>
-//! tiling=<tiling key: compact JSON of {family, params, edges, boundary: "dead"}>
+//! tiling=<identity key: compact JSON of {family, params, edges, boundary: "dead"}>
 //! start=<start JSON: "empty", or the start cells>
 //! ```
 //!
@@ -116,7 +116,7 @@ impl AntRow {
 pub fn ant_identity(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
     format!(
         "jetcarp-ant-v1\nrule={rule}\ntiling={}\nstart={}",
-        tiling_key(tiling),
+        jetcarp_core::pattern::identity_key(tiling),
         serde_json::to_string(start).unwrap_or_default()
     )
 }

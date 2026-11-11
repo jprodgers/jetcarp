@@ -608,10 +608,32 @@ pub fn tiling_identity(t: &TilingSpec) -> TilingSpec {
     }
 }
 
-/// Text used in ids and comparisons.
+/// Text used in comparisons and the library's `tiling` columns.
 pub fn tiling_key(t: &TilingSpec) -> String {
     let id = tiling_identity(t);
     serde_json::to_string(&id).unwrap_or_default()
+}
+
+/// The tiling's identity without the level of an aperiodic family (which is the patch's size,
+/// and may be given as a `level` parameter, as the Spectre's default parameters do): what a
+/// pattern's or ant's identity, and a geometry pin's key, name. Other tilings: their identity.
+pub fn identity_tiling(t: &TilingSpec) -> TilingSpec {
+    let mut s = tiling_identity(t);
+    if crate::pin::is_aperiodic(t)
+        && let Some(serde_json::Value::Object(m)) = &mut s.params
+    {
+        m.remove("level");
+        if m.is_empty() {
+            s.params = None;
+        }
+    }
+    s
+}
+
+/// The JSON of [`identity_tiling`]: the `tiling=` line of an identity text and the key of a
+/// geometry pin. The same as [`tiling_key`] except on aperiodic families given a level parameter.
+pub fn identity_key(t: &TilingSpec) -> String {
+    serde_json::to_string(&identity_tiling(t)).unwrap_or_default()
 }
 
 /// A tiling's display name: the family name, or the catalog name for `periodic` catalog tilings.

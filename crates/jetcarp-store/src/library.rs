@@ -20,7 +20,7 @@
 //! | Table | One row per | Key columns |
 //! | --- | --- | --- |
 //! | `meta` | library fact | `key`, `value`: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
-//! | `engine_pins` | pin key in use | `pin_key` (the tiling identity JSON, or for an aperiodic patch its spec with the level), the running engine's `pin`, `polygon_hash`, `neighbour_hash`, `engine_version` (the engine that computed it), `checked` |
+//! | `engine_pins` | pin key in use | `pin_key` (the tiling's identity key: its identity JSON, without an aperiodic family's level), the running engine's `pin`, `polygon_hash`, `neighbour_hash`, `engine_version` (the engine that computed it), `checked` |
 //! | `rules` | rule as run (notation, neighbourhood, steps per generation) | `id`, `notation`, `neighborhood`, `steps_per_gen`, `family` (`lifelike`, `generations`, `wireworld`, `table`, `priority`, ...), `states`, `birth`/`survive` bitmasks (B/S and Generations) |
 //! | `patterns` | rule-free pattern | `id` (content id), `model`, `tiling` (identity JSON), `tiling_key` (family or catalog id), `tiling_name`, `pin_key`, `geometry_pin`, `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `emits` (a gun's ship), `needs_reverify`, `engine_version`, `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
 //! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `engine_version`, `first_seen` |

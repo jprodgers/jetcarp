@@ -19,7 +19,8 @@
 //! model=<cell-state model: lifelike, wireworld, table, priority, spectre_glider, ...>
 //! nb=<touch | edge>
 //! steps=<steps per generation>
-//! tiling=<tiling key: compact JSON of {family, params, edges, boundary: "dead"}, keys sorted>
+//! tiling=<identity key: compact JSON of {family, params, edges, boundary: "dead"}, keys sorted;
+//!         an aperiodic family's "level" parameter left out ([`super::identity_key`])>
 //! class=<still_life | oscillator | spaceship | puffer | mover | gun | other>
 //! period=<period>
 //! d=<di>,<dj>          (lattice displacement per period, canonical orientation; 0,0 if none)
@@ -124,7 +125,7 @@ pub fn identity(rec: &PatternRecord) -> Result<String, String> {
     Ok(format!(
         "{IDENTITY_VERSION}\nmodel={model}\nnb={nb}\nsteps={}\ntiling={}\nclass={}\nperiod={}\nd={},{}\nrule={exact}\ncanonical={}\nphases={phases}",
         rec.steps_per_gen,
-        tiling_key(&rec.tiling),
+        super::identity_key(&rec.tiling),
         rec.class.key(),
         form.period,
         d[0],
@@ -144,7 +145,7 @@ pub fn content_id(identity: &str, pin: &str) -> String {
 }
 
 /// The geometry pin of the tiling a record runs on: its tiling's unit cell, or on aperiodic
-/// tilings the patch its site was found on.
+/// tilings its family's reference patch (the same whatever level it was found on).
 pub fn record_pin(rec: &PatternRecord) -> Result<crate::pin::GeometryPin, String> {
     match &rec.site {
         Some(s) => crate::pin::geometry_pin(&s.patch),

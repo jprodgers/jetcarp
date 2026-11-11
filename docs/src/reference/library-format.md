@@ -45,6 +45,9 @@ phases=<phase 0>;<phase 1>;...
 - The **tiling key** is the compact JSON of the tiling's identity: its family, shape parameters and
   edges, with keys in sorted order and `"boundary":"dead"`, but not its size. For example
   `{"family":"square","boundary":"dead"}`, or `{"family":"periodic","params":{"catalog":"k3-019"},"boundary":"dead"}`.
+  The level of an aperiodic patch is its size, so it is left out too, even when it is given as a
+  `level` parameter (as the Spectre's default parameters give it): the Spectre's key is
+  `{"family":"spectre","boundary":"dead"}` on every level.
 - `d` is the displacement per period in lattice steps, in the canonical orientation (`0,0` for still
   lifes and oscillators).
 - `rule` is the exact rule only for puffers, movers, guns and `other`, whose stored phases do not
@@ -139,10 +142,15 @@ behaviour depends on, whatever grid size it was built on.
   and, for each tile type, its shape and corners in the unit cell; the *neighbour hash* covers the
   offset table of both neighbourhoods (edge, then touch): for each tile type, its neighbour slots in
   order.
-- **Aperiodic tilings** (hat, Spectre, Penrose): the patch the record was found on, named by its spec
-  (family, parameters, edges and substitution level): every tile's shape and corners in tile order,
-  then the neighbour lists of both neighbourhoods and which tiles lie on the open boundary. Two levels
-  of one family are two patches with two pins, so a pattern found on two levels is stored twice.
+- **Aperiodic tilings** (hat, Spectre, Penrose): one fixed reference patch of the family, level 4 of
+  each (4,000 tiles of the hat and of either Penrose tiling, 4,401 of the Spectre), whatever level
+  the record was found on: every tile's shape and corners in tile order, then the neighbour lists of
+  both neighbourhoods and which tiles lie on the open boundary. Level 4 is the smallest level that
+  holds every local configuration of the next one (each tile with its neighbours and theirs, two
+  steps out), so a change to any tile shows in the pin. A pattern's identity on these tilings
+  does not depend on where it sits on the patch, so the same pattern found on two levels is one
+  record; the record keeps the patch it was found on, where it is verified again. The reference
+  levels are fixed, not the families' default levels, so a change of default never changes a pin.
 
 Floats are hashed by their exact bits, and the tiling code uses JETCARP's own deterministic maths, so
 pins are the same on every platform. The pin is the first 32 hex digits of SHA-256 of the line
@@ -205,7 +213,7 @@ migrated: JETCARP 0.4 starts a fresh library.
 | Table | One row per |
 | --- | --- |
 | `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
-| `engine_pins` | tiling or patch in use: its pin key, the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
+| `engine_pins` | tiling in use: its pin key (its identity key), the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
 | `rules` | rule as run: notation, neighbourhood, steps per generation, family, birth and survival masks |
 | `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
 | `pattern_rules` | rule a pattern was verified in, with the verification and engine version |

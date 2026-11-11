@@ -123,9 +123,10 @@ states. Agents and some automata take several steps per generation.
 [Generations](../automata/generations.md).
 
 **Geometry pin.** A hash of the geometry a library record ran on: a periodic tiling's unit cell (its
-polygons and neighbour offsets), or an aperiodic record's patch. Every record stores one; when the
-engine's pin differs, the record is flagged for re-verification. Not to be confused with the test
-*pins*. See [Library format](library-format.md#geometry-pins).
+polygons and neighbour offsets), or for an aperiodic family a fixed reference patch (level 4),
+whatever the record's level. Every record stores one; when the engine's pin differs, the record is
+flagged for re-verification. Not to be confused with the test *pins*. See
+[Library format](library-format.md#geometry-pins).
 
 **Glider.** A small spaceship. On aperiodic tilings, a pattern that travels with a constant speed and
 heading although it never repeats exactly.

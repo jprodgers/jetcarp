@@ -361,6 +361,101 @@ fn identity_text_and_ids_are_pinned() {
     assert_eq!(g.id, GLIDER_ID, "the Life glider's id");
 }
 
+/// A patch of `family` at `level`, the level given as the size or (`param`) as a parameter, as
+/// the Spectre's default parameters and the app's sweeps give it.
+fn patch_at(family: &str, level: u32, param: bool) -> TilingSpec {
+    if param {
+        let mut t = TilingSpec::new(family);
+        t.params = Some(serde_json::json!({ "level": level }));
+        t
+    } else {
+        TilingSpec::new(family).with_size(SizeSpec::Level(level))
+    }
+}
+
+/// The record found again on another patch: its pattern graph matched there, and its site built
+/// at the match (as a search on that patch would build it).
+fn on_patch(rec: &PatternRecord, spec: &TilingSpec) -> Option<PatternRecord> {
+    let site = rec.site.as_ref().unwrap();
+    let topo = patch_topology(spec).unwrap();
+    let rule = Rule::parse(&rec.rule).unwrap().0;
+    let (_, m) = other_sites(&topo, site, 1).into_iter().next()?;
+    let phases: Vec<Phase> = rec
+        .all_phases()
+        .unwrap()
+        .iter()
+        .map(|ph| {
+            ph.iter()
+                .map(|c| LCell {
+                    i: m[c.i as usize] as i32,
+                    ..*c
+                })
+                .collect()
+        })
+        .collect();
+    let built = if rec.class == PatternClass::Mover {
+        build_mover_site(&topo, rec.neighborhood, &rule, &phases[0])
+    } else {
+        build_site_for(&topo, rec.neighborhood, &rule, &phases)
+    };
+    let (s2, ph, canonical) = built.unwrap();
+    let mut y = rec.clone();
+    y.site = Some(s2);
+    y.phases = ph.iter().map(|v| encode_cells(v)).collect();
+    y.canonical = canonical;
+    y.tiling = pattern::tiling_identity(spec);
+    Some(y)
+}
+
+// The level of an aperiodic patch is its size: an oscillator on the Spectre and the hat glider,
+// found again on levels 3, 4 and 5 (the level given as the size and as a parameter), have one id
+// and one pin, the reference patch's.
+#[test]
+fn aperiodic_records_have_one_id_on_every_level() {
+    let mut w = World::new(patch_at("spectre", 4, false), 1).unwrap();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B35/S234").seed(SeedSpec::Random { density: 0.4 }),
+    })
+    .unwrap();
+    w.apply(Command::Step { gens: 600 }).unwrap();
+    let osc = records_of(&w)
+        .into_iter()
+        .filter(|r| {
+            r.class == PatternClass::Oscillator
+                && r.period >= 2
+                && r.site.as_ref().is_some_and(|s| s.graph.is_some())
+        })
+        .min_by_key(|r| (r.cells, r.id.clone()))
+        .expect("an oscillator on the Spectre patch");
+    let mut spec = TrackSpec::new(
+        "Priority 4: 3|n2>=1->2; 0|n3>=2->0; 0|n2>=1->3; 0|n1>=1->2",
+        Nb::Touch,
+        patch_at("hat", 4, false),
+        vec![(0, 1), (3, 2)],
+    );
+    spec.max_level = Some(5);
+    let glider = mover_record(&spec, &track(&spec).unwrap(), prov(), DiscoveredBy::Search).unwrap();
+    for (family, rec) in [("spectre", &osc), ("hat", &glider)] {
+        let reference = Topology::geometry_pin(&patch_at(family, 4, false))
+            .unwrap()
+            .pin;
+        assert_eq!(rec.geometry_pin, reference);
+        for level in [3, 4, 5] {
+            for param in [false, true] {
+                let y = on_patch(rec, &patch_at(family, level, param))
+                    .unwrap_or_else(|| panic!("{family}: {} not on level {level}", rec.label()));
+                assert_eq!(
+                    pattern::pattern_id(&y).unwrap(),
+                    rec.id,
+                    "{family} {} on level {level} (as a parameter: {param})",
+                    rec.label()
+                );
+                assert_eq!(pattern::record_pin(&y).unwrap().pin, reference);
+            }
+        }
+    }
+}
+
 /// The square grid's geometry pin and the Life glider's id (B3/S23, touching neighbours).
 const SQUARE_PIN: &str = "0145310ebd49abfe89eb01c42ecaf459";
 const GLIDER_ID: &str = "5a080db389c0cab3caf884d2596a1e70";

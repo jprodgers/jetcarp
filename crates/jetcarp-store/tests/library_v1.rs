@@ -304,6 +304,109 @@ fn a_record_on_a_tiling_the_engine_cannot_build_is_flagged() {
     assert_eq!(pin, jetcarp_store::library::schema::NO_PIN);
 }
 
+/// A bounded search on a Spectre patch of this level, run as a job into the library.
+fn spectre_search(lib: &Library, level: u32) -> i64 {
+    let spec = jetcarp_search::bounded::SearchSpec {
+        rules: vec!["B35/S234".into()],
+        tilings: vec![TilingSpec::new("spectre")],
+        size: SizeSpec::Level(level),
+        boundary: Boundary::Dead,
+        soups: 4,
+        gens: 600,
+        seed: 1,
+        ..Default::default()
+    };
+    let js = JobSpec {
+        strategy: "search".into(),
+        spec: serde_json::to_value(jetcarp_search::jobs::search::SearchJobSpec {
+            search: spec,
+            store: true,
+        })
+        .unwrap(),
+        ..Default::default()
+    };
+    let job = jobs::create(lib, &js).unwrap();
+    Runner::new(lib.clone())
+        .run(job, &Default::default())
+        .unwrap();
+    job
+}
+
+// The level of an aperiodic patch is its size, not part of an id: searches on two levels of the
+// Spectre into one library store one record for what both find, with sightings from both.
+#[test]
+fn searches_on_two_aperiodic_levels_store_one_record() {
+    let lib = temp_lib("levels");
+    let (j4, j5) = (spectre_search(&lib, 4), spectre_search(&lib, 5));
+    let both: Vec<PatternRecord> = lib
+        .list()
+        .unwrap()
+        .into_iter()
+        .filter(|r| {
+            let s = lib.sightings(&r.id).unwrap();
+            s.iter().any(|x| x.job == j4) && s.iter().any(|x| x.job == j5)
+        })
+        .collect();
+    assert!(!both.is_empty(), "nothing found on both levels");
+    let pin = Topology::geometry_pin(&TilingSpec::new("spectre"))
+        .unwrap()
+        .pin;
+    for r in lib.list().unwrap() {
+        assert_eq!(r.geometry_pin, pin, "{}", r.label());
+    }
+    // One pin key for the family, with no level in it.
+    let keys: Vec<String> = raw(&lib)
+        .prepare("SELECT DISTINCT pin_key FROM patterns")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(keys.len(), 1, "{keys:?}");
+    assert!(!keys[0].contains("level"), "{keys:?}");
+}
+
+// Opening a library after an engine change computes each aperiodic family's pin on its
+// reference patch: a record whose site is on level 7 (millions of tiles) builds nothing more.
+#[test]
+fn opening_after_an_engine_change_builds_only_reference_patches() {
+    let lib = temp_lib("level7");
+    let job = spectre_search(&lib, 4);
+    let mut r = lib
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|r| r.site.is_some() && lib.sightings(&r.id).unwrap().iter().any(|s| s.job == job))
+        .expect("a Spectre record");
+    lib.remove(&r.id).unwrap();
+    // The same record as a search on level 7 would store it (its site on that patch; verified).
+    r.site.as_mut().unwrap().patch.size = Some(SizeSpec::Level(7));
+    let id = r.id.clone();
+    lib.add(r).unwrap();
+    assert_eq!(
+        lib.get(&id).unwrap().site.unwrap().patch.size,
+        Some(SizeSpec::Level(7))
+    );
+    raw(&lib)
+        .execute(
+            "UPDATE engine_pins SET engine_version = 'an older engine'",
+            [],
+        )
+        .unwrap();
+    let again = Library::open(lib.path());
+    let check = again.check_pins().unwrap();
+    assert!(!again.get(&id).unwrap().needs_reverify);
+    let v: String = raw(&again)
+        .query_row("SELECT engine_version FROM engine_pins LIMIT 1", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(v, jetcarp_core::pin::engine_geometry(), "{check:?}");
+    for b in jetcarp_core::pin::built_patches() {
+        assert!(b.contains("\"level\":4"), "a pin built {b}");
+    }
+}
+
 #[test]
 fn aliases_resolve_ids_and_short_ids() {
     let lib = temp_lib("alias");
