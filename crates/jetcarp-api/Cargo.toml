@@ -10,12 +10,17 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
-# Everything here so far needs only the engine. jetcarp-display reaches these modules through
-# world-only Rhai, so anything heavier (the store, the job runner) goes behind a feature.
+[features]
+default = ["ops"]
+# The operations and the context they run in, which need the store and the job runner. Without
+# it only the argument parsers, output folders, cells, the world host and errors remain: what
+# world-only Rhai (jetcarp-script without `api`, so jetcarp-display and the macOS saver) uses.
+ops = ["dep:jetcarp-store", "dep:jetcarp-search"]
+
 [dependencies]
 jetcarp-core.workspace = true
-jetcarp-store.workspace = true
-jetcarp-search.workspace = true
+jetcarp-store = { workspace = true, optional = true }
+jetcarp-search = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 png.workspace = true

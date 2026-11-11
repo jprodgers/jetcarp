@@ -10,11 +10,18 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[features]
+default = ["api"]
+# Scripts with the whole host API: worlds, the library, searches, media, and every operation.
+# Without it only the series expansion and the shared argument parsers remain (what
+# jetcarp-display uses for rotations), so the macOS saver links no store, job runner or SQLite.
+api = ["jetcarp-api/ops", "dep:jetcarp-store", "dep:jetcarp-search"]
+
 [dependencies]
 jetcarp-core.workspace = true
-jetcarp-store.workspace = true
-jetcarp-search.workspace = true
-jetcarp-api.workspace = true
+jetcarp-store = { workspace = true, optional = true }
+jetcarp-search = { workspace = true, optional = true }
+jetcarp-api = { workspace = true, default-features = false }
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true

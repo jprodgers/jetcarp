@@ -14,39 +14,67 @@
 //!
 //! Scripts write only inside the output root (`<Pictures>/JETCARP`, `$JETCARP_OUT`, or
 //! [`RunOptions::out_root`]) and folders in [`RunOptions::allow_dirs`].
+//!
+//! **Feature `api`** (on by default): all of the above, which runs on the operations of
+//! `jetcarp-api`, so on the store and the job runner. Without it the crate is world-only: the
+//! series expansion ([`series`]), describing a world ([`describe`]), the world wrapper ([`sim`]),
+//! and the shared argument parsers ([`args`]), which is what `jetcarp-display` uses for
+//! rotations. A program built that way (the macOS saver) links no store, job runner or SQLite.
 
+#[cfg(feature = "api")]
 mod ants;
+#[cfg(feature = "api")]
 mod api;
 pub mod describe;
+#[cfg(feature = "api")]
 mod hl;
+#[cfg(feature = "api")]
 pub mod jobs;
+#[cfg(feature = "api")]
 pub mod library;
+#[cfg(feature = "api")]
 pub mod media;
+#[cfg(feature = "api")]
 mod pile;
+#[cfg(feature = "api")]
 pub mod results;
+#[cfg(feature = "api")]
 mod search;
 pub mod series;
 pub mod sim;
+#[cfg(feature = "api")]
 pub mod sweep;
 
 /// The argument parsers scripts use, for crates that run world-only scripts (jetcarp-display)
 /// without depending on jetcarp-api themselves.
 pub use jetcarp_api::args;
 pub use jetcarp_api::args::Screen;
+#[cfg(feature = "api")]
 pub use jetcarp_api::sweeps::run_world;
+#[cfg(feature = "api")]
 pub use sweep::{Estimate, estimate, sweep_to_script};
 
+#[cfg(feature = "api")]
 use jetcarp_api::out::{self, Guard};
+#[cfg(feature = "api")]
 use rhai::{AST, Dynamic, EvalAltResult, Position, Scope};
+#[cfg(feature = "api")]
 use serde_json::{Value, json};
+#[cfg(feature = "api")]
 use std::collections::BTreeMap;
+#[cfg(feature = "api")]
 use std::path::{Path, PathBuf};
+#[cfg(feature = "api")]
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(feature = "api")]
 use std::sync::mpsc::{Receiver, channel};
+#[cfg(feature = "api")]
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "api")]
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// How a script runs.
+#[cfg(feature = "api")]
 #[derive(Clone, Debug, Default)]
 pub struct RunOptions {
     /// `--set k=v` values, seen by the script as the `params` map (numbers and true/false are
@@ -72,6 +100,7 @@ pub struct RunOptions {
 }
 
 /// Bounds for untrusted or interactive runs (the MCP tool sets these).
+#[cfg(feature = "api")]
 #[derive(Clone, Debug)]
 pub struct Limits {
     /// Stop the script after this many seconds (it ends as cancelled, with a timeout note).
@@ -86,6 +115,7 @@ pub struct Limits {
     pub restrict_reads: bool,
 }
 
+#[cfg(feature = "api")]
 impl Default for Limits {
     fn default() -> Self {
         Limits {
@@ -99,6 +129,7 @@ impl Default for Limits {
 }
 
 /// Something a running script reports.
+#[cfg(feature = "api")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// A line from `print`, `log`, `debug`, or the engine (sweep start and end).
@@ -110,6 +141,7 @@ pub enum Event {
 
 /// A world a script asked the host to show. The world is a copy, taken once with
 /// [`Shown::take_world`].
+#[cfg(feature = "api")]
 #[derive(Clone)]
 pub struct Shown {
     pub label: String,
@@ -118,6 +150,7 @@ pub struct Shown {
     world: Arc<Mutex<Option<jetcarp_core::World>>>,
 }
 
+#[cfg(feature = "api")]
 impl Shown {
     pub fn new(label: String, world: jetcarp_core::World) -> Shown {
         Shown {
@@ -133,12 +166,14 @@ impl Shown {
     }
 }
 
+#[cfg(feature = "api")]
 impl PartialEq for Shown {
     fn eq(&self, o: &Shown) -> bool {
         self.label == o.label && self.generation == o.generation && self.hash == o.hash
     }
 }
 
+#[cfg(feature = "api")]
 impl std::fmt::Debug for Shown {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -149,6 +184,7 @@ impl std::fmt::Debug for Shown {
     }
 }
 
+#[cfg(feature = "api")]
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Progress {
     /// What is progressing, e.g. `sweep HexW3`.
@@ -163,6 +199,7 @@ pub struct Progress {
     pub eta: Option<f64>,
 }
 
+#[cfg(feature = "api")]
 impl Progress {
     /// `sweep HexW3: 1200/19683 (6.1%), 14.2s, ~3m 40s left, HexW3 1199`.
     pub fn line(&self) -> String {
@@ -191,6 +228,7 @@ impl Progress {
 }
 
 /// `3m 40s`, `1h 02m`, `12.3s`.
+#[cfg(feature = "api")]
 pub fn duration(s: f64) -> String {
     if s < 60.0 {
         format!("{s:.1}s")
@@ -206,6 +244,7 @@ pub fn duration(s: f64) -> String {
 }
 
 /// A script error with its place in the source (1-based line and column), when known.
+#[cfg(feature = "api")]
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct ScriptError {
     pub message: String,
@@ -213,6 +252,7 @@ pub struct ScriptError {
     pub column: Option<usize>,
 }
 
+#[cfg(feature = "api")]
 impl std::fmt::Display for ScriptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (self.line, self.column) {
@@ -223,6 +263,7 @@ impl std::fmt::Display for ScriptError {
     }
 }
 
+#[cfg(feature = "api")]
 impl ScriptError {
     fn at(message: String, pos: Position) -> ScriptError {
         ScriptError {
@@ -244,6 +285,7 @@ impl ScriptError {
 /// `until` is a Rhai keyword (`do { } until x`), but scripts use it as a map key:
 /// `#{ until: "done" }`. Quote `until` wherever it is directly followed by `:` (not `::`),
 /// outside strings and comments. Returns the new source and the (line, column) of each change.
+#[cfg(feature = "api")]
 pub fn preprocess(src: &str) -> (String, Vec<(usize, usize)>) {
     let b: Vec<char> = src.chars().collect();
     let mut out = String::with_capacity(src.len() + 16);
@@ -319,6 +361,7 @@ pub fn preprocess(src: &str) -> (String, Vec<(usize, usize)>) {
 }
 
 /// The result of a run.
+#[cfg(feature = "api")]
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Summary {
     pub ok: bool,
@@ -339,6 +382,7 @@ pub struct Summary {
     pub sweeps: Vec<Value>,
 }
 
+#[cfg(feature = "api")]
 impl Summary {
     pub fn to_json(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
@@ -346,6 +390,7 @@ impl Summary {
 }
 
 /// Check a script for syntax errors without running it.
+#[cfg(feature = "api")]
 pub fn check(source: &str) -> Result<(), ScriptError> {
     let engine = api::bare_engine();
     let (src, quoted) = preprocess(source);
@@ -355,6 +400,7 @@ pub fn check(source: &str) -> Result<(), ScriptError> {
 }
 
 /// A syntax error message with a hint for habits of other languages.
+#[cfg(feature = "api")]
 fn with_hint(msg: String) -> String {
     if msg.contains("'null' is a reserved keyword") || msg.contains("'None' is a reserved") {
         format!("{msg}. Rhai has no null: JSON null reads as (), so test `x == ()`")
@@ -365,6 +411,7 @@ fn with_hint(msg: String) -> String {
 
 /// Run a script on this thread. `on_event` receives log lines and progress as they happen
 /// (from worker threads too); setting `cancel` stops the script at the next check.
+#[cfg(feature = "api")]
 pub fn run(
     source: &str,
     opts: RunOptions,
@@ -437,6 +484,7 @@ pub fn run(
     }
 }
 
+#[cfg(feature = "api")]
 fn script_error(ctx: &Ctx, mut e: EvalAltResult) -> ScriptError {
     if ctx.timed_out.load(Ordering::Relaxed) {
         let limit = ctx.opts.limits.max_seconds.unwrap_or(0.0);
@@ -470,6 +518,7 @@ fn script_error(ctx: &Ctx, mut e: EvalAltResult) -> ScriptError {
 
 /// A hint for "Function not found" errors from habits of other languages (Python, JavaScript),
 /// which language models bring to Rhai.
+#[cfg(feature = "api")]
 fn missing_function_hint(msg: &str) -> Option<&'static str> {
     let name = msg.strip_prefix("Function not found: ")?;
     let name = name.split([' ', '(']).next()?.trim_start_matches('.');
@@ -500,12 +549,14 @@ fn missing_function_hint(msg: &str) -> Option<&'static str> {
 }
 
 /// A script running on a background thread.
+#[cfg(feature = "api")]
 pub struct Job {
     cancel: Arc<AtomicBool>,
     rx: Receiver<Event>,
     handle: Option<std::thread::JoinHandle<Summary>>,
 }
 
+#[cfg(feature = "api")]
 impl Job {
     /// Ask the script to stop (it stops at its next check, within a fraction of a second).
     pub fn cancel(&self) {
@@ -547,6 +598,7 @@ impl Job {
 }
 
 /// Run a script on a background thread. Poll [`Job::events`] for log lines and progress.
+#[cfg(feature = "api")]
 pub fn spawn(source: String, opts: RunOptions) -> Job {
     let cancel = Arc::new(AtomicBool::new(false));
     let (tx, rx) = channel();
@@ -573,6 +625,7 @@ pub fn spawn(source: String, opts: RunOptions) -> Job {
 }
 
 /// The function reference (also shown by `jetcarp script --functions` and the MCP tool).
+#[cfg(feature = "api")]
 pub fn help_text() -> &'static str {
     include_str!("help.md")
 }
@@ -580,8 +633,10 @@ pub fn help_text() -> &'static str {
 // ---------------------------------------------------------------------------------------------
 // Shared state of one run
 
+#[cfg(feature = "api")]
 type Sink = Arc<dyn Fn(Event) + Send + Sync>;
 
+#[cfg(feature = "api")]
 pub(crate) struct Ctx {
     pub opts: RunOptions,
     pub source: String,
@@ -601,6 +656,7 @@ pub(crate) struct Ctx {
     pub op_world: Mutex<Option<jetcarp_api::world::Session>>,
 }
 
+#[cfg(feature = "api")]
 impl Ctx {
     fn new(source: &str, opts: RunOptions, sink: Sink, cancel: Arc<AtomicBool>) -> Ctx {
         let root = out::out_root(opts.out_root.as_deref());
@@ -817,6 +873,7 @@ impl Ctx {
     }
 }
 
+#[cfg(feature = "api")]
 pub(crate) fn unix_time() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -824,7 +881,7 @@ pub(crate) fn unix_time() -> f64 {
         .unwrap_or(0.0)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "api"))]
 mod tests {
     use super::*;
 
@@ -843,6 +900,7 @@ mod tests {
 
 /// Example scripts shipped with JETCARP (the files in this crate's `scripts/` folder), as
 /// (file name, source). The app lists them in its Scripts window.
+#[cfg(feature = "api")]
 pub const EXAMPLES: &[(&str, &str)] = &[
     (
         "hexw3-atlas.rhai",

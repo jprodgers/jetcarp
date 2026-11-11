@@ -16,6 +16,7 @@ use jetcarp_core::media::encode;
 use jetcarp_core::render::{self, RenderOptions};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[cfg(feature = "library")]
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -207,6 +208,7 @@ pub fn thumbnails(baked: &Baked) -> Option<[Vec<u8>; 2]> {
 }
 
 /// Signs the bundle for this machine only (ad hoc), which Apple silicon needs before it runs code.
+#[cfg(feature = "library")]
 fn sign(bundle: &Path) -> Result<(), String> {
     let out = Command::new("codesign")
         .args(["--force", "--sign", "-"])
@@ -239,6 +241,7 @@ pub fn built_dylib() -> Result<PathBuf, String> {
 
 /// Builds the bundle from the current settings and opens System Settings where savers are chosen. Returns
 /// where it went, and warnings about items that will show Life instead.
+#[cfg(feature = "library")]
 pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     if !cfg!(target_os = "macos") {
         return Err("`.saver` screen savers exist only on macOS".into());
@@ -260,6 +263,7 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
 /// System Settings' own pane for screen savers, which macOS 14 and 15 have.
 const SAVER_PANE: &str = "com.apple.ScreenSaver-Settings.extension";
 /// Where the screen savers are when that pane is gone (macOS 27): Wallpaper, "Screen Saver…".
+#[cfg(feature = "library")]
 const WALLPAPER_PANE: &str = "com.apple.Wallpaper-Settings.extension";
 
 /// Whether this macOS still has the Screen Saver pane, from the panes System Settings loads.
@@ -274,6 +278,7 @@ fn has_saver_pane() -> bool {
     })
 }
 
+#[cfg(feature = "library")]
 fn settings_pane() -> &'static str {
     if has_saver_pane() {
         SAVER_PANE
@@ -332,7 +337,7 @@ pub fn describe() -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "library"))]
 mod tests {
     use super::*;
 

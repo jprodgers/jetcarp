@@ -17,7 +17,9 @@ path = "src/lib.rs"
 [target.'cfg(target_os = "macos")'.dependencies]
 jetcarp-core.workspace = true
 jetcarp-gpu.workspace = true
-jetcarp-display.workspace = true
+# Without its library: the saver's scenes are baked into the bundle, and a sandboxed saver
+# could not read the library anyway. So the saver links no store, job runner or SQLite.
+jetcarp-display = { workspace = true, default-features = false }
 serde_json.workspace = true
 wgpu.workspace = true
 pollster.workspace = true

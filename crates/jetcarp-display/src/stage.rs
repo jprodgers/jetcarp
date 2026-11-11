@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 pub type Lookup = Arc<dyn Fn(&str) -> Option<Scene> + Send + Sync>;
 
 /// Finds Quick Start entries in the user's library, as the app does.
+#[cfg(feature = "library")]
 pub fn library_lookup() -> Lookup {
     let library = jetcarp_store::Library::open_default();
     Arc::new(move |id: &str| jetcarp_store::qsmenu::scene_by_id(&library, id))

@@ -2,6 +2,11 @@
 //! ([`gpu`]), choosing and colouring what a view shows ([`view`]), stepping on the GPU
 //! ([`simgpu`]), and screensaver profiles ([`profiles`]). The app wraps these in egui; a wallpaper
 //! or screensaver host draws to its own wgpu surface.
+//!
+//! **Feature `library`** (on by default): rotations find the Quick Start entries they name in the
+//! user's library ([`stage::library_lookup`]), and the macOS saver can be installed
+//! ([`saver::install`], which bakes those scenes into the bundle). The saver's own code is built
+//! without it, so it links no store, job runner or SQLite.
 
 pub mod autostart;
 pub mod caption;

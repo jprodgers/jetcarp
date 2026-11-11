@@ -10,11 +10,18 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[features]
+default = ["library"]
+# Quick Start entries a rotation names are found in the user's library (the background host;
+# installing the macOS saver, which bakes them in). The saver itself is built without it.
+library = ["dep:jetcarp-store"]
+
 [dependencies]
 jetcarp-core.workspace = true
-jetcarp-store.workspace = true
+jetcarp-store = { workspace = true, optional = true }
 jetcarp-gpu.workspace = true
-jetcarp-script.workspace = true
+# World-only: rotations need only the series expansion and the argument parsers.
+jetcarp-script = { workspace = true, default-features = false }
 wgpu.workspace = true
 bytemuck.workspace = true
 serde.workspace = true
@@ -28,6 +35,7 @@ epaint_default_fonts = "0.37.0"
 
 [dev-dependencies]
 pollster.workspace = true
+jetcarp-store.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }

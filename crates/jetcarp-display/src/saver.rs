@@ -2,6 +2,7 @@
 //! ([`crate::winsaver`]) and a `.saver` bundle on macOS ([`crate::macsaver`]). GNOME has no such
 //! list; its lock screen setting does the job instead.
 
+#[cfg(feature = "library")]
 use std::path::PathBuf;
 
 /// Whether this system has a list to be in.
@@ -18,6 +19,7 @@ pub fn os_name() -> &'static str {
 
 /// Puts JETCARP in the list and opens the system's screen saver settings. Returns where it went and
 /// any warnings.
+#[cfg(feature = "library")]
 pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     if cfg!(target_os = "macos") {
         return crate::macsaver::install();
