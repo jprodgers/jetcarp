@@ -992,7 +992,6 @@ impl PileIn {
             gpu: self.gpu.unwrap_or(false),
             extra: json!({
                 "tiling_id": id,
-                "host": crate::out::host_name(),
                 "started": crate::out::now_rfc3339(),
             }),
         })

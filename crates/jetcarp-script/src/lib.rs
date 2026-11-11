@@ -805,7 +805,6 @@ impl Ctx {
                 "ok": s.ok,
                 "error": s.error,
                 "cancelled": s.cancelled,
-                "host": out::host_name(),
                 "os": std::env::consts::OS,
                 "threads": self.opts.threads.unwrap_or_else(rayon::current_num_threads),
                 "screen": self.opts.screen,

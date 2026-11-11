@@ -264,11 +264,6 @@ pub fn format_float(f: f64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// Host name for records (no extra dependency: environment, then /etc/hostname).
-pub fn host_name() -> String {
-    jetcarp_core::paths::host_name()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

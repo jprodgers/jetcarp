@@ -319,7 +319,6 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
             "jetcarp_version": jetcarp_core::VERSION,
             "kind": "sweep",
             "started": started,
-            "host": out::host_name(),
             "os": std::env::consts::OS,
             "threads": threads.unwrap_or_else(rayon::current_num_threads),
             "screen": screen,

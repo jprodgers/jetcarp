@@ -78,8 +78,9 @@ pub fn absolute(p: &Path) -> PathBuf {
     }
 }
 
-/// This machine's name, for records and job owners (no extra dependency: `HOSTNAME` or
-/// `COMPUTERNAME`, then `/etc/hostname`, else `unknown`).
+/// This machine's name, for job owners (`host:pid` while a job runs; no extra dependency:
+/// `HOSTNAME` or `COMPUTERNAME`, then `/etc/hostname`, else `unknown`). Run records leave it out,
+/// since their folders are made to be shared.
 pub fn host_name() -> String {
     for k in ["HOSTNAME", "COMPUTERNAME"] {
         if let Ok(h) = std::env::var(k)

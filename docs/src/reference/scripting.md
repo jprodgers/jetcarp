@@ -102,8 +102,9 @@ error: line 3, column 3: scripts may only write inside /home/ada/Pictures/JETCAR
 From the command line and the app a script may read files anywhere; through MCP, only from the output
 folder. A relative path to read is looked for next to the script first, then in the current output
 folder. Each output folder a script makes gets a `run.json` that records the script's text, its
-parameters, the screen size, the thread count, the JETCARP version, the operating system, the
-computer's name, and when it started and finished. Sweeps write their own `run.json` and manifests.
+parameters, the screen size, the thread count, the JETCARP version, the operating system, and
+when it started and finished (not the computer's name, so the folder can be shared as it is). Sweeps
+write their own `run.json` and manifests.
 
 ## Calling any operation: `jetcarp(op, #{…})`
 
