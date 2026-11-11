@@ -97,7 +97,7 @@ fn glider_has_one_id_across_rules_and_its_hand_derived_range() {
     assert_eq!(life.id, high.id, "same evolution, same pattern");
     assert_eq!(life.rule, "B3/S23");
     assert_eq!(high.rule, "B36/S23");
-    // Worked by hand over the four phases (see README, Catalog): births happen only at 3 live
+    // Worked by hand over the four phases: births happen only at 3 live
     // neighbours, and empty cells next to the glider see 1, 2, 4, and 5 without being born; live
     // cells survive with 2 and 3 and die with 1 and 4; 0, 5-8 never occur for live cells and
     // 6-8 never for empty ones. Deaths go straight to 0, so it is plain B/S (2 states).
@@ -479,8 +479,8 @@ fn phase3_json_library_imports_with_its_quick_start() {
     assert!(qs.iter().any(|q| q.source_kind == "sweep"));
 }
 
-/// Insert and query speed for about 100,000 sightings (run with `--nocapture` to see the numbers;
-/// the README quotes a release run).
+/// Insert and query speed for about 100,000 sightings (run with `--nocapture` to see the
+/// numbers).
 #[test]
 fn catalog_speed_100k_sightings() {
     let lib = temp_lib("speed");

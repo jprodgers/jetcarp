@@ -1179,7 +1179,7 @@ mod tests {
 
     #[test]
     fn hexw3_atlas_from_the_form() {
-        // The README's atlas: every HexW3 code, top to bottom of the screen.
+        // The HexW3 atlas: every HexW3 code, top to bottom of the screen.
         let f = SweepForm::default();
         let v = f.to_json();
         assert_eq!(v["rules"], "HexW3");

@@ -43,7 +43,7 @@ pub struct RulesOut {
 }
 
 /// What the rule list leaves out, as `jetcarp rules` ends.
-pub const NOTATION_SUMMARY: &str = "Any B/S rule (B3/S23, add V for edge neighbours), Generations B2/S/C3, W0..W255, HexW 0..15, HexW3 0..19682,\nHexT 0..255 / HexT3 n / HexT3 sum 0..2186 (flat-top hexagons), Margolus <16 block outputs> or Margolus BBM,\nLenia R=13,T=10,b=1,m=0.15,s=0.015, Ant RL, Turmite LLRR. See the README for every family.";
+pub const NOTATION_SUMMARY: &str = "Any B/S rule (B3/S23, add V for edge neighbours), Generations B2/S/C3, W0..W255, HexW 0..15, HexW3 0..19682,\nHexT 0..255 / HexT3 n / HexT3 sum 0..2186 (flat-top hexagons), Margolus <16 block outputs> or Margolus BBM,\nLenia R=13,T=10,b=1,m=0.15,s=0.015, Ant RL, Turmite LLRR. See the book's \"Rule notation\" reference for every family.";
 
 impl Report for RulesOut {
     fn text(&self) -> String {

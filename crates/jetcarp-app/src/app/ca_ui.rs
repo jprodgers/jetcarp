@@ -387,7 +387,7 @@ impl JetcarpApp {
     pub(super) fn add_ui(&mut self, ui: &mut egui::Ui) {
         if ui
             .small_button("Load rule table…")
-            .on_hover_text("A JETCARP rule table (JSON). See README: Rule tables.")
+            .on_hover_text("A JETCARP rule table (JSON). See the book's \"Rule tables\" page.")
             .clicked()
         {
             self.load_table();

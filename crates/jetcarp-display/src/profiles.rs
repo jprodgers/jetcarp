@@ -683,8 +683,7 @@ fn builtin(scene: Scene, desc: &str, cell_px: f32, speed: f32, reseed: Vec<AutoR
     }
 }
 
-/// The built-in profiles, tuned at 2560 x 1440 (see the README's table and the
-/// `profile_survey` test, which measures them).
+/// The built-in profiles, tuned at 2560 x 1440 (the `profile_survey` test measures them).
 pub fn builtins() -> Vec<Profile> {
     let life = AutoReseed::new;
     vec![

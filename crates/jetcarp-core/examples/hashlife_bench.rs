@@ -1,4 +1,4 @@
-//! Time HashLife on the README's benchmark patterns and on soups:
+//! Time HashLife on classic benchmark patterns and on soups:
 //! `cargo run --release --example hashlife_bench [-- names...]`.
 //!
 //! Names: `gun`, `replicator`, `rpent`, `acorn`, `soup1k` (1024² torus soup to 1000, 10,000 and

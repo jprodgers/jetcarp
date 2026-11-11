@@ -42,7 +42,7 @@ PRINTING = {"to_string", "to_debug"}
 # Phrases in help.md that point outside the book, and the book link that replaces them on the page.
 # A phrase that no longer occurs is reported, so this list cannot go stale unnoticed.
 LINKS = {
-    "(see the README's *Pattern library and catalog*)":
+    '(see the book\'s "The pattern library" guide)':
         "(see [The pattern library](../guides/pattern-library.md) and "
         "[Folders](folders.md#environment-variables))",
 }

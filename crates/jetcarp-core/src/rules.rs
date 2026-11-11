@@ -447,7 +447,8 @@ impl Rule {
 }
 
 /// Named Margolus block tables (block states: upper left 1, upper right 2, lower left 4,
-/// lower right 8), built from the published rule statements; see the README for sources.
+/// lower right 8), built from the published rule statements; the book's "Margolus block
+/// rules" page gives the sources.
 pub fn margolus_named(name: &str) -> Option<[u8; 16]> {
     let rot180 = |x: u8| (x & 1) << 3 | (x & 2) << 1 | (x & 4) >> 1 | (x & 8) >> 3;
     let mut t = [0u8; 16];

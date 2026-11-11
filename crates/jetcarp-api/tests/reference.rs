@@ -23,7 +23,10 @@ fn rules_by_family() {
         t.starts_with(&format!("{:30} {:15} ", "Life", "B3/S23")),
         "{t}"
     );
-    assert!(t.trim_end().ends_with("See the README for every family."));
+    assert!(
+        t.trim_end()
+            .ends_with("See the book's \"Rule notation\" reference for every family.")
+    );
     let gens = ReferenceRules::run(
         &cx,
         RulesIn {
