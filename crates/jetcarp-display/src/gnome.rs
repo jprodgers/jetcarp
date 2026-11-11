@@ -1,7 +1,7 @@
 //! Installing JETCARP's GNOME Shell extension, which turns the host's windows into the desktop and
 //! lock-screen background and adds a top-bar menu. The files are built into the program.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const UUID: &str = "jetcarp@jimmieprodgers.com";
@@ -48,11 +48,30 @@ impl ExtensionState {
     }
 }
 
+/// The extension's folder: `<data>/gnome-shell/extensions/<uuid>`, where `<data>` is
+/// `$XDG_DATA_HOME` or `~/.local/share`. The same folder in any session, GNOME or not.
 fn dir() -> Result<PathBuf, String> {
+    Ok(extensions_dir()?.join(UUID))
+}
+
+/// GNOME Shell's folder of per-user extensions.
+pub fn extensions_dir() -> Result<PathBuf, String> {
     Ok(dirs::data_dir()
         .ok_or("no data folder on this system")?
-        .join("gnome-shell/extensions")
-        .join(UUID))
+        .join("gnome-shell/extensions"))
+}
+
+/// Whether the extension's files are in `extensions` (GNOME Shell's folder of extensions). Read
+/// from the folder itself, so it works outside a GNOME session too (from another desktop or a
+/// text console), where [`state`] can only say [`ExtensionState::NoGnome`].
+pub fn installed_in(extensions: &Path) -> bool {
+    let d = extensions.join(UUID);
+    d.join("metadata.json").exists() || d.join("extension.js").exists()
+}
+
+/// Whether the extension's files are in place for this user, whatever the session.
+pub fn installed() -> bool {
+    extensions_dir().is_ok_and(|d| installed_in(&d))
 }
 
 /// GNOME's numeric extension state in a `GetExtensionInfo` reply, printed by `gdbus`. An unknown
@@ -168,14 +187,28 @@ pub fn install() -> Result<(), String> {
 
 /// Switches the extension off and removes its files.
 pub fn remove() -> Result<(), String> {
-    let mut list = enabled_list()?;
-    if list.iter().any(|u| u == UUID) {
-        list.retain(|u| u != UUID);
-        set_enabled_list(&list)?;
-    }
-    let dir = dir()?;
+    remove_from(&extensions_dir()?, enabled_list, set_enabled_list)
+}
+
+/// Removes the extension's files from `extensions`, then takes it off GNOME's list of enabled
+/// extensions through `list` and `set`. The files go first and decide the result: outside a
+/// GNOME session the list may be out of reach (no `org.gnome.shell` schema on another desktop, or
+/// no session bus to write it through), and GNOME Shell skips an enabled extension whose files
+/// are gone, so a list left as it was does no harm.
+pub fn remove_from(
+    extensions: &Path,
+    list: impl FnOnce() -> Result<Vec<String>, String>,
+    set: impl FnOnce(&[String]) -> Result<(), String>,
+) -> Result<(), String> {
+    let dir = extensions.join(UUID);
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    if let Ok(mut l) = list()
+        && l.iter().any(|u| u == UUID)
+    {
+        l.retain(|u| u != UUID);
+        let _ = set(&l);
     }
     Ok(())
 }

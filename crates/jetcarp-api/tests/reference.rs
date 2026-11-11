@@ -247,6 +247,63 @@ fn uninstall_lists_then_undoes() {
 }
 
 #[test]
+fn deleting_the_settings_keeps_the_picture_the_desktop_shows() {
+    use jetcarp_api::ops::system::remove_dir_keeping;
+    let dir = scratch("settings-keep").join("jetcarp");
+    let pics = dir.join("desktop-pictures");
+    std::fs::create_dir_all(pics.join("deeper")).unwrap();
+    std::fs::create_dir_all(dir.join("profiles")).unwrap();
+    for f in [
+        "host.json",
+        "app.json",
+        "profiles/mine.json",
+        "desktop-picture.json",
+    ] {
+        std::fs::write(dir.join(f), "{}").unwrap();
+    }
+    let shown = pics.join("original-1.jpg");
+    std::fs::write(&shown, b"jpeg").unwrap();
+    std::fs::write(pics.join("still-2.png"), b"png").unwrap();
+    std::fs::write(pics.join("deeper/x"), b"").unwrap();
+    // The desktop shows the copy of the user's own picture, and a file outside the folder.
+    let elsewhere = dir.parent().unwrap().join("mine.jpg");
+    std::fs::write(&elsewhere, b"jpeg").unwrap();
+    let kept = remove_dir_keeping(&dir, &[shown.clone(), elsewhere.clone()]).unwrap();
+    assert_eq!(kept, [std::fs::canonicalize(&shown).unwrap()]);
+    let mut left: Vec<String> = walkdir(&dir);
+    left.sort();
+    assert_eq!(
+        left,
+        ["desktop-pictures", "desktop-pictures/original-1.jpg"]
+    );
+    assert!(elsewhere.exists());
+    // Nothing shown inside it: the whole folder goes.
+    assert!(remove_dir_keeping(&dir, &[elsewhere]).unwrap().is_empty());
+    assert!(!dir.exists());
+}
+
+/// Everything under `dir`, relative and with `/` separators.
+fn walkdir(dir: &std::path::Path) -> Vec<String> {
+    let mut out = vec![];
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(d) = todo.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            let rel = p
+                .strip_prefix(dir)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            out.push(rel);
+            if p.is_dir() {
+                todo.push(p);
+            }
+        }
+    }
+    out
+}
+
+#[test]
 fn files_list_reads_inside_its_roots_only() {
     let dir = scratch("files");
     std::fs::write(dir.join("a.json"), "{\"x\": 1}").unwrap();

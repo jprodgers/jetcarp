@@ -162,8 +162,9 @@ enum Cmd {
     /// What JETCARP sees on this machine: version, folders, graphics adapters, desktop
     /// integration. Include it in bug reports.
     Doctor,
-    /// Undo what JETCARP set up outside its folders (login entry, GNOME extension, screen
-    /// saver), and optionally delete its settings and data. Shows the plan unless --yes.
+    /// Undo what JETCARP set up outside its folders (the host and its still on the desktop,
+    /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
+    /// Shows the plan unless --yes.
     Uninstall(platform::UninstallArgs),
     /// Print the settings, data, and output folders JETCARP uses (environment overrides
     /// included).

@@ -249,6 +249,12 @@ pub trait Platform: Send + Sync {
     fn undo_steps(&self) -> Vec<UndoStep> {
         Vec::new()
     }
+    /// The picture files the desktop shows now. Uninstalling keeps them when it deletes the
+    /// settings folder (where the host's stills, and on Windows a copy of the user's own
+    /// picture, are kept), so the desktop is never left pointing at a deleted file.
+    fn desktop_files(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
     /// GPU soup batches for hunts (`jetcarp_gpu::hunt::GpuHunter`).
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
         Err("this program was built without the GPU soup hunter".into())

@@ -12,8 +12,9 @@ use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::job::SoupBatcher;
-use jetcarp_display::{autostart, gnome, saver};
-use jetcarp_mcp::link::host_call;
+use jetcarp_display::host_settings::HostSettings;
+use jetcarp_display::{autostart, desktop_picture, gnome, saver};
+use jetcarp_mcp::link::{host_call, host_gone};
 use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
@@ -105,10 +106,15 @@ impl Platform for Machine {
             run,
         };
         let mut steps = vec![];
-        if host_running() {
+        let running = host_running();
+        if running {
+            steps.push(step("stop the background host", Box::new(stop_host)));
+        }
+        let still_wanted = desktop_picture::wanted(&HostSettings::load().0);
+        if picture_step(desktop_picture::showing(), running, still_wanted) {
             steps.push(step(
-                "stop the background host (it puts your own desktop picture back)",
-                Box::new(|| host_call(&json!({"action": "quit"})).map(|_| ())),
+                "put your own desktop picture back (the host left a still there)",
+                Box::new(|| desktop_picture::restore().map(|_| ())),
             ));
         }
         if autostart::enabled() {
@@ -117,11 +123,14 @@ impl Platform for Machine {
                 Box::new(|| autostart::set(false, &autostart::host_command()?)),
             ));
         }
+        // The files are looked for in their folder as well as asked of GNOME Shell, which
+        // cannot be reached outside a GNOME session (another desktop, a text console).
         if cfg!(target_os = "linux")
-            && !matches!(
-                gnome::state(),
-                gnome::ExtensionState::NoGnome | gnome::ExtensionState::NotInstalled
-            )
+            && (gnome::installed()
+                || !matches!(
+                    gnome::state(),
+                    gnome::ExtensionState::NoGnome | gnome::ExtensionState::NotInstalled
+                ))
         {
             steps.push(step(
                 "remove the GNOME Shell extension",
@@ -144,6 +153,38 @@ impl Platform for Machine {
         }
         steps
     }
+
+    fn desktop_files(&self) -> Vec<std::path::PathBuf> {
+        desktop_picture::shown_files()
+    }
+}
+
+/// Asks the host to quit and waits until it has gone. It may leave a still on the desktop as it
+/// goes (`host still on`), and that has to be written before the user's own picture can be put
+/// back, so this waits for its port to close (which comes after the still) rather than only for
+/// the answer to "quit".
+fn stop_host() -> Result<(), String> {
+    match host_call(&json!({"action": "quit"})) {
+        Err(e) if e.contains("not running") => return Ok(()),
+        // The answer can be lost as the host closes its end (seen on Windows); it may still
+        // have quit, which the wait below shows.
+        Ok(_) | Err(_) => {}
+    }
+    let t0 = std::time::Instant::now();
+    while t0.elapsed() < std::time::Duration::from_secs(20) {
+        if host_gone() {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err("the host did not quit within 20 seconds; `jetcarp host stop` or end it by hand".into())
+}
+
+/// Whether uninstalling puts the user's own desktop picture back: when the host has left a still
+/// (it saved the user's picture beside the settings), or will leave one as it stops (it runs,
+/// and its settings want a still).
+fn picture_step(still_showing: bool, host_running: bool, still_wanted: bool) -> bool {
+    still_showing || (host_running && still_wanted)
 }
 
 #[derive(Args, Debug)]
@@ -151,11 +192,30 @@ pub struct UninstallArgs {
     /// Do it. Without this, only show what would be done.
     #[arg(long)]
     pub yes: bool,
-    /// Also delete JETCARP's settings folder.
+    /// Also delete JETCARP's settings folder (except a picture the desktop still shows).
     #[arg(long)]
     pub settings: bool,
     /// Also delete JETCARP's data folder (the pattern library, search databases, packs). This
     /// cannot be undone.
     #[arg(long)]
     pub data: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_picture_comes_back_when_a_still_is_or_will_be_up() {
+        use super::picture_step;
+        assert!(picture_step(true, false, false), "a still the host left");
+        assert!(picture_step(true, true, false));
+        assert!(
+            picture_step(false, true, true),
+            "the host leaves one as it stops"
+        );
+        assert!(!picture_step(false, true, false), "the host leaves none");
+        assert!(
+            !picture_step(false, false, true),
+            "no host and no still: nothing to put back"
+        );
+    }
 }

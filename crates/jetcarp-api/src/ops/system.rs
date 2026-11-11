@@ -25,6 +25,47 @@ pub fn folder_size(p: &Path) -> u64 {
         .sum()
 }
 
+/// Deletes `dir` and everything in it except the files in `keep` and the folders that hold them,
+/// and returns the files kept. Uninstalling deletes the settings folder this way, keeping the
+/// picture the desktop shows (a still the host left, or on Windows the copy of the user's own
+/// picture that was put back), so the desktop is never left pointing at a deleted file.
+/// Symbolic links are removed, not followed.
+pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let root = canon(dir);
+    let mut inside: Vec<PathBuf> = keep
+        .iter()
+        .map(|k| canon(k))
+        .filter(|k| k.starts_with(&root) && k.is_file())
+        .collect();
+    inside.dedup();
+    if inside.is_empty() {
+        std::fs::remove_dir_all(dir)?;
+        return Ok(inside);
+    }
+    /// Empties `d` but for `keep`; true when nothing is left in it.
+    fn empty(d: &Path, keep: &[PathBuf]) -> std::io::Result<bool> {
+        let mut left = false;
+        for e in std::fs::read_dir(d)? {
+            let p = e?.path();
+            if std::fs::symlink_metadata(&p)?.is_dir() {
+                if empty(&p, keep)? {
+                    std::fs::remove_dir(&p)?;
+                } else {
+                    left = true;
+                }
+            } else if keep.contains(&p) {
+                left = true;
+            } else {
+                std::fs::remove_file(&p)?;
+            }
+        }
+        Ok(!left)
+    }
+    empty(&root, &inside)?;
+    Ok(inside)
+}
+
 /// A size for people: `512 B`, `3.4 MB`.
 pub fn human_bytes(bytes: u64) -> String {
     let units = ["B", "KB", "MB", "GB", "TB"];
@@ -235,7 +276,7 @@ pub struct UninstallIn {
     /// Do it. Without this, only say what would be done.
     #[serde(default)]
     pub yes: bool,
-    /// Also delete the settings folder.
+    /// Also delete the settings folder (except a picture the desktop still shows).
     #[serde(default)]
     pub settings: bool,
     /// Also delete the data folder (the catalog, search databases, packs). Cannot be undone.
@@ -252,6 +293,9 @@ pub struct UndoResult {
     pub ok: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// What else to know about a step that worked (files it kept).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// A folder kept, with its size.
@@ -288,6 +332,9 @@ impl Report for UninstallReport {
                 match (&st.ok, &st.error) {
                     (Some(true), _) => {
                         let _ = writeln!(s, "  done: {}", st.what);
+                        if let Some(n) = &st.note {
+                            let _ = writeln!(s, "        {n}");
+                        }
                     }
                     (Some(false), e) => {
                         let _ =
@@ -333,29 +380,48 @@ impl Report for UninstallReport {
 pub struct SystemUninstall;
 impl Op for SystemUninstall {
     const NAME: &'static str = "system.uninstall";
-    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (login entry, GNOME extension, screen saver), and optionally delete its settings and data; only lists the steps unless `yes`.";
+    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (the host, its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings (keeping the picture the desktop shows) and data; only lists the steps unless `yes`.";
     const READ_ONLY: bool = false;
     type In = UninstallIn;
     type Out = UninstallReport;
     fn run(cx: &Ctx, a: UninstallIn, _: &dyn Progress) -> Result<UninstallReport, ApiError> {
-        type Step = (String, Box<dyn Fn() -> Result<(), String> + Send + Sync>);
-        let mut steps: Vec<Step> = cx
+        /// A step's work: a note on success (files kept), or why it failed.
+        type Run = Box<dyn Fn() -> Result<Option<String>, String> + Send + Sync>;
+        let mut steps: Vec<(String, Run)> = cx
             .platform
             .undo_steps()
             .into_iter()
-            .map(|s| (s.what, s.run))
+            .map(|s| {
+                let run = s.run;
+                (s.what, Box::new(move || run().map(|()| None)) as Run)
+            })
             .collect();
         let paths = cx.paths();
         if let Some(c) = paths.settings.clone().filter(|c| c.exists()) {
             if a.settings {
+                // Asked when the step runs, after the steps before it have put the user's own
+                // picture back.
+                let platform = cx.platform.clone();
                 steps.push((
                     format!("delete the settings folder {}", c.display()),
-                    Box::new(move || std::fs::remove_dir_all(&c).map_err(|e| e.to_string())),
+                    Box::new(move || {
+                        let kept = remove_dir_keeping(&c, &platform.desktop_files())
+                            .map_err(|e| e.to_string())?;
+                        Ok((!kept.is_empty()).then(|| {
+                            let names: Vec<String> =
+                                kept.iter().map(|k| k.display().to_string()).collect();
+                            format!("kept {}: the desktop shows it", names.join(", "))
+                        }))
+                    }),
                 ));
             } else if let Some(record) = Some(c.join("host-program")).filter(|p| p.exists()) {
                 steps.push((
                     "forget the recorded host command".into(),
-                    Box::new(move || std::fs::remove_file(&record).map_err(|e| e.to_string())),
+                    Box::new(move || {
+                        std::fs::remove_file(&record)
+                            .map(|()| None)
+                            .map_err(|e| e.to_string())
+                    }),
                 ));
             }
         }
@@ -365,7 +431,11 @@ impl Op for SystemUninstall {
             let d = data.clone();
             steps.push((
                 format!("delete the data folder {} ({size})", data.display()),
-                Box::new(move || std::fs::remove_dir_all(&d).map_err(|e| e.to_string())),
+                Box::new(move || {
+                    std::fs::remove_dir_all(&d)
+                        .map(|()| None)
+                        .map_err(|e| e.to_string())
+                }),
             ));
         }
         let steps = steps
@@ -376,13 +446,22 @@ impl Op for SystemUninstall {
                         what,
                         ok: None,
                         error: None,
+                        note: None,
                     };
                 }
-                let r = run();
-                UndoResult {
-                    what,
-                    ok: Some(r.is_ok()),
-                    error: r.err(),
+                match run() {
+                    Ok(note) => UndoResult {
+                        what,
+                        ok: Some(true),
+                        error: None,
+                        note,
+                    },
+                    Err(e) => UndoResult {
+                        what,
+                        ok: Some(false),
+                        error: Some(e),
+                        note: None,
+                    },
                 }
             })
             .collect();

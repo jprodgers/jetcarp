@@ -4,7 +4,9 @@
 //! The host leaves a still of its scene there when it stops, or while the live wallpaper can't be
 //! shown, and puts the user's own picture back when the still is no longer wanted. The user's
 //! picture is saved beside the settings the first time, so it survives the host stopping. If the
-//! user has chosen another picture since, that one is left alone.
+//! user has chosen another picture since, that one is left alone. `jetcarp uninstall` puts it back
+//! as well ([`restore`]), and keeps whatever file the desktop still shows ([`shown_files`]) when it
+//! deletes the settings folder.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -104,6 +106,61 @@ pub fn settle(settings: &crate::host_settings::HostSettings) -> Result<Restored,
 /// Whether a still is up (the user's picture is saved).
 pub fn showing() -> bool {
     dir().is_ok_and(|d| d.join(SAVED).exists())
+}
+
+/// The picture files the desktop shows now (every screen, light and dark), as far as the
+/// system says: uninstalling keeps these when it deletes the settings folder, since a desktop
+/// whose picture file has gone shows a blank or default background at the next login.
+pub fn shown_files() -> Vec<PathBuf> {
+    system()
+        .and_then(|d| d.current())
+        .map(|v| files_named(&v))
+        .unwrap_or_default()
+}
+
+/// The local files a [`Desktop::current`] description names: GNOME's `'file:///…'` URIs (as
+/// `gsettings` prints them, quoted and percent-escaped), Windows' path, or macOS's paths per
+/// screen. Anything else in it (GNOME's `'zoom'`, a plain colour's empty path) is skipped.
+fn files_named(v: &Value) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    let mut add = |s: &str| {
+        let s = s.trim().trim_matches('\'');
+        let path = match s.strip_prefix("file://") {
+            Some(rest) => PathBuf::from(unescape(rest)),
+            None => PathBuf::from(s),
+        };
+        if path.is_absolute() && !out.contains(&path) {
+            out.push(path);
+        }
+    };
+    match v {
+        Value::String(s) => add(s),
+        Value::Array(a) => a.iter().filter_map(Value::as_str).for_each(&mut add),
+        Value::Object(m) => m.values().filter_map(Value::as_str).for_each(&mut add),
+        _ => {}
+    }
+    out
+}
+
+/// A URI path with its `%XX` escapes decoded (invalid escapes are kept as written).
+fn unescape(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2]))
+        {
+            out.push((h * 16 + l) as u8);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn show_on(desktop: &dyn Desktop, dir: &Path, png: &[u8]) -> Result<PathBuf, String> {
@@ -555,6 +612,33 @@ mod tests {
         assert!(!second.exists() && !dir.join(SAVED).exists());
         assert_eq!(restore_on(&desk, &dir).unwrap(), Restored::Nothing);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_files_each_system_shows_are_read_from_its_description() {
+        // GNOME, as `gsettings get` prints the keys; the dark picture is the same file.
+        let gnome = serde_json::json!({
+            "picture-uri": "'file:///home/a%20b/.config/jetcarp/desktop-pictures/still-1.png'",
+            "picture-uri-dark": "'file:///home/a%20b/.config/jetcarp/desktop-pictures/still-1.png'",
+            "picture-options": "'zoom'",
+        });
+        assert_eq!(
+            files_named(&gnome),
+            [PathBuf::from(
+                "/home/a b/.config/jetcarp/desktop-pictures/still-1.png"
+            )]
+        );
+        // macOS: one path per screen; an empty one (no picture) is skipped.
+        let mac = serde_json::json!(["/Users/a/Pictures/x.heic", "", "/Users/a/Pictures/x.heic"]);
+        assert_eq!(
+            files_named(&mac),
+            [PathBuf::from("/Users/a/Pictures/x.heic")]
+        );
+        // Windows: one path, or an empty one for a plain colour. (On Linux a Windows path is
+        // not absolute, so only the empty case is checked here.)
+        assert!(files_named(&Value::String(String::new())).is_empty());
+        assert!(files_named(&Value::Null).is_empty());
+        assert_eq!(unescape("%2Fa%zz%4"), "/a%zz%4");
     }
 
     #[test]

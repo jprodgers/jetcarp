@@ -8,11 +8,7 @@ a still picture as your desktop background. Removing JETCARP takes three steps: 
 
 ## 1. Undo what JETCARP set up
 
-If you used the still picture (*Leave a still picture when it stops*, or `jetcarp host still on`),
-first run `jetcarp host still off`. That puts your own desktop picture back, which matters if you also
-delete the settings folder, where the still is kept.
-
-Then `jetcarp uninstall`, on its own, shows what it would do without changing anything:
+`jetcarp uninstall`, on its own, shows what it would do without changing anything:
 
 ```text
 $ jetcarp uninstall
@@ -28,8 +24,10 @@ To remove the program itself, use what installed it: `pip uninstall jetcarp`, `p
 `jetcarp uninstall --yes` does it, and reports each step as *done* or *FAILED* with the reason. The
 steps it may list are:
 
-- **stop the background host**, which also puts your own desktop picture back if it had left a still
-  there;
+- **stop the background host**;
+- **put your own desktop picture back**, if the host left a still there (*Leave a still picture when
+  it stops*, or `jetcarp host still on`) or will as it stops. JETCARP saved your picture when it
+  first put a still up; if you have chosen another picture since, that one is left alone;
 - **stop the host starting at login**;
 - **remove the GNOME Shell extension** (Linux): it is switched off and its folder deleted. Log out and
   back in once to finish;
@@ -39,15 +37,16 @@ steps it may list are:
 - **forget the recorded host command**, a small file in the settings folder that GNOME's menu and the
   Windows screen saver use to start the host.
 
-Run it from your desktop session. On Linux it asks GNOME Shell whether the extension is installed,
-and from a text console or over SSH it cannot reach GNOME Shell, so it leaves the extension alone;
-`jetcarp uninstall` then lists no extension step.
+Run it from your desktop session where you can, since putting your picture back and switching the
+GNOME extension off both go through the desktop. From another desktop, a text console or over SSH
+it still finds the GNOME extension's files and deletes them; GNOME Shell skips an extension on its
+list whose files have gone.
 
 Two options also delete JETCARP's folders:
 
 | Option | Deletes |
 | --- | --- |
-| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures |
+| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures. A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be |
 | `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries of your own, the exploratory search's databases and the atlas. **This cannot be undone** |
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you

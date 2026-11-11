@@ -440,6 +440,18 @@ pub fn host_call(args: &Value) -> Result<Value, String> {
     serde_json::from_str(text).map_err(|e| format!("host: bad reply: {e}"))
 }
 
+/// Whether the background host has gone: its endpoint file is gone, or nothing listens on its
+/// port any more. Unlike a status call this never waits for an answer, so it can be polled while
+/// a host shuts down: the host leaves its still picture (if it leaves one) before it closes its
+/// port and removes the file.
+pub fn host_gone() -> bool {
+    let Ok(info) = EndpointInfo::read_from(HOST_ENDPOINT, "") else {
+        return true;
+    };
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, info.port));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_err()
+}
+
 /// The one tool the host answers.
 pub const HOST_TOOL: &str = "host_control";
 
