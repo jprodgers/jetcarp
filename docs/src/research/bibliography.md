@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 260 works cited across the JETCARP documentation. Every entry was
+These are the 261 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -207,6 +207,8 @@ BibTeX key, so you can link to it directly.
 <span id="gomezjauregui2012generation"></span>Gomez-Jauregui, V., C. Otero, R. Arias and C. Manchado (2012). “Generation and Nomenclature of Tessellations and Double-Layer Grids”. *Journal of Structural Engineering* 138(7): 843–852. doi:[10.1061/(ASCE)ST.1943-541X.0000532](https://doi.org/10.1061/(ASCE)ST.1943-541X.0000532). <small>`gomezjauregui2012generation`</small>
 
 <span id="gomezjauregui2021gomjau"></span>Gomez-Jauregui, Valentin, Harrison Hogg, Cristina Manchado and Cesar Otero (2021). “GomJau-Hogg's Notation for Automatic Generation of k-Uniform Tessellations with ANTWERP v3.0”. *Symmetry* 13(12): 2376. doi:[10.3390/sym13122376](https://doi.org/10.3390/sym13122376). <small>`gomezjauregui2021gomjau`</small>
+
+<span id="gosper1984exploiting"></span>Gosper, R. Wm. (1984). “Exploiting regularities in large cellular spaces”. *Physica D: Nonlinear Phenomena* 10(1–2): 75–80. doi:[10.1016/0167-2789(84)90251-3](https://doi.org/10.1016/0167-2789(84)90251-3). <small>`gosper1984exploiting`</small>
 
 <span id="goucher2012gliders"></span>Goucher, Adam P. (2012). “Gliders in Cellular Automata on Penrose Tilings”. *Journal of Cellular Automata* 7(5–6): 385–392. <small>`goucher2012gliders`</small>
 

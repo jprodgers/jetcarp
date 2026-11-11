@@ -93,8 +93,9 @@ Every picture is made by JETCARP from a scene in `docs/scenes/`, and its caption
 (it needs Python with NumPy and Pillow; set `PYTHON=` if your default Python lacks them). Both use
 `target/release/jetcarp` unless `JETCARP=` names another binary, and both take a filter to render only
 some figures. Some pages are generated, and say so at the top: edit their sources and run
-`docs/tools/gen-bibliography.py`, `gen-named-rules.py` or `gen-tiling-catalogue.py` instead of editing
-the page.
+`docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py` or
+`gen-scripting.py` instead of editing the page. `gen-scripting.py` also fails if the Rhai help and
+the functions the engine registers disagree.
 
 The writing style is plain and direct, in British spelling ("colour", "neighbour"), and the book never
 claims more than its evidence: novelty only as set out in

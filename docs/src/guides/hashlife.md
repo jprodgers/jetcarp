@@ -143,5 +143,6 @@ HashLife needs regularity and a lattice. For everything else:
 - **Searches** run as resumable jobs, so they can run for days and survive restarts (see
   [Searching for patterns](searching.md)).
 
-HashLife was described by R. Wm. Gosper in "Exploiting regularities in large cellular spaces",
-*Physica D* 10 (1984), 75–80. JETCARP claims nothing new about the algorithm itself.
+HashLife was described by R. Wm. Gosper in "Exploiting regularities in large cellular spaces"
+([Gosper 1984](../research/bibliography.md#gosper1984exploiting)). JETCARP claims nothing new about the
+algorithm itself.
