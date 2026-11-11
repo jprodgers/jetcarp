@@ -87,10 +87,23 @@ pattern has one id whichever phase, orientation or position it was found or writ
   and k-uniform tilings, glide reflections included), moved to the origin, the smallest is the
   canonical start; the period is rewritten from that phase, in that orientation, with the
   displacement turned to match. Rule tables are not isotropic, so for them only the starting phase
-  and the position count. The symmetries are found by searching small integer matrices that carry
-  the tiling's polygons and neighbours onto themselves; on every periodic tiling JETCARP builds
-  they form a closed point group, and a wider search finds no more, but completeness is not proven
-  for tilings added later.
+  and the position count. The symmetries are all of them: the search goes through every rotation
+  or reflection that can map the unit cell's lattice onto itself (the cell vectors' images are
+  lattice vectors of the same lengths, so their coordinates are bounded), with every translation
+  that carries the cell's first tile onto a tile, the translations inside the cell included, and
+  JETCARP's tests check the result on every periodic tiling it builds against an independent scan
+  of the tiles' corners.
+- **Unit cells that hold the tile pattern more than once** (41 tilings: flat-top hexagons, the glide
+  and fourfold families, and 38 isohedral types, such as IH58, whose 1 × 2 cell holds two unit
+  squares). Some of their symmetries, such as IH58's quarter turn, do not map the cell's lattice
+  onto itself, so the minimum is taken over the whole symmetry group, applied to each cell through
+  its centroid. On such a cell a spaceship moving half a cell per period is seen again only after it
+  has moved a whole cell, so its period as found can depend on its direction; its period is first
+  made its shortest over every translation of the tiling, and in the canonical orientation it is
+  the shortest multiple of that after which the ship has moved by a cell vector. Conway's glider on
+  IH58 gets one id (period 8, as the cell sees it) in all 8 orientations and both rows of the cell.
+  Puffers and guns there use the symmetries that keep their displacement a cell vector, and rule
+  tables only the identity.
 - **Aperiodic patches, pattern graphs** (outer-totalistic rules). The pattern's tiles, as a labelled
   graph, are labelled canonically again from the stored graph (minimised over the starting phase and,
   on chiral tilings such as the hat, a global mirror image), so the patch's rotations and reflections

@@ -126,7 +126,7 @@ pub fn identity(rec: &PatternRecord) -> Result<String, String> {
         rec.steps_per_gen,
         tiling_key(&rec.tiling),
         rec.class.key(),
-        rec.period,
+        form.period,
         d[0],
         d[1],
         form.canonical,

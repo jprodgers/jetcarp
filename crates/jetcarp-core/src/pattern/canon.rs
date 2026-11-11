@@ -13,8 +13,12 @@
 //!   the origin; the period then starts at that phase, in that orientation, at the origin
 //!   (phase rotation, orientation, translation). The displacement is carried into the same
 //!   orientation. Rule tables are not isotropic, so only translations and phase rotation apply.
-//!   Orientation is only as complete as the symmetry search ([`super::symmetry`]: a closed point
-//!   group on every periodic tiling built today, but not proven complete).
+//!   The symmetries are every symmetry of the tiling ([`super::symmetry`] says why). On a unit
+//!   cell that holds its tile pattern more than once (41 of the tilings: flat-top hexagons, the
+//!   glide and fourfold families, 38 isohedral types), the minimum is over the whole group as
+//!   isometries ([`super::group`]), since some of it cannot be written as cell maps, and a
+//!   spaceship's period is first made its shortest over every translation of the tiling (see
+//!   [`general_form`]). Rule tables on such cells: identity only (their slots need not match).
 //! - **Aperiodic patches with a pattern graph** (outer-totalistic rules). The stored graph is
 //!   labelled canonically again ([`super::site_graph`]: colour refinement and individualization,
 //!   minimised over the starting phase and, on chiral tilings, a global mirror), which is
@@ -33,6 +37,7 @@
 //! for importers: on lattices from the record alone, on aperiodic patches by matching the site
 //! on its patch and building it again.
 
+use super::group::{Iso, TilingGroup, tiling_group};
 use super::site::{Site, describe, match_site, original_anchor, patch_topology, site_canonical};
 use super::symmetry::CellMap;
 use super::{
@@ -54,6 +59,16 @@ pub struct CanonicalForm {
     pub displacement: [i32; 2],
     /// The canonical form text (`rows`, `k@i,j` lists, `graph ...`, `site r2 ...`).
     pub canonical: String,
+    /// The period in the canonical orientation: the record's, except for a spaceship on a unit
+    /// cell that holds its tile pattern more than once, whose period over the cell's lattice can
+    /// depend on its direction (see [`general_form`]).
+    pub period: u64,
+}
+
+/// The symmetry that took a record's stored orientation to its canonical one.
+enum Chosen {
+    Cell(CellMap),
+    Geo(Iso, Arc<TilingGroup>),
 }
 
 /// Does orientation count for this rule (isotropic rules)? Rule tables are not isotropic.
@@ -99,13 +114,20 @@ pub fn canonical_form(rec: &PatternRecord) -> Result<CanonicalForm, String> {
 
 /// A lattice record's canonical form, and the map from its stored orientation to the canonical
 /// one.
-fn lattice_form(rec: &PatternRecord) -> Result<(CanonicalForm, CellMap), String> {
+fn lattice_form(rec: &PatternRecord) -> Result<(CanonicalForm, Chosen), String> {
     let info = super::verify::lattice_info(&rec.tiling, rec.neighborhood)?;
-    let syms = tiling_symmetries(&rec.tiling, rec.neighborhood, isotropic(&rec.rule))?;
+    let iso = isotropic(&rec.rule);
     let phases = rec.all_phases()?;
     if phases.is_empty() || phases.iter().all(|p| p.is_empty()) {
         return Err(format!("{}: no cells", rec.id));
     }
+    if iso {
+        let grp = tiling_group(&rec.tiling, rec.neighborhood)?;
+        if !grp.primitive() {
+            return general_form(rec, &phases, grp, info.ntypes);
+        }
+    }
+    let syms = tiling_symmetries(&rec.tiling, rec.neighborhood, iso)?;
     let d = rec.displacement.unwrap_or([0, 0]);
     let (ph, d2, mi) = canonical_phases_map(&phases, d, &syms);
     let canonical = crate::objects::picture(&ph[0], info.ntypes);
@@ -114,8 +136,141 @@ fn lattice_form(rec: &PatternRecord) -> Result<(CanonicalForm, CellMap), String>
             phases: ph,
             displacement: d2,
             canonical,
+            period: rec.period,
         },
-        syms[mi].clone(),
+        Chosen::Cell(syms[mi].clone()),
+    ))
+}
+
+/// A record's cells moved to the origin (the smallest row and column 0), sorted, and the shift.
+fn at_origin(mut v: Phase) -> (Phase, [i32; 2]) {
+    let mi = v.iter().map(|c| c.i).min().unwrap_or(0);
+    let mj = v.iter().map(|c| c.j).min().unwrap_or(0);
+    for c in &mut v {
+        c.i -= mi;
+        c.j -= mj;
+    }
+    v.sort_unstable();
+    (v, [mi, mj])
+}
+
+/// The canonical form on a unit cell that holds its tile pattern more than once, over the whole
+/// symmetry group ([`super::group`]). Two things differ from a primitive cell. The orientation is
+/// the minimum over every symmetry, including those (rotations of the true translation lattice)
+/// that no cell map can write. And a spaceship's period is first made its shortest over every
+/// translation of the tiling: on such a cell the object finder sees a ship again only when it
+/// has moved by a whole cell vector, so a ship moving half a cell per period is found with twice
+/// its period, in some directions and not others. In the canonical orientation the period is
+/// the shortest multiple of that true period after which the ship has moved by a cell vector,
+/// so the same ship found in any direction gets one canonical period, displacement, and phases.
+/// Puffers (only their start is stored) and guns (their stream must stay a cell vector) use the
+/// symmetries that keep those vectors on the cell's lattice.
+fn general_form(
+    rec: &PatternRecord,
+    phases: &[Phase],
+    grp: Arc<TilingGroup>,
+    ntypes: u32,
+) -> Result<(CanonicalForm, Chosen), String> {
+    let n = phases.len() as u64;
+    let d = rec.displacement.unwrap_or([0, 0]);
+    let dw = grp.world(d);
+    // Generation `t` of the stored evolution (spaceships move on by `d` each stored period).
+    let at = |t: u64| -> Phase {
+        let k = (t / n) as i32;
+        phases[(t % n) as usize]
+            .iter()
+            .map(|c| LCell {
+                i: c.i + d[0] * k,
+                j: c.j + d[1] * k,
+                ..*c
+            })
+            .collect()
+    };
+    let image = |g: &Iso, ph: &Phase| -> Result<Phase, String> {
+        ph.iter()
+            .map(|c| grp.apply(g, c))
+            .collect::<Option<Phase>>()
+            .ok_or_else(|| format!("{}: a symmetry carried a cell off the tiles", rec.id))
+    };
+    let spaceship = rec.class == PatternClass::Spaceship;
+    // The shortest period over every translation of the tiling.
+    let mut q = n;
+    if spaceship {
+        for q2 in (1..n).filter(|q2| n % q2 == 0) {
+            let v = [dw[0] * q2 as f64 / n as f64, dw[1] * q2 as f64 / n as f64];
+            if !grp.is_translation(v) {
+                continue;
+            }
+            let back = Iso {
+                r: Iso::ID.r,
+                t: [-v[0], -v[1]],
+            };
+            let mut moved = image(&back, &at(q2))?;
+            moved.sort_unstable();
+            if moved == phases[0] {
+                q = q2;
+                break;
+            }
+        }
+    }
+    let v = [dw[0] * q as f64 / n as f64, dw[1] * q as f64 / n as f64];
+    let keeps_lattice = |g: &Iso| match rec.class {
+        PatternClass::Puffer => grp.lattice(g.turn(dw)).is_some(),
+        PatternClass::Gun => rec.gun.as_ref().is_none_or(|x| {
+            grp.lattice(g.turn(grp.world(x.ship_displacement)))
+                .is_some()
+        }),
+        _ => true,
+    };
+    let mut best: Option<(Phase, usize, u64, [i32; 2])> = None;
+    for (gi, g) in grp.isos.iter().enumerate() {
+        if !keeps_lattice(g) {
+            continue;
+        }
+        for t in 0..q {
+            let (img, shift) = at_origin(image(g, &at(t))?);
+            if best.as_ref().is_none_or(|b| img < b.0) {
+                best = Some((img, gi, t, shift));
+            }
+        }
+    }
+    let (_, gi, t0, shift) = best.ok_or_else(|| format!("{}: no symmetry fits", rec.id))?;
+    let g = grp.isos[gi];
+    let vs = g.turn(v);
+    let (period, count, disp) = if rec.class == PatternClass::Puffer {
+        (rec.period, 1, grp.lattice(vs).unwrap_or([0, 0]))
+    } else {
+        let m = (1..=24u64)
+            .find(|m| {
+                grp.lattice([vs[0] * *m as f64, vs[1] * *m as f64])
+                    .is_some()
+            })
+            .ok_or_else(|| format!("{}: its displacement is not a translation", rec.id))?;
+        let dl = grp
+            .lattice([vs[0] * m as f64, vs[1] * m as f64])
+            .unwrap_or([0, 0]);
+        (m * q, m * q, dl)
+    };
+    let out = (0..count)
+        .map(|u| {
+            let mut ph = image(&g, &at(t0 + u))?;
+            for c in &mut ph {
+                c.i -= shift[0];
+                c.j -= shift[1];
+            }
+            ph.sort_unstable();
+            Ok(ph)
+        })
+        .collect::<Result<Vec<Phase>, String>>()?;
+    let canonical = crate::objects::picture(&out[0], ntypes);
+    Ok((
+        CanonicalForm {
+            phases: out,
+            displacement: disp,
+            canonical,
+            period,
+        },
+        Chosen::Geo(g, grp),
     ))
 }
 
@@ -163,6 +318,7 @@ fn site_form(rec: &PatternRecord, site: &Site) -> Result<CanonicalForm, String> 
         return Ok(CanonicalForm {
             phases: out,
             displacement: [0, 0],
+            period: rec.period,
             canonical: super::site_graph::graph_canonical_text(
                 &code,
                 rec.class == PatternClass::Mover,
@@ -209,6 +365,7 @@ fn site_form(rec: &PatternRecord, site: &Site) -> Result<CanonicalForm, String> 
         phases: (0..p).map(|u| phases[(t0 + u) % p].clone()).collect(),
         displacement: [0, 0],
         canonical: site_canonical(site.radius, &text),
+        period: rec.period,
     })
 }
 
@@ -239,6 +396,7 @@ impl PatternRecord {
         let info = super::verify::lattice_info(&self.tiling, self.neighborhood)?;
         let moving = matches!(self.class, PatternClass::Spaceship | PatternClass::Puffer);
         let d = form.displacement;
+        self.period = form.period;
         self.phases = form.phases.iter().map(|p| encode_cells(p)).collect();
         self.canonical = form.canonical;
         set_counts(self, &form.phases);
@@ -260,12 +418,34 @@ impl PatternRecord {
             .speed_in(Some((info.a1, info.a2)));
         }
         if let Some(g) = &mut self.gun {
-            g.ship_displacement = m.vector(g.ship_displacement);
-            g.ship_phases = g
-                .ship_phases
-                .iter()
-                .map(|s| decode_cells(s).map(|v| encode_cells(&super::orient(&v, &m).0)))
-                .collect::<Result<_, _>>()?;
+            match &m {
+                Chosen::Cell(m) => {
+                    g.ship_displacement = m.vector(g.ship_displacement);
+                    g.ship_phases = g
+                        .ship_phases
+                        .iter()
+                        .map(|s| decode_cells(s).map(|v| encode_cells(&super::orient(&v, m).0)))
+                        .collect::<Result<_, _>>()?;
+                }
+                Chosen::Geo(iso, grp) => {
+                    g.ship_displacement = grp
+                        .lattice(iso.turn(grp.world(g.ship_displacement)))
+                        .ok_or("the gun's ship leaves off the cell lattice")?;
+                    g.ship_phases = g
+                        .ship_phases
+                        .iter()
+                        .map(|s| {
+                            let v = decode_cells(s)?;
+                            let w = v
+                                .iter()
+                                .map(|c| grp.apply(iso, c))
+                                .collect::<Option<Phase>>()
+                                .ok_or("a symmetry carried a ship cell off the tiles")?;
+                            Ok(encode_cells(&at_origin(w).0))
+                        })
+                        .collect::<Result<_, String>>()?;
+                }
+            }
         }
         Ok(())
     }

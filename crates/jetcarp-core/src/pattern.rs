@@ -46,6 +46,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod canon;
 pub mod collide;
+pub mod group;
 pub mod movers;
 pub mod paste;
 pub mod promote;
@@ -987,7 +988,17 @@ pub fn build_record_with(
         needs_reverify: false,
     };
     rec.geometry_pin = range::record_pin(&rec)?.pin;
-    rec.id = pattern_id(&rec)?;
+    // A unit cell that holds its tile pattern more than once has symmetries the cell maps above
+    // cannot write (and a ship's period over the cell can depend on its direction): put the
+    // record in the whole group's canonical form ([`canon`]), which also sets its id.
+    if topo.lattice().is_some()
+        && isotropic
+        && !group::tiling_group(&rec.tiling, what.nb)?.primitive()
+    {
+        rec.canonicalize()?;
+    } else {
+        rec.id = pattern_id(&rec)?;
+    }
     rec.rescore();
     Ok(rec)
 }
