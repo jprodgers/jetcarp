@@ -259,7 +259,8 @@ saved state and carries on, without reading its millions of runs again.
 and activity early and late, entropy, smoothness, the sizes and number of its parts, how far things
 travelled, how many movers it had) and scored from 0 to about 3. Row rules are judged as pictures.
 For the rest, the core of the score is a logistic model fitted to people's keep, maybe and drop
-ratings of 829 animated clips over four rounds; fitted to the first three, it reached an AUC of 0.84
+ratings of animated clips over four rounds. Of the 1,043 clips rated, it was fitted to the 829 that
+are not row rules or WireWorld circuits. Fitted to the first three rounds, it reached an AUC of 0.84
 for keep against drop on the fourth, which it had not seen. Most of the clips were rated by Emily
 Teich, whose eye is built into the score. Learning a score from human judgements is the general
 technique of [Christiano et al. 2017](bibliography.md#christiano2017deep). The ratings favour runs that
