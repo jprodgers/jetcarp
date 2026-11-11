@@ -556,7 +556,7 @@ mod tests {
             status(w).is_some_and(|s| s.0 == "running" && s.2 > 500)
         });
         assert!(ok, "the search never showed as running: {:?}", status(&w));
-        assert_eq!(status(&w).unwrap().3, false, "explore is not deterministic");
+        assert!(!status(&w).unwrap().3, "explore is not deterministic");
         shot(&mut o, &mut w, show, &dir, "dashboard-explore-running");
         seen_running(job);
         w.test_pause(job);

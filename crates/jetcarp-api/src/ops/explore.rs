@@ -42,7 +42,7 @@ fn invalid(e: impl Into<String>) -> ApiError {
 pub fn explore_job(cx: &Ctx, job: Option<i64>) -> Result<(Library, JobRow, PathBuf), ApiError> {
     let lib = cx.library();
     let row = match job {
-        Some(j) => lib.job(j).map_err(|e| ApiError::not_found(e))?,
+        Some(j) => lib.job(j).map_err(ApiError::not_found)?,
         None => lib
             .jobs()
             .map_err(catalog_err)?
