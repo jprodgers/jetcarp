@@ -3,12 +3,10 @@
 //! growth, a hexagon highway, the reductions, and searches as resumable, thread-independent
 //! catalog jobs.
 
-use jetcarp_core::ants::job::{
-    AntProgress, AntSpec, Soups, parse_rule, rules_for, run_one, start, status,
-};
+use jetcarp_core::ants::job::{AntProgress, AntSpec, Soups, rules_for, run_one, start, status};
 use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
-use jetcarp_core::ants::search::{Strings, Tables};
+use jetcarp_core::ants::search::{Strings, Tables, parse_rule};
 use jetcarp_core::jobs::ants::AntsRun;
 use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::library::{AntQuery, AntRow, Library, tiling_list};

@@ -3,7 +3,7 @@
 
 use super::{Live, Sink, now_seconds, status_name};
 use crate::dashboard::{Finds, HeatSpace, JobSummary};
-use crate::hunt::job::SoupBatcher;
+use crate::hunt::soup::SoupBatcher;
 use crate::library::store::JobRow;
 use crate::library::{AddOutcome, JobStatus, Library};
 use serde_json::Value;

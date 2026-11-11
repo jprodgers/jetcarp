@@ -10,9 +10,9 @@
 //!   after the onset that the window sees only highway, so the frame after the last is the first
 //!   pixel for pixel (checked; `seamless` says so).
 
-use super::job::parse_rule;
 use super::plane::{Ant, Compiled, Field, Lattice, step};
 use super::run::{Outcome, Start};
+use super::search::parse_rule;
 use crate::library::AntRow;
 use crate::media::{
     Animation, EMPTY_BOX, MediaMode, MediaOptions, apply_style, bbox_union, draw, fit_scale, grow,

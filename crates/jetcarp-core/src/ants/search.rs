@@ -26,10 +26,26 @@
 
 use super::plane::Lattice;
 use crate::rng::Rng;
-use crate::rules::Turn;
+use crate::rules::{Rule, Turn};
 use crate::turmite::{Entry, Mite};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
+/// A rule notation or a bare turn string or table (`RL2N`, `1R1,1L0/1R1,0N0`).
+pub fn parse_rule(r: &str) -> Result<Mite, String> {
+    let t = r.trim();
+    let low = t.to_ascii_lowercase();
+    let text = if low.starts_with("ant") || low.starts_with("turmite") {
+        t.to_string()
+    } else {
+        format!("Turmite {t}")
+    };
+    match Rule::parse(&text) {
+        Ok((Rule::Turmite(m), _)) => Ok(m),
+        Ok(_) => Err(format!("'{r}' is not a turmite")),
+        Err(e) => Err(format!("'{r}': {e}")),
+    }
+}
 
 /// Turn strings of these lengths.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -2,9 +2,9 @@
 //! outcome) must be identical to `prefix_cpu`, and a hunt with the GPU must leave exactly the
 //! catalog a CPU-only hunt leaves. Skipped (with a note) when no GPU adapter is available.
 
-use jetcarp_core::hunt::job::{self, HuntProgress, HuntSpec, SoupBatcher};
+use jetcarp_core::hunt::job::{self, HuntProgress, HuntSpec};
 use jetcarp_core::hunt::separate::Census;
-use jetcarp_core::hunt::soup::{Layout, prefix_cpu, soup_state};
+use jetcarp_core::hunt::soup::{Layout, SoupBatcher, prefix_cpu, soup_state};
 use jetcarp_core::jobs::{RunOptions, Runner};
 use jetcarp_core::library::{Library, Query};
 use jetcarp_core::topology::TilingSpec;

@@ -61,7 +61,7 @@ pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcar
         lib.add(rec).unwrap();
     }
     // Langton's ant: a highway.
-    let m = jetcarp_core::ants::job::parse_rule("RL").unwrap();
+    let m = jetcarp_core::ants::search::parse_rule("RL").unwrap();
     let t = jetcarp_core::library::tiling_list("square").unwrap();
     let lim = jetcarp_core::ants::run::Limits {
         steps: 20_000,

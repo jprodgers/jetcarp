@@ -15,7 +15,7 @@ use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
 use jetcarp_api::ops::search::{SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::{ApiError, Ctx, Platform};
 use jetcarp_core::explore::batch::Backend;
-use jetcarp_core::hunt::job::SoupBatcher;
+use jetcarp_core::hunt::soup::SoupBatcher;
 use jetcarp_core::jobs::{Live, Viewer, registry};
 use jetcarp_core::library::Library;
 use serde_json::Value;

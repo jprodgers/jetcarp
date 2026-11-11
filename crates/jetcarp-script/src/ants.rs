@@ -6,8 +6,9 @@
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
 use jetcarp_api::args::{check_keys, get_bool, get_f64, get_pair, get_str, get_u64};
-use jetcarp_core::ants::job::{self, parse_rule};
+use jetcarp_core::ants::job;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
+use jetcarp_core::ants::search::parse_rule;
 use jetcarp_core::library::{AntQuery, Library};
 use rhai::{Array, Dynamic, Engine, EvalAltResult, Map};
 use serde_json::Value;

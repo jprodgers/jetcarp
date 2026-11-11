@@ -20,12 +20,11 @@
 
 use super::plane::Lattice;
 use super::run::{Limits, Outcome, Start, run};
-use super::search::{Strings, Tables, strings, tables};
+use super::search::{Strings, Tables, parse_rule, strings, tables};
 use crate::jobs::{RunCx, Sink};
 use crate::library::{
     AntRow, JobStatus, Library, ant_id, ant_score, now_utc, tiling_display_name, tiling_key,
 };
-use crate::rules::Rule;
 use crate::topology::TilingSpec;
 use crate::turmite::Mite;
 use rayon::prelude::*;
@@ -148,22 +147,6 @@ pub fn rules_for(spec: &AntSpec, lat: &Lattice) -> Result<Vec<Mite>, String> {
     let mut seen = HashSet::new();
     out.retain(|m| seen.insert(m.clone()));
     Ok(out)
-}
-
-/// A rule notation or a bare turn string or table (`RL2N`, `1R1,1L0/1R1,0N0`).
-pub fn parse_rule(r: &str) -> Result<Mite, String> {
-    let t = r.trim();
-    let low = t.to_ascii_lowercase();
-    let text = if low.starts_with("ant") || low.starts_with("turmite") {
-        t.to_string()
-    } else {
-        format!("Turmite {t}")
-    };
-    match Rule::parse(&text) {
-        Ok((Rule::Turmite(m), _)) => Ok(m),
-        Ok(_) => Err(format!("'{r}' is not a turmite")),
-        Err(e) => Err(format!("'{r}': {e}")),
-    }
 }
 
 /// One stored run, made from a rule, tiling, start, and its result.

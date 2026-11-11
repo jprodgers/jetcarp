@@ -16,8 +16,8 @@
 //! cutting and the census.
 
 use jetcarp_core::hunt::bits::Universe;
-use jetcarp_core::hunt::job::SoupBatcher;
 use jetcarp_core::hunt::separate::Census;
+use jetcarp_core::hunt::soup::SoupBatcher;
 use jetcarp_core::hunt::soup::{End, Limits, Prefix, Ring};
 use jetcarp_core::objects::LCell;
 use rayon::prelude::*;

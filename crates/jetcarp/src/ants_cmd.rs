@@ -5,8 +5,9 @@
 use anyhow::{Result, bail};
 use jetcarp_api::Ctx;
 use jetcarp_api::args;
-use jetcarp_core::ants::job::{self, parse_rule};
+use jetcarp_core::ants::job;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
+use jetcarp_core::ants::search::parse_rule;
 use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, Library};
 use std::path::PathBuf;
 use std::time::Instant;

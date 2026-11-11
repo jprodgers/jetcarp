@@ -4,7 +4,7 @@
 use super::lease::HEARTBEAT_S;
 use super::{Budget, Lease, RunCx, Strategy, kind, now_seconds, status_name, status_of, typed};
 use crate::dashboard::JobSummary;
-use crate::hunt::job::SoupBatcher;
+use crate::hunt::soup::SoupBatcher;
 use crate::library::store::JobRow;
 use crate::library::{JobStatus, Library};
 use serde::Serialize;

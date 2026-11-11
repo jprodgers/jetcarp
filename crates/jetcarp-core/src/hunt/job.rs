@@ -21,7 +21,7 @@
 //! progress and checkpoint.
 
 use super::separate::{Cache, Census, Found};
-use super::soup::{End, Layout, Limits, SoupOut, SoupSpec, run_soup, soup_state};
+use super::soup::{End, Layout, Limits, SoupBatcher, SoupOut, SoupSpec, run_soup, soup_state};
 use crate::jobs::{RunCx, Sink};
 use crate::library::{
     AddOutcome, JobStatus, Library, PatternClass, PatternRecord, Provenance, Sighting,
@@ -328,23 +328,6 @@ pub struct Checkpoint {
     pub bad: Vec<Vec<String>>,
     pub newest: Vec<Find>,
     pub elapsed_s: f64,
-}
-
-/// A stepper that runs the start of many soups at once (the GPU). See `soup` for the rules a
-/// prefix must follow so the results equal the CPU's.
-pub trait SoupBatcher: Send + Sync {
-    fn name(&self) -> String;
-    /// Can it run this group? (Rule, tiling, and region size.)
-    fn supports(&self, census: &Census, region: [i32; 4]) -> bool;
-    /// Run soups (generation 0 cells) inside `region` until each ends or a cell leaves the
-    /// region; one result per soup, in order.
-    fn prefix(
-        &self,
-        census: &Census,
-        region: [i32; 4],
-        limits: Limits,
-        soups: &[Vec<crate::objects::LCell>],
-    ) -> Result<Vec<super::soup::Prefix>, String>;
 }
 
 /// Create a hunt job (status `paused` until a runner starts it). Returns the job id.

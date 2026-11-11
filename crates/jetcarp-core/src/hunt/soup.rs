@@ -500,6 +500,23 @@ pub struct Prefix {
     pub pending: bool,
 }
 
+/// A stepper that runs the start of many soups at once (the GPU). See the module notes for the
+/// rules a prefix must follow so the results equal the CPU's.
+pub trait SoupBatcher: Send + Sync {
+    fn name(&self) -> String;
+    /// Can it run this group? (Rule, tiling, and region size.)
+    fn supports(&self, census: &Census, region: [i32; 4]) -> bool;
+    /// Run soups (generation 0 cells) inside `region` until each ends or a cell leaves the
+    /// region; one result per soup, in order.
+    fn prefix(
+        &self,
+        census: &Census,
+        region: [i32; 4],
+        limits: Limits,
+        soups: &[Vec<LCell>],
+    ) -> Result<Vec<Prefix>, String>;
+}
+
 /// The CPU reference for a soup prefix: run inside the region until the soup ends or a cell
 /// leaves it.
 pub fn prefix_cpu(c: &Census, region: [i32; 4], limits: Limits, cells: &[LCell]) -> Prefix {

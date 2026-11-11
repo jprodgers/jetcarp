@@ -9,7 +9,7 @@ use crate::out::{self, Guard};
 use crate::world::Session;
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
-use jetcarp_core::hunt::job::SoupBatcher;
+use jetcarp_core::hunt::soup::SoupBatcher;
 use jetcarp_core::jobs::Registry;
 use jetcarp_core::library::Library;
 use schemars::JsonSchema;

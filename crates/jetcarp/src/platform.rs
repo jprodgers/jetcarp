@@ -11,7 +11,7 @@ use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuStepper, GpuSteps, UndoStep};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
-use jetcarp_core::hunt::job::SoupBatcher;
+use jetcarp_core::hunt::soup::SoupBatcher;
 use jetcarp_display::host_settings::HostSettings;
 use jetcarp_display::{autostart, desktop_picture, gnome, saver};
 use jetcarp_mcp::link::{host_call, host_gone};

@@ -221,8 +221,9 @@ fn filters_and_frames() {
 /// ant deletes its files; an outcome filter keeps only highways.
 #[test]
 fn ants_are_exported_with_their_media() {
-    use jetcarp_core::ants::job::{parse_rule, run_one};
+    use jetcarp_core::ants::job::run_one;
     use jetcarp_core::ants::run::{Limits, Start};
+    use jetcarp_core::ants::search::parse_rule;
     use jetcarp_core::library::AntUpdate;
     let (lib, site) = temp("ants");
     let lim = |steps: u64| Limits {
