@@ -1,0 +1,45 @@
+{
+ "name": "Life spaceship 487cf3f7 on 2-uniform tiling k2-003",
+ "description": "A period-13 spaceship in Conway's Life (B3/S23) on the 2-uniform tiling k2-003, with touching neighbours, 12 to 44 cells, moving two lattice steps every 13 generations (2c/13). It runs the same way in the 2,048 rules from B3/S23 to B3,8,9,10/S2,3,9,10. JETCARP's Life census met it in 0.0% of its soups on this tiling.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k2-003"
+  },
+  "size": {
+   "rect": {
+    "w": 64,
+    "h": 8
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 1,0,3,1 1,0,4,1 2,0,0,1 2,0,2,1 2,0,3,1 2,0,4,1 3,0,3,1 0,1,0,1 0,1,4,1 1,1,0,1 1,1,4,1 2,1,4,1 0,2,1,1 1,2,1,1 1,2,2,1 2,2,1,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k2-003"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+{
+ "name": "Life spaceship 7e006ed1 on square grid",
+ "description": "A period-4 spaceship in Conway's Life (B3/S23) on the square grid, with touching neighbours, 11 to 15 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 512 rules from B3/S23 to B3468/S238. It also runs in Life, unchanged, on 25 isohedral and drawn tilings with the square grid's neighbour graph. This is the middleweight spaceship (MWSS), credited to found by John Conway in 1970.",
+ "tiling": {
+  "family": "square",
+  "size": {
+   "rect": {
+    "w": 60,
+    "h": 28
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 2,0,0,1 3,0,0,1 4,0,0,1 0,1,0,1 5,1,0,1 0,2,0,1 1,3,0,1 5,3,0,1 3,4,0,1",
+    "tiling": {
+     "family": "square",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

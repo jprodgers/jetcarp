@@ -3,7 +3,9 @@
 This page collects what JETCARP's searches have found and what the checks of November 2026 made of
 it. It is the data behind the claims on [What is new in JETCARP](contributions.md): every result was
 run again on the release engine (JETCARP 0.4.0), every spaceship was compared with the ships of
-simpler tilings, and the list was cut down wherever a check failed. The ConwayLife.com forums have not
+simpler tilings, and the list was cut down wherever a check failed. A census of Life itself on the
+Archimedean, 2-uniform and 3-uniform tilings went through the same checks; its results are in
+[their own section](#life-on-the-archimedean-and-k-uniform-tilings). The ConwayLife.com forums have not
 been searched yet, so a candidate here is a candidate, not a discovery; we will ask the community when
 the results are posted there. Corrections are welcome as issues.
 
@@ -129,11 +131,14 @@ He did not list his ships, and his pattern files are no longer online, so these 
 comparison with them. The claimed ships on 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 run in none of the rules
 he named (see [What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
 
-Life itself (`B3/S23`), the rule Guttesen searched, deserves a separate word. All eleven candidates
-that run in Life turned out to be made of Guttesen's gliders: on 3.6.3.6 every one is a pair of his
-glider g, so no new single Life ship on the kagome tiling survives; on 3.3.4.3.4 one is a pair of his
-snub-square glider, one is a bound pair of it (`2ba58828`, period 16) and one contains a perturbed copy
-of it (`98a3c53b`, period 24).
+Life itself (`B3/S23`), the rule Guttesen searched, deserves a separate word. All eleven of these
+candidates that run in Life turned out to be made of Guttesen's gliders: on 3.6.3.6 every one is a
+pair of his glider g, so no new single Life ship on the kagome tiling survives; on 3.3.4.3.4 one is a
+pair of his snub-square glider, one is a bound pair of it (`2ba58828`, period 16) and one contains a
+perturbed copy of it (`98a3c53b`, period 24). But the searches behind these candidates ran Life on only
+a few tilings, so they say little about Life elsewhere. A later census of Life on all 92 Archimedean,
+2-uniform and 3-uniform tilings found Life spaceships on 28 of them, 24 of those 2- or 3-uniform; see
+[Life on the Archimedean and k-uniform tilings](#life-on-the-archimedean-and-k-uniform-tilings).
 
 ### The 60 objects
 
@@ -1248,6 +1253,1027 @@ others may well have seen them, so they are not claimed.
 </div>
 </div>
 
+## Life on the Archimedean and k-uniform tilings
+
+The candidates above came from searches that ran Conway's Life itself on only a few tilings, so what
+they say about Life is incomplete. In November 2026 JETCARP therefore ran a census of Life (`B3/S23`,
+with cells that share an edge or a vertex as neighbours) on 92 tilings: the 11 Archimedean tilings,
+which include the square, hexagonal and triangular grids, the 20 2-uniform tilings and the 61
+3-uniform tilings of the [k-uniform catalogue](../tilings/k-uniform.md). On each it ran 50,000 random
+soups of 16 by 16 unit cells, each cell live with probability one half, on the unbounded plane until
+the soup settled, and catalogued every object that was left and every spaceship that flew away
+(`jetcarp search hunt`, the job labelled `life-k123`).
+
+Life has spaceships on 28 of the 92 tilings:
+four Archimedean tilings (the square grid, 3.6.3.6, 3.3.3.4.4 and 3.3.4.3.4),
+five of the 2-uniform tilings and 19 of the 3-uniform ones. On the other 64, no soup
+produced one. That is not a proof that they have none: a ship that turns up in fewer than about one
+soup in 50,000 could easily have been missed, and so would any ship of period above 64, which the
+census did not look for.
+
+| Tiling | Soups | Ships seen | Distinct objects | Of which listed here |
+| --- | --- | --- | --- | --- |
+| square | 50,000 | 95,227 | 6 | 4 known, 2 compound |
+| hexagonal | 50,000 | none |  |  |
+| triangular | 50,000 | none |  |  |
+| 4.8.8 | 50,000 | none |  |  |
+| 3.6.3.6 | 50,000 | 149,878 | 13 | 1 known, 12 compound |
+| 3.3.3.4.4 | 50,000 | 4,605 | 2 | 1 known, 1 compound |
+| 3.3.4.3.4 | 50,000 | 118,322 | 21 | 1 known, 1 flagged, 5 derivative, 14 compound |
+| 3.3.3.3.6 | 50,000 | none |  |  |
+| 3.4.6.4 | 50,000 | none |  |  |
+| 3.12.12 | 50,000 | none |  |  |
+| 4.6.12 | 50,000 | none |  |  |
+| k2-001 | 50,000 | none |  |  |
+| k2-002 | 50,000 | none |  |  |
+| k2-003 | 50,000 | 577 | 2 | 1 single, 1 flagged |
+| k2-004 | 50,000 | none |  |  |
+| k2-005 | 50,000 | none |  |  |
+| k2-006 | 50,000 | none |  |  |
+| k2-007 | 50,000 | 5,773 | 3 | 1 known, 1 flagged, 1 compound |
+| k2-008 | 50,000 | none |  |  |
+| k2-009 | 50,000 | none |  |  |
+| k2-010 | 50,000 | none |  |  |
+| k2-011 | 50,000 | 332 | 1 | 1 flagged |
+| k2-012 | 50,000 | 1 | 1 | 1 single |
+| k2-013 | 50,000 | none |  |  |
+| k2-014 | 50,000 | none |  |  |
+| k2-015 | 50,000 | none |  |  |
+| k2-016 | 50,000 | none |  |  |
+| k2-017 | 50,000 | 67,753 | 3 | 1 flagged, 1 derivative, 1 compound |
+| k2-018 | 50,000 | none |  |  |
+| k2-019 | 50,000 | none |  |  |
+| k2-020 | 50,000 | none |  |  |
+| k3-001 | 50,000 | none |  |  |
+| k3-002 | 50,000 | 560 | 2 | 1 single; 1 listed on k2-011 |
+| k3-003 | 50,000 | none |  |  |
+| k3-004 | 50,000 | none |  |  |
+| k3-005 | 50,000 | none |  |  |
+| k3-006 | 50,000 | none |  |  |
+| k3-007 | 50,000 | none |  |  |
+| k3-008 | 50,000 | none |  |  |
+| k3-009 | 50,000 | none |  |  |
+| k3-010 | 50,000 | 384 | 4 | 2 single; 1 listed on square; 1 listed on k2-003 |
+| k3-011 | 50,000 | 26 | 4 | 4 single |
+| k3-012 | 50,000 | none |  |  |
+| k3-013 | 50,000 | 4,248 | 2 | 1 compound; 1 listed on 3.3.3.4.4 |
+| k3-014 | 50,000 | none |  |  |
+| k3-015 | 50,000 | none |  |  |
+| k3-016 | 50,000 | 379 | 1 | 1 listed on k2-003 |
+| k3-017 | 50,000 | none |  |  |
+| k3-018 | 50,000 | none |  |  |
+| k3-019 | 50,000 | 4,744 | 1 | 1 listed on 3.3.3.4.4 |
+| k3-020 | 50,000 | none |  |  |
+| k3-021 | 50,000 | none |  |  |
+| k3-022 | 50,000 | none |  |  |
+| k3-023 | 50,000 | none |  |  |
+| k3-024 | 50,000 | none |  |  |
+| k3-025 | 50,000 | none |  |  |
+| k3-026 | 50,000 | none |  |  |
+| k3-027 | 50,000 | none |  |  |
+| k3-028 | 50,000 | none |  |  |
+| k3-029 | 50,000 | none |  |  |
+| k3-030 | 50,000 | 35,750 | 9 | 7 compound; 2 listed on 3.6.3.6 |
+| k3-031 | 50,000 | none |  |  |
+| k3-032 | 50,000 | 35,643 | 11 | 9 compound; 2 listed on 3.6.3.6 |
+| k3-033 | 50,000 | none |  |  |
+| k3-034 | 50,000 | none |  |  |
+| k3-035 | 50,000 | none |  |  |
+| k3-036 | 50,000 | none |  |  |
+| k3-037 | 50,000 | none |  |  |
+| k3-038 | 50,000 | none |  |  |
+| k3-039 | 50,000 | 47,294 | 13 | 1 flagged, 2 derivative, 8 compound; 2 listed on 3.6.3.6 |
+| k3-040 | 50,000 | 3,675 | 3 | 1 single, 1 flagged, 1 compound |
+| k3-041 | 50,000 | 150 | 1 | 1 single |
+| k3-042 | 50,000 | none |  |  |
+| k3-043 | 50,000 | none |  |  |
+| k3-044 | 50,000 | 88,580 | 45 | 1 single, 1 flagged, 3 derivative, 40 compound |
+| k3-045 | 50,000 | 7,644 | 3 | 1 flagged, 2 compound |
+| k3-046 | 50,000 | 3,794 | 2 | 1 derivative; 1 listed on k3-045 |
+| k3-047 | 50,000 | none |  |  |
+| k3-048 | 50,000 | none |  |  |
+| k3-049 | 50,000 | none |  |  |
+| k3-050 | 50,000 | none |  |  |
+| k3-051 | 50,000 | none |  |  |
+| k3-052 | 50,000 | none |  |  |
+| k3-053 | 50,000 | 70,914 | 1 | 1 listed on k2-017 |
+| k3-054 | 50,000 | none |  |  |
+| k3-055 | 50,000 | 266 | 14 | 13 single, 1 derivative |
+| k3-056 | 50,000 | none |  |  |
+| k3-057 | 50,000 | 6,610 | 2 | 1 single, 1 flagged |
+| k3-058 | 50,000 | none |  |  |
+| k3-059 | 50,000 | 81,623 | 12 | 1 flagged, 1 derivative, 10 compound |
+| k3-060 | 50,000 | none |  |  |
+| k3-061 | 50,000 | 34,070 | 17 | 1 flagged, 1 derivative, 15 compound |
+
+*Ships seen* counts every ship the census met, so a soup that sent out three gliders counts three.
+*Distinct objects* counts the objects among them after the checks below; *of which listed here*
+counts those listed on this tiling, since an object that also runs on a simpler tiling is listed
+there.
+
+### How the census ships were checked
+
+The census catalogued 198 distinct spaceship records. Each went through the same checks as the
+candidates above:
+
+1. JETCARP ran it alone on a large wrapped patch, on a smaller one and with dead edges, and its
+   object finder saw one spaceship each time, with the recorded period and displacement; a scratch
+   catalog recomputed the same range of rules.
+2. Every phase was split into groups and each group run alone, to find **compounds**: two or more
+   smaller ships flying together without influencing each other.
+3. Every smaller ship of the same tiling was searched for inside it, to find **derivatives**: a
+   smaller ship that runs inside it unchanged and pulls a passenger along, or two ships that are
+   bound together.
+4. Every pair of records, and every record against the candidates above and Guttesen's gliders, was
+   tested for **congruence**: the same live tiles at every generation, after one rotation, reflection
+   and translation and a shift of phase, whatever the neighbour counts of the empty tiles around
+   them. A congruent pair is one object.
+5. Each object's live tiles were placed on all 181 tilings of the earlier checks (Archimedean,
+   2-uniform, 3-uniform and isohedral), and JETCARP ran every placement that Life allows. An object is
+   listed on the simplest tiling where it runs in Life: Archimedean before 2-uniform before
+   3-uniform.
+6. Each object was compared with the known Life ships: Conway's glider and spaceships, Guttesen's two
+   gliders, the 3.3.3.4.4 ship that EricG reported, and Büttner's period-20 ship. The last two could
+   only be compared with their published descriptions, since their patterns are not available.
+
+| Verdict | Objects |
+| --- | --- |
+| Spaceship records in the census | 198 |
+| Records added from the 500,000-soup hunt on k2-007 | 1 |
+| Distinct objects (records congruent to one another merged) | 185 |
+| Compounds: two or more smaller ships flying together | 124 |
+| Derivatives: a smaller ship with a passenger, or a bound pair | 15 |
+| Known objects, credited below | 8 |
+| Ships of a simpler tiling | 0 |
+| Single ships, flagged | 12 |
+| **Single ships with no flag** | **26** |
+
+Two kinds of verdict need a word. A ship found in a corridor of a simpler tiling inside a 3-uniform
+tiling is the same object as the simpler tiling's ship, and every such ship in this census was also
+found on the simpler tiling itself: Guttesen's glider g in the kagome corridors of k3-030, k3-032 and
+k3-039, the lightweight spaceship in the strips of squares of k3-010, the probable EricG ship in the
+strips of squares and triangles of k3-013 and k3-019, and three ships that run on a 2-uniform tiling
+and in strips of 3-uniform ones. So no object had to be moved to a simpler tiling. And a **flagged**
+ship passed every check, but is so common (in at least one soup in a hundred on a tiling where the
+census met it) that anyone who ran Life there would see it at once, or lies on a tiling where others
+have run Life before (3.3.4.3.4 and k2-007). For these the question is not whether the ship is new, but whether anyone has
+run Life on that tiling. We know of no one who has run Life on a 3-uniform tiling, or on a 2-uniform
+tiling other than k2-007.
+
+Most census records are not new objects. JETCARP's object finder stores ships that fly side by side
+as one, so the census lists 124 **compounds**, nearly all pairs (and a few triples) of the commonest
+ship of their tiling: 40 of the period-31 ship of k3-044, 29 of Guttesen's glider g on 3.6.3.6 and in
+kagome corridors, 15 of the period-22 ship of k3-061, 14 of the snub-square glider, 10 of the period-30
+ship of k3-059, 7 of the period-20 ship of k3-039 (three of them with a glider g), and a few more,
+among them two pairs of Conway's glider and two of the probable EricG ship. The 15 **derivatives** are 14
+bound pairs (five of them made of the snub-square glider) and one large k3-055 ship that carries a
+smaller k3-055 ship unchanged and drags debris behind it. Six single ships contain a perturbed phase of
+a smaller ship without being built from it, as Life's own heavyweight spaceship contains a phase of the
+lightweight one: the period-24 ship on 3.3.4.3.4 (Guttesen's glider), the period-20 ship of k3-039
+(glider g), the k3-010 ship `b62c62bf` (the lightweight spaceship, which runs unchanged in the strips
+of squares of k3-010), and three ships of k3-002 and k3-011 that each contain a phase of a smaller ship
+of their own tiling.
+
+The large ships of k3-055 deserve a caution. The census found 14 of them, all moving at c/4, with
+periods of 20, 32 and 64 and up to 169 cells, each seen in only 1 to 185 soups. No test splits them
+into independent parts, and only one of them carries a smaller one unchanged, so 13 are listed as
+single ships; but they look alike, and a closer look may well find that they share a common engine.
+
+### The Life objects
+
+The known objects and every single ship that passed the checks, flagged or not, in the order of the
+gallery below. *Seen* counts sightings on every tiling where the census met the object, with the
+number of soups in brackets; *rules in range* gives
+the smallest rule (always `B3/S23`) and how many rules the ship runs in unchanged. Each id links to
+its card.
+
+| | id | tiling (also runs on) | p | d per period | cells | rules in range | seen (soups) | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | [`7e006ed1`](#life-7e006ed1) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 11–15 | `B3/S23` (512) | 45 (45) | known: the middleweight spaceship (MWSS); contains a phase of the LWSS |
+| 2 | [`83051933`](#life-83051933) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−1, −1) | 5 | `B3/S23` (512) | 95,041 (29,732) | known: Conway's glider |
+| 3 | [`eaf14870`](#life-eaf14870) | square (k3-010, 25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 9–12 | `B3/S23` (512) | 135 (133) | known: the lightweight spaceship (LWSS) |
+| 4 | [`fbf3fc62`](#life-fbf3fc62) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 13–18 | `B3/S23` (512) | 11 (11) | known: the heavyweight spaceship (HWSS); contains a phase of the MWSS and the LWSS |
+| 5 | [`c1cda1c4`](#life-c1cda1c4) | 3.6.3.6 (k3-030, k3-032, k3-039) | 4 | (1, 0) | 4–5 | `B3/S23` (8,192) | 245,860 (114,606) | known: Guttesen's kagome glider g |
+| 6 | [`6ca1d74c`](#life-6ca1d74c) | 3.3.3.4.4 (k3-013, k3-019) | 2 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 13,595 (13,052) | known: EricG's 3.3.3.4.4 ship |
+| 7 | [`ad39623e`](#life-ad39623e) | 3.3.4.3.4 | 8 | (0, −2) | 8–15 | `B3/S23` (8,192) | 118,271 (43,179) | known: Guttesen's snub-square glider |
+| 8 | [`6574801c`](#life-6574801c) | k2-007 | 20 | (1, 0) | 6–20 | `B3/S23` (8,192) | 5,772 (5,537) | known: Büttner's period-20 ship |
+| 9 | [`487cf3f7`](#life-487cf3f7) | k2-003 | 13 | (−2, 0) | 12–44 | `B3/S23` (2,048) | 13 (13) | single |
+| 10 | [`4392fd90`](#life-4392fd90) | k2-012 | 3 | (−1, 0) | 10–14 | `B3/S23` (32,768) | 1 (1) | single |
+| 11 | [`3b16f6b5`](#life-3b16f6b5) | k3-002 | 3 | (−1, 0) | 14–16 | `B3/S23` (1,024) | 10 (10) | single; contains a phase of `d45da341` |
+| 12 | [`b62c62bf`](#life-b62c62bf) | k3-010 | 4 | (−2, 0) | 11–15 | `B3/S23` (2,048) | 2 (2) | single; contains a phase of the LWSS |
+| 13 | [`c1a8b0bf`](#life-c1a8b0bf) | k3-010 | 38 | (4, 0) | 8–24 | `B3/S23` (2,048) | 23 (23) | single |
+| 14 | [`28714e5c`](#life-28714e5c) | k3-011 | 4 | (1, 0) | 11–15 | `B3/S23` (8,192) | 8 (8) | single; contains a phase of [`6573d1df`](#life-6573d1df) |
+| 15 | [`6573d1df`](#life-6573d1df) | k3-011 | 4 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 9 (9) | single |
+| 16 | [`a07330dc`](#life-a07330dc) | k3-011 | 4 | (−1, 0) | 11–18 | `B3/S23` (8,192) | 1 (1) | single; contains a phase of [`28714e5c`](#life-28714e5c) and [`6573d1df`](#life-6573d1df) |
+| 17 | [`6a4efaf6`](#life-6a4efaf6) | k3-011 | 9 | (−1, 0) | 9–16 | `B3/S23` (8,192) | 8 (8) | single |
+| 18 | [`b22eedfa`](#life-b22eedfa) | k3-040 | 8 | (2, 0) | 8–12 | `B3/S23` (32,768) | 13 (13) | single |
+| 19 | [`63cd2160`](#life-63cd2160) | k3-041 | 4 | (1, 0) | 12–19 | `B3/S23` (32,768) | 150 (150) | single |
+| 20 | [`4241bdcf`](#life-4241bdcf) | k3-044 | 8 | (1, 0) | 8–18 | `B3/S23` (131,072) | 5 (5) | single |
+| 21 | [`06aa3aec`](#life-06aa3aec) | k3-055 | 20 | (5, 0) | 35–57 | `B3/S23` (8,192) | 185 (185) | single |
+| 22 | [`0100430f`](#life-0100430f) | k3-055 | 32 | (8, 0) | 17–65 | `B3/S23` (8,192) | 21 (21) | single |
+| 23 | [`0af25862`](#life-0af25862) | k3-055 | 32 | (−8, 0) | 28–66 | `B3/S23` (8,192) | 1 (1) | single |
+| 24 | [`28d7a526`](#life-28d7a526) | k3-055 | 32 | (−8, 0) | 73–121 | `B3/S23` (8,192) | 1 (1) | single |
+| 25 | [`3491af4a`](#life-3491af4a) | k3-055 | 32 | (8, 0) | 53–105 | `B3/S23` (8,192) | 7 (7) | single |
+| 26 | [`63121d47`](#life-63121d47) | k3-055 | 32 | (8, 0) | 54–94 | `B3/S23` (8,192) | 1 (1) | single |
+| 27 | [`b270dddd`](#life-b270dddd) | k3-055 | 32 | (−8, 0) | 52–96 | `B3/S23` (8,192) | 8 (8) | single |
+| 28 | [`d0b8f09d`](#life-d0b8f09d) | k3-055 | 32 | (8, 0) | 39–73 | `B3/S23` (8,192) | 3 (3) | single |
+| 29 | [`f34bd1e7`](#life-f34bd1e7) | k3-055 | 32 | (8, 0) | 38–104 | `B3/S23` (8,192) | 4 (4) | single |
+| 30 | [`140cd3cc`](#life-140cd3cc) | k3-055 | 64 | (16, 0) | 63–148 | `B3/S23` (8,192) | 6 (6) | single |
+| 31 | [`6c80b30d`](#life-6c80b30d) | k3-055 | 64 | (16, 0) | 75–149 | `B3/S23` (8,192) | 5 (5) | single |
+| 32 | [`9f474023`](#life-9f474023) | k3-055 | 64 | (16, 0) | 28–84 | `B3/S23` (8,192) | 15 (15) | single |
+| 33 | [`d26a876d`](#life-d26a876d) | k3-055 | 64 | (16, 0) | 103–169 | `B3/S23` (8,192) | 4 (4) | single |
+| 34 | [`83da34d9`](#life-83da34d9) | k3-057 | 12 | (0, −1) | 13–24 | `B3/S23` (8,192) | 57 (57) | single |
+| 35 | [`98a3c53b`](#life-98a3c53b) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (8,192) | 3 (3) | flagged; contains a phase of Guttesen's snub-square glider |
+| 36 | [`2076694c`](#life-2076694c) | k2-003 (k3-010, k3-016) | 16 | (5, 0) | 8–16 | `B3/S23` (2,048) | 1,295 (1,292) | flagged |
+| 37 | [`ac3667f4`](#life-ac3667f4) | k2-007 | 5 | (0, −1) | 16–22 | `B3/S23` (8,192) | 1 (1) | flagged |
+| 38 | [`119e5cea`](#life-119e5cea) | k2-011 (k3-002) | 3 | (1, 0) | 9–11 | `B3/S23` (8,192) | 882 (878) | flagged |
+| 39 | [`ac1d0f14`](#life-ac1d0f14) | k2-017 (k3-053) | 4 | (−1, 0) | 6–9 | `B3/S23` (8,192) | 138,656 (77,024) | flagged |
+| 40 | [`5deb47c2`](#life-5deb47c2) | k3-039 | 20 | (−5, 0) | 7–21 | `B3/S23` (8,192) | 22,100 (17,978) | flagged; contains a phase of glider g |
+| 41 | [`98d64885`](#life-98d64885) | k3-040 | 24 | (4, 0) | 7–23 | `B3/S23` (32,768) | 3,661 (3,567) | flagged |
+| 42 | [`bf101de9`](#life-bf101de9) | k3-044 | 31 | (−2, 0) | 3–18 | `B3/S23` (131,072) | 88,492 (42,183) | flagged |
+| 43 | [`49237dd5`](#life-49237dd5) | k3-045 (k3-046) | 11 | (−2, 0) | 8–16 | `B3/S23` (131,072) | 11,435 (10,811) | flagged |
+| 44 | [`adfd2f61`](#life-adfd2f61) | k3-057 | 8 | (1, 0) | 9–14 | `B3/S23` (8,192) | 6,553 (6,141) | flagged |
+| 45 | [`37db33e3`](#life-37db33e3) | k3-059 | 30 | (1, 1) | 7–23 | `B3/S23` (524,288) | 81,611 (41,207) | flagged |
+| 46 | [`b414ad8f`](#life-b414ad8f) | k3-061 | 22 | (1, 1) | 5–10 | `B3/S23` (524,288) | 34,039 (25,346) | flagged |
+
+### Gallery of the Life objects
+
+Each clip is a window that the ship crosses, in Life, on the tiling it is listed on, with the tile
+outlines drawn; with reduced motion it is replaced by a still of a few of its positions. The scenes
+are in `docs/scenes/life-census/`, one per object, and `docs/tools/render-animations.sh life-census/`
+makes the clips again.
+
+#### Known objects (8)
+
+Conway's glider and spaceships, which run on the square grid and on every isohedral tiling with its
+neighbour graph; Guttesen's two gliders; the ship that is probably EricG's on 3.3.3.4.4; and the
+ship that is very likely Büttner's on k2-007.
+
+<div class="ship-gallery">
+<div class="ship-card" id="life-7e006ed1">
+<picture>
+  <source srcset="../images/life-census/7e006ed1-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/7e006ed1.webp" alt="Life spaceship 7e006ed1 moving across the square grid" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>7e006ed1</code> <a class="ship-n" href="#the-life-objects">table row 1</a></p>
+<dl>
+<dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
+<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
+<dt>Cells</dt><dd>11–15</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S238</code> (512 rules)</dd>
+<dt>Seen</dt><dd>45 times, in 45 soups</dd>
+<dt>Verdict</dt><dd><b>Known</b>: the middleweight spaceship (MWSS) (found by John Conway in 1970). Contains a perturbed phase of the LWSS.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-83051933">
+<picture>
+  <source srcset="../images/life-census/83051933-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/83051933.webp" alt="Life spaceship 83051933 moving across the square grid" width="272" height="272" loading="lazy">
+</picture>
+<p class="ship-name"><code>83051933</code> <a class="ship-n" href="#the-life-objects">table row 2</a></p>
+<dl>
+<dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
+<dt>Period</dt><dd>4, moving (−1, −1) per period</dd>
+<dt>Cells</dt><dd>5</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3678/S0235678</code> (512 rules)</dd>
+<dt>Seen</dt><dd>95,041 times, in 29,732 soups</dd>
+<dt>Verdict</dt><dd><b>Known</b>: Conway's glider (found by Richard Guy in 1970).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="life-eaf14870">
+<picture>
+  <source srcset="../images/life-census/eaf14870-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/eaf14870.webp" alt="Life spaceship eaf14870 moving across the square grid" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>eaf14870</code> <a class="ship-n" href="#the-life-objects">table row 3</a></p>
+<dl>
+<dt>Tiling</dt><dd>square (shown); also, unchanged, k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
+<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
+<dt>Cells</dt><dd>9–12</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S2378</code> (512 rules)</dd>
+<dt>Seen</dt><dd>128 times, in 126 soups on square; 7 times, in 7 soups on k3-010</dd>
+<dt>Verdict</dt><dd><b>Known</b>: the lightweight spaceship (LWSS) (found by John Conway in 1970).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-fbf3fc62">
+<picture>
+  <source srcset="../images/life-census/fbf3fc62-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/fbf3fc62.webp" alt="Life spaceship fbf3fc62 moving across the square grid" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>fbf3fc62</code> <a class="ship-n" href="#the-life-objects">table row 4</a></p>
+<dl>
+<dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
+<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
+<dt>Cells</dt><dd>13–18</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S23</code> (512 rules)</dd>
+<dt>Seen</dt><dd>11 times, in 11 soups</dd>
+<dt>Verdict</dt><dd><b>Known</b>: the heavyweight spaceship (HWSS) (found by John Conway in 1970). Contains a perturbed phase of the MWSS and the LWSS.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-c1cda1c4">
+<picture>
+  <source srcset="../images/tilings/glider-guttesen-kagome-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-kagome.webp" alt="Life spaceship c1cda1c4 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="420" height="252" loading="lazy">
+</picture>
+<p class="ship-name"><code>c1cda1c4</code> <a class="ship-n" href="#the-life-objects">table row 5</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.6.3.6 (shown); also, unchanged, k3-030, k3-032 and k3-039</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>4–5</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,6,7,8,9,10,11,12/S1,2,3,5,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>149,642 times, in 43,743 soups on 3.6.3.6; 35,634 times, in 25,780 soups on k3-030; 35,417 times, in 25,058 soups on k3-032; 25,167 times, in 20,025 soups on k3-039</dd>
+<dt>Verdict</dt><dd><b>Known</b>: Guttesen's kagome glider g (Guttesen 2026).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 60.</p>
+</div>
+<div class="ship-card" id="life-6ca1d74c">
+<picture>
+  <source srcset="../images/life-census/6ca1d74c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6ca1d74c.webp" alt="Life spaceship 6ca1d74c moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>6ca1d74c</code> <a class="ship-n" href="#the-life-objects">table row 6</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.3.3.4.4 (shown); also, unchanged, k3-013 and k3-019</dd>
+<dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
+<dt>Cells</dt><dd>8–12</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,7,9,10,11,12/S1,2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>4,604 times, in 4,416 soups on 3.3.3.4.4; 4,247 times, in 4,066 soups on k3-013; 4,744 times, in 4,570 soups on k3-019</dd>
+<dt>Verdict</dt><dd><b>Known</b>: probably EricG's 3.3.3.4.4 ship (EricG 2013).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="life-ad39623e">
+<picture>
+  <source srcset="../images/tilings/glider-guttesen-snubsq-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="Life spaceship ad39623e moving across the snub square tiling 3.3.4.3.4" width="240" height="400" loading="lazy">
+</picture>
+<p class="ship-name"><code>ad39623e</code> <a class="ship-n" href="#the-life-objects">table row 7</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.3.4.3.4</dd>
+<dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>8–15</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>118,271 times, in 43,179 soups</dd>
+<dt>Verdict</dt><dd><b>Known</b>: Guttesen's snub-square glider (Guttesen 2026).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 56.</p>
+</div>
+<div class="ship-card" id="life-6574801c">
+<picture>
+  <source srcset="../images/life-census/6574801c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6574801c.webp" alt="Life spaceship 6574801c moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>6574801c</code> <a class="ship-n" href="#the-life-objects">table row 8</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-007</dd>
+<dt>Period</dt><dd>20, moving one lattice step per period (c/20)</dd>
+<dt>Cells</dt><dd>6–20</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>5,772 times, in 5,537 soups</dd>
+<dt>Verdict</dt><dd><b>Known</b>: very likely Büttner's period-20 ship (Martin Büttner, Code Golf 2014).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 9 to 169, every 3rd.</p>
+</div>
+</div>
+
+#### Single ships with no flag (26)
+
+Single ships that carry no flag. To our knowledge, none of them has been reported before.
+
+<div class="ship-gallery">
+<div class="ship-card" id="life-487cf3f7">
+<picture>
+  <source srcset="../images/life-census/487cf3f7-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/487cf3f7.webp" alt="Life spaceship 487cf3f7 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>487cf3f7</code> <a class="ship-n" href="#the-life-objects">table row 9</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-003</dd>
+<dt>Period</dt><dd>13, moving 2 lattice steps per period (2c/13)</dd>
+<dt>Cells</dt><dd>12–44</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,9,10</code> (2,048 rules)</dd>
+<dt>Seen</dt><dd>13 times, in 13 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 6 to 149, every 3rd.</p>
+</div>
+<div class="ship-card" id="life-4392fd90">
+<picture>
+  <source srcset="../images/life-census/4392fd90-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/4392fd90.webp" alt="Life spaceship 4392fd90 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>4392fd90</code> <a class="ship-n" href="#the-life-objects">table row 10</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-012</dd>
+<dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
+<dt>Cells</dt><dd>10–14</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12,13,14/S0,2,3,6,7,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 44.</p>
+</div>
+<div class="ship-card" id="life-3b16f6b5">
+<picture>
+  <source srcset="../images/life-census/3b16f6b5-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/3b16f6b5.webp" alt="Life spaceship 3b16f6b5 moving across the 3-uniform tiling k3-002" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>3b16f6b5</code> <a class="ship-n" href="#the-life-objects">table row 11</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-002</dd>
+<dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
+<dt>Cells</dt><dd>14–16</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3789/S23789</code> (1,024 rules)</dd>
+<dt>Seen</dt><dd>10 times, in 10 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <code>d45da341</code>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 43.</p>
+</div>
+<div class="ship-card" id="life-b62c62bf">
+<picture>
+  <source srcset="../images/life-census/b62c62bf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b62c62bf.webp" alt="Life spaceship b62c62bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>b62c62bf</code> <a class="ship-n" href="#the-life-objects">table row 12</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-010</dd>
+<dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
+<dt>Cells</dt><dd>11–15</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10/S2,3,8,9,10</code> (2,048 rules)</dd>
+<dt>Seen</dt><dd>2 times, in 2 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of the LWSS.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-c1a8b0bf">
+<picture>
+  <source srcset="../images/life-census/c1a8b0bf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/c1a8b0bf.webp" alt="Life spaceship c1a8b0bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>c1a8b0bf</code> <a class="ship-n" href="#the-life-objects">table row 13</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-010</dd>
+<dt>Period</dt><dd>38, moving 4 lattice steps per period (2c/19)</dd>
+<dt>Cells</dt><dd>8–24</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,8,9,10</code> (2,048 rules)</dd>
+<dt>Seen</dt><dd>23 times, in 23 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 6 to 158, every 3rd.</p>
+</div>
+<div class="ship-card" id="life-28714e5c">
+<picture>
+  <source srcset="../images/life-census/28714e5c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/28714e5c.webp" alt="Life spaceship 28714e5c moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>28714e5c</code> <a class="ship-n" href="#the-life-objects">table row 14</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-011</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>11–15</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>8 times, in 8 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-6573d1df"><code>6573d1df</code></a>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-6573d1df">
+<picture>
+  <source srcset="../images/life-census/6573d1df-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6573d1df.webp" alt="Life spaceship 6573d1df moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>6573d1df</code> <a class="ship-n" href="#the-life-objects">table row 15</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-011</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>8–12</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,9,10,11,12/S0,2,3,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>9 times, in 9 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="life-a07330dc">
+<picture>
+  <source srcset="../images/life-census/a07330dc-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/a07330dc.webp" alt="Life spaceship a07330dc moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>a07330dc</code> <a class="ship-n" href="#the-life-objects">table row 16</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-011</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>11–18</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,9,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-28714e5c"><code>28714e5c</code></a> and <a href="#life-6573d1df"><code>6573d1df</code></a>.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 40.</p>
+</div>
+<div class="ship-card" id="life-6a4efaf6">
+<picture>
+  <source srcset="../images/life-census/6a4efaf6-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6a4efaf6.webp" alt="Life spaceship 6a4efaf6 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>6a4efaf6</code> <a class="ship-n" href="#the-life-objects">table row 17</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-011</dd>
+<dt>Period</dt><dd>9, moving one lattice step per period (c/9)</dd>
+<dt>Cells</dt><dd>9–16</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>8 times, in 8 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 65.</p>
+</div>
+<div class="ship-card" id="life-b22eedfa">
+<picture>
+  <source srcset="../images/life-census/b22eedfa-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b22eedfa.webp" alt="Life spaceship b22eedfa moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>b22eedfa</code> <a class="ship-n" href="#the-life-objects">table row 18</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-040</dd>
+<dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>8–12</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,6,7,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Seen</dt><dd>13 times, in 13 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-63cd2160">
+<picture>
+  <source srcset="../images/life-census/63cd2160-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/63cd2160.webp" alt="Life spaceship 63cd2160 moving across the 3-uniform tiling k3-041" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>63cd2160</code> <a class="ship-n" href="#the-life-objects">table row 19</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-041</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>12–19</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Seen</dt><dd>150 times, in 150 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 42.</p>
+</div>
+<div class="ship-card" id="life-4241bdcf">
+<picture>
+  <source srcset="../images/life-census/4241bdcf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/4241bdcf.webp" alt="Life spaceship 4241bdcf moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>4241bdcf</code> <a class="ship-n" href="#the-life-objects">table row 20</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-044</dd>
+<dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
+<dt>Cells</dt><dd>8–18</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,6,7,8,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Seen</dt><dd>5 times, in 5 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 58.</p>
+</div>
+<div class="ship-card" id="life-06aa3aec">
+<picture>
+  <source srcset="../images/life-census/06aa3aec-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/06aa3aec.webp" alt="Life spaceship 06aa3aec moving across the 3-uniform tiling k3-055" width="318" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>06aa3aec</code> <a class="ship-n" href="#the-life-objects">table row 21</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>35–57</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,10,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>185 times, in 185 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 17 to 57.</p>
+</div>
+<div class="ship-card" id="life-0100430f">
+<picture>
+  <source srcset="../images/life-census/0100430f-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/0100430f.webp" alt="Life spaceship 0100430f moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>0100430f</code> <a class="ship-n" href="#the-life-objects">table row 22</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>17–65</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>21 times, in 21 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 19 to 51.</p>
+</div>
+<div class="ship-card" id="life-0af25862">
+<picture>
+  <source srcset="../images/life-census/0af25862-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/0af25862.webp" alt="Life spaceship 0af25862 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>0af25862</code> <a class="ship-n" href="#the-life-objects">table row 23</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>28–66</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 19 to 51.</p>
+</div>
+<div class="ship-card" id="life-28d7a526">
+<picture>
+  <source srcset="../images/life-census/28d7a526-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/28d7a526.webp" alt="Life spaceship 28d7a526 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>28d7a526</code> <a class="ship-n" href="#the-life-objects">table row 24</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>73–121</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 16 to 48.</p>
+</div>
+<div class="ship-card" id="life-3491af4a">
+<picture>
+  <source srcset="../images/life-census/3491af4a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/3491af4a.webp" alt="Life spaceship 3491af4a moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>3491af4a</code> <a class="ship-n" href="#the-life-objects">table row 25</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>53–105</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>7 times, in 7 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 23 to 55.</p>
+</div>
+<div class="ship-card" id="life-63121d47">
+<picture>
+  <source srcset="../images/life-census/63121d47-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/63121d47.webp" alt="Life spaceship 63121d47 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>63121d47</code> <a class="ship-n" href="#the-life-objects">table row 26</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>54–94</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 19 to 51.</p>
+</div>
+<div class="ship-card" id="life-b270dddd">
+<picture>
+  <source srcset="../images/life-census/b270dddd-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b270dddd.webp" alt="Life spaceship b270dddd moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>b270dddd</code> <a class="ship-n" href="#the-life-objects">table row 27</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>52–96</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>8 times, in 8 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 33.</p>
+</div>
+<div class="ship-card" id="life-d0b8f09d">
+<picture>
+  <source srcset="../images/life-census/d0b8f09d-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/d0b8f09d.webp" alt="Life spaceship d0b8f09d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>d0b8f09d</code> <a class="ship-n" href="#the-life-objects">table row 28</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>39–73</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>3 times, in 3 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 19 to 51.</p>
+</div>
+<div class="ship-card" id="life-f34bd1e7">
+<picture>
+  <source srcset="../images/life-census/f34bd1e7-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/f34bd1e7.webp" alt="Life spaceship f34bd1e7 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>f34bd1e7</code> <a class="ship-n" href="#the-life-objects">table row 29</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>38–104</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>4 times, in 4 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 22 to 54.</p>
+</div>
+<div class="ship-card" id="life-140cd3cc">
+<picture>
+  <source srcset="../images/life-census/140cd3cc-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/140cd3cc.webp" alt="Life spaceship 140cd3cc moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>140cd3cc</code> <a class="ship-n" href="#the-life-objects">table row 30</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>63–148</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>6 times, in 6 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 55 to 119, every 2nd.</p>
+</div>
+<div class="ship-card" id="life-6c80b30d">
+<picture>
+  <source srcset="../images/life-census/6c80b30d-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6c80b30d.webp" alt="Life spaceship 6c80b30d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>6c80b30d</code> <a class="ship-n" href="#the-life-objects">table row 31</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>75–149</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>5 times, in 5 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 29 to 93, every 2nd.</p>
+</div>
+<div class="ship-card" id="life-9f474023">
+<picture>
+  <source srcset="../images/life-census/9f474023-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/9f474023.webp" alt="Life spaceship 9f474023 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>9f474023</code> <a class="ship-n" href="#the-life-objects">table row 32</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>28–84</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>15 times, in 15 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 23 to 87, every 2nd.</p>
+</div>
+<div class="ship-card" id="life-d26a876d">
+<picture>
+  <source srcset="../images/life-census/d26a876d-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/d26a876d.webp" alt="Life spaceship d26a876d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>d26a876d</code> <a class="ship-n" href="#the-life-objects">table row 33</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-055</dd>
+<dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>103–169</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>4 times, in 4 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 12 to 76, every 2nd.</p>
+</div>
+<div class="ship-card" id="life-83da34d9">
+<picture>
+  <source srcset="../images/life-census/83da34d9-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/83da34d9.webp" alt="Life spaceship 83da34d9 moving across the 3-uniform tiling k3-057" width="260" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>83da34d9</code> <a class="ship-n" href="#the-life-objects">table row 34</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-057</dd>
+<dt>Period</dt><dd>12, moving one lattice step per period (c/12)</dd>
+<dt>Cells</dt><dd>13–24</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>57 times, in 57 soups</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 6 to 54.</p>
+</div>
+</div>
+
+#### Flagged single ships (12)
+
+Single ships that passed every check but are common on their tiling, or lie on a tiling where others
+have run Life. We found no earlier report of any of them.
+
+<div class="ship-gallery">
+<div class="ship-card" id="life-98a3c53b">
+<picture>
+  <source srcset="../images/life-census/98a3c53b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/98a3c53b.webp" alt="Life spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>98a3c53b</code> <a class="ship-n" href="#the-life-objects">table row 35</a></p>
+<dl>
+<dt>Tiling</dt><dd>3.3.4.3.4</dd>
+<dt>Period</dt><dd>24, moving 6 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>17–50</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>3 times, in 3 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: EricG 2013 and Guttesen 2026 ran Life on 3.3.4.3.4. Contains a perturbed phase of Guttesen's snub-square glider.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 15 to 55.</p>
+</div>
+<div class="ship-card" id="life-2076694c">
+<picture>
+  <source srcset="../images/life-census/2076694c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/2076694c.webp" alt="Life spaceship 2076694c moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>2076694c</code> <a class="ship-n" href="#the-life-objects">table row 36</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-003 (shown); also, unchanged, k3-010 and k3-016</dd>
+<dt>Period</dt><dd>16, moving 5 lattice steps per period (5c/16)</dd>
+<dt>Cells</dt><dd>8–16</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10/S2,3,7,8,9,10</code> (2,048 rules)</dd>
+<dt>Seen</dt><dd>564 times, in 563 soups on k2-003; 352 times, in 352 soups on k3-010; 379 times, in 377 soups on k3-016</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 1.1% of the census soups on k2-003.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 48.</p>
+</div>
+<div class="ship-card" id="life-ac3667f4">
+<picture>
+  <source srcset="../images/life-census/ac3667f4-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/ac3667f4.webp" alt="Life spaceship ac3667f4 moving across the 2-uniform tiling k2-007" width="192" height="320" loading="lazy">
+</picture>
+<p class="ship-name"><code>ac3667f4</code> <a class="ship-n" href="#the-life-objects">table row 37</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-007</dd>
+<dt>Period</dt><dd>5, moving one lattice step per period (c/5)</dd>
+<dt>Cells</dt><dd>16–22</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>1 time, in 1 soup</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: Büttner and Kevin L (Code Golf 2014) very likely ran Life on k2-007.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 3 to 43.</p>
+</div>
+<div class="ship-card" id="life-119e5cea">
+<picture>
+  <source srcset="../images/life-census/119e5cea-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/119e5cea.webp" alt="Life spaceship 119e5cea moving across the 2-uniform tiling k2-011" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>119e5cea</code> <a class="ship-n" href="#the-life-objects">table row 38</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-011 (shown); also, unchanged, k3-002</dd>
+<dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
+<dt>Cells</dt><dd>9–11</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,7,8,9,10,11,12/S2,3,5,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>332 times, in 329 soups on k2-011; 550 times, in 549 soups on k3-002</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 1.1% of the census soups on k3-002 (where it runs in a corridor; 0.66% on k2-011).</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 42.</p>
+</div>
+<div class="ship-card" id="life-ac1d0f14">
+<picture>
+  <source srcset="../images/life-census/ac1d0f14-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/ac1d0f14.webp" alt="Life spaceship ac1d0f14 moving across the 2-uniform tiling k2-017" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>ac1d0f14</code> <a class="ship-n" href="#the-life-objects">table row 39</a></p>
+<dl>
+<dt>Tiling</dt><dd>k2-017 (shown); also, unchanged, k3-053</dd>
+<dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
+<dt>Cells</dt><dd>6–9</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,6,8,9,10,11,12/S1,2,3,7,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>67,742 times, in 38,158 soups on k2-017; 70,914 times, in 38,866 soups on k3-053</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 76.3% of the census soups on k2-017.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 41.</p>
+</div>
+<div class="ship-card" id="life-5deb47c2">
+<picture>
+  <source srcset="../images/life-census/5deb47c2-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/5deb47c2.webp" alt="Life spaceship 5deb47c2 moving across the 3-uniform tiling k3-039" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>5deb47c2</code> <a class="ship-n" href="#the-life-objects">table row 40</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-039</dd>
+<dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
+<dt>Cells</dt><dd>7–21</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>22,100 times, in 17,978 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 36.0% of the census soups on k3-039. Contains a perturbed phase of glider g.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 18 to 58.</p>
+</div>
+<div class="ship-card" id="life-98d64885">
+<picture>
+  <source srcset="../images/life-census/98d64885-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/98d64885.webp" alt="Life spaceship 98d64885 moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>98d64885</code> <a class="ship-n" href="#the-life-objects">table row 41</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-040</dd>
+<dt>Period</dt><dd>24, moving 4 lattice steps per period (c/6)</dd>
+<dt>Cells</dt><dd>7–23</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Seen</dt><dd>3,661 times, in 3,567 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 7.1% of the census soups on k3-040.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 0 to 48.</p>
+</div>
+<div class="ship-card" id="life-bf101de9">
+<picture>
+  <source srcset="../images/life-census/bf101de9-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/bf101de9.webp" alt="Life spaceship bf101de9 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>bf101de9</code> <a class="ship-n" href="#the-life-objects">table row 42</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-044</dd>
+<dt>Period</dt><dd>31, moving 2 lattice steps per period (2c/31)</dd>
+<dt>Cells</dt><dd>3–18</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Seen</dt><dd>88,492 times, in 42,183 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 84.4% of the census soups on k3-044.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 29 to 122, every 2nd.</p>
+</div>
+<div class="ship-card" id="life-49237dd5">
+<picture>
+  <source srcset="../images/life-census/49237dd5-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/49237dd5.webp" alt="Life spaceship 49237dd5 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>49237dd5</code> <a class="ship-n" href="#the-life-objects">table row 43</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-045 (shown); also, unchanged, k3-046</dd>
+<dt>Period</dt><dd>11, moving 2 lattice steps per period (2c/11)</dd>
+<dt>Cells</dt><dd>8–16</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Seen</dt><dd>7,642 times, in 7,138 soups on k3-045; 3,793 times, in 3,673 soups on k3-046</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 14.3% of the census soups on k3-045.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 1 to 45.</p>
+</div>
+<div class="ship-card" id="life-adfd2f61">
+<picture>
+  <source srcset="../images/life-census/adfd2f61-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/adfd2f61.webp" alt="Life spaceship adfd2f61 moving across the 3-uniform tiling k3-057" width="320" height="192" loading="lazy">
+</picture>
+<p class="ship-name"><code>adfd2f61</code> <a class="ship-n" href="#the-life-objects">table row 44</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-057</dd>
+<dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
+<dt>Cells</dt><dd>9–14</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,10,11,12/S2,3,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Seen</dt><dd>6,553 times, in 6,141 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 12.3% of the census soups on k3-057.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 2 to 42.</p>
+</div>
+<div class="ship-card" id="life-37db33e3">
+<picture>
+  <source srcset="../images/life-census/37db33e3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/37db33e3.webp" alt="Life spaceship 37db33e3 moving across the 3-uniform tiling k3-059" width="320" height="232" loading="lazy">
+</picture>
+<p class="ship-name"><code>37db33e3</code> <a class="ship-n" href="#the-life-objects">table row 45</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-059</dd>
+<dt>Period</dt><dd>30, moving (1, 1) per period</dd>
+<dt>Cells</dt><dd>7–23</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14,15,16,17,18/S2,3,9,10,11,12,13,14,15,16,17,18</code> (524,288 rules)</dd>
+<dt>Seen</dt><dd>81,611 times, in 41,207 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 82.4% of the census soups on k3-059.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 12 to 72.</p>
+</div>
+<div class="ship-card" id="life-b414ad8f">
+<picture>
+  <source srcset="../images/life-census/b414ad8f-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b414ad8f.webp" alt="Life spaceship b414ad8f moving across the 3-uniform tiling k3-061" width="320" height="298" loading="lazy">
+</picture>
+<p class="ship-name"><code>b414ad8f</code> <a class="ship-n" href="#the-life-objects">table row 46</a></p>
+<dl>
+<dt>Tiling</dt><dd>k3-061</dd>
+<dt>Period</dt><dd>22, moving (1, 1) per period</dd>
+<dt>Cells</dt><dd>5–10</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10,11,12,13,14,15,16,17,18/S2,3,7,8,9,10,11,12,13,14,15,16,17,18</code> (524,288 rules)</dd>
+<dt>Seen</dt><dd>34,039 times, in 25,346 soups</dd>
+<dt>Verdict</dt><dd><b>Flagged</b>: common: in 50.7% of the census soups on k3-061.</dd>
+</dl>
+<p class="ship-clip">Clip: generations 5 to 68.</p>
+</div>
+</div>
+
+### Credits for Life on these tilings
+
+Conway's glider and the light-, middle- and heavyweight spaceships are the classic ships of Life
+([Gardner 1970](bibliography.md#gardner1970life); [Berlekamp, Conway and Guy 1982](bibliography.md#berlekamp1982winning)).
+EricG ran Life-like rules on the eight mixed Archimedean tilings in 2013 and reported Life spaceships
+on 3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 ([EricG 2013](bibliography.md#ericg2013tiling2)). Martin Büttner
+found a period-20 Life ship on a tiling of hexagons, squares and triangles in 2014
+([Code Golf 2014](bibliography.md#codegolf2014life)). H. S. Guttesen described the kagome glider g
+and the snub-square glider ([Guttesen 2026](bibliography.md#guttesen2026game)). The 2- and 3-uniform
+tilings are Galebach's catalogue ([Galebach: uniform tilings](bibliography.md#galebachnd_uniform)).
+
 ## The hat glider is Edmond's glider B
 
 The hat glider that JETCARP's reimplementation of James Edmond's evolutionary search found is
@@ -1266,6 +2292,11 @@ immortal. See [Priority rules](../automata/priority-rules.md).
 
 - Ask on the ConwayLife.com forums whether any of the candidates, above all the flagged ones, have
   been seen before. Our prior-art search could not read the forums directly.
+- Compare the census's 3.3.3.4.4 ship with EricG's 2013 patterns, and its period-20 k2-007 ship with
+  Büttner's 2014 ship, cell for cell, if those patterns can be found.
+- Look more closely at the large Life ships of k3-055, which may share a common engine.
+- Run the Life census on more soups, on the k-uniform tilings with k from 4 to 6, and with ships of
+  periods above 64, which the census did not look for.
 - Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once they
   are published.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6, and the ship comparison

@@ -1,0 +1,45 @@
+{
+ "name": "Life spaceship 63121d47 on 3-uniform tiling k3-055",
+ "description": "A period-32 spaceship in Conway's Life (B3/S23) on the 3-uniform tiling k3-055, with touching neighbours, 54 to 94 cells, moving eight lattice steps every 32 generations (c/4). It runs the same way in the 8,192 rules from B3/S23 to B3,11,12/S2,3,10,11,12. JETCARP's Life census met it in 0.0% of its soups on this tiling.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k3-055"
+  },
+  "size": {
+   "rect": {
+    "w": 44,
+    "h": 12
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,1,1 0,0,4,1 1,0,2,1 1,0,3,1 1,0,5,1 1,0,6,1 6,1,1,1 6,1,4,1 7,1,0,1 7,1,2,1 7,1,3,1 7,1,5,1 8,1,3,1 9,1,4,1 9,1,7,1 10,1,0,1 10,1,7,1 10,1,8,1 11,1,3,1 11,1,6,1 5,2,1,1 5,2,2,1 5,2,4,1 5,2,7,1 5,2,8,1 6,2,3,1 6,2,4,1 6,2,6,1 6,2,7,1 7,2,3,1 7,2,5,1 7,2,6,1 9,2,0,1 6,3,1,1 4,4,4,1 4,4,8,1 5,4,1,1 5,4,2,1 5,4,3,1 5,4,8,1 6,4,6,1 6,4,8,1 8,4,4,1 8,4,5,1 8,4,6,1 8,4,8,1 10,4,3,1 10,4,4,1 10,4,5,1 10,4,8,1 5,5,0,1 6,5,0,1 6,5,1,1 6,5,2,1 6,5,6,1 9,5,0,1 10,5,2,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k3-055"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

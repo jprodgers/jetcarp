@@ -1,0 +1,39 @@
+{
+ "name": "Life spaceship 83051933 on square grid",
+ "description": "A period-4 spaceship in Conway's Life (B3/S23) on the square grid, with touching neighbours, 5 to 5 cells, moving (−1, −1) lattice steps every 4 generations. It runs the same way in the 512 rules from B3/S23 to B3678/S0235678. It also runs in Life, unchanged, on 25 isohedral and drawn tilings with the square grid's neighbour graph. This is Conway's glider, credited to found by Richard Guy in 1970.",
+ "tiling": {
+  "family": "square",
+  "size": {
+   "rect": {
+    "w": 36,
+    "h": 36
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 1,0,0,1 2,0,0,1 0,1,0,1 1,2,0,1",
+    "tiling": {
+     "family": "square",
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}

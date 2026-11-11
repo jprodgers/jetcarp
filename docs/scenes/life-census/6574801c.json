@@ -1,0 +1,45 @@
+{
+ "name": "Life spaceship 6574801c on 2-uniform tiling k2-007",
+ "description": "A period-20 spaceship in Conway's Life (B3/S23) on the 2-uniform tiling k2-007, with touching neighbours, 6 to 20 cells, moving one lattice step every 20 generations (c/20). It runs the same way in the 8,192 rules from B3/S23 to B3,8,10,11,12/S2,3,8,9,10,11,12. This is very likely Büttner's period-20 ship, credited to Martin Büttner, Code Golf 2014.",
+ "tiling": {
+  "family": "periodic",
+  "params": {
+   "catalog": "k2-007"
+  },
+  "size": {
+   "rect": {
+    "w": 28,
+    "h": 10
+   }
+  },
+  "boundary": "wrap"
+ },
+ "rng_state": 1,
+ "cas": [
+  {
+   "rule": "B3/S23",
+   "neighborhood": "touch",
+   "enabled": true,
+   "steps_per_gen": 1,
+   "palette": "Prism",
+   "seed": "empty"
+  }
+ ],
+ "commands": [
+  {
+   "op": "paste_pattern",
+   "id": 1,
+   "pattern": {
+    "cells": "0,0,0,1 0,0,1,1 0,0,2,1 0,0,4,1 1,0,2,1 0,1,2,1 0,1,3,1 1,1,2,1",
+    "tiling": {
+     "family": "periodic",
+     "params": {
+      "catalog": "k2-007"
+     },
+     "boundary": "dead"
+    }
+   },
+   "at": "center"
+  }
+ ]
+}
