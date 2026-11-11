@@ -17,11 +17,12 @@ this book were made with CART, and every one was run again on JETCARP 0.4.0 befo
 
 ## Rust, with an AI coding assistant
 
-JETCARP is written in Rust: about 170,000 lines in ten crates, tests and generated tables included,
-with a small GNOME Shell extension in JavaScript. The simulation engine is `jetcarp-core`; the
-others are the GPU stepper, the operations shared by the front ends, the app, the background host
-and screensavers, the Rhai scripting, the MCP server, and the `jetcarp` program that ties them
-together.
+JETCARP is written in Rust: about 170,000 lines in twelve crates, tests and generated tables
+included, with a small GNOME Shell extension in JavaScript. The simulation engine is `jetcarp-core`;
+the others are the store (the pattern library, Quick Start and media), the searches and the job
+runner they share, the GPU stepper, the operations shared by the front ends, the app, the
+background host and screensavers, the Rhai scripting, the MCP server, and the `jetcarp` program
+that ties them together.
 
 All of its code was written by Claude Code, Anthropic's AI coding assistant. The division of work
 was this:

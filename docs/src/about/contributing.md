@@ -109,6 +109,11 @@ claims more than its evidence: novelty only as set out in
 - Every change to a world goes through a `Command`, so that it is logged and replays. New features
   for the front ends belong in the shared operations of `jetcarp-api`, so that the command line,
   scripts, the MCP server and the app all get them.
+- Each layer depends only on the ones below it: the engine (`jetcarp-core`: tilings, rules,
+  worlds, rendering, and what a pattern is), the store (`jetcarp-store`: the pattern library, Quick
+  Start and media), the searches (`jetcarp-search`: the job runner and every search), the
+  operations (`jetcarp-api`), then the front ends. The traits a GPU backend implements stay in the
+  engine, so `jetcarp-gpu` needs only `jetcarp-core`.
 - Errors are messages a user can act on ("Margolus block rules need the square grid. Remove that CA
   before switching tilings."), not codes.
 - Tests live beside the code (`#[cfg(test)]`) and in each crate's `tests/` folder. A new rule, tiling
