@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this data, please cite it as below."
+title: "minimal"
+type: dataset
+version: "golden-1"
+date-released: "2026-11-11"
+license: "CC0-1.0"
+authors:
+  - given-names: "Golden Publisher"
+    family-names: "A"
+identifiers:
+  - type: other
+    value: "sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6"
+    description: "The pack version's id (manifest hash)"

@@ -1,0 +1,1 @@
+{"children":[],"format":"jetcarp-index","parts":[{"bytes":6687,"first":"{\"family\":\"penrose-kd\",\"boundary\":\"dead\"}","last":"{\"family\":\"penrose-kd\",\"boundary\":\"dead\"}","object":"sha256:261a4aed566ac6046ac87cdf9cdc69501ce91979aad5b48111e0d2f7f0a70320","partition":{},"rows":1}],"schema":"jetcarp-tilings 1","table":"tilings","version":"1.0"}

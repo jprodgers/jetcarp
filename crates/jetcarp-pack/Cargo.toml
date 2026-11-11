@@ -26,3 +26,8 @@ arrow-buffer = "60.1.0"
 # SSH signatures (sshsig) with Ed25519 keys, pure Rust (RustCrypto); no RSA or ECDSA.
 ssh-key = { version = "0.6.7", default-features = false, features = ["std", "ed25519", "getrandom"] }
 sha2 = "0.10.9"
+
+[dev-dependencies]
+# The golden packs' generator fixes a test library's times, and writes tiny PNGs.
+rusqlite.workspace = true
+png.workspace = true
