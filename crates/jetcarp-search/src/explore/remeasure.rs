@@ -402,7 +402,7 @@ pub struct State {
     pub tilings: BTreeMap<String, String>,
     /// Of those, the ones re-measured for one rule family only, and that family.
     pub families: BTreeMap<String, String>,
-    /// Per tiling: runs re-measured, changed, and failed, in the segments committed.
+    /// Per tiling: runs re-measured, changed, and failed, in the chunks committed.
     pub counts: BTreeMap<String, (u64, u64, u64)>,
     /// Which runs the GPU named in the record's `backend` measures (none: the CPU runs all).
     pub gpu: Option<OnGpu>,
@@ -467,7 +467,7 @@ impl State {
         }
     }
 
-    /// Add a segment's counts.
+    /// Add a re-measured chunk's counts.
     pub fn commit(&mut self, add: &BTreeMap<String, (u64, u64, u64)>) {
         for (t, (n, c, f)) in add {
             let e = self.counts.entry(t.clone()).or_default();
