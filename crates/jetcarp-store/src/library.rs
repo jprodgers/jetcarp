@@ -81,7 +81,7 @@ pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
 pub use provenance::{AliasRow, Origin, ProvenanceRow};
 pub use query::{Query, Update, sort_records};
-pub use ratings::RatingRow;
+pub use ratings::{Dedupe, RatingRow, RunReview, VERDICTS, search_run_target, verdict_rating};
 pub use reverify::{Reverified, ReverifyCounts, ReverifyTarget};
 pub use schema::{PinCheck, SCHEMA_VERSION, new_uuid};
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};

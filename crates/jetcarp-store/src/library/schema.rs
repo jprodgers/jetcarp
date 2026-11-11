@@ -295,7 +295,9 @@ CREATE TABLE ratings (
     target_id TEXT NOT NULL,
     rater TEXT NOT NULL,
     rating REAL NOT NULL,
+    verdict TEXT CHECK (verdict IS NULL OR verdict IN ('keep', 'maybe', 'drop')),
     note TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
     created TEXT NOT NULL
 );
 CREATE INDEX ratings_target ON ratings (target_kind, target_id);
