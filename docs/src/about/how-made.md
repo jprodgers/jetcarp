@@ -134,9 +134,10 @@ claim was made:
   around them; and importing an old record could give the same pattern several ids, one per phase. The
   duplicates were merged in the claims, and a fix to the ids is planned.
 - **Smaller slips**, among them tests that wrote into the user's real Pictures folder (fixed), and
-  the speed labels such as "c/4 diagonal" in catalogue names, which use the square grid's words and
-  are wrong on tilings whose lattice has 60° angles (still to be fixed). Both were found by looking
-  at what the program did, not by reading its code.
+  the speed labels such as "c/4 diagonal" in catalogue names, which used the square grid's words and
+  were wrong on tilings whose lattice has 60° angles. New records now name a ship's direction in its
+  lattice's own terms; records already stored keep the labels they were made with. Both were found by
+  looking at what the program did, not by reading its code.
 
 The claims in this book are what survived. If you find something we missed, please open an issue: we
 will correct the page and credit you.
