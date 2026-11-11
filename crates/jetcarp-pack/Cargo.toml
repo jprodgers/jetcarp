@@ -1,0 +1,28 @@
+[package]
+name = "jetcarp-pack"
+description = "JETCARP packs (format 1.0): a content-addressed store of Parquet tables and JSON documents, signed with SSH signatures; publishing a library into one, exporting a version, and importing a store or an export with every hash checked. Arrow lives here, so builds without packs (the screensaver) never link it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+jetcarp-core.workspace = true
+jetcarp-store.workspace = true
+jetcarp-search.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+rayon.workspace = true
+bytes.workspace = true
+# The pack tables: Parquet through its Arrow API (nested lists of structs), zstd only.
+parquet = { workspace = true, features = ["arrow"] }
+arrow-array = "60.1.0"
+arrow-schema = "60.1.0"
+arrow-buffer = "60.1.0"
+# SSH signatures (sshsig) with Ed25519 keys, pure Rust (RustCrypto); no RSA or ECDSA.
+ssh-key = { version = "0.6.7", default-features = false, features = ["std", "ed25519", "getrandom"] }
+sha2 = "0.10.9"
