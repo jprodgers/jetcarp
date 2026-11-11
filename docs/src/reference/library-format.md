@@ -42,12 +42,41 @@ phases=<phase 0>;<phase 1>;...
 
 - `model` is `lifelike` for B/S and Generations rules (B/S is Generations with two states), otherwise
   the rule's family.
-- The **tiling key** is the compact JSON of the tiling's identity: its family, shape parameters and
-  edges, with keys in sorted order and `"boundary":"dead"`, but not its size. For example
-  `{"family":"square","boundary":"dead"}`, or `{"family":"periodic","params":{"catalog":"k3-019"},"boundary":"dead"}`.
-  The level of an aperiodic patch is its size, so it is left out too, even when it is given as a
-  `level` parameter (as the Spectre's default parameters give it): the Spectre's key is
+- The **tiling key** is the JSON of the tiling's identity: its family, shape parameters and edges,
+  and `"boundary":"dead"`, but not its size. For example `{"family":"square","boundary":"dead"}`,
+  or `{"family":"periodic","params":{"catalog":"k3-019"},"boundary":"dead"}`. The level of an
+  aperiodic patch is its size, so it is left out too, even when it is given as a `level` parameter
+  (as the Spectre's default parameters give it): the Spectre's key is
   `{"family":"spectre","boundary":"dead"}` on every level.
+- The tiling key has one spelling, so any program can write it and get the same id:
+  - Its own members come in a fixed order: `family`, then `params` and `edges` (each only if the
+    tiling has them), then `boundary`. This is the order every id has used, so this one object does
+    not sort its members as RFC 8785 would (which would put `boundary` first).
+  - Every member's value is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) canonical JSON:
+    object keys sorted by their UTF-16 code units at every depth, no whitespace, strings escaped as
+    RFC 8785 says, and numbers as ECMAScript writes them (`1`, not `1.0`; `0.000001` but `1e-7`;
+    `1e+21`; minus zero as `0`).
+  - Tilings at their default shapes have no numbers in their parameters, so the rule for numbers
+    never changes their keys; a reshaped tiling's numbers get their one spelling, for example
+    `{"family":"cairo","params":{"a":[1e-7,0.000001],"b":1},"boundary":"dead"}`.
+  - JETCARP's tests check the key against RFC 8785's own samples and against 600 lines written
+    with an independent implementation, the Python `rfc8785` package
+    (`crates/jetcarp-core/tests/data/jcs_vectors.txt`, made by `tools/jcs_vectors.py`).
+
+  In Python, with the `rfc8785` package and a tiling `t` as JETCARP writes it (in a scene, say),
+  read from JSON:
+
+  ```python
+  import rfc8785
+  def tiling_key(t):
+      jcs = lambda v: rfc8785.dumps(v).decode()
+      out = ['"family":' + jcs(t["family"])]
+      out += [f'"{k}":' + jcs(t[k]) for k in ("params", "edges") if t.get(k) is not None]
+      return "{" + ",".join(out + ['"boundary":"dead"']) + "}"
+  ```
+
+  (On the four aperiodic families, take `level` out of `params` first, and leave `params` out if
+  nothing is left.)
 - `d` is the displacement per period in lattice steps, in the canonical orientation (`0,0` for still
   lifes and oscillators).
 - `rule` is the exact rule only for puffers, movers, guns and `other`, whose stored phases do not
