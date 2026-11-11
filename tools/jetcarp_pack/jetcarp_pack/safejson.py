@@ -1,4 +1,4 @@
-"""Reading JSON from a pack without trusting it (pack spec sections 3 and 17).
+"""Reading JSON from a pack without trusting it (pack-format.md, "Encodings" and "Limits").
 
 `loads()` refuses, before parsing, input over the size limit, a byte-order mark, bytes that are not
 UTF-8, and nesting deeper than the limit (so Python's recursive parser never meets a hostile depth).

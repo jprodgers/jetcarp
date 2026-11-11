@@ -1,4 +1,4 @@
-"""Identity texts and content ids (pack spec section 9, library-format.md), and the value formats
+"""Identity texts and content ids (pack-format.md "Ids", library-format.md), and the value formats
 that pack tables and documents use."""
 
 import datetime
@@ -22,9 +22,11 @@ ORCID = re.compile(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]\Z")
 POSITIVE = re.compile(r"[1-9][0-9]{0,17}\Z")
 VERSION = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\Z")
 SPDX = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+-]{0,63}\Z")
-QUICKSTART_ID = re.compile(r"[A-Za-z0-9._-]{1,200}\Z")
+QUICKSTART_ID = re.compile(r"qs-[0-9a-f]{32}\Z")
+RATER_ID = re.compile(r"rater-[0-9a-f]{16}\Z")
 _CELL = re.compile(r"(-?\d{1,10}),(-?\d{1,10}),(-?\d{1,10}),(-?\d{1,10})\Z")
-_LOCAL_PATH = re.compile(r"(^|[\s'\"=(])(/home/|/Users/|/tmp/|/var/|/root/|~/|[A-Za-z]:\\\\?[A-Za-z])")
+# Absolute paths as pack-format.md lists them: /x/y, ~/, C:\, \\server\, file://
+_LOCAL_PATH = re.compile(r"(^|[\s'\"=(\[,])(/[^/\s]+/|~/|[A-Za-z]:\\|\\\\[^\\\s]+\\|file://)")
 
 
 class IdentityError(ValueError):
@@ -32,7 +34,7 @@ class IdentityError(ValueError):
 
 
 def content_hash(identity, pin):
-    """First 32 hex digits of SHA-256 over identity + "\\n" + pin (section 9)."""
+    """First 32 hex digits of SHA-256 over identity + "\\n" + pin (pack-format.md, "Ids")."""
     return hashlib.sha256((identity + "\n" + pin).encode("utf-8")).hexdigest()[:32]
 
 
@@ -42,6 +44,11 @@ def pattern_id(identity, pin):
 
 def ant_id(identity, pin):
     return "ant-" + content_hash(identity, pin)
+
+
+def quickstart_id(scene, pin):
+    """`qs-` and the first 32 hex digits of SHA-256 over the scene's text, "\n" and the pin."""
+    return "qs-" + content_hash(scene, pin)
 
 
 def parse_identity(text, scheme, fields):
@@ -146,7 +153,7 @@ def check_tiling_key(text):
 
 
 def tiling_group(key):
-    """The partition group of a tiling (section 8.2), from its parsed tiling key. Isohedral
+    """The partition group of a tiling (pack-format.md, "Partitions"), from its tiling key. Isohedral
     families are taken to be named `ih<n>` (from library-format.md's IH58; choice)."""
     family = key["family"]
     if family == "periodic":

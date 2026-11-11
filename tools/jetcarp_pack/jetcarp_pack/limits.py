@@ -1,4 +1,4 @@
-"""The limits of pack spec section 17, plus the reader's own budgets for replay."""
+"""The limits of pack-format.md ("Limits"), plus the reader's own budgets for replay."""
 
 from dataclasses import dataclass
 
