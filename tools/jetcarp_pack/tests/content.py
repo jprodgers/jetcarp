@@ -9,6 +9,8 @@ The square grid's `tilings` row is pack-format.md's own ("Geometry pins"): its p
 recomputed from it here and must give the spec's values.
 """
 
+import math
+
 from jetcarp_pack import identity as ident
 from jetcarp_pack import jcs, pins
 from jetcarp_pack.replay import Lattice, moved, translation
@@ -170,11 +172,18 @@ def langtons_ant(steps=12000):
             break
         onset -= 1
     identity = ident.format_ant_identity(rule="Ant RL", tiling=SQUARE_KEY, start='"empty"')
+    # The run as pack-format.md gives it: its limits, and what it found (cells: the coloured cells at
+    # the end; reach: the box of cells the ant reached; speed: distance per step in cell sizes).
+    xs, ys = [p[0] for p in visited], [p[1] for p in visited]
+    speed = round(math.hypot(dx, dy) / period, 6)
+    run = {"limits": {"max_period": 2000, "steps": steps, "symmetry": True},
+           "run": {"cells": len(black), "d": [dx, dy], "onset": onset, "outcome": "highway", "period": period,
+                   "reach": [min(xs), min(ys), max(xs), max(ys)], "speed": speed, "steps": steps}}
     return {"id": ident.ant_id(identity, SQUARE_PIN), "identity": identity, "pin_key": SQUARE_KEY,
             "pin": SQUARE_PIN, "rule": "Ant RL", "kind": "string", "family": "ant", "semantics": "1",
             "states": 1, "colors": 2, "start": '"empty"', "outcome": "highway",
-            "period": period, "dx": dx, "dy": dy, "onset": onset, "speed": None, "steps": steps,
-            "cells": len(visited), "run": jcs.dumps({"steps": steps}), "tiling_group": "square"}
+            "period": period, "dx": dx, "dy": dy, "onset": onset, "speed": speed, "steps": steps,
+            "cells": len(black), "run": jcs.dumps(run, allow_floats=True), "tiling_group": "square"}
 
 
 SEARCH = "0b6f3c2a-5d4e-4f1a-9c8b-7a6e5d4c3b2a"

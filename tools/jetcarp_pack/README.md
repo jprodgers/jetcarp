@@ -62,8 +62,9 @@ applies the limits below.
   `family`, `params` and `edges`. Each neighbour must be listed once, symmetrically.
 - **Content.** Fact rows agree across parts. Every JSON cell is in its one spelling, and no text
   cell holds a local path. The other rules are checked as the spec gives them: consent (a group's
-  members too), annotations' `rev`, the main verification, sightings' sources, retractions with
-  their publishers, search indexes, media files.
+  members too; each rater's latest `raters` row stands, and a note needs a row that shares notes),
+  annotations' `rev`, the main verification, the members of `gun`, `range` and `ants.run`,
+  sightings' sources, retractions with their publishers, search indexes, media files.
 - **Across versions.** Every parent's retractions are kept, and no part a version adds repeats an
   event row its parents have. In an export, every file is where the layout puts it.
 
@@ -125,7 +126,8 @@ cover:
 - every refusal and limit;
 - B0 alternation against a brute-force run of the real rule;
 - replay on a two-tile cell;
-- JETCARP's golden packs, with the disagreements found pinned exactly (`tests/test_rust_golden.py`).
+- JETCARP's golden packs, every one of which must pass every level with no FAIL and no WARN
+  (`tests/test_rust_golden.py`).
 
 `tests/packwriter.py` is a writer for tests only. It writes Parquet with pyarrow and no key-value
 metadata, sets `created_by` to `jetcarp-pack 1` by patching the footer, and signs with Ed25519 keys
@@ -140,14 +142,17 @@ outcome. Every name in them is invented.
 | `merge` | accept: feeds `test-a` and `test-b`; `test-a` seq 2 merges both, signed by A's authorised laptop key |
 | `retraction` | accept: version 2 retracts the blinker and renames the glider (`rev` 2) |
 | `group-raters` | accept: a taste pack, with a group rater whose two members consented |
-| `ant-run` | accept: Langton's ant alone (its `run` JSON has no shape in the spec) |
+| `ant-run` | accept: Langton's ant alone, its `run` JSON in the shape the spec gives |
 | `key-rotation` | accept: key R2 supersedes R1; version 2 and its ref are by R2 |
 | `revoked-by-successor` | accept: R1's revocation is signed by its successor R2 |
 | `negative/tampered-object`, `bad-signature`, `unsigned`, `unknown-requires`, `unknown-major`, `revoked-key`, `bad-pin`, `successor-of-self-revoked`, `revoked-machine-key` | refuse, each for its reason |
 | `negative/rollback` | refuse (`seq-rollback`) after accepting `retraction`'s ref |
 
-JETCARP 0.4 accepts and refuses them as expected, except `group-raters` and `ant-run`
-(SPEC_QUESTIONS.md, X4 and X5). The test ant's outcome uses this writer's own start direction and
-turn sense, and the canonical forms of the block, blinker and LWSS are inferred from the book's
-glider. JETCARP's re-verification confirms the canonical forms; the ant was not reached. Running
+JETCARP 0.4 (`jetcarp pack check` and `pack import --verify full`) accepts and refuses them as
+expected, `group-raters` and `ant-run` included since the cross-check's fixes (SPEC_QUESTIONS.md).
+The one exception is `negative/rollback`: JETCARP 0.4 keeps no `seq`, so it accepts the rolled-back
+version, as pack-format.md says it does. The test ant's outcome uses this writer's own start direction
+and turn sense, and the canonical forms of the block, blinker and LWSS are inferred from the book's
+glider. JETCARP's re-verification confirms the canonical forms; it imports the ant as packed (its
+id is the same as JETCARP's own Langton's ant's, in the golden `ants` pack). Running
 `make_testdata.py` again makes new keys, so every signature and manifest hash changes.

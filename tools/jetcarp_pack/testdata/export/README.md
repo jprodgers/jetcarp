@@ -1,3 +1,3 @@
 # Minimal test pack
 
-An export of pack version `sha256:51ac110e756b0d59409c03476ebb6266781e1c6c0193a5b2460b3551d27ee0bd`, made by the test writer of the independent pack reader.
+An export of pack version `sha256:73020a24451a118da3ae7563492ad818040ad8c6e0a0125cc175cbe67f84a7fd`, made by the test writer of the independent pack reader.

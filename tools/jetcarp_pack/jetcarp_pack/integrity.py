@@ -675,6 +675,22 @@ class Checker:
                 self.r.fail(1, "ant-field", w, f"period {row['period']} is out of range")
             if row["states"] < 1 or row["colors"] < 1:
                 self.r.fail(1, "ant-field", w, f"states {row['states']} and colors {row['colors']} must be positive")
+            try:
+                run = ident.json_cell(row["run"], "run")
+            except Exception:  # its JSON is reported by json_cells
+                run = None
+            if run is not None:
+                missing = []
+                for k, members in schemas.ANT_RUN_MEMBERS.items():
+                    inner = run.get(k) if isinstance(run, dict) else None
+                    if not isinstance(inner, dict):
+                        missing.append(k)
+                    else:
+                        missing += [f"{k}.{m}" for m in members if m not in inner]
+                if missing:
+                    self.r.fail(1, "ant-run", w, f"run lacks {', '.join(missing)}")
+                elif run["run"]["outcome"] != row["outcome"]:
+                    self.r.fail(1, "ant-run", w, f"run.outcome {run['run']['outcome']!r} is not the outcome column's")
             self._semantics(row["family"], row["semantics"], w)
         if check_ids and rows:
             self.r.ok(1, "ant content ids", good)

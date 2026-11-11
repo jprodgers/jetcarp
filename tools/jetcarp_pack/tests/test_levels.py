@@ -65,6 +65,19 @@ class Integrity(StoreTest):
         self.assertClean(report)
         self.assertEqual(report.passed[(1, "ant content ids")], 1)
 
+    def test_ant_run_has_its_members(self):
+        ant = stores.records()["ant"]
+        for bad, lacks in (({"steps": 12000}, "limits, run"),
+                           ({"limits": {"steps": 12000}, "run": {"outcome": "highway"}},
+                            "limits.max_period, run.cells, run.reach, run.steps")):
+            with self.subTest(run=bad):
+                root = self.root(f"ant-{len(lacks)}")
+                stores.build_small(root, self.keys, feed="test-ant",
+                                   tables={"tilings": [C.square_tiling()], "ants": [dict(ant, run=jcs.dumps(bad))]})
+                report = run(root, 1)
+                self.assertIn("ant-run", fails(report))
+                self.assertTrue(any(f.code == "ant-run" and lacks in f.message for f in report.findings))
+
     def test_pin_must_follow_from_geometry(self):
         stores.build_bad_pin(self.root(), self.keys)
         self.assertIn("pin", fails(run(self.root(), 1)))

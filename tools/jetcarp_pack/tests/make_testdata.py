@@ -28,8 +28,8 @@ EXPECT = {
     "retraction": ("accept", None, "Version 2 retracts the blinker and renames the glider (rev 2); its other "
                                    "tables keep version 1's index hashes."),
     "group-raters": ("accept", None, "A taste pack: a group rater whose two members have consented."),
-    "ant-run": ("accept", None, "Langton's ant alone. Its run column is {\"steps\":12000}: the spec gives the "
-                                "column no shape, and JETCARP 0.4 refuses it (SPEC_QUESTIONS.md)."),
+    "ant-run": ("accept", None, "Langton's ant alone, its run column in the shape pack-format.md gives "
+                                "(limits, and the run: outcome, steps, cells, reach, period, d, onset, speed)."),
     "key-rotation": ("accept", None, "R2 supersedes R1 (statement signed by R1); version 2 and its ref "
                                      "are by R2. A follower that accepted seq 1 from R1 accepts seq 2."),
     "revoked-by-successor": ("accept", None, "R2 supersedes R1; R1's revocation is signed by R2, so R2 stands. "

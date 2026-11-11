@@ -176,6 +176,9 @@ RULE_FAMILIES_WITH_MASKS = ("lifelike", "generations")
 SCALES = {"keep-maybe-drop 1": ("keep", "maybe", "drop"), "stars-1-5 1": ("1", "2", "3", "4", "5")}
 GUN_MEMBERS = ("ship", "ship_label", "ship_period", "ship_displacement", "ship_speed", "per_period", "ship_phases")
 RANGE_MEMBERS = ("bits", "birth_min", "birth_max", "survive_min", "survive_max", "states_min", "states_max")
+# ants.run: the members every run has (the others are there when they apply).
+ANT_RUN_MEMBERS = {"limits": ("max_period", "steps"), "run": ("cells", "outcome", "reach", "steps")}
+
 
 def normalise_type(t):
     """A type with list field names, string widths and integer and float widths set aside, as readers

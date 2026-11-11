@@ -1,1 +1,0 @@
-{"children":[],"format":"jetcarp-index","parts":[{"bytes":4020,"first":"pattern:5a080db389c0cab3caf884d2596a1e70","last":"pattern:9c85980ffc554466a1073383568acae9","object":"sha256:4b17c2d661417b4b6911060cf6d1d1d4c16d4bb33219835a5262da7a91cfdb15","partition":{},"rows":2}],"schema":"jetcarp-provenance 1","table":"provenance","version":"1.0"}

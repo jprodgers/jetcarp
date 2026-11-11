@@ -212,7 +212,7 @@ def build_unknown_major(root, keys):
 
 
 def build_ant_run(root, keys):
-    """Langton's ant on the square grid, alone (its `run` JSON has no shape in the spec)."""
+    """Langton's ant on the square grid, alone (its `run` JSON in the shape pack-format.md gives)."""
     r = records()
     return build_small(root, keys, feed="test-ant",
                        tables={"tilings": [C.square_tiling()], "ants": [r["ant"]],
