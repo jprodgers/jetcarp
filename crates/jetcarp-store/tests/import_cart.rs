@@ -182,7 +182,7 @@ fn cart_catalog(path: &std::path::Path) {
                '2026-11-06T14:00:00Z', '2026-11-06T14:00:00Z', NULL);
            INSERT INTO jobs VALUES (1, 'hunt',
                '{"label":"first","out":"/home/someone/cart/runs/first-run"}', 'done',
-               '{"new_patterns":2,"newest":[{"id":"aaaa000000000001","label":"c/4 spaceship 5c #aaaa00"},{"id":"dddd000000000004","label":"still life 1c #dddd00"}]}',
+               '{"job":1,"new_patterns":2,"newest":[{"id":"aaaa000000000001","label":"c/4 spaceship 5c #aaaa00"},{"id":"dddd000000000004","label":"still life 1c #dddd00"}]}',
                x'00', '2026-11-06T15:00:00Z', '2026-11-06T17:30:00Z', '2026-11-06T17:30:00Z');
            INSERT INTO jobs VALUES (2, 'hunt', '{"label":"second"}', 'done', '{}', NULL,
                '2026-11-06T15:30:00Z', '2026-11-06T18:00:00Z', '2026-11-06T18:00:00Z');
@@ -366,6 +366,7 @@ fn a_cart_catalog_comes_in_once_verified_with_its_history() {
     assert_eq!(first.progress["unstored"]["still life"], 1);
     assert_eq!(first.progress["unstored"]["oscillator"], 2);
     assert_eq!(first.progress["unstored_distinct"], 2);
+    assert_eq!(first.progress["job"], first.id);
     let newest = first.progress["newest"].as_array().unwrap();
     assert_eq!(newest.len(), 1);
     assert_eq!(newest[0]["id"], g.id.as_str());

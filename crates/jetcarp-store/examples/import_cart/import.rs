@@ -607,8 +607,8 @@ fn cut_paths(v: &mut Value, n: &mut u64) {
 }
 
 /// CART record ids in a job's progress changed to the new ids (and a find's label with them);
-/// finds that were not imported are left out of their lists. A pipeline's job numbers become
-/// the library's.
+/// finds that were not imported are left out of their lists. Job numbers (a job's own, a
+/// pipeline's steps') become the library's.
 fn remap_progress(
     v: &mut Value,
     ids: &HashMap<String, String>,
@@ -648,7 +648,12 @@ fn remap_progress(
                 }
                 counts.0 += 1;
             }
-            // A pipeline's steps name its jobs by number.
+            // A job names itself by number, and a pipeline's steps name their jobs.
+            if let Some(Value::Number(j)) = m.get("job")
+                && let Some(x) = j.as_i64().and_then(|n| jobs.get(&n))
+            {
+                m.insert("job".into(), json!(x));
+            }
             if let Some(Value::Array(js)) = m.get_mut("jobs") {
                 for j in js.iter_mut() {
                     if let Some(n) = j.as_i64() {
