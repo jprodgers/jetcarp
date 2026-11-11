@@ -10,5 +10,5 @@ authors:
     family-names: "A"
 identifiers:
   - type: other
-    value: "sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6"
+    value: "sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6"
     description: "The pack version's id (manifest hash)"

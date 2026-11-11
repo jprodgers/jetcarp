@@ -154,7 +154,7 @@ id. The minimal golden pack's, pretty-printed (stored without whitespace):
   "retain": [],
   "retracts": [],
   "searches": {},
-  "stats": {"ants": 0, "bytes": 63913, "patterns": 3, "quickstart": 1},
+  "stats": {"ants": 0, "bytes": 64013, "patterns": 3, "quickstart": 1},
   "tables": {"annotations": "sha256:432e...", "patterns": "sha256:5669...", "...": "..."},
   "title": "minimal",
   "version": "1.0",
@@ -199,7 +199,7 @@ another publisher also published stays theirs.
 ## Refs
 
 ```json
-{"feed": "golden-a", "format": "jetcarp-ref", "manifest": "sha256:83f9...", "publisher": "SHA256:ACp7...",
+{"feed": "golden-a", "format": "jetcarp-ref", "manifest": "sha256:8dbe...", "publisher": "SHA256:ACp7...",
  "seq": 1, "signature": "-----BEGIN SSH SIGNATURE-----\n...\n-----END SSH SIGNATURE-----\n",
  "updated": "2026-11-11T00:00:00Z", "version": "1.0"}
 ```
@@ -243,7 +243,7 @@ This is accepted for 0.4.
   ```sh
   echo "publisher namespaces=\"jetcarp-manifest\" ssh-ed25519 AAAA..." > allowed
   ssh-keygen -Y verify -f allowed -I publisher -n jetcarp-manifest \
-      -s sigs/sha256/83/83f9.../<signer>.sig < objects/sha256/83/83f9....json
+      -s sigs/sha256/8d/8dbe.../<signer>.sig < objects/sha256/8d/8dbe....json
   ```
 
 - **Key statements** (`keys/<signer>.json`):
@@ -941,13 +941,14 @@ packs; none is ever deleted or rewritten.
 
 | Pack | Holds | Manifest |
 | --- | --- | --- |
-| `minimal` | three Life patterns, a sighting, a Quick Start entry, ratings by the publisher, a consented pseudonymous rater and a group of both | `sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6` |
-| `retraction` | a second version retracting a pattern, adding one and renaming another (`rev` 2) | `sha256:f13d5a72ea30960dcc56f70ba26d18d6d2bded342b93e54192069ef1adaac4c6` |
-| `merge` | another publisher's version merging `minimal`: two parents | `sha256:0e6fdf99d648cefb59417eefc81c88884e9150ee4c28cce5e2a0494cb858157f` |
-| `searches` | an explore search's two segments and a score sidecar, with verdicts | `sha256:69836e167a7a2207aa5a9759714b9478134d5df36226cbf866c317adda2f19a4` |
+| `minimal` | three Life patterns, a sighting, a Quick Start entry, ratings by the publisher, a consented pseudonymous rater and a group of both | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
+| `retraction` | a second version retracting a pattern, adding one and renaming another (`rev` 2) | `sha256:7bb0d0fd2312437e0c544e993adfc82b8a3573cf258c36a2197de7bb2faf2c7e` |
+| `merge` | another publisher's version merging `minimal`: two parents | `sha256:c404c65b80861d9bb95ca1f5f5455a3f68123373efdf561396562f170bcab588` |
+| `searches` | an explore search's two segments and a score sidecar, with verdicts | `sha256:38af93e6e3d675e82edfee2ab866e85721fcced3b3d0a0f81970c9046c1c7de7` |
 | `media` | a poster and a thumbnail | `sha256:318ed4ed00f83228bb2204aee87ee578d7dd0c5f1c07ddd337fc2b2271f406f3` |
-| `aperiodic` | patterns on a Penrose kite-and-dart patch, with the reference patch | `sha256:f0add939fb55f54c0c6b3fc2ac302e4174ce1eff2a98e6ce37f4669e3b3027dd` |
-| `export` | `minimal` as an export | `sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6` |
+| `aperiodic` | patterns on a Penrose kite-and-dart patch, with the reference patch | `sha256:96d960bec9f37024594372e1e3370630eb27ba4329ade27ca13fe2b4977b12e4` |
+| `ants` | two ant runs on the square grid: Langton's ant (a highway, named) and LLRR (symmetric growth) | `sha256:c5f2ab90b2bb2f269a62db194cc951eb77f0753b18e4658d93b0749ad53b317d` |
+| `export` | `minimal` as an export | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
 
 Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
 fixed, including the times a search stamps on what it finds (a find's date and its verification's),

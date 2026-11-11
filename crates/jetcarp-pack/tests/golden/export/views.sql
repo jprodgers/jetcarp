@@ -1,4 +1,4 @@
--- DuckDB views over JETCARP pack version sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6 (feed golden-a).
+-- DuckDB views over JETCARP pack version sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6 (feed golden-a).
 -- Not part of the format: run `duckdb -init views.sql` in this folder, or replace
 -- the paths with this folder's URL to query a pack in place over HTTPS.
 CREATE OR REPLACE VIEW annotations AS SELECT * FROM read_parquet(['tables/annotations/part-000001.parquet'], union_by_name = true);

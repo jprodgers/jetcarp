@@ -1,1 +1,0 @@
-{"children":[],"format":"jetcarp-index","parts":[{"bytes":1871,"first":"rater-0000000000001000","last":"rater-0000000000002000","object":"sha256:c3daf6fe285db9cdee05356a3376116644e42eb516350478a9b06cb2d591d554","partition":{},"rows":3}],"schema":"jetcarp-raters 1","table":"raters","version":"1.0"}

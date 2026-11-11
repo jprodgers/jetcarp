@@ -3,7 +3,7 @@
 Golden pack: minimal. Made by JETCARP's tests; never rewritten.
 
 - Feed: `golden-a`, version golden-1, made 2026-11-11T00:00:00Z
-- Version id (manifest hash): `sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6`
+- Version id (manifest hash): `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6`
 - Publisher key: `SHA256:ACp7het+5at0PuMIyNhhqe8OXAJ9oehORSHEyzwQYcg`
 - Licence: CC0-1.0
 - Creators: Golden Publisher A
