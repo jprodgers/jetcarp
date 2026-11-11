@@ -194,8 +194,8 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
-rows 1, 2, ...: today `reverified`. The records brought in from CART are the one exception to how row
-0 is written: theirs is their discovery in CART, and their row 1 the import (see
+rows 1, 2, ...: today `reverified`. The records brought in from CART's catalog and from two early development catalogs are the one
+exception to how row 0 is written: theirs is their discovery, and their row 1 the import (see
 [Records from CART](#records-from-cart)).
 
 ## Aliases
@@ -226,6 +226,14 @@ commit `f3492e8` is the last that has it. What the import did:
   the job that saw it first, with engine version `CART 0.1.0` and the geometry pin it was verified
   with in 0.4.0; the record's own provenance gives the same date. Row 1, `imported`, is the
   import.
+- **Two more catalogs.** The same tool brought in two catalogs that JETCARP's development builds
+  wrote in CART's format before the library had a schema: the Life census and the mining hunts. Their
+  records were verified and merged in the same way, and their row 0 states the engine version the
+  records give (`0.4.0`).
+- **Counts.** The library holds 723,736 records: 415,086 from CART's catalog (its 416,392 records,
+  of which 2,498 merged into 1,192), 308,595 from the census (whose other 487 records were already
+  there and gained their rules), and 55 from the hunts (86 already there). 295 of them are
+  spaceships.
 
 ## Tables
 
