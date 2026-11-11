@@ -98,6 +98,36 @@ fn every_golden_pack_reads_and_checks() {
     }
 }
 
+/// The golden aperiodic library, made and published twice with the wall clock in another
+/// second each time, gives byte-identical stores: a search's finds keep no time of their own.
+#[test]
+fn an_aperiodic_library_publishes_the_same_bytes_twice() {
+    let tmp = temp("golden-twice");
+    let mut stores = vec![];
+    for n in 0..2 {
+        let lib = aperiodic_library(&tmp.join(format!("lib{n}")));
+        let to = tmp.join(format!("store{n}"));
+        publish_into(
+            &lib,
+            PUBLISHER_A,
+            "Golden Publisher A",
+            &opts("golden-ap", &to, "aperiodic"),
+        );
+        stores.push(files(&to));
+        // The next library is made in a later second, so a time that leaks into a pack shows.
+        let end = jetcarp_core::pattern::now_utc();
+        while jetcarp_core::pattern::now_utc() == end {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+    assert!(stores[0].iter().any(|f| f.0.ends_with(".parquet")));
+    let names = |s: &[(String, Vec<u8>)]| s.iter().map(|f| f.0.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&stores[0]), names(&stores[1]));
+    for (a, b) in stores[0].iter().zip(&stores[1]) {
+        assert!(a.1 == b.1, "{} differs between the two", a.0);
+    }
+}
+
 /// `ssh-keygen -Y verify` on a version's manifest signature, if `ssh-keygen` is installed.
 fn ssh_keygen_verify(store: &Path, v: &jetcarp_pack::read::Version) {
     if std::process::Command::new("ssh-keygen")
@@ -484,9 +514,7 @@ fn write_golden_packs() {
 
     // aperiodic: patterns found on a Penrose kite-and-dart patch, with the family's reference
     // patch.
-    let ap = Library::open(work.join("lib-ap"));
-    aperiodic_search(&ap);
-    fix_library(&ap);
+    let ap = aperiodic_library(&work.join("ap"));
     put(
         "aperiodic",
         publish_into(
@@ -620,6 +648,39 @@ fn fake_search(dir: &Path, uuid: &str) {
         serde_json::to_string_pretty(&m).unwrap(),
     )
     .unwrap();
+}
+
+/// A library of patterns found by a bounded search on a Penrose kite-and-dart patch, with
+/// every time fixed.
+///
+/// A search stamps what it finds with the wall clock: each record's find (`provenance.date`,
+/// which becomes its provenance row 0 and the `run` JSON) and its verification. So the search
+/// runs in a scratch library, and its finds are copied into the golden one with those times
+/// set to [`FIXED`], under a job of the search's kind.
+fn aperiodic_library(dir: &Path) -> Library {
+    let found = Library::open(dir.join("search"));
+    aperiodic_search(&found);
+    let lib = Library::open(dir.join("lib"));
+    let job = lib
+        .create_job("search", &serde_json::json!({"label": "golden search"}))
+        .unwrap();
+    let recs: Vec<_> = found
+        .list()
+        .unwrap()
+        .into_iter()
+        .map(|mut r| {
+            r.provenance.date = FIXED.into();
+            r.verified.date = FIXED.into();
+            r.created = FIXED.into();
+            r.updated = FIXED.into();
+            r
+        })
+        .collect();
+    for r in lib.add_many(recs, Some(job)).unwrap() {
+        r.unwrap();
+    }
+    fix_library(&lib);
+    lib
 }
 
 /// Patterns from a bounded search on a Penrose kite-and-dart patch.

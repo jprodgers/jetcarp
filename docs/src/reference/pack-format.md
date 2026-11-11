@@ -856,7 +856,10 @@ packs; none is ever deleted or rewritten.
 | `aperiodic` | patterns on a Penrose kite-and-dart patch, with the reference patch | `sha256:f0add939fb55f54c0c6b3fc2ac302e4174ce1eff2a98e6ce37f4669e3b3027dd` |
 | `export` | `minimal` as an export | `sha256:83f9a55da2225566a271e13a4f9ef8a0bf1b6aa51e9c275be5cb79710d56d9e6` |
 
-Their keys are Ed25519 keys from fixed seeds and their raters are invented.
+Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
+fixed, including the times a search stamps on what it finds (a find's date and its verification's),
+so making them again gives the same bytes; a test makes and publishes the aperiodic one twice, in
+different seconds, and compares every file.
 
 ### Conformance levels
 
