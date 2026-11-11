@@ -1,6 +1,6 @@
 {
  "name": "Life spaceship c1a8b0bf on 3-uniform tiling k3-010",
- "description": "A period-38 spaceship in Conway's Life (B3/S23) on the 3-uniform tiling k3-010, with touching neighbours, 8 to 24 cells, moving four lattice steps every 38 generations (2c/19). It runs the same way in the 2,048 rules from B3/S23 to B3,8,9,10/S2,3,8,9,10. JETCARP's Life census met it in 0.0% of its soups on this tiling.",
+ "description": "A period-38 spaceship in Conway's Life (B3/S23) on the 3-uniform tiling k3-010, with touching neighbours, 8 to 24 cells, moving four lattice steps every 38 generations (2c/19). It runs the same way in the 2,048 rules from B3/S23 to B3,8,9,10/S2,3,8,9,10. JETCARP's Life census met it in 23 of its 50,000 soups on this tiling.",
  "tiling": {
   "family": "periodic",
   "params": {
