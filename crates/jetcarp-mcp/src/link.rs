@@ -426,7 +426,7 @@ fn serve(
 pub fn host_call(args: &Value) -> Result<Value, String> {
     const NOT_RUNNING: &str = "the JETCARP background host is not running";
     let info = EndpointInfo::read_from(HOST_ENDPOINT, NOT_RUNNING)?;
-    let mut c = AppClient::connect(Some(info)).map_err(|_| NOT_RUNNING.to_string())?;
+    let mut c = AppClient::connect_as(info, Peer::Host).map_err(|_| NOT_RUNNING.to_string())?;
     let msg = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": HOST_TOOL, "arguments": args}});
     let r = c.call(&msg)?;
@@ -459,26 +459,58 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/// The CLI side: one authenticated connection to the app.
+/// Which program a connection is to, so that its errors name it: the app (AI control) or the
+/// background host (`jetcarp host ...`), which listen the same way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Peer {
+    App,
+    Host,
+}
+
+impl Peer {
+    fn name(self) -> &'static str {
+        match self {
+            Peer::App => "the JETCARP app",
+            Peer::Host => "the JETCARP background host",
+        }
+    }
+    /// What to try when it will not talk.
+    fn hint(self) -> &'static str {
+        match self {
+            Peer::App => "Turn AI control off and on again in the app, or pass the token it shows.",
+            Peer::Host => "It may be stopping or starting; try again in a moment.",
+        }
+    }
+}
+
+/// The CLI side: one authenticated connection to the app (or the background host).
 pub struct AppClient {
     reader: BufReader<TcpStream>,
     writer: TcpStream,
     pub port: u16,
+    peer: Peer,
 }
 
 impl AppClient {
-    /// Connect using `info`, or the endpoint file when `None`.
+    /// Connect to the app using `info`, or the endpoint file when `None`.
     pub fn connect(info: Option<EndpointInfo>) -> Result<AppClient, String> {
         let info = match info {
             Some(i) => i,
             None => EndpointInfo::read()?,
         };
+        Self::connect_as(info, Peer::App)
+    }
+
+    /// Connect to `peer` at `info`; errors name it.
+    pub fn connect_as(info: EndpointInfo, peer: Peer) -> Result<AppClient, String> {
+        let who = peer.name();
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, info.port));
-        let s = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| {
-            format!(
+        let s = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| match peer {
+            Peer::App => format!(
                 "could not reach the JETCARP app on 127.0.0.1:{} ({e}). Is the app open with AI control on?",
                 info.port
-            )
+            ),
+            Peer::Host => format!("could not reach {who} on 127.0.0.1:{} ({e})", info.port),
         })?;
         let mut writer = s.try_clone().map_err(|e| e.to_string())?;
         let mut reader = BufReader::new(s);
@@ -490,12 +522,13 @@ impl AppClient {
         let mut line = String::new();
         reader
             .read_line(&mut line)
-            .map_err(|e| format!("app handshake: {e}"))?;
+            .map_err(|e| format!("{who} did not answer the handshake ({e}). {}", peer.hint()))?;
         let v: Value = serde_json::from_str(&line).unwrap_or(Value::Null);
         if v["ok"] != json!(true) {
             return Err(format!(
-                "the JETCARP app refused the connection: {}. Turn AI control off and on again in the app, or pass the token it shows.",
-                v["error"].as_str().unwrap_or("no answer")
+                "{who} refused the connection: {}. {}",
+                v["error"].as_str().unwrap_or("no answer"),
+                peer.hint()
             ));
         }
         reader
@@ -506,6 +539,7 @@ impl AppClient {
             reader,
             writer,
             port: info.port,
+            peer,
         })
     }
 
@@ -526,7 +560,8 @@ impl AppClient {
         msg: &Value,
         note: &mut dyn FnMut(&Value),
     ) -> Result<Value, String> {
-        writeln!(self.writer, "{msg}").map_err(|e| format!("app link: {e}"))?;
+        let who = self.peer.name();
+        writeln!(self.writer, "{msg}").map_err(|e| format!("link to {who}: {e}"))?;
         self.writer.flush().map_err(|e| e.to_string())?;
         if msg.get("id").is_none() {
             return Ok(Value::Null);
@@ -536,12 +571,15 @@ impl AppClient {
             let n = self
                 .reader
                 .read_line(&mut line)
-                .map_err(|e| format!("app link: {e}"))?;
+                .map_err(|e| format!("link to {who}: {e}"))?;
             if n == 0 {
-                return Err("the JETCARP app closed the connection".into());
+                return Err(match self.peer {
+                    Peer::App => format!("{who} closed the connection"),
+                    Peer::Host => format!("{who} closed the connection (it may be stopping)"),
+                });
             }
-            let v: Value =
-                serde_json::from_str(&line).map_err(|e| format!("app link: bad reply: {e}"))?;
+            let v: Value = serde_json::from_str(&line)
+                .map_err(|e| format!("link to {who}: bad reply: {e}"))?;
             if v.get("method").is_some() && v.get("id").is_none() {
                 note(&v);
                 continue;

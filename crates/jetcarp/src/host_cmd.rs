@@ -10,7 +10,7 @@ use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings,
 };
 use jetcarp_display::saver;
-use jetcarp_mcp::link::host_call;
+use jetcarp_mcp::link::{host_call, host_gone};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
@@ -168,7 +168,7 @@ pub enum HostCmd {
         #[arg(value_enum)]
         action: GnomeAction,
     },
-    /// The Windows screen saver.
+    /// The screen saver (Windows and macOS).
     Saver {
         #[arg(value_enum)]
         action: SaverAction,
@@ -282,10 +282,11 @@ fn settle_picture(s: &HostSettings) {
     }
 }
 
-/// Whether the host stops answering within a few seconds.
+/// Whether the host has gone within a few seconds (its port closed: a status call could wait for
+/// an answer from a host that is closing).
 fn gone_soon() -> bool {
     for _ in 0..50 {
-        if host_call(&json!({"action": "status"})).is_err_and(|e| e.contains("not running")) {
+        if host_gone() {
             return true;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
