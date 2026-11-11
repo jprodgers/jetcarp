@@ -878,6 +878,7 @@ impl JetcarpApp {
         if let Some(id) = preset_buttons(ui, &self.reseed.settings.presets) {
             self.install_preset(&id);
         }
+        auto_preset_combo(ui, &mut self.reseed.settings);
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.reseed.preset_name)
@@ -910,7 +911,11 @@ impl JetcarpApp {
                         }
                     }
                     if let Some(d) = del {
-                        self.reseed.settings.presets.retain(|p| p.name != d);
+                        let s = &mut self.reseed.settings;
+                        s.presets.retain(|p| p.name != d);
+                        if s.auto_preset == d && preset_policies(&d, 1).is_none() {
+                            s.auto_preset = ReseedSettings::default().auto_preset;
+                        }
                         ui.close();
                     }
                 });
@@ -1050,6 +1055,42 @@ pub(super) fn preset_buttons(ui: &mut egui::Ui, saved: &[NamedPolicies]) -> Opti
         }
     });
     install
+}
+
+/// The preset *Seed → Auto reseed* installs when a world has no policies: a built-in one or one
+/// of the saved ones (starred), kept in the app settings.
+fn auto_preset_combo(ui: &mut egui::Ui, s: &mut ReseedSettings) {
+    let label = auto_preset_label(&s.auto_preset, &s.presets);
+    ui.horizontal(|ui| {
+        ui.label("Seed → Auto reseed installs")
+            .on_hover_text("The preset that Seed → Auto reseed puts in when the world has no policies (with policies, it switches them all off or on)");
+        egui::ComboBox::from_id_salt("reseed-auto-preset")
+            .selected_text(label)
+            .show_ui(ui, |ui| {
+                for p in PRESETS {
+                    ui.selectable_value(&mut s.auto_preset, p.id.to_string(), p.name)
+                        .on_hover_text(p.hint);
+                }
+                for p in &s.presets {
+                    ui.selectable_value(&mut s.auto_preset, p.name.clone(), format!("★ {}", p.name));
+                }
+            });
+    });
+}
+
+/// How the combo names the auto-reseed preset `id`: a built-in's name, a saved preset starred,
+/// or the screensaver preset's name for one that no longer exists (it falls back to that).
+fn auto_preset_label(id: &str, saved: &[NamedPolicies]) -> String {
+    if let Some(p) = PRESETS.iter().find(|p| p.id == id) {
+        return p.name.to_string();
+    }
+    if saved.iter().any(|p| p.name == id) {
+        return format!("★ {id}");
+    }
+    PRESETS
+        .iter()
+        .find(|p| p.id == ReseedSettings::default().auto_preset)
+        .map_or_else(|| id.to_string(), |p| p.name.to_string())
 }
 
 /// A preset's policies by id (built in) or name (saved), for a grid of `cells` cells.
@@ -1240,6 +1281,21 @@ mod tests {
         assert_eq!(pct(0.0025), "0.25%");
         assert_eq!(pct(0.5), "50%");
         assert_eq!(pct(0.00001), "<0.01%");
+    }
+
+    #[test]
+    fn the_auto_reseed_preset_is_named_in_its_combo() {
+        let saved = [NamedPolicies {
+            name: "mine".into(),
+            policies: preset_policies("storm", 1000).unwrap(),
+        }];
+        assert_eq!(auto_preset_label("screensaver", &saved), "Screensaver");
+        assert_eq!(auto_preset_label("storm", &saved), "Storm");
+        assert_eq!(auto_preset_label("mine", &saved), "★ mine");
+        // A saved preset deleted since: Seed → Auto reseed falls back to the screensaver preset.
+        assert_eq!(auto_preset_label("gone", &saved), "Screensaver");
+        assert!(find_preset("gone", &saved, 1000).is_none());
+        assert!(find_preset("mine", &saved, 1000).is_some());
     }
 
     #[test]

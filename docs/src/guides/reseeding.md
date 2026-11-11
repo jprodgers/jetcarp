@@ -104,8 +104,9 @@ every 3 generations), the *Cooldown*, and which automaton it reseeds. Each shows
 fired. *Add policy* and *Remove all* do what they say. Your edits are applied a moment after you stop
 changing them, as one logged command, so they are saved with the scene.
 
-*Seed → Auto reseed* switches all the policies on or off at once; when there are none, it installs the
-Screensaver preset.
+*Seed → Auto reseed* switches all the policies on or off at once; when there are none, it installs a
+preset: Screensaver, unless you choose another (one of yours too) under *Seed → Auto reseed installs*
+in the pane's presets.
 
 ## From the command line
 
