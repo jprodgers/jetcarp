@@ -417,14 +417,14 @@ fn aliases_resolve_ids_and_short_ids() {
     // A short id works when it is unique.
     assert_eq!(lib.get(&g.id[..8]).unwrap().id, g.id);
     // Ids from before a geometry change, kept as aliases.
-    lib.add_alias("25e004f4f640c35a", "pattern", &g.id, "geometry-change")
+    lib.add_alias("cccc3333cccc3333", "pattern", &g.id, "geometry-change")
         .unwrap();
     lib.add_alias("aaaa1111aaaa1111", "pattern", &g.id, "geometry-change")
         .unwrap();
     lib.add_alias("aaaa2222aaaa2222", "pattern", &b.id, "geometry-change")
         .unwrap();
-    assert_eq!(lib.get("25e004f4f640c35a").unwrap().id, g.id);
-    assert_eq!(lib.get("25e004f4").unwrap().id, g.id);
+    assert_eq!(lib.get("cccc3333cccc3333").unwrap().id, g.id);
+    assert_eq!(lib.get("cccc3333").unwrap().id, g.id);
     let e = lib.get("aaaa").unwrap_err();
     assert!(
         e.contains("matches") && e.contains(&g.id) && e.contains(&b.id),
@@ -439,7 +439,7 @@ fn aliases_resolve_ids_and_short_ids() {
     );
     // Removing the record removes its aliases.
     lib.remove(&g.id).unwrap();
-    assert!(lib.get("25e004f4").is_err());
+    assert!(lib.get("cccc3333").is_err());
     assert!(lib.aliases("pattern", &g.id).unwrap().is_empty());
 }
 
