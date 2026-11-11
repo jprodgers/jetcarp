@@ -114,6 +114,14 @@ because they were very common in their search or run in HighLife. All are listed
 in [Findings](../research/findings.md#the-60-objects); see also
 [What is new in JETCARP](../research/contributions.md).
 
+Those ships run in rules other than Life. A census of Life itself (`B3/S23`), 50,000 random soups on
+each of the 81 2- and 3-uniform tilings, found Life spaceships on 5 of the 20 2-uniform tilings and on
+19 of the 61 3-uniform ones. To our knowledge, Life had not been reported on any 3-uniform tiling
+before, nor on any 2-uniform tiling but k2-007, where Martin Büttner very likely found a period-20 ship
+in 2014. Most of what the census found is common ships flying in pairs, or ships of simpler tilings
+running in corridors; the single ships that passed every check are in
+[Life on the Archimedean and k-uniform tilings](../research/findings.md#life-on-the-archimedean-and-k-uniform-tilings).
+
 <figure>
 <picture>
   <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">

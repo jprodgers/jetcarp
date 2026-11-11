@@ -215,6 +215,16 @@ only these particular ships are claimed. Only two of the 60 run in
 Life itself: both are on the snub square tiling, both are built around Guttesen's glider, and both are
 flagged. The rest are in other rules.
 
+The searches behind those 60 ran Life itself on only a few tilings, though. A census of Life on all 92
+Archimedean, 2-uniform and 3-uniform tilings, 50,000 random soups on each, found Life spaceships on 28
+of them: Conway's glider and spaceships on the square grid, Guttesen's two gliders, a ship on 3.3.3.4.4
+that is probably the one EricG reported in 2013, the period-20 ship on k2-007 that is very likely
+Büttner's, and ships on 5 of the 2-uniform and 19 of the 3-uniform tilings. To our knowledge, nobody
+had reported running Life on any of those 2- and 3-uniform tilings but k2-007. Most of the census's
+ships are common ships flying in pairs, or ships of a simpler tiling running in a corridor; those that
+passed every check are listed in
+[Life on the Archimedean and k-uniform tilings](../research/findings.md#life-on-the-archimedean-and-k-uniform-tilings).
+
 Ships found on isohedral tilings are not claimed at all. Each isohedral tiling has the neighbour graph
 of one of the eleven Laves tilings, and every "ship" JETCARP found on one is a known ship of the square
 or triangular grid in another drawing, Conway's glider among them. The full list, with every check, is

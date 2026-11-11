@@ -265,7 +265,8 @@ credit and source are given:
 - **EricG**: Life-like rules on all eight mixed Archimedean tilings and their duals, emulated in
   Golly, with spaceships reported on every Archimedean tiling (ConwayLife forums, 2013); the earliest
   survey of these tilings that we know of, and the reason four of JETCARP's ships are flagged rather
-  than claimed. See [What is new in JETCARP](../research/contributions.md#4-spaceships-on-non-square-tilings).
+  than claimed. The one Life ship JETCARP's census finds on 3.3.3.4.4 is probably the one he reported
+  there. See [What is new in JETCARP](../research/contributions.md#4-spaceships-on-non-square-tilings).
 - **Peter Taylor**, **Kevin L** and **Martin Büttner** (now Martin Ender): Life on non-square tilings in
   a 2014 Code Golf challenge; Büttner's period-20 spaceship, very likely the one JETCARP's hunts find in
   Life on the 2-uniform tiling k2-007, is the earliest ship on a k-uniform tiling that we know of.

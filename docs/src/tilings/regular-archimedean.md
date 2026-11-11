@@ -148,6 +148,17 @@ JETCARP's catalogue first listed as separate ships. In Life on 3.3.4.3.4, JETCAR
 ships built around his glider, of periods 16 and 24; we found no earlier report of them. Every ship is
 listed in [Findings](../research/findings.md#the-60-objects).
 
+A census of Life itself, 50,000 random soups on each of the eleven tilings, found spaceships only on
+the square grid, 3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 (see
+[Life on the Archimedean and k-uniform tilings](../research/findings.md#life-on-the-archimedean-and-k-uniform-tilings)).
+On the first three they are Conway's and Guttesen's ships, the pairs and bound pairs those form, and
+the larger snub-square ships above. On 3.3.3.4.4 it is one ship, now and then flying in a pair: eight
+to twelve cells, period 2, moving along the rows at c/2, in about one soup in eleven. It is probably
+the "common spaceship (although it only travels horizontally)" that EricG reported there in 2013,
+although his patterns are not online to compare. On the hexagonal and triangular grids, 4.8.8,
+3.12.12, 4.6.12, 3.4.6.4 and 3.3.3.3.6 no soup produced a Life ship; on the last five, Guttesen and the
+2014 Code Golf challenge had found none either.
+
 <figure class="pair">
 <div><picture>
   <source srcset="../images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">

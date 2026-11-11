@@ -100,8 +100,8 @@ candidates, 60 distinct objects survived the checks in the box below. We claim, 
 the 25 of them that are single ships, carry no flag, and run in none of the rules in which EricG
 reported ships: six on Archimedean tilings (3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6), thirteen on 2-uniform
 tilings and six on 3-uniform tilings. Every one is listed, with its rule range, in
-[Findings](findings.md#the-60-objects). Each runs the same way in a whole range of rules; none runs in
-Life itself.
+[Findings](findings.md#the-60-objects). Each runs the same way in a whole range of rules; none of
+these 25 runs in Life itself. Life's own spaceships on these tilings are a separate claim, below.
 
 The other 35 are described, not claimed:
 
@@ -210,6 +210,20 @@ H. S. Guttesen studied Life (`B3/S23`) on six Archimedean lattices and found no 
 4.6.12, 3.12.12 or 3.3.3.3.6 ([Guttesen 2026](bibliography.md#guttesen2026game)); JETCARP's ships there
 are in other rules. We found no other report of Life-like spaceships on k-uniform tilings.
 
+**Claim (to our knowledge): Life on the 2- and 3-uniform tilings.** In November 2026 JETCARP ran a
+census of Life itself (`B3/S23`, touching neighbours) on all 92 Archimedean, 2-uniform and 3-uniform
+tilings, 50,000 random soups on each
+([Findings](findings.md#life-on-the-archimedean-and-k-uniform-tilings)). By the search above, Life has
+not been reported on any 3-uniform tiling before, nor on any 2-uniform tiling but k2-007, where Büttner
+very likely found his ship. The census finds Life spaceships on 19 of the 61 3-uniform tilings and 5 of
+the 20 2-uniform ones. After the same checks as the candidates above, 26 of its objects are single
+ships with no flag, on 2 of the 2-uniform and 8 of the 3-uniform tilings, and to our knowledge they
+have not been reported before; 13 of them are large ships of k3-055 that may share a common engine.
+Twelve more passed the same checks but are flagged: ten are so common on their tiling that anyone who
+ran Life there would see them at once, although we know of no one who has, and two lie on tilings
+where others have run Life (3.3.4.3.4 and k2-007). Everything else the census found is a known ship,
+two or more smaller ships flying together, or a smaller ship with a passenger.
+
 **Not claimed.**
 
 - **Guttesen's gliders.** EricG reported spaceships in Life on the kagome (3.6.3.6) and snub square
@@ -236,6 +250,13 @@ are in other rules. We found no other report of Life-like spaceships on k-unifor
   simplest tiling it runs on.
 - **The same ship catalogued twice.** `25e004f4` is `7860a67a`, and `f62ba07d` is `c15dd310`: the
   same live tiles at every generation, at positions with other neighbour counts around them.
+- **The known Life ships of the census.** Conway's glider and spaceships; Guttesen's two gliders, also
+  in the kagome corridors of three 3-uniform tilings; the period-2 ship on 3.3.3.4.4, the only Life ship
+  the census found there, which is probably the "common spaceship (although it only travels
+  horizontally)" EricG reported in 2013; and the period-20 ship on k2-007, very likely Büttner's.
+  Neither of the last two could be compared cell for cell, since EricG's patterns are offline and
+  Büttner's animation could not be read. The lightweight spaceship also runs in the strips of squares
+  of k3-010, and the census found it there too.
 
 <figure class="pair">
 <div><picture>
@@ -282,6 +303,11 @@ the snub square tiling 3.3.4.3.4. Both are credited to
   counts everywhere (but see the congruence check above).
 - **Robustness.** Each ship ran 40 periods on a wrapped patch of about 30,000 cells, on a smaller
   patch and with dead edges, with identical results.
+- **The Life census.** Every spaceship record of the census of Life on the 92 Archimedean, 2-uniform
+  and 3-uniform tilings went through the same checks: the confirmation runs, the compound and
+  derivative tests (with a second, larger search for a smaller ship inside each single one),
+  congruence with every other record and with the candidates above, and placement on all 181
+  tilings in Life.
 - **Not yet searched.** The ConwayLife.com forums, where hobbyists report most new patterns, refuse
   automated reading, so our prior-art search could not cover them. We will ask the community when the
   results are posted there.
@@ -393,8 +419,10 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
   candidates have been seen before, and ask EricG whether his 2013 Tiling Project patterns can be
   shared again, so the flagged 4.8.8 and 3.12.12 ships, and the claimed Archimedean ones, can be
   compared with his.
-- Find Martin Büttner's 2014 period-20 ship, confirm its tiling and rule, and add it to the
-  catalogue with his credit.
+- Find Martin Büttner's 2014 period-20 ship, confirm its tiling and rule, and compare it cell for
+  cell with the census's period-20 ship on k2-007, which is very likely his.
+- Compare the census's 3.3.3.4.4 ship with EricG's, and look more closely at the large Life ships of
+  k3-055, which may share a common engine.
 - Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once he
   publishes them.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.
