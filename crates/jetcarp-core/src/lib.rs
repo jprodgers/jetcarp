@@ -30,6 +30,7 @@ pub mod paths;
 pub mod pattern;
 pub mod penrose;
 pub mod pile;
+pub mod pin;
 pub mod quickstart;
 pub mod render;
 pub mod reseed;

@@ -372,6 +372,14 @@ impl Topology {
         }
     }
 
+    /// The geometry pin of a tiling: a hash of its unit cell's polygons and offset table
+    /// (periodic tilings), or of the patch its spec names (aperiodic ones), whatever grid size
+    /// the spec gives. Records carry it so a library can flag them when the engine's geometry
+    /// changes; see [`crate::pin`] for exactly what is hashed.
+    pub fn geometry_pin(spec: &TilingSpec) -> Result<crate::pin::GeometryPin, String> {
+        crate::pin::geometry_pin(spec)
+    }
+
     pub fn build(spec: &TilingSpec) -> Result<Topology, String> {
         let fam = families::family(&spec.family)
             .ok_or_else(|| format!("unknown tiling family '{}'", spec.family))?;
