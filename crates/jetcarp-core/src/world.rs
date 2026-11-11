@@ -667,8 +667,6 @@ pub struct Applied {
 pub struct Record {
     pub generation: u64,
     pub hash: String,
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     /// True when some cells have missing neighbours (dead edges or a patch boundary).
     pub dead_boundary: bool,
@@ -678,8 +676,6 @@ pub struct Record {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scene {
     #[serde(default)]
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     #[serde(default = "fmt1")]
     pub format: u32,

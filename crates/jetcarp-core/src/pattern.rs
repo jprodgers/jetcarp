@@ -215,8 +215,6 @@ pub struct Provenance {
     /// Generation of the run when the object was taken.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generation: Option<u64>,
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     /// UTC time, `YYYY-MM-DDTHH:MM:SSZ`.
     pub date: String,

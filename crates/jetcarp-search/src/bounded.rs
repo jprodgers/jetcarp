@@ -112,8 +112,6 @@ pub struct GroupReport {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SearchReport {
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub spec: SearchSpec,
     pub groups: Vec<GroupReport>,

@@ -219,8 +219,6 @@ pub struct MoverReport {
     pub nb: Nb,
     pub family: String,
     pub note: String,
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub date: String,
 }

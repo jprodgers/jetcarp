@@ -28,8 +28,6 @@ pub struct Verification {
     /// Aperiodic patterns: the sites it was run at (its own and other matching ones).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub sites: u32,
-    /// Records written by CART, JETCARP's predecessor, call this `cart_version`.
-    #[serde(alias = "cart_version")]
     pub jetcarp_version: String,
     pub date: String,
 }
