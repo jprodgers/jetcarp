@@ -109,7 +109,9 @@ impl ObjClass {
     }
     /// Spaceship speed in lattice steps, like `c/4 diagonal` or `c/2 orthogonal`, on a lattice
     /// with basis `lattice` (`dx`, `dy` count its vectors). The fraction is the larger of `|dx|`
-    /// and `|dy|` over the period. The direction is named in the lattice's own terms
+    /// and `|dy|` over the period, in the basis as it is, on hexagonal lattices too (the convention
+    /// Golly's hexagonal rules use: there (1, 1) counts as one step, as (1, 0) does). The
+    /// direction is named in the lattice's own terms
     /// ([`direction`]), or left out where the lattice has no axes to name it by; `None` names
     /// it on the square grid's basis.
     pub fn speed_in(&self, lattice: Option<(P, P)>) -> Option<String> {

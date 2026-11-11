@@ -281,7 +281,10 @@ rebuilt as it travels.
 Its speed is written as a fraction of one lattice step per generation, such as c/4, and its direction
 in the lattice's own terms: *orthogonal* along one of the lattice's shortest steps (on a rectangular
 lattice, one of its two mirror axes), *diagonal* halfway between two of them (square and hexagonal
-lattices only), and *oblique* otherwise. A lattice with no mirror axes gets no word.
+lattices only), and *oblique* otherwise. A lattice with no mirror axes gets no word. The fraction
+counts steps in the lattice's basis: the larger of the displacement's two coordinates, over the
+period. On a hexagonal lattice, whose basis vectors are 60° apart, that is the convention Golly's
+hexagonal rules use, so (1, 1), halfway between two shortest steps, also counts as one step.
 
 **Stage.** A palette's colour for the area outside the tiling.
 
