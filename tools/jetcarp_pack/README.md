@@ -1,11 +1,12 @@
 # jetcarp_pack: an independent reader for pack format 1.0
 
-A second implementation of JETCARP's pack format, written only from the pack specification
-(`design/pack-spec.md` sections 1 to 26, with section 24's fixes taken as agreed) and the book's
-`library-format.md`, `rule-notation.md` and the Generations and Life-like pages that the spec
-includes by reference. No JETCARP source was read to answer a format question. Where the two
-implementations disagree, the spec is unclear or wrong; [SPEC_QUESTIONS.md](SPEC_QUESTIONS.md) lists
-every such place found while writing this one.
+A second implementation of JETCARP's pack format. It implements the normative spec,
+`docs/src/reference/pack-format.md`, with `library-format.md` for identity texts, and the automata
+pages it points to for cell states. It was first written from the design alone. Since then it has
+been cross-checked against JETCARP's golden packs and against `jetcarp pack check` and
+`jetcarp pack import` run as a black box. No JETCARP source was read to answer a format question;
+only the book, the test vectors and the golden packs. [SPEC_QUESTIONS.md](SPEC_QUESTIONS.md) records
+every question found, how the spec settled it, and the cross-check's disagreements.
 
 Python 3.10 or later, [pyarrow](https://arrow.apache.org/docs/python/), and the standard library.
 Level 2 runs `ssh-keygen -Y verify` (OpenSSH 8.1 or later).
@@ -15,96 +16,101 @@ Level 2 runs `ssh-keygen -Y verify` (OpenSSH 8.1 or later).
 ```sh
 python3 -m venv ~/venvs/jetcarp-pack && ~/venvs/jetcarp-pack/bin/pip install pyarrow
 cd tools/jetcarp_pack
-mkdir -p /tmp/golden && tar -xf testdata/golden.tar -C /tmp/golden
-~/venvs/jetcarp-pack/bin/python -m jetcarp_pack check /tmp/golden/minimal      # levels 1, 2 and 3
+~/venvs/jetcarp-pack/bin/python -m jetcarp_pack check testdata/minimal      # levels 1, 2 and 3
 ```
 
-`pip install tools/jetcarp_pack` also installs a `jetcarp-pack` command.
+`pip install tools/jetcarp_pack` also installs a `jetcarp-pack` command. Every command reads a
+store, or an export (a folder holding `pack.json`).
 
 | Command | Level | What it does |
 | --- | --- | --- |
-| `info STORE` | 0 | the store's refs (feed, seq, publisher, manifest) and key statements |
+| `info STORE` | 0 | the refs (feed, seq, publisher, manifest) and key statements |
 | `tables STORE` | 0 | a version's tables: schema, parts, rows, partitions |
 | `rows STORE TABLE [--where col=value] [--columns a,b] [--limit N]` | 0 | rows as JSON |
 | `find STORE ID` | 0 | a pattern or ant by id, unique prefix of 4+ digits, alias or name, with its events, latest annotations and any retraction |
-| `integrity STORE [--no-scan]` | 1 | object, manifest and index hashes; content ids; table consistency |
+| `integrity STORE [--no-scan]` | 1 | object, manifest and index hashes; content ids; pins; table consistency |
 | `authenticity STORE [--state FILE [--accept]]` | 2 | signatures, key statements, refs and `seq` |
 | `replay STORE [--periods N]` | 3 | re-runs periodic patterns from `tilings` and `rules` |
 | `check STORE [--level 1-3]` | 1-3 | levels 1 to N in turn |
 
-Browse commands take `--manifest sha256:...` or `--feed NAME` when the store has several refs.
+Browse commands take `--manifest sha256:...` or `--feed NAME` when a store has several refs.
 `--json` prints the report as JSON; `-v` adds INFO lines. The exit status is 0 when nothing failed,
-1 when a check failed or the pack was refused, and 2 for a store that cannot be opened.
-
-Every finding names its level, a stable code, where it was found and why:
+1 when a check failed or the pack was refused, and 2 for a folder that cannot be opened. Every
+finding names its level, a stable code, where it was found and why:
 
 ```
-FAIL L1 object-hash: patterns part sha256:f0efb3724ca7: objects/sha256/f0/f0ef....parquet hashes to sha256:45d9..., not its name
+FAIL L1 pin: tilings {"family":"square","boundary":"dead"}: pin is 0145310e..., but the geometry gives d748e571...
 FAIL L2 seq-rollback: refs/test-retraction.json: seq 1 is below 2, the last accepted; refusing a rollback
 ```
 
 ## What each level checks
 
 **Level 0, browse.** Opens a version and reads every table and document. Even browsing checks each
-object's hash before using it (section 4), refuses an unknown major version or an unknown
-`requires` (section 15) and an unknown schema number, and applies the limits below.
+object's hash before using it, refuses an unknown major version, `requires` or schema number, and
+applies the limits below.
 
 **Level 1, integrity.**
-- Every file under `objects/` is named `<sha256>.<ext>` in its two-digit folder and hashes to its
-  name. Every manifest and index named by a ref, a parent or `retain` is checked; manifests and
-  indexes must be in RFC 8785 form (their hashes are ids).
-- Each part matches its index entry: bytes, rows, partition, `first`/`last`, and its sort order (by
-  UTF-8 bytes). Each column has the type section 11 gives; unknown columns are ignored.
-- Every pattern id is `sha256(identity + "\n" + pin)[:32]` and every ant id `ant-` plus the same.
-  The identity text is parsed and its lines compared with the typed columns (`phases`, `period`,
-  `d`, `class`, ...). Each record's `pin_key` must be a `tilings` row with the same pin, and every
-  tiling key must be in its one spelling (RFC 8785 values in the fixed member order).
-- Fact rows with the same key must be identical across parts (promise 4). Events, ratings and
-  their consent rules (every rater has a `raters` row; a group's members have all consented),
-  retractions, media objects and the manifest's fields are checked as section 11 describes.
-
-  Not checked: geometry pins (the spec does not yet give the byte layout), Quick Start ids (no
-  identity scheme is given), and search runs beyond their hashes.
+- **Hashes.** Every object hashes to its name; an export's `index/` and `history/` do too.
+  Manifests, indexes and `jetcarp-store.json` must be RFC 8785.
+- **Parts.** Each part matches its index entry: bytes, rows, partition (values checked), `first`
+  and `last`, and its sort order. Each column has its type; a nullable column left out reads as
+  null.
+- **Ids.** Every pattern, ant and Quick Start id is recomputed from its identity text (or scene)
+  and pin. The identity's lines are checked against the typed columns.
+- **Pins.** Every pin is recomputed with the spec's byte layout: from a lattice tiling's
+  geometry columns, or from an aperiodic family's reference patch. Each `pin_key` is rebuilt from
+  `family`, `params` and `edges`. Each neighbour must be listed once, symmetrically.
+- **Content.** Fact rows agree across parts. Every JSON cell is in its one spelling, and no text
+  cell holds a local path. The other rules are checked as the spec gives them: consent (a group's
+  members too), annotations' `rev`, the main verification, sightings' sources, retractions with
+  their publishers, search indexes, media files.
+- **Across versions.** Every parent's retractions are kept, and no part a version adds repeats an
+  event row its parents have. In an export, every file is where the layout puts it.
 
 **Level 2, authenticity.**
-- Key statements: the file name is the key's fingerprint, the fingerprint is the key's, and the
-  signature (namespace `jetcarp-key`) is by the key itself, or for a successor by the key it
-  `supersedes`. Further machine keys are read from `authorised` (section 24 fix 1; the field name is
-  this reader's choice). Revocations, forks (two successors) and unconfirmed supersessions are
-  reported.
-- Manifests: at least one detached signature (`jetcarp-manifest`) by the publisher's key or one of
-  its authorised keys; other valid signatures are endorsements. A key revoked before the manifest
-  was made fails it.
-- Refs: signed (`jetcarp-ref`) by the publisher's current key, pointing to a manifest of the same feed
-  and publisher. With `--state FILE`, a `seq` below the last accepted is a rollback and the same
-  `seq` for another manifest is refused; `--accept` records what passed.
-- Receipts, if any, name their folder's manifest and are signed by their verifier.
+- **Key statements.** A first statement is signed by its own key, a successor by its
+  predecessor, and a revocation by the key or a successor. The file name is the key's SHA-256 in
+  hex, and Ed25519 is the only key type.
+- **Revocation.** A revoked key signs nothing, whatever the dates. A successor stands after a
+  revocation only if it signed it. With `--state`, revocations are kept, so a store serving the
+  old statement again cannot undo one.
+- **Manifests.** A version needs a signature by its publisher's standing key or a machine key it
+  authorises and has not revoked. The signing key is taken from the signature, and must be the one
+  the file is named for.
+- **Refs.** A ref is canonical and signed by the publisher's current key, or a machine key it
+  authorises. With `--state FILE`, a lower `seq` is a rollback, and the same `seq` for another
+  manifest is refused; `--accept` records what passed. Signatures are checked by
+  `ssh-keygen -Y verify` against an allowed-signers file holding only the expected key.
 
-  Signatures are checked by `ssh-keygen -Y verify` against an allowed-signers file holding only the
-  expected key. GitHub confirmation of a lost key is not done (no network).
+**Level 3, replay.** Each still life, oscillator and spaceship on a lattice tiling is re-run on the
+neighbour graph its `tilings` row gives, on an unbounded dead plane:
+- in its rule (its `rule`, else its main verification's), and in every other rule a verification
+  names;
+- with B/S and Generations from the masks, `steps_per_gen` applications a generation, and B0 B/S
+  rules as two complementary rules alternating on even and odd generations.
 
-**Level 3, replay.** For every still life, oscillator and spaceship on a lattice tiling, in each rule
-it was verified in: the neighbourhood is built from the `tilings` row's `edge` or `touch` offsets,
-and the rule from the `rules` row's masks (B/S and Generations), on an unbounded dead plane.
-Every generation for `--periods` periods (default 2) must equal the stored phase moved by the
-displacement so far. The period must be the smallest, and the class must follow from period and
-displacement. The masks are also checked against the rule's notation. Patterns on aperiodic
-tilings, other rule families, B0 rules, puffers, guns and other classes are skipped with a reason.
-Each record has a budget (100,000 generations, 1,000,000 live cells, 20 seconds).
+Every generation for `--periods` periods (default 2) must equal its stored phase moved by the
+displacement so far, the period must be the smallest, and the class must follow. The masks are
+checked against the notation. Aperiodic patterns, other families, B0 rules the alternation does not
+define, puffers, guns and other classes are skipped with a reason. Each record has a budget of
+100,000 generations, 1,000,000 live cells and 20 seconds.
 
-## Limits (section 17)
+## Limits
 
-Objects over 4 GiB and documents over 16 MiB are refused before reading. JSON nesting is limited to
-32, checked before parsing, so a deep document cannot exhaust Python's stack. Duplicate keys, NaN,
-non-integers and integers beyond 2^53 are refused. An index may list 10,000 parts and 10,000
-children, nested 8 deep, and each index is read once however often it is listed. A part whose
-Parquet pages decompress to more than 64 times its size is refused before decoding. Decoding goes
-64 rows at a time and stops at 64 times the stored size plus 64 MiB, which catches dictionary
-bombs. String cells are limited to 1 MiB, phases to 1,000,000 cells and periods to 2^32.
+The limits in pack-format.md's "Limits" table are all enforced:
+- Objects over 4 GiB and documents over 16 MiB are refused before reading.
+- JSON nesting over 32 is checked before parsing. Duplicate keys, NaN, numbers with a fraction or
+  exponent, and integers beyond 2^53 are refused.
+- An index may list 10,000 parts and 10,000 children, 8 levels deep, and each index is read once.
+- A Parquet footer is checked before pyarrow parses it: 16 MiB, Thrift nesting 32, 1,024 columns.
+- Then every page header is read: the pages' uncompressed sizes may total at most 64 times the
+  part's size, and the data pages' values at most 64 per byte plus 2^20.
+- Decoding goes 64 rows at a time and stops at 64 times the stored size plus 64 MiB.
+- String cells are limited to 1 MiB, phases to 1,000,000 cells and periods to 2^32.
 
-Paths are built only from validated hashes, the extension allowlist, feed names and fingerprints.
-Symbolic links and non-files (a FIFO, a device) anywhere in the store are refused without being
-opened.
+Paths are built only from checked hashes, the extension list, feed and signer names, and (in
+exports) table names and checked partition values. Symbolic links and non-files anywhere are refused
+without being opened. An input no check foresaw is a failure, never a traceback.
 
 ## Tests and test stores
 
@@ -112,42 +118,36 @@ opened.
 cd tools/jetcarp_pack && ~/venvs/jetcarp-pack/bin/python -m unittest
 ```
 
-99 tests. Without pyarrow, `python3 -m unittest` still runs the 20 RFC 8785 tests and skips the
-rest. The tests cover:
-- RFC 8785's own number table (Appendix B) and examples (sections 3.2.2 and 3.2.3), and the
-  repository's 600 vectors from the Python `rfc8785` package, read as data;
-- every refusal: a tampered object, bad and misdirected signatures, a rolled-back `seq`, unknown
-  `requires`, an unknown major version or schema number;
-- the limits above, and replay on a two-tile unit cell.
+Without pyarrow, `python3 -m unittest` still runs the RFC 8785 tests and skips the rest. The tests
+cover:
+- RFC 8785's own examples and the repository's 600 `rfc8785` vectors;
+- the spec's square-grid pin, the 12 pin vectors and the golden Penrose reference patch;
+- every refusal and limit;
+- B0 alternation against a brute-force run of the real rule;
+- replay on a two-tile cell;
+- JETCARP's golden packs, with the disagreements found pinned exactly (`tests/test_rust_golden.py`).
 
-`tests/packwriter.py` is a tiny writer used only by the tests. It writes Parquet with pyarrow and
-patches the footer's `created_by` to `jetcarp-pack 1`, which pyarrow cannot set. It signs with
-Ed25519 keys made by `ssh-keygen` in a temporary folder. `tests/make_testdata.py` wrote the golden
-stores, for the cross-check with JETCARP's importer, as one uncompressed tar,
-`testdata/golden.tar` (440 KB). They aren't committed as folders because the spec's signature and key
-file names hold a colon (`SHA256:...`), and Git for Windows refuses to check out such paths, which
-would break the whole repository there ([SPEC_QUESTIONS.md](SPEC_QUESTIONS.md) A3). The tests unpack
-the tar into a temporary folder. `testdata/EXPECTED.json` lists each store's manifest, refs, test
-keys and expected outcome.
+`tests/packwriter.py` is a writer for tests only. It writes Parquet with pyarrow and no key-value
+metadata, sets `created_by` to `jetcarp-pack 1` by patching the footer, and signs with Ed25519 keys
+made by `ssh-keygen` in a temporary folder. `tests/make_testdata.py` wrote the stores in
+`testdata/`. `testdata/EXPECTED.json` gives each one's manifest, refs, test keys and expected
+outcome. Every name in them is invented.
 
 | Store | Expected |
 | --- | --- |
-| `minimal` | accept: square grid, `B3/S23` and `B2/S/C3`, glider (the book's id `5a080db3`), block, blinker, Langton's ant, events |
-| `merge` | accept: feeds `test-a` and `test-b`; `test-a` seq 2 merges both (two parents), signed by A's authorised laptop key |
-| `retraction` | accept: version 2 keeps version 1's index hashes and retracts the blinker |
-| `group-raters` | accept: a taste pack with a group rater whose two members have consented |
+| `minimal` | accept: square grid (the spec's row), `B3/S23`, `B2/S/C3`, glider (the book's id `5a080db3`), block, blinker, a Quick Start entry, events |
+| `export` | accept: `minimal`'s version as an export |
+| `merge` | accept: feeds `test-a` and `test-b`; `test-a` seq 2 merges both, signed by A's authorised laptop key |
+| `retraction` | accept: version 2 retracts the blinker and renames the glider (`rev` 2) |
+| `group-raters` | accept: a taste pack, with a group rater whose two members consented |
+| `ant-run` | accept: Langton's ant alone (its `run` JSON has no shape in the spec) |
 | `key-rotation` | accept: key R2 supersedes R1; version 2 and its ref are by R2 |
-| `negative/tampered-object` | refuse (`object-hash`) |
-| `negative/bad-signature` | refuse (`bad-signature`) |
-| `negative/unknown-requires` | refuse (`unknown-requires`) |
-| `negative/unknown-major` | refuse (`unknown-major`) |
+| `revoked-by-successor` | accept: R1's revocation is signed by its successor R2 |
+| `negative/tampered-object`, `bad-signature`, `unsigned`, `unknown-requires`, `unknown-major`, `revoked-key`, `bad-pin`, `successor-of-self-revoked`, `revoked-machine-key` | refuse, each for its reason |
 | `negative/rollback` | refuse (`seq-rollback`) after accepting `retraction`'s ref |
 
-All names are invented. The geometry columns of the square grid's `tilings` row (corners, axes,
-neighbour order) are this writer's guesses, since section 23.1 leaves them to the engine; its pin is
-the book's. The block, blinker and LWSS identities use the canonical form that the book's glider
-implies, which may not be JETCARP's; the ant's outcome uses this writer's own start direction and
-turn sense.
-
-Running `make_testdata.py` again makes new keys, so every signature and manifest hash changes.
-The committed stores are the golden ones.
+JETCARP 0.4 accepts and refuses them as expected, except `group-raters` and `ant-run`
+(SPEC_QUESTIONS.md, X4 and X5). The test ant's outcome uses this writer's own start direction and
+turn sense, and the canonical forms of the block, blinker and LWSS are inferred from the book's
+glider. JETCARP's re-verification confirms the canonical forms; the ant was not reached. Running
+`make_testdata.py` again makes new keys, so every signature and manifest hash changes.
