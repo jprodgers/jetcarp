@@ -5,8 +5,9 @@
 //! **Search runs.** A verdict on run `R` of the explore search with uuid `U` is a row with
 //! `target_kind = 'search_run'` and `target_id = 'U:R'`, its `verdict`, the rating that stands for
 //! it (keep 5, maybe 3, drop 1), its rater (a name, `user`, or `model:<name>`), note, and
-//! `source` (`review`, `ratings:<folder>`, `import:<database>`). They live in the library, not in
-//! the search's folder, so the folder can be deleted or shared without them.
+//! `source` (`review`, `ratings:<folder>`; `import:<database>` on the reviews that came with the
+//! search imported from CART). They live in the library, not in the search's folder, so the
+//! folder can be deleted or shared without them.
 
 use super::*;
 
@@ -21,7 +22,8 @@ pub struct RatingRow {
     /// keep, maybe, or drop (search runs).
     pub verdict: Option<String>,
     pub note: String,
-    /// Where it came from (search runs: `review`, `ratings:<folder>`, `import:<database>`).
+    /// Where it came from (search runs: `review`, `ratings:<folder>`, or `import:<database>` from
+    /// the import of CART's search).
     pub source: String,
     pub created: String,
 }
@@ -66,7 +68,7 @@ pub enum Dedupe {
     None,
     /// One with a review of the same run from the same source (a ratings folder read again).
     SameSource,
-    /// One that is recorded already, every field the same (an import done again).
+    /// One that is recorded already, every field the same (a ratings folder read again).
     Exact,
 }
 

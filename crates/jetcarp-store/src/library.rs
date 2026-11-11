@@ -10,8 +10,8 @@
 //!
 //! **Schema.** Version 2 ([`schema`]): `PRAGMA user_version` = 2 and the application id `JETC`.
 //! A library of schema 1 (before the 0.4 release) is brought up to 2 when it is opened. A library
-//! from a newer JETCARP is refused, and so is a catalog from before schema 1 (CART's, or an early
-//! JETCARP's, `catalog.sqlite`): there is no migration from those.
+//! from a newer JETCARP is refused, and so is a catalog from before schema 1 (`catalog.sqlite`,
+//! made by a build before 0.4): there is no migration from those.
 //!
 //! **Ids.** Patterns and ants have content ids: 32 hex digits of SHA-256 over the record's
 //! canonical identity and its tiling's geometry pin (`jetcarp_core::pattern::range`; ants

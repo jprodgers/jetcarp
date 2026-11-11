@@ -1,6 +1,6 @@
 //! Tile families: the prototype's 13 periodic families plus the Spectre.
-//! Ported from `FAMILIES` in JETCARP's JavaScript prototype, the CART tiling editor (2026). Parameters use the prototype's JSON layout so
-//! tile JSON copied from the prototype loads unchanged.
+//! Ported from `FAMILIES` in JETCARP's JavaScript prototype, the CART tiling editor (2026).
+//! Parameters keep the prototype's JSON layout.
 
 use crate::edges::{EdgeClass, EdgeMode, EdgeShape, GlueKind, Node};
 use crate::geom::*;

@@ -106,7 +106,7 @@ fn the_schema_is_marked_and_other_files_are_refused() {
         e.contains("newer than this JETCARP") && e.contains("update"),
         "{e}"
     );
-    // A catalog from before schema 1 (CART's, user version 6, no JETCARP mark) is refused.
+    // A catalog from before schema 1 (user version 6, no JETCARP mark) is refused.
     let old = lib.folder().join("catalog.sqlite");
     let c = Connection::open(&old).unwrap();
     c.execute_batch("CREATE TABLE patterns (id TEXT PRIMARY KEY); PRAGMA user_version = 6;")
@@ -430,9 +430,8 @@ fn aliases_resolve_ids_and_short_ids() {
         e.contains("matches") && e.contains(&g.id) && e.contains(&b.id),
         "{e}"
     );
+    // Only geometry changes make aliases.
     assert!(lib.add_alias("bbbb", "pattern", &g.id, "because").is_err());
-    // Only geometry changes make aliases: there is no compatibility with CART's ids.
-    assert!(lib.add_alias("bbbb", "pattern", &g.id, "cart-fnv").is_err());
     assert!(
         lib.add_alias("bbbb", "pattern", "no-such-id", "geometry-change")
             .is_err()

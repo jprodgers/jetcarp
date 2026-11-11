@@ -3,9 +3,9 @@
 //! **Schema.** One script, [`SCHEMA`], makes a new library. `PRAGMA user_version` is the schema
 //! version ([`SCHEMA_VERSION`], 2) and `PRAGMA application_id` marks the file as a JETCARP
 //! library ([`APPLICATION_ID`], `JETC`), so a library from a newer JETCARP is refused with a
-//! clear message, and so is a catalog from before schema 1 (CART's, or an early JETCARP build's:
-//! no application id, user versions 1 to 7), which is not migrated: JETCARP 0.4 starts a fresh
-//! library, and CART's records come in through an importer that verifies them again.
+//! clear message, and so is a catalog from before schema 1 (made by a build before 0.4: no
+//! application id, user versions 1 to 7), which is not migrated: JETCARP 0.4 starts a fresh
+//! library.
 //!
 //! **Migrations.** A library of an older schema is brought up to date when it is opened, in one
 //! transaction: schema 1 to 2 ([`migrate_1_2`]). A schema change adds a migration here; never
@@ -413,9 +413,9 @@ fn check(c: &Connection) -> Result<bool, String> {
     if tables > 0 || version != 0 {
         return Err(format!(
             "this is not a JETCARP library of schema {SCHEMA_VERSION} (it has schema version \
-             {version} and no JETCARP mark): a catalog from CART or from a JETCARP build before \
-             0.4, which this version does not open or migrate. Give JETCARP another library \
-             file (the default is <data>/{}) and bring old records in with an importer",
+             {version} and no JETCARP mark): a catalog from a build before 0.4, which this \
+             version does not open or migrate. Give JETCARP another library file (the default \
+             is <data>/{})",
             super::FILE
         ));
     }
