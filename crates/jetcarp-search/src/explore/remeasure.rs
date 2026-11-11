@@ -621,17 +621,19 @@ pub fn measure(
             None => cpu.push(i),
         }
     }
-    let queue: Mutex<Vec<Queued>> = Mutex::new(
-        groups
-            .into_iter()
-            .map(|((tiling, cells, _), (ltl, v))| Queued {
-                tiling,
-                cells,
-                ltl,
-                left: v.into(),
-            })
-            .collect(),
-    );
+    // Larger than Life first: only the GPU runs it, so the CPU's threads work through the other
+    // batches from their backs meanwhile, and the GPU joins them after.
+    let mut queued: Vec<Queued> = groups
+        .into_iter()
+        .map(|((tiling, cells, _), (ltl, v))| Queued {
+            tiling,
+            cells,
+            ltl,
+            left: v.into(),
+        })
+        .collect();
+    queued.sort_by_key(|q| !q.ltl);
+    let queue: Mutex<Vec<Queued>> = Mutex::new(queued);
     let trace = std::env::var_os("JETCARP_EXPLORE_TRACE").is_some();
     let on_cpu = |i: usize| -> (usize, Option<Measured>) {
         let c = &evals[i].as_ref().unwrap().cand;
@@ -658,7 +660,10 @@ pub fn measure(
             .flat_map_iter(|_| {
                 let mut got = Vec::new();
                 loop {
-                    if let Some(i) = own.lock().unwrap().pop_front() {
+                    // Taken, then run with no lock held: a run may use the pool itself, and a
+                    // thread waiting on that may be handed another of these loops.
+                    let mine = own.lock().unwrap().pop_front();
+                    if let Some(i) = mine {
                         got.push(on_cpu(i));
                         continue;
                     }
