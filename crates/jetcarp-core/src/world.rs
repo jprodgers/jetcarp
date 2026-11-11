@@ -1423,6 +1423,20 @@ impl World {
         }
         v
     }
+    /// Whether [`palette`](Self::palette) knows `name` (one of the world's own palettes, a
+    /// built-in, or hex colours like `#4fc3ff` or `#103050-#4fc3ff`) rather than falling back.
+    pub fn check_palette(&self, name: &str) -> Result<(), String> {
+        let known = self.palettes.iter().any(|p| p.name == name)
+            || Palette::builtin(name).is_some()
+            || Palette::from_hex(name).is_some();
+        if known {
+            return Ok(());
+        }
+        Err(format!(
+            "no palette named '{name}'. Palettes: {}, or colours like #4fc3ff or #103050-#4fc3ff",
+            self.palette_names().join(", ")
+        ))
+    }
 
     /// The field a rule needs; table rules take their state count from the table.
     pub fn kind_of(&self, rule: &Rule) -> FieldKind {

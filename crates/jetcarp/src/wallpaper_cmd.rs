@@ -41,7 +41,8 @@ pub struct WallpaperArgs {
     /// Step on the GPU where the rules allow it (results are identical).
     #[arg(long)]
     gpu: bool,
-    /// Colour every CA with this palette (`jetcarp palettes` lists them).
+    /// Colour every CA with this palette (`jetcarp palettes` lists them), or with hex colours
+    /// like `#4fc3ff` or `#103050-#4fc3ff`.
     #[arg(long)]
     palette: Option<String>,
     /// Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout), for a span image.

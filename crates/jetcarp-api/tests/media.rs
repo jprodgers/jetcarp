@@ -306,7 +306,20 @@ fn wallpapers_of_the_world_or_a_scene() {
         wp(&mut h, json!({"source": scene, "palette": "Bogus"})),
         ErrorKind::NotFound,
     );
-    assert!(e.message.ends_with("(see `jetcarp palettes`)"), "{e}");
+    assert!(
+        e.message.contains("Palettes: Ember, Tide") && e.message.contains("#103050-#4fc3ff"),
+        "{e}"
+    );
+    // Hex colours work wherever palette names do, as on the rest of the command line.
+    for src in [Some(scene.clone()), None] {
+        let mut v =
+            json!({"size": "40x30", "palette": "#103050-#4fc3ff", "out": dir.join("hex.png")});
+        if let Some(s) = &src {
+            v["source"] = json!(s);
+        }
+        wp(&mut h, v).unwrap();
+    }
+    assert_eq!(h.world().cas[0].palette, "#103050-#4fc3ff");
     // A built-in Quick Start entry; no limits on the command line's context.
     let cli = Ctx::new().with_limits(Limits::NONE);
     let w = WallpaperExport::run(

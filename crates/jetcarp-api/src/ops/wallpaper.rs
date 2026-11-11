@@ -55,7 +55,8 @@ pub struct WallpaperIn {
     /// Step on the GPU where the rules allow it (results are identical).
     #[serde(default)]
     pub gpu: bool,
-    /// Colour every CA with this palette first.
+    /// Colour every CA with this palette first: a name (`reference.palettes` lists them) or hex
+    /// colours like `#4fc3ff` or `#103050-#4fc3ff`.
     #[serde(default)]
     pub palette: Option<String>,
     /// Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout): the image spans them.
@@ -176,11 +177,7 @@ impl WorldOp for WallpaperExport {
                 }
                 let mut w = World::from_scene(&sc)?;
                 if let Some(p) = &a.palette {
-                    if !w.palette_names().contains(p) {
-                        return Err(ApiError::not_found(format!(
-                            "no palette named '{p}' (see `jetcarp palettes`)"
-                        )));
-                    }
+                    w.check_palette(p).map_err(ApiError::not_found)?;
                     for c in recolour(&w, p) {
                         w.apply(c)?;
                     }
@@ -210,12 +207,7 @@ impl WorldOp for WallpaperExport {
             None => {
                 if let Some(p) = &a.palette {
                     let w = host.world();
-                    if !w.palette_names().iter().any(|n| n == p) {
-                        return Err(ApiError::not_found(format!(
-                            "no palette named {p}. Palettes: {}",
-                            w.palette_names().join(", ")
-                        )));
-                    }
+                    w.check_palette(p).map_err(ApiError::not_found)?;
                     for c in recolour(w, p) {
                         host.exec(c)?;
                     }
