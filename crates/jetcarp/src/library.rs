@@ -1,6 +1,7 @@
-//! `jetcarp library`: the pattern catalog (list, show, paste, promote, render, update, export,
-//! import, remove, quickstart, info, verify, prune) and its ant runs (`library ants`) and movers
-//! (`library movers`). Searches that add to it are jobs: `jetcarp search`, `jetcarp jobs`.
+//! `jetcarp library`: the pattern library (list, show, paste, promote, render, update, export,
+//! import, remove, quickstart, info, verify, reverify, prune) and its ant runs (`library ants`)
+//! and movers (`library movers`). Searches that add to it are jobs: `jetcarp search`,
+//! `jetcarp jobs`.
 
 use crate::show;
 use anyhow::{Context, Result};
@@ -8,8 +9,9 @@ use jetcarp_api::Ctx;
 use jetcarp_api::op::{self, NoInput, Op, Quiet};
 use jetcarp_api::ops::library::{
     ExportIn, GetIn, ImportIn, LibraryExport, LibraryGet, LibraryImport, LibraryInfoOp,
-    LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove, LibraryRender, LibraryUpdate,
-    LibraryVerify, PasteSceneIn, PruneIn, QueryIn, RemoveIn, RenderIn, UpdateIn, VerifyIn,
+    LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove, LibraryRender, LibraryReverify,
+    LibraryUpdate, LibraryVerify, PasteSceneIn, PruneIn, QueryIn, RemoveIn, RenderIn, ReverifyIn,
+    UpdateIn, VerifyIn,
 };
 use jetcarp_api::ops::quickstart::{
     AddIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
@@ -19,8 +21,8 @@ use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct LibraryArgs {
-    /// Catalog: a .sqlite file, or a folder holding catalog.sqlite (default: $JETCARP_LIBRARY, else
-    /// <data>/catalog.sqlite).
+    /// Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else
+    /// <data>/library.sqlite).
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]
@@ -124,6 +126,29 @@ enum LibCmd {
         periods: Option<u64>,
         #[arg(long)]
         drop: bool,
+    },
+    /// Check again the records flagged after a geometry change (their geometry pin is not this
+    /// engine's), or every record with --all: those that pass get this engine's pin and a
+    /// provenance row (and a new id if their geometry changed, the old id kept as an alias);
+    /// those that fail stay flagged and are listed, or are deleted with --drop. Runs as a job,
+    /// resumable with --job.
+    Reverify {
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        drop: bool,
+        /// Periods each pattern is run (default: its own default).
+        #[arg(long)]
+        periods: Option<u64>,
+        /// Resume this re-verification job.
+        #[arg(long)]
+        job: Option<i64>,
+        /// Worker threads (default: all cores).
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Stop after this many minutes (resume with --job).
+        #[arg(long)]
+        minutes: Option<f64>,
     },
     /// Delete the still lifes and oscillators a hunt would no longer store (the hunt storage
     /// policy: more than --max-cells cells or period x cells above --max-volume, unless a job
@@ -381,6 +406,26 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 drop,
             };
             let out = LibraryVerify::run(&cx, a, &crate::ProgressLine)?;
+            eprintln!();
+            show(&out, json)
+        }
+        LibCmd::Reverify {
+            all,
+            drop,
+            periods,
+            job,
+            threads,
+            minutes,
+        } => {
+            let a = ReverifyIn {
+                all,
+                drop,
+                periods,
+                job,
+                threads,
+                minutes,
+            };
+            let out = LibraryReverify::run(&cx, a, &crate::ProgressLine)?;
             eprintln!();
             show(&out, json)
         }

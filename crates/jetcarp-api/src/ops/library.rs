@@ -1,8 +1,9 @@
-//! `library.*`: the pattern catalog: what it holds (`library.info`), its records (`library.query`,
+//! `library.*`: the pattern library: what it holds (`library.info`), its records (`library.query`,
 //! `library.get`), curation (`library.update`, `library.remove`), pictures and text drawings of a
 //! pattern's phases (`library.render`), JSON records out and in (`library.export`,
-//! `library.import`), scenes made of patterns (`library.paste`), checking every record again
-//! (`library.verify`), and making the file smaller (`library.prune`).
+//! `library.import`), scenes made of patterns (`library.paste`), checking records again
+//! (`library.verify`; `library.reverify`, the job that clears the flags a geometry change
+//! leaves), and making the file smaller (`library.prune`).
 //!
 //! Records are patterns (verified still lifes, oscillators, spaceships, guns, movers) and ant
 //! runs (ids `ant-...`). The catalog is the context's ([`Ctx::library`]). Searches that add to it
@@ -76,7 +77,7 @@ pub struct LibraryInfo(#[schemars(with = "Value")] pub CatalogInfo);
 impl Report for LibraryInfo {
     fn text(&self) -> String {
         let i = &self.0;
-        format!(
+        let mut s = format!(
             "catalog:        {}\nschema version: {}\npatterns {}, rules {}, pattern rules {}, \
              sightings {} ({} copies), jobs {}, Quick Start {}, ratings {}, media {}, ants {}\n",
             i.path,
@@ -91,7 +92,15 @@ impl Report for LibraryInfo {
             i.ratings,
             i.media,
             i.ants
-        )
+        );
+        if i.needs_reverify > 0 {
+            s.push_str(&format!(
+                "re-verify:      {} record{} flagged after a geometry change (jetcarp library reverify)\n",
+                i.needs_reverify,
+                if i.needs_reverify == 1 { "" } else { "s" }
+            ));
+        }
+        s
     }
 }
 
@@ -522,6 +531,13 @@ impl Report for RecordView {
             r.verified.jetcarp_version,
             r.verified.date
         );
+        if r.needs_reverify {
+            let _ = writeln!(
+                s,
+                "flagged:     needs re-verification: it was verified on another geometry (pin {}); run jetcarp library reverify",
+                r.geometry_pin
+            );
+        }
         let p = &r.provenance;
         let _ = writeln!(
             s,
@@ -1458,6 +1474,151 @@ impl Op for LibraryVerify {
             by_tiling,
             seconds,
             removed,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// library.reverify
+
+/// Which records to check again, and how.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReverifyIn {
+    /// Every record, not only those flagged because their geometry pin is not this engine's.
+    #[serde(default)]
+    pub all: bool,
+    /// Delete the records that fail (default: keep them flagged and report them).
+    #[serde(default)]
+    pub drop: bool,
+    /// Periods each pattern is run (default: its own default, 4 to 16).
+    #[serde(default)]
+    pub periods: Option<u64>,
+    /// Resume this re-verification job instead of starting one.
+    #[serde(default)]
+    pub job: Option<i64>,
+    /// Worker threads (0 or absent: all cores).
+    #[serde(default)]
+    pub threads: usize,
+    /// Stop after this many minutes, resumable with `job`.
+    #[serde(default)]
+    pub minutes: Option<f64>,
+}
+
+/// What a re-verification did.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct ReverifyReport {
+    /// The library file.
+    pub catalog: String,
+    /// The `reverify` job.
+    pub job: i64,
+    /// `done`, or `paused` when stopped (resume with `job`).
+    pub status: String,
+    /// Checked, passed, failed (the first 200, with why), moved to new ids, removed.
+    #[schemars(with = "Value")]
+    pub progress: jetcarp_search::jobs::reverify::ReverifyProgress,
+    /// Records still flagged afterwards, by kind.
+    pub flagged: BTreeMap<String, u64>,
+    pub seconds: f64,
+}
+
+impl Report for ReverifyReport {
+    fn text(&self) -> String {
+        let p = &self.progress;
+        let mut s = String::new();
+        for f in p.failures.iter().take(10) {
+            let _ = writeln!(s, "  failed {} {}: {}", f.kind, f.id, f.error);
+        }
+        if p.failures.len() > 10 {
+            let _ = writeln!(s, "  ... {} more failures", p.failed - 10);
+        }
+        for m in p.moved.iter().take(10) {
+            let _ = writeln!(
+                s,
+                "  moved  {} {} -> {} (old id kept as an alias)",
+                m.kind, m.old, m.new
+            );
+        }
+        let _ = writeln!(s, "{} ({:.1} s)", p.line, self.seconds);
+        let left: u64 = self.flagged.values().sum();
+        if left > 0 {
+            let _ = writeln!(
+                s,
+                "{left} records still flagged in {}{}",
+                self.catalog,
+                if self.status == "paused" {
+                    format!(" (resume with --job {})", self.job)
+                } else {
+                    String::new()
+                }
+            );
+        }
+        s
+    }
+}
+
+/// `library.reverify`.
+pub struct LibraryReverify;
+impl Op for LibraryReverify {
+    const NAME: &'static str = "library.reverify";
+    const SUMMARY: &'static str = "Check again the records flagged after a geometry change (or all), as a resumable job: those that pass get this engine's pin and a provenance row, those that fail stay flagged.";
+    const READ_ONLY: bool = false;
+    type In = ReverifyIn;
+    type Out = ReverifyReport;
+    fn run(cx: &Ctx, a: ReverifyIn, p: &dyn Progress) -> Result<ReverifyReport, ApiError> {
+        use jetcarp_search::jobs::reverify::{ReverifyProgress, ReverifySpec};
+        use jetcarp_search::jobs::{self, Budget, JobSpec};
+        let lib = cx.library();
+        let budget = Budget {
+            minutes: a.minutes,
+            ..Default::default()
+        };
+        let job = match a.job {
+            Some(j) => {
+                let row = lib.job(j).map_err(catalog_err)?;
+                if row.kind != "reverify" {
+                    return Err(ApiError::invalid(format!(
+                        "job {j} is a {} job, not a re-verification",
+                        row.kind
+                    )));
+                }
+                j
+            }
+            None => {
+                let spec = ReverifySpec {
+                    all: a.all,
+                    drop: a.drop,
+                    periods: a.periods,
+                    ..Default::default()
+                };
+                let js = JobSpec {
+                    strategy: "reverify".into(),
+                    spec: serde_json::to_value(spec)
+                        .map_err(|e| ApiError::engine(e.to_string()))?,
+                    label: None,
+                    budget: Budget::default(),
+                };
+                jobs::create(&lib, &js).map_err(ApiError::invalid)?
+            }
+        };
+        let how = super::search::How {
+            threads: a.threads,
+            gpu: false,
+            budget,
+            background: false,
+            detach: false,
+            files: Default::default(),
+        };
+        let out = super::search::run_job(cx, &lib, job, &how, p)?;
+        let progress: ReverifyProgress =
+            serde_json::from_value(out.progress.clone()).unwrap_or_default();
+        Ok(ReverifyReport {
+            catalog: lib.path().display().to_string(),
+            job,
+            status: out.status,
+            progress,
+            flagged: lib.flagged().map_err(catalog_err)?.into_iter().collect(),
+            seconds: out.seconds,
         })
     }
 }

@@ -43,6 +43,7 @@
 //! | `collide` | two patterns at every offset | `jetcarp_core::pattern::collide` | runs, then checks | runs |
 //! | `evolve` | the evolutionary glider search | `jetcarp_core::evolve` | a generation | generations |
 //! | `explore` | the broad search over tilings, families, rules, seeds | `crate::explore` | two seconds of rounds | runs |
+//! | `reverify` | stored records checked again on this engine's geometry | [`reverify`] | two seconds of checks | records |
 //!
 //! Batches adapt to a few seconds of work: a hunt's to about three (with the next batch already
 //! running, so the slow soups at a batch's end, its merge, and its write overlap it), an ant
@@ -86,6 +87,7 @@ pub mod hunt;
 pub mod mover;
 pub mod other;
 pub mod pile;
+pub mod reverify;
 pub mod search;
 
 pub use lease::{Lease, lock_path, owner_id};
@@ -186,7 +188,7 @@ impl Budget {
     }
 }
 
-static KINDS: [&dyn StrategyKind; 9] = [
+static KINDS: [&dyn StrategyKind; 10] = [
     &hunt::KIND,
     &search::KIND,
     &ants::KIND,
@@ -196,6 +198,7 @@ static KINDS: [&dyn StrategyKind; 9] = [
     &collide::KIND,
     &evolve::KIND,
     &explore::KIND,
+    &reverify::KIND,
 ];
 
 /// Every kind with a strategy, in the module table's order.

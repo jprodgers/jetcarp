@@ -451,3 +451,55 @@ fn verify_and_prune() {
     assert_eq!(lib.count(&Default::default()).unwrap(), 2);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+// `library.reverify` checks records again as a job: with nothing flagged it checks nothing;
+// with `all` it checks every record, each passes on this engine, and nothing stays flagged.
+// (A geometry change, simulated in the file, is tested in jetcarp-store's library_v1.)
+#[test]
+fn reverify_checks_flagged_or_all_records_as_a_job() {
+    let dir = scratch("lib-reverify");
+    let (lib, cx) = catalog(&dir);
+    let r = LibraryReverify::run(&cx, ReverifyIn::default(), &Quiet).unwrap();
+    assert_eq!(
+        (r.status.as_str(), r.progress.total, r.progress.checked),
+        ("done", 0, 0)
+    );
+    assert_eq!(r.flagged.values().sum::<u64>(), 0);
+    assert_eq!(lib.job(r.job).unwrap().kind, "reverify");
+    let v = call_json(&cx, "library.reverify", json!({"all": true, "threads": 2})).unwrap();
+    assert_eq!(v["status"], "done");
+    assert_eq!(
+        (
+            v["progress"]["checked"].as_u64(),
+            v["progress"]["passed"].as_u64()
+        ),
+        (Some(3), Some(3))
+    );
+    assert_eq!(v["progress"]["failed"], 0);
+    // Resuming a finished job runs nothing.
+    let again = LibraryReverify::run(
+        &cx,
+        ReverifyIn {
+            job: Some(r.job),
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert!(again.text().contains("0 of 0 checked"), "{}", again.text());
+    // A pattern's history has its row 0 and a `reverified` row now.
+    let id = &lib.list().unwrap()[0].id;
+    let h = lib.provenance("pattern", id).unwrap();
+    assert_eq!(
+        (h[0].kind.as_str(), h.last().unwrap().kind.as_str()),
+        ("found", "reverified")
+    );
+    let e = fails(
+        call_json(&cx, "library.reverify", json!({"job": 0})),
+        ErrorKind::Invalid,
+    );
+    assert!(e.message.contains("not a re-verification"), "{e}");
+    let i = LibraryInfoOp::run(&cx, NoInput {}, &Quiet).unwrap();
+    assert_eq!(i.0.needs_reverify, 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
