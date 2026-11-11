@@ -38,6 +38,7 @@ pub mod rules;
 pub mod sandpile;
 pub mod script;
 pub mod seeding;
+pub mod sha256;
 pub mod sheet;
 pub mod sizeclass;
 pub mod spectre;
