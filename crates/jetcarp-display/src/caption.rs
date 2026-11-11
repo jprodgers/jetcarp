@@ -4,7 +4,7 @@
 
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use jetcarp_core::rules::{self, Rule};
-use jetcarp_core::topology::Boundary;
+use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
 use serde::{Deserialize, Serialize};
 
@@ -93,12 +93,12 @@ pub struct Place<'a> {
 
 const MAX_NOTATION: usize = 32;
 
-fn rule_name(rule: &Rule, nb: jetcarp_core::topology::Nb) -> String {
+fn rule_name(rule: &Rule, nb: jetcarp_core::topology::Nb, topo: &Topology) -> String {
     if let Rule::Wolfram(n) = rule {
         return format!("Rule {n}");
     }
     let notation = rule.notation();
-    let name = rules::catalog_name(rule, nb)
+    let name = rules::catalog_name_on(rule, nb, topo)
         .map(str::to_string)
         .or_else(|| {
             rules::named_rules()
@@ -122,7 +122,7 @@ fn rule_name(rule: &Rule, nb: jetcarp_core::topology::Nb) -> String {
 pub fn rule_line(world: &World) -> String {
     let mut names: Vec<String> = vec![];
     for c in world.cas.iter().filter(|c| c.enabled) {
-        let n = rule_name(&c.rule, c.nb);
+        let n = rule_name(&c.rule, c.nb, &world.topo);
         if !names.contains(&n) {
             names.push(n);
         }

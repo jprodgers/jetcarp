@@ -1502,7 +1502,7 @@ impl World {
         let ca = CaInstance {
             id,
             name: spec.name.clone().unwrap_or_else(|| {
-                crate::rules::catalog_name(&rule, nb)
+                crate::rules::catalog_name_on(&rule, nb, &self.topo)
                     .map(String::from)
                     .unwrap_or_else(|| rule.notation())
             }),

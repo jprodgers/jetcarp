@@ -21,7 +21,7 @@
 
 use crate::render::{Image, RenderOptions, render};
 use crate::rng::{Fnv, Rng};
-use crate::rules::{Rule, catalog_name};
+use crate::rules::{Rule, catalog_name_on};
 use crate::topology::{Nb, TilingSpec, Topology};
 use crate::world::{CaSpec, Command, SeedSpec, Status, World};
 use rayon::prelude::*;
@@ -532,7 +532,7 @@ fn resolve(topo: &Arc<Topology>, spec: &CensusSpec, rule: &str) -> (String, Opti
             let c = &w.cas[0];
             (
                 c.notation(),
-                catalog_name(&c.rule, c.nb).map(|s| s.to_string()),
+                catalog_name_on(&c.rule, c.nb, &w.topo).map(|s| s.to_string()),
             )
         }
         Err(_) => (rule.to_string(), None),

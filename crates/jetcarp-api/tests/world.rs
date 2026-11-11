@@ -240,6 +240,38 @@ fn new_world_checks_tiling_size_and_cas() {
     .unwrap();
 }
 
+/// What `world_status` says of each CA: Larger than Life's own neighbourhood, and a B/S rule's
+/// hexagonal name on the hexagon grid's neighbour graph (and only there).
+#[test]
+fn status_names_ltl_neighbourhoods_and_hexagonal_rules() {
+    let cx = Ctx::interactive();
+    let status = |tiling: &str, rule: &str| {
+        let mut h = Session::new();
+        new_world(
+            &cx,
+            &mut h,
+            json!({"tiling": tiling, "width": 24, "height": 24, "cas": [rule]}),
+        );
+        let st = WorldStatusOp::run(&cx, &mut h, StatusIn::default(), &Quiet).unwrap();
+        let c = &st.status.cas[0];
+        (c.name.clone(), c.neighborhood.clone())
+    };
+    // NN (von Neumann) and N+ (the cross) reach over edge neighbours, NM over touching ones.
+    assert_eq!(status("square", "R2,C2,S2-4,B3-4,NN").1, "edge");
+    assert_eq!(status("square", "R2,C2,S2-4,B3-4,N+").1, "edge");
+    assert_eq!(status("square", "R2,C2,S2-4,B3-4,NM").1, "touch");
+    assert_eq!(status("square", "R2,C2,S2-4,B3-4").1, "touch");
+    // B2/S34 is Hexagonal Life (B2/S34H) on hexagons and Escher's lizards, whose tiles have the
+    // same six edge neighbours, but not on squares or triangles.
+    assert_eq!(status("hex", "B2/S34").0, "Hexagonal Life");
+    assert_eq!(status("lizard", "B2/S34").0, "Hexagonal Life");
+    assert_eq!(status("square", "B2/S34").0, "B2/S34");
+    assert_eq!(status("triangle", "B2/S34").0, "B2/S34");
+    // Other names are as before.
+    assert_eq!(status("hex", "B3/S23").0, "Life");
+    assert_eq!(status("square", "B3/S23").0, "Life");
+}
+
 #[test]
 fn status_inspect_and_apply() {
     let cx = Ctx::interactive();

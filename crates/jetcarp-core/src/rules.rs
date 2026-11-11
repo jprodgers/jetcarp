@@ -217,6 +217,9 @@ impl Rule {
         match self {
             Rule::Turmite(_) | Rule::Sandpile | Rule::Cyclic { .. } | Rule::Table(_) => Nb::Edge,
             Rule::VonNeumann => Nb::Edge,
+            // Larger than Life's own neighbourhood decides: NM reaches over touching neighbours,
+            // NN (von Neumann) and N+ (the cross) over edge neighbours (`ltl::reach`).
+            Rule::Ltl(l) if l.hood != crate::ltl::Hood::Moore => Nb::Edge,
             _ => Nb::Touch,
         }
     }
@@ -1250,6 +1253,37 @@ pub fn catalog_name(rule: &Rule, nb: Nb) -> Option<&'static str> {
         n.push('V');
     }
     catalog().iter().find(|e| e.notation == n).map(|e| e.name)
+}
+
+/// [`catalog_name`] for a rule running on `topo`. On a hexagonal neighbour graph ([`hexagonal`])
+/// a B/S rule's hexagonal name comes first: LifeWiki writes those rules with an `H`, so
+/// `B2/S34` there is Hexagonal Life (`B2/S34H`). Touching and edge neighbours are the same tiles
+/// there, so the `V` names, which mean the square grid's four edge neighbours, never apply.
+pub fn catalog_name_on(
+    rule: &Rule,
+    nb: Nb,
+    topo: &crate::topology::Topology,
+) -> Option<&'static str> {
+    if matches!(rule, Rule::LifeLike { .. } | Rule::Generations { .. }) && hexagonal(topo) {
+        let h = format!("{}H", rule.notation());
+        return catalog()
+            .iter()
+            .find(|e| e.notation == h)
+            .map(|e| e.name)
+            .or_else(|| catalog_name(rule, Nb::Touch));
+    }
+    catalog_name(rule, nb)
+}
+
+/// Whether `topo` has the hexagon grid's neighbour graph: every tile has six neighbours, and all
+/// six share an edge with it (so three tiles meet at every corner). Tilings by hexagon-like tiles,
+/// such as Escher's lizards, have it too, and a B/S rule runs on them exactly as on hexagons.
+pub fn hexagonal(topo: &crate::topology::Topology) -> bool {
+    topo.lattice().is_some_and(|g| {
+        g.offsets
+            .iter()
+            .all(|per_type| per_type.iter().all(|slots| slots.len() == 6))
+    })
 }
 
 #[derive(serde::Deserialize)]
