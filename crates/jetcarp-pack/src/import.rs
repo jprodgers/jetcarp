@@ -657,9 +657,12 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         out.quickstart = lib.import_quickstart(&qs)?;
     }
 
-    // Aliases.
+    // Aliases (none for a retracted record).
     let mut aliases = vec![];
     for (_, a) in rows_of::<AliasPackRow>(&src, &v, "aliases")? {
+        if retracted.contains(a.target.as_str()) {
+            continue;
+        }
         let (k, id) = split_target(&a.target)?;
         aliases.push(AliasRow {
             alias: a.old_id.clone(),
@@ -682,6 +685,10 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         let b = src.object(&mr.object, ext, &rel, 256 << 20)?;
         out.objects_checked += 1;
         out.bytes_checked += b.len() as u64;
+        // Nothing is added for a retracted record (its file is checked all the same).
+        if retracted.contains(mr.target.as_str()) {
+            continue;
+        }
         let (tk, tid) = local(split_target(&mr.target)?);
         if !opts.dry_run {
             jetcarp_store::media::put_file(&lib.folder(), &b, ext)?;
@@ -706,11 +713,21 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         out.media = lib.import_media(&media)?;
     }
 
-    // Ratings, under their raters' names when they chose to be named.
-    let raters: HashMap<String, RaterRow> = rows_of::<RaterRow>(&src, &v, "raters")?
-        .into_iter()
-        .map(|(_, r)| (r.rater.clone(), r))
-        .collect();
+    // Ratings, under their raters' names when they chose to be named. A rater's rows are events
+    // (consent recorded again adds one): the latest stands, by consent_date, then by the row's
+    // RFC 8785 text.
+    let mut raters: HashMap<String, (String, RaterRow)> = HashMap::new();
+    for (_, r) in rows_of::<RaterRow>(&src, &v, "raters")? {
+        let text = jetcarp_core::jcs::to_string(&serde_json::to_value(&r).unwrap_or_default());
+        let key = (r.consent_date.clone(), text);
+        match raters.get(&r.rater) {
+            Some((t, old)) if (old.consent_date.clone(), t.clone()) >= key => {}
+            _ => {
+                raters.insert(r.rater.clone(), (key.1, r));
+            }
+        }
+    }
+    let raters: HashMap<String, RaterRow> = raters.into_iter().map(|(k, v)| (k, v.1)).collect();
     let name_of = |id: &str| -> String {
         raters
             .get(id)
@@ -722,6 +739,9 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         let Some(info) = raters.get(&r.rater) else {
             return Err(format!("ratings by {} who has no raters row", r.rater));
         };
+        if retracted.contains(r.target.as_str()) {
+            continue;
+        }
         let rater = match &info.members {
             Some(ms) if !ms.is_empty() => ms
                 .iter()
@@ -758,7 +778,8 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             rater,
             rating,
             verdict,
-            note: r.note.clone().unwrap_or_default(),
+            // A note is kept only while the rater's latest consent shares notes.
+            note: r.note.clone().filter(|_| info.notes).unwrap_or_default(),
             source: r.round.clone().unwrap_or_default(),
             created: r.date.clone(),
         });

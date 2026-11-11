@@ -62,8 +62,9 @@ A pack makes four promises:
 - **Times** are RFC 3339 strings in UTC with `Z` and whole seconds (`2026-11-11T09:02:38Z`):
   every time in a pack, in documents and in table columns alike (`raters.consent_date` too; a
   calendar date alone is written as its midnight, `2026-11-01T00:00:00Z`). Times are
-  information: no rule of this format orders anything by a time, except where it breaks a tie
-  that nothing else breaks ([latest wins](#annotations)).
+  information: no rule of this format orders anything by a time, except a rater's consent (the
+  latest [`raters`](#ratings) row stands) and where a time breaks a tie that nothing else breaks
+  ([latest wins](#annotations)).
 - **Parquet tables:**
   - zstd compression; statistics and page indexes (column and offset indexes) written;
   - each part's rows sorted as its table says ([below](#tables-indexes-and-parts));
@@ -190,8 +191,10 @@ the fingerprint of the publisher whose assertions it withdraws (the version's pu
 first listed it), and `reason` and `date` are for people. The list is cumulative: every later
 version of the feed lists every retraction its parents list, and a merge keeps its parents' with
 their publishers. A reader shows a retracted record as retracted, with the reason; an importer
-flags it and never deletes the user's copy. A retraction applies only to its publisher's
-assertions: a record another publisher also published stays theirs.
+flags it and never deletes the user's copy. A retracted record the importer's library lacks is
+skipped: the importer adds nothing for it (not the record, nor its events, ratings or media) and
+records only the retraction. A retraction applies only to its publisher's assertions: a record
+another publisher also published stays theirs.
 
 ## Refs
 
@@ -300,9 +303,10 @@ feeds, and keeping the last `seq`, arrive with networking in 0.6.*
   rows the parents lack. A part SHOULD be at most 256 MiB and MUST be at most 4 GiB.
 - **Fact and event tables.** In a fact table (`tilings`, `rules`, `patterns`, `ants`, `quickstart`,
   `aliases`) a key's rows are the same wherever they appear: a reader keeps one and MAY check the
-  others are identical (JETCARP's `--strict` does). In an event table, rows are not deduplicated
-  across parts: a writer MUST NOT add a row its parents already have (JETCARP adds only missing
-  rows), and identical rows in two parts count twice.
+  others are identical (JETCARP's `--strict` does). The others are event tables (`verifications`,
+  `sightings`, `provenance`, `annotations`, `media`, `ratings`, `raters`, `score_models`): rows
+  are not deduplicated across parts, a writer MUST NOT add a row its parents already have
+  (JETCARP adds only missing rows), and identical rows in two parts count twice.
 - **Schema evolution.** Adding a nullable column is a minor change: the schema id stays, and readers
   MUST ignore columns they do not know and read a missing nullable column as null. Removing a
   column or changing what one means is a new schema number.
@@ -719,8 +723,8 @@ pack**.
 | `round: string?` | the rating session or round (`review`, `ratings:ratings1`) |
 | `date: string` | |
 
-`raters` (sorted by `rater`): one row for every rater the ratings name, and for every member of a
-group.
+`raters` (events, sorted by `rater`): a rater's consent, as recorded. Every rater the ratings
+name, and every member of a group, has a row.
 
 | Column | Meaning |
 | --- | --- |
@@ -734,6 +738,17 @@ group.
 A group's ratings are one verdict agreed by several people; a reader shows its members. A group's
 ratings go in a pack only when every member consented. JETCARP never writes another person's
 ratings without their recorded consent; by default it publishes only the publisher's own.
+
+**`raters` is an event table, because consent can change.** A rater who later chooses to be named,
+or no longer to be named or to share notes, has their consent recorded again, and the publisher's
+next version adds a row with the new choices and the new `consent_date` (the old row stays in its
+part, as every row does). A reader uses each rater's latest row: the greatest `consent_date`, then
+the greater row by its RFC 8785 text. It shows a name and ORCID only if that row has them, and a
+rating's note only if it shares notes; a rating's `note` needs some row of its rater with `notes`
+true. A fact row could never change, so a rater who asked not to be named would stay named in every
+later version. A rater who withdraws consent altogether gets no new rows and no new ratings; what
+earlier versions published stays in their parts, and goes only as [withdrawal](#personal-data)
+says.
 
 ### `score_models` (events, sorted by `model`, `version`)
 
@@ -806,8 +821,9 @@ is earliest, then the manifest's publisher, then by fingerprint), followed by an
 naming the manifest. Its curation is the latest annotations of the manifest's publisher, then of
 others for fields still empty. Sightings are kept per search (a job made for each uuid), the larger
 of the publishers' totals, so importing a pack again changes nothing; copies counted without a
-search add to the record's seen count. Ratings are kept under the rater's display name when the
-rater chose one (a group's: its members' names joined by ` & `), else the rater id. A pattern's
+search add to the record's seen count. Ratings are kept under the display name of the rater's
+latest `raters` row when it has one (a group's: its members' names joined by ` & `), else the rater
+id, and with their notes only while that row shares notes. A pattern's
 rule is written as the library writes rules: the notation with `V` for B/S and Generations rules
 (and JACA's edge form) on edge neighbours (`B2/S23V`), as a search that found it here would write
 it. A search's segments and sidecars are copied into the library's search folders, and it becomes
@@ -884,7 +900,9 @@ A reader SHOULD apply these limits, and MUST NOT crash or hang on input beyond t
   release: a published pack cannot be recalled from mirrors and torrents.
 - **Withdrawal.** A person may ask a publisher to stop distributing their data. The publisher
   retracts it in the next version, and hosts MAY prune old versions on request. Copies already
-  downloaded cannot be recalled, and consent says so.
+  downloaded cannot be recalled, and consent says so. A rater who stops being named, or stops
+  sharing notes, does so with a new [`raters`](#ratings) row, which readers of later versions
+  follow; a rater who withdraws consent gets no new rows or ratings.
 
 ## Licences
 

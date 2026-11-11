@@ -296,6 +296,69 @@ fn consent_dates_are_times() {
     assert!(e.contains("RFC 3339"), "{e}");
 }
 
+/// A rater's rows are events: consent recorded again adds a row, and the latest stands. A rater
+/// who stops being named is shown by their id from the next version on.
+#[test]
+fn a_raters_latest_consent_stands() {
+    let dir = temp("raters");
+    let lib = small_library(&dir);
+    let id = lib.list().unwrap()[0].id.clone();
+    lib.import_ratings(&[jetcarp_store::RatingRow {
+        id: 0,
+        target_kind: "pattern".into(),
+        target_id: id,
+        rater: "Test Rater B".into(),
+        rating: 3.0,
+        verdict: None,
+        note: String::new(),
+        source: "review".into(),
+        created: "2026-11-11T12:00:00Z".into(),
+    }])
+    .unwrap();
+    let p = publisher(6, "Test Publisher");
+    let mut b = book(&["Test Publisher", "Test Rater B"]);
+    let store = dir.join("store");
+    run(&lib, &p, &mut b, &options("raters", &store));
+    b.raters[1].show_name = false;
+    b.raters[1].consent_date = "2026-11-05T00:00:00Z".into();
+    let mut o = options("raters", &store);
+    o.created = Some("2026-11-12T12:00:00Z".into());
+    let out = run(&lib, &p, &mut b, &o);
+
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&out.manifest).unwrap();
+    let mut rows = vec![];
+    src.table_rows(&v, "raters", |_, r| {
+        rows.extend(r);
+        Ok(())
+    })
+    .unwrap();
+    let b_rows: Vec<_> = rows
+        .iter()
+        .filter(|r| r["rater"] == "rater-0000000000001001")
+        .collect();
+    assert_eq!(b_rows.len(), 2, "{rows:?}");
+
+    let lib2 = Library::open(dir.join("lib2"));
+    let opts = import::Options {
+        path: store.clone(),
+        verify: VerifyMode::None,
+        ..Default::default()
+    };
+    import::import(&lib2, &opts, &|_| {}).unwrap();
+    let raters: Vec<String> = lib2
+        .ratings(None)
+        .unwrap()
+        .into_iter()
+        .map(|r| r.rater)
+        .collect();
+    assert!(
+        raters.contains(&"rater-0000000000001001".to_string()),
+        "{raters:?}"
+    );
+    assert!(!raters.contains(&"Test Rater B".to_string()), "{raters:?}");
+}
+
 #[test]
 fn the_same_library_gives_the_same_store() {
     let dir = temp("determinism");
