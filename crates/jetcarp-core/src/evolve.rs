@@ -29,7 +29,6 @@
 //! distance it was verified to.
 
 pub mod arena;
-pub mod catalog;
 pub mod priority;
 
 use arena::{Arena, Outcome, RunStats};
@@ -551,8 +550,8 @@ pub struct EvolveCheckpoint {
 }
 
 /// A search in progress, one generation at a time: what [`evolve`] runs, and what an evolve job
-/// (`crate::jobs::evolve`) saves after every generation and resumes from. A resumed search ends
-/// exactly as an uninterrupted one; only the memo of evaluated rules starts empty again, so
+/// (`jetcarp_search::jobs::evolve`) saves after every generation and resumes from. A resumed search
+/// ends exactly as an uninterrupted one; only the memo of evaluated rules starts empty again, so
 /// `unique_evaluations` (which counts it) and the timings differ.
 pub struct Evolution {
     spec: EvolveSpec,

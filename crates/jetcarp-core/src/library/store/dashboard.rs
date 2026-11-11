@@ -1,4 +1,4 @@
-//! Catalog reads for the hunt dashboard and the Quick Start menu (`crate::dashboard`,
+//! Catalog reads for the hunt dashboard and the Quick Start menu (`jetcarp_search::dashboard`,
 //! `crate::qsmenu`): Quick Start usage, the latest user rating of every target, the rule-space
 //! heat map's rows, and a job's finds. All of them are plain reads (WAL lets them run while a
 //! hunt writes).

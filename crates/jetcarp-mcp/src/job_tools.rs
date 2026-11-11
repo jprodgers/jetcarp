@@ -18,10 +18,10 @@ use jetcarp_api::ops::jobs::{
 use jetcarp_api::ops::search::{
     AntsIn, EvolveIn, HuntIn, MoverIn, PileIn, SearchStart, SearchStartIn, SearchStarted,
 };
-use jetcarp_core::ants::job::AntProgress;
-use jetcarp_core::hunt::job::HuntProgress;
-use jetcarp_core::pile::job::PileProgress;
-use jetcarp_core::window::job::MoverProgress;
+use jetcarp_search::ants::AntProgress;
+use jetcarp_search::hunt::HuntProgress;
+use jetcarp_search::pile::PileProgress;
+use jetcarp_search::window::MoverProgress;
 use serde_json::{Value, json};
 use std::sync::atomic::Ordering;
 

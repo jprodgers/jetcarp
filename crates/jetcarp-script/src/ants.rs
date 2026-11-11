@@ -6,10 +6,10 @@
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
 use jetcarp_api::args::{check_keys, get_bool, get_f64, get_pair, get_str, get_u64};
-use jetcarp_core::ants::job;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::parse_rule;
 use jetcarp_core::library::{AntQuery, Library};
+use jetcarp_search::ants::run_one;
 use rhai::{Array, Dynamic, Engine, EvalAltResult, Map};
 use serde_json::Value;
 use std::sync::Arc;
@@ -64,7 +64,7 @@ fn ant_run(lib: &Library, rule: &str, v: &Value) -> Result<Value, String> {
         max_period: get_u64(v, "max_period")?.unwrap_or(20_000),
         symmetry: get_bool(v, "symmetry")?.unwrap_or(true),
     };
-    let row = job::run_one(&m, &t[0], &start, &lim)?;
+    let row = run_one(&m, &t[0], &start, &lim)?;
     if get_bool(v, "store")?.unwrap_or(false) {
         lib.ants_flush(0, std::slice::from_ref(&row), None, None)?;
     }

@@ -20,10 +20,10 @@ use jetcarp_api::ops::quickstart::{
 use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
-use jetcarp_core::dashboard::digits;
-use jetcarp_core::jobs::search::SearchResult;
 use jetcarp_core::library::{self, Library};
 use jetcarp_core::pattern::PatternRecord;
+use jetcarp_search::dashboard::digits;
+use jetcarp_search::jobs::search::SearchResult;
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &[

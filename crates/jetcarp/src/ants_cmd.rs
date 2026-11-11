@@ -5,7 +5,6 @@
 use anyhow::{Result, bail};
 use jetcarp_api::Ctx;
 use jetcarp_api::args;
-use jetcarp_core::ants::job;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::parse_rule;
 use jetcarp_core::library::{AntQuery, AntRow, AntUpdate, Library};
@@ -278,7 +277,7 @@ fn run_one(lib: &Library, r: RunArgs, json: bool) -> Result<()> {
         symmetry: true,
     };
     let t0 = Instant::now();
-    let row = msg(job::run_one(&m, &t[0], &start, &lim))?;
+    let row = msg(jetcarp_search::ants::run_one(&m, &t[0], &start, &lim))?;
     if r.store {
         msg(lib.ants_flush(0, std::slice::from_ref(&row), None, None))?;
     }

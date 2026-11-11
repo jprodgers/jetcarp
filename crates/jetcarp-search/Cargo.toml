@@ -1,0 +1,24 @@
+[package]
+name = "jetcarp-search"
+description = "JETCARP's searches: the job runner (specs, strategies, runner, handles, registry, budgets) and every strategy (soup hunts, bounded soup searches, explore, evolve, ants, movers, census, collisions, sandpiles), the dashboard's logic, and atlas publishing. No UI or GPU dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+jetcarp-core.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+rusqlite.workspace = true
+flate2.workspace = true
+memory-stats = "1.2.0"
+
+[dev-dependencies]
+# The GPU strategies' tests: a hunt and an explore search on the GPU equal the CPU's.
+jetcarp-gpu.workspace = true

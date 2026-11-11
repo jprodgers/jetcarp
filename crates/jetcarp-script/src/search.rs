@@ -13,10 +13,10 @@ use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64, nb_word
 use jetcarp_api::op::{Op, Progress, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut};
 use jetcarp_api::ops::search::{SearchStart, SearchStartIn, SearchStarted};
-use jetcarp_core::ants::job::AntProgress;
-use jetcarp_core::census::CensusProgress;
-use jetcarp_core::hunt::job::HuntProgress;
 use jetcarp_core::library::Library;
+use jetcarp_search::ants::AntProgress;
+use jetcarp_search::census::CensusProgress;
+use jetcarp_search::hunt::HuntProgress;
 use rhai::{Array, Dynamic, Engine, EvalAltResult, INT, Map};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -298,7 +298,7 @@ fn search(c: &Ctx, lib: &Library, v: &Value) -> Result<Value, String> {
             "known_patterns": 0, "new_rules": 0, "ids": [], "stored": true, "seconds": 0.0 }),
         );
     }
-    let r: jetcarp_core::jobs::search::SearchResult = out
+    let r: jetcarp_search::jobs::search::SearchResult = out
         .result
         .and_then(|r| serde_json::from_value(r).ok())
         .ok_or_else(|| format!("search {} stopped before its end ({})", out.job, out.status))?;
@@ -425,7 +425,7 @@ fn evolve(c: &Ctx, v: &Value) -> Result<Value, String> {
     };
     let report: jetcarp_core::evolve::EvolveReport =
         serde_json::from_value(r["report"].clone()).map_err(|e| e.to_string())?;
-    let found: Vec<jetcarp_core::evolve::catalog::FoundMover> =
+    let found: Vec<jetcarp_search::evolve::FoundMover> =
         serde_json::from_value(r["found"].clone()).unwrap_or_default();
     let last = report.generations.last();
     Ok(json!({
@@ -646,7 +646,7 @@ pub(crate) fn sandpile_pile(c: &Arc<Ctx>, m: &Map, parent: Option<&std::path::Pa
     }
     let lib = default_lib(c);
     let out = start(c, &lib, "pile", &spec, false).map_err(|x| e(format!("sandpile_pile: {x}")))?;
-    let p: jetcarp_core::pile::job::PileProgress =
+    let p: jetcarp_search::pile::PileProgress =
         serde_json::from_value(out.progress.clone()).unwrap_or_default();
     if !out.created {
         c.log(format!("resuming {} from step {}", p.folder, p.step));

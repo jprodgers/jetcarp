@@ -480,7 +480,7 @@ pub struct JobRow {
     pub created: String,
     pub updated: String,
     pub finished: Option<String>,
-    /// Who runs it (`host:pid`), while a runner holds it (`crate::jobs`).
+    /// Who runs it (`host:pid`), while a runner holds it (`jetcarp_search::jobs`).
     #[serde(skip)]
     pub owner: Option<String>,
     /// The runner's last heartbeat, seconds since 1970.

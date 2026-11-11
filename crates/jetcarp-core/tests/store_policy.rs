@@ -1,12 +1,12 @@
 //! The hunt's storage policy (large one-off still lifes and oscillators kept as `unstored`
 //! rows), compressed pattern bodies, and pruning a catalog to the policy.
 
-use jetcarp_core::hunt::job::{self, HuntSpec, StorePolicy};
-use jetcarp_core::jobs::hunt::HuntRun;
-use jetcarp_core::jobs::{Budget, RunOptions, Runner};
 use jetcarp_core::library::{Library, Query};
 use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::topology::TilingSpec;
+use jetcarp_search::hunt::{self, HuntSpec, StorePolicy};
+use jetcarp_search::jobs::hunt::HuntRun;
+use jetcarp_search::jobs::{Budget, RunOptions, Runner};
 use std::collections::BTreeSet;
 
 fn temp_lib(name: &str) -> Library {
@@ -81,7 +81,7 @@ fn run_hunt(
     threads: usize,
     batch: u64,
     limit: Option<u64>,
-) -> job::HuntProgress {
+) -> hunt::HuntProgress {
     let o = RunOptions {
         threads,
         budget: Budget {
@@ -96,8 +96,8 @@ fn run_hunt(
         .progress_as()
 }
 
-fn run(lib: &Library, s: &HuntSpec, threads: usize, batch: u64) -> (i64, job::HuntProgress) {
-    let jid = job::start(lib, s).unwrap();
+fn run(lib: &Library, s: &HuntSpec, threads: usize, batch: u64) -> (i64, hunt::HuntProgress) {
+    let jid = hunt::start(lib, s).unwrap();
     (jid, run_hunt(lib, jid, threads, batch, None))
 }
 
@@ -161,7 +161,7 @@ fn policy_keeps_large_one_offs_unstored_independent_of_threads_and_batches() {
     assert_eq!(&ids | &un, ids_all);
     assert!(all.unstored_counts(ja).unwrap().is_empty());
     // Distinct counts do not depend on the policy.
-    let d = |p: &job::HuntProgress| p.groups.iter().map(|g| g.distinct).sum::<u64>();
+    let d = |p: &hunt::HuntProgress| p.groups.iter().map(|g| g.distinct).sum::<u64>();
     assert_eq!(d(&p), d(&pa));
     // Pruning the full catalog to the policy removes exactly the unstored objects and keeps
     // their copies as unstored rows.
@@ -185,7 +185,7 @@ fn policy_hunt_resumed_equals_uninterrupted() {
     let a = temp_lib("r-whole");
     let (ja, pa) = run(&a, &s, 0, 0);
     let b = temp_lib("r-halves");
-    let jb = job::start(&b, &s).unwrap();
+    let jb = hunt::start(&b, &s).unwrap();
     let half = run_hunt(&b, jb, 0, 40, Some(120));
     assert_eq!(half.status, "paused");
     let b2 = Library::open(b.path());

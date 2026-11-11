@@ -70,7 +70,7 @@ pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcar
         symmetry: true,
     };
     let row =
-        jetcarp_core::ants::job::run_one(&m, &t[0], &jetcarp_core::ants::run::Start::Empty, &lim)
+        jetcarp_search::ants::run_one(&m, &t[0], &jetcarp_core::ants::run::Start::Empty, &lim)
             .unwrap();
     lib.ants_flush(0, std::slice::from_ref(&row), None, None)
         .unwrap();

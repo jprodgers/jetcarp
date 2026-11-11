@@ -10,8 +10,8 @@ use crate::world::Session;
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::soup::SoupBatcher;
-use jetcarp_core::jobs::Registry;
 use jetcarp_core::library::Library;
+use jetcarp_search::jobs::Registry;
 use schemars::JsonSchema;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -330,7 +330,7 @@ impl Ctx {
             library: None,
             store: OnceLock::new(),
             session: Mutex::new(None),
-            registry: jetcarp_core::jobs::registry(),
+            registry: jetcarp_search::jobs::registry(),
         }
     }
 

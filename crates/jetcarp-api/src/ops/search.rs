@@ -1,7 +1,8 @@
 //! `search.start`: start (or carry on) a search of any strategy, as a catalog job run by the job
-//! runner (`jetcarp_core::jobs`): here until it ends, is stopped, or runs out of budget; on a
-//! thread of this process (`background`, kept in the context's [`Registry`](jetcarp_core::jobs::Registry));
-//! or in a process of its own (`detach`, `jetcarp jobs resume JOB`).
+//! runner (`jetcarp_search::jobs`): here until it ends, is stopped, or runs out of budget; on a
+//! thread of this process (`background`, kept in the context's
+//! [`Registry`](jetcarp_search::jobs::Registry)); or in a process of its own (`detach`, `jetcarp
+//! jobs resume JOB`).
 //!
 //! | Strategy (aliases) | Job kind | What | Spec |
 //! | --- | --- | --- | --- |
@@ -38,26 +39,26 @@ use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
 use jetcarp_core::census::{self, CensusReport, CensusSpec, RunClass};
 use jetcarp_core::evolve::EvolveSpec;
-use jetcarp_core::hunt::job::{HuntSpec, StorePolicy};
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
-use jetcarp_core::jobs::collide::{CollideJobSpec, CollideRun};
-use jetcarp_core::jobs::evolve::{EvolveJobSpec, EvolveResult, EvolveRun};
-use jetcarp_core::jobs::explore::{ExploreRun, ExploreSpec};
-use jetcarp_core::jobs::pile::PileRunOn;
-use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
-use jetcarp_core::jobs::{
-    self, Budget, JobSpec, Outcome, RunOptions, Runner, Stopped, Strategy, status_name,
-};
 use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{self, JobStatus, Library};
+use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::collide::{CollideOutput, CollideSpec};
 use jetcarp_core::pattern::movers::{MoverReport, TrackSpec};
 use jetcarp_core::pattern::{self, PatternClass, tiling_list};
-use jetcarp_core::pile::job::PileJobSpec;
 use jetcarp_core::pile::{self, Centre, PileSpec};
-use jetcarp_core::window::job::{MoverJobSpec, MoverProgress, travelling_start};
 use jetcarp_core::window::track::WindowOpts;
 use jetcarp_core::{Boundary, Nb, SizeSpec, TilingSpec, Topology, VERSION, render, sheet};
+use jetcarp_search::hunt::{HuntSpec, StorePolicy};
+use jetcarp_search::jobs::collide::{CollideJobSpec, CollideRun};
+use jetcarp_search::jobs::evolve::{EvolveJobSpec, EvolveResult, EvolveRun};
+use jetcarp_search::jobs::explore::{ExploreRun, ExploreSpec};
+use jetcarp_search::jobs::pile::PileRunOn;
+use jetcarp_search::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
+use jetcarp_search::jobs::{
+    self, Budget, JobSpec, Outcome, RunOptions, Runner, Stopped, Strategy, status_name,
+};
+use jetcarp_search::pile::PileJobSpec;
+use jetcarp_search::window::{MoverJobSpec, MoverProgress, travelling_start};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -384,7 +385,7 @@ pub struct BoundedIn {
 
 impl BoundedIn {
     fn spec(&self, cx: &Ctx) -> Result<SearchJobSpec, ApiError> {
-        let d = library::search::SearchSpec::default();
+        let d = jetcarp_search::bounded::SearchSpec::default();
         let mut rules = texts(self.rules.as_ref(), "rules", RULE_SEPS)?;
         rules.extend(rules_file(cx, self.rules_file.as_deref())?);
         if rules.is_empty() {
@@ -416,7 +417,7 @@ impl BoundedIn {
             },
         };
         Ok(SearchJobSpec {
-            search: library::search::SearchSpec {
+            search: jetcarp_search::bounded::SearchSpec {
                 rules,
                 tilings: tilings(self.tilings.as_ref())?,
                 size,
@@ -494,9 +495,9 @@ pub struct AntsIn {
 }
 
 impl AntsIn {
-    fn spec(&self) -> Result<jetcarp_core::ants::job::AntSpec, ApiError> {
-        use jetcarp_core::ants::job::{AntSpec, Soups};
+    fn spec(&self) -> Result<jetcarp_search::ants::AntSpec, ApiError> {
         use jetcarp_core::ants::search::{Strings, Tables};
+        use jetcarp_search::ants::{AntSpec, Soups};
         let d = AntSpec::default();
         let strings = match &self.strings {
             None | Some(Value::Null) | Some(Value::Bool(false)) => None,
@@ -1011,7 +1012,7 @@ impl PileIn {
                 }
                 let want = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
                 for j in lib.jobs().map_err(catalog_err)?.into_iter().rev() {
-                    if j.kind != jetcarp_core::pile::job::KIND {
+                    if j.kind != jetcarp_search::pile::KIND {
                         continue;
                     }
                     if let Ok(s) = serde_json::from_value::<PileJobSpec>(j.spec.clone())
@@ -1342,8 +1343,8 @@ const FAMILIES: &str = "families: life_like, generations, ltl, jaca, cyclic, rps
 
 impl ExploreIn {
     fn spec(&self, cx: &Ctx) -> Result<ExploreSpec, ApiError> {
-        use jetcarp_core::explore::job::Settings;
-        use jetcarp_core::explore::store::fam_named;
+        use jetcarp_search::explore::job::Settings;
+        use jetcarp_search::explore::store::fam_named;
         let d = Settings::default();
         let seps = &[',', ' ', ';', '\t', '\n'];
         let tilings = texts(self.tilings.as_ref(), "tilings", seps)?;
@@ -1740,7 +1741,7 @@ impl Op for SearchStart {
 /// seconds to a minute. Jobs run in the background or in a process of their own have no such
 /// bound.
 fn within_limits(cx: &Ctx, lib: &Library, kind: &str, spec: &Value) -> Result<(), ApiError> {
-    use jetcarp_core::dashboard::digits;
+    use jetcarp_search::dashboard::digits;
     let l = &cx.limits;
     let over = |m: String| Err(ApiError::limit(m));
     let spec_err = |e: serde_json::Error| ApiError::engine(format!("{kind} spec: {e}"));
@@ -2164,7 +2165,7 @@ fn run_here(
 /// A done job's result from the catalog and its folder (what does not need the run itself).
 fn saved_result(lib: &Library, row: &JobRow) -> Option<Value> {
     match row.kind.as_str() {
-        "census" => census::job_report(lib, row.id)
+        "census" => jetcarp_search::census::job_report(lib, row.id)
             .ok()
             .map(|r| census_value(&r)),
         "pile" => {
@@ -2240,7 +2241,7 @@ fn finished(lib: &Library, row: &JobRow, slot: Slot, progress: &Value) -> (Optio
             Extra::None,
         ),
         Slot::None => match row.kind.as_str() {
-            "census" => match census::job_report(lib, row.id) {
+            "census" => match jetcarp_search::census::job_report(lib, row.id) {
                 Ok(r) => (Some(census_value(&r)), Extra::Census(Box::new(r))),
                 Err(_) => (None, Extra::None),
             },
@@ -2625,7 +2626,7 @@ fn result_text(
             }
         }
         "pile" => {
-            let p: jetcarp_core::pile::job::PileProgress =
+            let p: jetcarp_search::pile::PileProgress =
                 serde_json::from_value(out.progress.clone()).ok()?;
             let _ = writeln!(
                 s,

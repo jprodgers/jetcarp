@@ -102,7 +102,7 @@ struct Row<'a> {
 
 /// A small atlas with one mature entry (the second).
 fn write_atlas(path: &Path, rows: &[Row]) {
-    let conn = atlas::create(path).unwrap();
+    let conn = jetcarp_search::explore::atlas::create(path).unwrap();
     let mut st = conn
         .prepare(
             "INSERT INTO entries(id,title,category,family,tiling,tiling_group,rule,seed,score,

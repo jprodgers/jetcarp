@@ -981,7 +981,7 @@ impl Op for QuickstartPublish {
     fn run(cx: &Ctx, a: PublishIn, _: &dyn Progress) -> Result<Published, ApiError> {
         use jetcarp_core::explore::atlas;
         let (_, row, path) = super::explore::explore_job(cx, a.job)?;
-        let conn = jetcarp_core::explore::store::open_read(&path).map_err(ApiError::not_found)?;
+        let conn = jetcarp_search::explore::store::open_read(&path).map_err(ApiError::not_found)?;
         if a.per_niche == 0 || a.max_entries == 0 {
             return Err(ApiError::invalid(
                 "per_niche and max_entries must be at least 1",
@@ -998,14 +998,15 @@ impl Op for QuickstartPublish {
                 cx.fs.writable(&p.display().to_string())?
             }
         };
-        let opts = atlas::AtlasOpts {
+        let opts = jetcarp_search::explore::atlas::AtlasOpts {
             per_niche: a.per_niche,
             min_score: a.min_score,
             max_entries: a.max_entries,
         };
         // Built beside it and moved over it, so a reader never sees half an atlas.
         let tmp = out.with_extension("sqlite.part");
-        let n = atlas::build(&conn, &tmp, &opts).map_err(ApiError::engine)?;
+        let n =
+            jetcarp_search::explore::atlas::build(&conn, &tmp, &opts).map_err(ApiError::engine)?;
         std::fs::rename(&tmp, &out).map_err(|e| ApiError::io(format!("{}: {e}", out.display())))?;
         let in_qs = atlas::locate()
             .is_some_and(|p| std::fs::canonicalize(&p).ok() == std::fs::canonicalize(&out).ok());

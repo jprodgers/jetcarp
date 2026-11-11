@@ -1,7 +1,6 @@
 //! Phase 3: the pattern library (records, dedup, verification, search, collisions, paste,
 //! promotion to Quick Start). Every test uses its own temporary catalog.
 
-use jetcarp_core::library::search::{SearchSpec, search};
 use jetcarp_core::library::{self, AddOutcome, Library, Query};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::collide::{CollideSpec, Outcome, collide};
@@ -10,6 +9,7 @@ use jetcarp_core::pattern::{
     record_from_object, verify,
 };
 use jetcarp_core::*;
+use jetcarp_search::bounded::{SearchSpec, search};
 
 /// A fresh folder under the system temp folder.
 fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -295,7 +295,7 @@ fn search_is_identical_at_any_thread_count() {
     };
     let (a, b) = (run(1), run(8));
     assert_eq!(a.report, b.report);
-    let key = |o: &library::search::SearchOutput| {
+    let key = |o: &jetcarp_search::bounded::SearchOutput| {
         o.records
             .iter()
             .map(|r| {

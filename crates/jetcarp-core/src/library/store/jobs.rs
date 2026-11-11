@@ -1,11 +1,11 @@
-//! The job runner's side of the catalog (`crate::jobs`): who runs a job, and a runner step's
-//! writes in one transaction.
+//! The job runner's side of the catalog (`jetcarp_search::jobs`): who runs a job, and a runner
+//! step's writes in one transaction.
 //!
 //! **Lease columns.** `jobs.owner` (`host:pid` of the process running the job) and
 //! `jobs.heartbeat` (seconds since 1970, renewed by the runner every half minute) say who runs
 //! a job and that it is alive; the dashboard reads the heartbeat so a job with long batches is
 //! not shown as stalled. What keeps two runners off one job is the runner's lock file
-//! (`crate::jobs`); these columns make the hold visible and let a runner's step write only
+//! (`jetcarp_search::jobs`); these columns make the hold visible and let a runner's step write only
 //! while it still holds the job ([`Library::job_step`]).
 
 use super::{

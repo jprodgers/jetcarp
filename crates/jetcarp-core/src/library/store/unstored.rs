@@ -1,5 +1,5 @@
 //! Objects a hunt saw but did not store as full records (the hunt's storage policy,
-//! [`crate::hunt::job::StorePolicy`]), pruning a catalog to that policy, and compact pattern
+//! `jetcarp_search::hunt::StorePolicy`), pruning a catalog to that policy, and compact pattern
 //! bodies.
 //!
 //! **Unstored objects.** Boiling rules leave huge numbers of one-off large still lifes and

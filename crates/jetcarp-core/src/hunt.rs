@@ -3,6 +3,5 @@
 
 pub mod bits;
 pub mod gun;
-pub mod job;
 pub mod separate;
 pub mod soup;

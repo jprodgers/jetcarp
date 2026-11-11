@@ -4,7 +4,7 @@
 //! carry one on (`jobs.resume`), delete one (`jobs.remove`), and write a Markdown report of what
 //! one job or a labelled set of jobs searched and found (`jobs.report`).
 //!
-//! Every kind is the job runner's (`jetcarp_core::jobs`): what is kind-specific (its summary,
+//! Every kind is the job runner's (`jetcarp_search::jobs`): what is kind-specific (its summary,
 //! progress line, stop, finds) comes from the kind, so one status and one stop serve hunts, ant
 //! searches, censuses, movers, piles, bounded searches, collisions, evolve searches, and explore
 //! searches alike. A deterministic job resumes exactly (it ends as an uninterrupted run would);
@@ -15,14 +15,14 @@ use super::search::{FilesIn, How, SearchStarted, line_of, run_job};
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
-use jetcarp_core::ants::job::AntProgress;
-use jetcarp_core::dashboard::{self, JobSummary, Target, digits, duration};
-use jetcarp_core::hunt::job::HuntProgress;
-use jetcarp_core::jobs::explore::ExploreProgress;
-use jetcarp_core::jobs::{self, status_name};
 use jetcarp_core::library::store::JobRow;
 use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::{PatternClass, PatternRecord};
+use jetcarp_search::ants::AntProgress;
+use jetcarp_search::dashboard::{self, JobSummary, Target, digits, duration};
+use jetcarp_search::hunt::HuntProgress;
+use jetcarp_search::jobs::explore::ExploreProgress;
+use jetcarp_search::jobs::{self, status_name};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

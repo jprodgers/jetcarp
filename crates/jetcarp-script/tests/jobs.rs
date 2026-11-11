@@ -73,7 +73,8 @@ fn labelled_jobs_census_jobs_and_rule_neighbours() {
     // The dashboard shows the label in front of the job's title.
     let lib = Library::open(root.join("lib"));
     let rows = lib.jobs().unwrap();
-    let sums = jetcarp_core::dashboard::summaries(&rows, jetcarp_core::dashboard::now_seconds());
+    let sums =
+        jetcarp_search::dashboard::summaries(&rows, jetcarp_search::dashboard::now_seconds());
     assert!(
         sums.iter().any(|s| s.title.starts_with("t · hunt: ")),
         "{:?}",

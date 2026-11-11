@@ -18,8 +18,8 @@
 //! (anything else; the products are listed and cataloged).
 //!
 //! Every placement's run is a pure function of its inputs and results are gathered in placement
-//! order ([`Collected`]), so they are identical at any thread count and in any batches:
-//! [`collide`] runs them all at once; a collide job (`crate::jobs::collide`) runs them a batch per
+//! order ([`Collected`]), so they are identical at any thread count and in any batches: [`collide`]
+//! runs them all at once; a collide job (`jetcarp_search::jobs::collide`) runs them a batch per
 //! step, its checkpoint the gathered state.
 
 use super::verify::{Frame, lattice_info, rule_world};

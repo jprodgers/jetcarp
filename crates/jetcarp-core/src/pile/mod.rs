@@ -25,7 +25,6 @@
 
 pub mod export;
 pub mod file;
-pub mod job;
 pub mod lattice;
 pub mod patch;
 
@@ -148,8 +147,8 @@ pub enum BoardRef<'a> {
 }
 
 impl<'a> BoardRef<'a> {
-    /// The board as a job's live state (`crate::jobs::Viewer`): the pile job shows its board
-    /// this way each second and after each step.
+    /// The board as a job's live state (`jetcarp_search::jobs::Viewer`): the pile job shows its
+    /// board this way each second and after each step.
     pub fn as_any(&self) -> &'a dyn std::any::Any {
         match *self {
             BoardRef::Lattice(b) => b,

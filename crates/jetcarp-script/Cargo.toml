@@ -12,6 +12,7 @@ homepage.workspace = true
 
 [dependencies]
 jetcarp-core.workspace = true
+jetcarp-search.workspace = true
 jetcarp-api.workspace = true
 rayon.workspace = true
 serde.workspace = true

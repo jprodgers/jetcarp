@@ -37,7 +37,6 @@ use crate::topology::{SizeSpec, TilingSpec, Topology};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-pub mod job;
 pub mod track;
 
 /// A disc of the window, in exact-coordinate floats (the frame of the exact placements).

@@ -1,7 +1,5 @@
 //! Phase 4: the SQLite catalog, rule-free pattern identity, and rule ranges.
 
-use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
-use jetcarp_core::library::search::{SearchSpec, search};
 use jetcarp_core::library::{self, AddOutcome, Library, Query, Sighting};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::{
@@ -10,6 +8,8 @@ use jetcarp_core::pattern::{
 };
 use jetcarp_core::rules::Rule;
 use jetcarp_core::*;
+use jetcarp_search::bounded::{SearchSpec, search};
+use jetcarp_search::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
 use std::collections::HashSet;
 
 fn temp_lib(name: &str) -> Library {
@@ -374,7 +374,7 @@ fn catalog_store_search_jobs_and_sightings() {
     };
     let out = search(&spec, None).unwrap();
     // The search as a job on the runner, its finds stored with the job's last write.
-    let js = jetcarp_core::jobs::JobSpec {
+    let js = jetcarp_search::jobs::JobSpec {
         strategy: "search".into(),
         spec: serde_json::to_value(SearchJobSpec {
             search: spec.clone(),
@@ -383,11 +383,11 @@ fn catalog_store_search_jobs_and_sightings() {
         .unwrap(),
         ..Default::default()
     };
-    let jid = jetcarp_core::jobs::create(&lib, &js).unwrap();
+    let jid = jetcarp_search::jobs::create(&lib, &js).unwrap();
     let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
     let mut run = SearchRun::new(spec.clone());
     run.result = Some(slot.clone());
-    jetcarp_core::jobs::Runner::new(lib.clone())
+    jetcarp_search::jobs::Runner::new(lib.clone())
         .run_with(jid, &mut run, &Default::default())
         .unwrap();
     let st: SearchResult = slot.lock().unwrap().take().unwrap();

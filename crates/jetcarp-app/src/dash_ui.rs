@@ -11,11 +11,11 @@
 //! new progress, and runs the commands (start, pause, resume, stop, rate, reject). A hunt
 //! starts through the operation `search.start`, pause and stop go through `jobs.stop`, and
 //! *Resume here* through `jobs.resume`, all in the background: the jobs run on the job runner,
-//! their handles in the process's registry (`jetcarp_core::jobs::registry`), which the other
+//! their handles in the process's registry (`jetcarp_search::jobs::registry`), which the other
 //! windows' jobs and the app's MCP link share. Animations are made on two more threads
 //! (`media::pattern_animation`) only for the finds on screen, in the house style or the palette
 //! picked under *Colours* (which *Render media* uses too). Everything kind-specific is in
-//! `jetcarp_core::jobs::StrategyKind`.
+//! `jetcarp_search::jobs::StrategyKind`.
 
 use crate::thumbs;
 use crate::window_job::{self, AppPlatform};
@@ -24,14 +24,14 @@ use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
 use jetcarp_api::ops::search::{HuntIn, SearchStart, SearchStartIn};
 use jetcarp_api::{Ctx, Platform};
-use jetcarp_core::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
-use jetcarp_core::hunt::job::HuntSpec;
 use jetcarp_core::hunt::soup::SoupSpec;
-use jetcarp_core::jobs::{self, registry};
 use jetcarp_core::library::{HeatRow, JobStatus, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
+use jetcarp_search::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
+use jetcarp_search::hunt::HuntSpec;
+use jetcarp_search::jobs::{self, registry};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};

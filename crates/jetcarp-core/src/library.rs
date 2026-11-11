@@ -1,19 +1,17 @@
 //! The pattern library: the SQLite catalog that stores patterns (their records are in
-//! [`crate::pattern`]) and what else JETCARP keeps (jobs, Quick Start rows, ant runs, media), and
-//! the bounded soup search.
+//! [`crate::pattern`]) and what else JETCARP keeps (jobs, Quick Start rows, ant runs, media).
 //!
 //! **Store.** [`Library`] is the catalog file (`JETCARP_LIBRARY`, else
 //! `<data>/catalog.sqlite`); [`store`] documents its tables and migrations.
 //!
 //! The main entry points: [`Library`] (add, get, list, query, update, remove, export, import,
-//! sightings, jobs, Quick Start rows), [`search`](search::search), and [`promote`].
+//! sightings, jobs, Quick Start rows) and [`promote`].
 
 use crate::pattern::{CurationState, DiscoveredBy, PatternClass, PatternRecord, range};
 use crate::topology::Nb;
 use crate::world::Scene;
 use serde::{Deserialize, Serialize};
 
-pub mod search;
 pub mod store;
 
 pub use store::prepare;
