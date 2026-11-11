@@ -38,6 +38,20 @@ pub struct Origin {
     /// Found elsewhere, by this finder (a name and an ORCID iD, either may be empty): see
     /// [`Origin::found_elsewhere`].
     pub found_by: Option<(String, String)>,
+    /// Found elsewhere and imported with its whole history there (a pack's provenance): row 0
+    /// as that history gives it, then its later rows, before this library's `imported` row
+    /// ([`Origin::with_history`]).
+    pub history: Option<Box<History>>,
+}
+
+/// A record's history from where it was found ([`Origin::with_history`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct History {
+    /// Its row 0 there (`found`, or `imported` when it came from records without a history),
+    /// written as it is apart from its target and sequence number.
+    pub row0: ProvenanceRow,
+    /// Its rows 1, 2, ... there, in order.
+    pub rows: Vec<ProvenanceRow>,
 }
 
 impl Origin {
@@ -48,6 +62,7 @@ impl Origin {
             source: None,
             pack_hash: String::new(),
             found_by: None,
+            history: None,
         }
     }
     /// Imported from records made elsewhere.
@@ -57,6 +72,7 @@ impl Origin {
             source: Some(source.to_string()),
             pack_hash: String::new(),
             found_by: None,
+            history: None,
         }
     }
     /// Found elsewhere by `finder` (with ORCID iD `orcid`), and imported from `source`. A record
@@ -72,7 +88,17 @@ impl Origin {
             source: Some(source.to_string()),
             pack_hash: String::new(),
             found_by: Some((finder.trim().to_string(), orcid.trim().to_string())),
+            history: None,
         }
+    }
+    /// A record found elsewhere ([`Origin::found_elsewhere`]) that brings its whole history
+    /// there, as a pack's provenance rows do: row 0 is `history.row0` (its kind, finder,
+    /// search, machine, engine, source and date as given; the pin is the record's), rows 1, 2,
+    /// ... are `history.rows`, and the `imported` row follows them, naming `pack_hash`.
+    pub fn with_history(mut self, history: History, pack_hash: &str) -> Origin {
+        self.history = Some(Box::new(history));
+        self.pack_hash = pack_hash.to_string();
+        self
     }
 }
 
@@ -158,6 +184,9 @@ pub(super) fn first_in(
     } else {
         date
     };
+    if let Some(h) = &origin.history {
+        return history_in(tx, target_kind, id, origin, h, pin, &now);
+    }
     if let Some((finder, orcid)) = &origin.found_by {
         let n = tx
             .prepare_cached(
@@ -216,6 +245,75 @@ pub(super) fn first_in(
         date,
     ])
     .map_err(e)?;
+    Ok(())
+}
+
+/// Write a record's history from elsewhere (nothing if it has a provenance here already): row 0
+/// and the rows after it as given, then this library's `imported` row, naming the pack.
+fn history_in(
+    tx: &Transaction,
+    target_kind: &str,
+    id: &str,
+    origin: &Origin,
+    h: &History,
+    pin: &str,
+    now: &str,
+) -> Result<(), String> {
+    let mut ins = tx
+        .prepare_cached(
+            "INSERT OR IGNORE INTO provenance (target_kind, target_id, seq, kind, finder, orcid,
+                search_kind, job_uuid, pack_hash, machine, engine_version, geometry_pin, source,
+                date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        )
+        .map_err(e)?;
+    let mut put = |seq: i64, r: &ProvenanceRow, pin: &str| -> Result<usize, String> {
+        ins.execute(params![
+            target_kind,
+            id,
+            seq,
+            r.kind,
+            r.finder,
+            r.orcid,
+            r.search_kind,
+            r.job_uuid,
+            r.pack_hash,
+            r.machine,
+            r.engine_version,
+            pin,
+            r.source,
+            r.date
+        ])
+        .map_err(e)
+    };
+    if put(0, &h.row0, pin)? == 0 {
+        return Ok(());
+    }
+    for (k, r) in h.rows.iter().enumerate() {
+        let p = if r.geometry_pin.is_empty() {
+            pin
+        } else {
+            r.geometry_pin.as_str()
+        };
+        put(k as i64 + 1, r, p)?;
+    }
+    let imported = ProvenanceRow {
+        target_kind: target_kind.to_string(),
+        target_id: id.to_string(),
+        seq: 0,
+        kind: "imported".into(),
+        finder: env("JETCARP_FINDER"),
+        orcid: env("JETCARP_ORCID"),
+        search_kind: String::new(),
+        job_uuid: String::new(),
+        pack_hash: origin.pack_hash.clone(),
+        machine: machine(),
+        engine_version: jetcarp_core::VERSION.into(),
+        geometry_pin: pin.to_string(),
+        source: origin.source.clone().unwrap_or_default(),
+        date: now.to_string(),
+    };
+    put(h.rows.len() as i64 + 1, &imported, pin)?;
     Ok(())
 }
 

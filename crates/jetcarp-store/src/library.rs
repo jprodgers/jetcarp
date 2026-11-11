@@ -73,6 +73,7 @@ mod ants;
 mod census;
 mod dashboard;
 mod jobs;
+pub mod pack;
 pub mod provenance;
 mod query;
 pub mod schema;
@@ -82,7 +83,7 @@ mod reverify;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
-pub use provenance::{AliasRow, Origin, ProvenanceRow};
+pub use provenance::{AliasRow, History, Origin, ProvenanceRow};
 pub use query::{Query, Update, sort_records};
 pub use ratings::{Dedupe, RatingRow, RunReview, VERDICTS, search_run_target, verdict_rating};
 pub use reverify::{Reverified, ReverifyCounts, ReverifyTarget};
@@ -932,6 +933,33 @@ impl Library {
         origin: &Origin,
     ) -> Result<Vec<Result<AddOutcome, String>>, String> {
         self.add_batch(recs.into_iter().map(|r| (r, 0)).collect(), job, origin)
+    }
+
+    /// [`add_many_as`](Self::add_many_as) with an origin per record (a pack's records each
+    /// bring their own finder and history: [`Origin::with_history`]). With `prepare` false the
+    /// records are stored as they are, without canonical form or verification, keeping their id
+    /// and pin (an importer's records made on another geometry or meaning of their rule, stored
+    /// flagged `needs_reverify` until `library reverify` checks them).
+    pub fn add_many_each(
+        &self,
+        recs: Vec<(PatternRecord, Origin)>,
+        job: i64,
+        prepare_first: bool,
+    ) -> Result<Vec<Result<AddOutcome, String>>, String> {
+        let ready: Vec<(Result<PatternRecord, String>, Origin)> = recs
+            .into_par_iter()
+            .map(|(r, o)| (if prepare_first { prepare(r) } else { Ok(r) }, o))
+            .collect();
+        self.write(|tx| {
+            let mut out = Vec::with_capacity(ready.len());
+            for (r, origin) in ready {
+                out.push(match r {
+                    Ok(r) => Ok(add_in(tx, r, job, 0, &origin)?),
+                    Err(x) => Err(x),
+                });
+            }
+            Ok(out)
+        })
     }
 
     fn add_batch(
