@@ -378,6 +378,12 @@ schema number stays 2, since schema 2 gained them before the 0.4.0 release.
 | `quickstart_usage` | how often the app opened a Quick Start entry (local only) |
 | `ratings` | rating of a pattern, ant run, Quick Start entry or search run (see below) |
 | `media` | picture or animation rendered for a record: its kind and mode, the SHA-256 and extension of its file, its render key (see below) |
+| `pack_imports` | import of a [pack](pack-format.md) version: its manifest hash, feed, publisher, how its signature checked, the folder's name, when, the engine, and a report (JSON: counts, and the sample verified again) |
+| `pack_retractions` | record a pack's publisher retracted: target, publisher, reason, date, and the manifest that said so (kept as a flag; nothing is deleted) |
+| `pack_revoked` | publisher key a pack's key statements revoked, and when it was seen: kept for good |
+
+The three `pack_` tables are made the first time a pack is imported, so a library that never
+imported one does not have them; the schema number stays 2.
 
 ## Ratings of search runs
 
