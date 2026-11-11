@@ -214,8 +214,12 @@ another publisher also published stays theirs.
   authorises. A follower MUST refuse a ref whose signature does not verify.
 - A reader MUST ignore ref members it does not know (1.1 adds `mirrors` and `torrents`).
 
-*JETCARP 0.4 reads refs to find a store's newest version and checks their signatures; following
-feeds, and keeping the last `seq`, arrive with networking in 0.6.*
+**JETCARP 0.4 does not refuse rollbacks.** It reads refs to find a store's newest version and
+checks their signatures, but it is not a follower: it keeps no `seq` (following feeds, and keeping
+the last `seq`, arrive with networking in 0.6). So importing an older version of a feed after a
+newer one is accepted, and a record the newer version retracted comes back with the older one. The
+retraction stays in the library's `pack_retractions`, so that record stays flagged as retracted.
+This is accepted for 0.4.
 
 ## Signatures and keys
 
@@ -227,8 +231,13 @@ feeds, and keeping the last `seq`, arrive with networking in 0.6.*
 - **A manifest's signature** is a detached file, `sigs/sha256/<aa>/<hex>/<signer>.sig`, over the
   manifest's exact bytes, so signing never changes a manifest's hash and others can add
   endorsements later. A reader takes the signing key from the signature itself, and MUST check
-  that the file's `<signer>` is that key's. The publisher's own signature is at the name the
-  manifest's `publisher` gives, so a reader over HTTP fetches it without listing a folder.
+  that the file's `<signer>` is that key's. Every signature is at its own key's name: the
+  publisher's key's at the name the manifest's `publisher` gives, a machine key's at that machine
+  key's. A static host cannot list a folder, so a reader over HTTP looks for a manifest's
+  signature under the publisher's key and under each key in the `authorised` list of the
+  publisher's key statement (fetched first, at the name `publisher` gives); that finds every
+  signature that can make the version signed by its publisher. Finding endorsements by other keys
+  needs listing, which waits for 1.1.
 - Anyone can check one with OpenSSH:
 
   ```sh
@@ -1022,8 +1031,9 @@ The operations are `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pac
 
 ## Questions settled while building it
 
-Step 10 settled these, from building the reader and writer and from an independent Python reader
-written from the design alone. Each is part of the rules above.
+Step 10 settled these, from building the reader and writer, from an independent Python reader
+written from the design alone, and from a cross-check of the two (the last rows). Each is part of
+the rules above.
 
 | Question | Settled |
 | --- | --- |
@@ -1044,7 +1054,7 @@ written from the design alone. Each is part of the rules above.
 | Decimals in a search's settings and record | strings in the pack, numbers again in JETCARP |
 | Exports made of hard links | links where the file system allows, else copies |
 | Partition keys and columns | keys named as their columns (`class_group`, `tiling_group`); `class_group` is the class; ants and Quick Start by `tiling_group` only; Hive folders name the same columns |
-| `family` and `semantics` | on `patterns`, `rules`, `ants`, `quickstart` and every verification |
+| `family` and `semantics` | `family` and `semantics` on `patterns`, `rules` and `ants`; `rule_family` and `semantics` on `quickstart`; `semantics` alone on every verification (its rule's family is the `rules` row's) |
 | `created_by` and key-value metadata | `created_by` free (JETCARP's `jetcarp-pack 1`); writers SHOULD write no key-value metadata, readers ignore it |
 | The same `seq` again | the same manifest is no update; another manifest, or a lower `seq`, a refusal |
 | Retractions in snapshots and merges | cumulative, each with its `publisher` |
@@ -1053,7 +1063,7 @@ written from the design alone. Each is part of the rules above.
 | Index children | at most 10,000, 8 levels; an index read once, a part counted once |
 | Exports' indexes | in `index/`, with earlier manifests in `history/` and key statements in `keys/` |
 | The search index | defined above: `table` `search`, its parts and scores Parquet |
-| Finding keys and signatures over HTTP | the publisher's key statement and signature have names the manifest gives; listing endorsements and receipts waits for 1.1 |
+| Finding keys and signatures over HTTP | the publisher's key statement has the name the manifest gives; its signatures are looked for under the publisher's key and each key its statement authorises; listing endorsements and receipts waits for 1.1 |
 | Media files' extensions | `image/png` `png`, `image/gif` `gif`, `image/webp` `webp`; nothing else |
 | Generations populations | every listed cell counts, ageing cells too |
 | Sightings as counts | increments per version, totals by sum |
@@ -1075,3 +1085,12 @@ written from the design alone. Each is part of the rules above.
 | Cell-state meanings | the automata pages, pinned by semantics versions |
 | Level 3: which rule, steps, B0, repeated offsets, aperiodic | as [above](#conformance-levels) |
 | Ed25519 only | packs are signed with Ed25519 keys; another kind may count as no signature |
+| Reproducible golden packs | every time in them fixed, a search's find and verification times too; a test publishes the aperiodic one twice |
+| Quick Start targets | `quickstart:qs-<hex>`, the pack id, in every row; JETCARP maps its library's names to it and back |
+| `raters.consent_date` | a time like every other (a date alone is its midnight, `T00:00:00Z`) |
+| Schema ids | `jetcarp-<table> <n>` with the name as written (`jetcarp-score_models 1`); every id in [one table](#schema-ids) |
+| `ants.run` | its members given, as for `gun` and `range`; an ant an importer cannot read is left out alone, with a note naming it |
+| `raters`: facts or events | events: consent recorded again adds a row, and each rater's latest stands, so a rater can stop being named |
+| Machine-key signatures over HTTP | looked for under the publisher's key and each key its statement authorises |
+| Retracted records an importer lacks | skipped: nothing is added for them, and the retraction is recorded |
+| Rollbacks in JETCARP 0.4 | not refused (no `seq` is kept until 0.6); a retracted record that comes back stays flagged |
