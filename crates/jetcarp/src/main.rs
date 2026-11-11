@@ -19,6 +19,7 @@ mod jobs_cmd;
 mod library;
 mod media_cmd;
 mod movers_cmd;
+mod pack_cmd;
 mod platform;
 mod research;
 mod script_cmd;
@@ -151,6 +152,10 @@ enum Cmd {
     /// cropped PNG, a preview, metadata, and a resumable pile file per step (the same as
     /// `jetcarp search pile`).
     Pile(Box<search_cmd::PileArgs>),
+    /// Packs: publish the library as a signed, content-addressed store (Parquet and JSON that
+    /// any tool reads), export a version for a single download, check or import one: `key`,
+    /// `rater`, `publish`, `export`, `check`, `import`.
+    Pack(pack_cmd::PackArgs),
     /// Media for the catalog: per-step frames, a GIF or animated WebP, a poster, and a
     /// thumbnail for a pattern (alone), a Quick Start entry (from the seed), an ant run, or a
     /// scene; `--missing` renders everything missing or stale.
@@ -472,6 +477,7 @@ fn run() -> Result<()> {
         Cmd::Demo(a) => demo_cmd::run(a)?,
         Cmd::Pile(a) => search_cmd::pile(*a, json)?,
         Cmd::Media(a) => media_cmd::run(a, json)?,
+        Cmd::Pack(a) => pack_cmd::run(a, json)?,
         Cmd::Site(a) => media_cmd::run_site(a, json)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(&cx, *a, json)?,
         Cmd::Doctor => show(&system::SystemDoctor::run(&cx, NoInput {}, &Quiet)?, json)?,

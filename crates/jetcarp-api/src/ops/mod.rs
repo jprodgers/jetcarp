@@ -15,12 +15,15 @@
 //! | [`search`] | `search.start` |
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
 //! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
+//! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.import` (with the `pack` feature) |
 
 pub mod explore;
 pub mod files;
 pub mod jobs;
 pub mod library;
 pub mod media;
+#[cfg(feature = "pack")]
+pub mod pack;
 pub mod quickstart;
 pub mod reference;
 pub mod scene;
@@ -102,4 +105,16 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<jobs::JobsResume>::NEW,
     &Plain::<jobs::JobsRemove>::NEW,
     &Plain::<jobs::JobsReport>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackKey>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackRater>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackPublish>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackExport>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackCheck>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackImport>::NEW,
 ];

@@ -2392,6 +2392,7 @@ version = "0.4.0"
 dependencies = [
  "chrono",
  "jetcarp-core",
+ "jetcarp-pack",
  "jetcarp-search",
  "jetcarp-store",
  "png",

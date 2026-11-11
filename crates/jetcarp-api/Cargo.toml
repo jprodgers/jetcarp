@@ -11,16 +11,20 @@ repository.workspace = true
 homepage.workspace = true
 
 [features]
-default = ["ops"]
+default = ["ops", "pack"]
 # The operations and the context they run in, which need the store and the job runner. Without
 # it only the argument parsers, output folders, cells, the world host and errors remain: what
 # world-only Rhai (jetcarp-script without `api`, so jetcarp-display and the macOS saver) uses.
 ops = ["dep:jetcarp-store", "dep:jetcarp-search"]
+# Packs (`pack.*`): Arrow and Parquet's Arrow API come with them, so builds without packs (the
+# macOS saver, world-only Rhai) never link them.
+pack = ["ops", "dep:jetcarp-pack"]
 
 [dependencies]
 jetcarp-core.workspace = true
 jetcarp-store = { workspace = true, optional = true }
 jetcarp-search = { workspace = true, optional = true }
+jetcarp-pack = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 png.workspace = true

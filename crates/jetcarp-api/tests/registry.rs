@@ -30,7 +30,8 @@ fn every_operation_is_named_once_and_found_by_name() {
                 "wallpaper",
                 "sheet",
                 "search",
-                "jobs"
+                "jobs",
+                "pack"
             ]
             .contains(&group),
             "{n}"
@@ -83,6 +84,9 @@ fn every_operation_is_named_once_and_found_by_name() {
         ("jobs.status", true),
         ("jobs.stop", false),
         ("jobs.report", true),
+        ("pack.publish", false),
+        ("pack.import", false),
+        ("pack.check", true),
     ] {
         assert_eq!(find(n).unwrap().read_only(), ro, "{n}");
     }
