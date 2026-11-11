@@ -4,8 +4,8 @@
 
 use jetcarp_core::evolve::arena::deepest;
 use jetcarp_core::exact::{Iso, Place, Z12};
-use jetcarp_core::library::movers::{Stop, TrackSpec, track};
-use jetcarp_core::library::site::patch_topology;
+use jetcarp_core::pattern::movers::{Stop, TrackSpec, track};
+use jetcarp_core::pattern::site::patch_topology;
 use jetcarp_core::topology::{Nb, SizeSpec, Storage, TilingSpec, Topology};
 use jetcarp_core::window::track::{Tracker, WindowOpts, track_window};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};

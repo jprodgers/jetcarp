@@ -6,7 +6,8 @@ use jetcarp_core::evolve::priority::{PriorityRule, spectre_glider};
 use jetcarp_core::evolve::{
     Arenas, Evolution, EvolveCheckpoint, EvolveSpec, catalog, cross_check, evolve,
 };
-use jetcarp_core::library::{Library, PatternClass};
+use jetcarp_core::library::Library;
+use jetcarp_core::pattern::PatternClass;
 use jetcarp_core::topology::{Nb, TilingSpec};
 
 fn rule(t: &str) -> PriorityRule {

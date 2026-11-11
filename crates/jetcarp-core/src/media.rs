@@ -39,9 +39,10 @@
 pub mod encode;
 mod vp8l;
 
-use crate::library::verify::{Frame, envelope, lattice_info, rule_world};
-use crate::library::{Library, PatternClass, PatternRecord, QsStatus};
+use crate::library::{Library, QsStatus};
 use crate::objects::{LCell, Phase};
+use crate::pattern::verify::{Frame, envelope, lattice_info, rule_world};
+use crate::pattern::{PatternClass, PatternRecord};
 use crate::render::{self, Colorer, Image, Palette, RenderOptions, Rgba, ViewColors};
 use crate::rng::Fnv;
 use crate::rules::{FieldKind, Rule};
@@ -852,7 +853,7 @@ fn alone_run_lattice(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation,
 /// Movers on aperiodic patches: from the pattern's site on its patch.
 fn alone_run_patch(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation, String> {
     let st = &o.style;
-    let sc = crate::library::promote::showcase_scene(rec, None, None)?;
+    let sc = crate::pattern::promote::showcase_scene(rec, None, None)?;
     let p = rec.period.max(1);
     let n = (p * o.periods.max(8)).clamp(16, 240);
     let (frames, gens, win, s, px) = run_world(
@@ -886,7 +887,7 @@ fn alone_run_patch(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation, S
 pub fn pattern_animation(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation, String> {
     match o.mode {
         MediaMode::Seed => {
-            let sc = crate::library::promote::showcase_scene(rec, None, None)?;
+            let sc = crate::pattern::promote::showcase_scene(rec, None, None)?;
             scene_animation(&sc, o)
         }
         _ if rec.site.is_some() => alone_run_patch(rec, o),
@@ -1125,7 +1126,7 @@ fn resolve(lib: &Library, t: &MediaTarget, mode: MediaMode) -> Result<Job, Strin
             let id = rec.id.clone();
             let src = match mode {
                 MediaMode::Seed => Source::Scene(Box::new(
-                    crate::library::promote::showcase_scene(&rec, None, None)?,
+                    crate::pattern::promote::showcase_scene(&rec, None, None)?,
                 )),
                 _ => Source::Pattern(Box::new(rec)),
             };
@@ -1376,7 +1377,7 @@ fn write_files(
     if let Some(p) = &st.palette {
         render["palette"] = p.clone().into();
     }
-    let now = crate::library::now_utc();
+    let now = crate::pattern::now_utc();
     let row = |kind: &str, path: String, w: u32, h: u32, frames: u32, bytes: u64, hash: String| {
         MediaRow {
             target_kind: job.kind.into(),

@@ -54,7 +54,7 @@ fn grid_for(
     let h = (b[3] - b[1] + 1 + 2 * m) as u32;
     let mut w = (b[2] - b[0] + 1 + 2 * m) as u32 + h;
     for _ in 0..4 {
-        let mut spec = crate::library::tiling_identity(&row.tiling);
+        let mut spec = crate::pattern::tiling_identity(&row.tiling);
         spec.size = Some(SizeSpec::Rect { w, h });
         spec.boundary = Boundary::Dead;
         let topo = Topology::build(&spec)?;

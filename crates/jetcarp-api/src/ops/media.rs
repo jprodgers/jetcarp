@@ -11,11 +11,12 @@ use crate::args::{check_keys, get_bool, get_f64, get_list, get_str, get_u64};
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
-use jetcarp_core::library::{CurationState, PatternClass, QsStatus};
+use jetcarp_core::library::QsStatus;
 use jetcarp_core::media::{
     self, BatchReport, MediaFormat, MediaMode, MediaOptions, MediaRow, MediaStyle, MediaTarget,
     MissingFilter,
 };
+use jetcarp_core::pattern::{CurationState, PatternClass};
 use jetcarp_core::website::{self, ExportFilter, ExportOptions, ExportReport};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

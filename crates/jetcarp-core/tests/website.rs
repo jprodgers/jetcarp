@@ -1,11 +1,11 @@
 //! Website export (Phase 4 catalog deliverable 10): what is public, the manifest, and
 //! incremental updates.
 
-use jetcarp_core::library::{
-    self, CurationState, DiscoveredBy, Library, PatternClass, PatternRecord, Provenance,
-    QuickStartRow, Update, record_from_object,
-};
+use jetcarp_core::library::{Library, QuickStartRow, Update};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+use jetcarp_core::pattern::{
+    self, CurationState, DiscoveredBy, PatternClass, PatternRecord, Provenance, record_from_object,
+};
 use jetcarp_core::website::{self, ExportFilter, ExportOptions, Manifest};
 use jetcarp_core::*;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ fn one(rule: &str, rows: &str) -> PatternRecord {
     let prov = Provenance {
         source: "test".into(),
         jetcarp_version: VERSION.into(),
-        date: library::now_utc(),
+        date: pattern::now_utc(),
         ..Default::default()
     };
     r.objects
@@ -235,7 +235,7 @@ fn ants_are_exported_with_their_media() {
         rows.push(
             run_one(
                 &parse_rule(rule).unwrap(),
-                &jetcarp_core::library::tiling_list("square")
+                &jetcarp_core::pattern::tiling_list("square")
                     .unwrap()
                     .remove(0),
                 &Start::Empty,

@@ -31,8 +31,9 @@
 //! classes; Quick Start entries with status `auto` or `approved`; ant and turmite runs whose
 //! state is `promoted` or `reviewed` (optionally only some outcomes, such as highways).
 
-use crate::library::{CurationState, Library, PatternClass, PatternRecord, QsStatus, RuleRange};
+use crate::library::{Library, QsStatus};
 use crate::media::{self, MediaMode, MediaOptions, MediaRow, MediaTarget, content_hash};
+use crate::pattern::{CurationState, PatternClass, PatternRecord, RuleRange};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -360,7 +361,7 @@ pub struct SitePattern<'a> {
     /// One period of phases (`i,j,k,s` tuples), phase 0 first.
     pub phases: &'a [String],
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gun: Option<&'a crate::library::GunInfo>,
+    pub gun: Option<&'a crate::pattern::GunInfo>,
     /// Copies found over all searches, and per rule.
     pub seen: u64,
     pub seen_by_rule: BTreeMap<String, u64>,
@@ -369,7 +370,7 @@ pub struct SitePattern<'a> {
     pub rating: Option<u8>,
     pub tags: &'a [String],
     pub state: CurationState,
-    pub discovered_by: crate::library::DiscoveredBy,
+    pub discovered_by: crate::pattern::DiscoveredBy,
     /// Date of the first find (`YYYY-MM-DD`).
     pub discovered: &'a str,
     pub verified_periods: u64,
@@ -693,7 +694,7 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
         let m = Manifest {
             format: FORMAT,
             generator: format!("JETCARP {}", crate::VERSION),
-            exported: crate::library::now_utc(),
+            exported: crate::pattern::now_utc(),
             filter: f.clone(),
             style,
             counts,

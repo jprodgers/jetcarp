@@ -14,7 +14,8 @@ use crate::window_job::{Hooks, WindowJob};
 use eframe::egui::{self, Color32, RichText};
 use jetcarp_api::ops::jobs::ResumeIn;
 use jetcarp_api::ops::search::SearchStartIn;
-use jetcarp_core::library::{self, AddOutcome, Library};
+use jetcarp_core::library::{AddOutcome, Library};
+use jetcarp_core::pattern;
 use jetcarp_core::world::Scene;
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -248,7 +249,7 @@ impl CatalogTools {
     /// *Evolve*: the search as a job (`search.start`, strategy `evolve`), its files in a new
     /// `evolve-<tiling>` folder in the output folder.
     fn start_evolve(&mut self) {
-        if let Err(e) = library::tiling_from_key(&self.ev_tiling) {
+        if let Err(e) = pattern::tiling_from_key(&self.ev_tiling) {
             self.evolve_last = Some(Err(e));
             return;
         }
@@ -453,7 +454,7 @@ impl CatalogTools {
                     match self
                         .lib
                         .get(&id)
-                        .and_then(|r| library::promote::showcase_scene(&r, None, None))
+                        .and_then(|r| pattern::promote::showcase_scene(&r, None, None))
                     {
                         Ok(sc) => out.push(Action::Open(Box::new(sc))),
                         Err(e) => out.push(Action::Message(e, true)),

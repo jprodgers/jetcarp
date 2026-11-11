@@ -619,7 +619,7 @@ pub fn find_entry(lib: &crate::library::Library, q: crate::library::QuickStartRo
     let (rule, states, _) = main_rule(&q.scene);
     QuickStart {
         id: format!("find:{}", q.id),
-        tiling: crate::library::tiling_display_name(&q.scene.tiling),
+        tiling: crate::pattern::tiling_display_name(&q.scene.tiling),
         scene: q.scene,
         family: MY_FINDS.into(),
         states,

@@ -254,7 +254,7 @@ impl Menu {
     /// background thread.
     pub fn note_open(&mut self, i: usize) {
         let id = self.items[i].q.id.clone();
-        qsmenu::note_open(&mut self.items, &id, &jetcarp_core::library::now_utc());
+        qsmenu::note_open(&mut self.items, &id, &jetcarp_core::pattern::now_utc());
         self.rev += 1;
         self.order_key = None;
         self.popular = qsmenu::popular(&self.items, ROW_LEN);

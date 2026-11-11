@@ -4,7 +4,8 @@
 use jetcarp_core::hunt::job::{self, HuntSpec, StorePolicy};
 use jetcarp_core::jobs::hunt::HuntRun;
 use jetcarp_core::jobs::{Budget, RunOptions, Runner};
-use jetcarp_core::library::{Library, PatternRecord, Query};
+use jetcarp_core::library::{Library, Query};
+use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::topology::TilingSpec;
 use std::collections::BTreeSet;
 

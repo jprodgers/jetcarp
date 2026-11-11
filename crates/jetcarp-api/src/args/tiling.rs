@@ -4,7 +4,7 @@ use super::json::{get, get_str, get_u64};
 use super::size::Screen;
 use jetcarp_core::families::{self, FamilyKind};
 use jetcarp_core::topology::fill_size;
-use jetcarp_core::{Boundary, SizeSpec, TilingSpec, aperiodic, catalog, library};
+use jetcarp_core::{Boundary, SizeSpec, TilingSpec, aperiodic, catalog, pattern};
 use serde_json::{Value, json};
 
 /// Tiling id → spec: a family id (`square`, `hex`, `cairo`, `spectre`, `ih41`, ...), a catalog id
@@ -32,11 +32,11 @@ pub fn tiling_by_id(id: &str) -> Result<TilingSpec, String> {
     Ok(TilingSpec::new(alias))
 }
 
-/// A tiling list as searches take it ([`library::tiling_list`]: keys separated by commas or
+/// A tiling list as searches take it ([`pattern::tiling_list`]: keys separated by commas or
 /// spaces, plus sets such as `all-periodic` and `kuniform:2`), with an empty list meaning the
 /// square grid.
 pub fn tilings_or_square(text: &str) -> Result<Vec<TilingSpec>, String> {
-    library::tiling_list(if text.trim().is_empty() {
+    pattern::tiling_list(if text.trim().is_empty() {
         "square"
     } else {
         text

@@ -2,11 +2,12 @@
 
 use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
 use jetcarp_core::library::search::{SearchSpec, search};
-use jetcarp_core::library::{
-    self, AddOutcome, DiscoveredBy, Library, PatternClass, PatternRecord, Provenance, Query,
-    RuleRange, Sighting, record_from_object, verify,
-};
+use jetcarp_core::library::{self, AddOutcome, Library, Query, Sighting};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+use jetcarp_core::pattern::{
+    self, DiscoveredBy, PatternClass, PatternRecord, Provenance, RuleRange, record_from_object,
+    verify,
+};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::*;
 use std::collections::HashSet;
@@ -24,7 +25,7 @@ fn prov() -> Provenance {
     Provenance {
         source: "test".into(),
         jetcarp_version: VERSION.into(),
-        date: library::now_utc(),
+        date: pattern::now_utc(),
         ..Default::default()
     }
 }
@@ -281,7 +282,7 @@ fn check_ranges(recs: &[PatternRecord]) -> usize {
         let forbidden = mask & !r.birth_max & !1;
         if forbidden != 0 {
             let n = forbidden.trailing_zeros();
-            let (b, s, c) = library::range::bs_parts(&Rule::parse(&rec.rule).unwrap().0).unwrap();
+            let (b, s, c) = pattern::range::bs_parts(&Rule::parse(&rec.rule).unwrap().0).unwrap();
             let rule = if c == 2 {
                 Rule::LifeLike {
                     birth: b | 1 << n,
@@ -309,7 +310,7 @@ fn check_ranges(recs: &[PatternRecord]) -> usize {
 fn ranges_hold_on_other_tilings_and_generations() {
     let spec = SearchSpec {
         rules: vec!["B2/S34".into(), "B3/S23".into()],
-        tilings: library::tiling_list("hex,oct,trihex").unwrap(),
+        tilings: pattern::tiling_list("hex,oct,trihex").unwrap(),
         size: SizeSpec::Rect { w: 32, h: 32 },
         boundary: Boundary::Wrap,
         soups: 4,
@@ -458,7 +459,7 @@ fn phase3_json_library_imports_with_its_quick_start() {
     v["id"] = "0123456789abcdef".into();
     v.as_object_mut().unwrap().remove("range");
     std::fs::write(dir.join("patterns/0123456789abcdef.json"), v.to_string()).unwrap();
-    let sc = library::promote::showcase_scene(&g, Some("Old glider"), None).unwrap();
+    let sc = pattern::promote::showcase_scene(&g, Some("Old glider"), None).unwrap();
     std::fs::write(dir.join("quickstart/0123456789abcdef.json"), sc.to_json()).unwrap();
     std::fs::write(
         dir.join("quickstart/sweep-00000000000000aa.json"),

@@ -4,15 +4,15 @@
 //! Set `JETCARP_MEDIA_SAMPLES=DIR` to keep the rendered files for a look.
 
 use jetcarp_core::hunt::separate::{Cache, Census, Obj};
-use jetcarp_core::library::{
-    self, DiscoveredBy, Library, PatternClass, PatternRecord, Provenance, QuickStartRow,
-    record_from_object,
-};
+use jetcarp_core::library::{self, Library, QuickStartRow};
 use jetcarp_core::media::{
     self, AloneView, MediaFormat, MediaMode, MediaOptions, MediaStyle, MediaTarget, MissingFilter,
     encode,
 };
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+use jetcarp_core::pattern::{
+    self, DiscoveredBy, PatternClass, PatternRecord, Provenance, record_from_object,
+};
 use jetcarp_core::render::Image;
 use jetcarp_core::*;
 
@@ -27,7 +27,7 @@ fn prov() -> Provenance {
     Provenance {
         source: "test".into(),
         jetcarp_version: VERSION.into(),
-        date: library::now_utc(),
+        date: pattern::now_utc(),
         ..Default::default()
     }
 }
@@ -230,7 +230,7 @@ fn gosper() -> PatternRecord {
             _ => None,
         })
         .expect("the gun");
-    rec.verified = library::verify(&rec, 4).unwrap();
+    rec.verified = pattern::verify(&rec, 4).unwrap();
     rec
 }
 

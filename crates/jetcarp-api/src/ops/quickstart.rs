@@ -356,9 +356,8 @@ impl Op for QuickstartAdd {
             });
         }
         let key = a.pattern.as_deref().unwrap_or_default();
-        let (sc, id) =
-            library::promote::promote(&lib, key, a.title.as_deref(), a.description.as_deref())
-                .map_err(catalog_err)?;
+        let (sc, id) = library::promote(&lib, key, a.title.as_deref(), a.description.as_deref())
+            .map_err(catalog_err)?;
         Ok(Added {
             entry: format!("find:{id}"),
             id,

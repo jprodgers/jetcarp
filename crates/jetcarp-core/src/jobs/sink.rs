@@ -1,7 +1,8 @@
 //! Where a step puts its results ([`Sink`]).
 
 use crate::library::store::StepWrite;
-use crate::library::{AntRow, JobStatus, PatternRecord, Sighting, UnstoredFlush};
+use crate::library::{AntRow, JobStatus, Sighting, UnstoredFlush};
+use crate::pattern::PatternRecord;
 use serde_json::Value;
 use std::path::PathBuf;
 

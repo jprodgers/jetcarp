@@ -852,7 +852,7 @@ pub fn catalog_rows(
                 None,
                 None,
                 &format!("sweep {folder} run #{} ({rule})", r["index"]),
-                jetcarp_core::library::DiscoveredBy::User,
+                jetcarp_core::pattern::DiscoveredBy::User,
             )
         });
         match res {

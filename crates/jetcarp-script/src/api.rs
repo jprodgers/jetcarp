@@ -1216,7 +1216,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
 #[derive(Clone)]
 pub struct LibHandle(pub jetcarp_core::library::Library);
 
-fn lib_records(v: Vec<jetcarp_core::library::PatternRecord>) -> Array {
+fn lib_records(v: Vec<jetcarp_core::pattern::PatternRecord>) -> Array {
     v.iter()
         .map(|r| from_json(&crate::library::record_json(r)))
         .collect()
@@ -1229,7 +1229,8 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
         UpdateIn,
     };
     use jetcarp_api::ops::quickstart::{AddIn, ListIn, QuickstartAdd, QuickstartList};
-    use jetcarp_core::library::{DiscoveredBy, Library, Query, Update};
+    use jetcarp_core::library::{Library, Query, Update};
+    use jetcarp_core::pattern::DiscoveredBy;
     e.register_type_with_name::<LibHandle>("Library");
     let c = ctx.clone();
     e.register_fn("library", move || {

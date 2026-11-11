@@ -184,13 +184,13 @@ impl JetcarpApp {
             && let Some((key, cells)) = p.split_once('@')
         {
             let lib = jetcarp_core::library::Library::open_default();
-            let src = jetcarp_core::library::PatternSource {
+            let src = jetcarp_core::pattern::PatternSource {
                 library: Some(key.to_string()),
                 ..Default::default()
             };
             match (
                 lib.get(key),
-                jetcarp_core::library::paste::resolve(&src, 0, Some(&lib)),
+                jetcarp_core::pattern::paste::resolve(&src, 0, Some(&lib)),
             ) {
                 (Ok(r), Ok(source)) => {
                     self.paste = Some(crate::library_ui::PasteRequest {

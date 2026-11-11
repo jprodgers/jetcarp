@@ -14,7 +14,7 @@
 //! [`Library::compact_bodies`] rewrites old text bodies in place.
 
 use super::{Library, e};
-use crate::library::PatternClass;
+use crate::pattern::PatternClass;
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;

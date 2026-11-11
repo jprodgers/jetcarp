@@ -6,7 +6,8 @@
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status_name, typed};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{AddOutcome, JobStatus, Library, tiling_display_name};
+use crate::library::{AddOutcome, JobStatus, Library};
+use crate::pattern::tiling_display_name;
 use crate::window::job::{self as job, MoverJobSpec, MoverProgress};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};

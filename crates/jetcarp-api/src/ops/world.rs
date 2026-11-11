@@ -13,7 +13,7 @@ use crate::error::{ApiError, ErrorKind, ResultExt};
 use crate::op::{Progress, Report, WorldOp, to_pretty};
 use crate::ops::scene::{Recorded, read_scene};
 use crate::world::Host;
-use jetcarp_core::library::{self, PasteAt};
+use jetcarp_core::pattern::{self, PasteAt};
 use jetcarp_core::render::{self, RenderOptions};
 use jetcarp_core::reseed::{AutoReseed, ReseedMode};
 use jetcarp_core::rules::{FieldKind, Rule};
@@ -1187,7 +1187,7 @@ impl WorldOp for WorldPaste {
         });
         host.exec(Command::PastePattern {
             id: ca_id,
-            pattern: library::paste::source_from_record(&rec, phase),
+            pattern: pattern::paste::source_from_record(&rec, phase),
             at,
             orientation,
             phase: 0,

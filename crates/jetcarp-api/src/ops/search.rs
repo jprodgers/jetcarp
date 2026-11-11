@@ -48,10 +48,11 @@ use jetcarp_core::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
 use jetcarp_core::jobs::{
     self, Budget, JobSpec, Outcome, RunOptions, Runner, Stopped, Strategy, status_name,
 };
-use jetcarp_core::library::collide::{CollideOutput, CollideSpec};
-use jetcarp_core::library::movers::{MoverReport, TrackSpec};
 use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{self, JobStatus, Library, PatternClass, tiling_list};
+use jetcarp_core::library::{self, JobStatus, Library};
+use jetcarp_core::pattern::collide::{CollideOutput, CollideSpec};
+use jetcarp_core::pattern::movers::{MoverReport, TrackSpec};
+use jetcarp_core::pattern::{self, PatternClass, tiling_list};
 use jetcarp_core::pile::job::PileJobSpec;
 use jetcarp_core::pile::{self, Centre, PileSpec};
 use jetcarp_core::window::job::{MoverJobSpec, MoverProgress, travelling_start};
@@ -1252,7 +1253,7 @@ impl EvolveIn {
             })?,
         };
         let spec = EvolveSpec {
-            tiling: library::tiling_from_key(&key).map_err(invalid)?,
+            tiling: pattern::tiling_from_key(&key).map_err(invalid)?,
             nb,
             states: self.states.unwrap_or(d.states),
             pop: self.pop.unwrap_or(d.pop),
@@ -2198,7 +2199,7 @@ enum Extra {
     Thumbs(
         Vec<(
             String,
-            jetcarp_core::library::collide::Outcome,
+            jetcarp_core::pattern::collide::Outcome,
             render::Image,
         )>,
     ),
@@ -2507,7 +2508,7 @@ fn result_text(
             let _ = writeln!(s, "time: {:.1}s", out.seconds);
         }
         "collide" => {
-            let rep: jetcarp_core::library::collide::CollideReport =
+            let rep: jetcarp_core::pattern::collide::CollideReport =
                 serde_json::from_value(r["report"].clone()).ok()?;
             let _ = writeln!(
                 s,

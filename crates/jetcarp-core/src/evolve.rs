@@ -25,7 +25,7 @@
 //!
 //! Verified gliders go on to the pattern library: on lattices the detector finds the exact
 //! spaceship (lattice translation); on aperiodic patches the mover tracker
-//! ([`crate::library::movers`]) follows the glider across growing patch levels and records the
+//! ([`crate::pattern::movers`]) follows the glider across growing patch levels and records the
 //! distance it was verified to.
 
 pub mod arena;

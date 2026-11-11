@@ -8,16 +8,16 @@
 //! parts (each periodic, and their joint run is exactly the union), puffer, gun, or other (dies,
 //! grows, unsettled). Pieces that die alone are retried together when they lie a few steps apart
 //! (some oscillator phases fall apart). A periodic part's canonical evolution gives its rule-free
-//! catalog id ([`crate::library::identity`]), and a second cache keyed by that id holds one
+//! catalog id ([`crate::pattern::identity`]), and a second cache keyed by that id holds one
 //! record per distinct pattern, so a pattern's record (canonical form, rule range) is built once
 //! per thread. The caches only save work: every result is a pure function of the cells.
 
 use super::bits::{Plan, Universe};
-use crate::library::{
+use crate::objects::{LCell, Phase, puffer, translated};
+use crate::pattern::{
     CellMap, DiscoveredBy, PatternClass, PatternRecord, Provenance, RecordParts, build_record_with,
     canonical_symmetries,
 };
-use crate::objects::{LCell, Phase, puffer, translated};
 use crate::rules::Rule;
 use crate::topology::{Boundary, Nb, SizeSpec, TilingSpec, Topology};
 use serde::{Deserialize, Serialize};
@@ -288,7 +288,7 @@ pub fn ca_notation(rule: &Rule, nb: Nb) -> String {
 
 /// A small dead-edged grid of the tiling (records and symmetries only need its shape).
 pub fn small_topology(tiling: &TilingSpec) -> Result<Topology, String> {
-    let mut spec = crate::library::tiling_identity(tiling);
+    let mut spec = crate::pattern::tiling_identity(tiling);
     spec.size = Some(SizeSpec::Rect { w: 8, h: 8 });
     spec.boundary = Boundary::Dead;
     Topology::build(&spec)
@@ -459,7 +459,7 @@ impl Census {
             return f.clone();
         }
         if rec.range.is_none() && self.ranges {
-            rec.range = crate::library::range::rule_range(&rec).ok().flatten();
+            rec.range = crate::pattern::range::rule_range(&rec).ok().flatten();
         }
         let f = Arc::new(Found {
             id: rec.id.clone(),

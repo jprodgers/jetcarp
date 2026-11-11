@@ -142,7 +142,7 @@ impl AntsWindow {
     fn start(&mut self) {
         self.error = None;
         // Checked here for a message at once; the operation reads the same text.
-        if let Err(e) = jetcarp_core::library::tiling_list(&self.tilings) {
+        if let Err(e) = jetcarp_core::pattern::tiling_list(&self.tilings) {
             self.error = Some(e);
             return;
         }

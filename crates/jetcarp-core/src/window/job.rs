@@ -12,8 +12,9 @@
 //! ([`MoverJob`]), under its lease, in this process or on a thread of it.
 
 use super::track::{Tracker, WindowCheckpoint, WindowOpts};
-use crate::library::movers::{MoverReport, Stop, TrackSpec, mover_record};
-use crate::library::{DiscoveredBy, JobStatus, Library, PatternRecord, Provenance, now_utc};
+use crate::library::{JobStatus, Library};
+use crate::pattern::movers::{MoverReport, Stop, TrackSpec, mover_record};
+use crate::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -110,7 +111,7 @@ pub fn travelling_start(
     if states.is_empty() {
         return Err("give at least one state".into());
     }
-    let topo = crate::library::site::patch_topology(patch)?;
+    let topo = crate::pattern::site::patch_topology(patch)?;
     let roots: Vec<usize> = match at {
         Some(x) => vec![x as usize],
         None => {

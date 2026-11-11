@@ -11,7 +11,8 @@ use jetcarp_core::hunt::job::{self as hunt, HuntProgress, HuntSpec};
 use jetcarp_core::jobs::{
     self, Budget, JobSpec, Outcome, RunOptions, Runner, Stopped, hunt::HuntRun, registry,
 };
-use jetcarp_core::library::{JobStatus, Library, PatternRecord, Query};
+use jetcarp_core::library::{JobStatus, Library, Query};
+use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::topology::{SizeSpec, TilingSpec};
 use std::time::{Duration, Instant};
 
@@ -567,10 +568,10 @@ fn bounded_searches_resumed_store_what_one_whole_search_stores() {
 fn glider_into_block() -> (
     PatternRecord,
     PatternRecord,
-    jetcarp_core::library::collide::CollideSpec,
+    jetcarp_core::pattern::collide::CollideSpec,
 ) {
-    use jetcarp_core::library::{DiscoveredBy, Provenance, record_from_object};
     use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+    use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
     use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, Topology, World};
     let mut w = World::new(TilingSpec::rect("square", 96, 80, Boundary::Wrap), 1).unwrap();
     let g = w.topo.lattice().unwrap().clone();
@@ -600,11 +601,11 @@ fn glider_into_block() -> (
     let (block, glider) = (named("block").clone(), named("glider").clone());
     let topo = Topology::build(&TilingSpec::rect("square", 8, 8, Boundary::Dead)).unwrap();
     let d = glider.displacement.unwrap();
-    let o = jetcarp_core::library::paste::orientations(&topo, glider.neighborhood)
+    let o = jetcarp_core::pattern::paste::orientations(&topo, glider.neighborhood)
         .iter()
         .position(|m| m.vector(d) == [-1, -1])
         .unwrap() as u32;
-    let cs = jetcarp_core::library::collide::CollideSpec {
+    let cs = jetcarp_core::pattern::collide::CollideSpec {
         dx: [-2, 5],
         dy: [3, 5],
         orientation_b: o,
@@ -669,8 +670,8 @@ fn collisions_resumed_equal_uninterrupted() {
 
 #[test]
 fn bounded_searches_and_collisions_store_what_their_calls_store() {
-    use jetcarp_core::library::collide::collide;
     use jetcarp_core::library::search::{SearchSpec, search};
+    use jetcarp_core::pattern::collide::collide;
     let spec = SearchSpec {
         rules: vec!["B3/S23".into()],
         tilings: vec![TilingSpec::new("square")],

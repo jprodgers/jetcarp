@@ -6,10 +6,11 @@
 
 use super::arena::{Arena, is_aperiodic};
 use super::{Champion, EvolveReport};
-use crate::library::movers::{MoverReport, TrackSpec, mover_record, track};
-use crate::library::split::records_from_object;
-use crate::library::{DiscoveredBy, PatternRecord, Provenance, now_utc, prepare};
+use crate::library::prepare;
 use crate::objects::{ObjClass, ObjectOptions, find_objects};
+use crate::pattern::movers::{MoverReport, TrackSpec, mover_record, track};
+use crate::pattern::split::records_from_object;
+use crate::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
 use crate::world::{CaSpec, Command, SeedSpec, World};
 use serde::{Deserialize, Serialize};
 

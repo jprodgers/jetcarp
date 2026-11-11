@@ -1,4 +1,4 @@
-//! Collisions (`jobs.kind` `collide`): `crate::library::collide` of two catalog patterns at
+//! Collisions (`jobs.kind` `collide`): `crate::pattern::collide` of two catalog patterns at
 //! every offset and phase, in steps: a batch of placements each, gathered in placement order
 //! into the checkpoint, then the products verified in batches, then (when the job stores them)
 //! stored with the job, as `Library::add_many` stores a whole collision. A stopped collision resumes
@@ -15,9 +15,10 @@ use super::{
     thread_count,
 };
 use crate::dashboard::{JobSummary, digits};
-use crate::library::collide::{Collected, CollideOutput, CollideSpec, Collision};
 use crate::library::store::JobRow;
-use crate::library::{AddOutcome, JobStatus, Library, PatternRecord, now_utc, prepare};
+use crate::library::{AddOutcome, JobStatus, Library, prepare};
+use crate::pattern::collide::{Collected, CollideOutput, CollideSpec, Collision};
+use crate::pattern::{PatternRecord, now_utc};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

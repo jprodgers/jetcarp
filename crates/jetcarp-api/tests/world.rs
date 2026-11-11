@@ -7,8 +7,9 @@ use jetcarp_api::op::{Callbacks, Quiet, Report, WorldOp, to_value};
 use jetcarp_api::ops::world::*;
 use jetcarp_api::world::{Host, Session};
 use jetcarp_api::{Ctx, ErrorKind, Limits};
-use jetcarp_core::library::{DiscoveredBy, Library, Provenance, record_from_object};
+use jetcarp_core::library::Library;
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
 use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -668,7 +669,7 @@ fn glider_catalog(dir: &std::path::Path) -> Library {
         let prov = Provenance {
             source: "api test".into(),
             jetcarp_version: jetcarp_core::VERSION.into(),
-            date: jetcarp_core::library::now_utc(),
+            date: jetcarp_core::pattern::now_utc(),
             ..Default::default()
         };
         let rec = record_from_object(&w, w.cas[0].id, o, prov, DiscoveredBy::User).unwrap();

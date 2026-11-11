@@ -33,7 +33,7 @@ pub struct Lattice {
 
 impl Lattice {
     pub fn new(t: &TilingSpec) -> Result<Lattice, String> {
-        let mut spec = crate::library::tiling_identity(t);
+        let mut spec = crate::pattern::tiling_identity(t);
         spec.size = Some(SizeSpec::Rect { w: 12, h: 12 });
         spec.boundary = Boundary::Wrap;
         let topo = Topology::build(&spec)?;
@@ -42,7 +42,7 @@ impl Lattice {
             .ok_or_else(|| {
                 format!(
                     "{}: ant searches run on periodic tilings only",
-                    crate::library::tiling_display_name(t)
+                    crate::pattern::tiling_display_name(t)
                 )
             })?
             .clone();
@@ -95,7 +95,7 @@ impl Lattice {
             mirror = !reflections.is_empty() && rot_hits.len() == offs[0].len();
         }
         Ok(Lattice {
-            tiling: crate::library::tiling_identity(t),
+            tiling: crate::pattern::tiling_identity(t),
             ntypes: nt,
             deg,
             moves,

@@ -157,7 +157,7 @@ fn site_export_writes_once_and_keeps_its_page() {
     lib.update(
         "glider",
         &jetcarp_core::library::Update {
-            state: Some(jetcarp_core::library::CurationState::Reviewed),
+            state: Some(jetcarp_core::pattern::CurationState::Reviewed),
             ..Default::default()
         },
     )

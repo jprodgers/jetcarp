@@ -8,7 +8,8 @@ use super::{
 use crate::ants::job::{self as job, AntProgress, AntSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{JobStatus, Library, tiling_display_name};
+use crate::library::{JobStatus, Library};
+use crate::pattern::tiling_display_name;
 use serde_json::Value;
 
 pub struct AntsKind;

@@ -5,7 +5,8 @@
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, drive, status_name, typed};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{JobStatus, Library, tiling_display_name};
+use crate::library::{JobStatus, Library};
+use crate::pattern::tiling_display_name;
 use crate::pile::Toppler;
 use crate::pile::job::{self as job, PileJobSpec, PileProgress};
 use serde_json::Value;

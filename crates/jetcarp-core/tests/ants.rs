@@ -9,7 +9,8 @@ use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables, parse_rule};
 use jetcarp_core::jobs::ants::AntsRun;
 use jetcarp_core::jobs::{Budget, RunOptions, Runner};
-use jetcarp_core::library::{AntQuery, AntRow, Library, tiling_list};
+use jetcarp_core::library::{AntQuery, AntRow, Library};
+use jetcarp_core::pattern::tiling_list;
 use jetcarp_core::topology::{Boundary, TilingSpec};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
 

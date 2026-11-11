@@ -7,7 +7,7 @@ use common::{ant_id, catalog, fails, scratch};
 use jetcarp_api::op::{NoInput, Op, Quiet, Report, to_value};
 use jetcarp_api::ops::library::*;
 use jetcarp_api::{ErrorKind, call_json};
-use jetcarp_core::library::{CurationState, PatternClass};
+use jetcarp_core::pattern::{CurationState, PatternClass};
 use serde_json::json;
 
 fn query(cx: &jetcarp_api::Ctx, q: QueryIn) -> QueryOut {

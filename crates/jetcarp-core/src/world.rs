@@ -620,12 +620,12 @@ pub enum Command {
     },
     /// Paste a pattern-library pattern (by id, or inline cells) into a CA's field at a lattice
     /// position, turned by `orientation` (index into the tiling's lattice symmetries) and in
-    /// phase `phase`. Logged with the cells resolved inline. See `library::paste`.
+    /// phase `phase`. Logged with the cells resolved inline. See `pattern::paste`.
     PastePattern {
         id: u32,
-        pattern: crate::library::PatternSource,
+        pattern: crate::pattern::PatternSource,
         #[serde(default)]
-        at: crate::library::PasteAt,
+        at: crate::pattern::PasteAt,
         #[serde(default, skip_serializing_if = "is_zero")]
         orientation: u32,
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -1043,7 +1043,7 @@ impl World {
                 orientation,
                 phase,
             } => Command::PastePattern {
-                pattern: crate::library::paste::resolve(&pattern, phase, None)?,
+                pattern: crate::pattern::paste::resolve(&pattern, phase, None)?,
                 id,
                 at,
                 orientation,
@@ -1152,7 +1152,7 @@ impl World {
                 ..
             } => {
                 let i = self.ca_index(*id)?;
-                let cells = crate::library::paste::paste_cells(
+                let cells = crate::pattern::paste::paste_cells(
                     &self.topo,
                     self.cas[i].nb,
                     pattern,

@@ -30,6 +30,7 @@ pub mod media;
 pub mod objects;
 pub mod patch;
 pub mod paths;
+pub mod pattern;
 pub mod penrose;
 pub mod pile;
 pub mod qsmenu;

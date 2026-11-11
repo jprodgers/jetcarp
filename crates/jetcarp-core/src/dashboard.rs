@@ -19,9 +19,8 @@
 
 use crate::census;
 use crate::library::store::JobRow;
-use crate::library::{
-    CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update, tiling_key,
-};
+use crate::library::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update};
+use crate::pattern::{CurationState, tiling_key};
 use crate::topology::{Nb, SizeSpec, TilingSpec, Topology};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -179,7 +178,7 @@ pub fn now_seconds() -> i64 {
         .unwrap_or(0)
 }
 
-/// `YYYY-MM-DDTHH:MM:SSZ` (as `library::now_utc` writes) as seconds since 1970.
+/// `YYYY-MM-DDTHH:MM:SSZ` (as `pattern::now_utc` writes) as seconds since 1970.
 pub fn utc_seconds(s: &str) -> Option<i64> {
     let b = s.as_bytes();
     if b.len() < 19 {

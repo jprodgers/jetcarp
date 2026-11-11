@@ -13,7 +13,8 @@ use super::{
 use crate::dashboard::{JobSummary, digits};
 use crate::library::search::{Gathered, SearchReport, SearchSpec, SoupSearch};
 use crate::library::store::JobRow;
-use crate::library::{AddOutcome, JobStatus, Library, now_utc};
+use crate::library::{AddOutcome, JobStatus, Library};
+use crate::pattern::now_utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{Read, Write};

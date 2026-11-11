@@ -2,10 +2,11 @@
 //! patches.
 
 use jetcarp_core::evolve::arena::deepest;
-use jetcarp_core::library::movers::{Stop, TrackSpec, mover_record, track};
+use jetcarp_core::library::Library;
 use jetcarp_core::library::search::{SearchSpec, search};
-use jetcarp_core::library::site::patch_topology;
-use jetcarp_core::library::{DiscoveredBy, Library, PatternClass, Provenance, verify};
+use jetcarp_core::pattern::movers::{Stop, TrackSpec, mover_record, track};
+use jetcarp_core::pattern::site::patch_topology;
+use jetcarp_core::pattern::{DiscoveredBy, PatternClass, Provenance, verify};
 use jetcarp_core::topology::{Boundary, Nb, SizeSpec, TilingSpec};
 use std::collections::BTreeMap;
 
@@ -18,7 +19,7 @@ fn temp_lib(name: &str) -> Library {
 
 /// The published glider pair (states 1 and 3 on two edge neighbours) near the deepest tile of a
 /// Spectre level-4 patch: the first start the tracker verifies.
-fn spectre_glider_start() -> (TrackSpec, jetcarp_core::library::movers::MoverReport) {
+fn spectre_glider_start() -> (TrackSpec, jetcarp_core::pattern::movers::MoverReport) {
     let patch = TilingSpec::new("spectre").with_size(SizeSpec::Level(4));
     let topo = patch_topology(&patch).unwrap();
     let (d, _) = deepest(&topo);
@@ -92,7 +93,7 @@ fn spectre_glider_verifies_to_a_distance_across_levels() {
     let mut old: serde_json::Value = serde_json::from_str(&back.to_json()).unwrap();
     old.as_object_mut().unwrap().remove("mover");
     let txt = serde_json::to_string(&old).unwrap();
-    assert!(jetcarp_core::library::PatternRecord::from_json(&txt).is_ok());
+    assert!(jetcarp_core::pattern::PatternRecord::from_json(&txt).is_ok());
 }
 
 // The same start tracked onto the exact level-7 patch (2.1 million tiles) goes farther, and

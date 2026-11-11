@@ -22,9 +22,8 @@ use super::plane::Lattice;
 use super::run::{Limits, Outcome, Start, run};
 use super::search::{Strings, Tables, parse_rule, strings, tables};
 use crate::jobs::{RunCx, Sink};
-use crate::library::{
-    AntRow, JobStatus, Library, ant_id, ant_score, now_utc, tiling_display_name, tiling_key,
-};
+use crate::library::{AntRow, JobStatus, Library, ant_id, ant_score};
+use crate::pattern::{now_utc, tiling_display_name, tiling_key};
 use crate::topology::TilingSpec;
 use crate::turmite::Mite;
 use rayon::prelude::*;

@@ -1,10 +1,11 @@
 //! Puffer detection: the front recurs shifted by a lattice vector while the debris grows.
 
-use jetcarp_core::library::{Library, PatternClass, Provenance, record_from_object, verify};
+use jetcarp_core::library::Library;
 use jetcarp_core::objects::puffer::{Sparse, detect};
 use jetcarp_core::objects::{
     LCell, ObjClass, ObjectOptions, find_objects, place_rows, rows_to_cells,
 };
+use jetcarp_core::pattern::{PatternClass, Provenance, record_from_object, verify};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::{Boundary, Nb, TilingSpec, Topology};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};

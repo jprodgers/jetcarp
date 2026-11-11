@@ -1872,7 +1872,7 @@ impl Plane {
         Ok(Plane {
             layers: vec![Layer::new(lr, opts)],
             generation: 0,
-            tiling: crate::library::tiling_identity(tiling),
+            tiling: crate::pattern::tiling_identity(tiling),
             cas: vec![(ca, 0)],
         })
     }
@@ -1917,7 +1917,7 @@ impl Plane {
         Ok(Plane {
             layers,
             generation: w.generation,
-            tiling: crate::library::tiling_identity(&w.topo.spec),
+            tiling: crate::pattern::tiling_identity(&w.topo.spec),
             cas,
         })
     }
@@ -2460,7 +2460,7 @@ pub fn plane_from_text(text: &str, rule: Option<&str>, opts: &Options) -> Result
     if t.starts_with('{') {
         let v: serde_json::Value = serde_json::from_str(t).map_err(|e| format!("JSON: {e}"))?;
         if v.get("phases").is_some() {
-            let rec = crate::library::PatternRecord::from_json(t)?;
+            let rec = crate::pattern::PatternRecord::from_json(t)?;
             if rec.is_aperiodic() {
                 return Err("aperiodic library patterns cannot run in HashLife".into());
             }

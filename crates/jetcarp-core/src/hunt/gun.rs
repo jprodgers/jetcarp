@@ -26,12 +26,12 @@
 
 use super::bits::Universe;
 use super::separate::{Cache, Census, Found, Run, ShipEntry, normalize};
-use crate::library::verify::{Frame, Verification, default_periods, lattice_info, rule_world};
-use crate::library::{
+use crate::objects::{LCell, Phase};
+use crate::pattern::verify::{Frame, Verification, default_periods, lattice_info, rule_world};
+use crate::pattern::{
     GunInfo, PatternClass, PatternRecord, canonical_choice, decode_cells, encode_cells, now_utc,
     orient,
 };
-use crate::objects::{LCell, Phase};
 use crate::world::Command;
 use std::sync::Arc;
 

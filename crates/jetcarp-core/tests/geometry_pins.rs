@@ -220,7 +220,7 @@ fn geometry_sources_use_detmath() {
         "isohedral/data.rs",
         "window.rs",
         "hunt/soup.rs",
-        "library/site_graph.rs",
+        "pattern/site_graph.rs",
         "pile/mod.rs",
     ];
     let banned = [

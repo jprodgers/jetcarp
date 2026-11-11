@@ -1,7 +1,9 @@
-//! Promotion to Quick Start, scenes built from patterns, and pictures of a pattern's phases.
+//! Scenes built from patterns (what promotion to Quick Start shows), and pictures of a pattern's
+//! phases.
 //!
 //! A promoted pattern becomes a row of the catalog's `quickstart` table with id = the pattern id
-//! (the Quick Start lists these under "My finds"). The scene is a wrapped grid with the pattern pasted in the
+//! (the Quick Start lists these under "My finds"; [`crate::library::promote`]). Its scene
+//! ([`showcase_scene`]) is a wrapped grid with the pattern pasted in the
 //! centre through `Command::PastePattern`: still lifes and oscillators get a grid about three
 //! times their size; spaceships a grid at least 4 times their size and 48 x 32 unit cells, so they
 //! fly across and wrap around. Grids stay under the Quick Start's preview size (6,000 cells)
@@ -10,7 +12,7 @@
 
 use super::paste::source_from_record;
 use super::verify::{Frame, envelope, lattice_info, rule_world};
-use super::{CurationState, Library, PasteAt, PatternClass, PatternRecord, QuickStartRow, Update};
+use super::{PasteAt, PatternClass, PatternRecord};
 use crate::render::{Image, RenderOptions, render};
 use crate::sheet::{Label, labelled_sheet};
 use crate::topology::{Boundary, SizeSpec};
@@ -127,33 +129,6 @@ pub fn showcase_scene(
     // Check that it builds and the paste lands.
     World::from_scene(&sc)?;
     Ok(sc)
-}
-
-/// Save a Quick Start entry ("My finds") for the record in the catalog's `quickstart` table (id =
-/// the pattern id; promoting again replaces it) and mark the pattern promoted. Returns the scene
-/// and the entry id.
-pub fn promote(
-    lib: &Library,
-    key: &str,
-    title: Option<&str>,
-    description: Option<&str>,
-) -> Result<(Scene, String), String> {
-    let rec = lib.get(key)?;
-    let sc = showcase_scene(&rec, title, description)?;
-    let mut row = QuickStartRow::for_scene(&rec.id, "pattern", sc.clone());
-    row.source_id = Some(rec.id.clone());
-    row.grid = rec.tiling_name.clone();
-    row.behaviour = rec.class.name().to_string();
-    row.score = Some(rec.score);
-    lib.put_quickstart(&row)?;
-    lib.update(
-        &rec.id,
-        &Update {
-            state: Some(CurationState::Promoted),
-            ..Default::default()
-        },
-    )?;
-    Ok((sc, rec.id))
 }
 
 /// A picture of every phase (at most `max_phases`), side by side and labelled, each on the same

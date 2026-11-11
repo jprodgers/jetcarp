@@ -2,11 +2,10 @@
 //! Rhai `library()` handle and the app (sweep favourites).
 
 use jetcarp_core::World;
-use jetcarp_core::library::split::records_from_object;
-use jetcarp_core::library::{
-    AddOutcome, DiscoveredBy, Library, PatternRecord, Provenance, now_utc,
-};
+use jetcarp_core::library::{AddOutcome, Library};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects};
+use jetcarp_core::pattern::split::records_from_object;
+use jetcarp_core::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

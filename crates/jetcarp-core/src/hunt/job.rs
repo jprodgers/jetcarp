@@ -7,7 +7,7 @@
 //! else); a batch's results are merged per group in soup order, so every count is independent of
 //! the thread count and the batching, and each new pattern's record comes from the lowest soup
 //! index that found it. A pattern already verified in the rule only gets a sighting; any other is
-//! verified (`library::verify`) and stored. Then one transaction writes the records, the
+//! verified (`pattern::verify`) and stored. Then one transaction writes the records, the
 //! sightings, the progress (JSON, a [`HuntProgress`]), and the checkpoint (the next soup index,
 //! the totals, the ids that failed verification, and the newest finds), so a crash loses at most
 //! the batch in flight and a resumed hunt ends with exactly the totals of an uninterrupted one.
@@ -23,9 +23,10 @@
 use super::separate::{Cache, Census, Found};
 use super::soup::{End, Layout, Limits, SoupBatcher, SoupOut, SoupSpec, run_soup, soup_state};
 use crate::jobs::{RunCx, Sink};
-use crate::library::{
-    AddOutcome, JobStatus, Library, PatternClass, PatternRecord, Provenance, Sighting,
-    UnstoredFlush, UnstoredRow, default_periods, now_utc, tiling_display_name, tiling_key, verify,
+use crate::library::{AddOutcome, JobStatus, Library, Sighting, UnstoredFlush, UnstoredRow};
+use crate::pattern::{
+    PatternClass, PatternRecord, Provenance, default_periods, now_utc, tiling_display_name,
+    tiling_key, verify,
 };
 use crate::topology::{Nb, SizeSpec, TilingSpec};
 use rayon::prelude::*;
@@ -525,7 +526,7 @@ impl Hunt {
                             .collect()
                     };
                     seen.extend(pending.keys().cloned());
-                    let mut tiling = crate::library::tiling_identity(t);
+                    let mut tiling = crate::pattern::tiling_identity(t);
                     tiling.size = Some(SizeSpec::Rect {
                         w: spec.soup.w,
                         h: spec.soup.h,
@@ -1134,8 +1135,8 @@ fn provenance(
 }
 
 /// A gun's ship as a record (from the stream phases it stores).
-fn ship_record(c: &Census, info: &crate::library::GunInfo) -> Option<Arc<Found>> {
-    let start = crate::library::decode_cells(info.ship_phases.first()?).ok()?;
+fn ship_record(c: &Census, info: &crate::pattern::GunInfo) -> Option<Arc<Found>> {
+    let start = crate::pattern::decode_cells(info.ship_phases.first()?).ok()?;
     match c.run_alone(&start, c.max_period.max(info.ship_period)) {
         super::separate::Run::Periodic { period, d, phases } if d != [0, 0] => {
             let rec = c.record(PatternClass::Spaceship, period, d, &phases).ok()?;

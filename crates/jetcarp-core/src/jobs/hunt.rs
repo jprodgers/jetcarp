@@ -8,7 +8,8 @@ use super::{
 use crate::dashboard::{FindItem, Finds, HeatSpace, JobSummary, Target, digits};
 use crate::hunt::job::{self as hunt, HuntProgress, HuntSpec};
 use crate::library::store::JobRow;
-use crate::library::{AddOutcome, HeatQuery, JobStatus, Library, tiling_display_name};
+use crate::library::{AddOutcome, HeatQuery, JobStatus, Library};
+use crate::pattern::tiling_display_name;
 use crate::rules::Rule;
 use crate::topology::Nb;
 use serde_json::Value;

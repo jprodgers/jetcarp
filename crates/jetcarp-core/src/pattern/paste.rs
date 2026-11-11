@@ -4,13 +4,14 @@
 //! as a label), so a scene replays without the library.
 //!
 //! Lattice tilings: the pattern is turned by `orientation` (an index into the tiling's
-//! symmetries, see `library::symmetry`: 0 = as stored; 0-7 on squares, 0-11 on hexagons, the
+//! symmetries, see `pattern::symmetry`: 0 = as stored; 0-7 on squares, 0-11 on hexagons, the
 //! tiling's own symmetry group on others), its bounding box moved to (0, 0), and placed with that
 //! corner at `at`. Cells off
 //! a dead edge refuse the paste; on wrapped grids they wrap. Aperiodic patches: the pattern's
 //! anchor tile goes on `at` (a cell index, or `original`) and the surrounding tiles must match.
 
-use super::{Library, PatternRecord, decode_cells, encode_cells, orient, site};
+use super::{PatternRecord, decode_cells, encode_cells, orient, site};
+use crate::library::Library;
 use crate::objects::{LCell, Phase};
 use crate::topology::{Nb, TilingSpec, Topology};
 use serde::{Deserialize, Serialize};

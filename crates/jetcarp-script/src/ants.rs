@@ -46,7 +46,7 @@ fn ant_run(lib: &Library, rule: &str, v: &Value) -> Result<Value, String> {
         "ant_run",
     )?;
     let m = parse_rule(rule)?;
-    let t = jetcarp_core::library::tiling_list(get_str(v, "tiling")?.unwrap_or("square"))?;
+    let t = jetcarp_core::pattern::tiling_list(get_str(v, "tiling")?.unwrap_or("square"))?;
     let start = match v.get("soup") {
         None | Some(Value::Null) => Start::Empty,
         Some(_) => {

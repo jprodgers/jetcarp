@@ -7,9 +7,10 @@ use jetcarp_core::hunt::separate::{Cache, Census};
 use jetcarp_core::hunt::soup::{Layout, continue_soup, prefix_cpu, run_soup, soup_state};
 use jetcarp_core::jobs::hunt::HuntRun;
 use jetcarp_core::jobs::{Budget, RunOptions, Runner};
-use jetcarp_core::library::{JobStatus, Library, PatternRecord, Query};
+use jetcarp_core::library::{JobStatus, Library, Query};
 use jetcarp_core::objects::LCell;
 use jetcarp_core::objects::puffer::Sparse;
+use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::rng::Rng;
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec, Topology};
@@ -183,7 +184,7 @@ fn gun_record(
     rows: &str,
     rule: &str,
     mirror: bool,
-) -> (Census, jetcarp_core::library::PatternRecord) {
+) -> (Census, jetcarp_core::pattern::PatternRecord) {
     use jetcarp_core::hunt::separate::Obj;
     let c = Census::new(rule, &TilingSpec::new("square"), None, 64).unwrap();
     let mut cells = jetcarp_core::objects::rows_to_cells(rows);
@@ -197,7 +198,7 @@ fn gun_record(
     let guns: Vec<_> = parts
         .iter()
         .filter_map(|p| match &p.obj {
-            Obj::Pattern(f) if f.class == jetcarp_core::library::PatternClass::Gun => {
+            Obj::Pattern(f) if f.class == jetcarp_core::pattern::PatternClass::Gun => {
                 Some(f.clone())
             }
             _ => None,
@@ -210,7 +211,7 @@ fn gun_record(
 
 #[test]
 fn gosper_gun_is_detected_verified_and_stored() {
-    use jetcarp_core::library::{PatternClass, verify};
+    use jetcarp_core::pattern::{PatternClass, verify};
     let (c, mut rec) = gun_record(GOSPER, "B3/S23", false);
     assert_eq!(rec.class, PatternClass::Gun);
     assert_eq!(rec.period, 30);
@@ -246,9 +247,9 @@ fn gosper_gun_is_detected_verified_and_stored() {
     );
     // A broken gun fails: drop one cell of a block.
     let mut bad = rec.clone();
-    let mut ph = jetcarp_core::library::decode_cells(&bad.phases[0]).unwrap();
+    let mut ph = jetcarp_core::pattern::decode_cells(&bad.phases[0]).unwrap();
     ph.remove(0);
-    bad.phases[0] = jetcarp_core::library::encode_cells(&ph);
+    bad.phases[0] = jetcarp_core::pattern::encode_cells(&ph);
     assert!(verify(&bad, 4).is_err());
     // Its mirror image is the same pattern.
     let (_, m) = gun_record(GOSPER, "B3/S23", true);

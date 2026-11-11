@@ -6,7 +6,8 @@ use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status
 use crate::census::{self, CensusProgress, CensusSpec};
 use crate::dashboard::{JobSummary, digits};
 use crate::library::store::JobRow;
-use crate::library::{JobStatus, Library, tiling_display_name};
+use crate::library::{JobStatus, Library};
+use crate::pattern::tiling_display_name;
 use serde_json::Value;
 
 pub struct CensusKind;

@@ -27,7 +27,7 @@ fn gpu() -> Option<Arc<GpuHunter>> {
 }
 
 fn check_prefixes(g: &GpuHunter, rule: &str, tiling: &str, n: u64) {
-    let t = jetcarp_core::library::tiling_from_key(tiling).unwrap();
+    let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
     let spec = HuntSpec::default();
     let c = Census::new(rule, &t, None, spec.max_period).unwrap();
     let layout = Layout::new(&c.topo, spec.soup, spec.margin()).unwrap();
@@ -74,7 +74,7 @@ fn gpu_prefix_speed() {
     let what = std::env::var("W").unwrap_or_else(|_| "B3/S23@square".into());
     for w in what.split(',') {
         let (rule, tiling) = w.split_once('@').unwrap();
-        let t = jetcarp_core::library::tiling_from_key(tiling).unwrap();
+        let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
         let spec = HuntSpec::default();
         let c = Census::new(rule, &t, None, spec.max_period).unwrap();
         let layout = Layout::new(&c.topo, spec.soup, spec.margin()).unwrap();

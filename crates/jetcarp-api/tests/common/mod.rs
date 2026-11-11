@@ -33,8 +33,9 @@ pub fn keys(v: &serde_json::Value) -> Vec<String> {
 /// A catalog in `dir` holding Life's glider and blinker (found by the object finder, as a
 /// script's `lib.catalog(w)` stores them) and Langton's ant's highway, and a context on it.
 pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcarp_api::Ctx) {
-    use jetcarp_core::library::{DiscoveredBy, Library, Provenance, record_from_object};
+    use jetcarp_core::library::Library;
     use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+    use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
     use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
     let mut w = World::new(TilingSpec::rect("square", 40, 40, Boundary::Wrap), 1).unwrap();
     let g = w.topo.lattice().unwrap().clone();
@@ -54,7 +55,7 @@ pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcar
         let prov = Provenance {
             source: "api test".into(),
             jetcarp_version: jetcarp_core::VERSION.into(),
-            date: jetcarp_core::library::now_utc(),
+            date: jetcarp_core::pattern::now_utc(),
             ..Default::default()
         };
         let rec = record_from_object(&w, w.cas[0].id, o, prov, DiscoveredBy::User).unwrap();
@@ -62,7 +63,7 @@ pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcar
     }
     // Langton's ant: a highway.
     let m = jetcarp_core::ants::search::parse_rule("RL").unwrap();
-    let t = jetcarp_core::library::tiling_list("square").unwrap();
+    let t = jetcarp_core::pattern::tiling_list("square").unwrap();
     let lim = jetcarp_core::ants::run::Limits {
         steps: 20_000,
         max_period: 2000,

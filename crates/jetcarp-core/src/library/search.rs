@@ -6,13 +6,13 @@
 //! in any batches: [`search`] runs them all at once; a search job (`crate::jobs::search`) runs
 //! them a batch per step, its checkpoint the gathered state.
 
-use super::split::records_from_object;
-use super::{
+use crate::census::{CensusSpec, soup_world};
+use crate::objects::{ObjClass, ObjectOptions, find_objects};
+use crate::pattern::split::records_from_object;
+use crate::pattern::{
     DiscoveredBy, PatternClass, PatternRecord, Provenance, default_periods, now_utc,
     record_from_object, verify,
 };
-use crate::census::{CensusSpec, soup_world};
-use crate::objects::{ObjClass, ObjectOptions, find_objects};
 use crate::topology::{Boundary, Nb, SizeSpec, TilingSpec, Topology};
 use crate::world::{Command, Status};
 use rayon::prelude::*;
@@ -296,7 +296,7 @@ impl Gathered {
             .iter()
             .map(|&(t, r)| GroupReport {
                 rule: spec.rules[r].clone(),
-                tiling: super::tiling_display_name(&spec.tilings[t]),
+                tiling: crate::pattern::tiling_display_name(&spec.tilings[t]),
                 tiling_spec: spec.tilings[t].clone(),
                 error: None,
                 soups: spec.soups,
@@ -403,7 +403,7 @@ impl Gathered {
     /// run must be in.
     pub fn verify(&mut self, n: usize) {
         let (a, b) = (self.verified, (self.verified + n).min(self.unique.len()));
-        let checked: Vec<Result<crate::library::Verification, String>> = self.unique[a..b]
+        let checked: Vec<Result<crate::pattern::Verification, String>> = self.unique[a..b]
             .par_iter()
             .map(|rec| verify(rec, default_periods(rec.period)))
             .collect();
@@ -500,7 +500,7 @@ fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date
     let mut ended = 1;
     // Dead edges: catch spaceships in a band along the edge before they hit it.
     let band = match (spec.boundary, topo.lattice()) {
-        (Boundary::Dead, Some(_)) => super::verify::lattice_info(&topo.spec, w.cas[0].nb)
+        (Boundary::Dead, Some(_)) => crate::pattern::verify::lattice_info(&topo.spec, w.cas[0].nb)
             .map(|i| 4 * i.reach + 8)
             .ok(),
         _ => None,

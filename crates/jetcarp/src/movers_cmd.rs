@@ -1,14 +1,13 @@
 //! `jetcarp library movers`: follow a pattern across growing aperiodic patches and report how far
-//! it was verified (`jetcarp_core::library::movers`), track a library mover again, and list the
+//! it was verified (`jetcarp_core::pattern::movers`), track a library mover again, and list the
 //! movers. Following one far on a sliding window is a job: `jetcarp search mover`.
 
 use anyhow::{Result, anyhow, bail};
 use jetcarp_api::Ctx;
 use jetcarp_api::args;
-use jetcarp_core::library::movers::{TrackSpec, mover_record, retrack, track};
-use jetcarp_core::library::{
-    DiscoveredBy, Library, PatternClass, Provenance, Query, now_utc, sort_records,
-};
+use jetcarp_core::library::{Library, Query, sort_records};
+use jetcarp_core::pattern::movers::{TrackSpec, mover_record, retrack, track};
+use jetcarp_core::pattern::{DiscoveredBy, PatternClass, Provenance, now_utc};
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec};
 use std::path::PathBuf;
 
@@ -144,7 +143,7 @@ fn gens_limit(a: &TrackArgs) -> u64 {
     a.gens.unwrap_or(20_000)
 }
 
-fn print_levels(rep: &jetcarp_core::library::movers::MoverReport) {
+fn print_levels(rep: &jetcarp_core::pattern::movers::MoverReport) {
     for l in &rep.levels {
         println!(
             "  level {} ({} tiles): {} generations, {:?}, {} rings, population {}-{}{}, {:.1}s",
@@ -186,7 +185,7 @@ fn parse_cells(s: &str) -> Result<Vec<(u32, u8)>> {
 fn track_cmd(a: TrackArgs, lib: &Library) -> Result<()> {
     let nb = parse_nb(&a.nb)?;
     let patch = TilingSpec::new(&a.tiling).with_size(SizeSpec::Level(a.level));
-    let topo = jetcarp_core::library::site::patch_topology(&patch).map_err(|e| anyhow!(e))?;
+    let topo = jetcarp_core::pattern::site::patch_topology(&patch).map_err(|e| anyhow!(e))?;
     let starts: Vec<Vec<(u32, u8)>> = if let Some(c) = &a.cells {
         vec![parse_cells(c)?]
     } else {

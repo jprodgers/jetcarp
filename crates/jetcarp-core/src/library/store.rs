@@ -33,13 +33,12 @@
 //! the bitmasks (`birth_min & ~B = 0`, `B & ~birth_max = 0`, the same for S, and the state count
 //! between `states_min` and `states_max`) or an explicit `pattern_rules` row.
 
-use super::movers::MoverRecord;
-use super::range::{self, RuleRange, bs_parts, rule_family};
-use super::site::Site;
-use super::verify::{Verification, default_periods, verify};
-use super::{
-    CurationState, PatternClass, PatternRecord, Provenance, Query, Update, now_utc, tiling_key,
-};
+use super::{Query, Update};
+use crate::pattern::movers::MoverRecord;
+use crate::pattern::range::{self, RuleRange, bs_parts, rule_family};
+use crate::pattern::site::Site;
+use crate::pattern::verify::{Verification, default_periods, verify};
+use crate::pattern::{CurationState, PatternClass, PatternRecord, Provenance, now_utc, tiling_key};
 use crate::rules::Rule;
 use crate::topology::{Nb, TilingSpec};
 use crate::world::Scene;
@@ -446,7 +445,7 @@ impl QuickStartRow {
             source_id: None,
             title: scene.name.clone(),
             description: scene.description.clone(),
-            grid: super::tiling_display_name(&scene.tiling),
+            grid: crate::pattern::tiling_display_name(&scene.tiling),
             rule,
             rule_family: family,
             behaviour: String::new(),
@@ -563,7 +562,7 @@ struct Body {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mover: Option<MoverRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    gun: Option<super::GunInfo>,
+    gun: Option<crate::pattern::GunInfo>,
     provenance: Provenance,
 }
 
@@ -842,7 +841,7 @@ fn sightings_in(tx: &Transaction, job: i64, s: &[Sighting], now: &str) -> Result
             })
             .map_err(|x| format!("catalog: sighting of unknown pattern {id}: {x}"))?;
         let seen = seen as u64 + n;
-        let score = super::interest_score(
+        let score = crate::pattern::interest_score(
             parse_name::<PatternClass>(&class)?,
             period as u64,
             cells as usize,

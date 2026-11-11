@@ -42,7 +42,7 @@
 //! | `census` | rules by fate | `crate::census` | a chunk of rules | rules |
 //! | `mover` | a mover on a sliding window | `crate::window::job` | a slice, to a window | – |
 //! | `pile` | a large sandpile | `crate::pile::job` | a doubling step | – |
-//! | `collide` | two patterns at every offset | `crate::library::collide` | runs, then checks | runs |
+//! | `collide` | two patterns at every offset | `crate::pattern::collide` | runs, then checks | runs |
 //! | `evolve` | the evolutionary glider search | `crate::evolve` | a generation | generations |
 //! | `explore` | the broad search over tilings, families, rules, seeds | `crate::explore` | two seconds of rounds | runs |
 //!

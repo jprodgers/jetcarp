@@ -73,14 +73,14 @@ impl Arena {
         if radius < 4 {
             return Err("the arena radius must be at least 4".into());
         }
-        let ident = crate::library::tiling_identity(tiling);
+        let ident = crate::pattern::tiling_identity(tiling);
         if is_aperiodic(&ident.family) {
             let (lo, _) = crate::aperiodic::level_range(&ident.family);
             let hi = crate::aperiodic::arena_root_max(&ident.family);
             let mut last = String::new();
             for level in lo.max(2)..=hi {
                 let spec = ident.clone().with_size(SizeSpec::Level(level));
-                let topo = crate::library::site::patch_topology(&spec)?;
+                let topo = crate::pattern::site::patch_topology(&spec)?;
                 let (root, depth) = deepest(&topo);
                 if depth <= radius || (depth <= room && level < hi) {
                     last = format!("level {level} has {depth} rings inside its edge");
@@ -119,7 +119,7 @@ impl Arena {
     /// same type, which is the same up to translation).
     pub fn grown(&self, radius: u32) -> Result<Arena, String> {
         let root = self.cell_of[0] as usize;
-        let ident = crate::library::tiling_identity(&self.tiling);
+        let ident = crate::pattern::tiling_identity(&self.tiling);
         if let Some(g) = self.topo.lattice() {
             let k = root % g.ntypes as usize;
             let mut side = 2 * radius + 8;
@@ -156,9 +156,9 @@ impl Arena {
                 .iter()
                 .map(|&q| m.apply(q))
                 .collect();
-            let p = crate::library::site::interior_point(&poly);
+            let p = crate::pattern::site::interior_point(&poly);
             let spec = ident.clone().with_size(SizeSpec::Level(l));
-            let topo = crate::library::site::patch_topology(&spec)?;
+            let topo = crate::pattern::site::patch_topology(&spec)?;
             let found = match crate::aperiodic::map_tile(
                 &ident.family,
                 level,

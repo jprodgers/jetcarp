@@ -481,8 +481,8 @@ const TRACK_KEYS: &[&str] = &[
 /// window (`window: true` or `rings`: a job of kind `mover`). Returns the tracker's report, with
 /// the stored record's `id`.
 fn track_mover(c: &Ctx, v: &Value) -> Result<Value, String> {
-    use jetcarp_core::library::movers::{TrackSpec, mover_record, track};
-    use jetcarp_core::library::{DiscoveredBy, Provenance, now_utc};
+    use jetcarp_core::pattern::movers::{TrackSpec, mover_record, track};
+    use jetcarp_core::pattern::{DiscoveredBy, Provenance, now_utc};
     use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec};
     check_keys(v, TRACK_KEYS, "track_mover")?;
     if !v.get("cells").is_some_and(|x| x.is_array()) {

@@ -7,8 +7,9 @@ use jetcarp_core::dashboard::{self, HeatColour, Target};
 use jetcarp_core::hunt::job::{self as hunt, HuntSpec};
 use jetcarp_core::jobs::{self, RunOptions, Runner};
 use jetcarp_core::library::{
-    CurationState, HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
+    HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
 };
+use jetcarp_core::pattern::CurationState;
 use jetcarp_core::qsmenu::{self, Filter, Origin, Sort};
 use jetcarp_core::topology::{Nb, TilingSpec};
 use std::collections::HashMap;
@@ -43,7 +44,7 @@ fn utc_round_trip_and_durations() {
         dashboard::utc_seconds("2026-11-06T12:34:56Z"),
         Some(1_793_968_496)
     );
-    let now = jetcarp_core::library::now_utc();
+    let now = jetcarp_core::pattern::now_utc();
     let t = dashboard::utc_seconds(&now).unwrap();
     assert!((t - dashboard::now_seconds()).abs() <= 2);
     assert_eq!(dashboard::duration(3725.0), "1 h 2 min");
@@ -159,7 +160,7 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     let all = lib
         .heat_rows(
             &HeatQuery::Patterns { job: None },
-            &jetcarp_core::library::tiling_key(&TilingSpec::new("square")),
+            &jetcarp_core::pattern::tiling_key(&TilingSpec::new("square")),
             Nb::Touch,
             2,
         )

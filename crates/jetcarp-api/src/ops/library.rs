@@ -14,8 +14,10 @@ use crate::error::{ApiError, ErrorKind};
 use crate::op::{NoInput, Op, Progress, Report};
 use jetcarp_core::library::store::CatalogInfo;
 use jetcarp_core::library::{
-    self, AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, CurationState, DiscoveredBy, PasteAt,
-    PatternClass, PatternRecord, Query, SightingRow, Update,
+    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, Query, SightingRow, Update,
+};
+use jetcarp_core::pattern::{
+    self, CurationState, DiscoveredBy, PasteAt, PatternClass, PatternRecord,
 };
 use jetcarp_core::{Boundary, CaSpec, Command, Nb, Scene, SeedSpec, VERSION, World};
 use schemars::JsonSchema;
@@ -384,7 +386,7 @@ pub fn phases_text(rec: &PatternRecord, n: u64) -> Result<Vec<PhaseText>, ApiErr
         .map(|t| {
             Ok(PhaseText {
                 phase: t,
-                ascii: library::ascii(rec, t).map_err(ApiError::engine)?,
+                ascii: pattern::ascii(rec, t).map_err(ApiError::engine)?,
                 cells: rec.phases[(t % rec.period.max(1)) as usize].to_string(),
             })
         })
@@ -594,7 +596,7 @@ impl Op for LibraryGet {
             kind: "pattern".into(),
             label: r.label(),
             sightings: lib.sightings(&r.id).map_err(catalog_err)?,
-            orientations: library::orientation_moves(&r).map_err(ApiError::engine)?,
+            orientations: pattern::orientation_moves(&r).map_err(ApiError::engine)?,
             phases: phases_text(&r, a.phases.unwrap_or(1))?,
             pattern: Some(r),
             ant: None,
@@ -897,7 +899,7 @@ impl Op for LibraryRender {
         let mut png_size = None;
         if let Some(p) = &a.png {
             let img =
-                library::promote::render_phases_in(&rec, a.px, a.max_phases, a.palette.as_deref())
+                pattern::promote::render_phases_in(&rec, a.px, a.max_phases, a.palette.as_deref())
                     .map_err(ApiError::engine)?;
             let meta = vec![
                 ("jetcarp:version", VERSION.to_string()),
@@ -1203,7 +1205,7 @@ impl Op for LibraryPaste {
         }
         let first = &places[0].rec;
         for pl in &places[1..] {
-            if library::tiling_key(&pl.rec.tiling) != library::tiling_key(&first.tiling) {
+            if pattern::tiling_key(&pl.rec.tiling) != pattern::tiling_key(&first.tiling) {
                 return Err(ApiError::invalid(format!(
                     "all patterns must be on one tiling ({} vs {})",
                     first.tiling_name, pl.rec.tiling_name
@@ -1212,7 +1214,7 @@ impl Op for LibraryPaste {
         }
         let mut tiling = match &first.site {
             Some(s) => s.patch.clone(),
-            None => library::tiling_identity(&first.tiling),
+            None => pattern::tiling_identity(&first.tiling),
         };
         if first.site.is_none() {
             tiling.size = Some(args::size_spec(&a.size).map_err(ApiError::invalid)?);
@@ -1248,7 +1250,7 @@ impl Op for LibraryPaste {
             let ca = rules.iter().position(|x| *x == k).unwrap_or(0) as u32 + 1;
             sc.commands.push(Command::PastePattern {
                 id: ca,
-                pattern: library::paste::source_from_record(&pl.rec, pl.phase as u64),
+                pattern: pattern::paste::source_from_record(&pl.rec, pl.phase as u64),
                 at: pl.at.clone(),
                 orientation: pl.orientation,
                 phase: 0,
@@ -1414,8 +1416,8 @@ impl Op for LibraryVerify {
                 .map(|r| {
                     let n = a
                         .periods
-                        .unwrap_or_else(|| library::default_periods(r.period));
-                    let e = library::verify(r, n).err();
+                        .unwrap_or_else(|| pattern::default_periods(r.period));
+                    let e = pattern::verify(r, n).err();
                     (r.id.clone(), r.tiling_name.clone(), e)
                 })
                 .collect();

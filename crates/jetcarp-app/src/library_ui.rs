@@ -7,10 +7,10 @@ use crate::sweep_form::thousands;
 use crate::thumbs::{self, Thumb, ThumbCache};
 use eframe::egui::{self, Color32, RichText, TextureHandle};
 use jetcarp_core::Scene;
-use jetcarp_core::library::promote::{render_phases_in, showcase_scene};
-use jetcarp_core::library::{
-    CurationState, Library, PatternClass, PatternRecord, PatternSource, Query, Update,
-    orientation_moves,
+use jetcarp_core::library::{Library, Query, Update};
+use jetcarp_core::pattern::promote::{render_phases_in, showcase_scene};
+use jetcarp_core::pattern::{
+    CurationState, PatternClass, PatternRecord, PatternSource, orientation_moves,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -499,7 +499,7 @@ impl LibraryWindow {
                 &mut |ui, k| {
                     let r = &recs[order[k]];
                     ui.label(RichText::new(r.label()).strong());
-                    ui.label(jetcarp_core::library::promote::describe(r));
+                    ui.label(jetcarp_core::pattern::promote::describe(r));
                     ui.label(RichText::new(format!("state: {}", r.state.name())).weak());
                 },
             );
@@ -711,7 +711,7 @@ impl LibraryWindow {
                     library: Some(r.id.clone()),
                     ..Default::default()
                 };
-                match jetcarp_core::library::paste::resolve(&src, self.phase, Some(&self.lib)) {
+                match jetcarp_core::pattern::paste::resolve(&src, self.phase, Some(&self.lib)) {
                     Ok(source) => out.push(Action::Arm(Box::new(PasteRequest {
                         source,
                         label: r.label(),
@@ -839,7 +839,7 @@ mod tests {
             None,
             None,
             "test",
-            jetcarp_core::library::DiscoveredBy::User,
+            jetcarp_core::pattern::DiscoveredBy::User,
         )
         .unwrap();
         assert_eq!(rep.added.len(), 3);

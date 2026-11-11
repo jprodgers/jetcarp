@@ -449,7 +449,7 @@ impl CensusJob {
         p.rules_total = total;
         p.per_s = self.session_done as f64 / el.max(1e-9);
         p.elapsed_s = self.base_elapsed + el;
-        p.updated = crate::library::now_utc();
+        p.updated = crate::pattern::now_utc();
         if self.adapt {
             let dt = t0.elapsed().as_secs_f64();
             let want = (n as f64 * 3.0 / dt.max(1e-3)).clamp(4.0, 4096.0) as u64;

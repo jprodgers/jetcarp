@@ -1,13 +1,14 @@
 //! Phase 3: the pattern library (records, dedup, verification, search, collisions, paste,
 //! promotion to Quick Start). Every test uses its own temporary catalog.
 
-use jetcarp_core::library::collide::{CollideSpec, Outcome, collide};
 use jetcarp_core::library::search::{SearchSpec, search};
-use jetcarp_core::library::{
-    self, AddOutcome, CurationState, DiscoveredBy, Library, PasteAt, PatternClass, PatternRecord,
-    Provenance, Query, record_from_object, verify,
-};
+use jetcarp_core::library::{self, AddOutcome, Library, Query};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
+use jetcarp_core::pattern::collide::{CollideSpec, Outcome, collide};
+use jetcarp_core::pattern::{
+    self, CurationState, DiscoveredBy, PasteAt, PatternClass, PatternRecord, Provenance,
+    record_from_object, verify,
+};
 use jetcarp_core::*;
 
 /// A fresh folder under the system temp folder.
@@ -41,7 +42,7 @@ fn prov(src: &str) -> Provenance {
     Provenance {
         source: src.into(),
         jetcarp_version: VERSION.into(),
-        date: library::now_utc(),
+        date: pattern::now_utc(),
         ..Default::default()
     }
 }
@@ -217,7 +218,7 @@ fn compound_objects_split_into_their_parts() {
     let whole = record_from_object(&w, 1, o, prov("t"), DiscoveredBy::User).unwrap();
     assert_eq!((whole.class, whole.cells), (PatternClass::Oscillator, 12));
     let parts =
-        library::split::records_from_object(&w, 1, o, prov("t"), DiscoveredBy::User).unwrap();
+        pattern::split::records_from_object(&w, 1, o, prov("t"), DiscoveredBy::User).unwrap();
     let alone = records_of(
         &life_world(&[(".ooo/ooo.", 5, 5), (".oo./o..o/.oo.", 30, 30)]),
         "t",
@@ -231,7 +232,7 @@ fn compound_objects_split_into_their_parts() {
     let w = life_world(&[("..o....o../oo.oooo.oo/..o....o..", 10, 10)]);
     let r = find_objects(&w, &ObjectOptions::default()).unwrap();
     let parts =
-        library::split::records_from_object(&w, 1, &r.objects[0], prov("t"), DiscoveredBy::User)
+        pattern::split::records_from_object(&w, 1, &r.objects[0], prov("t"), DiscoveredBy::User)
             .unwrap();
     assert_eq!(parts.len(), 1);
     assert_eq!(parts[0].period, 15);
@@ -272,7 +273,7 @@ fn verification_rejects_patterns_that_do_not_repeat() {
 fn small_search(rules: &[&str], tilings: &str, soups: u32, gens: u64) -> SearchSpec {
     SearchSpec {
         rules: rules.iter().map(|s| s.to_string()).collect(),
-        tilings: library::tiling_list(tilings).unwrap(),
+        tilings: pattern::tiling_list(tilings).unwrap(),
         size: SizeSpec::Rect { w: 40, h: 40 },
         boundary: Boundary::Wrap,
         soups,
@@ -339,11 +340,11 @@ fn tiling_symmetry_groups_used_for_canonical_forms() {
     ] {
         let topo = Topology::build(&TilingSpec::rect(fam, 8, 8, Boundary::Wrap)).unwrap();
         for nb in [Nb::Touch, Nb::Edge] {
-            let maps = library::canonical_symmetries(&topo, nb, true);
+            let maps = pattern::canonical_symmetries(&topo, nb, true);
             assert_eq!(maps.len(), n, "{fam} {nb:?}");
         }
         assert_eq!(
-            library::canonical_symmetries(&topo, Nb::Touch, false).len(),
+            pattern::canonical_symmetries(&topo, Nb::Touch, false).len(),
             1
         );
     }
@@ -398,7 +399,7 @@ fn spaceships_and_oscillators_on_multi_type_tilings() {
     .unwrap();
     w.apply(Command::PastePattern {
         id: 1,
-        pattern: library::paste::source_from_record(&ship, 0),
+        pattern: pattern::paste::source_from_record(&ship, 0),
         at: PasteAt::Cell { x: 10, y: 10 },
         orientation: 0,
         phase: 0,
@@ -434,7 +435,7 @@ fn spaceships_and_oscillators_on_multi_type_tilings() {
         .phases
         .iter()
         .map(|p| {
-            let v: Vec<jetcarp_core::objects::LCell> = library::decode_cells(p)
+            let v: Vec<jetcarp_core::objects::LCell> = pattern::decode_cells(p)
                 .unwrap()
                 .into_iter()
                 .map(|c| jetcarp_core::objects::LCell {
@@ -442,7 +443,7 @@ fn spaceships_and_oscillators_on_multi_type_tilings() {
                     ..c
                 })
                 .collect();
-            library::encode_cells(&v)
+            pattern::encode_cells(&v)
         })
         .collect();
     assert!(verify(&bad, 4).is_err());
@@ -472,7 +473,7 @@ fn collisions_glider_into_block() {
     // Turn the glider so it flies up and to the left, towards the block at the origin.
     let topo = Topology::build(&TilingSpec::rect("square", 8, 8, Boundary::Dead)).unwrap();
     let d = glider.displacement.unwrap();
-    let o = library::paste::orientations(&topo, glider.neighborhood)
+    let o = pattern::paste::orientations(&topo, glider.neighborhood)
         .iter()
         .position(|m| m.vector(d) == [-1, -1])
         .unwrap() as u32;
@@ -552,7 +553,7 @@ fn paste_pattern_command_replays_and_refuses_bad_spots() {
     sc.commands = vec![
         Command::PastePattern {
             id: 1,
-            pattern: library::paste::source_from_record(glider, 0),
+            pattern: pattern::paste::source_from_record(glider, 0),
             at: PasteAt::Cell { x: 5, y: 5 },
             orientation: 3,
             phase: 0,
@@ -573,7 +574,7 @@ fn paste_pattern_command_replays_and_refuses_bad_spots() {
     let e = bad
         .apply(Command::PastePattern {
             id: 1,
-            pattern: library::paste::source_from_record(glider, 0),
+            pattern: pattern::paste::source_from_record(glider, 0),
             at: PasteAt::Cell { x: 15, y: 2 },
             orientation: 0,
             phase: 0,
@@ -589,7 +590,7 @@ fn paste_pattern_command_replays_and_refuses_bad_spots() {
     let e = hex
         .apply(Command::PastePattern {
             id: 1,
-            pattern: library::paste::source_from_record(glider, 0),
+            pattern: pattern::paste::source_from_record(glider, 0),
             at: PasteAt::Center,
             orientation: 0,
             phase: 0,
@@ -607,7 +608,7 @@ fn promoted_patterns_appear_in_quick_start() {
     ) {
         lib.add(r).unwrap();
     }
-    let (sc, entry) = library::promote::promote(&lib, "glider", Some("My glider"), None).unwrap();
+    let (sc, entry) = library::promote(&lib, "glider", Some("My glider"), None).unwrap();
     let glider = lib.get("glider").unwrap();
     assert_eq!(entry, glider.id);
     assert_eq!(glider.state, CurationState::Promoted);
@@ -680,7 +681,7 @@ fn aperiodic_patterns_paste_only_where_the_tiles_match() {
     let paste_at = |w: &mut World, at: PasteAt| {
         w.apply(Command::PastePattern {
             id: 1,
-            pattern: library::paste::source_from_record(&rec, 0),
+            pattern: pattern::paste::source_from_record(&rec, 0),
             at,
             orientation: 0,
             phase: 0,
@@ -743,7 +744,7 @@ fn paste_at_cell_uses_grid_columns_on_multi_type_tilings() {
         ca: CaSpec::new("B3/S23").seed(SeedSpec::Empty),
     })
     .unwrap();
-    let src = library::PatternSource {
+    let src = pattern::PatternSource {
         cells: Some("0,0,0,1".into()),
         tiling: Some(TilingSpec::new("trihex")),
         ..Default::default()

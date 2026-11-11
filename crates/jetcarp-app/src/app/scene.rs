@@ -81,7 +81,7 @@ impl JetcarpApp {
             .exec(Command::PastePattern {
                 id,
                 pattern: p.source,
-                at: jetcarp_core::library::PasteAt::Index { cell: cell as u32 },
+                at: jetcarp_core::pattern::PasteAt::Index { cell: cell as u32 },
                 orientation: p.orientation,
                 phase: 0,
             })

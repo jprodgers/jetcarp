@@ -22,7 +22,8 @@ use super::export::ExportOptions;
 use super::{
     Ctl, Pile, PileSpec, RunOptions, StepRecord, Toppler, file, latest_step_file, write_growth,
 };
-use crate::library::{JobStatus, Library, now_utc};
+use crate::library::{JobStatus, Library};
+use crate::pattern::now_utc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

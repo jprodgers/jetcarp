@@ -17,10 +17,10 @@
 use super::{Disc, Frame, Hier, Key, WindowPatch};
 use crate::exact::{FxMap, Place};
 use crate::geom::{P, dist};
-use crate::library::movers::{
+use crate::pattern::movers::{
     LevelRun, MoverReport, Reach, Stop, TrackSpec, WindowStats, groups_around,
 };
-use crate::library::now_utc;
+use crate::pattern::now_utc;
 use crate::rules::FieldKind;
 use crate::topology::{Nb, SizeSpec, Topology};
 use crate::world::{CaInstance, CaSpec, Command, Field, SeedSpec, World};
@@ -265,12 +265,12 @@ impl Tracker {
         if !(opts.margin.is_finite() && opts.margin >= 8.0) {
             return Err("the window margin must be at least 8 units".into());
         }
-        let ident = crate::library::tiling_identity(&spec.patch);
+        let ident = crate::pattern::tiling_identity(&spec.patch);
         let l0 = match spec.patch.size {
             Some(SizeSpec::Level(l)) => l,
             _ => crate::aperiodic::default_level(&family),
         };
-        let topo0 = crate::library::site::patch_topology(&ident.with_size(SizeSpec::Level(l0)))?;
+        let topo0 = crate::pattern::site::patch_topology(&ident.with_size(SizeSpec::Level(l0)))?;
         let mut cells0 = spec.cells.clone();
         cells0.sort_unstable();
         cells0.dedup_by_key(|c| c.0);

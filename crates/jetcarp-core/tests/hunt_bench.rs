@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 fn probe(rule: &str, tiling: &str, n: u64, threads: usize) {
-    let t = jetcarp_core::library::tiling_from_key(tiling).unwrap();
+    let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
     let c = Census::new(rule, &t, None, 64).unwrap();
     let layout = Layout::new(&c.topo, SoupSpec::default(), 32).unwrap();
     let limits = Limits {
@@ -88,7 +88,7 @@ fn hunt_throughput() {
 fn gun_hashes() {
     use jetcarp_core::hunt::bits::Universe;
     let rows = "........................o.........../......................o.o.........../............oo......oo............oo/...........o...o....oo............oo/oo........o.....o...oo............../oo........o...o.oo....o.o.........../..........o.....o.......o.........../...........o...o..................../............oo......................";
-    let t = jetcarp_core::library::tiling_from_key("square").unwrap();
+    let t = jetcarp_core::pattern::tiling_from_key("square").unwrap();
     let c = Census::new("B3/S23", &t, None, 64).unwrap();
     let mut u = Universe::with_cells(c.plan.clone(), &jetcarp_core::objects::rows_to_cells(rows));
     let mut seen = std::collections::HashMap::new();
@@ -135,7 +135,7 @@ fn hunt_one_soup() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(2);
-    let t = jetcarp_core::library::tiling_from_key("square").unwrap();
+    let t = jetcarp_core::pattern::tiling_from_key("square").unwrap();
     let c = Census::new("B3/S23", &t, None, 64).unwrap();
     let layout = Layout::new(&c.topo, SoupSpec::default(), 32).unwrap();
     let cells = layout.soup(soup_state(1, i));
@@ -204,7 +204,7 @@ fn hunt_profile() {
         .unwrap_or(1000);
     let what = std::env::var("W").unwrap_or_else(|_| "B3/S23@square".into());
     let (rule, tiling) = what.split_once('@').unwrap();
-    let t = jetcarp_core::library::tiling_from_key(tiling).unwrap();
+    let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
     let spec = jetcarp_core::hunt::job::HuntSpec::default();
     let c = Census::new(rule, &t, None, 64).unwrap();
     let layout = Layout::new(&c.topo, spec.soup, spec.margin()).unwrap();

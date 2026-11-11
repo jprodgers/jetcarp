@@ -8,7 +8,8 @@ use jetcarp_api::args;
 use jetcarp_core::ants::job;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::parse_rule;
-use jetcarp_core::library::{self, AntQuery, AntRow, AntUpdate, Library};
+use jetcarp_core::library::{AntQuery, AntRow, AntUpdate, Library};
+use jetcarp_core::pattern;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -254,7 +255,7 @@ pub fn run(cx: &Ctx, a: AntsArgs, json: bool) -> Result<()> {
 
 fn run_one(lib: &Library, r: RunArgs, json: bool) -> Result<()> {
     let m = msg(parse_rule(&r.rule))?;
-    let t = msg(library::tiling_list(&r.tiling))?;
+    let t = msg(pattern::tiling_list(&r.tiling))?;
     let start = match &r.soup {
         None => Start::Empty,
         Some(s) => {
