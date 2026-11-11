@@ -32,9 +32,9 @@
 //! | `id_aliases` | old id of a record | `alias`, `target_kind`, `id`, `reason` (`cart-fnv`, `geometry-change`, `canonicalised`) |
 //! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`), `pin_key`, `geometry_pin`, `needs_reverify`, `engine_version` |
 //! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
-//! | `ratings` | rating of a pattern, an ant run, a Quick Start entry, or a search run | `target_kind`, `target_id`, `rater` (`user` or `model:<name>`), `rating` (1-5), `note` |
+//! | `ratings` | rating of a pattern, an ant run, a Quick Start entry, or a search run | `target_kind`, `target_id` (a search run: `<search uuid>:<run id>`), `rater` (`user` or `model:<name>`; a search run's reviewer may be any name), `rating` (1-5), `verdict` (a search run's keep, maybe or drop; rating 5, 3, 1), `note`, `source` |
 //! | `ants` | ant or turmite run: rule, tiling, start ([`ants`]) | `id` (`ant-` and a content id), `rule`, `kind` (`string`, `table`), `states`, `colors`, `tiling`, `tiling_key`, `pin_key`, `geometry_pin`, `start`, `outcome` (`highway`, `periodic`, `symmetric`, `bounded`, `chaotic`), `period`, `dx`/`dy`, `speed`, `onset`, `steps`, `cells`, `body` (JSON: the run with its proof, and the limits), `score`, curation, `job_id`, `needs_reverify`, `engine_version` |
-//! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `path` (relative to the library's folder), `from_seed`, `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale), `hash` (SHA-256 of the file) |
+//! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `from_seed`, `hash` (SHA-256 of the file; for `frames` of its frame list) and `ext` (the file is `media/<first two hex digits>/<hash>.<ext>` beside the library), `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale) |
 //!
 //! Gone since the catalog: the stage 1 tables `settings` and `score_models`, and the `setting`
 //! targets of media and ratings.
@@ -1019,7 +1019,8 @@ impl Library {
         Ok(r)
     }
 
-    /// Delete a pattern with its rules, sightings, and Quick Start entry.
+    /// Delete a pattern with its rules, sightings, Quick Start entry, and media rows (the media
+    /// files stay until `jetcarp media gc`, as another record may share them).
     pub fn remove(&self, key: &str) -> Result<PatternRecord, String> {
         let r = self.get(key)?;
         self.write(|tx| {
@@ -1027,6 +1028,11 @@ impl Library {
                 .map_err(e)?;
             tx.execute(
                 "DELETE FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1",
+                [&r.id],
+            )
+            .map_err(e)?;
+            tx.execute(
+                "DELETE FROM media WHERE target_kind = 'pattern' AND target_id = ?1",
                 [&r.id],
             )
             .map_err(e)?;
@@ -1407,12 +1413,17 @@ impl Library {
         })
     }
 
-    /// Delete a Quick Start entry.
+    /// Delete a Quick Start entry and its media rows (the files stay until `jetcarp media gc`).
     pub fn remove_quickstart(&self, id: &str) -> Result<(), String> {
         let id = id.trim().trim_start_matches("find:");
         self.write(|tx| {
             tx.execute("DELETE FROM quickstart WHERE id = ?1", [id])
                 .map_err(e)?;
+            tx.execute(
+                "DELETE FROM media WHERE target_kind = 'quickstart' AND target_id = ?1",
+                [id],
+            )
+            .map_err(e)?;
             provenance::forget_in(tx, "quickstart", id)?;
             Ok(())
         })

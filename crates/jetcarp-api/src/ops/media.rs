@@ -1,6 +1,8 @@
-//! `media.*` and `site.export`: media for the catalog (per-step PNG frames, an animation, a
+//! `media.*` and `site.export`: media for the library (per-step PNG frames, an animation, a
 //! poster, and a thumbnail, in one house style) for a pattern, a Quick Start entry, an ant run,
-//! or any scene, and the incremental website export of the public part of the catalog.
+//! or any scene; the library's media files listed (`media.list`, their content-addressed paths),
+//! copied out under readable names (`media.export`), and the files no record names deleted
+//! (`media.gc`); and the incremental website export of the public part of the library.
 //!
 //! The MCP tools and Rhai read their options from a JSON map the same way
 //! ([`MediaRenderIn::from_map`], [`SiteIn::from_map`]); the command line from its flags.
@@ -57,7 +59,7 @@ pub struct MediaRenderIn {
     pub pattern: Option<String>,
     /// A Quick Start entry: one of the catalog's (`find:...`, its media stored in the catalog),
     /// or a built-in one by id (`life`) or number in `jetcarp quickstart`, rendered from its
-    /// seed like `scene` (into `out`, default `<catalog folder>/media/scenes/<id>`).
+    /// seed like `scene` (into `out`, default `<output folder>/media/<id>`).
     #[serde(default)]
     pub quickstart: Option<String>,
     /// An ant run (`ant-...`): a highway's moving loop alone, or the build-up from the seed.
@@ -108,8 +110,8 @@ pub struct MediaRenderIn {
     /// render again).
     #[serde(default)]
     pub palette: Option<String>,
-    /// With `scene` or a built-in Quick Start entry: the output folder (default
-    /// `<catalog folder>/media/scenes/<scene name>`).
+    /// With `scene` or a built-in Quick Start entry: the folder for its files (default
+    /// `<output folder>/media/<scene name>`).
     #[serde(default)]
     pub out: Option<String>,
     /// Worker threads (default: all cores; the files do not depend on it).
@@ -226,7 +228,8 @@ pub struct MediaReport {
     pub rows: Vec<MediaRow>,
 }
 
-/// Media files by kind (`anim` for the GIF or WebP), with the first one's size.
+/// Media files by kind (`anim` for the GIF or WebP; `frames` a list of every frame's file),
+/// with the first one's size.
 pub fn files_by_kind(rows: &[MediaRow]) -> Value {
     let mut m = serde_json::Map::new();
     for r in rows {
@@ -234,7 +237,16 @@ pub fn files_by_kind(rows: &[MediaRow]) -> Value {
             "gif" | "webp" => "anim",
             k => k,
         };
-        m.insert(k.into(), json!(r.abs_path.display().to_string()));
+        if r.kind == "frames" {
+            let v: Vec<String> = r
+                .frame_files
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            m.insert(k.into(), json!(v));
+        } else {
+            m.insert(k.into(), json!(r.abs_path.display().to_string()));
+        }
     }
     m.insert(
         "width".into(),
@@ -390,10 +402,11 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
         let dir = match &a.out {
             Some(d) => cx.fs.writable_dir(d)?,
             None => {
-                let d = lib
-                    .folder()
+                // Not the library's media folder: that holds content-addressed files only.
+                let d = cx
+                    .paths()
+                    .output
                     .join("media")
-                    .join("scenes")
                     .join(crate::out::sanitize(&name));
                 cx.fs.writable_dir(&d.display().to_string())?
             }
@@ -497,8 +510,7 @@ impl Report for MediaList {
 pub struct MediaListOp;
 impl Op for MediaListOp {
     const NAME: &'static str = "media.list";
-    const SUMMARY: &'static str =
-        "A catalog target's stored media files (kind, size, frames, bytes, path).";
+    const SUMMARY: &'static str = "A library target's stored media files (kind, size, frames, bytes, content-addressed path under <library folder>/media/).";
     const READ_ONLY: bool = true;
     type In = MediaListIn;
     type Out = MediaList;
@@ -509,6 +521,130 @@ impl Op for MediaListOp {
             id: a.id,
             media,
         })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// media.export
+
+/// Whose media to copy out, and where.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MediaExportIn {
+    /// `pattern`, `quickstart`, or `ant`.
+    pub kind: String,
+    /// The target's id (a pattern's full id).
+    pub id: String,
+    /// The folder to copy them into (made if new).
+    pub to: String,
+    /// alone or seed (default: alone if it has media alone, else seed).
+    #[serde(default)]
+    pub mode: Option<String>,
+}
+
+/// Files copied out.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct MediaExported {
+    pub kind: String,
+    pub id: String,
+    pub folder: String,
+    pub files: Vec<String>,
+}
+
+impl Report for MediaExported {
+    fn text(&self) -> String {
+        format!(
+            "{} {}: {} file(s) in {}\n",
+            self.kind,
+            self.id,
+            self.files.len(),
+            self.folder
+        )
+    }
+}
+
+/// `media.export`.
+pub struct MediaExport;
+impl Op for MediaExport {
+    const NAME: &'static str = "media.export";
+    const SUMMARY: &'static str = "Copy a library target's stored media out of the content-addressed store into a folder under readable names (frames/0000.png, anim.gif or anim.webp, poster.png, thumb.png).";
+    const READ_ONLY: bool = false;
+    type In = MediaExportIn;
+    type Out = MediaExported;
+    fn run(cx: &Ctx, a: MediaExportIn, _: &dyn Progress) -> Result<MediaExported, ApiError> {
+        let seed = match a.mode.as_deref() {
+            None => None,
+            Some("alone") => Some(false),
+            Some("seed") => Some(true),
+            Some(m) => {
+                return Err(ApiError::invalid(format!("mode is alone or seed, not {m}")));
+            }
+        };
+        let dir = cx.fs.writable_dir(&a.to)?;
+        let files = media::export(&cx.library(), &a.kind, &a.id, seed, &dir)
+            .map_err(ApiError::not_found)?;
+        Ok(MediaExported {
+            kind: a.kind,
+            id: a.id,
+            folder: dir.display().to_string(),
+            files: files.iter().map(|p| p.display().to_string()).collect(),
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// media.gc
+
+fn ten_minutes() -> u64 {
+    600
+}
+
+/// How to collect.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MediaGcIn {
+    /// Only report what would be deleted.
+    #[serde(default)]
+    pub dry_run: bool,
+    /// Leave files younger than this many seconds (default 600: a render in another process may
+    /// not have recorded its files yet).
+    #[serde(default = "ten_minutes")]
+    pub min_age_s: u64,
+}
+
+/// What was collected.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[serde(transparent)]
+pub struct MediaGcReport(#[schemars(with = "Value")] pub media::GcReport);
+
+impl Report for MediaGcReport {
+    fn text(&self) -> String {
+        let r = &self.0;
+        let verb = if r.dry_run { "would delete" } else { "deleted" };
+        let mut s = String::new();
+        for f in &r.files {
+            let _ = writeln!(s, "{verb} {f}");
+        }
+        let _ = writeln!(
+            s,
+            "{} file(s) in use ({} bytes); {verb} {} unused file(s) ({} bytes) and {} temporary file(s); {} left as too new; {} index row(s) without a file",
+            r.kept, r.kept_bytes, r.deleted, r.deleted_bytes, r.temp_files, r.too_new, r.missing
+        );
+        s
+    }
+}
+
+/// `media.gc`.
+pub struct MediaGc;
+impl Op for MediaGc {
+    const NAME: &'static str = "media.gc";
+    const SUMMARY: &'static str = "Delete the library's media files that no media row names (a frame list's frames count as named) and leftover temporary files, older than min_age_s; dry_run only reports.";
+    const READ_ONLY: bool = false;
+    type In = MediaGcIn;
+    type Out = MediaGcReport;
+    fn run(cx: &Ctx, a: MediaGcIn, _: &dyn Progress) -> Result<MediaGcReport, ApiError> {
+        let r = media::gc(&cx.library(), a.dry_run, a.min_age_s).map_err(catalog_err)?;
+        Ok(MediaGcReport(r))
     }
 }
 

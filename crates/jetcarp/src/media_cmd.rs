@@ -1,20 +1,22 @@
-//! `jetcarp media` (frames, animations, posters, thumbnails for catalog patterns, Quick Start
-//! entries, ant runs, and scenes) and `jetcarp site` (incremental static export for a website).
-//! The work is in the operations `media.render`, `media.list`, and `site.export`.
+//! `jetcarp media` (frames, animations, posters, thumbnails for library patterns, Quick Start
+//! entries, ant runs, and scenes; listing, exporting and collecting the library's
+//! content-addressed media files) and `jetcarp site` (incremental static export for a website).
+//! The work is in the operations `media.render`, `media.list`, `media.export`, `media.gc`, and
+//! `site.export`.
 
 use crate::show;
 use anyhow::{Result, bail};
 use jetcarp_api::op::{Op, Quiet, Report};
 use jetcarp_api::ops::media::{
-    MediaListIn, MediaListOp, MediaRender, MediaRenderIn, SiteExport, SiteIn,
+    MediaExport, MediaExportIn, MediaGc, MediaGcIn, MediaListIn, MediaListOp, MediaRender,
+    MediaRenderIn, SiteExport, SiteIn,
 };
-use jetcarp_store::Library;
 use std::path::{Path, PathBuf};
 
 #[derive(clap::Args)]
 pub struct MediaArgs {
     /// Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else
-    /// <data>/library.sqlite). Media files go under its folder.
+    /// <data>/library.sqlite). Media files go under its folder, in media/ab/<sha256>.<ext>.
     #[arg(long, global = true)]
     library: Option<PathBuf>,
     #[command(subcommand)]
@@ -25,13 +27,36 @@ pub struct MediaArgs {
 enum MediaCmd {
     /// Render frames, an animation, a poster, and a thumbnail (skipped when up to date).
     Render(Box<RenderArgs>),
-    /// List a target's stored media files.
+    /// List a target's stored media files, with their paths (content-addressed: media/ab/<sha256>.<ext>).
     List {
         /// `pattern`, `quickstart`, or `ant`.
         kind: String,
         id: String,
         #[arg(long)]
         json: bool,
+    },
+    /// Copy a target's stored media into a folder under readable names (frames/0000.png,
+    /// anim.gif or anim.webp, poster.png, thumb.png).
+    Export {
+        /// `pattern`, `quickstart`, or `ant`.
+        kind: String,
+        id: String,
+        /// The folder to copy them into.
+        #[arg(long)]
+        to: PathBuf,
+        /// alone or seed (default: alone if it has media alone, else seed).
+        #[arg(long)]
+        mode: Option<String>,
+    },
+    /// Delete the media files no record names any more, and leftover temporary files.
+    Gc {
+        /// Only list what would be deleted.
+        #[arg(long)]
+        dry_run: bool,
+        /// Leave files younger than this many seconds (a render in another process may not have
+        /// recorded them yet).
+        #[arg(long, default_value_t = 600)]
+        min_age: u64,
     },
 }
 
@@ -48,7 +73,7 @@ struct RenderArgs {
     /// seed.
     #[arg(long)]
     ant: Option<String>,
-    /// Any scene file (from the seed); written to --out, not the catalog.
+    /// Any scene file (from the seed); written to --out, not the library.
     #[arg(long)]
     scene: Option<PathBuf>,
     /// Every pattern and shown Quick Start entry whose media are missing or stale.
@@ -91,8 +116,8 @@ struct RenderArgs {
     /// The palette is part of the render key, so media stored in another palette render again.
     #[arg(long)]
     palette: Option<String>,
-    /// --scene or a built-in --quickstart entry: output folder (default
-    /// `<catalog folder>/media/scenes/<scene file's name, or the entry's id>`).
+    /// --scene or a built-in --quickstart entry: the folder for its files (default
+    /// `<output folder>/media/<scene file's name, or the entry's id>`).
     #[arg(long)]
     out: Option<PathBuf>,
     /// Worker threads (default: all cores).
@@ -133,6 +158,26 @@ pub fn run(a: MediaArgs, json: bool) -> Result<()> {
             show(&out, false)
         }
         MediaCmd::Render(r) => render(&cx, *r, json),
+        MediaCmd::Export { kind, id, to, mode } => {
+            let i = MediaExportIn {
+                kind,
+                id,
+                to: to.display().to_string(),
+                mode,
+            };
+            show(&MediaExport::run(&cx, i, &Quiet)?, json)
+        }
+        MediaCmd::Gc { dry_run, min_age } => show(
+            &MediaGc::run(
+                &cx,
+                MediaGcIn {
+                    dry_run,
+                    min_age_s: min_age,
+                },
+                &Quiet,
+            )?,
+            json,
+        ),
     }
 }
 
@@ -192,12 +237,10 @@ fn render(cx: &jetcarp_api::Ctx, a: RenderArgs, json: bool) -> Result<()> {
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "scene".into());
-        let dir = a.out.clone().unwrap_or_else(|| {
-            Library::default_path()
-                .parent()
-                .map(|p| p.join("media").join("scenes").join(&stem))
-                .unwrap_or_else(|| PathBuf::from(&stem))
-        });
+        let dir = a
+            .out
+            .clone()
+            .unwrap_or_else(|| cx.paths().output.join("media").join(&stem));
         input.scene = Some(serde_json::Value::String(text));
         input.out = Some(dir.display().to_string());
         out_dir = Some(dir);

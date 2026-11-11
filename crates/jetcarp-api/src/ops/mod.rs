@@ -80,6 +80,8 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<quickstart::QuickstartPublish>::NEW,
     &Plain::<media::MediaRender>::NEW,
     &Plain::<media::MediaListOp>::NEW,
+    &Plain::<media::MediaExport>::NEW,
+    &Plain::<media::MediaGc>::NEW,
     &Plain::<media::SiteExport>::NEW,
     &OnWorld::<wallpaper::WallpaperExport>::NEW,
     &Plain::<sheet::SheetRules>::NEW,

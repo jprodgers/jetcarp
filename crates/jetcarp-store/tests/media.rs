@@ -1,5 +1,7 @@
 //! Media (Phase 4 catalog deliverable 6): seamless loops, moving windows, frame counts, the
-//! WebP container, idempotent re-rendering, and thread-count independence.
+//! WebP container, idempotent re-rendering, thread-count independence, and content-addressed
+//! files: identical renders stored once, a shared file kept when one of its records goes, and
+//! `gc`.
 //!
 //! Set `JETCARP_MEDIA_SAMPLES=DIR` to keep the rendered files for a look.
 
@@ -143,10 +145,29 @@ fn glider_gif_loops_seamlessly_in_a_moving_window() {
     assert_eq!(poster.rgba, frames[0].rgba);
     let thumb = r.file("thumb").unwrap();
     assert!(thumb.width <= o.style.thumb_side && thumb.height <= o.style.thumb_side);
-    // One PNG per step.
+    // One PNG per step, content-addressed, listed in order in the frame list.
     let fr = r.file("frames").unwrap();
     assert_eq!(fr.frames, 4);
-    assert!(fr.abs_path.join("0003.png").exists());
+    assert_eq!(fr.frame_files.len(), 4);
+    assert!(fr.frame_files.iter().all(|f| f.exists()));
+    assert_eq!(fr.abs_path.extension().unwrap(), "txt");
+    let list = std::fs::read_to_string(&fr.abs_path).unwrap();
+    assert!(list.starts_with("jetcarp-frames 1\n"), "{list}");
+    assert_eq!(media::content_hash(list.as_bytes()), fr.hash);
+    // Every file is named by its hash.
+    for f in r
+        .rows
+        .iter()
+        .map(|x| x.abs_path.clone())
+        .chain(fr.frame_files.clone())
+    {
+        let name = f.file_stem().unwrap().to_string_lossy().into_owned();
+        assert_eq!(name, media::content_hash(&std::fs::read(&f).unwrap()));
+        assert_eq!(
+            f.parent().unwrap().file_name().unwrap().to_string_lossy(),
+            &name[..2]
+        );
+    }
 }
 
 #[test]
@@ -297,10 +318,9 @@ fn soup_webp_decodes_with_its_frame_count_and_size() {
     assert_eq!((frames[0].width, frames[0].height), (480, 360));
     assert_eq!((a.width, a.height), (480, 360));
     // The decoded frames are the PNG frames.
-    let f10 = encode::decode_png(
-        &std::fs::read(r.file("frames").unwrap().abs_path.join("0010.png")).unwrap(),
-    )
-    .unwrap();
+    let f10 =
+        encode::decode_png(&std::fs::read(&r.file("frames").unwrap().frame_files[10]).unwrap())
+            .unwrap();
     assert_eq!(f10.rgba, frames[10].rgba);
     // The poster is the last frame.
     let poster =
@@ -344,7 +364,11 @@ fn unchanged_inputs_skip_and_a_style_change_rerenders() {
     let c = jetcarp_store::media::render(&lib, &t, &o2).unwrap();
     assert!(c.written, "style changed: rendered again");
     assert_ne!(c.rows[0].key, a.rows[0].key);
-    let frames = encode::decode_gif(&std::fs::read(&gif).unwrap()).unwrap();
+    // New bytes, a new file; the old one stays until `gc` (nothing names it now).
+    let gif2 = c.animation().unwrap().abs_path.clone();
+    assert_ne!(gif2, gif);
+    assert!(gif.exists());
+    let frames = encode::decode_gif(&std::fs::read(&gif2).unwrap()).unwrap();
     assert!(colour_box(&frames[0], [0x60, 0xd0, 0xff]).is_some());
     // A missing-media batch now finds nothing to do for it.
     let r = jetcarp_store::media::render_missing(
@@ -528,3 +552,136 @@ fn a_palette_override_recolours_and_marks_media_stale() {
 /// `MediaStyle::default().hash()` (pinned: a change re-renders every stored media file). 16 hex
 /// digits of SHA-256 of the style's JSON.
 const HOUSE_STYLE_HASH: &str = "86fdb8c4566d9a22";
+
+/// Every file in the library's media folder, relative to it.
+fn media_files(lib: &Library) -> Vec<String> {
+    let root = lib.folder().join("media");
+    let mut out = Vec::new();
+    for d in std::fs::read_dir(&root).into_iter().flatten().flatten() {
+        for f in std::fs::read_dir(d.path()).into_iter().flatten().flatten() {
+            out.push(format!(
+                "{}/{}",
+                d.file_name().to_string_lossy(),
+                f.file_name().to_string_lossy()
+            ));
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn identical_renders_share_files_and_gc_keeps_what_is_named() {
+    use jetcarp_store::media::{self as m, gc, remove};
+    let lib = temp_lib("dedupe");
+    // Two Quick Start entries showing the same scene, and a blinker whose two phases repeat.
+    let mut sc = Scene::new(TilingSpec::rect("square", 24, 24, Boundary::Wrap));
+    sc.cas = vec![CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 })];
+    for id in ["twin-a", "twin-b"] {
+        lib.put_quickstart(&QuickStartRow::for_scene(id, "scene", sc.clone()))
+            .unwrap();
+    }
+    let blinker = one("B3/S23", "ooo");
+    lib.add(blinker.clone()).unwrap();
+    let o = MediaOptions {
+        gens: Some(6),
+        ..Default::default()
+    };
+    let a = m::render(&lib, &MediaTarget::QuickStart("twin-a".into()), &o).unwrap();
+    let b = m::render(&lib, &MediaTarget::QuickStart("twin-b".into()), &o).unwrap();
+    let hashes = |r: &jetcarp_store::media::Rendered| -> Vec<(String, String)> {
+        r.rows
+            .iter()
+            .map(|x| (x.kind.clone(), x.hash.clone()))
+            .collect()
+    };
+    assert_eq!(hashes(&a), hashes(&b), "the same render, the same files");
+    // The soup's frames, their list, the animation, the poster and the thumbnail, once each
+    // (a file that two of them share, such as the poster and the last frame, once too).
+    let named: std::collections::HashSet<std::path::PathBuf> = a
+        .rows
+        .iter()
+        .map(|x| x.abs_path.clone())
+        .chain(a.file("frames").unwrap().frame_files.clone())
+        .collect();
+    assert_eq!(media_files(&lib).len(), named.len());
+    // The blinker shown for two periods: four frames, two files.
+    let bl = m::render(
+        &lib,
+        &MediaTarget::Pattern(blinker.id.clone()),
+        &MediaOptions {
+            periods: 2,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let fr = bl.file("frames").unwrap();
+    assert_eq!(fr.frame_files.len(), 4);
+    assert_eq!(fr.frame_files[0], fr.frame_files[2]);
+    assert_eq!(fr.frame_files[1], fr.frame_files[3]);
+    assert_ne!(fr.frame_files[0], fr.frame_files[1]);
+    // Nothing to collect: every file is named.
+    let all = media_files(&lib);
+    let r = gc(&lib, false, 0).unwrap();
+    assert_eq!((r.deleted, r.temp_files, r.missing), (0, 0, 0));
+    assert_eq!(r.kept as usize, all.len());
+    assert_eq!(media_files(&lib), all);
+    // One twin goes: its rows only; the other still names every file, so gc keeps them all.
+    lib.remove_quickstart("twin-a").unwrap();
+    assert!(m::stored(&lib, "quickstart", "twin-a").unwrap().is_empty());
+    let r = gc(&lib, false, 0).unwrap();
+    assert_eq!(r.deleted, 0, "{:?}", r.files);
+    assert_eq!(media_files(&lib), all);
+    assert!(
+        m::export(
+            &lib,
+            "quickstart",
+            "twin-b",
+            None,
+            &lib.folder().join("out-b")
+        )
+        .is_ok()
+    );
+    // The other goes too: its files (not the blinker's) are no longer named. A dry run lists
+    // them; files newer than the age limit are left; then they are deleted, with a leftover
+    // temporary file.
+    assert_eq!(remove(&lib, "quickstart", "twin-b", None).unwrap(), 4);
+    let tmp = lib
+        .folder()
+        .join("media")
+        .join("00")
+        .join(".abc.png.1-1.tmp");
+    std::fs::create_dir_all(tmp.parent().unwrap()).unwrap();
+    std::fs::write(&tmp, b"half").unwrap();
+    let dry = gc(&lib, true, 0).unwrap();
+    assert!(dry.deleted > 0 && dry.dry_run);
+    assert_eq!(
+        media_files(&lib).len(),
+        all.len() + 1,
+        "a dry run deletes nothing"
+    );
+    let young = gc(&lib, false, 3600).unwrap();
+    assert_eq!((young.deleted, young.temp_files), (0, 0));
+    assert!(young.too_new > 0);
+    let done = gc(&lib, false, 0).unwrap();
+    assert_eq!(done.deleted, dry.deleted);
+    assert_eq!(done.temp_files, 1);
+    assert!(!tmp.exists());
+    // The blinker's files are all still there, and the twins' are gone.
+    for row in m::stored(&lib, "pattern", &blinker.id).unwrap() {
+        assert!(row.abs_path.exists());
+        assert!(row.frame_files.iter().all(|f| f.exists()));
+    }
+    assert!(!a.animation().unwrap().abs_path.exists());
+    assert!(
+        !lib.folder().join("media").join("00").exists(),
+        "empty folders go"
+    );
+    // A readable copy.
+    let out = lib.folder().join("readable");
+    let files = m::export(&lib, "pattern", &blinker.id, Some(false), &out).unwrap();
+    assert!(out.join("anim.gif").is_file() && out.join("poster.png").is_file());
+    assert!(out.join("frames").join("0003.png").is_file());
+    assert_eq!(files.len(), 4 + 3);
+    assert!(m::export(&lib, "pattern", &blinker.id, Some(true), &out).is_err());
+}

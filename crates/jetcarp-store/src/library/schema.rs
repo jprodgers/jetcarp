@@ -307,19 +307,20 @@ CREATE TABLE media (
     target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'quickstart', 'ant')),
     target_id TEXT NOT NULL,
     kind TEXT NOT NULL,
-    path TEXT NOT NULL,
     from_seed INTEGER NOT NULL DEFAULT 0,
+    hash TEXT NOT NULL,
+    ext TEXT NOT NULL,
     render TEXT NOT NULL DEFAULT '{}',
     width INTEGER,
     height INTEGER,
     frames INTEGER,
     bytes INTEGER,
     key TEXT,
-    hash TEXT,
     created TEXT NOT NULL,
     updated TEXT,
     UNIQUE (target_kind, target_id, kind, from_seed)
 );
+CREATE INDEX media_hash ON media (hash);
 "#;
 
 /// Is this a library of this schema (`Ok(true)`), a new empty file (`Ok(false)`), or neither

@@ -1,19 +1,30 @@
-//! The media index: media for catalog targets (patterns, Quick Start entries, ant runs), made by
+//! The media index: media for library targets (patterns, Quick Start entries, ant runs), made by
 //! the engine (`jetcarp_core::media`: frames, animations, the house style, encoding) and recorded
-//! in the catalog.
+//! in the library.
 //!
-//! **Storage.** Files go under the catalog's folder in
-//! `media/<target kind>/<target id>/<alone|seed>/` (`frames/0000.png`..., `anim.gif` or
-//! `anim.webp`, `poster.png`, `thumb.png`), one `media` row per file (the frame folder is one
-//! row), with paths relative to the catalog folder, the render key, and the content hash.
-//! Rendering again with the same inputs, options, and style does nothing.
+//! **Storage.** Files are content-addressed, beside the library file wherever it is:
+//! `<library folder>/media/ab/<sha256>.<ext>`, named by the SHA-256 of their bytes (`ab` its
+//! first two hex digits), so identical renders (a pattern and the Quick Start entry made from
+//! it, an oscillator's repeated phases) are stored once. A target has one `media` row per file
+//! and mode (`frames`, `gif` or `webp`, `poster`, `thumb`; alone or from the seed) with the
+//! file's hash and extension, the render key, and the render's details. A frame sequence is its
+//! PNG frames, each content-addressed, and a **frame list** (`<hash>.txt`: the line
+//! `jetcarp-frames 1`, then one frame hash per line, in order), whose hash is the `frames` row's:
+//! the frames stay plain PNG files that viewers and the website export use as they are, and a
+//! loop's repeated phases are stored once. Files are written to a temporary name beside their
+//! final one and renamed. Rendering again with the same inputs, options, and style does nothing.
+//!
+//! **Removal.** Deleting a target's rows never deletes a file (another row may name it); [`gc`]
+//! deletes the files no row names, and leftover temporary files. [`export`] copies a target's
+//! files out under readable names, and [`render_scene_to`] writes a scene that is not in the
+//! library to a folder of its own the same way.
 
 pub mod ants;
 
 use crate::{Library, QsStatus};
 use jetcarp_core::media::{
-    Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, frames_hash,
-    pattern_animation, scene_animation,
+    Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, pattern_animation,
+    scene_animation,
 };
 use jetcarp_core::pattern::{PatternClass, PatternRecord};
 use jetcarp_core::render::Image;
@@ -48,16 +59,21 @@ impl MediaTarget {
     }
 }
 
-/// One row of `media`, with the absolute path.
+/// One row of `media`, with the file's paths.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct MediaRow {
     pub target_kind: String,
     pub target_id: String,
     /// `frames`, `gif`, `webp`, `poster`, `thumb`.
     pub kind: String,
-    /// Relative to the catalog's folder (a folder for `frames`).
+    /// Relative to the library's folder: `media/ab/<hash>.<ext>` (for `frames`, its frame list).
     pub path: String,
     pub abs_path: PathBuf,
+    /// The file's extension: `png`, `gif`, `webp`, or `txt` (a frame list).
+    pub ext: String,
+    /// `frames`: every frame's file, in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub frame_files: Vec<PathBuf>,
     pub from_seed: bool,
     pub render: Value,
     pub width: u32,
@@ -66,9 +82,58 @@ pub struct MediaRow {
     pub bytes: u64,
     /// The render key the file was made with.
     pub key: String,
-    /// Content hash (FNV-1a 64; frames: of every frame's hash).
+    /// SHA-256 of the file (frames: of the frame list).
     pub hash: String,
     pub created: String,
+}
+
+/// The media folder inside the library's folder.
+pub const DIR: &str = "media";
+
+/// What the first line of a frame list says.
+pub const FRAME_LIST: &str = "jetcarp-frames 1";
+
+/// Where a file of this hash and extension is, relative to the library's folder.
+pub fn rel_path(hash: &str, ext: &str) -> String {
+    format!("{DIR}/{}/{hash}.{ext}", hash.get(..2).unwrap_or("00"))
+}
+
+fn is_hash(s: &str) -> bool {
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// Store bytes as a content-addressed file under `folder` (written to a temporary name and
+/// renamed, unless a file of that hash is there already). Returns its hash.
+pub fn put_file(folder: &Path, bytes: &[u8], ext: &str) -> Result<String, String> {
+    let hash = content_hash(bytes);
+    let p = folder.join(rel_path(&hash, ext));
+    if std::fs::metadata(&p).is_ok_and(|m| m.len() == bytes.len() as u64) {
+        return Ok(hash);
+    }
+    let d = p.parent().unwrap_or(folder);
+    std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = d.join(format!(".{hash}.{ext}.{}-{n}.tmp", std::process::id()));
+    std::fs::write(&tmp, bytes).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &p).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{}: {e}", p.display())
+    })?;
+    Ok(hash)
+}
+
+/// The frame hashes a frame list file names, in order.
+pub fn frame_list(folder: &Path, hash: &str) -> Result<Vec<String>, String> {
+    let p = folder.join(rel_path(hash, "txt"));
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+    let mut lines = text.lines();
+    if lines.next() != Some(FRAME_LIST) {
+        return Err(format!("{} is not a frame list", p.display()));
+    }
+    Ok(lines.filter(|l| is_hash(l)).map(String::from).collect())
 }
 
 /// What [`render`] did for one target.
@@ -106,10 +171,11 @@ fn safe(id: &str) -> String {
         .collect()
 }
 
-/// The folder (relative to the catalog's folder) holding a target's media in one mode.
+/// A readable folder name for a target's media in one mode (for [`export`]):
+/// `<target kind>/<target id>/<alone|seed>`.
 pub fn media_dir(target_kind: &str, target_id: &str, mode: MediaMode) -> String {
     format!(
-        "media/{target_kind}/{}/{}",
+        "{target_kind}/{}/{}",
         safe(target_id),
         if mode == MediaMode::Seed {
             "seed"
@@ -232,26 +298,30 @@ fn resolve(lib: &Library, t: &MediaTarget, mode: MediaMode) -> Result<Job, Strin
     })
 }
 
-/// Stored media rows of a target (every mode), from the catalog.
+/// Stored media rows of a target (every mode), from the library, with their files' paths.
 pub fn stored(lib: &Library, target_kind: &str, target_id: &str) -> Result<Vec<MediaRow>, String> {
     let folder = lib.folder();
-    lib.read(Vec::new(), |c| {
+    let mut rows = lib.read(Vec::new(), |c| {
         let mut st = c
             .prepare(
-                "SELECT target_kind, target_id, kind, path, from_seed, render, width, height, frames,
-                        bytes, key, hash, created
+                "SELECT target_kind, target_id, kind, ext, from_seed, render, width, height,
+                        frames, bytes, key, hash, created
                  FROM media WHERE target_kind = ?1 AND target_id = ?2 ORDER BY from_seed, kind",
             )
             .map_err(|e| e.to_string())?;
         let rows = st
             .query_map(rusqlite::params![target_kind, target_id], |r| {
-                let path: String = r.get(3)?;
+                let ext: String = r.get(3)?;
+                let hash: String = r.get(11)?;
+                let path = rel_path(&hash, &ext);
                 Ok(MediaRow {
                     target_kind: r.get(0)?,
                     target_id: r.get(1)?,
                     kind: r.get(2)?,
                     abs_path: folder.join(&path),
                     path,
+                    ext,
+                    frame_files: Vec::new(),
                     from_seed: r.get::<_, i64>(4)? != 0,
                     render: serde_json::from_str(&r.get::<_, String>(5)?).unwrap_or_default(),
                     width: r.get::<_, Option<i64>>(6)?.unwrap_or(0) as u32,
@@ -259,14 +329,22 @@ pub fn stored(lib: &Library, target_kind: &str, target_id: &str) -> Result<Vec<M
                     frames: r.get::<_, Option<i64>>(8)?.unwrap_or(0) as u32,
                     bytes: r.get::<_, Option<i64>>(9)?.unwrap_or(0) as u64,
                     key: r.get::<_, Option<String>>(10)?.unwrap_or_default(),
-                    hash: r.get::<_, Option<String>>(11)?.unwrap_or_default(),
+                    hash,
                     created: r.get(12)?,
                 })
             })
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
-    })
+    })?;
+    for r in rows.iter_mut().filter(|r| r.kind == "frames") {
+        r.frame_files = frame_list(&folder, &r.hash)
+            .unwrap_or_default()
+            .iter()
+            .map(|h| folder.join(rel_path(h, "png")))
+            .collect();
+    }
+    Ok(rows)
 }
 
 /// Every target with media: (target kind, target id).
@@ -328,7 +406,13 @@ fn fresh(rows: &[MediaRow], job: &Job) -> bool {
         .collect();
     !mine.is_empty()
         && mine.iter().any(|r| r.kind == "poster")
-        && mine.iter().all(|r| r.key == job.key && r.abs_path.exists())
+        && mine.iter().all(|r| {
+            r.key == job.key
+                && r.abs_path.exists()
+                && (r.kind != "frames"
+                    || (r.frame_files.len() == r.frames as usize
+                        && r.frame_files.iter().all(|f| f.exists())))
+        })
 }
 
 /// A job's animation in memory.
@@ -362,31 +446,69 @@ pub fn target_animation(
     job_animation(&resolve(lib, target, o.mode)?, o)
 }
 
-/// Render a job's files into the catalog folder (no catalog writes). Pure apart from the files.
+/// Render a job's files into the library's media folder, content-addressed (no library
+/// writes). Pure apart from the files.
 fn make_files(folder: &Path, job: &Job, o: &MediaOptions) -> Result<Vec<MediaRow>, String> {
     let anim = job_animation(job, o)?;
-    write_files(
-        folder,
-        &media_dir(job.kind, &job.id, job.mode),
-        &anim,
-        o,
-        job,
-    )
+    let enc = encode_all(&anim, o, job)?;
+    let mut rows = Vec::new();
+    for f in &enc.files {
+        let (hash, ext, frame_files) = match &f.data {
+            Data::One(b) => (put_file(folder, b, &f.ext)?, f.ext.clone(), Vec::new()),
+            Data::Frames(pngs) => {
+                let mut list = String::from(FRAME_LIST);
+                let mut files = Vec::with_capacity(pngs.len());
+                for b in pngs {
+                    let h = put_file(folder, b, "png")?;
+                    list.push('\n');
+                    list.push_str(&h);
+                    files.push(folder.join(rel_path(&h, "png")));
+                }
+                list.push('\n');
+                (
+                    put_file(folder, list.as_bytes(), "txt")?,
+                    "txt".into(),
+                    files,
+                )
+            }
+        };
+        let path = rel_path(&hash, &ext);
+        rows.push(MediaRow {
+            abs_path: folder.join(&path),
+            path,
+            ext,
+            frame_files,
+            hash,
+            ..f.row.clone()
+        });
+    }
+    Ok(rows)
 }
 
-fn write_files(
-    folder: &Path,
-    rel: &str,
-    anim: &Animation,
-    o: &MediaOptions,
-    job: &Job,
-) -> Result<Vec<MediaRow>, String> {
-    let dir = if rel.is_empty() {
-        folder.to_path_buf()
-    } else {
-        folder.join(rel)
-    };
-    // Clear only the files this writes (the folder may be the user's own, for scenes).
+/// A file's bytes: one file, or a frame sequence.
+enum Data {
+    One(Vec<u8>),
+    Frames(Vec<Vec<u8>>),
+}
+
+/// A file to write, with its row (paths and hash not yet filled in).
+struct EncFile {
+    /// Its name in a readable folder (`anim.gif`, `poster.png`, `frames`).
+    name: String,
+    ext: String,
+    data: Data,
+    row: MediaRow,
+}
+
+/// An animation's files, encoded.
+struct Encoded {
+    files: Vec<EncFile>,
+}
+
+/// Write a job's files to `dir` under readable names (`frames/0000.png`..., `anim.gif` or
+/// `anim.webp`, `poster.png`, `thumb.png`), replacing only those files (the folder may be the
+/// user's own). Rows' paths are the files' names in `dir`.
+fn write_tree(dir: &Path, enc: &Encoded) -> Result<Vec<MediaRow>, String> {
     let frames_dir = dir.join("frames");
     if frames_dir.is_dir() {
         std::fs::remove_dir_all(&frames_dir)
@@ -395,14 +517,48 @@ fn write_files(
     for f in ["anim.gif", "anim.webp", "poster.png", "thumb.png"] {
         let _ = std::fs::remove_file(dir.join(f));
     }
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let rel_of = |name: &str| {
-        if rel.is_empty() {
-            name.to_string()
-        } else {
-            format!("{rel}/{name}")
-        }
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let put = |name: &str, b: &[u8]| -> Result<(), String> {
+        let p = dir.join(name);
+        std::fs::write(&p, b).map_err(|e| format!("{}: {e}", p.display()))
     };
+    let mut rows = Vec::new();
+    for f in &enc.files {
+        let (hash, frame_files) = match &f.data {
+            Data::One(b) => {
+                put(&f.name, b)?;
+                (content_hash(b), Vec::new())
+            }
+            Data::Frames(pngs) => {
+                std::fs::create_dir_all(&frames_dir)
+                    .map_err(|e| format!("{}: {e}", frames_dir.display()))?;
+                let mut files = Vec::new();
+                let mut list = String::from(FRAME_LIST);
+                for (k, b) in pngs.iter().enumerate() {
+                    let name = format!("frames/{k:04}.png");
+                    put(&name, b)?;
+                    files.push(dir.join(&name));
+                    list.push('\n');
+                    list.push_str(&content_hash(b));
+                }
+                list.push('\n');
+                (content_hash(list.as_bytes()), files)
+            }
+        };
+        rows.push(MediaRow {
+            abs_path: dir.join(&f.name),
+            path: f.name.clone(),
+            ext: f.ext.clone(),
+            frame_files,
+            hash,
+            ..f.row.clone()
+        });
+    }
+    Ok(rows)
+}
+
+/// Encode an animation's files (frames, animation, poster, thumbnail) with their rows.
+fn encode_all(anim: &Animation, o: &MediaOptions, job: &Job) -> Result<Encoded, String> {
     let st = &o.style;
     let (fmt, bytes) = anim.encode(o.format, st)?;
     let render = json!({
@@ -429,87 +585,68 @@ fn write_files(
         render["palette"] = p.clone().into();
     }
     let now = jetcarp_core::pattern::now_utc();
-    let row = |kind: &str, path: String, w: u32, h: u32, frames: u32, bytes: u64, hash: String| {
-        MediaRow {
-            target_kind: job.kind.into(),
-            target_id: job.id.clone(),
-            kind: kind.into(),
-            abs_path: folder.join(&path),
-            path,
-            from_seed: anim.mode == MediaMode::Seed,
-            render: render.clone(),
-            width: w,
-            height: h,
-            frames,
-            bytes,
-            key: job.key.clone(),
-            hash,
-            created: now.clone(),
-        }
-    };
-    let put = |name: &str, b: &[u8]| -> Result<String, String> {
-        let p = dir.join(name);
-        std::fs::write(&p, b).map_err(|e| format!("{}: {e}", p.display()))?;
-        Ok(rel_of(name))
+    let row = |kind: &str, w: u32, h: u32, frames: u32, bytes: u64| MediaRow {
+        target_kind: job.kind.into(),
+        target_id: job.id.clone(),
+        kind: kind.into(),
+        path: String::new(),
+        abs_path: PathBuf::new(),
+        ext: String::new(),
+        frame_files: Vec::new(),
+        from_seed: anim.mode == MediaMode::Seed,
+        render: render.clone(),
+        width: w,
+        height: h,
+        frames,
+        bytes,
+        key: job.key.clone(),
+        hash: String::new(),
+        created: now.clone(),
     };
     let (w, h) = (anim.width(), anim.height());
-    let mut rows = Vec::new();
+    let mut files = Vec::new();
     if o.frames {
-        let fdir = dir.join("frames");
-        std::fs::create_dir_all(&fdir).map_err(|e| format!("{}: {e}", fdir.display()))?;
         let pngs: Vec<Vec<u8>> = anim
             .frames
             .par_iter()
             .map(encode::png)
             .collect::<Result<_, _>>()?;
-        let mut total = 0u64;
-        for (k, b) in pngs.iter().enumerate() {
-            put(&format!("frames/{k:04}.png"), b)?;
-            total += b.len() as u64;
-        }
-        rows.push(row(
-            "frames",
-            rel_of("frames"),
+        let total = pngs.iter().map(|b| b.len() as u64).sum();
+        files.push(EncFile {
+            name: "frames".into(),
+            ext: "txt".into(),
+            row: row("frames", w, h, pngs.len() as u32, total),
+            data: Data::Frames(pngs),
+        });
+    }
+    files.push(EncFile {
+        name: format!("anim.{}", fmt.name()),
+        ext: fmt.name().into(),
+        row: row(
+            fmt.name(),
             w,
             h,
-            pngs.len() as u32,
-            total,
-            frames_hash(pngs.iter().map(|b| b.as_slice())),
-        ));
-    }
-    let name = format!("anim.{}", fmt.name());
-    let path = put(&name, &bytes)?;
-    rows.push(row(
-        fmt.name(),
-        path,
-        w,
-        h,
-        anim.frames.len() as u32,
-        bytes.len() as u64,
-        content_hash(&bytes),
-    ));
+            anim.frames.len() as u32,
+            bytes.len() as u64,
+        ),
+        data: Data::One(bytes),
+    });
     let poster = encode::png(anim.poster_image())?;
-    rows.push(row(
-        "poster",
-        put("poster.png", &poster)?,
-        w,
-        h,
-        1,
-        poster.len() as u64,
-        content_hash(&poster),
-    ));
+    files.push(EncFile {
+        name: "poster.png".into(),
+        ext: "png".into(),
+        row: row("poster", w, h, 1, poster.len() as u64),
+        data: Data::One(poster),
+    });
     let t = anim.thumbnail(st);
     let thumb = encode::png(&t)?;
-    rows.push(row(
-        "thumb",
-        put("thumb.png", &thumb)?,
-        t.width,
-        t.height,
-        1,
-        thumb.len() as u64,
-        content_hash(&thumb),
-    ));
-    Ok(rows)
+    files.push(EncFile {
+        name: "thumb.png".into(),
+        ext: "png".into(),
+        row: row("thumb", t.width, t.height, 1, thumb.len() as u64),
+        data: Data::One(thumb),
+    });
+    Ok(Encoded { files })
 }
 
 fn store_rows(lib: &Library, done: &[(String, String, bool, Vec<MediaRow>)]) -> Result<(), String> {
@@ -524,7 +661,7 @@ fn store_rows(lib: &Library, done: &[(String, String, bool, Vec<MediaRow>)]) -> 
             .map_err(|e| e.to_string())?;
         let mut ins = tx
             .prepare(
-                "INSERT INTO media (target_kind, target_id, kind, path, from_seed, render, width,
+                "INSERT INTO media (target_kind, target_id, kind, ext, from_seed, render, width,
                     height, frames, bytes, key, hash, created, updated)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
             )
@@ -537,7 +674,7 @@ fn store_rows(lib: &Library, done: &[(String, String, bool, Vec<MediaRow>)]) -> 
                     r.target_kind,
                     r.target_id,
                     r.kind,
-                    r.path,
+                    r.ext,
                     r.from_seed as i64,
                     r.render.to_string(),
                     r.width as i64,
@@ -758,8 +895,7 @@ pub fn render_scene_to(
         gens: None,
     };
     let anim = scene_animation(scene, o)?;
-    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    write_files(dir, "", &anim, o, &job)
+    write_tree(dir, &encode_all(&anim, o, &job)?)
 }
 
 /// Write an animation already in memory to `dir` (for scripts and tools).
@@ -778,6 +914,202 @@ pub fn write_animation(
         ))),
         gens: None,
     };
+    write_tree(dir, &encode_all(anim, o, &job)?)
+}
+
+/// Copy a target's stored media (one mode: `seed`, or alone when false; `None`: the mode with a
+/// poster, alone first) into `dir` under readable names: `frames/0000.png`..., `anim.gif` or
+/// `anim.webp`, `poster.png`, `thumb.png`. Returns the files written.
+pub fn export(
+    lib: &Library,
+    target_kind: &str,
+    target_id: &str,
+    seed: Option<bool>,
+    dir: &Path,
+) -> Result<Vec<PathBuf>, String> {
+    let rows = stored(lib, target_kind, target_id)?;
+    let has = |s: bool| rows.iter().any(|r| r.from_seed == s && r.kind == "poster");
+    let seed = match seed {
+        Some(s) => s,
+        None if has(false) => false,
+        None => true,
+    };
+    let mine: Vec<&MediaRow> = rows.iter().filter(|r| r.from_seed == seed).collect();
+    if mine.is_empty() {
+        return Err(format!(
+            "{target_kind} {target_id} has no media {} (media.render makes them)",
+            if seed { "from the seed" } else { "alone" }
+        ));
+    }
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    write_files(dir, "", anim, o, &job)
+    let mut out = Vec::new();
+    let copy = |from: &Path, to: PathBuf, out: &mut Vec<PathBuf>| -> Result<(), String> {
+        std::fs::copy(from, &to).map_err(|e| format!("{}: {e}", from.display()))?;
+        out.push(to);
+        Ok(())
+    };
+    for r in mine {
+        match r.kind.as_str() {
+            "frames" => {
+                let fd = dir.join("frames");
+                std::fs::create_dir_all(&fd).map_err(|e| format!("{}: {e}", fd.display()))?;
+                if r.frame_files.len() != r.frames as usize {
+                    return Err(format!(
+                        "the frame list {} is missing",
+                        r.abs_path.display()
+                    ));
+                }
+                for (k, f) in r.frame_files.iter().enumerate() {
+                    copy(f, fd.join(format!("{k:04}.png")), &mut out)?;
+                }
+            }
+            "gif" | "webp" => copy(&r.abs_path, dir.join(format!("anim.{}", r.kind)), &mut out)?,
+            k => copy(&r.abs_path, dir.join(format!("{k}.png")), &mut out)?,
+        }
+    }
+    Ok(out)
+}
+
+/// Forget a target's media (one mode, or both with `None`): its rows go, its files stay for
+/// [`gc`] (another row may name the same file). Returns the rows removed.
+pub fn remove(
+    lib: &Library,
+    target_kind: &str,
+    target_id: &str,
+    seed: Option<bool>,
+) -> Result<u64, String> {
+    lib.write(|tx| {
+        tx.execute(
+            "DELETE FROM media WHERE target_kind = ?1 AND target_id = ?2
+             AND (?3 IS NULL OR from_seed = ?3)",
+            rusqlite::params![target_kind, target_id, seed.map(|s| s as i64)],
+        )
+        .map(|n| n as u64)
+        .map_err(|e| e.to_string())
+    })
+}
+
+/// What [`gc`] found and did.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct GcReport {
+    /// Files the index names (frames through their lists), and their bytes.
+    pub kept: u64,
+    pub kept_bytes: u64,
+    /// Files no row names, deleted (or, with `dry_run`, to delete), and their bytes.
+    pub deleted: u64,
+    pub deleted_bytes: u64,
+    /// Leftover temporary files deleted.
+    pub temp_files: u64,
+    /// Unnamed or temporary files left alone because they are newer than `min_age_s` (a render
+    /// in another process may not have recorded them yet).
+    pub too_new: u64,
+    /// Rows whose file is missing (rendering them again fixes it).
+    pub missing: u64,
+    pub dry_run: bool,
+    /// The files deleted (or to delete), relative to the library's folder.
+    pub files: Vec<String>,
+}
+
+/// Delete the media files no `media` row names (a frame list's frames count as named), and
+/// leftover temporary files, older than `min_age_s` seconds. With `dry_run`, only say which.
+/// Files outside `media/<two hex digits>/` are never touched.
+pub fn gc(lib: &Library, dry_run: bool, min_age_s: u64) -> Result<GcReport, String> {
+    let folder = lib.folder();
+    let rows: Vec<(String, String)> = lib.read(Vec::new(), |c| {
+        let mut st = c
+            .prepare("SELECT DISTINCT hash, ext FROM media")
+            .map_err(|e| e.to_string())?;
+        let v = st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|e| e.to_string())?;
+        v.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    })?;
+    let mut named: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out = GcReport {
+        dry_run,
+        ..Default::default()
+    };
+    for (h, x) in &rows {
+        let rel = rel_path(h, x);
+        if !folder.join(&rel).is_file() {
+            out.missing += 1;
+            continue;
+        }
+        if x == "txt" {
+            for f in frame_list(&folder, h).unwrap_or_default() {
+                named.insert(rel_path(&f, "png"));
+            }
+        }
+        named.insert(rel);
+    }
+    let now = std::time::SystemTime::now();
+    let old = |m: &std::fs::Metadata| {
+        m.modified()
+            .ok()
+            .and_then(|t| now.duration_since(t).ok())
+            .is_some_and(|d| d.as_secs() >= min_age_s)
+    };
+    let root = folder.join(DIR);
+    let Ok(rd) = std::fs::read_dir(&root) else {
+        return Ok(out);
+    };
+    let mut dirs: Vec<PathBuf> = rd
+        .flatten()
+        .filter(|d| {
+            let n = d.file_name().to_string_lossy().into_owned();
+            n.len() == 2 && n.bytes().all(|b| b.is_ascii_hexdigit()) && d.path().is_dir()
+        })
+        .map(|d| d.path())
+        .collect();
+    dirs.sort();
+    for d in dirs {
+        let mut files: Vec<std::fs::DirEntry> = std::fs::read_dir(&d)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect();
+        files.sort_by_key(|f| f.file_name());
+        let mut left = 0;
+        for f in files {
+            let name = f.file_name().to_string_lossy().into_owned();
+            let rel = format!(
+                "{DIR}/{}/{name}",
+                d.file_name().unwrap_or_default().to_string_lossy()
+            );
+            let Ok(m) = f.metadata() else { continue };
+            if !m.is_file() {
+                left += 1;
+                continue;
+            }
+            let temp = name.starts_with('.') && name.ends_with(".tmp");
+            if !temp && named.contains(&rel) {
+                out.kept += 1;
+                out.kept_bytes += m.len();
+                left += 1;
+                continue;
+            }
+            if !old(&m) {
+                out.too_new += 1;
+                left += 1;
+                continue;
+            }
+            if temp {
+                out.temp_files += 1;
+            } else {
+                out.deleted += 1;
+                out.deleted_bytes += m.len();
+                out.files.push(rel.clone());
+            }
+            if dry_run {
+                left += 1;
+            } else {
+                std::fs::remove_file(f.path())
+                    .map_err(|e| format!("{}: {e}", f.path().display()))?;
+            }
+        }
+        if left == 0 && !dry_run {
+            let _ = std::fs::remove_dir(&d);
+        }
+    }
+    Ok(out)
 }

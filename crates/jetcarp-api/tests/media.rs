@@ -21,6 +21,8 @@ fn render(cx: &Ctx, v: serde_json::Value) -> Result<MediaReport, jetcarp_api::Ap
 fn media_for_patterns_scenes_and_what_is_missing() {
     let dir = scratch("media");
     let (lib, cx) = catalog(&dir);
+    // Scenes' media go to the output folder: the scratch one.
+    let cx = cx.with_out_root(Some(dir.join("out")));
     let r = render(&cx, json!({"pattern": "glider", "frames": false})).unwrap();
     assert_eq!((r.written, r.skipped, r.failed.len()), (1, 0, 0));
     let d = &r.done[0];
@@ -116,7 +118,7 @@ fn media_for_patterns_scenes_and_what_is_missing() {
             &Quiet,
         )
         .unwrap();
-        let expect = folder.unwrap_or_else(|| lib.folder().join("media/scenes/langtons-ant"));
+        let expect = folder.unwrap_or_else(|| cx.paths().output.join("media/langtons-ant"));
         assert_eq!(b.folder.as_deref(), Some(expect.as_path()), "{q}");
         assert_eq!(b.frames_count, Some(4));
     }

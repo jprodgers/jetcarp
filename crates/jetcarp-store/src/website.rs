@@ -18,6 +18,9 @@
 //!                                        [`write_page`]; `jetcarp site export` does)
 //! ```
 //!
+//! The media files are copied from the library's content-addressed files (`media/ab/<sha256>`,
+//! found through the media index by target and kind) to the readable names above.
+//!
 //! **Incremental.** The manifest records a content hash (SHA-256) for every item and media
 //! file, and it is the export's state: an export reads the old manifest, writes only items
 //! whose JSON changed and media files whose hash changed (or that are missing), deletes the
@@ -273,7 +276,7 @@ fn links(
     id: &str,
     prefer_seed: bool,
     frames: bool,
-) -> (MediaLinks, Vec<(String, PathBuf, SiteMedia)>) {
+) -> (MediaLinks, Vec<(String, Vec<PathBuf>, SiteMedia)>) {
     let mut out = MediaLinks::new();
     let mut copies = Vec::new();
     // One mode: the preferred one if it has a poster, else the other.
@@ -310,7 +313,13 @@ fn links(
                 .then(|| r.render["delay_ms"].as_u64())
                 .flatten(),
         };
-        copies.push((m.path.clone(), r.abs_path.clone(), m.clone()));
+        // The library's files, found by hash (a frame folder: every frame's).
+        let src = if r.kind == "frames" {
+            r.frame_files.clone()
+        } else {
+            vec![r.abs_path.clone()]
+        };
+        copies.push((m.path.clone(), src, m.clone()));
         out.insert(name.into(), m);
     }
     (out, copies)
@@ -486,7 +495,7 @@ fn quickstart_json(q: &crate::QuickStartRow, media: &MediaLinks) -> Result<Vec<u
 struct Planned {
     item: ManifestItem,
     json: Vec<u8>,
-    copies: Vec<(String, PathBuf, SiteMedia)>,
+    copies: Vec<(String, Vec<PathBuf>, SiteMedia)>,
 }
 
 /// Export the public part of the catalog to `dir` (see the module documentation).
@@ -636,12 +645,14 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
                 let all_fresh = names
                     .iter()
                     .all(|n| up_to_date(&format!("{rel}/{n}"), &m.hash));
-                for n in &names {
+                if src.len() != names.len() {
+                    return Err(format!("the frames of {rel} are not all in the library"));
+                }
+                for (n, f) in names.iter().zip(src) {
                     let r = format!("{rel}/{n}");
                     new_files.insert(r.clone());
                     if !all_fresh {
-                        let b = std::fs::read(src.join(n))
-                            .map_err(|e| format!("{}: {e}", src.join(n).display()))?;
+                        let b = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;
                         write(&r, &b)?;
                         report.written.push(r);
                         changed = true;
@@ -650,7 +661,8 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
             } else {
                 new_files.insert(rel.clone());
                 if !up_to_date(rel, &m.hash) {
-                    let b = std::fs::read(src).map_err(|e| format!("{}: {e}", src.display()))?;
+                    let f = src.first().ok_or_else(|| format!("no file for {rel}"))?;
+                    let b = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;
                     write(rel, &b)?;
                     report.written.push(rel.clone());
                     changed = true;

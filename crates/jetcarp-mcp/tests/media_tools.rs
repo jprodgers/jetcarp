@@ -64,7 +64,13 @@ fn media_render_and_site_export_over_mcp() {
     let r = text(&res);
     assert_eq!(r["written"], 1, "{r}");
     let anim = r["done"][0]["files"]["anim"].as_str().unwrap();
-    assert!(anim.ends_with("anim.gif") && std::path::Path::new(anim).exists());
+    // Content-addressed: media/<two hex digits>/<sha256>.gif beside the library.
+    let p = std::path::Path::new(anim);
+    assert!(anim.ends_with(".gif") && p.exists(), "{anim}");
+    assert_eq!(
+        p.file_stem().unwrap().to_string_lossy(),
+        jetcarp_core::media::content_hash(&std::fs::read(p).unwrap())
+    );
     let img = res["content"]
         .as_array()
         .unwrap()
