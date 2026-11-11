@@ -23,9 +23,14 @@ use parquet::basic::{Compression, ZstdLevel};
 use parquet::file::properties::{EnabledStatistics, WriterProperties, WriterVersion};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 
-/// Rows per row group.
+/// Rows per row group (at most).
 pub const ROW_GROUP: usize = 16_384;
+/// A row group is written once its rows' JSON text reaches this many bytes.
+pub const GROUP_TEXT: usize = 32 << 20;
 /// A part is closed once it holds this many bytes (parts SHOULD stay under 256 MiB).
 pub const PART_BYTES: u64 = 224 << 20;
 /// The `created_by` every part names.
@@ -93,7 +98,8 @@ pub fn first_key(def: &TableDef, row: &Value) -> String {
     }
 }
 
-/// Sort rows as the table says (a total order).
+/// Sort rows as the table says (a total order): by their sort columns, ties broken by the
+/// rows' RFC 8785 text.
 pub fn sort_rows(def: &TableDef, rows: &mut [Value]) {
     use rayon::prelude::*;
     let mut keyed: Vec<((Vec<Key>, String), Value)> = rows
@@ -127,14 +133,15 @@ struct Open {
     last: String,
 }
 
-/// Writes one table's rows (pushed in sort order) into parts in a store.
+/// Writes one table's rows (pushed in sort order) into parts in a store. Each partition's rows
+/// are spooled to a temporary file as JSON lines while they arrive, and the partitions are
+/// written one at a time at the end, so only one Parquet writer (with its compressors) is open
+/// at once however many partitions a table has.
 pub struct TableWriter<'a> {
     store: &'a Store,
     def: &'static TableDef,
     part_bytes: u64,
-    /// Per partition: rows waiting for a row group, and the open part.
-    buf: BTreeMap<BTreeMap<String, String>, (Vec<Value>, Option<Open>)>,
-    done: Vec<Part>,
+    spools: BTreeMap<BTreeMap<String, String>, (PathBuf, BufWriter<File>)>,
 }
 
 impl<'a> TableWriter<'a> {
@@ -143,8 +150,7 @@ impl<'a> TableWriter<'a> {
             store,
             def,
             part_bytes: PART_BYTES,
-            buf: BTreeMap::new(),
-            done: vec![],
+            spools: BTreeMap::new(),
         }
     }
 
@@ -156,36 +162,70 @@ impl<'a> TableWriter<'a> {
 
     pub fn push(&mut self, row: Value) -> Result<(), String> {
         let p = partition_of(self.def, &row)?;
-        let full = {
-            let e = self.buf.entry(p.clone()).or_default();
-            e.0.push(row);
-            e.0.len() >= ROW_GROUP
-        };
-        if full {
-            self.flush(&p)?;
-        }
-        Ok(())
+        self.push_text(row.to_string(), p)
     }
 
-    fn flush(&mut self, p: &BTreeMap<String, String>) -> Result<(), String> {
-        let (rows, open) = self.buf.get_mut(p).unwrap();
+    /// A row as JSON text (one line: JSON text has no raw newline), in its partition.
+    pub fn push_text(&mut self, text: String, p: BTreeMap<String, String>) -> Result<(), String> {
+        if !self.spools.contains_key(&p) {
+            let path = self.store.temp_path("spool")?;
+            let f = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            self.spools
+                .insert(p.clone(), (path, BufWriter::with_capacity(1 << 16, f)));
+        }
+        let (path, w) = self.spools.get_mut(&p).unwrap();
+        w.write_all(text.as_bytes())
+            .and_then(|_| w.write_all(b"\n"))
+            .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Write every partition's parts; the parts in partition order, each partition's in row
+    /// order.
+    pub fn finish(self) -> Result<Vec<Part>, String> {
+        let mut parts = vec![];
+        for (p, (path, w)) in self.spools {
+            drop(
+                w.into_inner()
+                    .map_err(|e| format!("{}: {e}", path.display()))?,
+            );
+            let r = write_spool(self.store, self.def, self.part_bytes, &p, &path, &mut parts);
+            let _ = std::fs::remove_file(&path);
+            r?;
+        }
+        Ok(parts)
+    }
+}
+
+/// One partition's spooled rows as parts: row groups of [`ROW_GROUP`] rows (or [`GROUP_TEXT`]
+/// bytes of text), parts closed at `part_bytes`.
+fn write_spool(
+    store: &Store,
+    def: &'static TableDef,
+    part_bytes: u64,
+    p: &BTreeMap<String, String>,
+    path: &Path,
+    out: &mut Vec<Part>,
+) -> Result<(), String> {
+    use std::io::BufRead;
+    let f = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut open: Option<Open> = None;
+    let mut rows: Vec<Value> = vec![];
+    let mut text = 0usize;
+    let mut flush = |rows: &mut Vec<Value>, open: &mut Option<Open>| -> Result<(), String> {
         if rows.is_empty() {
             return Ok(());
         }
-        let rows = std::mem::take(rows);
-        let batch =
-            columns::batch(&self.def.cols, &rows).map_err(|e| format!("{}: {e}", self.def.name))?;
+        let batch = columns::batch(&def.cols, rows).map_err(|e| format!("{}: {e}", def.name))?;
         if open.is_none() {
-            let props = properties();
             let opts = parquet::arrow::arrow_writer::ArrowWriterOptions::new()
-                .with_properties(props)
+                .with_properties(properties())
                 .with_skip_arrow_metadata(true);
-            let w = ArrowWriter::try_new_with_options(self.store.temp()?, batch.schema(), opts)
+            let w = ArrowWriter::try_new_with_options(store.temp()?, batch.schema(), opts)
                 .map_err(pe)?;
             *open = Some(Open {
                 w,
                 rows: 0,
-                first: first_key(self.def, &rows[0]),
+                first: first_key(def, &rows[0]),
                 last: String::new(),
             });
         }
@@ -193,31 +233,27 @@ impl<'a> TableWriter<'a> {
         o.w.write(&batch).map_err(pe)?;
         o.w.flush().map_err(pe)?;
         o.rows += rows.len() as u64;
-        o.last = first_key(self.def, rows.last().unwrap());
-        if o.w.bytes_written() as u64 >= self.part_bytes {
-            let o = open.take().unwrap();
-            let part = close(self.store, o, p.clone())?;
-            self.done.push(part);
+        o.last = first_key(def, rows.last().unwrap());
+        rows.clear();
+        if o.w.bytes_written() as u64 >= part_bytes {
+            out.push(close(store, open.take().unwrap(), p.clone())?);
         }
         Ok(())
-    }
-
-    /// Write what is left; the parts in partition order, each partition's in row order.
-    pub fn finish(mut self) -> Result<Vec<Part>, String> {
-        let keys: Vec<_> = self.buf.keys().cloned().collect();
-        for p in &keys {
-            self.flush(p)?;
-            if let Some(o) = self.buf.get_mut(p).unwrap().1.take() {
-                let part = close(self.store, o, p.clone())?;
-                self.done.push(part);
-            }
+    };
+    for line in std::io::BufReader::with_capacity(1 << 20, f).lines() {
+        let line = line.map_err(|e| format!("{}: {e}", path.display()))?;
+        text += line.len();
+        rows.push(serde_json::from_str(&line).map_err(|e| e.to_string())?);
+        if rows.len() >= ROW_GROUP || text >= GROUP_TEXT {
+            flush(&mut rows, &mut open)?;
+            text = 0;
         }
-        let mut parts = self.done;
-        // Partition order, then the order they were written in (parts of one partition are
-        // in row order already).
-        parts.sort_by(|a, b| a.partition.cmp(&b.partition));
-        Ok(parts)
     }
+    flush(&mut rows, &mut open)?;
+    if let Some(o) = open {
+        out.push(close(store, o, p.clone())?);
+    }
+    Ok(())
 }
 
 fn close(store: &Store, o: Open, partition: BTreeMap<String, String>) -> Result<Part, String> {
@@ -238,13 +274,54 @@ fn close(store: &Store, o: Open, partition: BTreeMap<String, String>) -> Result<
 pub fn write_table(
     store: &Store,
     def: &'static TableDef,
-    mut rows: Vec<Value>,
+    rows: Vec<Value>,
     part_bytes: u64,
 ) -> Result<Vec<Part>, String> {
-    sort_rows(def, &mut rows);
+    write_table_text(
+        store,
+        def,
+        rows.into_iter().map(|r| r.to_string()).collect(),
+        part_bytes,
+    )
+}
+
+/// [`write_table`] for rows given as JSON text (what a publish collects: far less memory than
+/// parsed values). They are sorted by their sort columns, ties broken by their RFC 8785 text.
+pub fn write_table_text(
+    store: &Store,
+    def: &'static TableDef,
+    texts: Vec<String>,
+    part_bytes: u64,
+) -> Result<Vec<Part>, String> {
+    use rayon::prelude::*;
+    let keyed: Vec<(Vec<Key>, BTreeMap<String, String>)> = texts
+        .par_iter()
+        .map(|t| {
+            let v: Value = serde_json::from_str(t).map_err(|e| e.to_string())?;
+            Ok((
+                def.sort.iter().map(|c| Key::of(&v[*c])).collect(),
+                partition_of(def, &v)?,
+            ))
+        })
+        .collect::<Result<_, String>>()?;
+    let mut order: Vec<usize> = (0..texts.len()).collect();
+    let canon = |i: usize| {
+        serde_json::from_str::<Value>(&texts[i])
+            .map(|v| jetcarp_core::jcs::to_string(&v))
+            .unwrap_or_default()
+    };
+    order.par_sort_by(|&a, &b| {
+        keyed[a]
+            .0
+            .cmp(&keyed[b].0)
+            .then_with(|| canon(a).cmp(&canon(b)))
+    });
+    let mut slots: Vec<Option<String>> = texts.into_iter().map(Some).collect();
+    let mut parts: Vec<Option<BTreeMap<String, String>>> =
+        keyed.into_iter().map(|k| Some(k.1)).collect();
     let mut w = TableWriter::new(store, def).with_part_bytes(part_bytes);
-    for r in rows {
-        w.push(r)?;
+    for i in order {
+        w.push_text(slots[i].take().unwrap(), parts[i].take().unwrap())?;
     }
     w.finish()
 }

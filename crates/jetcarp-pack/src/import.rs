@@ -338,7 +338,8 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     // Patterns.
     log("checking ids and storing patterns");
     let mut seen_ids: HashMap<String, String> = HashMap::new();
-    let mut new_ids: Vec<String> = vec![];
+    // Every pattern stored, and whether it is new.
+    let mut kept: Vec<(String, bool)> = vec![];
     let mut flagged_ids: Vec<String> = vec![];
     let mut other_rules: Vec<(
         String,
@@ -351,7 +352,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     let now = jetcarp_core::pattern::now_utc();
     let flush = |batch: &mut Vec<(PatternRecord, Origin, bool)>,
                  out: &mut Imported,
-                 new_ids: &mut Vec<String>|
+                 kept: &mut Vec<(String, bool)>|
      -> Result<(), String> {
         if batch.is_empty() || opts.dry_run {
             batch.clear();
@@ -388,9 +389,12 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             match r? {
                 jetcarp_store::AddOutcome::Added => {
                     out.patterns_added += 1;
-                    new_ids.push(id);
+                    kept.push((id, true));
                 }
-                jetcarp_store::AddOutcome::Merged { .. } => out.patterns_merged += 1,
+                jetcarp_store::AddOutcome::Merged { .. } => {
+                    out.patterns_merged += 1;
+                    kept.push((id, false));
+                }
             }
         }
         Ok(())
@@ -399,7 +403,11 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     src.table_rows(&v, "patterns", |_, rows| {
         for r in rows {
             let p: PatternRow = de(r, "patterns")?;
-            let text = jetcarp_core::jcs::to_string(&serde_json::to_value(&p).unwrap_or_default());
+            let text = if opts.strict {
+                jetcarp_core::jcs::to_string(&serde_json::to_value(&p).unwrap_or_default())
+            } else {
+                String::new()
+            };
             if let Some(prev) = seen_ids.get(&p.id) {
                 if opts.strict && *prev != crate::hash::hex(text.as_bytes()) {
                     return Err(format!("pattern {}: two different rows for one id", p.id));
@@ -454,17 +462,18 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             }
             batch.push((rec, origin, !stale));
             if batch.len() >= 4096 {
-                flush(&mut batch, &mut out, &mut new_ids)?;
+                flush(&mut batch, &mut out, &mut kept)?;
             }
         }
         Ok(())
     })?;
-    flush(&mut batch, &mut out, &mut new_ids)?;
+    flush(&mut batch, &mut out, &mut kept)?;
     if let Some(e) = pattern_err {
         return Err(e);
     }
     out.flagged = flagged_ids.len() as u64;
-    let stored: HashSet<String> = seen_ids.keys().cloned().collect();
+    let new_ids: Vec<String> = kept.iter().filter(|x| x.1).map(|x| x.0.clone()).collect();
+    let stored: HashSet<String> = kept.iter().map(|x| x.0.clone()).collect();
     if !opts.dry_run && !other_rules.is_empty() {
         other_rules.retain(|x| stored.contains(&x.0));
         lib.add_rule_verifications(&other_rules)?;

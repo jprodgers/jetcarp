@@ -447,7 +447,8 @@ fn opt(s: &str) -> Option<String> {
 /// Collects one table's new rows (not in the parents).
 struct NewRows {
     name: &'static str,
-    rows: Vec<Value>,
+    /// Rows as JSON text (parsed only when written).
+    rows: Vec<String>,
 }
 
 impl NewRows {
@@ -455,24 +456,20 @@ impl NewRows {
         NewRows { name, rows: vec![] }
     }
     fn push<T: Serialize>(&mut self, inh: &Inherited, row: &T) -> Result<(), String> {
-        let v = serde_json::to_value(row).map_err(|e| e.to_string())?;
         let def = table(self.name).unwrap();
-        if def.facts {
-            if inh
-                .keys
-                .get(self.name)
-                .is_some_and(|k| k.contains(&parquet_io::first_key(def, &v)))
-            {
+        let facts = def.facts && inh.keys.contains_key(self.name);
+        let events = !def.facts && inh.rows.contains_key(self.name);
+        if facts || events {
+            let v = serde_json::to_value(row).map_err(|e| e.to_string())?;
+            if facts && inh.keys[self.name].contains(&parquet_io::first_key(def, &v)) {
                 return Ok(());
             }
-        } else if inh
-            .rows
-            .get(self.name)
-            .is_some_and(|k| k.contains(&jetcarp_core::jcs::to_string(&v)))
-        {
-            return Ok(());
+            if events && inh.rows[self.name].contains(&jetcarp_core::jcs::to_string(&v)) {
+                return Ok(());
+            }
         }
-        self.rows.push(v);
+        self.rows
+            .push(serde_json::to_string(row).map_err(|e| e.to_string())?);
         Ok(())
     }
 }
@@ -596,7 +593,19 @@ pub fn publish(
         pin_keys.insert(row.pin_key.clone());
         let key = parquet_io::first_key(table("patterns").unwrap(), &json!({"id": rec.id}));
         if !inh.keys.get("patterns").is_some_and(|k| k.contains(&key)) {
-            pw.push(serde_json::to_value(&row).map_err(|e| e.to_string())?)?;
+            let part: BTreeMap<String, String> = [
+                ("class_group".to_string(), row.class_group.clone()),
+                ("tiling_group".to_string(), row.tiling_group.clone()),
+            ]
+            .into_iter()
+            .collect();
+            if !part.values().all(|v| valid_partition_value(v)) {
+                return Err(format!("pattern {}: partition {part:?}", rec.id));
+            }
+            pw.push_text(
+                serde_json::to_string(&row).map_err(|e| e.to_string())?,
+                part,
+            )?;
             pattern_rows += 1;
         }
         let main_rule = Rule::parse(&rec.rule)
@@ -1062,7 +1071,7 @@ pub fn publish(
         let new_parts = if def.name == "patterns" {
             pattern_parts.clone()
         } else if let Some(nr) = t.remove(def.name) {
-            parquet_io::write_table(&store, def, nr.rows, opts.part_bytes)?
+            parquet_io::write_table_text(&store, def, nr.rows, opts.part_bytes)?
         } else {
             vec![]
         };
@@ -1362,7 +1371,7 @@ fn search_index(store: &Store, dir: &Path, uuid: &str) -> Result<(String, Vec<St
     }
     if dir.join("search.sqlite").is_file() {
         notes.push(format!(
-            "search {uuid}: runs not yet sealed stay in its working database and are not published (`jetcarp jobs seal` first)"
+            "search {uuid}: only its sealed segments are published; any runs its working database still holds are not (`jetcarp jobs seal` first)"
         ));
     }
     let clean = |v: Value| json::sanitize(crate::paths::strip_json(v));

@@ -163,6 +163,15 @@ impl Store {
         })
     }
 
+    /// A path for a scratch file in the store's temporary folder (`stem` names its use).
+    pub fn temp_path(&self, stem: &str) -> Result<PathBuf, String> {
+        let d = self.root.join(TMP);
+        std::fs::create_dir_all(&d).map_err(|e| io(&d, e))?;
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let k = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(d.join(format!("{stem}-{}-{k}.tmp", std::process::id())))
+    }
+
     /// Remove the temporary folder (after a publish).
     pub fn clean_temp(&self) {
         let d = self.root.join(TMP);
