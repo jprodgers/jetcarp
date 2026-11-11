@@ -266,7 +266,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder", help="sweep folder (manifest.json, run.json, PNGs)")
     ap.add_argument("--jetcarp", default=os.path.join(REPO, "target", "release", "jetcarp"))
-    ap.add_argument("--library", help="library folder for --promote (a folder or .sqlite file; default: $JETCARP_LIBRARY or <data>/catalog.sqlite)")
+    ap.add_argument("--library", help="library folder for --promote (a folder or .sqlite file; default: $JETCARP_LIBRARY or <data>/library.sqlite)")
     ap.add_argument("--base-url", default="http://localhost:1234/v1")
     ap.add_argument("--model", default="qwen/qwen3.8-27b")
     ap.add_argument("--candidates", type=int, default=48, help="runs shown to the model in round 1")

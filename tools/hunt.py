@@ -74,8 +74,8 @@ class HuntMcp(Mcp):
 
 
 def catalog(lib):
-    """The catalog file for a --library argument (a folder holding catalog.sqlite, or the file)."""
-    return lib if lib.endswith((".sqlite", ".sqlite3", ".db")) else os.path.join(lib, "catalog.sqlite")
+    """The catalog file for a --library argument (a folder holding library.sqlite, or the file)."""
+    return lib if lib.endswith((".sqlite", ".sqlite3", ".db")) else os.path.join(lib, "library.sqlite")
 
 
 def query(lib, sql):

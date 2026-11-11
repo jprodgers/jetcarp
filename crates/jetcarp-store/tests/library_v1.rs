@@ -270,6 +270,40 @@ fn records_that_fail_stay_flagged_and_drop_deletes_them() {
     assert!(lib.provenance("pattern", &b.id).unwrap().is_empty());
 }
 
+// A record whose pin names a tiling this engine cannot build (a family removed or renamed,
+// simulated) still lets the library open: the key gets no engine pin, and the record is flagged.
+#[test]
+fn a_record_on_a_tiling_the_engine_cannot_build_is_flagged() {
+    let lib = temp_lib("nofamily");
+    let b = one("B3/S23", "oo/oo");
+    lib.add(b.clone()).unwrap();
+    let gone = r#"{"family":"no-such-family","boundary":"dead"}"#;
+    let c = raw(&lib);
+    c.execute(
+        "UPDATE patterns SET pin_key = ?2 WHERE id = ?1",
+        params![b.id, gone],
+    )
+    .unwrap();
+    // As an older engine would have cached it.
+    c.execute(
+        "INSERT INTO engine_pins (pin_key, pin, polygon_hash, neighbour_hash, engine_version,
+            checked) VALUES (?1, ?2, '', '', 'an older engine', '')",
+        params![gone, b.geometry_pin],
+    )
+    .unwrap();
+    drop(c);
+    let lib = Library::open(lib.path());
+    assert!(lib.get(&b.id).unwrap().needs_reverify);
+    let pin: String = raw(&lib)
+        .query_row(
+            "SELECT pin FROM engine_pins WHERE pin_key = ?1",
+            [gone],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(pin, jetcarp_store::library::schema::NO_PIN);
+}
+
 #[test]
 fn aliases_resolve_ids_and_short_ids() {
     let lib = temp_lib("alias");

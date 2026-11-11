@@ -427,6 +427,9 @@ pub(super) fn open_db(path: &std::path::Path) -> Result<Connection, String> {
     Ok(c)
 }
 
+/// The engine pin of a tiling this engine cannot build.
+pub const NO_PIN: &str = "none";
+
 /// The tables that hold records with geometry pins.
 pub(super) const PINNED: [(&str, &str); 3] = [
     ("pattern", "patterns"),
@@ -476,7 +479,14 @@ pub(super) fn check_pins(c: &mut Connection) -> Result<PinCheck, String> {
     for k in &keys {
         match cached.get(k) {
             Some((_, v)) if v == engine => {}
-            _ => fresh.push(engine_pin_of_key(k)?),
+            // A tiling this engine cannot build (a family removed or renamed) has no pin: every
+            // record on it is flagged, and re-verifying it reports why.
+            _ => fresh.push(engine_pin_of_key(k).unwrap_or_else(|_| GeometryPin {
+                key: k.clone(),
+                pin: NO_PIN.into(),
+                polygon_hash: String::new(),
+                neighbour_hash: String::new(),
+            })),
         }
     }
     let mut pins: HashMap<String, String> = cached.into_iter().map(|(k, (p, _))| (k, p)).collect();
