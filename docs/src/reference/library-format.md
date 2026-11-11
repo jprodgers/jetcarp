@@ -194,10 +194,9 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
-rows 1, 2, ...: today `reverified`. A record found elsewhere and imported with its history keeps its
-discovery as row 0 (`found`, with the finder, source and engine that found it, the moment of the
-find, and the pin it was verified with here; the machine is not known), and row 1 is then
-`imported`.
+rows 1, 2, ...: today `reverified`. The records brought in from CART are the one exception to how row
+0 is written: theirs is their discovery in CART, and their row 1 the import (see
+[Records from CART](#records-from-cart)).
 
 ## Aliases
 
@@ -206,9 +205,10 @@ change). Every lookup by id, prefix or short id also searches the aliases.
 
 ## Records from CART
 
-CART's catalog was brought into a fresh library once, by a development tool that is not part of the
-released program (`crates/jetcarp-store/examples/import_cart`), and every record was verified again
-on JETCARP 0.4.0 on the way in:
+CART's catalog was brought into a fresh library once, before this release, by a development tool
+(`crates/jetcarp-store/examples/import_cart`), and every record was verified again on JETCARP 0.4.0 on
+the way in. The tool was removed once the import was made: it was added in commit `ef3eed3`, and
+commit `f3492e8` is the last that has it. What the import did:
 
 - **Records.** Each record was put in canonical form, which gives it its content id, and verified again
   in its own rule and in every rule CART had verified it in; its rule range was computed again. A
@@ -270,7 +270,7 @@ library when the search's folder is deleted or shared:
 | `rating` | the rating that stands for the verdict: keep 5, maybe 3, drop 1 |
 | `rater` | who judged: a name, `user` or `model:<name>` |
 | `note` | what was seen, in a sentence |
-| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page), `import:<database>` (an old CART database); a folder or database by its name only, never where it was on the disk |
+| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page), or `import:<database>` (the reviews that came with [the search imported from CART](search-runs.md#the-search-imported-from-cart); nothing writes it now); a folder or database by its name only, never where it was on the disk |
 | `created` | when (UTC): the rating file's time, or the file's own when it holds none |
 
 Reading a folder of rating files again records only the ratings not already recorded (the same run,

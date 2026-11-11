@@ -31,8 +31,10 @@ and reworked for release in a new repository with a fresh history.
 - **JSON output.** `--json` on any command that reports a result prints it as JSON. The options that
   wrote a JSON report to a file (on the census, mover tracking, library search and collision
   commands) are now `--json-out FILE`.
-- **Old files.** CART's scenes and pattern records still load: their `cart_version` field is read as
-  `jetcarp_version`.
+- **Old files.** JETCARP does not read CART's files. CART's pattern catalog and its long exploratory
+  search were brought into JETCARP once, before this release, and checked on it (see
+  [Records from CART](../reference/library-format.md#records-from-cart) and
+  [The search imported from CART](../reference/search-runs.md#the-search-imported-from-cart)).
 - **Penrose rhombs.** The P3 (rhomb) construction was rewritten (see *Changed*), so scenes on
   `penrose-rhomb` saved by CART lay out their tiles differently and do not replay to their old hashes.
   The kites-and-darts tiling (P2) is unchanged.

@@ -26,10 +26,8 @@ runs are waiting there, the oldest million are *sealed*: written to the next **s
 its newest runs, fewer than a million, stay in the working database and the next session adds to
 them, so every segment but the last holds a million runs however often the search is stopped and
 continued. `jetcarp jobs seal JOB` (a stopped job) seals the rest, so that the folder holds every run
-in Parquet; do that before sharing a folder. Importing an old CART explore database
-(`jetcarp search explore --import FILE`) writes segments straight from it, after checking its runs on
-this engine (see [Re-measuring an import](#re-measuring-an-import)), and a search folder from
-before JETCARP 0.4's segments is sealed the first time it is opened.
+in Parquet; do that before sharing a folder. A search folder from before JETCARP 0.4's segments is
+sealed the first time it is opened.
 
 **A run's id** is its place in one sequence that never restarts: segment 1 holds the lowest ids,
 segment 2 the next, and the working database the newest. Elites, confirmation runs (`parent`) and
@@ -54,54 +52,46 @@ another process.
 | `engine_version` | the JETCARP version that last wrote the manifest |
 | `run_schema`, `score_schema` | `jetcarp-explore-runs 1` and `jetcarp-explore-scores 1`: the column layouts below |
 | `created`, `updated` | UTC times |
-| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...). An imported database is named by its file name only, so a shared folder never shows where it came from on the publisher's disk |
+| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...) |
 | `segments` | one per segment, in id order: `file` (relative to the folder), `sha256` and `bytes` of the file, `rows`, `first_id` and `last_id`, `sealed` (UTC) and `engine_version` |
 | `scores` | one per rescore that changed a score: `version` (1, 2, ...), `created`, `engine_version`, and `files`, one per segment it rescored: `segment`, `file`, `sha256`, `bytes`, `rows` |
-| `remeasure` | only in an imported search: how its runs were checked on this engine and which were run again (see [below](#re-measuring-an-import)) |
+| `remeasure` | only in the search imported from CART: how its runs were checked on JETCARP 0.4.0 and which were run again (see [below](#the-search-imported-from-cart)) |
 
-## Re-measuring an import
+## The search imported from CART
 
-The runs of an imported database were measured by the engine of their day, and where something has
-changed since (a tiling's geometry, the way a rule runs) they no longer replay to the measures stored
-with them. So before an import copies anything it checks them on this engine. With
-`--remeasure auto` (the default) it runs up to 32 runs of every tiling again at their recorded
-settings. The sample holds each rule family's first run on the tiling (a database's engine may have
-changed while its search ran, and the oldest runs are the likeliest not to reproduce), then takes the
-families in turn and, within each family, its kinds of starting pattern, with the confirmation runs
-as one more group; it is drawn the same way every time. Each is compared exactly with what is stored:
-fate, settling generation, period, every measure, score and behaviour class.
+The long exploratory search this book reports on ran in CART, JETCARP's predecessor. Its 15.3 million
+runs were brought into a JETCARP search folder once, before this release, by an import that is no
+longer part of JETCARP: it was removed once the import was made, and is in the repository's history
+up to commit `f3492e8`. The import copied the runs into segments under their own ids, rebuilt the
+search's archive from them, and moved their reviews to the library (with source `import:<database>`;
+see [Library format](library-format.md#ratings-of-search-runs)).
 
-Every run of a tiling whose sampled runs differ in two or more rule families is then run again: a
-change to the tiling shows in all its families. When the sampled runs that differ are all of one
-family, the way that rule runs has changed rather than the tiling, and only that family's runs on the
-tiling are run again. They are run again before the copy, many at a time, and their new measures are
-kept in the working database (a stopped import goes on from the last of them); the copy then stores
-each with its new measures under the same id, and the other runs as they are. `--remeasure all` runs
-every run again, and `--remeasure none` copies them all as they are.
+The runs had been measured by the engine of their day, and where something had changed since (a
+tiling's geometry, the way a rule runs) they no longer replayed to the measures stored with them. So
+the import first checked them on JETCARP 0.4.0: up to 32 runs of every tiling, drawn the same way
+every time (each rule family's first run on the tiling, then the families and their kinds of starting
+pattern in turn, the confirmation runs as one more group), were run again at their recorded settings
+and compared exactly with what was stored: fate, settling generation, period, every measure, score
+and behaviour class. Every run of a tiling whose differing sampled runs were in two or more rule
+families was then run again and stored with its new measures; when they were all of one family, only
+that family's runs on the tiling were. The other runs were copied as they were.
 
-The check runs the sampled runs on the CPU, but Larger than Life on the GPU when the job has one
-(`--gpu`): a search runs those on a GPU only, and on the CPU each takes seconds. Each tiling's largest
-batch of sampled runs that a GPU can run (other than Larger than Life) is run on the GPU as well. If
-the GPU measured every one of those as the CPU did, the runs re-measured go to the GPU for every rule
-it runs, the rest to the CPU; if not, only Larger than Life does. Without a GPU the CPU runs
-everything, Larger than Life included, which is slow when there are many.
-
-The manifest's `remeasure` says what was done:
+The manifest's `remeasure` records what was done:
 
 | Field | Holds |
 | --- | --- |
-| `mode` | `auto`, `all` or `none` |
+| `mode` | `auto` (the check above), `all` (every run measured again) or `none` (every run copied as it was) |
 | `engine_version`, `checked` | the JETCARP that checked, and when (UTC) |
 | `sample_per_tiling`, `tilings`, `sampled`, `sampled_differ` | the check: runs sampled per tiling at most, tilings checked, runs sampled, and those that measured differently |
 | `backend` | what ran the rules a GPU can run: `cpu`, or the GPU and why |
 | `remeasured` | one per tiling run again: `tiling`, `family` (only when just that family's runs were run again), `why` (how many sampled runs differed, in what, and in which families), `runs`, `changed` (runs whose measures changed) and `failed` (runs that could not run again, kept as they were) |
 | `to_remeasure`, `runs`, `changed` | runs to re-measure (as the check counted them; 0 with `all`), runs re-measured, and those whose measures changed |
 | `check_seconds`, `remeasure_seconds` | how long the check took, and the re-measuring |
-| `done` | whether the import has copied every run |
+| `done` | whether the import had copied every run |
 
 A run was re-measured when its tiling is listed in `remeasured` (with its family, when one is named):
-runs have no column of their own for it. The job's progress (`jetcarp jobs status JOB`) and report
-show the same, while the import runs and after.
+runs have no column of their own for it. JETCARP reads the field and keeps it when it writes the
+manifest again; nothing writes a new one.
 
 ## Segments
 

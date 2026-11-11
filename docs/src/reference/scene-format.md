@@ -71,7 +71,7 @@ replays it and answers `ok: generation 100 hash 1adf6e3234b7f199`.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `jetcarp_version` | text | empty | The JETCARP version that wrote the file. Files written by CART, JETCARP's predecessor, call it `cart_version`; both are read |
+| `jetcarp_version` | text | empty | The JETCARP version that wrote the file |
 | `format` | number | `1` | The scene format version (see [Versions](#versions)) |
 | `name`, `description` | text | empty | Shown in the app and in Quick Start |
 | `tiling` | object | required | The tiling (see [below](#tiling-tiling)) |
@@ -201,7 +201,7 @@ built-in scene `script-five.json` is a complete example. Reseed policies (`resee
 | --- | --- |
 | `generation` | The generation the world had reached |
 | `hash` | The world's state hash then, 16 hexadecimal digits |
-| `jetcarp_version` | The version that saved it (`cart_version` in CART's files) |
+| `jetcarp_version` | The version that saved it |
 | `dead_boundary` | Whether some cells have missing neighbours (dead edges or a patch boundary) |
 
 `jetcarp verify scene.json` (or the `scene.verify` operation) replays the scene and reports whether it

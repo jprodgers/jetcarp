@@ -281,8 +281,10 @@ for reviewing results by eye, and `jetcarp jobs review` records a verdict on a r
 ratings of the clips, for the next fit of the score. Verdicts are kept with the library's ratings,
 not in the search's folder, so they outlive it.
 
-**Command.** `jetcarp search explore --hours 8 --gpu`. A database from CART, JETCARP's predecessor,
-is brought in with `jetcarp search explore --import search.sqlite --import-only`.
+**Command.** `jetcarp search explore --hours 8 --gpu`. The search reported here ran in CART,
+JETCARP's predecessor; its runs were brought into a JETCARP search folder once, before this release,
+and checked on JETCARP 0.4.0 (see
+[The search imported from CART](../reference/search-runs.md#the-search-imported-from-cart)).
 
 Its first full run covered about 15 million runs. To our knowledge it is the first exploratory search
 to treat the tiling itself as a search dimension; the evidence and related work are on
