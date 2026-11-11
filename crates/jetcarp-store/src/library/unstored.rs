@@ -14,10 +14,10 @@
 //! [`Library::compact_bodies`] rewrites old text bodies in place.
 
 use super::{Library, e};
-use crate::pattern::PatternClass;
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
+use jetcarp_core::pattern::PatternClass;
 use rusqlite::{Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};

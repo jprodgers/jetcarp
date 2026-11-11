@@ -6,9 +6,9 @@
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status_name, typed};
 use crate::dashboard::{JobSummary, digits};
 use crate::window::{self as job, MoverJobSpec, MoverProgress};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{AddOutcome, JobStatus, Library};
 use jetcarp_core::pattern::tiling_display_name;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{AddOutcome, JobStatus, Library};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 

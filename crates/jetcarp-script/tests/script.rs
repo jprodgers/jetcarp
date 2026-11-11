@@ -541,8 +541,8 @@ fn scripts_catalog_and_promote_library_patterns() {
     // Both work in B3678/S0235678 (the block: B/S3 to B345678/S012345678; the glider: B3/S23 to
     // B3678/S0235678), though neither was seen there.
     assert_eq!(s.log[4], "2 1 2 B3/S23 B3/S23 true");
-    let lib = jetcarp_core::library::Library::open(root.join("lib"));
-    assert_eq!(jetcarp_core::quickstart::user_finds(&lib).len(), 1);
+    let lib = jetcarp_store::Library::open(root.join("lib"));
+    assert_eq!(jetcarp_store::quickstart::user_finds(&lib).len(), 1);
     // The example script runs (small) against the same scratch library.
     o.params.insert("soups".into(), "1".into());
     o.params.insert("size".into(), "48".into());
@@ -693,8 +693,8 @@ fn scripts_promote_sweep_runs() {
         "{:?}",
         s.log
     );
-    let lib = jetcarp_core::library::Library::open(root.join("lib"));
-    let finds = jetcarp_core::quickstart::user_finds(&lib);
+    let lib = jetcarp_store::Library::open(root.join("lib"));
+    let finds = jetcarp_store::quickstart::user_finds(&lib);
     assert_eq!(finds.len(), 2);
     let favs = jetcarp_script::results::Favourites::load(&folder(&s));
     assert_eq!(favs.items.len(), 2);

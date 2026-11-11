@@ -9,9 +9,9 @@ use serde_json::json;
 /// its palette and direction, and an unknown palette is an error naming the palettes.
 #[test]
 fn pile_export_and_jobs_keep_the_palette() {
-    use jetcarp_core::library::Library;
     use jetcarp_core::pile::export::{ExportOptions, read_look_file, write_look_file};
     use jetcarp_search::pile::{self as pilejob, PileJobSpec};
+    use jetcarp_store::Library;
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("jetcarp-pile-look-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

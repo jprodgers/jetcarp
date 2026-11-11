@@ -6,9 +6,9 @@ use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, eta, status
 use crate::census::{self, CensusProgress};
 use crate::dashboard::{JobSummary, digits};
 use jetcarp_core::census::CensusSpec;
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::tiling_display_name;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{JobStatus, Library};
 use serde_json::Value;
 
 pub struct CensusKind;

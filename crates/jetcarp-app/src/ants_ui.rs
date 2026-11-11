@@ -20,11 +20,12 @@ use eframe::egui::{self, Color32, RichText, TextureHandle};
 use jetcarp_api::ops::jobs::ResumeIn;
 use jetcarp_api::ops::search::SearchStartIn;
 use jetcarp_core::ants::run::Outcome;
-use jetcarp_core::library::{AntCensus, AntQuery, AntRow, AntUpdate, Library};
-use jetcarp_core::media::{self, MediaOptions, MediaStyle, MediaTarget};
+use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::render::Image;
 use jetcarp_core::world::Scene;
 use jetcarp_search::ants::AntProgress;
+use jetcarp_store::media::MediaTarget;
+use jetcarp_store::{AntCensus, AntQuery, AntRow, AntUpdate, Library};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
@@ -222,7 +223,11 @@ impl AntsWindow {
                         style: MediaStyle::with_palette(Some(p))?,
                         ..Default::default()
                     };
-                    let a = media::target_animation(&lib, &MediaTarget::Ant(id.clone()), &o)?;
+                    let a = jetcarp_store::media::target_animation(
+                        &lib,
+                        &MediaTarget::Ant(id.clone()),
+                        &o,
+                    )?;
                     let note = format!(
                         "{} in {p} (not stored), {} frames, {} × {}",
                         if a.mode == media::MediaMode::Alone {
@@ -239,7 +244,7 @@ impl AntsWindow {
                     return Ok((frames, a.delay_ms.max(20), note));
                 }
                 let o = MediaOptions::default();
-                let done = media::render(&lib, &MediaTarget::Ant(id.clone()), &o)?;
+                let done = jetcarp_store::media::render(&lib, &MediaTarget::Ant(id.clone()), &o)?;
                 let a = done.animation().ok_or("no animation was rendered")?.clone();
                 let bytes = std::fs::read(&a.abs_path)
                     .map_err(|e| format!("{}: {e}", a.abs_path.display()))?;
@@ -610,7 +615,7 @@ impl AntsWindow {
                                     .on_hover_text("The run from step 0 in the main view")
                                     .clicked()
                                 {
-                                    match jetcarp_core::ants::media::build_scene_in(
+                                    match jetcarp_store::media::ants::build_scene_in(
                                         r,
                                         self.palette.as_deref(),
                                     ) {

@@ -334,7 +334,7 @@ pub(crate) fn tiling_name(t: &TilingSpec) -> String {
         .unwrap_or_else(|| t.family.clone())
 }
 
-pub(crate) fn main_rule(sc: &Scene) -> (String, u32, String) {
+pub fn main_rule(sc: &Scene) -> (String, u32, String) {
     let Some(ca) = sc.cas.first() else {
         return (String::new(), 0, "Other".into());
     };
@@ -602,46 +602,6 @@ pub fn jaca_presets() -> Vec<QuickStart> {
 
 /// Family shown for promoted pattern-library finds.
 pub const MY_FINDS: &str = "My finds";
-
-/// The catalog's shown Quick Start entries (status `auto` or `approved`; promoted patterns and
-/// sweep runs, "My finds"), oldest first, under the family "My finds" and marked featured, with
-/// ids `find:<id>`. Candidates and rejected entries are left out.
-pub fn user_finds(lib: &crate::library::Library) -> Vec<QuickStart> {
-    use crate::library::QsStatus;
-    let rows = lib
-        .quickstart(&[QsStatus::Auto, QsStatus::Approved])
-        .unwrap_or_default();
-    rows.into_iter().map(|q| find_entry(lib, q)).collect()
-}
-
-/// A catalog Quick Start row as an entry (id `find:<id>`, family "My finds", featured).
-pub fn find_entry(lib: &crate::library::Library, q: crate::library::QuickStartRow) -> QuickStart {
-    let (rule, states, _) = main_rule(&q.scene);
-    QuickStart {
-        id: format!("find:{}", q.id),
-        tiling: crate::pattern::tiling_display_name(&q.scene.tiling),
-        scene: q.scene,
-        family: MY_FINDS.into(),
-        states,
-        featured: true,
-        rule,
-        source: Some(format!(
-            "{} ({} {})",
-            lib.path().display(),
-            q.source_kind,
-            q.id
-        )),
-    }
-}
-
-/// The shown finds in the default catalog (`JETCARP_LIBRARY`, else
-/// `<data>/catalog.sqlite`) first, marked featured, then the built-in entries.
-/// The app shows this list.
-pub fn all_entries() -> Vec<QuickStart> {
-    let mut v = user_finds(&crate::library::Library::open_default());
-    v.extend(entries());
-    v
-}
 
 /// Preview size for a scene: `base` cells, more for long-range rules whose structures are large.
 /// `None` when the full scene is already small enough.

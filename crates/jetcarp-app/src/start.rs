@@ -1,4 +1,4 @@
-//! Quick Start: the browser for everything the app can open (`jetcarp_core::qsmenu`: the atlas of
+//! Quick Start: the browser for everything the app can open (`jetcarp_store::qsmenu`: the atlas of
 //! search results, "My finds", and the classics).
 //!
 //! A sidebar filters by category, tiling group, rule family, and source (with counts); the main
@@ -15,9 +15,9 @@ use crate::previews::{MAX_LIVE, Pool, Source};
 use crate::thumbs;
 use eframe::egui::{self, Color32, Rect, RichText, Sense};
 use jetcarp_core::Scene;
-use jetcarp_core::explore::atlas;
-use jetcarp_core::library::Library;
-use jetcarp_core::qsmenu::{self, Facets, Filter, Item, Origin, Sort};
+use jetcarp_store::Library;
+use jetcarp_store::atlas;
+use jetcarp_store::qsmenu::{self, Facets, Filter, Item, Origin, Sort};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Instant;

@@ -4,10 +4,10 @@
 //! explore database imported; rescoring rebuilding the archive.
 
 use jetcarp_core::explore::batch::CpuBatch;
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_search::explore::store;
 use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner, Stopped};
+use jetcarp_store::{JobStatus, Library};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::path::PathBuf;

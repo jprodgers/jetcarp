@@ -8,9 +8,9 @@ use crate::ctx::Ctx;
 use crate::error::{ApiError, ErrorKind, ResultExt};
 use crate::op::{Op, Progress, Report};
 use crate::sweeps::{self, Manifest};
-use jetcarp_core::library::{self, AntUpdate, QsStatus, QuickStartRow};
 use jetcarp_core::quickstart;
 use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, SizeSpec, TilingSpec};
+use jetcarp_store::{AntUpdate, QsStatus, QuickStartRow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -324,7 +324,7 @@ impl Op for QuickstartAdd {
         }
         if let Some(id) = &a.ant {
             let r = lib.ant(id).map_err(catalog_err)?;
-            let mut sc = jetcarp_core::ants::media::build_scene_in(&r, a.palette.as_deref())
+            let mut sc = jetcarp_store::media::ants::build_scene_in(&r, a.palette.as_deref())
                 .kind(ErrorKind::Invalid)?;
             if let Some(t) = &a.title {
                 sc.name = t.clone();
@@ -356,8 +356,13 @@ impl Op for QuickstartAdd {
             });
         }
         let key = a.pattern.as_deref().unwrap_or_default();
-        let (sc, id) = library::promote(&lib, key, a.title.as_deref(), a.description.as_deref())
-            .map_err(catalog_err)?;
+        let (sc, id) = jetcarp_store::quickstart::promote(
+            &lib,
+            key,
+            a.title.as_deref(),
+            a.description.as_deref(),
+        )
+        .map_err(catalog_err)?;
         Ok(Added {
             entry: format!("find:{id}"),
             id,
@@ -375,7 +380,7 @@ impl Op for QuickstartAdd {
 fn promote_run_only(
     folder: &std::path::Path,
     run: &str,
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     title: Option<&str>,
     note: Option<&str>,
 ) -> Result<sweeps::Promoted, String> {
@@ -902,7 +907,7 @@ pub fn scene_source(cx: &Ctx, source: &str) -> Result<Scene, ApiError> {
     if source.starts_with("find:") {
         let lib = cx.library();
         let row = lib.get_quickstart(source).map_err(catalog_err)?;
-        return Ok(quickstart::find_entry(&lib, row).scene);
+        return Ok(jetcarp_store::quickstart::find_entry(&lib, row).scene);
     }
     Err(ApiError::not_found(format!(
         "'{source}' is neither a scene file nor a Quick Start id (see `jetcarp quickstart`)"
@@ -979,7 +984,7 @@ impl Op for QuickstartPublish {
     type In = PublishIn;
     type Out = Published;
     fn run(cx: &Ctx, a: PublishIn, _: &dyn Progress) -> Result<Published, ApiError> {
-        use jetcarp_core::explore::atlas;
+        use jetcarp_store::atlas;
         let (_, row, path) = super::explore::explore_job(cx, a.job)?;
         let conn = jetcarp_search::explore::store::open_read(&path).map_err(ApiError::not_found)?;
         if a.per_niche == 0 || a.max_entries == 0 {

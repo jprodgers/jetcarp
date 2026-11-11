@@ -40,8 +40,6 @@ use crate::op::{Op, Progress, Report};
 use jetcarp_core::census::{self, CensusReport, CensusSpec, RunClass};
 use jetcarp_core::evolve::EvolveSpec;
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::collide::{CollideOutput, CollideSpec};
 use jetcarp_core::pattern::movers::{MoverReport, TrackSpec};
 use jetcarp_core::pattern::{self, PatternClass, tiling_list};
@@ -59,6 +57,8 @@ use jetcarp_search::jobs::{
 };
 use jetcarp_search::pile::PileJobSpec;
 use jetcarp_search::window::{MoverJobSpec, MoverProgress, travelling_start};
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{JobStatus, Library};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

@@ -25,13 +25,13 @@ use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
 use jetcarp_api::ops::search::{HuntIn, SearchStart, SearchStartIn};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::hunt::soup::SoupSpec;
-use jetcarp_core::library::{HeatRow, JobStatus, Library};
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
 use jetcarp_search::dashboard::{self, FindItem, Finds, HeatColour, HeatMap, JobSummary, Target};
 use jetcarp_search::hunt::HuntSpec;
 use jetcarp_search::jobs::{self, registry};
+use jetcarp_store::{HeatRow, JobStatus, Library};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -374,10 +374,10 @@ impl Worker {
                 Err(e) => self.msg(e, true),
             },
             Cmd::RenderMedia(ts, palette) => {
-                let targets: Vec<media::MediaTarget> = ts
+                let targets: Vec<jetcarp_store::media::MediaTarget> = ts
                     .into_iter()
                     .map(|t| match t {
-                        Target::Pattern(id) => media::MediaTarget::Pattern(id),
+                        Target::Pattern(id) => jetcarp_store::media::MediaTarget::Pattern(id),
                     })
                     .collect();
                 let path = self.path.clone();
@@ -389,7 +389,7 @@ impl Worker {
                             style,
                             ..Default::default()
                         };
-                        media::render_many(&lib, &targets, &o)
+                        jetcarp_store::media::render_many(&lib, &targets, &o)
                     });
                     let m = match r {
                         Ok(r) => (

@@ -11,11 +11,11 @@
 //! tiling and shared by every card on that tiling. Topologies are shared the same way.
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
-use jetcarp_core::explore::atlas;
 use jetcarp_core::quickstart;
 use jetcarp_core::render::{Colorer, RenderOptions, ViewColors, render_with_colors};
 use jetcarp_core::topology::Topology;
 use jetcarp_core::{Scene, Status, World};
+use jetcarp_store::atlas;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};

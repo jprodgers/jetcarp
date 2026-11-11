@@ -523,7 +523,7 @@ mod tests {
         let Some(mut o) = Offscreen::new(1300, 900) else {
             return;
         };
-        let cx = crate::window_job::ctx(&jetcarp_core::library::Library::default_path());
+        let cx = crate::window_job::ctx(&jetcarp_store::Library::default_path());
         let spec = serde_json::json!({
             "tilings": "square, hex, trihex, cairo",
             "families": "life_like, generations, cyclic, hodgepodge, turmite",

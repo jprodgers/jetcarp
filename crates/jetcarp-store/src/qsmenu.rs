@@ -2,12 +2,12 @@
 //! search, sorting, opening rows, and ratings the Quick Start screen uses.
 //!
 //! **Sources** ([`Origin`]): the **Atlas** (`explore::atlas`, the published result of the long
-//! search: only its metadata is held, a card reads its preview by id when it is on screen and
-//! an open reads the full scene by id); **My finds** (catalog `quickstart` rows made from
-//! patterns, sweep runs, and scenes, status `auto` or `approved`); and **Classics** (the
-//! built-in entries, `quickstart::entries()`, kept only for rules the atlas does not cover, and
-//! always for the hand-made featured scenes, so every named rule is reachable). Catalog rows
-//! with any other status (`candidate`, `rejected`) are hidden.
+//! search: only its metadata is held, a card reads its preview by id when it is on screen and an
+//! open reads the full scene by id); **My finds** (catalog `quickstart` rows made from patterns,
+//! sweep runs, and scenes, status `auto` or `approved`); and **Classics** (the built-in entries,
+//! `jetcarp_core::quickstart::entries()`, kept only for rules the atlas does not cover, and always
+//! for the hand-made featured scenes, so every named rule is reachable). Catalog rows with any
+//! other status (`candidate`, `rejected`) are hidden.
 //!
 //! **Categories**: the behaviour (the atlas's category; a built-in or a find gets the nearest
 //! one, or "Classics" / "My finds"), the grid group ([`grid_group`]: squares, hexagons,
@@ -27,13 +27,14 @@
 //! (`find:<id>`, `atlas:<id>`, `rule:<notation>`, a bundled name). A rating goes to the most
 //! specific target ([`rating_target`]).
 
-use crate::explore::atlas::{self, AtlasMeta};
-use crate::explore::space::Fam;
-use crate::library::{Library, QsStatus, QuickStartRow, UsageRow};
-use crate::quickstart::{self, QuickStart};
-use crate::rng::Rng;
-use crate::rules::Rule;
-use crate::topology::TilingSpec;
+use crate::atlas::{self, AtlasMeta};
+use crate::quickstart;
+use crate::{Library, QsStatus, QuickStartRow, UsageRow};
+use jetcarp_core::explore::space::Fam;
+use jetcarp_core::quickstart::QuickStart;
+use jetcarp_core::rng::Rng;
+use jetcarp_core::rules::Rule;
+use jetcarp_core::topology::TilingSpec;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -138,7 +139,7 @@ pub fn family_label(fam: Fam) -> &'static str {
 
 /// The family label for the atlas's family name (`life_like`, ...).
 pub fn family_label_named(name: &str) -> String {
-    crate::explore::space::ALL_FAMS
+    jetcarp_core::explore::space::ALL_FAMS
         .iter()
         .find(|f| f.name() == name)
         .map(|f| family_label(*f).to_string())
@@ -173,10 +174,11 @@ fn tiling_label(key: &str) -> String {
         return "Square".into();
     }
     if let Some(id) = key.strip_prefix("catalog:") {
-        return crate::catalog::get(id).map_or_else(|| key.to_string(), |t| t.id.to_string());
+        return jetcarp_core::catalog::get(id)
+            .map_or_else(|| key.to_string(), |t| t.id.to_string());
     }
-    crate::families::family(key)
-        .or_else(|| crate::isohedral::family(key))
+    jetcarp_core::families::family(key)
+        .or_else(|| jetcarp_core::isohedral::family(key))
         .map_or_else(|| key.to_string(), |f| f.name.to_string())
 }
 
@@ -222,7 +224,7 @@ fn atlas_title(meta: &AtlasMeta, family: &str, named: &HashMap<&str, &str>) -> S
 
 /// The atlas's entries as menu items, sharing the file's path.
 pub fn atlas_items(metas: Vec<AtlasMeta>, path: Arc<PathBuf>) -> Vec<Item> {
-    let named: HashMap<&str, &str> = crate::rules::catalog()
+    let named: HashMap<&str, &str> = jetcarp_core::rules::catalog()
         .iter()
         .map(|e| (e.notation, e.name))
         .collect();
@@ -259,7 +261,7 @@ pub fn atlas_items(metas: Vec<AtlasMeta>, path: Arc<PathBuf>) -> Vec<Item> {
         let id = format!("atlas:{}", m.id);
         let q = QuickStart {
             id,
-            scene: crate::world::Scene::new(TilingSpec::new("square")),
+            scene: jetcarp_core::world::Scene::new(TilingSpec::new("square")),
             family: family.clone(),
             tiling,
             states: 0,
@@ -295,7 +297,7 @@ pub fn atlas_items(metas: Vec<AtlasMeta>, path: Arc<PathBuf>) -> Vec<Item> {
 
 /// The grid group of a tiling.
 pub fn grid_group(t: &TilingSpec) -> &'static str {
-    use crate::families::FamilyKind;
+    use jetcarp_core::families::FamilyKind;
     let f = t.family.as_str();
     match f {
         "square" => return "Squares",
@@ -317,10 +319,10 @@ pub fn grid_group(t: &TilingSpec) -> &'static str {
         }
         _ => {}
     }
-    if crate::isohedral::family(f).is_some() {
+    if jetcarp_core::isohedral::family(f).is_some() {
         return "Isohedral";
     }
-    match crate::families::family(f).map(|x| x.kind) {
+    match jetcarp_core::families::family(f).map(|x| x.kind) {
         Some(FamilyKind::Aperiodic) => "Aperiodic",
         _ => "Other periodic",
     }
@@ -328,7 +330,7 @@ pub fn grid_group(t: &TilingSpec) -> &'static str {
 
 /// The nearest category for a built-in entry.
 fn classic_category(q: &QuickStart) -> &'static str {
-    if q.family == quickstart::COMPUTING {
+    if q.family == jetcarp_core::quickstart::COMPUTING {
         return "Computing";
     }
     let Some(ca) = q.scene.cas.first() else {
@@ -385,8 +387,8 @@ fn scene_item(q: QuickStart, origin: Origin, row: Option<QuickStartRow>, rank: u
             String::new(),
         ),
     };
-    let family = if q.family == quickstart::COMPUTING {
-        quickstart::COMPUTING.to_string()
+    let family = if q.family == jetcarp_core::quickstart::COMPUTING {
+        jetcarp_core::quickstart::COMPUTING.to_string()
     } else {
         family_of_rule(&q.rule, &q.family)
     };
@@ -436,7 +438,7 @@ pub fn canonical_rule(rule: &str) -> String {
 /// The built-in entries as menu items (the Classics), leaving out rules in `covered` other than
 /// the hand-made featured scenes (the atlas has its own example of those).
 pub fn classics_items(covered: &HashSet<String>) -> Vec<Item> {
-    quickstart::entries()
+    jetcarp_core::quickstart::entries()
         .into_iter()
         .filter(|q| q.featured || !covered.contains(&canonical_rule(&q.rule)))
         .enumerate()
@@ -495,14 +497,14 @@ pub fn load(lib: &Library) -> Vec<Item> {
 }
 
 /// An entry's scene by id, without loading the whole menu.
-pub fn scene_by_id(lib: &Library, id: &str) -> Option<crate::Scene> {
+pub fn scene_by_id(lib: &Library, id: &str) -> Option<jetcarp_core::Scene> {
     if let Some(n) = id.strip_prefix("atlas:") {
         return atlas::load_full(&atlas::locate()?, n.parse().ok()?).ok();
     }
     if let Some(bare) = id.strip_prefix("find:") {
         return lib.get_quickstart(bare).ok().map(|q| q.scene);
     }
-    quickstart::entries()
+    jetcarp_core::quickstart::entries()
         .into_iter()
         .find(|q| q.id == id)
         .map(|q| q.scene)

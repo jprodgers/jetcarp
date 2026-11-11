@@ -6,10 +6,10 @@
 use jetcarp_api::args::{self, check_keys, get_str};
 use jetcarp_core::Nb;
 use jetcarp_core::census;
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::tiling_list;
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::{SizeSpec, TilingSpec, Topology};
+use jetcarp_store::{JobStatus, Library};
 use serde_json::{Value, json};
 
 fn status_name(s: JobStatus) -> &'static str {

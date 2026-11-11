@@ -1,4 +1,4 @@
-//! The Library window: browse the pattern library (`jetcarp_core::library`) as a thumbnail grid,
+//! The Library window: browse the pattern library (`jetcarp_store::library`) as a thumbnail grid,
 //! filter and sort it, curate records (name, tags, notes, rating, state), paste a pattern into
 //! the world on screen (through `Command::PastePattern`), open it alone in a new world, and
 //! promote it to the Quick Start ("My finds").
@@ -7,11 +7,11 @@ use crate::sweep_form::thousands;
 use crate::thumbs::{self, Thumb, ThumbCache};
 use eframe::egui::{self, Color32, RichText, TextureHandle};
 use jetcarp_core::Scene;
-use jetcarp_core::library::{Library, Query, Update};
 use jetcarp_core::pattern::promote::{render_phases_in, showcase_scene};
 use jetcarp_core::pattern::{
     CurationState, PatternClass, PatternRecord, PatternSource, orientation_moves,
 };
+use jetcarp_store::{Library, Query, Update};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -879,7 +879,7 @@ mod tests {
         assert_eq!((r.state, r.rating), (CurationState::Reviewed, Some(4)));
         // Promote: the scene appears in the Quick Start's finds.
         assert_eq!(promote(&lib, ship).unwrap(), format!("find:{}", ship.id));
-        let finds = jetcarp_core::quickstart::user_finds(&lib);
+        let finds = jetcarp_store::quickstart::user_finds(&lib);
         assert_eq!(finds.len(), 1);
         assert_eq!(lib.get(&ship.id).unwrap().state, CurationState::Promoted);
         // Thumbnails render.

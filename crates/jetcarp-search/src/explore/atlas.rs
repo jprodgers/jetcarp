@@ -1,17 +1,17 @@
 //! The atlas: the published result of a search, the file Quick Start browses. Entries are
 //! selected from a search database, given a category and palette, and stored with a mature
 //! state so a preview can start where the action is. This is the writing half (choosing,
-//! scoring, and writing entries); finding and reading the file is `jetcarp_core::explore::atlas`.
+//! scoring, and writing entries); finding and reading the file is `jetcarp_store::atlas`.
 
 use crate::explore::job::feat_from_blob;
 use crate::explore::sheet::{RunRow, query_runs};
 use flate2::Compression;
 use flate2::write::DeflateEncoder;
-use jetcarp_core::explore::atlas::AtlasEntry;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::Features;
 use jetcarp_core::explore::space::{ALL_FAMS, Fam, sized_spec};
 use jetcarp_core::world::{Scene, SeedSpec, World};
+use jetcarp_store::atlas::AtlasEntry;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};

@@ -2049,6 +2049,7 @@ dependencies = [
  "jetcarp-mcp",
  "jetcarp-script",
  "jetcarp-search",
+ "jetcarp-store",
  "rayon",
  "serde",
  "serde_json",
@@ -2061,6 +2062,7 @@ dependencies = [
  "chrono",
  "jetcarp-core",
  "jetcarp-search",
+ "jetcarp-store",
  "png",
  "rayon",
  "schemars",
@@ -2086,6 +2088,7 @@ dependencies = [
  "jetcarp-mcp",
  "jetcarp-script",
  "jetcarp-search",
+ "jetcarp-store",
  "png",
  "pollster 0.4.0",
  "rfd",
@@ -2103,10 +2106,8 @@ dependencies = [
  "flate2",
  "gif",
  "image-webp",
- "jetcarp-search",
  "png",
  "rayon",
- "rusqlite",
  "serde",
  "serde_json",
 ]
@@ -2123,6 +2124,7 @@ dependencies = [
  "jetcarp-core",
  "jetcarp-gpu",
  "jetcarp-script",
+ "jetcarp-store",
  "objc2 0.6.5",
  "pollster 0.4.0",
  "rhai",
@@ -2172,6 +2174,7 @@ dependencies = [
  "jetcarp-core",
  "jetcarp-script",
  "jetcarp-search",
+ "jetcarp-store",
  "serde_json",
 ]
 
@@ -2199,6 +2202,7 @@ dependencies = [
  "jetcarp-api",
  "jetcarp-core",
  "jetcarp-search",
+ "jetcarp-store",
  "png",
  "rayon",
  "rhai",
@@ -2213,7 +2217,21 @@ dependencies = [
  "flate2",
  "jetcarp-core",
  "jetcarp-gpu",
+ "jetcarp-store",
  "memory-stats",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "jetcarp-store"
+version = "0.4.0"
+dependencies = [
+ "flate2",
+ "jetcarp-core",
+ "jetcarp-search",
  "rayon",
  "rusqlite",
  "serde",

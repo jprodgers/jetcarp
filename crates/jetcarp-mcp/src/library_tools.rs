@@ -1,4 +1,4 @@
-//! MCP tools for the pattern catalog (`jetcarp_core::library`): list, get, a bounded soup search,
+//! MCP tools for the pattern catalog (`jetcarp_store::library`): list, get, a bounded soup search,
 //! paste into the world, curation updates, promotion to the Quick Start, and the Quick Start
 //! entries ("My finds").
 //!
@@ -20,10 +20,10 @@ use jetcarp_api::ops::quickstart::{
 use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
 use jetcarp_api::world::Host;
-use jetcarp_core::library::{self, Library};
 use jetcarp_core::pattern::PatternRecord;
 use jetcarp_search::dashboard::digits;
 use jetcarp_search::jobs::search::SearchResult;
+use jetcarp_store::Library;
 use serde_json::{Value, json};
 
 pub const NAMES: &[&str] = &[
@@ -262,7 +262,7 @@ fn list(args: &Value) -> Res {
     }
 }
 
-pub(crate) fn ant_json(r: &library::AntRow) -> Value {
+pub(crate) fn ant_json(r: &jetcarp_store::AntRow) -> Value {
     json!({
         "id": r.id, "rule": r.rule, "tiling": r.tiling_name, "start": r.start.label(),
         "outcome": r.outcome.name(), "period": r.period, "d": r.d, "speed": r.speed,

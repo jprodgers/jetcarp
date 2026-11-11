@@ -7,8 +7,8 @@ use jetcarp_api::Ctx;
 use jetcarp_api::args;
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::parse_rule;
-use jetcarp_core::library::{AntQuery, AntRow, AntUpdate, Library};
 use jetcarp_core::pattern;
+use jetcarp_store::{AntQuery, AntRow, AntUpdate, Library};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -223,7 +223,7 @@ pub fn run(cx: &Ctx, a: AntsArgs, json: bool) -> Result<()> {
         }
         AntsCmd::Scene { id, out, palette } => {
             let r = msg(lib.ant(&id))?;
-            let sc = msg(jetcarp_core::ants::media::build_scene_in(
+            let sc = msg(jetcarp_store::media::ants::build_scene_in(
                 &r,
                 palette.as_deref(),
             ))?;
@@ -234,7 +234,7 @@ pub fn run(cx: &Ctx, a: AntsArgs, json: bool) -> Result<()> {
             println!(
                 "{} ({} generations of {} steps show the build-up)",
                 out.display(),
-                jetcarp_core::ants::media::build_gens(&r),
+                jetcarp_store::media::ants::build_gens(&r),
                 sc.cas[0].steps_per_gen
             );
             Ok(())

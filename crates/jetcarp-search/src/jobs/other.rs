@@ -2,8 +2,8 @@
 
 use super::{Strategy, StrategyKind, base_summary, short_list};
 use crate::dashboard::JobSummary;
-use jetcarp_core::library::Library;
-use jetcarp_core::library::store::JobRow;
+use jetcarp_store::Library;
+use jetcarp_store::library::JobRow;
 use serde_json::Value;
 
 pub struct OtherKind;

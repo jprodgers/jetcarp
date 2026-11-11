@@ -11,13 +11,11 @@ use crate::args::{check_keys, get_bool, get_f64, get_list, get_str, get_u64};
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
-use jetcarp_core::library::QsStatus;
-use jetcarp_core::media::{
-    self, BatchReport, MediaFormat, MediaMode, MediaOptions, MediaRow, MediaStyle, MediaTarget,
-    MissingFilter,
-};
+use jetcarp_core::media::{MediaFormat, MediaMode, MediaOptions, MediaStyle};
 use jetcarp_core::pattern::{CurationState, PatternClass};
-use jetcarp_core::website::{self, ExportFilter, ExportOptions, ExportReport};
+use jetcarp_store::QsStatus;
+use jetcarp_store::media::{self, BatchReport, MediaRow, MediaTarget, MissingFilter};
+use jetcarp_store::website::{self, ExportFilter, ExportOptions, ExportReport};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -432,7 +430,7 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
 /// it is not one of the catalog's own (`find:...`, or an id the catalog has), which come first.
 /// None for a catalog entry; an error if it is neither.
 fn builtin_entry(
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     q: &str,
 ) -> Result<Option<jetcarp_core::quickstart::QuickStart>, ApiError> {
     let q = q.trim();

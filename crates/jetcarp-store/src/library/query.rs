@@ -1,28 +1,10 @@
-//! The pattern library: the SQLite catalog that stores patterns (their records are in
-//! [`crate::pattern`]) and what else JETCARP keeps (jobs, Quick Start rows, ant runs, media).
-//!
-//! **Store.** [`Library`] is the catalog file (`JETCARP_LIBRARY`, else
-//! `<data>/catalog.sqlite`); [`store`] documents its tables and migrations.
-//!
-//! The main entry points: [`Library`] (add, get, list, query, update, remove, export, import,
-//! sightings, jobs, Quick Start rows) and [`promote`].
+//! Changes to a pattern ([`Update`]) and filters for listing patterns ([`Query`]), for the
+//! catalog's [`Library::update`](super::Library::update) and
+//! [`Library::query`](super::Library::query).
 
-use crate::pattern::{CurationState, DiscoveredBy, PatternClass, PatternRecord, range};
-use crate::topology::Nb;
-use crate::world::Scene;
+use jetcarp_core::pattern::{CurationState, DiscoveredBy, PatternClass, PatternRecord, range};
+use jetcarp_core::topology::Nb;
 use serde::{Deserialize, Serialize};
-
-pub mod store;
-
-pub use store::prepare;
-pub use store::{
-    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsStatus,
-    QuickStartRow, RatingRow, Sighting, SightingRow, ant_id, ant_score,
-};
-pub use store::{FindRow, HeatQuery, HeatRow, PruneReport, UnstoredFlush, UnstoredRow, UsageRow};
-
-// ---------------------------------------------------------------------------------------------
-// Updates and queries (the store is in `store`)
 
 /// Changes for [`Library::update`]. `None` leaves a field alone.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -114,7 +96,7 @@ impl Query {
             return false;
         }
         if let Some(q) = &self.works_in {
-            let Ok((rule, nb)) = crate::rules::Rule::parse(q) else {
+            let Ok((rule, nb)) = jetcarp_core::rules::Rule::parse(q) else {
                 return false;
             };
             let n = rule.notation();
@@ -141,7 +123,9 @@ impl Query {
             let qc = q.trim_start_matches("catalog:");
             // A family or catalog id matches exactly ("hex" is not "trihex"); other text matches
             // part of the tiling name.
-            let ok = if crate::families::family(&q).is_some() || crate::catalog::get(qc).is_some() {
+            let ok = if jetcarp_core::families::family(&q).is_some()
+                || jetcarp_core::catalog::get(qc).is_some()
+            {
                 (r.tiling.family.eq_ignore_ascii_case(&q) && cat.is_none())
                     || cat.is_some_and(|c| c.eq_ignore_ascii_case(qc))
             } else {
@@ -186,34 +170,4 @@ pub fn sort_records(v: &mut [PatternRecord]) {
             .then(b.rating.cmp(&a.rating))
             .then(a.id.cmp(&b.id))
     });
-}
-
-// ---------------------------------------------------------------------------------------------
-// Promotion
-
-/// Save a Quick Start entry ("My finds") for the record in the catalog's `quickstart` table (id =
-/// the pattern id; promoting again replaces it) and mark the pattern promoted. Returns the scene
-/// and the entry id.
-pub fn promote(
-    lib: &Library,
-    key: &str,
-    title: Option<&str>,
-    description: Option<&str>,
-) -> Result<(Scene, String), String> {
-    let rec = lib.get(key)?;
-    let sc = crate::pattern::promote::showcase_scene(&rec, title, description)?;
-    let mut row = QuickStartRow::for_scene(&rec.id, "pattern", sc.clone());
-    row.source_id = Some(rec.id.clone());
-    row.grid = rec.tiling_name.clone();
-    row.behaviour = rec.class.name().to_string();
-    row.score = Some(rec.score);
-    lib.put_quickstart(&row)?;
-    lib.update(
-        &rec.id,
-        &Update {
-            state: Some(CurationState::Promoted),
-            ..Default::default()
-        },
-    )?;
-    Ok((sc, rec.id))
 }

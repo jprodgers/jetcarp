@@ -18,12 +18,12 @@
 //! (written when the job is made, from its spec), so whoever changes them while the pile builds
 //! (the Sandpile window) gets the export in the new colours.
 
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::now_utc;
 use jetcarp_core::pile::export::ExportOptions;
 use jetcarp_core::pile::{
     Ctl, Pile, PileSpec, RunOptions, StepRecord, Toppler, file, latest_step_file, write_growth,
 };
+use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

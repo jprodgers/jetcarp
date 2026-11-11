@@ -22,10 +22,10 @@ use crate::jobs::{RunCx, Sink};
 use jetcarp_core::ants::plane::Lattice;
 use jetcarp_core::ants::run::{Limits, Outcome, Start, run};
 use jetcarp_core::ants::search::{Strings, Tables, parse_rule, strings, tables};
-use jetcarp_core::library::{AntRow, JobStatus, Library, ant_id, ant_score};
 use jetcarp_core::pattern::{now_utc, tiling_display_name, tiling_key};
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_core::turmite::Mite;
+use jetcarp_store::{AntRow, JobStatus, Library, ant_id, ant_score};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -335,10 +335,7 @@ pub fn start(lib: &Library, spec: &AntSpec) -> Result<i64, String> {
     Ok(job)
 }
 
-fn job_spec(
-    lib: &Library,
-    job: i64,
-) -> Result<(jetcarp_core::library::store::JobRow, AntSpec), String> {
+fn job_spec(lib: &Library, job: i64) -> Result<(jetcarp_store::library::JobRow, AntSpec), String> {
     let j = lib.job(job)?;
     if j.kind != KIND {
         return Err(format!("job {job} is a {} job, not an ant search", j.kind));

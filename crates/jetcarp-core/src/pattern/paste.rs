@@ -1,7 +1,10 @@
 //! `Command::PastePattern`: paste a library pattern (by id or inline) into a CA's field.
 //!
 //! In the command log a paste is always stored resolved (the cells inline, the library id kept
-//! as a label), so a scene replays without the library.
+//! as a label), so a scene replays without the library. The engine has no library of its own: a
+//! pattern named by id is found in the library given to [`resolve`] ([`Patterns`]), else in the
+//! default library the pattern store installs ([`set_default_library`]; the front ends do this
+//! at start through `jetcarp_store::install`).
 //!
 //! Lattice tilings: the pattern is turned by `orientation` (an index into the tiling's
 //! symmetries, see `pattern::symmetry`: 0 = as stored; 0-7 on squares, 0-11 on hexagons, the
@@ -11,10 +14,10 @@
 //! anchor tile goes on `at` (a cell index, or `original`) and the surrounding tiles must match.
 
 use super::{PatternRecord, decode_cells, encode_cells, orient, site};
-use crate::library::Library;
 use crate::objects::{LCell, Phase};
 use crate::topology::{Nb, TilingSpec, Topology};
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 /// What to paste: a library pattern, or cells given inline.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
@@ -50,12 +53,30 @@ pub enum PasteAt {
     Original,
 }
 
+/// Where [`resolve`] finds a library pattern by id (or unique prefix, or name): the pattern
+/// library (`jetcarp_store::Library`).
+pub trait Patterns {
+    fn pattern(&self, key: &str) -> Result<PatternRecord, String>;
+}
+
+/// The default library's lookup, once the pattern store has installed it.
+static DEFAULT_LIBRARY: OnceLock<fn(&str) -> Result<PatternRecord, String>> = OnceLock::new();
+
+/// Let [`resolve`] (and so `Command::PastePattern`) find library patterns when it is given no
+/// library: `get` looks a pattern up in the default library. The pattern store installs it
+/// (`jetcarp_store::install`); without it only inline cells can be pasted. Only the first call
+/// counts.
+pub fn set_default_library(get: fn(&str) -> Result<PatternRecord, String>) {
+    let _ = DEFAULT_LIBRARY.set(get);
+}
+
 /// Fill in `cells`, `tiling` and `site` from the library when only `library` is given, taking
-/// phase `phase` (modulo the period). Inline sources are returned unchanged.
+/// phase `phase` (modulo the period). Inline sources are returned unchanged. With no library
+/// given, the default library is used ([`set_default_library`]).
 pub fn resolve(
     src: &PatternSource,
     phase: u32,
-    lib: Option<&Library>,
+    lib: Option<&dyn Patterns>,
 ) -> Result<PatternSource, String> {
     if src.cells.is_some() {
         if phase != 0 {
@@ -67,15 +88,17 @@ pub fn resolve(
         .library
         .as_deref()
         .ok_or("paste_pattern needs a library id or inline cells")?;
-    let owned;
-    let lib = match lib {
-        Some(l) => l,
-        None => {
-            owned = Library::open_default();
-            &owned
-        }
+    let rec = match lib {
+        Some(l) => l.pattern(key)?,
+        None => match DEFAULT_LIBRARY.get() {
+            Some(get) => get(key)?,
+            None => {
+                return Err(format!(
+                    "pasting '{key}' needs the pattern library, which this program does not have; paste its cells instead"
+                ));
+            }
+        },
     };
-    let rec = lib.get(key)?;
     Ok(source_from_record(&rec, phase as u64))
 }
 

@@ -5,10 +5,10 @@
 use anyhow::{Result, anyhow, bail};
 use jetcarp_api::Ctx;
 use jetcarp_api::args;
-use jetcarp_core::library::{Library, Query, sort_records};
 use jetcarp_core::pattern::movers::{TrackSpec, mover_record, retrack, track};
 use jetcarp_core::pattern::{DiscoveredBy, PatternClass, Provenance, now_utc};
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec};
+use jetcarp_store::{Library, Query, sort_records};
 use std::path::PathBuf;
 
 #[derive(clap::Args)]

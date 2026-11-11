@@ -7,9 +7,9 @@ use super::{
 };
 use crate::ants::{self as job, AntProgress, AntSpec};
 use crate::dashboard::{JobSummary, digits};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::tiling_display_name;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{JobStatus, Library};
 use serde_json::Value;
 
 pub struct AntsKind;

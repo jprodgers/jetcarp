@@ -4,12 +4,12 @@
 
 use flate2::Compression;
 use flate2::write::DeflateEncoder;
-use jetcarp_core::explore::atlas::{self, AtlasEntry};
-use jetcarp_core::library::Library;
-use jetcarp_core::qsmenu::{self, Filter, Origin, Sort, canonical_rule};
 use jetcarp_core::rules::catalog;
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_core::{CaSpec, Scene, World};
+use jetcarp_store::Library;
+use jetcarp_store::atlas::{self, AtlasEntry};
+use jetcarp_store::qsmenu::{self, Filter, Origin, Sort, canonical_rule};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 

@@ -7,11 +7,11 @@ use super::{
 };
 use crate::dashboard::{FindItem, Finds, HeatSpace, JobSummary, Target, digits};
 use crate::hunt::{self, HuntProgress, HuntSpec};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{AddOutcome, HeatQuery, JobStatus, Library};
 use jetcarp_core::pattern::tiling_display_name;
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{AddOutcome, HeatQuery, JobStatus, Library};
 use serde_json::Value;
 
 pub struct HuntKind;
@@ -156,7 +156,7 @@ impl StrategyKind for HuntKind {
         rules: &[String],
         n: usize,
     ) -> Result<Finds, String> {
-        let item = |f: jetcarp_core::library::FindRow| FindItem {
+        let item = |f: jetcarp_store::FindRow| FindItem {
             subtitle: format!(
                 "{} · seen {} here, {} in all",
                 f.rule,

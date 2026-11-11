@@ -2,7 +2,7 @@
 
 use super::{JobHandle, Outcome, RunOptions, Runner, Strategy};
 use crate::dashboard::JobSummary;
-use jetcarp_core::library::Library;
+use jetcarp_store::Library;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;

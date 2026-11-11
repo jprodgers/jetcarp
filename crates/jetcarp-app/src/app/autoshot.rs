@@ -183,7 +183,7 @@ impl JetcarpApp {
         if let Ok(p) = std::env::var("JETCARP_PASTE")
             && let Some((key, cells)) = p.split_once('@')
         {
-            let lib = jetcarp_core::library::Library::open_default();
+            let lib = jetcarp_store::Library::open_default();
             let src = jetcarp_core::pattern::PatternSource {
                 library: Some(key.to_string()),
                 ..Default::default()

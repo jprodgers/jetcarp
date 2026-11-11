@@ -3,15 +3,13 @@
 //! handles), the heat map's binning, finds, ratings, the opening rows, search and filters, and an
 //! entry's ratings and opens.
 
-use jetcarp_core::library::{
-    HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow,
-};
 use jetcarp_core::pattern::CurationState;
-use jetcarp_core::qsmenu::{self, Filter, Origin, Sort};
 use jetcarp_core::topology::{Nb, TilingSpec};
 use jetcarp_search::dashboard::{self, HeatColour, Target};
 use jetcarp_search::hunt::{self, HuntSpec};
 use jetcarp_search::jobs::{self, RunOptions, Runner};
+use jetcarp_store::qsmenu::{self, Filter, Origin, Sort};
+use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow};
 use std::collections::HashMap;
 
 fn temp_lib(name: &str) -> Library {

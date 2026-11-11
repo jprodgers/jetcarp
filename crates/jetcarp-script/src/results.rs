@@ -44,9 +44,9 @@ mod tests {
             "nested triangles"
         );
         // Promotion with a title and note.
-        let lib = jetcarp_core::library::Library::open(root.join("lib"));
+        let lib = jetcarp_store::Library::open(root.join("lib"));
         let id = promote_run_with(&m, k, &lib, Some("Rule thirty"), Some("chaotic")).unwrap();
-        let finds = jetcarp_core::quickstart::user_finds(&lib);
+        let finds = jetcarp_store::quickstart::user_finds(&lib);
         assert_eq!(finds.len(), 1);
         assert_eq!(finds[0].id, format!("find:{id}"));
         let sc = &finds[0].scene;

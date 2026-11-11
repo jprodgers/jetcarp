@@ -4,8 +4,8 @@
 use super::{Live, Sink, now_seconds, status_name};
 use crate::dashboard::{Finds, HeatSpace, JobSummary};
 use jetcarp_core::hunt::soup::SoupBatcher;
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{AddOutcome, JobStatus, Library};
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{AddOutcome, JobStatus, Library};
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

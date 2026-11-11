@@ -153,10 +153,7 @@ fn paths_and_doctor() {
     // Without a platform there is no GPU and no desktop integration.
     let d = SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
     assert!(d.gpu.is_empty());
-    assert_eq!(
-        d.folders.library,
-        jetcarp_core::library::Library::default_path()
-    );
+    assert_eq!(d.folders.library, jetcarp_store::Library::default_path());
     let t = d.text();
     assert!(t.starts_with("JETCARP "), "{t}");
     assert!(t.contains("\nFolders\n  settings: "), "{t}");

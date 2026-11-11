@@ -65,7 +65,7 @@ fn info_query_and_count() {
     );
     assert_eq!((counted.patterns.len(), counted.matching), (0, Some(1)));
     // From a catalog Query, as Rhai's lib.query reads one.
-    let q: jetcarp_core::library::Query =
+    let q: jetcarp_store::Query =
         serde_json::from_value(json!({"class": "spaceship", "state": "new"})).unwrap();
     assert_eq!(query(&cx, QueryIn::from_query(&q)).patterns.len(), 1);
     // Ant runs, with the outcome census.
@@ -207,7 +207,7 @@ fn update_and_remove() {
         format!("updated {} (glider), state reviewed\n", r.id)
     );
     // As Rhai's lib.update reads its map.
-    let up: jetcarp_core::library::Update =
+    let up: jetcarp_store::Update =
         serde_json::from_value(json!({"rating": 2, "remove_tags": ["nice"]})).unwrap();
     let u2 = LibraryUpdate::run(&cx, UpdateIn::from_update("glider", &up), &Quiet).unwrap();
     assert_eq!(u2.pattern.as_ref().unwrap().rating, Some(2));

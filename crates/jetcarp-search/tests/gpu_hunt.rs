@@ -4,11 +4,11 @@
 
 use jetcarp_core::hunt::separate::Census;
 use jetcarp_core::hunt::soup::{Layout, SoupBatcher, prefix_cpu, soup_state};
-use jetcarp_core::library::{Library, Query};
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_gpu::hunt::GpuHunter;
 use jetcarp_search::hunt::{self, HuntProgress, HuntSpec};
 use jetcarp_search::jobs::{RunOptions, Runner};
+use jetcarp_store::{Library, Query};
 use std::sync::{Arc, OnceLock};
 
 fn gpu() -> Option<Arc<GpuHunter>> {

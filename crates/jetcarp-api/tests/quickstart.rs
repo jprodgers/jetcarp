@@ -8,8 +8,8 @@ use jetcarp_api::op::{Op, Quiet, Report, to_value};
 use jetcarp_api::ops::quickstart::*;
 use jetcarp_api::sweeps::{Favourites, Manifest};
 use jetcarp_api::{ErrorKind, call_json};
-use jetcarp_core::library::QsStatus;
 use jetcarp_core::pattern::CurationState;
+use jetcarp_store::QsStatus;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 

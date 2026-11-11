@@ -732,10 +732,7 @@ fn start_in(strategy: &str, spec: Value, j: &JobFlags) -> Result<SearchStartIn> 
 }
 
 fn ctx(j: &JobFlags) -> jetcarp_api::Ctx {
-    let lib = j
-        .library
-        .clone()
-        .map(jetcarp_core::library::Library::file_for);
+    let lib = j.library.clone().map(jetcarp_store::Library::file_for);
     crate::platform::ctx().with_library(lib)
 }
 

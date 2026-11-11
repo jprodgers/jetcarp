@@ -156,7 +156,7 @@ fn site_export_writes_once_and_keeps_its_page() {
     let (lib, cx) = catalog(&dir);
     lib.update(
         "glider",
-        &jetcarp_core::library::Update {
+        &jetcarp_store::Update {
             state: Some(jetcarp_core::pattern::CurationState::Reviewed),
             ..Default::default()
         },

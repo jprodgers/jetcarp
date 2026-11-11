@@ -21,8 +21,8 @@ pub type Lookup = Arc<dyn Fn(&str) -> Option<Scene> + Send + Sync>;
 
 /// Finds Quick Start entries in the user's library, as the app does.
 pub fn library_lookup() -> Lookup {
-    let library = jetcarp_core::library::Library::open_default();
-    Arc::new(move |id: &str| jetcarp_core::qsmenu::scene_by_id(&library, id))
+    let library = jetcarp_store::Library::open_default();
+    Arc::new(move |id: &str| jetcarp_store::qsmenu::scene_by_id(&library, id))
 }
 
 /// For a stage whose scenes are all inline (the macOS screen saver's): finds nothing.

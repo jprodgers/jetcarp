@@ -367,6 +367,6 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
     )
     .unwrap();
     assert!(p["entries"].as_u64().unwrap() > 0, "{p}");
-    let entries = jetcarp_core::explore::atlas::load(&atlas).unwrap();
+    let entries = jetcarp_store::atlas::load(&atlas).unwrap();
     assert_eq!(entries.len() as u64, p["entries"].as_u64().unwrap());
 }

@@ -95,8 +95,8 @@ pub use sink::Sink;
 pub use strategy::{RunCx, Step, Strategy, StrategyKind, drive};
 
 use crate::dashboard::JobSummary;
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{JobStatus, Library};
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

@@ -14,9 +14,9 @@ use crate::window_job::{Hooks, WindowJob};
 use eframe::egui::{self, Color32, RichText};
 use jetcarp_api::ops::jobs::ResumeIn;
 use jetcarp_api::ops::search::SearchStartIn;
-use jetcarp_core::library::{AddOutcome, Library};
 use jetcarp_core::pattern;
 use jetcarp_core::world::Scene;
+use jetcarp_store::{AddOutcome, Library};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 

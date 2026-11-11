@@ -18,10 +18,10 @@
 //! says so). A cell's value is the sum over its rules (finds, spaceships).
 
 use jetcarp_core::census;
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update};
 use jetcarp_core::pattern::{CurationState, tiling_key};
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec, Topology};
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update};
 use serde::Serialize;
 use std::collections::BTreeMap;
 

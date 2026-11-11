@@ -13,6 +13,7 @@ homepage.workspace = true
 [dependencies]
 dirs = { workspace = true }
 jetcarp-core.workspace = true
+jetcarp-store.workspace = true
 jetcarp-search.workspace = true
 jetcarp-api.workspace = true
 jetcarp-script.workspace = true

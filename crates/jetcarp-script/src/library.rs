@@ -1,11 +1,11 @@
-//! Cataloging a world's objects into the pattern library (`jetcarp_core::library`), shared by the
+//! Cataloging a world's objects into the pattern library (`jetcarp_store::library`), shared by the
 //! Rhai `library()` handle and the app (sweep favourites).
 
 use jetcarp_core::World;
-use jetcarp_core::library::{AddOutcome, Library};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects};
 use jetcarp_core::pattern::split::records_from_object;
 use jetcarp_core::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
+use jetcarp_store::{AddOutcome, Library};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

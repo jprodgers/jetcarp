@@ -31,9 +31,10 @@
 //! classes; Quick Start entries with status `auto` or `approved`; ant and turmite runs whose
 //! state is `promoted` or `reviewed` (optionally only some outcomes, such as highways).
 
-use crate::library::{Library, QsStatus};
-use crate::media::{self, MediaMode, MediaOptions, MediaRow, MediaTarget, content_hash};
-use crate::pattern::{CurationState, PatternClass, PatternRecord, RuleRange};
+use crate::media::{self, MediaRow, MediaTarget};
+use crate::{Library, QsStatus};
+use jetcarp_core::media::{MediaMode, MediaOptions, content_hash};
+use jetcarp_core::pattern::{CurationState, PatternClass, PatternRecord, RuleRange};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -120,7 +121,7 @@ impl ExportFilter {
             && (self.ids.is_empty() || self.ids.contains(&r.id))
     }
     /// Whether an ant run is public.
-    pub fn admits_ant(&self, a: &crate::library::AntRow) -> bool {
+    pub fn admits_ant(&self, a: &crate::AntRow) -> bool {
         a.state != "rejected"
             && self.ant_states.contains(&a.state)
             && self
@@ -343,10 +344,10 @@ pub struct SitePattern<'a> {
     pub speed: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub displacement: Option<[i32; 2]>,
-    pub tiling: &'a crate::topology::TilingSpec,
+    pub tiling: &'a jetcarp_core::topology::TilingSpec,
     pub tiling_name: &'a str,
     pub tile_types: u32,
-    pub neighborhood: crate::topology::Nb,
+    pub neighborhood: jetcarp_core::topology::Nb,
     pub steps_per_gen: u32,
     /// The rule it runs in by default, every rule it was verified in, and its rule range.
     pub rule: &'a str,
@@ -361,7 +362,7 @@ pub struct SitePattern<'a> {
     /// One period of phases (`i,j,k,s` tuples), phase 0 first.
     pub phases: &'a [String],
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gun: Option<&'a crate::pattern::GunInfo>,
+    pub gun: Option<&'a jetcarp_core::pattern::GunInfo>,
     /// Copies found over all searches, and per rule.
     pub seen: u64,
     pub seen_by_rule: BTreeMap<String, u64>,
@@ -370,7 +371,7 @@ pub struct SitePattern<'a> {
     pub rating: Option<u8>,
     pub tags: &'a [String],
     pub state: CurationState,
-    pub discovered_by: crate::pattern::DiscoveredBy,
+    pub discovered_by: jetcarp_core::pattern::DiscoveredBy,
     /// Date of the first find (`YYYY-MM-DD`).
     pub discovered: &'a str,
     pub verified_periods: u64,
@@ -428,7 +429,7 @@ fn pattern_json(lib: &Library, r: &PatternRecord, media: &MediaLinks) -> Result<
 }
 
 /// An ant or turmite run as the website sees it (no curation notes or timestamps).
-fn ant_json(a: &crate::library::AntRow, media: &MediaLinks) -> Result<Vec<u8>, String> {
+fn ant_json(a: &crate::AntRow, media: &MediaLinks) -> Result<Vec<u8>, String> {
     let v = json!({
         "format": FORMAT,
         "kind": "ant",
@@ -457,10 +458,7 @@ fn ant_json(a: &crate::library::AntRow, media: &MediaLinks) -> Result<Vec<u8>, S
     serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
 }
 
-fn quickstart_json(
-    q: &crate::library::QuickStartRow,
-    media: &MediaLinks,
-) -> Result<Vec<u8>, String> {
+fn quickstart_json(q: &crate::QuickStartRow, media: &MediaLinks) -> Result<Vec<u8>, String> {
     let mut scene = q.scene.clone();
     scene.jetcarp_version.clear();
     scene.record = None;
@@ -515,7 +513,7 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
     let mut ants = if f.ant_states.is_empty() {
         Vec::new()
     } else {
-        lib.ants(&crate::library::AntQuery::default())?
+        lib.ants(&crate::AntQuery::default())?
     };
     ants.retain(|a| f.admits_ant(a));
     ants.sort_by(|a, b| a.id.cmp(&b.id));
@@ -693,8 +691,8 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
     if !same_index || !report.written.is_empty() || !report.deleted.is_empty() {
         let m = Manifest {
             format: FORMAT,
-            generator: format!("JETCARP {}", crate::VERSION),
-            exported: crate::pattern::now_utc(),
+            generator: format!("JETCARP {}", jetcarp_core::VERSION),
+            exported: jetcarp_core::pattern::now_utc(),
             filter: f.clone(),
             style,
             counts,

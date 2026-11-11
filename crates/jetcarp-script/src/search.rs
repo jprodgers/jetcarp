@@ -13,10 +13,10 @@ use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64, nb_word
 use jetcarp_api::op::{Op, Progress, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut};
 use jetcarp_api::ops::search::{SearchStart, SearchStartIn, SearchStarted};
-use jetcarp_core::library::Library;
 use jetcarp_search::ants::AntProgress;
 use jetcarp_search::census::CensusProgress;
 use jetcarp_search::hunt::HuntProgress;
+use jetcarp_store::Library;
 use rhai::{Array, Dynamic, Engine, EvalAltResult, INT, Map};
 use serde_json::{Value, json};
 use std::sync::Arc;

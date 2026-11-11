@@ -25,12 +25,12 @@ use jetcarp_core::hunt::separate::{Cache, Census, Found};
 use jetcarp_core::hunt::soup::{
     End, Layout, Limits, SoupBatcher, SoupOut, SoupSpec, run_soup, soup_state,
 };
-use jetcarp_core::library::{AddOutcome, JobStatus, Library, Sighting, UnstoredFlush, UnstoredRow};
 use jetcarp_core::pattern::{
     PatternClass, PatternRecord, Provenance, default_periods, now_utc, tiling_display_name,
     tiling_key, verify,
 };
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec};
+use jetcarp_store::{AddOutcome, JobStatus, Library, Sighting, UnstoredFlush, UnstoredRow};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};

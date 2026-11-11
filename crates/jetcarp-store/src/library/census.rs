@@ -1,4 +1,5 @@
-//! Census jobs' per-rule results in the catalog (table `census_rows`, see [`crate::census`]).
+//! Census jobs' per-rule results in the catalog (table `census_rows`, see
+//! [`jetcarp_core::census`]).
 
 use super::*;
 

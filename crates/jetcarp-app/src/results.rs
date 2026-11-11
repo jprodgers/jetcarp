@@ -791,7 +791,7 @@ impl ResultsBrowser {
         let folder = m.name();
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let lib = jetcarp_core::library::Library::open_default();
+            let lib = jetcarp_store::Library::open_default();
             let _ = tx.send(catalog_rows(&lib, &run, &folder, &rows));
         });
         self.cataloging = Some(rx);
@@ -832,7 +832,7 @@ impl ResultsBrowser {
 /// Rebuild each run, find its objects, verify and store them in `lib`. Returns a one-line report
 /// and whether it failed.
 pub fn catalog_rows(
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     run: &Value,
     folder: &str,
     rows: &[Row],
@@ -1081,9 +1081,9 @@ mod tests {
         .unwrap();
         assert_eq!(text(r, "hash"), w.hash_hex());
         // Promote the run: a Quick Start entry the finds list reads, which runs to the same state.
-        let lib = jetcarp_core::library::Library::open(root.join("lib"));
+        let lib = jetcarp_store::Library::open(root.join("lib"));
         let id = jetcarp_api::sweeps::promote_run(&m, 2, &lib).unwrap();
-        let finds = jetcarp_core::quickstart::user_finds(&lib);
+        let finds = jetcarp_store::quickstart::user_finds(&lib);
         assert_eq!(finds.len(), 1);
         assert_eq!(finds[0].rule, "W30");
         let mut again = World::from_scene(&finds[0].scene).unwrap();
@@ -1114,7 +1114,7 @@ mod tests {
         );
         assert!(s.ok, "{:?}", s.error);
         let m = Manifest::load(&sweep_folders(&root)[0]).unwrap();
-        let lib = jetcarp_core::library::Library::open(root.join("lib"));
+        let lib = jetcarp_store::Library::open(root.join("lib"));
         let (msg, failed) = catalog_rows(&lib, &m.run, &m.name(), &m.rows);
         assert!(!failed, "{msg}");
         // Life leaves objects; W30 makes none (a row rule), and the report says so.

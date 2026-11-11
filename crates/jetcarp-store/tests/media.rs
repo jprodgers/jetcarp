@@ -4,10 +4,8 @@
 //! Set `JETCARP_MEDIA_SAMPLES=DIR` to keep the rendered files for a look.
 
 use jetcarp_core::hunt::separate::{Cache, Census, Obj};
-use jetcarp_core::library::{self, Library, QuickStartRow};
 use jetcarp_core::media::{
-    self, AloneView, MediaFormat, MediaMode, MediaOptions, MediaStyle, MediaTarget, MissingFilter,
-    encode,
+    self, AloneView, MediaFormat, MediaMode, MediaOptions, MediaStyle, encode,
 };
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::{
@@ -15,6 +13,8 @@ use jetcarp_core::pattern::{
 };
 use jetcarp_core::render::Image;
 use jetcarp_core::*;
+use jetcarp_store::media::{MediaTarget, MissingFilter};
+use jetcarp_store::{Library, QuickStartRow};
 
 fn temp_lib(name: &str) -> Library {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
@@ -99,7 +99,7 @@ fn glider_gif_loops_seamlessly_in_a_moving_window() {
     assert_eq!(rec.class, PatternClass::Spaceship);
     lib.add(rec.clone()).unwrap();
     let o = MediaOptions::default();
-    let r = media::render(&lib, &MediaTarget::Pattern(rec.id.clone()), &o).unwrap();
+    let r = jetcarp_store::media::render(&lib, &MediaTarget::Pattern(rec.id.clone()), &o).unwrap();
     assert!(r.written);
     assert_eq!(r.mode, MediaMode::Alone);
     let anim = r.animation().unwrap();
@@ -178,7 +178,7 @@ fn oscillator_gif_has_period_frames() {
     ] {
         assert_eq!(rec.period, p, "{name}");
         lib.add(rec.clone()).unwrap();
-        let r = media::render(
+        let r = jetcarp_store::media::render(
             &lib,
             &MediaTarget::Pattern(rec.id.clone()),
             &MediaOptions::default(),
@@ -240,7 +240,7 @@ fn gun_gif_shows_its_stream_and_loops() {
     let rec = gosper();
     lib.add(rec.clone()).unwrap();
     let o = MediaOptions::default();
-    let r = media::render(&lib, &MediaTarget::Pattern(rec.id.clone()), &o).unwrap();
+    let r = jetcarp_store::media::render(&lib, &MediaTarget::Pattern(rec.id.clone()), &o).unwrap();
     let a = r.animation().unwrap();
     keep("gosper.gif", &a.abs_path);
     keep("gosper-poster.png", &r.file("poster").unwrap().abs_path);
@@ -285,7 +285,8 @@ fn soup_webp_decodes_with_its_frame_count_and_size() {
         gens: Some(60),
         ..Default::default()
     };
-    let r = media::render(&lib, &MediaTarget::QuickStart("soup-test".into()), &o).unwrap();
+    let r = jetcarp_store::media::render(&lib, &MediaTarget::QuickStart("soup-test".into()), &o)
+        .unwrap();
     assert_eq!(r.mode, MediaMode::Seed);
     let a = r.animation().unwrap();
     assert_eq!(a.kind, "webp", "a whole soup is large: WebP");
@@ -319,34 +320,34 @@ fn unchanged_inputs_skip_and_a_style_change_rerenders() {
     lib.add(rec.clone()).unwrap();
     let t = MediaTarget::Pattern(rec.id.clone());
     let o = MediaOptions::default();
-    let a = media::render(&lib, &t, &o).unwrap();
+    let a = jetcarp_store::media::render(&lib, &t, &o).unwrap();
     assert!(a.written);
     let gif = a.animation().unwrap().abs_path.clone();
     let before = std::fs::metadata(&gif).unwrap().modified().unwrap();
-    let b = media::render(&lib, &t, &o).unwrap();
+    let b = jetcarp_store::media::render(&lib, &t, &o).unwrap();
     assert!(!b.written, "same inputs and style: skipped");
     assert_eq!(std::fs::metadata(&gif).unwrap().modified().unwrap(), before);
     assert_eq!(b.rows.len(), 4, "frames, gif, poster, thumb");
     // Curation changes do not change the pictures.
     lib.update(
         &rec.id,
-        &library::Update {
+        &jetcarp_store::Update {
             rating: Some(4),
             ..Default::default()
         },
     )
     .unwrap();
-    assert!(!media::render(&lib, &t, &o).unwrap().written);
+    assert!(!jetcarp_store::media::render(&lib, &t, &o).unwrap().written);
     // A style change marks it stale.
     let mut o2 = o.clone();
     o2.style.binary = vec![[0x60, 0xd0, 0xff]];
-    let c = media::render(&lib, &t, &o2).unwrap();
+    let c = jetcarp_store::media::render(&lib, &t, &o2).unwrap();
     assert!(c.written, "style changed: rendered again");
     assert_ne!(c.rows[0].key, a.rows[0].key);
     let frames = encode::decode_gif(&std::fs::read(&gif).unwrap()).unwrap();
     assert!(colour_box(&frames[0], [0x60, 0xd0, 0xff]).is_some());
     // A missing-media batch now finds nothing to do for it.
-    let r = media::render_missing(
+    let r = jetcarp_store::media::render_missing(
         &lib,
         &MissingFilter {
             patterns: true,
@@ -357,7 +358,7 @@ fn unchanged_inputs_skip_and_a_style_change_rerenders() {
     .unwrap();
     assert_eq!((r.written(), r.skipped()), (0, 1));
     // Both modes coexist.
-    let seed = media::render(
+    let seed = jetcarp_store::media::render(
         &lib,
         &t,
         &MediaOptions {
@@ -368,9 +369,14 @@ fn unchanged_inputs_skip_and_a_style_change_rerenders() {
     )
     .unwrap();
     assert!(seed.written && seed.rows.iter().all(|r| r.from_seed));
-    assert_eq!(media::stored(&lib, "pattern", &rec.id).unwrap().len(), 8);
+    assert_eq!(
+        jetcarp_store::media::stored(&lib, "pattern", &rec.id)
+            .unwrap()
+            .len(),
+        8
+    );
     assert!(
-        media::thumbnail(&lib, "pattern", &rec.id)
+        jetcarp_store::media::thumbnail(&lib, "pattern", &rec.id)
             .unwrap()
             .is_some()
     );
@@ -400,7 +406,7 @@ fn batch_is_identical_at_any_thread_count() {
             .unwrap();
         let rep = pool
             .install(|| {
-                media::render_missing(
+                jetcarp_store::media::render_missing(
                     &lib,
                     &MissingFilter {
                         patterns: true,
@@ -474,13 +480,13 @@ fn a_palette_override_recolours_and_marks_media_stale() {
     lib.add(rec.clone()).unwrap();
     let t = MediaTarget::Pattern(rec.id.clone());
     let o = MediaOptions::default();
-    let a = media::render(&lib, &t, &o).unwrap();
+    let a = jetcarp_store::media::render(&lib, &t, &o).unwrap();
     assert!(a.written);
     let po = MediaOptions {
         style: paper.clone(),
         ..Default::default()
     };
-    let b = media::render(&lib, &t, &po).unwrap();
+    let b = jetcarp_store::media::render(&lib, &t, &po).unwrap();
     assert!(b.written, "another palette: rendered again");
     assert_ne!(b.rows[0].key, a.rows[0].key);
     assert_eq!(b.rows[0].render["palette"], "Paper");
@@ -498,18 +504,18 @@ fn a_palette_override_recolours_and_marks_media_stale() {
     );
     assert!(colour_box(&poster, house.binary[0]).is_none());
     assert!(
-        !media::render(&lib, &t, &po).unwrap().written,
+        !jetcarp_store::media::render(&lib, &t, &po).unwrap().written,
         "same palette: skipped"
     );
     assert!(
-        media::render(&lib, &t, &o).unwrap().written,
+        jetcarp_store::media::render(&lib, &t, &o).unwrap().written,
         "back to the house style"
     );
     // In memory: the same frames as the stored animation, no files or rows written.
-    let anim = media::target_animation(&lib, &t, &po).unwrap();
+    let anim = jetcarp_store::media::target_animation(&lib, &t, &po).unwrap();
     assert_eq!(anim.poster_image().rgba, poster.rgba);
     assert_eq!(
-        media::stored(&lib, "pattern", &rec.id)
+        jetcarp_store::media::stored(&lib, "pattern", &rec.id)
             .unwrap()
             .iter()
             .filter(|r| r.render.get("palette").is_some())

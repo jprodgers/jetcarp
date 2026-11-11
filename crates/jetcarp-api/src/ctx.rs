@@ -10,8 +10,8 @@ use crate::world::Session;
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::soup::SoupBatcher;
-use jetcarp_core::library::Library;
 use jetcarp_search::jobs::Registry;
+use jetcarp_store::Library;
 use schemars::JsonSchema;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -320,8 +320,11 @@ impl Default for Ctx {
 }
 
 impl Ctx {
-    /// A trusted caller (the command line): no limits, files anywhere, no GPU.
+    /// A trusted caller (the command line): no limits, files anywhere, no GPU. Making one also
+    /// connects the engine to the store ([`jetcarp_store::install`]), so a `PastePattern` command
+    /// that names a library pattern finds it in the default library, as it always has.
     pub fn new() -> Ctx {
+        jetcarp_store::install();
         Ctx {
             limits: Limits::NONE,
             fs: FsPolicy::open(),

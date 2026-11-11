@@ -11,10 +11,10 @@
 //! The job runner (`crate::jobs::mover`) runs a job in steps of a couple of seconds each
 //! ([`MoverJob`]), under its lease, in this process or on a thread of it.
 
-use jetcarp_core::library::{JobStatus, Library};
 use jetcarp_core::pattern::movers::{MoverReport, Stop, TrackSpec, mover_record};
 use jetcarp_core::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
 use jetcarp_core::window::track::{Tracker, WindowCheckpoint, WindowOpts};
+use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -165,7 +165,7 @@ pub fn start(lib: &Library, spec: &MoverJobSpec) -> Result<i64, String> {
 fn job_spec(
     lib: &Library,
     job: i64,
-) -> Result<(jetcarp_core::library::store::JobRow, MoverJobSpec), String> {
+) -> Result<(jetcarp_store::library::JobRow, MoverJobSpec), String> {
     let j = lib.job(job)?;
     if j.kind != KIND {
         return Err(format!("job {job} is a {} job, not a mover run", j.kind));
@@ -343,7 +343,7 @@ impl MoverJob {
     }
 
     /// What became of the record: stored (its id in the progress), or the error.
-    pub fn stored(&mut self, outcome: Option<&Result<jetcarp_core::library::AddOutcome, String>>) {
+    pub fn stored(&mut self, outcome: Option<&Result<jetcarp_store::AddOutcome, String>>) {
         if let (Some(id), Some(o), Some(p)) = (self.record.take(), outcome, self.done.as_mut()) {
             match o {
                 Ok(_) => p.record = Some(id),

@@ -1,4 +1,4 @@
-//! Ant and turmite runs in the catalog (table `ants`, see [`crate::ants`]).
+//! Ant and turmite runs in the catalog (table `ants`, see [`jetcarp_core::ants`]).
 //!
 //! One row per (rule, tiling, start): the run's outcome (`highway`, `periodic`, `symmetric`,
 //! `bounded`, `chaotic`), the highway's period, displacement, speed, and onset, the steps run,
@@ -12,7 +12,7 @@
 //! range, phases, or sightings. Media and ratings name them with `target_kind = 'ant'`.
 
 use super::*;
-use crate::ants::run::{AntRun, Outcome, Start};
+use jetcarp_core::ants::run::{AntRun, Outcome, Start};
 
 /// Ants (Phase 4 wave 4): the `ants` table, and `media` and `ratings` rebuilt so their
 /// `target_kind` may be `ant` (SQLite cannot change a CHECK in place).
@@ -120,7 +120,7 @@ pub struct AntRow {
     pub cells: u64,
     /// The whole run (proof, symmetry, reach) and the limits it ran with.
     pub run: AntRun,
-    pub limits: crate::ants::run::Limits,
+    pub limits: jetcarp_core::ants::run::Limits,
     pub score: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rating: Option<i64>,
@@ -172,7 +172,10 @@ pub fn ant_id(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
         tiling_key(tiling),
         serde_json::to_string(start).unwrap_or_default()
     );
-    format!("ant-{}", &crate::media::content_hash(key.as_bytes())[..12])
+    format!(
+        "ant-{}",
+        &jetcarp_core::media::content_hash(key.as_bytes())[..12]
+    )
 }
 
 /// Filters for [`Library::ants`].
@@ -401,7 +404,7 @@ impl Library {
             wh.push(format!("outcome = ?{}", args.len()));
         }
         if let Some(t) = &q.tiling {
-            let key = crate::families::alias(t.trim())
+            let key = jetcarp_core::families::alias(t.trim())
                 .unwrap_or(t.trim())
                 .to_string();
             args.push(Sql::Text(key.clone()));

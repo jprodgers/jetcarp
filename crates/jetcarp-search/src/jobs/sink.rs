@@ -1,8 +1,8 @@
 //! Where a step puts its results ([`Sink`]).
 
-use jetcarp_core::library::store::StepWrite;
-use jetcarp_core::library::{AntRow, JobStatus, Sighting, UnstoredFlush};
 use jetcarp_core::pattern::PatternRecord;
+use jetcarp_store::library::StepWrite;
+use jetcarp_store::{AntRow, JobStatus, Sighting, UnstoredFlush};
 use serde_json::Value;
 use std::path::PathBuf;
 

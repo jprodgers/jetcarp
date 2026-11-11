@@ -2,7 +2,7 @@
 //! phases.
 //!
 //! A promoted pattern becomes a row of the catalog's `quickstart` table with id = the pattern id
-//! (the Quick Start lists these under "My finds"; [`crate::library::promote`]). Its scene
+//! (the Quick Start lists these under "My finds"; `jetcarp_store::quickstart::promote`). Its scene
 //! ([`showcase_scene`]) is a wrapped grid with the pattern pasted in the
 //! centre through `Command::PastePattern`: still lifes and oscillators get a grid about three
 //! times their size; spaceships a grid at least 4 times their size and 48 x 32 unit cells, so they

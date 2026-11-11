@@ -12,9 +12,9 @@ use super::{
 };
 use crate::bounded::{Gathered, SearchReport, SearchSpec, SoupSearch};
 use crate::dashboard::{JobSummary, digits};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{AddOutcome, JobStatus, Library};
 use jetcarp_core::pattern::now_utc;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{AddOutcome, JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{Read, Write};

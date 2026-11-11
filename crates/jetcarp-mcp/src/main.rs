@@ -5,6 +5,8 @@
 //! Usage: `jetcarp-mcp [--app] [--port N] [--token T]`
 
 fn main() {
+    // A PastePattern naming a library pattern finds it in the default library.
+    jetcarp_store::install();
     let mut app = false;
     let (mut port, mut token) = (None, None);
     let mut args = std::env::args().skip(1);

@@ -1,4 +1,5 @@
-//! Media for ant runs, chosen by what the run did (see [`crate::media`] for files and storage):
+//! Media for ant runs, chosen by what the run did (see [`crate::media`] for files and
+//! storage):
 //!
 //! - **Build-up** (mode `seed`, every outcome): the run from step 0 on a dead-edged grid that
 //!   just holds every cell the ant reaches (a scene, so the app replays it too), about 150
@@ -10,16 +11,16 @@
 //!   after the onset that the window sees only highway, so the frame after the last is the first
 //!   pixel for pixel (checked; `seamless` says so).
 
-use super::plane::{Ant, Compiled, Field, Lattice, step};
-use super::run::{Outcome, Start};
-use super::search::parse_rule;
-use crate::library::AntRow;
-use crate::media::{
+use crate::AntRow;
+use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
+use jetcarp_core::ants::run::{Outcome, Start};
+use jetcarp_core::ants::search::parse_rule;
+use jetcarp_core::media::{
     Animation, EMPTY_BOX, MediaMode, MediaOptions, apply_style, bbox_union, draw, fit_scale, grow,
     pixels,
 };
-use crate::topology::{Boundary, SizeSpec, Topology};
-use crate::world::{Agent, CaSpec, Command, Scene, SeedSpec, World};
+use jetcarp_core::topology::{Boundary, SizeSpec, Topology};
+use jetcarp_core::world::{Agent, CaSpec, Command, Scene, SeedSpec, World};
 
 /// The longest build-up shown.
 pub const BUILD_MAX_STEPS: u64 = 2_000_000;
@@ -50,11 +51,11 @@ fn grid_for(
     row: &AntRow,
     b: [i32; 4],
     m: i32,
-) -> Result<(crate::topology::TilingSpec, i32, i32), String> {
+) -> Result<(jetcarp_core::topology::TilingSpec, i32, i32), String> {
     let h = (b[3] - b[1] + 1 + 2 * m) as u32;
     let mut w = (b[2] - b[0] + 1 + 2 * m) as u32 + h;
     for _ in 0..4 {
-        let mut spec = crate::pattern::tiling_identity(&row.tiling);
+        let mut spec = jetcarp_core::pattern::tiling_identity(&row.tiling);
         spec.size = Some(SizeSpec::Rect { w, h });
         spec.boundary = Boundary::Dead;
         let topo = Topology::build(&spec)?;
@@ -96,7 +97,7 @@ pub const SCENE_PALETTE: &str = "Prism";
 /// steps, the ant at the start facing slot 0, the soup (if any) as cells, and `steps_per_gen`
 /// ant steps per generation, in [`SCENE_PALETTE`] ([`render::recolor_scene`] gives it another).
 ///
-/// [`render::recolor_scene`]: crate::render::recolor_scene
+/// [`render::recolor_scene`]: jetcarp_core::render::recolor_scene
 pub fn scene(row: &AntRow, steps: u64, steps_per_gen: u32) -> Result<Scene, String> {
     let (_, _, _, b) = replay(row, steps)?;
     let (spec, i0, j0) = grid_for(row, b, 3)?;
@@ -146,8 +147,8 @@ pub fn build_scene(row: &AntRow) -> Result<Scene, String> {
 pub fn build_scene_in(row: &AntRow, palette: Option<&str>) -> Result<Scene, String> {
     let mut sc = build_scene(row)?;
     if let Some(p) = palette {
-        crate::render::builtin_palette(p)?;
-        crate::render::recolor_scene(&mut sc, p);
+        jetcarp_core::render::builtin_palette(p)?;
+        jetcarp_core::render::recolor_scene(&mut sc, p);
     }
     Ok(sc)
 }
@@ -231,7 +232,7 @@ pub fn highway_animation(row: &AntRow, o: &MediaOptions) -> Result<Animation, St
             let x = index_in(&topo, ci + i, cj + j, k)?;
             bbox_union(&mut win, &topo.polygon(x), [0.0, 0.0]);
         }
-        let cs = crate::world::cell_size(&topo);
+        let cs = jetcarp_core::world::cell_size(&topo);
         let win = grow(win, st.margin_cells as f64 * cs);
         let (s, px) = fit_scale(
             win[2] - win[0],
@@ -247,49 +248,50 @@ pub fn highway_animation(row: &AntRow, o: &MediaOptions) -> Result<Animation, St
         let (i_hi, j_hi) = (i_lo + g.w as i32 + g.h as i32, j_lo + g.h as i32);
         // Frame t shows the cells moved back by the whole lattice steps of t·d/p, and the
         // window moved by the fractional rest, so frame p is frame 0 bit for bit.
-        let mut draw_now = |f: &Field, a: &Ant, t: u64| -> Result<crate::render::Image, String> {
-            let num = [d[0] as i64 * t as i64, d[1] as i64 * t as i64];
-            let l = [num[0].div_euclid(p as i64), num[1].div_euclid(p as i64)];
-            let r = [
-                (num[0] - l[0] * p as i64) as f64 / p as f64,
-                (num[1] - l[1] * p as i64) as f64 / p as f64,
-            ];
-            let (li, lj) = (l[0] as i32, l[1] as i32);
-            let mut cells: Vec<[u32; 2]> = Vec::new();
-            for j in j_lo..j_hi {
-                for i in i_lo..i_hi {
-                    for k in 0..lat.ntypes as u8 {
-                        let c = f.get(a0.i + i + li, a0.j + j + lj, k);
-                        if c != 0
-                            && let Some(x) = g.resolve(ci + i, cj + j, k as u32)
-                        {
-                            cells.push([x as u32, c as u32]);
+        let mut draw_now =
+            |f: &Field, a: &Ant, t: u64| -> Result<jetcarp_core::render::Image, String> {
+                let num = [d[0] as i64 * t as i64, d[1] as i64 * t as i64];
+                let l = [num[0].div_euclid(p as i64), num[1].div_euclid(p as i64)];
+                let r = [
+                    (num[0] - l[0] * p as i64) as f64 / p as f64,
+                    (num[1] - l[1] * p as i64) as f64 / p as f64,
+                ];
+                let (li, lj) = (l[0] as i32, l[1] as i32);
+                let mut cells: Vec<[u32; 2]> = Vec::new();
+                for j in j_lo..j_hi {
+                    for i in i_lo..i_hi {
+                        for k in 0..lat.ntypes as u8 {
+                            let c = f.get(a0.i + i + li, a0.j + j + lj, k);
+                            if c != 0
+                                && let Some(x) = g.resolve(ci + i, cj + j, k as u32)
+                            {
+                                cells.push([x as u32, c as u32]);
+                            }
                         }
                     }
                 }
-            }
-            canvas.apply(Command::Clear { id: cid })?;
-            canvas.apply(Command::SetCells { id: cid, cells })?;
-            canvas.cas[0].agents = g
-                .resolve(ci + a.i - a0.i - li, cj + a.j - a0.j - lj, a.k as u32)
-                .map(|x| {
-                    vec![Agent {
-                        cell: x as u32,
-                        heading: a.h as u16,
-                        state: a.q,
-                    }]
-                })
-                .unwrap_or_default();
-            let off = lat.world_f(r);
-            Ok(draw(
-                &canvas,
-                st,
-                [win[0] + off[0], win[1] + off[1]],
-                s,
-                pw,
-                ph,
-            ))
-        };
+                canvas.apply(Command::Clear { id: cid })?;
+                canvas.apply(Command::SetCells { id: cid, cells })?;
+                canvas.cas[0].agents = g
+                    .resolve(ci + a.i - a0.i - li, cj + a.j - a0.j - lj, a.k as u32)
+                    .map(|x| {
+                        vec![Agent {
+                            cell: x as u32,
+                            heading: a.h as u16,
+                            state: a.q,
+                        }]
+                    })
+                    .unwrap_or_default();
+                let off = lat.world_f(r);
+                Ok(draw(
+                    &canvas,
+                    st,
+                    [win[0] + off[0], win[1] + off[1]],
+                    s,
+                    pw,
+                    ph,
+                ))
+            };
         let mut frames = Vec::new();
         let mut gens = Vec::new();
         for t in 0..p {

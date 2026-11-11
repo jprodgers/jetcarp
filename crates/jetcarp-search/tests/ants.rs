@@ -6,13 +6,13 @@
 use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
 use jetcarp_core::ants::run::{Limits, Outcome, Start};
 use jetcarp_core::ants::search::{Strings, Tables, parse_rule};
-use jetcarp_core::library::{AntQuery, AntRow, Library};
 use jetcarp_core::pattern::tiling_list;
 use jetcarp_core::topology::{Boundary, TilingSpec};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
 use jetcarp_search::ants::{AntProgress, AntSpec, Soups, rules_for, run_one, start, status};
 use jetcarp_search::jobs::ants::AntsRun;
 use jetcarp_search::jobs::{Budget, RunOptions, Runner};
+use jetcarp_store::{AntQuery, AntRow, Library};
 
 /// Run (or resume) an ant search here on the job runner: on `threads` threads (0: all), `batch`
 /// runs per batch (0: adapt), stopping (paused) after `limit` runs in this session.
@@ -464,7 +464,7 @@ fn stored_rows_curate_and_keep_final_results() {
     let u = lib
         .update_ant(
             &got.id,
-            &jetcarp_core::library::AntUpdate {
+            &jetcarp_store::AntUpdate {
                 name: Some("Langton's highway".into()),
                 rating: Some(5),
                 ..Default::default()
@@ -485,7 +485,8 @@ fn stored_rows_curate_and_keep_final_results() {
 /// replays the run from step 0 as a scene; a symmetric rule has only the build-up.
 #[test]
 fn ant_media_by_outcome() {
-    use jetcarp_core::media::{self, MediaMode, MediaOptions, MediaTarget};
+    use jetcarp_core::media::{MediaMode, MediaOptions};
+    use jetcarp_store::media::{self, MediaTarget};
     let lib = temp_lib("media");
     let mut rows = Vec::new();
     for (rule, t, steps) in [
@@ -506,7 +507,7 @@ fn ant_media_by_outcome() {
     lib.ants_flush(0, &rows, None, None).unwrap();
     let o = MediaOptions::default();
     for r in &rows[..2] {
-        let a = jetcarp_core::ants::media::highway_animation(r, &o).unwrap();
+        let a = jetcarp_store::media::ants::highway_animation(r, &o).unwrap();
         assert!(a.seamless, "{}: the loop closes", r.rule);
         assert_eq!(a.frames.len() as u64, r.period.unwrap().min(240));
         assert_eq!(a.window_kind, "moving");
@@ -532,9 +533,9 @@ fn ant_media_by_outcome() {
         "{} frames",
         anim.frames
     );
-    let sc = jetcarp_core::ants::media::build_scene(&rows[0]).unwrap();
+    let sc = jetcarp_store::media::ants::build_scene(&rows[0]).unwrap();
     let mut w = World::from_scene(&sc).unwrap();
-    let gens = jetcarp_core::ants::media::build_gens(&rows[0]);
+    let gens = jetcarp_store::media::ants::build_gens(&rows[0]);
     w.apply(Command::Step { gens }).unwrap();
     let per = sc.cas[0].steps_per_gen as u64;
     assert!(gens * per >= 9977 + 4 * 104, "runs past the onset");
@@ -573,8 +574,9 @@ fn ant_media_by_outcome() {
 /// its colours.
 #[test]
 fn ant_scenes_and_media_take_a_palette() {
-    use jetcarp_core::ants::media::{SCENE_PALETTE, build_scene, build_scene_in};
-    use jetcarp_core::media::{self, MediaOptions, MediaStyle, MediaTarget};
+    use jetcarp_core::media::{MediaOptions, MediaStyle};
+    use jetcarp_store::media::ants::{SCENE_PALETTE, build_scene, build_scene_in};
+    use jetcarp_store::media::{self, MediaTarget};
     let lib = temp_lib("palette");
     let r = run_one(
         &parse_rule("RL").unwrap(),

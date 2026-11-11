@@ -324,6 +324,8 @@ fn without_json(cmd: &Cmd) -> Option<&'static str> {
 }
 
 fn main() -> Result<()> {
+    // A PastePattern naming a library pattern finds it in the default library.
+    jetcarp_store::install();
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
@@ -502,8 +504,7 @@ fn run() -> Result<()> {
                 }),
             ..
         } => {
-            let cx =
-                platform::ctx().with_library(library.map(jetcarp_core::library::Library::file_for));
+            let cx = platform::ctx().with_library(library.map(jetcarp_store::Library::file_for));
             let a = quickstart::PublishIn {
                 job,
                 out: out.map(|p| p.display().to_string()),

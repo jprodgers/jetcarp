@@ -1,6 +1,5 @@
 //! Phase 4: the SQLite catalog, rule-free pattern identity, and rule ranges.
 
-use jetcarp_core::library::{self, AddOutcome, Library, Query, Sighting};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::{
     self, DiscoveredBy, PatternClass, PatternRecord, Provenance, RuleRange, record_from_object,
@@ -10,6 +9,7 @@ use jetcarp_core::rules::Rule;
 use jetcarp_core::*;
 use jetcarp_search::bounded::{SearchSpec, search};
 use jetcarp_search::jobs::search::{SearchJobSpec, SearchResult, SearchRun};
+use jetcarp_store::{AddOutcome, Library, Query, Sighting};
 use std::collections::HashSet;
 
 fn temp_lib(name: &str) -> Library {
@@ -397,7 +397,7 @@ fn catalog_store_search_jobs_and_sightings() {
     assert!(n < out.records.len(), "{n} vs {}", out.records.len());
     assert!(!st.new_rules.is_empty());
     let job = lib.job(jid).unwrap();
-    assert_eq!(job.status, library::JobStatus::Done);
+    assert_eq!(job.status, jetcarp_store::JobStatus::Done);
     assert_eq!(job.kind, "search");
     let block = lib
         .query(&Query {
@@ -437,7 +437,10 @@ fn catalog_store_search_jobs_and_sightings() {
     .unwrap();
     assert_eq!(lib.get(&block.id).unwrap().seen, block.seen + 5);
     let info = lib.info().unwrap();
-    assert_eq!(info.schema_version, library::store::MIGRATIONS.len() as i64);
+    assert_eq!(
+        info.schema_version,
+        jetcarp_store::library::MIGRATIONS.len() as i64
+    );
     assert_eq!(info.patterns as usize, n);
     // A second handle (as another process would) sees the same data.
     let other = Library::open(lib.path());

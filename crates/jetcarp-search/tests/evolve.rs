@@ -3,10 +3,10 @@
 //! tested in jetcarp-core.)
 
 use jetcarp_core::evolve::{EvolveSpec, evolve};
-use jetcarp_core::library::Library;
 use jetcarp_core::pattern::PatternClass;
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_search::evolve::{FoundMover, glider_records};
+use jetcarp_store::Library;
 
 /// Run (or resume) an evolve job here on the job runner, `on_generation` seeing each generation;
 /// with the search's result when it finished.
@@ -143,9 +143,9 @@ fn hat_search_finds_a_mover() {
 
 #[test]
 fn evolve_job_resumed_equals_uninterrupted() {
-    use jetcarp_core::library::JobStatus;
     use jetcarp_search::jobs::evolve::{self as job, EvolveJobSpec};
     use jetcarp_search::jobs::{Budget, RunOptions, Stopped};
+    use jetcarp_store::JobStatus;
     use std::sync::{Arc, Mutex};
     let spec = small("square", 48, 10, 5);
     let whole = evolve(&spec, &|_| true).unwrap();

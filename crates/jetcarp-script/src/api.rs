@@ -1214,7 +1214,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
 
 /// A pattern catalog (SQLite file), as scripts see it.
 #[derive(Clone)]
-pub struct LibHandle(pub jetcarp_core::library::Library);
+pub struct LibHandle(pub jetcarp_store::Library);
 
 fn lib_records(v: Vec<jetcarp_core::pattern::PatternRecord>) -> Array {
     v.iter()
@@ -1229,8 +1229,8 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
         UpdateIn,
     };
     use jetcarp_api::ops::quickstart::{AddIn, ListIn, QuickstartAdd, QuickstartList};
-    use jetcarp_core::library::{Library, Query, Update};
     use jetcarp_core::pattern::DiscoveredBy;
+    use jetcarp_store::{Library, Query, Update};
     e.register_type_with_name::<LibHandle>("Library");
     let c = ctx.clone();
     e.register_fn("library", move || {

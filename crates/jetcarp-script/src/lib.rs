@@ -629,7 +629,7 @@ impl Ctx {
     /// output root and the allowed folders, relative paths from the newest output folder, reads
     /// restricted when the run says so), its output root, its world-size limit, and the catalog
     /// `lib` (default: the run's `library` option, else the default catalog).
-    pub fn api(&self, lib: Option<jetcarp_core::library::Library>) -> jetcarp_api::Ctx {
+    pub fn api(&self, lib: Option<jetcarp_store::Library>) -> jetcarp_api::Ctx {
         let roots = self.guard.lock().unwrap().roots.clone();
         let mut limits = jetcarp_api::Limits::NONE;
         if let Some(m) = self.opts.limits.max_cells {

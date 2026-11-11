@@ -15,7 +15,7 @@
 //! and a step-based run writes only while the owner is still its own
 //! (`Library::job_step`).
 
-use jetcarp_core::library::Library;
+use jetcarp_store::Library;
 use std::fs::{File, OpenOptions, TryLockError};
 use std::path::PathBuf;
 

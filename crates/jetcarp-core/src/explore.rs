@@ -7,9 +7,10 @@
 //!   implements.
 //! - [`features`], [`space`], [`cand`], [`seeds`]: what a run measures, the search space, one
 //!   candidate, and its starting pattern.
-//! - [`atlas`]: reading the atlas Quick Start browses (the search writes it).
+//!
+//! The atlas Quick Start browses is written by the search and read by the store
+//! (`jetcarp_store::atlas`).
 
-pub mod atlas;
 pub mod batch;
 pub mod cand;
 pub mod features;

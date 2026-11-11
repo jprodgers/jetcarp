@@ -15,7 +15,7 @@
 //! | Table | One row per | Key columns |
 //! | --- | --- | --- |
 //! | `rules` | rule as run (notation, neighbourhood, steps per generation) | `id`, `notation`, `neighborhood`, `steps_per_gen`, `family` (`lifelike`, `generations`, `wireworld`, `table`, `priority`, ...), `states`, `birth`/`survive` bitmasks (B/S and Generations) |
-//! | `patterns` | rule-free pattern ([`super::range::identity`]) | `id`, `model`, `tiling` (identity JSON), `tiling_id` (family or catalog id), `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
+//! | `patterns` | rule-free pattern (`jetcarp_core::pattern::range::identity`) | `id`, `model`, `tiling` (identity JSON), `tiling_id` (family or catalog id), `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
 //! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `first_seen` |
 //! | `sightings` | (pattern, rule, job) | `count` (copies), `soups` (soups it appeared in), `first_seen`, `last_seen`; job 0 is "manual" (adds outside a job) |
 //! | `jobs` | search or hunt | `kind`, `spec` (JSON), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB), `owner` (`host:pid` running it) and `heartbeat` (seconds since 1970; [`jobs`]) |
@@ -29,19 +29,20 @@
 //! The tables `settings` and `score_models` of the old stage 1 settings search (migration 3) are
 //! still created, but nothing reads or writes them; the schema v1 of the data layer drops them.
 //!
-//! "Every pattern that works in rule R" is [`Query::works_in`](super::Query): the range test on
+//! "Every pattern that works in rule R" is [`Query::works_in`](Query): the range test on
 //! the bitmasks (`birth_min & ~B = 0`, `B & ~birth_max = 0`, the same for S, and the state count
 //! between `states_min` and `states_max`) or an explicit `pattern_rules` row.
 
-use super::{Query, Update};
-use crate::pattern::movers::MoverRecord;
-use crate::pattern::range::{self, RuleRange, bs_parts, rule_family};
-use crate::pattern::site::Site;
-use crate::pattern::verify::{Verification, default_periods, verify};
-use crate::pattern::{CurationState, PatternClass, PatternRecord, Provenance, now_utc, tiling_key};
-use crate::rules::Rule;
-use crate::topology::{Nb, TilingSpec};
-use crate::world::Scene;
+use jetcarp_core::pattern::movers::MoverRecord;
+use jetcarp_core::pattern::range::{self, RuleRange, bs_parts, rule_family};
+use jetcarp_core::pattern::site::Site;
+use jetcarp_core::pattern::verify::{Verification, default_periods, verify};
+use jetcarp_core::pattern::{
+    CurationState, PatternClass, PatternRecord, Provenance, now_utc, tiling_key,
+};
+use jetcarp_core::rules::Rule;
+use jetcarp_core::topology::{Nb, TilingSpec};
+use jetcarp_core::world::Scene;
 use rayon::prelude::*;
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -55,11 +56,13 @@ mod ants;
 mod census;
 mod dashboard;
 mod jobs;
+mod query;
 pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_score};
 mod ratings;
 mod unstored;
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
+pub use query::{Query, Update, sort_records};
 pub use ratings::RatingRow;
 pub use unstored::{PruneReport, UnstoredFlush, UnstoredRow};
 
@@ -445,7 +448,7 @@ impl QuickStartRow {
             source_id: None,
             title: scene.name.clone(),
             description: scene.description.clone(),
-            grid: crate::pattern::tiling_display_name(&scene.tiling),
+            grid: jetcarp_core::pattern::tiling_display_name(&scene.tiling),
             rule,
             rule_family: family,
             behaviour: String::new(),
@@ -562,7 +565,7 @@ struct Body {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mover: Option<MoverRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    gun: Option<crate::pattern::GunInfo>,
+    gun: Option<jetcarp_core::pattern::GunInfo>,
     provenance: Provenance,
 }
 
@@ -774,8 +777,8 @@ fn rule_id_in(c: &Connection, notation: &str, nb: Nb, spg: u32) -> Result<i64, S
         return Ok(id);
     }
     let states = match rule.field_kind() {
-        crate::rules::FieldKind::Binary => 2,
-        crate::rules::FieldKind::Multi(n) => n as i64,
+        jetcarp_core::rules::FieldKind::Binary => 2,
+        jetcarp_core::rules::FieldKind::Multi(n) => n as i64,
         _ => 0,
     };
     let bs = bs_parts(&rule);
@@ -841,7 +844,7 @@ fn sightings_in(tx: &Transaction, job: i64, s: &[Sighting], now: &str) -> Result
             })
             .map_err(|x| format!("catalog: sighting of unknown pattern {id}: {x}"))?;
         let seen = seen as u64 + n;
-        let score = crate::pattern::interest_score(
+        let score = jetcarp_core::pattern::interest_score(
             parse_name::<PatternClass>(&class)?,
             period as u64,
             cells as usize,
@@ -995,12 +998,12 @@ type Guard<'a> = MutexGuard<'a, Option<Connection>>;
 
 impl Library {
     /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/catalog.sqlite`
-    /// ([`crate::paths::data_dir`]).
+    /// ([`jetcarp_core::paths::data_dir`]).
     pub fn default_path() -> PathBuf {
         if let Some(p) = std::env::var_os("JETCARP_LIBRARY").filter(|p| !p.is_empty()) {
             return Library::file_for(PathBuf::from(p));
         }
-        crate::paths::data_dir().join(FILE)
+        jetcarp_core::paths::data_dir().join(FILE)
     }
 
     /// The catalog file for a path: itself if it names a `.sqlite`/`.db` file, else
@@ -1924,7 +1927,8 @@ fn where_clause(q: &Query) -> Result<(String, Vec<Sql>), String> {
     if let Some(t) = &q.tiling {
         let t = t.trim().to_ascii_lowercase();
         let qc = t.trim_start_matches("catalog:").to_string();
-        if crate::families::family(&t).is_some() || crate::catalog::get(&qc).is_some() {
+        if jetcarp_core::families::family(&t).is_some() || jetcarp_core::catalog::get(&qc).is_some()
+        {
             let a = arg(&mut v, Sql::Text(qc));
             w.push(format!("p.tiling_id = {a} COLLATE NOCASE"));
         } else {

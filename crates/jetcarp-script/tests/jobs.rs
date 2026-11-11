@@ -1,8 +1,8 @@
 //! Jobs from scripts: labelled jobs found again (a rerun starts nothing new), censuses as jobs,
 //! and rule neighbours.
 
-use jetcarp_core::library::Library;
 use jetcarp_script::{RunOptions, Screen, Summary};
+use jetcarp_store::Library;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

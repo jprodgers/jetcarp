@@ -15,10 +15,10 @@ use super::{
     thread_count,
 };
 use crate::dashboard::{JobSummary, digits};
-use jetcarp_core::library::store::JobRow;
-use jetcarp_core::library::{AddOutcome, JobStatus, Library, prepare};
 use jetcarp_core::pattern::collide::{Collected, CollideOutput, CollideSpec, Collision};
 use jetcarp_core::pattern::{PatternRecord, now_utc};
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{AddOutcome, JobStatus, Library, prepare};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

@@ -1,13 +1,13 @@
 //! Website export (Phase 4 catalog deliverable 10): what is public, the manifest, and
 //! incremental updates.
 
-use jetcarp_core::library::{Library, QuickStartRow, Update};
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::{
     self, CurationState, DiscoveredBy, PatternClass, PatternRecord, Provenance, record_from_object,
 };
-use jetcarp_core::website::{self, ExportFilter, ExportOptions, Manifest};
 use jetcarp_core::*;
+use jetcarp_store::website::{self, ExportFilter, ExportOptions, Manifest};
+use jetcarp_store::{Library, QuickStartRow, Update};
 use std::path::PathBuf;
 
 fn temp(name: &str) -> (Library, PathBuf) {
@@ -223,8 +223,8 @@ fn filters_and_frames() {
 fn ants_are_exported_with_their_media() {
     use jetcarp_core::ants::run::{Limits, Start};
     use jetcarp_core::ants::search::parse_rule;
-    use jetcarp_core::library::AntUpdate;
     use jetcarp_search::ants::run_one;
+    use jetcarp_store::AntUpdate;
     let (lib, site) = temp("ants");
     let lim = |steps: u64| Limits {
         steps,

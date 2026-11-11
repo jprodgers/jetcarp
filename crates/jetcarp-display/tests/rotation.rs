@@ -1,10 +1,10 @@
 //! Rotations: the player's decisions from made-up observations, then real worlds running through
 //! it (the Wolfram series to the bottom of the screen, the settle watch).
 
-use jetcarp_core::quickstart::all_entries;
 use jetcarp_core::{Command, World};
 use jetcarp_display::profiles::{self, Profile, Show};
 use jetcarp_display::rotation::*;
+use jetcarp_store::quickstart::all_entries;
 use std::collections::HashSet;
 
 const MONDAY_NOON: Clock = Clock {

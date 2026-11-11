@@ -10,7 +10,7 @@ use jetcarp_search::jobs::{Budget, RunOptions, Runner};
 /// Run (or resume) a census job here on the job runner: `chunk` rules per chunk (0: adapt),
 /// stopping (paused) after `limit` rules in this session.
 fn run_job(
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     job: i64,
     chunk: u64,
     limit: Option<u64>,
@@ -32,7 +32,7 @@ fn run_job(
 
 #[test]
 fn census_jobs_resume_to_the_same_report() {
-    use jetcarp_core::library::{JobStatus, Library};
+    use jetcarp_store::{JobStatus, Library};
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("jetcarp-census-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

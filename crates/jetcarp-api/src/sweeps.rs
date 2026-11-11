@@ -272,7 +272,7 @@ pub fn sweep_folders(root: &Path) -> Vec<PathBuf> {
 pub fn promote_run(
     m: &Manifest,
     row: usize,
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
 ) -> Result<String, String> {
     promote_run_with(m, row, lib, None, None)
 }
@@ -282,7 +282,7 @@ pub fn promote_run(
 pub fn promote_run_with(
     m: &Manifest,
     row: usize,
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     title: Option<&str>,
     note: Option<&str>,
 ) -> Result<String, String> {
@@ -323,7 +323,7 @@ pub fn promote_run_with(
         h = (h ^ b as u64).wrapping_mul(0x100000001b3);
     }
     let id = format!("sweep-{h:016x}");
-    let mut q = jetcarp_core::library::QuickStartRow::for_scene(&id, "sweep", sc);
+    let mut q = jetcarp_store::QuickStartRow::for_scene(&id, "sweep", sc);
     q.source_id = Some(key);
     q.behaviour = r
         .get("row_class")
@@ -397,7 +397,7 @@ pub struct Promoted {
 pub fn promote_folder_run(
     folder: &Path,
     run: &str,
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     title: Option<&str>,
     note: Option<&str>,
 ) -> Result<Promoted, String> {

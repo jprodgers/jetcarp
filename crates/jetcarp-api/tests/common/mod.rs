@@ -32,11 +32,11 @@ pub fn keys(v: &serde_json::Value) -> Vec<String> {
 
 /// A catalog in `dir` holding Life's glider and blinker (found by the object finder, as a
 /// script's `lib.catalog(w)` stores them) and Langton's ant's highway, and a context on it.
-pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcarp_api::Ctx) {
-    use jetcarp_core::library::Library;
+pub fn catalog(dir: &std::path::Path) -> (jetcarp_store::Library, jetcarp_api::Ctx) {
     use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
     use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
     use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
+    use jetcarp_store::Library;
     let mut w = World::new(TilingSpec::rect("square", 40, 40, Boundary::Wrap), 1).unwrap();
     let g = w.topo.lattice().unwrap().clone();
     let mut cells = place_rows(&g, ".o./..o/ooo", 10, 10);
@@ -79,6 +79,6 @@ pub fn catalog(dir: &std::path::Path) -> (jetcarp_core::library::Library, jetcar
 }
 
 /// The id of the one ant run in [`catalog`].
-pub fn ant_id(lib: &jetcarp_core::library::Library) -> String {
+pub fn ant_id(lib: &jetcarp_store::Library) -> String {
     lib.ants(&Default::default()).unwrap()[0].id.clone()
 }

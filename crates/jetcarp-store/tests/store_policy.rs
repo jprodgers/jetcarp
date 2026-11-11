@@ -1,12 +1,12 @@
 //! The hunt's storage policy (large one-off still lifes and oscillators kept as `unstored`
 //! rows), compressed pattern bodies, and pruning a catalog to the policy.
 
-use jetcarp_core::library::{Library, Query};
 use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::topology::TilingSpec;
 use jetcarp_search::hunt::{self, HuntSpec, StorePolicy};
 use jetcarp_search::jobs::hunt::HuntRun;
 use jetcarp_search::jobs::{Budget, RunOptions, Runner};
+use jetcarp_store::{Library, Query};
 use std::collections::BTreeSet;
 
 fn temp_lib(name: &str) -> Library {

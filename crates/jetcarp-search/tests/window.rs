@@ -46,7 +46,7 @@ fn window_runs_resume_exactly() {
     let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("jetcarp-window-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
-    let lib = jetcarp_core::library::Library::open(&d);
+    let lib = jetcarp_store::Library::open(&d);
     let js = MoverJobSpec {
         track: spec.clone(),
         window: opts.clone(),

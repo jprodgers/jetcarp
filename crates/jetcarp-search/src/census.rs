@@ -36,23 +36,18 @@ impl CensusProgress {
 }
 
 /// Store a census as a job (status `paused` until a runner starts it).
-pub fn start_job(lib: &jetcarp_core::library::Library, spec: &CensusSpec) -> Result<i64, String> {
+pub fn start_job(lib: &jetcarp_store::Library, spec: &CensusSpec) -> Result<i64, String> {
     check_spec(spec)?;
     let v = serde_json::to_value(spec).map_err(|e| e.to_string())?;
     let job = lib.create_job("census", &v)?;
-    lib.update_job(
-        job,
-        Some(jetcarp_core::library::JobStatus::Paused),
-        None,
-        None,
-    )?;
+    lib.update_job(job, Some(jetcarp_store::JobStatus::Paused), None, None)?;
     Ok(job)
 }
 
 fn census_job(
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     job: i64,
-) -> Result<(jetcarp_core::library::store::JobRow, CensusSpec), String> {
+) -> Result<(jetcarp_store::library::JobRow, CensusSpec), String> {
     let j = lib.job(job)?;
     if j.kind != "census" {
         return Err(format!("job {job} is a {} job, not a census", j.kind));
@@ -64,10 +59,10 @@ fn census_job(
 
 /// A census job's spec and saved progress.
 pub fn job_status(
-    lib: &jetcarp_core::library::Library,
+    lib: &jetcarp_store::Library,
     job: i64,
 ) -> Result<(CensusSpec, CensusProgress), String> {
-    use jetcarp_core::library::JobStatus;
+    use jetcarp_store::JobStatus;
     let (j, spec) = census_job(lib, job)?;
     let mut p: CensusProgress = serde_json::from_value(j.progress.clone()).unwrap_or_default();
     p.job = job;
@@ -83,15 +78,10 @@ pub fn job_status(
 }
 
 /// Ask a running census job (in any process) to pause at its next chunk.
-pub fn request_stop(lib: &jetcarp_core::library::Library, job: i64) -> Result<(), String> {
+pub fn request_stop(lib: &jetcarp_store::Library, job: i64) -> Result<(), String> {
     let (j, _) = census_job(lib, job)?;
-    if j.status == jetcarp_core::library::JobStatus::Running {
-        lib.update_job(
-            job,
-            Some(jetcarp_core::library::JobStatus::Paused),
-            None,
-            None,
-        )?;
+    if j.status == jetcarp_store::JobStatus::Running {
+        lib.update_job(job, Some(jetcarp_store::JobStatus::Paused), None, None)?;
     }
     Ok(())
 }
@@ -229,7 +219,7 @@ impl CensusJob {
 }
 
 /// The report of a census job (all its rules, once done; the rules so far otherwise).
-pub fn job_report(lib: &jetcarp_core::library::Library, job: i64) -> Result<CensusReport, String> {
+pub fn job_report(lib: &jetcarp_store::Library, job: i64) -> Result<CensusReport, String> {
     let (_, spec) = census_job(lib, job)?;
     let topo = Topology::build(&spec.tiling)?;
     let rules: Vec<RuleSummary> = lib

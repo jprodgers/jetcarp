@@ -142,10 +142,10 @@ fn api_lists_describes_and_calls_operations() {
 
 /// A catalog holding Life's glider, in `dir`.
 fn glider_catalog(dir: &std::path::Path) -> std::path::PathBuf {
-    use jetcarp_core::library::Library;
     use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
     use jetcarp_core::pattern::{DiscoveredBy, Provenance, record_from_object};
     use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
+    use jetcarp_store::Library;
     let mut w = World::new(TilingSpec::rect("square", 30, 30, Boundary::Wrap), 1).unwrap();
     let g = w.topo.lattice().unwrap().clone();
     w.apply(Command::AddCa {

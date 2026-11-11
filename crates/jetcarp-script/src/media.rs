@@ -9,7 +9,7 @@ use crate::sim::Shared;
 use jetcarp_api::args::{check_keys, get_bool, get_str, get_u64};
 use jetcarp_api::op::{self, Op, Quiet};
 use jetcarp_api::ops::media::{MediaRender, MediaRenderIn, SiteExport, SiteIn};
-use jetcarp_core::library::Library;
+use jetcarp_store::Library;
 use rhai::{Dynamic, Engine, EvalAltResult, Map};
 use serde_json::{Value, json};
 use std::sync::Arc;

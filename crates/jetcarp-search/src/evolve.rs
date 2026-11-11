@@ -6,12 +6,12 @@
 
 use jetcarp_core::evolve::arena::{Arena, is_aperiodic};
 use jetcarp_core::evolve::{Champion, EvolveReport};
-use jetcarp_core::library::prepare;
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects};
 use jetcarp_core::pattern::movers::{MoverReport, TrackSpec, mover_record, track};
 use jetcarp_core::pattern::split::records_from_object;
 use jetcarp_core::pattern::{DiscoveredBy, PatternRecord, Provenance, now_utc};
 use jetcarp_core::world::{CaSpec, Command, SeedSpec, World};
+use jetcarp_store::prepare;
 use serde::{Deserialize, Serialize};
 
 /// One verified glider's fate.
@@ -64,7 +64,7 @@ pub fn not_cataloged(rule: &str, e: &str) -> FoundMover {
 /// Every verified glider of a search classified (an exact spaceship on a lattice, a mover verified
 /// to a distance on an aperiodic patch, or neither), with the records to store for it, in order
 /// (`added` left empty). With `ready`, the records are made ready to store (verified, their rule
-/// ranges computed: [`jetcarp_core::library::prepare`]); a glider whose record cannot be is
+/// ranges computed: [`jetcarp_store::prepare`]); a glider whose record cannot be is
 /// reported as not cataloged, with the records before it.
 pub fn glider_records(
     report: &EvolveReport,

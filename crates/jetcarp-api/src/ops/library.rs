@@ -12,14 +12,14 @@ use crate::args;
 use crate::ctx::Ctx;
 use crate::error::{ApiError, ErrorKind};
 use crate::op::{NoInput, Op, Progress, Report};
-use jetcarp_core::library::store::CatalogInfo;
-use jetcarp_core::library::{
-    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, Query, SightingRow, Update,
-};
 use jetcarp_core::pattern::{
     self, CurationState, DiscoveredBy, PasteAt, PatternClass, PatternRecord,
 };
 use jetcarp_core::{Boundary, CaSpec, Command, Nb, Scene, SeedSpec, VERSION, World};
+use jetcarp_store::library::CatalogInfo;
+use jetcarp_store::{
+    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, Query, SightingRow, Update,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

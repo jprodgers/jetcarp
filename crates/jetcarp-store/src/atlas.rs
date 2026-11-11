@@ -3,8 +3,8 @@
 //! state so a preview can start where the action is. This is the reading half (finding the
 //! file and loading entries); choosing and writing entries is `jetcarp_search::explore::atlas`.
 
-use crate::world::{Scene, World};
 use flate2::read::DeflateDecoder;
+use jetcarp_core::world::{Scene, World};
 use rusqlite::{Connection, params};
 use std::ffi::OsStr;
 use std::io::Read;
@@ -58,11 +58,11 @@ pub struct AtlasMeta {
 }
 
 /// The file in this order: `$JETCARP_ATLAS` (when set to an existing file),
-/// `<data>/explore/atlas.sqlite` ([`crate::paths::explore_dir`]), then `scenes/atlas.sqlite` found
-/// walking up from the executable (a copy shipped beside it).
+/// `<data>/explore/atlas.sqlite` ([`jetcarp_core::paths::explore_dir`]), then `scenes/atlas.sqlite`
+/// found walking up from the executable (a copy shipped beside it).
 pub fn locate() -> Option<PathBuf> {
     let env = std::env::var_os("JETCARP_ATLAS");
-    let explore = crate::paths::explore_dir();
+    let explore = jetcarp_core::paths::explore_dir();
     let exe = std::env::current_exe().ok();
     locate_from(env.as_deref(), Some(&explore), exe.as_deref())
 }
@@ -226,10 +226,12 @@ pub fn load(path: &Path) -> Result<Vec<AtlasEntry>, String> {
                 rule: r.get(6)?,
                 seed: r.get(7)?,
                 score: r.get(8)?,
-                preview: serde_json::from_str(&prev)
-                    .unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
-                full: serde_json::from_str(&full)
-                    .unwrap_or_else(|_| Scene::new(crate::topology::TilingSpec::new("square"))),
+                preview: serde_json::from_str(&prev).unwrap_or_else(|_| {
+                    Scene::new(jetcarp_core::topology::TilingSpec::new("square"))
+                }),
+                full: serde_json::from_str(&full).unwrap_or_else(|_| {
+                    Scene::new(jetcarp_core::topology::TilingSpec::new("square"))
+                }),
                 mature_gen: r.get::<_, i64>(11)? as u32,
                 mature: r.get(12)?,
             })

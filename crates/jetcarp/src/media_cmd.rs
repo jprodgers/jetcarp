@@ -8,7 +8,7 @@ use jetcarp_api::op::{Op, Quiet, Report};
 use jetcarp_api::ops::media::{
     MediaListIn, MediaListOp, MediaRender, MediaRenderIn, SiteExport, SiteIn,
 };
-use jetcarp_core::library::Library;
+use jetcarp_store::Library;
 use std::path::{Path, PathBuf};
 
 #[derive(clap::Args)]

@@ -248,7 +248,7 @@ fn list_in(f: Filters) -> ListIn {
 }
 
 pub fn run(a: JobsArgs, json: bool) -> Result<()> {
-    let lib = a.library.map(jetcarp_core::library::Library::file_for);
+    let lib = a.library.map(jetcarp_store::Library::file_for);
     let cx = crate::platform::ctx().with_library(lib);
     match a.cmd {
         JobsCmd::List(f) => show(&JobsList::run(&cx, list_in(f), &Quiet)?, json),

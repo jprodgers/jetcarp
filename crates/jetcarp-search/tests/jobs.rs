@@ -5,7 +5,6 @@
 //! and the bounded-search and collision strategies storing what their direct calls store.
 
 use jetcarp_core::census::{self, CensusSpec, all_bs_rules};
-use jetcarp_core::library::{JobStatus, Library, Query};
 use jetcarp_core::pattern::PatternRecord;
 use jetcarp_core::topology::{SizeSpec, TilingSpec};
 use jetcarp_search::ants::{self as antjob, AntSpec};
@@ -14,6 +13,7 @@ use jetcarp_search::hunt::{self, HuntProgress, HuntSpec};
 use jetcarp_search::jobs::{
     self, Budget, JobSpec, Outcome, RunOptions, Runner, Stopped, hunt::HuntRun, registry,
 };
+use jetcarp_store::{JobStatus, Library, Query};
 use std::time::{Duration, Instant};
 
 fn temp_lib(name: &str) -> Library {
@@ -324,7 +324,7 @@ fn ant_searches_resumed_on_the_runner_equal_uninterrupted() {
         assert_eq!(out.stopped, Some(Stopped::Budget));
     }
     let rows = |l: &Library, j: i64| {
-        let q = jetcarp_core::library::AntQuery {
+        let q = jetcarp_store::AntQuery {
             job: Some(j),
             ..Default::default()
         };

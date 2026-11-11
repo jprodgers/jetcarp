@@ -4,12 +4,12 @@
 //! steps the world with the engine): the same fate, behaviour bin, features, and score. Skipped
 //! (with a note) when no GPU adapter is available.
 
-use jetcarp_core::library::Library;
 use jetcarp_gpu::batch::BatchSim;
 use jetcarp_search::explore::job::try_one;
 use jetcarp_search::explore::store;
 use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner};
+use jetcarp_store::Library;
 use serde_json::json;
 
 #[test]

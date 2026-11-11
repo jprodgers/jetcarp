@@ -417,7 +417,7 @@ impl eframe::App for JetcarpApp {
         // dashboard's, then those the other windows started (when the dashboard never opened).
         self.dash.shutdown(std::time::Duration::from_secs(20));
         crate::window_job::shutdown(
-            &jetcarp_core::library::Library::default_path(),
+            &jetcarp_store::Library::default_path(),
             std::time::Duration::from_secs(20),
         );
     }

@@ -2,7 +2,7 @@
 //! them without the catalog that stores them.
 //!
 //! **Records.** A [`PatternRecord`] is one pattern: its tiling, rule, phases, and provenance.
-//! The pattern library that stores them is the SQLite catalog ([`crate::library::Library`]);
+//! The pattern library that stores them is the SQLite catalog (`jetcarp_store::Library`);
 //! JSON records ([`PatternRecord::to_json`], one file per pattern) remain the exchange format
 //! for its export and import.
 //!

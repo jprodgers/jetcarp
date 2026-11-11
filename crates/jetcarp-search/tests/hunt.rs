@@ -4,7 +4,6 @@
 use jetcarp_core::hunt::bits::{Plan, Universe};
 use jetcarp_core::hunt::separate::{Cache, Census};
 use jetcarp_core::hunt::soup::{Layout, continue_soup, prefix_cpu, run_soup, soup_state};
-use jetcarp_core::library::{JobStatus, Library, Query};
 use jetcarp_core::objects::LCell;
 use jetcarp_core::objects::puffer::Sparse;
 use jetcarp_core::pattern::PatternRecord;
@@ -14,6 +13,7 @@ use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec, Topology};
 use jetcarp_search::hunt::{self, HuntSpec};
 use jetcarp_search::jobs::hunt::HuntRun;
 use jetcarp_search::jobs::{Budget, RunOptions, Runner};
+use jetcarp_store::{JobStatus, Library, Query};
 use std::sync::Arc;
 
 fn temp_lib(name: &str) -> Library {
