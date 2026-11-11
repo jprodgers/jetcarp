@@ -320,19 +320,16 @@ CREATE TABLE media (
 );
 "#;
 
-/// Make the tables of a new library, or check an existing one's version (inside the open
-/// transaction).
-fn create_or_check(c: &mut Connection) -> Result<(), String> {
-    let tx = c
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(e)?;
-    let version: i64 = tx
+/// Is this a library of this schema (`Ok(true)`), a new empty file (`Ok(false)`), or neither
+/// (an error saying why it is refused)?
+fn check(c: &Connection) -> Result<bool, String> {
+    let version: i64 = c
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(e)?;
-    let app: i64 = tx
+    let app: i64 = c
         .query_row("PRAGMA application_id", [], |r| r.get(0))
         .map_err(e)?;
-    let tables: i64 = tx
+    let tables: i64 = c
         .query_row(
             "SELECT count(*) FROM sqlite_master WHERE type = 'table'",
             [],
@@ -350,7 +347,7 @@ fn create_or_check(c: &mut Connection) -> Result<(), String> {
         if version < 1 {
             return Err(format!("the library has no schema version ({version})"));
         }
-        return Ok(());
+        return Ok(true);
     }
     if tables > 0 || version != 0 {
         return Err(format!(
@@ -360,6 +357,22 @@ fn create_or_check(c: &mut Connection) -> Result<(), String> {
              file (the default is <data>/{}) and bring old records in with an importer",
             super::FILE
         ));
+    }
+    Ok(false)
+}
+
+/// Make the tables of a new library, or check an existing one's version.
+fn create_or_check(c: &mut Connection) -> Result<(), String> {
+    // An existing library is only read here (so a read-only file opens); a new one is made in a
+    // write transaction, its state read again inside it in case another process made it first.
+    if check(c)? {
+        return Ok(());
+    }
+    let tx = c
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(e)?;
+    if check(&tx)? {
+        return Ok(());
     }
     tx.execute_batch(SCHEMA).map_err(e)?;
     let now = now_utc();
@@ -404,7 +417,13 @@ pub(super) fn open_db(path: &std::path::Path) -> Result<Connection, String> {
     c.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")
         .map_err(e)?;
     create_or_check(&mut c).map_err(|x| format!("{}: {x}", path.display()))?;
-    check_pins(&mut c).map_err(|x| format!("{}: {x}", path.display()))?;
+    if let Err(x) = check_pins(&mut c) {
+        // A library that cannot be written (a read-only file) still opens for reading; its
+        // stale records cannot be flagged in it, and `library reverify` will say why.
+        if !c.is_readonly(rusqlite::MAIN_DB).unwrap_or(false) {
+            return Err(format!("{}: {x}", path.display()));
+        }
+    }
     Ok(c)
 }
 
