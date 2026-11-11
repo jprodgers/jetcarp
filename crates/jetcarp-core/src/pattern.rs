@@ -304,8 +304,14 @@ pub struct PatternRecord {
     /// The JETCARP version that last verified it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub engine_version: String,
-    /// Its pin differs from the running engine's: the geometry changed under it, so it must be
-    /// verified again (`jetcarp library reverify`) before it can be trusted.
+    /// The semantics version of its rule's family it was last verified under
+    /// ([`crate::semantics`]); empty in a record written before versions existed, which counts
+    /// as [`crate::semantics::FIRST`]. Not part of the id.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub semantics: String,
+    /// Its pin, or its rule family's semantics version, differs from the running engine's: the
+    /// geometry or the rule's meaning changed under it, so it must be verified again
+    /// (`jetcarp library reverify`) before it can be trusted.
     #[serde(default, skip_serializing_if = "is_false")]
     pub needs_reverify: bool,
 }
@@ -1031,8 +1037,12 @@ pub fn build_record_with(
         updated: now,
         geometry_pin: String::new(),
         engine_version: crate::VERSION.into(),
+        semantics: String::new(),
         needs_reverify: false,
     };
+    rec.semantics = crate::semantics::of_notation(&rec.rule)
+        .map_or(crate::semantics::FIRST, |(_, v)| v)
+        .into();
     rec.geometry_pin = range::record_pin(&rec)?.pin;
     // A unit cell that holds its tile pattern more than once has symmetries the cell maps above
     // cannot write (and a ship's period over the cell can depend on its direction): put the

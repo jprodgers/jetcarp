@@ -8,8 +8,10 @@
 //! library.
 //!
 //! **Migrations.** A library of an older schema is brought up to date when it is opened, in one
-//! transaction: schema 1 to 2 ([`migrate_1_2`]). A schema change adds a migration here; never
-//! edit [`SCHEMA`] once it has shipped.
+//! transaction: schema 1 to 2 ([`migrate_1_2`]), and a library made before rule-semantics
+//! versions gains them ([`add_semantics`]; schema 2 gained them before the 0.4.0 release, so its
+//! number stays 2). A schema change adds a migration here; never edit [`SCHEMA`] once it has
+//! shipped.
 //!
 //! **Geometry pins on opening.** Every pattern, ant run and Quick Start row stores the geometry
 //! pin of the tiling it was verified on (`geometry_pin`) and the key of that pin (`pin_key`;
@@ -18,10 +20,16 @@
 //! Opening a library computes again the pins an older (or newer) engine cached, then flags every
 //! record whose pin differs from the engine's (`needs_reverify = 1`). Flagged records are kept
 //! and listed, never deleted or failed silently; `jetcarp library reverify` checks them again.
+//!
+//! **Rule-semantics versions on opening.** Every pattern also stores its rule's family
+//! (`family`) and the version of that family's meaning it was verified under (`semantics`;
+//! [`jetcarp_core::semantics`]). Opening a library flags, in the same way, every pattern whose
+//! version is not the running engine's for its family, or whose family the engine does not have.
 
 use super::{Library, e};
 use jetcarp_core::pattern::now_utc;
 use jetcarp_core::pin::{GeometryPin, engine_geometry, geometry_pin, pin_key, pin_spec};
+use jetcarp_core::semantics;
 use jetcarp_core::topology::TilingSpec;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use std::collections::HashMap;
@@ -62,12 +70,7 @@ CREATE INDEX media_hash ON media (hash);
 /// touches only `media/<two hex digits>/`). Each change is made only where it is missing (a
 /// development build may have made part of it).
 pub fn migrate_1_2(tx: &Transaction) -> Result<(), String> {
-    let has = |table: &str, col: &str| -> Result<bool, String> {
-        tx.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
-            .map_err(e)?
-            .exists(params![table, col])
-            .map_err(e)
-    };
+    let has = |table: &str, col: &str| has_column(tx, table, col);
     if !has("ratings", "verdict")? {
         tx.execute_batch(
             "ALTER TABLE ratings ADD COLUMN verdict TEXT
@@ -85,6 +88,53 @@ pub fn migrate_1_2(tx: &Transaction) -> Result<(), String> {
     }
     tx.execute_batch("UPDATE meta SET value = '2' WHERE key = 'schema'; PRAGMA user_version = 2;")
         .map_err(e)
+}
+
+/// Does `table` have the column `col`?
+fn has_column(c: &Connection, table: &str, col: &str) -> Result<bool, String> {
+    c.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+        .map_err(e)?
+        .exists(params![table, col])
+        .map_err(e)
+}
+
+/// Rule-semantics versions, for a library made before them (schema 1 or 2): `patterns` gains
+/// `family`, its rule's family ([`semantics::family`], worked out once per distinct rule; empty
+/// for a rule this engine cannot read, which is then flagged), and `semantics`, the version of
+/// the family's meaning the record was verified under: `1` ([`semantics::FIRST`]), the version
+/// every family had before versions existed.
+pub fn add_semantics(tx: &Transaction) -> Result<(), String> {
+    tx.execute_batch(
+        "ALTER TABLE patterns ADD COLUMN family TEXT NOT NULL DEFAULT '';
+         ALTER TABLE patterns ADD COLUMN semantics TEXT NOT NULL DEFAULT '1';
+         CREATE TEMP TABLE rule_families (rule TEXT PRIMARY KEY, family TEXT NOT NULL);",
+    )
+    .map_err(e)?;
+    let rules: Vec<String> = {
+        let mut st = tx
+            .prepare("SELECT DISTINCT rule FROM patterns")
+            .map_err(e)?;
+        st.query_map([], |r| r.get(0))
+            .map_err(e)?
+            .collect::<Result<_, _>>()
+            .map_err(e)?
+    };
+    {
+        let mut put = tx
+            .prepare("INSERT INTO temp.rule_families (rule, family) VALUES (?1, ?2)")
+            .map_err(e)?;
+        for r in &rules {
+            let family = semantics::of_notation(r).map_or("", |(f, _)| f);
+            put.execute(params![r, family]).map_err(e)?;
+        }
+    }
+    tx.execute_batch(
+        "UPDATE patterns SET family = coalesce(
+             (SELECT f.family FROM temp.rule_families f WHERE f.rule = patterns.rule), '');
+         DROP TABLE temp.rule_families;
+         CREATE INDEX patterns_semantics ON patterns (family, semantics);",
+    )
+    .map_err(e)
 }
 
 /// The tables of schema 2.
@@ -159,7 +209,9 @@ CREATE TABLE patterns (
     engine_version TEXT NOT NULL,
     created TEXT NOT NULL,
     updated TEXT NOT NULL,
-    body TEXT NOT NULL
+    body TEXT NOT NULL,
+    family TEXT NOT NULL DEFAULT '',
+    semantics TEXT NOT NULL DEFAULT '1'
 );
 CREATE INDEX patterns_class ON patterns (class, score DESC);
 CREATE INDEX patterns_tiling ON patterns (tiling_key, class);
@@ -172,6 +224,7 @@ CREATE INDEX patterns_created ON patterns (created);
 CREATE INDEX patterns_emits ON patterns (emits) WHERE emits IS NOT NULL;
 CREATE INDEX patterns_pin ON patterns (pin_key, geometry_pin);
 CREATE INDEX patterns_reverify ON patterns (id) WHERE needs_reverify = 1;
+CREATE INDEX patterns_semantics ON patterns (family, semantics);
 
 CREATE TABLE pattern_rules (
     pattern_id TEXT NOT NULL REFERENCES patterns (id) ON DELETE CASCADE,
@@ -422,25 +475,30 @@ fn check(c: &Connection) -> Result<bool, String> {
     Ok(false)
 }
 
-/// Bring a library of an older schema up to this one, in one transaction.
+/// Bring a library of an older schema up to this one, in one transaction (and give one made
+/// before rule-semantics versions its versions).
 fn migrate(c: &mut Connection) -> Result<(), String> {
     let version = |c: &Connection| -> Result<i64, String> {
         c.query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(e)
     };
-    if version(c)? >= SCHEMA_VERSION {
+    let old = version(c)?;
+    if old >= SCHEMA_VERSION && has_column(c, "patterns", "semantics")? {
         return Ok(());
     }
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|x| {
             format!(
-                "the library has schema 1 and needs updating to {SCHEMA_VERSION}, which needs \
-                 writing to it: {x}"
+                "the library (schema {old}) needs updating to this JETCARP's schema \
+                 {SCHEMA_VERSION} with rule-semantics versions, which needs writing to it: {x}"
             )
         })?;
     if version(&tx)? == 1 {
         migrate_1_2(&tx)?;
+    }
+    if !has_column(&tx, "patterns", "semantics")? {
+        add_semantics(&tx)?;
     }
     tx.commit().map_err(e)
 }
@@ -522,13 +580,16 @@ pub(super) const PINNED: [(&str, &str); 3] = [
     ("quickstart", "quickstart"),
 ];
 
-/// What opening a library found about its pins.
+/// What opening a library found about its pins and rule-semantics versions.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct PinCheck {
     /// Keys whose engine pin was computed (again) by this engine.
     pub computed: usize,
     /// Keys whose engine pin changed from the one cached.
     pub changed: Vec<String>,
+    /// Rule families with patterns newly flagged because their semantics version is not the
+    /// engine's (or the engine has no such family).
+    pub semantics: Vec<String>,
     /// Records newly flagged `needs_reverify`, per table.
     pub flagged: HashMap<String, u64>,
 }
@@ -599,6 +660,7 @@ pub(super) fn check_pins(c: &mut Connection) -> Result<PinCheck, String> {
         }
     }
     if fresh.is_empty() && stale.is_empty() {
+        check_semantics(c, &mut out)?;
         return Ok(out);
     }
     let tx = c
@@ -621,7 +683,58 @@ pub(super) fn check_pins(c: &mut Connection) -> Result<PinCheck, String> {
         *out.flagged.entry(t.to_string()).or_default() += n as u64;
     }
     tx.commit().map_err(e)?;
+    check_semantics(c, &mut out)?;
     Ok(out)
+}
+
+/// Flag the patterns whose rule-semantics version is not the running engine's for their family
+/// (or whose family the engine does not have), as [`check_pins`] flags changed pins. Two index
+/// ranges per family, so only mismatches are read; writes only when something is flagged.
+fn check_semantics(c: &mut Connection, out: &mut PinCheck) -> Result<(), String> {
+    let families: Vec<String> = {
+        let mut st = c
+            .prepare("SELECT DISTINCT family FROM patterns")
+            .map_err(e)?;
+        st.query_map([], |r| r.get(0))
+            .map_err(e)?
+            .collect::<Result<_, _>>()
+            .map_err(e)?
+    };
+    // A family the engine does not have gets no version, which every stored one differs from.
+    let engine = |f: &str| semantics::version(f).unwrap_or("");
+    const STALE: &str = "((family = ?1 AND semantics < ?2) OR (family = ?1 AND semantics > ?2))
+        AND needs_reverify = 0";
+    let mut stale: Vec<&String> = vec![];
+    {
+        let mut st = c
+            .prepare_cached(&format!("SELECT count(*) FROM patterns WHERE {STALE}"))
+            .map_err(e)?;
+        for f in &families {
+            let n: i64 = st
+                .query_row(params![f, engine(f)], |r| r.get(0))
+                .map_err(e)?;
+            if n > 0 {
+                stale.push(f);
+            }
+        }
+    }
+    if stale.is_empty() {
+        return Ok(());
+    }
+    let tx = c
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(e)?;
+    for f in stale {
+        let n = tx
+            .execute(
+                &format!("UPDATE patterns SET needs_reverify = 1 WHERE {STALE}"),
+                params![f, engine(f)],
+            )
+            .map_err(e)?;
+        *out.flagged.entry("patterns".to_string()).or_default() += n as u64;
+        out.semantics.push(f.clone());
+    }
+    tx.commit().map_err(e)
 }
 
 /// The running engine's pin for a pin key (the JSON of the spec it is the pin of).

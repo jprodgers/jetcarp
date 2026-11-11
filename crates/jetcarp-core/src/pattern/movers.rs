@@ -775,6 +775,7 @@ pub fn mover_record(
         updated: now,
         geometry_pin: String::new(),
         engine_version: crate::VERSION.into(),
+        semantics: crate::semantics::rule_version(&rule).into(),
         needs_reverify: false,
     };
     rec.geometry_pin = super::record_pin(&rec)?.pin;

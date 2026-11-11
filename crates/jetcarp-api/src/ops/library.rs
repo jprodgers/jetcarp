@@ -2,8 +2,8 @@
 //! `library.get`), curation (`library.update`, `library.remove`), pictures and text drawings of a
 //! pattern's phases (`library.render`), JSON records out and in (`library.export`,
 //! `library.import`), scenes made of patterns (`library.paste`), checking records again
-//! (`library.verify`; `library.reverify`, the job that clears the flags a geometry change
-//! leaves), and making the file smaller (`library.prune`).
+//! (`library.verify`; `library.reverify`, the job that clears the flags a geometry change or a
+//! change in a rule's meaning leaves), and making the file smaller (`library.prune`).
 //!
 //! Records are patterns (verified still lifes, oscillators, spaceships, guns, movers) and ant
 //! runs (ids `ant-...`). The catalog is the context's ([`Ctx::library`]). Searches that add to it
@@ -95,7 +95,7 @@ impl Report for LibraryInfo {
         );
         if i.needs_reverify > 0 {
             s.push_str(&format!(
-                "re-verify:      {} record{} flagged after a geometry change (jetcarp library reverify)\n",
+                "re-verify:      {} record{} flagged after a change of geometry or of a rule's meaning (jetcarp library reverify)\n",
                 i.needs_reverify,
                 if i.needs_reverify == 1 { "" } else { "s" }
             ));
@@ -532,10 +532,19 @@ impl Report for RecordView {
             r.verified.date
         );
         if r.needs_reverify {
+            let (family, engine) =
+                jetcarp_core::semantics::of_notation(&r.rule).unwrap_or(("?", "?"));
+            let why = if r.semantics != engine {
+                format!(
+                    "under version {} of the {family} rules' meaning (this engine has {engine})",
+                    r.semantics
+                )
+            } else {
+                format!("on another geometry (pin {})", r.geometry_pin)
+            };
             let _ = writeln!(
                 s,
-                "flagged:     needs re-verification: it was verified on another geometry (pin {}); run jetcarp library reverify",
-                r.geometry_pin
+                "flagged:     needs re-verification: it was verified {why}; run jetcarp library reverify"
             );
         }
         let p = &r.provenance;
@@ -1485,7 +1494,8 @@ impl Op for LibraryVerify {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReverifyIn {
-    /// Every record, not only those flagged because their geometry pin is not this engine's.
+    /// Every record, not only those flagged because their geometry pin (or a pattern's
+    /// rule-semantics version) is not this engine's.
     #[serde(default)]
     pub all: bool,
     /// Delete the records that fail (default: keep them flagged and report them).
@@ -1561,7 +1571,7 @@ impl Report for ReverifyReport {
 pub struct LibraryReverify;
 impl Op for LibraryReverify {
     const NAME: &'static str = "library.reverify";
-    const SUMMARY: &'static str = "Check again the records flagged after a geometry change (or all), as a resumable job: those that pass get this engine's pin and a provenance row, those that fail stay flagged.";
+    const SUMMARY: &'static str = "Check again the records flagged after a change of geometry or of a rule's meaning (or all), as a resumable job: those that pass get this engine's pin and rule-semantics version and a provenance row, those that fail stay flagged.";
     const READ_ONLY: bool = false;
     type In = ReverifyIn;
     type Out = ReverifyReport;

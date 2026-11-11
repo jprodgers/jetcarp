@@ -1,5 +1,6 @@
-//! Library schema 2 (and schema 1 brought up to it): the file's marks, pins checked on opening, re-verification, provenance,
-//! id aliases, and the importer's canonical ids.
+//! Library schema 2 (and schema 1 brought up to it): the file's marks, pins and rule-semantics
+//! versions checked on opening, re-verification, provenance, id aliases, and the importer's
+//! canonical ids.
 
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
 use jetcarp_core::pattern::{self, DiscoveredBy, PatternRecord, Provenance, record_from_object};
@@ -302,6 +303,140 @@ fn a_record_on_a_tiling_the_engine_cannot_build_is_flagged() {
         )
         .unwrap();
     assert_eq!(pin, jetcarp_store::library::schema::NO_PIN);
+}
+
+// Rule-semantics versions are checked on opening as pins are: a pattern verified under another
+// version of its family's meaning (simulated: the version stored is not the engine's), or in a
+// family the engine does not have, is flagged, and re-verifying gives it the engine's version.
+#[test]
+fn a_record_whose_rule_semantics_differ_is_flagged_on_opening_and_reverify_clears_it() {
+    let lib = temp_lib("semantics");
+    let g = one("B3/S23", GLIDER);
+    let b = one("B3/S23", "oo/oo");
+    let h = one("B3/S23", "ooo");
+    for r in [&g, &b, &h] {
+        lib.add(r.clone()).unwrap();
+    }
+    let engine = jetcarp_core::semantics::version("lifelike").unwrap();
+    assert_eq!(lib.get(&g.id).unwrap().semantics, engine);
+    let row: (String, String) = raw(&lib)
+        .query_row(
+            "SELECT family, semantics FROM patterns WHERE id = ?1",
+            [&g.id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(row, ("lifelike".to_string(), engine.to_string()));
+    let c = raw(&lib);
+    c.execute("UPDATE patterns SET semantics = '7' WHERE id = ?1", [&g.id])
+        .unwrap();
+    c.execute(
+        "UPDATE patterns SET family = 'no-such-family' WHERE id = ?1",
+        [&h.id],
+    )
+    .unwrap();
+    drop(c);
+    let again = Library::open(lib.path());
+    assert!(again.get(&g.id).unwrap().needs_reverify, "another version");
+    assert!(
+        again.get(&h.id).unwrap().needs_reverify,
+        "an unknown family"
+    );
+    assert!(!again.get(&b.id).unwrap().needs_reverify);
+    assert_eq!(again.info().unwrap().needs_reverify, 2);
+    // Opening again finds nothing new to flag.
+    assert_eq!(
+        again.check_pins().unwrap(),
+        jetcarp_store::library::PinCheck::default()
+    );
+    let p = reverify(&again, false, false);
+    assert_eq!((p.checked, p.passed, p.failed), (2, 2, 0));
+    for r in [&g, &h] {
+        let x = again.get(&r.id).unwrap();
+        assert!(!x.needs_reverify);
+        assert_eq!(x.semantics, engine);
+    }
+    let family: String = raw(&lib)
+        .query_row("SELECT family FROM patterns WHERE id = ?1", [&h.id], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(family, "lifelike");
+    assert_eq!(Library::open(lib.path()).info().unwrap().needs_reverify, 0);
+    // A record from a file that has no version (written before versions existed) counts as
+    // version 1, and is stored with the engine's.
+    let mut old = one("B3/S23", "oo/o.o/.o");
+    old.semantics.clear();
+    lib.add(old.clone()).unwrap();
+    assert_eq!(lib.get(&old.id).unwrap().semantics, engine);
+}
+
+// A library made before rule-semantics versions (schema 2 without `family` and `semantics`)
+// gains them on opening: each pattern its rule's family and version 1, and nothing is flagged
+// but a record whose rule this engine cannot read.
+#[test]
+fn a_library_from_before_rule_semantics_gains_them_on_opening() {
+    let lib = temp_lib("presemantics");
+    let g = one("B3/S23", GLIDER);
+    let b = one("B3/S23", "oo/oo");
+    let h = one("B3/S23", "ooo");
+    for r in [&g, &b, &h] {
+        lib.add(r.clone()).unwrap();
+    }
+    let path = lib.path().to_path_buf();
+    drop(lib);
+    {
+        let c = Connection::open(&path).unwrap();
+        c.execute_batch(
+            "DROP INDEX patterns_semantics;
+             ALTER TABLE patterns DROP COLUMN semantics;
+             ALTER TABLE patterns DROP COLUMN family;",
+        )
+        .unwrap();
+        // Another family's rule, and a rule no engine reads (only their families are checked).
+        c.execute(
+            "UPDATE patterns SET rule = 'Cyclic 14/1' WHERE id = ?1",
+            [&b.id],
+        )
+        .unwrap();
+        c.execute(
+            "UPDATE patterns SET rule = 'No such rule' WHERE id = ?1",
+            [&h.id],
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&path);
+    assert_eq!(lib.info().unwrap().needs_reverify, 1);
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("2"));
+    let c = Connection::open(&path).unwrap();
+    let rows: Vec<(String, String, String, i64)> = c
+        .prepare("SELECT id, family, semantics, needs_reverify FROM patterns ORDER BY id")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    for (id, family, sem, flag) in rows {
+        let want = if id == g.id {
+            ("lifelike", 0)
+        } else if id == b.id {
+            ("cyclic", 0)
+        } else {
+            ("", 1)
+        };
+        assert_eq!(
+            (family.as_str(), sem.as_str(), flag),
+            (want.0, "1", want.1),
+            "{id}"
+        );
+    }
+    let indexed: bool = c
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'patterns_semantics'")
+        .unwrap()
+        .exists([])
+        .unwrap();
+    assert!(indexed);
+    assert_eq!(lib.get(&g.id).unwrap().semantics, "1");
 }
 
 /// A bounded search on a Spectre patch of this level, run as a job into the library.
@@ -659,6 +794,8 @@ fn a_schema_1_library_is_brought_up_to_2_on_opening() {
         let c = Connection::open(&path).unwrap();
         c.execute_batch(
             "ALTER TABLE ratings DROP COLUMN verdict; ALTER TABLE ratings DROP COLUMN source;
+             DROP INDEX patterns_semantics; ALTER TABLE patterns DROP COLUMN semantics;
+             ALTER TABLE patterns DROP COLUMN family;
              DROP TABLE media;
              CREATE TABLE media (id INTEGER PRIMARY KEY, target_kind TEXT NOT NULL,
                target_id TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
@@ -704,4 +841,13 @@ fn a_schema_1_library_is_brought_up_to_2_on_opening() {
         .exists([])
         .unwrap();
     assert!(has_ext);
+    // And rule-semantics versions (`a_library_from_before_rule_semantics_gains_them_on_opening`).
+    let sem: (String, String) = c
+        .query_row(
+            "SELECT family, semantics FROM patterns WHERE id = ?1",
+            [&block.id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(sem, ("lifelike".to_string(), "1".to_string()));
 }

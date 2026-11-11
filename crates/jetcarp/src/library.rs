@@ -127,9 +127,10 @@ enum LibCmd {
         #[arg(long)]
         drop: bool,
     },
-    /// Check again the records flagged after a geometry change (their geometry pin is not this
-    /// engine's), or every record with --all: those that pass get this engine's pin and a
-    /// provenance row (and a new id if their geometry changed, the old id kept as an alias);
+    /// Check again the records flagged after a change of geometry or of a rule's meaning (their
+    /// geometry pin, or a pattern's rule-semantics version, is not this engine's), or every
+    /// record with --all: those that pass get this engine's pin and version and a provenance row
+    /// (and a new id if their geometry changed, the old id kept as an alias);
     /// those that fail stay flagged and are listed, or are deleted with --drop. Runs as a job,
     /// resumable with --job.
     Reverify {

@@ -1,13 +1,16 @@
 //! Re-verification jobs (`jobs.kind` `reverify`): check stored records again with this
-//! engine, after a geometry change flagged them (`needs_reverify`), or all of them.
+//! engine, after a geometry change or a change in a rule's meaning flagged them
+//! (`needs_reverify`), or all of them.
 //!
-//! A library flags a record when its geometry pin is not the running engine's (see
-//! `jetcarp_store::library::schema`). This job checks each flagged record again, or every record
-//! with `all`, in id order: patterns, then ant runs, then Quick Start entries.
+//! A library flags a record when its geometry pin, or a pattern's rule-semantics version, is not
+//! the running engine's (see `jetcarp_store::library::schema`). This job checks each flagged
+//! record again, or every record with `all`, in id order: patterns, then ant runs, then Quick
+//! Start entries.
 //!
 //! - A **pattern** is put in canonical form on the current geometry (its pin and so perhaps its
 //!   content id change), verified again exactly ([`jetcarp_core::pattern::verify`]: N periods on
-//!   a dead-edged frame, or on its patch at its site), and its rule range computed again.
+//!   a dead-edged frame, or on its patch at its site), and its rule range computed again; it
+//!   then carries this engine's version of its rule's family.
 //! - An **ant** run is run again from its start with its limits, and must end the same way
 //!   (outcome, period, displacement and onset).
 //! - A **Quick Start** scene must build, and, when it records a state hash, reach it again.
@@ -236,6 +239,10 @@ fn check_pattern(r: &PatternRecord, periods: Option<u64>) -> Result<PatternRecor
     }
     x.needs_reverify = false;
     x.engine_version = jetcarp_core::VERSION.into();
+    x.semantics = jetcarp_core::semantics::of_notation(&x.rule)
+        .ok_or_else(|| format!("its rule {} no longer reads", x.rule))?
+        .1
+        .into();
     x.updated = pattern::now_utc();
     Ok(x)
 }

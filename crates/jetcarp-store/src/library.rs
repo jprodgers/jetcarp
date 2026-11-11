@@ -23,7 +23,7 @@
 //! | `meta` | library fact | `key`, `value`: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
 //! | `engine_pins` | pin key in use | `pin_key` (the tiling's identity key: its identity JSON, without an aperiodic family's level), the running engine's `pin`, `polygon_hash`, `neighbour_hash`, `engine_version` (the engine that computed it), `checked` |
 //! | `rules` | rule as run (notation, neighbourhood, steps per generation) | `id`, `notation`, `neighborhood`, `steps_per_gen`, `family` (`lifelike`, `generations`, `wireworld`, `table`, `priority`, ...), `states`, `birth`/`survive` bitmasks (B/S and Generations) |
-//! | `patterns` | rule-free pattern | `id` (content id), `model`, `tiling` (identity JSON), `tiling_key` (family or catalog id), `tiling_name`, `pin_key`, `geometry_pin`, `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `emits` (a gun's ship), `needs_reverify`, `engine_version`, `body` (JSON: phases, bbox, site, verification, mover, first-find provenance) |
+//! | `patterns` | rule-free pattern | `id` (content id), `model`, `tiling` (identity JSON), `tiling_key` (family or catalog id), `tiling_name`, `pin_key`, `geometry_pin`, `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `emits` (a gun's ship), `needs_reverify`, `engine_version`, `body` (JSON: phases, bbox, site, verification, mover, first-find provenance), `family` (its rule's family, as rule-semantics versions name them: `lifelike`, `generations`, `cyclic`, ...) and `semantics` (the version of that family's meaning it was verified under; [`jetcarp_core::semantics`]) |
 //! | `pattern_rules` | (pattern, rule) it was verified in | `verified` (JSON), `periods`, `engine_version`, `first_seen` |
 //! | `sightings` | (pattern, rule, job) | `count` (copies), `soups` (soups it appeared in), `first_seen`, `last_seen`; job 0 is "manual" (adds outside a job) |
 //! | `unstored` | (job, rule, pattern) a hunt counted but did not store ([`unstored`]) | class, period, cells, copies, soups, first find |
@@ -40,8 +40,9 @@
 //! Gone since the catalog: the stage 1 tables `settings` and `score_models`, and the `setting`
 //! targets of media and ratings.
 //!
-//! **Geometry pins.** Every pattern, ant run and Quick Start row stores the pin of the tiling it
-//! was verified on. Opening a library flags (`needs_reverify`) the records whose pin is not the
+//! **Geometry pins and rule semantics.** Every pattern, ant run and Quick Start row stores the
+//! pin of the tiling it was verified on, and every pattern the semantics version of its rule's
+//! family. Opening a library flags (`needs_reverify`) the records whose pin or version is not the
 //! running engine's ([`schema`]); [`Library::reverified`] stores what checking them again found.
 //!
 //! "Every pattern that works in rule R" is [`Query::works_in`](Query): the range test on
@@ -56,6 +57,7 @@ use jetcarp_core::pattern::{
     CurationState, PatternClass, PatternRecord, Provenance, now_utc, tiling_key,
 };
 use jetcarp_core::rules::Rule;
+use jetcarp_core::semantics;
 use jetcarp_core::topology::{Nb, TilingSpec};
 use jetcarp_core::world::Scene;
 use rayon::prelude::*;
@@ -286,8 +288,8 @@ pub struct CatalogInfo {
     pub ratings: i64,
     pub media: i64,
     pub ants: i64,
-    /// Records flagged for re-verification (their geometry pin is not the engine's): patterns,
-    /// ants, and Quick Start entries.
+    /// Records flagged for re-verification (their geometry pin, or a pattern's rule-semantics
+    /// version, is not the engine's): patterns, ants, and Quick Start entries.
     pub needs_reverify: i64,
 }
 
@@ -329,7 +331,7 @@ const PCOLS: &str = "p.id, p.name, p.rule, p.neighborhood, p.steps_per_gen, p.ti
     p.survive_max, p.states_min, p.states_max, \
     (SELECT group_concat(r.notation, char(10) ORDER BY pr.first_seen, r.id) \
        FROM pattern_rules pr JOIN rules r ON r.id = pr.rule_id WHERE pr.pattern_id = p.id), \
-    p.geometry_pin, p.engine_version, p.needs_reverify";
+    p.geometry_pin, p.engine_version, p.needs_reverify, p.semantics";
 
 fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord, String>> {
     let g_i = |i: usize| -> rusqlite::Result<i64> { row.get::<_, i64>(i) };
@@ -401,6 +403,7 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
             geometry_pin: row.get(34).map_err(e)?,
             engine_version: row.get(35).map_err(e)?,
             needs_reverify: row.get::<_, i64>(36).map_err(e)? != 0,
+            semantics: row.get(37).map_err(e)?,
         })
     })();
     Ok(parts)
@@ -422,6 +425,11 @@ fn short_tiling_key(t: &TilingSpec) -> String {
 /// it is put in `engine_pins` when missing.
 fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
     let rule = Rule::parse(&r.rule)?.0;
+    let sem = if r.semantics.is_empty() {
+        semantics::FIRST
+    } else {
+        r.semantics.as_str()
+    };
     let (pin_key, _) = schema::pin_for(tx, record_pin_spec(r))?;
     let body = serde_json::to_string(&Body {
         format: r.format,
@@ -446,10 +454,10 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
                 max_cells, canonical, rule, range_bits, birth_min, birth_max, survive_min,
                 survive_max, states_min, states_max, seen, score, rating, state, name, label,
                 tags, notes, discovered_by, created, updated, body, emits, pin_key,
-                geometry_pin, needs_reverify, engine_version)
+                geometry_pin, needs_reverify, engine_version, family, semantics)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                 ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
-                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42)
+                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44)
              ON CONFLICT (id) DO UPDATE SET model = excluded.model, tiling = excluded.tiling,
                 tiling_key = excluded.tiling_key, tiling_name = excluded.tiling_name,
                 tile_types = excluded.tile_types, neighborhood = excluded.neighborhood,
@@ -467,7 +475,8 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
                 discovered_by = excluded.discovered_by, updated = excluded.updated,
                 body = excluded.body, emits = excluded.emits, pin_key = excluded.pin_key,
                 geometry_pin = excluded.geometry_pin, needs_reverify = excluded.needs_reverify,
-                engine_version = excluded.engine_version",
+                engine_version = excluded.engine_version, family = excluded.family,
+                semantics = excluded.semantics",
         )
         .map_err(e)?;
     st.execute(params![
@@ -513,6 +522,8 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
         r.geometry_pin,
         r.needs_reverify as i64,
         r.engine_version,
+        semantics::family(&rule),
+        sem,
     ])
     .map_err(e)?;
     Ok(())
@@ -760,19 +771,28 @@ fn put_pattern_rule(
 
 /// A record as the library stores it: in canonical form with this engine's geometry pin and its
 /// content id ([`PatternRecord::canonicalize`]), verified (if not yet verified, or verified on
-/// another geometry: a stored pin that is not this engine's), and given its rule range (if
-/// missing). Adding a record does this first; a job that must know a record can be stored before
-/// it writes (its write is then only the store) does it itself.
+/// another geometry or another meaning of its rule: a stored pin, or a rule-semantics version,
+/// that is not this engine's; a record without a version has the first), with this engine's
+/// version of its rule's family, and given its rule range (if missing). Adding a record does
+/// this first; a job that must know a record can be stored before it writes (its write is then
+/// only the store) does it itself.
 pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
     let had_pin = std::mem::take(&mut rec.geometry_pin);
     rec.canonicalize()?;
+    let engine = semantics::rule_version(&Rule::parse(&rec.rule)?.0);
+    let had = match rec.semantics.as_str() {
+        "" => semantics::FIRST,
+        v => v,
+    };
     if rec.verified.periods == 0
         || rec.needs_reverify
         || (!had_pin.is_empty() && had_pin != rec.geometry_pin)
+        || had != engine
     {
         rec.verified = verify(&rec, default_periods(rec.period))?;
         rec.engine_version = jetcarp_core::VERSION.into();
     }
+    rec.semantics = engine.into();
     rec.needs_reverify = false;
     if rec.engine_version.is_empty() {
         rec.engine_version = jetcarp_core::VERSION.into();
