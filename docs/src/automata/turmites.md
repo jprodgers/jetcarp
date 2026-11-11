@@ -62,7 +62,7 @@ highways on non-square tilings in JETCARP's catalogue, all re-verified on the re
 
 ## Where it came from
 
-Christopher G. Langton described single-state two-dimensional Turing machines, which he called
+Christopher G. Langton described single-state two-dimensional Turing machines, which Langton called
 *vants* (virtual ants), in "Studying artificial life with cellular automata" (1986); the RL ant is
 among them ([Langton 1986](../research/bibliography.md#langton1986studying)). Greg Turk's 2025 review
 credits Langton with the term and, as far as Turk knows, with being the first to study such
@@ -71,7 +71,7 @@ Gardner wrote about in 1973 ([Turk 2025](../research/bibliography.md#turk2025van
 [Gardner 1973](../research/bibliography.md#gardner1973worms)).
 
 Turk rediscovered the RL ant independently and sent several two-dimensional Turing machines to
-A. K. Dewdney, who presented them in his *Scientific American* column of September 1989 and coined
+A. K. Dewdney, whose *Scientific American* column of September 1989 presented them and coined
 the name *tur-mite* ([Dewdney 1989](../research/bibliography.md#dewdney1989computer);
 [Turk 2025](../research/bibliography.md#turk2025vants)). David Gale's columns in *The Mathematical
 Intelligencer* took up the ant ([Gale 1993](../research/bibliography.md#gale1993industrious)) and
@@ -97,13 +97,13 @@ Hagiwara extended hardness results to generalised ants on square and hexagonal g
 The highway's onset is usually given as step 9,977, with period 104
 ([Hutton 2015](../research/bibliography.md#hutton2015twodimensional)); we have not traced that
 number to a primary publication, but JETCARP's own run reproduces it exactly. Tim Hutton's Golly
-scripts generate turmite rules, including on triangular and hexagonal grids, and his page credits
+scripts generate turmite rules, including on triangular and hexagonal grids, and Hutton's page credits
 Allen H. Brady with first studying the triangular case
 ([Hutton 2015](../research/bibliography.md#hutton2015twodimensional)). Other programs that run ants
 include CelLab ([Rucker and Walker 1989](../research/bibliography.md#rucker1989cellab)), Uri
 Wilensky's NetLogo model ([Wilensky 2005](../research/bibliography.md#wilensky2005vants)) and, on
 Penrose tilings, ptiles/ant ([ptiles/ant](../research/bibliography.md#ptilesnd_ant)). Turk's 2025
-paper publishes much of his own work from around 1989, including multistate, universal and
+paper publishes much of Turk's own work from around 1989, including multistate, universal and
 self-reproducing turmites ([Turk 2025](../research/bibliography.md#turk2025vants)).
 
 ## How JETCARP runs it

@@ -38,14 +38,14 @@ gates, clocks and memory ([LifeWiki: WireWorld](../research/bibliography.md#life
 ## Where it came from
 
 WireWorld was devised by Brian Silverman, who also created Brian's Brain and Seeds. LifeWiki says
-he proposed it in 1987 as part of his program *Phantom Fish Tank*
+Silverman proposed it in 1987 as part of the program *Phantom Fish Tank*
 ([LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)), and the CelLab manual's
 references list *The Phantom Fishtank* (Logo Computer Systems, Montreal, 1987)
 ([Silverman 1987](../research/bibliography.md#silverman1987phantom)). A 2025 blog post gives 1984
 instead ([daneelsan 2025](../research/bibliography.md#daneelsan2025wireworld)), so the rule itself
 may be older than the program; we have not been able to settle this.
 
-A. K. Dewdney described WireWorld in his *Scientific American* column in January 1990, which made it
+A. K. Dewdney's *Scientific American* column of January 1990 described WireWorld and made it
 widely known ([Dewdney 1990](../research/bibliography.md#dewdney1990cellular);
 [LifeWiki: WireWorld](../research/bibliography.md#lifewikind_wireworld)). David Moore and Mark Owen,
 "with the help of many others", designed a complete programmable computer in WireWorld between 1990

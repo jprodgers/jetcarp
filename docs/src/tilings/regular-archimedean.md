@@ -69,8 +69,8 @@ The regular tilings are ancient as patterns. The first systematic mathematical t
 edge-to-edge tilings by regular polygons, including the eight further Archimedean tilings, is Johannes
 Kepler's in Book II of *Harmonices Mundi* (1619)
 ([Kepler 1619](../research/bibliography.md#kepler1619harmonices); English translation
-[Kepler 1997](../research/bibliography.md#kepler1997harmony)). Darrah Chavey examined Kepler's results in
-detail in his 1984 thesis ([Chavey 1984](../research/bibliography.md#chavey1984periodic)). Branko
+[Kepler 1997](../research/bibliography.md#kepler1997harmony)). Darrah Chavey's 1984 thesis examined Kepler's
+results in detail ([Chavey 1984](../research/bibliography.md#chavey1984periodic)). Branko
 Grünbaum and G. C. Shephard surveyed the subject "from Kepler to the present" in 1977 and in their book
 *Tilings and Patterns*, the standard modern reference
 ([Grünbaum and Shephard 1977](../research/bibliography.md#grunbaum1977tilings);
@@ -87,8 +87,8 @@ pentagons ([Bays 2005](../research/bibliography.md#bays2005note)), and wrote an 
 ([Bays 2009](../research/bibliography.md#bays2009cellular)). In June 2013 EricG emulated all eight
 mixed Archimedean tilings and their duals in Golly, with cells that share an edge or a vertex as
 neighbours, and reported spaceships in Life-like rules on every one of the eight, in Life itself on
-3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 ([EricG 2013](../research/bibliography.md#ericg2013tiling2)); he named
-rules but did not list the ships, and his pattern files are no longer online. A 2014 Code Golf
+3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 ([EricG 2013](../research/bibliography.md#ericg2013tiling2)); EricG named
+rules but did not list the ships, and the pattern files are no longer online. A 2014 Code Golf
 challenge ran Life on several non-square tilings; Peter Taylor found only oscillators on 3.4.6.4
 ([Code Golf 2014](../research/bibliography.md#codegolf2014life)). H. S. Guttesen ran Life on six of the
 mixed Archimedean tilings, described gliders on 3.6.3.6 and 3.3.4.3.4 and built a glider gun on 3.6.3.6
@@ -103,9 +103,9 @@ mixed Archimedean tilings, described gliders on 3.6.3.6 and 3.3.4.3.4 and built 
   <source srcset="../images/tilings/glider-guttesen-snubsq-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="A ring of triangles and a square moving across the snub square tiling" width="240" loading="lazy">
 </picture></div>
-<figcaption>Guttesen's gliders in Life (<code>B3/S23</code>). Left: his glider g on the kagome tiling
+<figcaption>Guttesen's gliders in Life (<code>B3/S23</code>). Left: glider g on the kagome tiling
 3.6.3.6, two hexagons and a trailing triangle, period 4, one lattice step every four generations.
-Right: his period-8 glider on the snub square tiling 3.3.4.3.4, a ring of triangles with one square,
+Right: the period-8 glider on the snub square tiling 3.3.4.3.4, a ring of triangles with one square,
 moving two lattice steps every eight generations. JETCARP's soup searches found both independently;
 watch how each tile kind takes its turn. Scenes
 <code>docs/scenes/tilings/glider-guttesen-kagome.json</code> and
@@ -136,16 +136,16 @@ single ships with no flag remain on these tilings, four on 3.3.3.4.4 and one eac
 not been reported before. Three of the four on 3.3.3.4.4 were found in strips of squares and triangles
 inside 2- and 3-uniform tilings; their live tiles evolve the same way on the elongated triangular tiling
 itself, so they are listed there. Two ships on 4.8.8 and two on 3.12.12 passed the same checks but run in
-the `B2` and `B26` rules where EricG saw many ships, so they are flagged until his patterns can be
+the `B2` and `B26` rules where EricG saw many ships, so they are flagged until EricG's patterns can be
 compared. Four ships are below.
 
 The others on these tilings are described rather than claimed. On 4.8.8, 3.12.12, 4.6.12, 3.6.3.6 and
 3.3.3.4.4 the rest are small ships that turn up often in soups, ships in well-known rules such as HighLife or
 `B2/S34`, or a smaller ship with a passenger, and others may well have seen them. Guttesen's Life
 gliders on 3.6.3.6 and 3.3.4.3.4 (on tilings where EricG had seen Life spaceships in 2013), which
-JETCARP also found, are his, and so are the pairs of them that
+JETCARP also found, are Guttesen's, and so are the pairs of them that
 JETCARP's catalogue first listed as separate ships. In Life on 3.3.4.3.4, JETCARP also found two larger
-ships built around his glider, of periods 16 and 24; we found no earlier report of them. Every ship is
+ships built around Guttesen's glider, of periods 16 and 24; we found no earlier report of them. Every ship is
 listed in [Findings](../research/findings.md#the-60-objects).
 
 A census of Life itself, 50,000 random soups on each of the eleven tilings, found spaceships only on
@@ -155,7 +155,7 @@ On the first three they are Conway's and Guttesen's ships, the pairs and bound p
 the larger snub-square ships above. On 3.3.3.4.4 it is one ship, now and then flying in a pair: eight
 to twelve cells, period 2, moving along the rows at c/2, in about one soup in eleven. It is probably
 the "common spaceship (although it only travels horizontally)" that EricG reported there in 2013,
-although his patterns are not online to compare. On the hexagonal and triangular grids, 4.8.8,
+although EricG's patterns are not online to compare. On the hexagonal and triangular grids, 4.8.8,
 3.12.12, 4.6.12, 3.4.6.4 and 3.3.3.3.6 no soup produced a Life ship; on the last five, Guttesen and the
 2014 Code Golf challenge had found none either.
 

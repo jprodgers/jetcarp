@@ -54,15 +54,15 @@ of which twelve are marked ([Grünbaum and Shephard 1977](../research/bibliograp
 [1987](../research/bibliography.md#grunbaum1987tilings)). Nearly all of M. C. Escher's regular divisions
 of the plane can be read as isohedral tilings
 ([Kaplan and Schattschneider 2025](../research/bibliography.md#kaplan2025isohedral)); Doris
-Schattschneider's *Visions of Symmetry* is the standard catalogue of his periodic drawings
+Schattschneider's *Visions of Symmetry* is the standard catalogue of Escher's periodic drawings
 ([Schattschneider 1990](../research/bibliography.md#schattschneider1990visions)). Tom McLean's online
 catalogue gives a template for each of the 93 types ([McLean](../research/bibliography.md#mcleannd_isohedral)).
 
-Craig S. Kaplan brought the types into computer graphics. His thesis and his work with David Salesin
+Craig S. Kaplan brought the types into computer graphics. Kaplan's thesis and work with David Salesin
 on "Escherization" derive Escher-like tilings from shapes a user supplies
 ([Kaplan 2002](../research/bibliography.md#kaplan2002computer);
-[Kaplan and Salesin 2000](../research/bibliography.md#kaplan2000escherization)), and his book explains the
-types for programmers ([Kaplan 2009](../research/bibliography.md#kaplan2009introductory)). His Tactile
+[Kaplan and Salesin 2000](../research/bibliography.md#kaplan2000escherization)), and Kaplan's book explains the
+types for programmers ([Kaplan 2009](../research/bibliography.md#kaplan2009introductory)). Kaplan's Tactile
 library, in C++ and JavaScript, represents all 81 non-trivial types and lets their tiles be reshaped
 ([Tactile](../research/bibliography.md#kaplannd_tactile);
 [TactileJS](../research/bibliography.md#kaplannd_tactilejs)).

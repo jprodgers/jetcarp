@@ -67,7 +67,7 @@ Rendell later built an explicit Turing machine in Life
 
 **Neighbourhoods.** The eight-cell neighbourhood is named after Edward F. Moore
 ([Moore 1962](../research/bibliography.md#moore1962machine)) and the four-cell one after John von
-Neumann, who used it in his 29-state automaton
+Neumann, whose 29-state automaton used it
 ([LifeWiki: Von Neumann neighbourhood](../research/bibliography.md#lifewikind_vonneumann)).
 
 **The rule space.** Norman Packard and Stephen Wolfram surveyed two-dimensional automata, numbering
@@ -184,7 +184,7 @@ What JETCARP adds is a search for **spaceships** (patterns that move) across man
 at once. Some of what it found was already known. Guttesen reported a period-4 glider and a glider
 gun for Life on the kagome tiling (3.6.3.6) and a period-8 glider on the snub square tiling; JETCARP's
 soup searches found the same kagome glider (cell for cell, in one of its phases) and, by comparison
-with his figure, the same snub-square glider independently, and the credit for them is Guttesen's.
+with Guttesen's figure, the same snub-square glider independently, and the credit for them is Guttesen's.
 
 Beyond those, JETCARP's catalogue holds spaceships in Life-like rules on the 4.8.8, 3.12.12, 4.6.12,
 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 tilings, on 3.6.3.6 in rules other than Life, and on several 2- and

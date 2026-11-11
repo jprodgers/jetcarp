@@ -3,8 +3,8 @@
 For years it was an open question whether anything could glide across an aperiodic tiling: a
 small pattern that moves forever through a tiling that never repeats. In 2026 James Edmond found
 gliders on both of the new aperiodic monotiles, the hat and the spectre, by widening the space of
-rules to *priority tables* and searching it with an evolutionary algorithm. JETCARP runs his rules,
-and reimplements his search on every tiling.
+rules to *priority tables* and searching it with an evolutionary algorithm. JETCARP runs Edmond's rules,
+and reimplements that search on every tiling.
 
 <figure>
 <picture>
@@ -33,7 +33,7 @@ touch neighbourhood were rich enough to hold true gliders.
 The **Spectre glider** rule is one such table with four states, of which it uses three. A *head*
 (state 1) excites *wings* (state 3) around it; a wing next to a head becomes a head; crowded wings die.
 The result is a relay that moves one ring of tiles every two generations. From the seed it emits two
-gliders on lanes 120° apart, and Edmond reports that his gliders travel a million rings at constant
+gliders on lanes 120° apart, and Edmond's paper reports that its gliders travel a million rings at constant
 speed and heading ([Edmond 2026](../research/bibliography.md#edmond2026gliders)).
 
 ## Where it came from
@@ -50,9 +50,9 @@ hand-designed "Worms" rule whose worms cross the patch
 ([Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)).
 
 James Edmond's "Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre" (2026)
-introduced priority tables, presented as his own rule family, and found gliders on both monotiles
-with a genetic algorithm over four-state tables on the touch neighbourhood. His gliders' headings fall
-on a "six-spoke compass", and the Spectre glider is his record of the evolved Spectre rule (Table 7 of
+introduced priority tables, presented as Edmond's own rule family, and found gliders on both monotiles
+with a genetic algorithm over four-state tables on the touch neighbourhood. The gliders' headings fall
+on a "six-spoke compass", and the Spectre glider is Edmond's record of the evolved Spectre rule (Table 7 of
 the paper's second version), found with no known rule planted in the search
 ([Edmond 2026](../research/bibliography.md#edmond2026gliders)).
 
@@ -82,8 +82,8 @@ the centre of a patch.
 ### Evolutionary search and verified movers
 
 `jetcarp search evolve` reimplements Edmond's evolutionary search and runs it on any tiling,
-periodic or aperiodic. It is written from his paper and a reading of his repository; two small
-functions, the mutation step and the table notation, are adapted from his monotile-ca code under its
+periodic or aperiodic. It is written from Edmond's paper and a reading of Edmond's repository; two small
+functions, the mutation step and the table notation, are adapted from the monotile-ca code under its
 MIT licence, as listed in JETCARP's third-party notices. Movers it finds on aperiodic tilings are followed
 across ever larger exact patches (`jetcarp library movers track`), or on a sliding window that
 generates tiles around the mover as it goes (`jetcarp search mover`), and recorded as *verified to
@@ -94,9 +94,9 @@ a distance*: the number of rings of tiles the mover was followed without changin
   <source srcset="../images/automata/priority-hat-glider-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/automata/priority-hat-glider.webp" alt="A small glider of a head and a few wing tiles crossing a patch of hats on a straight course" width="286" loading="lazy">
 </picture>
-<figcaption>Edmond's hat glider B, as JETCARP's reimplementation of his search found it, one
+<figcaption>Edmond's hat glider B, as JETCARP's reimplementation of Edmond's search found it, one
 generation per frame. The table JETCARP's search returned looks different from Edmond's, but with B's
-states renamed (1 as 3, 2 as 1, 3 as 2) the two give the same evolution cell for cell: it is his glider.
+states renamed (1 as 3, 2 as 1, 3 as 2) the two give the same evolution cell for cell: it is Edmond's glider.
 Watch the head (cyan) lead four to six wing tiles; after a short start the glider settles onto a
 straight course at one ring of tiles every two generations. Scene
 <code>docs/scenes/automata/priority-hat-glider.json</code>, 64 generations.</figcaption>

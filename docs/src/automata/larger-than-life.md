@@ -30,7 +30,7 @@ A Larger than Life rule has a **range** `r`, a **neighbourhood shape**, and a **
 
 Life is the range-1 case. Larger ranges average over more cells, which smooths out the randomness
 of small counts: patterns grow round edges and move as large coherent bodies. Kellie Evans showed
-that rescaled versions of Life's gliders and replicators exist at large ranges; she called the
+that rescaled versions of Life's gliders and replicators exist at large ranges; Evans called the
 gliders "bugs" ([Evans 1996](../research/bibliography.md#evans1996larger)).
 
 The modern generalisation, *higher-range outer-totalistic* (HROT) rules, allows any list of counts
@@ -45,12 +45,12 @@ together ([Golly: Larger than Life](../research/bibliography.md#gollynd_ltl)). G
 Griffeath's "Self-organization of random cellular automata: four snapshots" as the first reference
 ([Griffeath 1994](../research/bibliography.md#griffeath1994self)).
 
-Kellie Michele Evans developed the family in her 1996 PhD thesis at the University of
-Wisconsin–Madison, *Larger than Life: It's So Nonlinear*, supervised by Griffeath. Her preface says
-the question came from him: would glider-like "digital creatures" emerge from random starts if
+Kellie Michele Evans developed the family in a 1996 PhD thesis at the University of
+Wisconsin–Madison, *Larger than Life: It's So Nonlinear*, supervised by Griffeath. Evans's preface says
+the question came from Griffeath: would glider-like "digital creatures" emerge from random starts if
 Life's rule were rescaled to larger neighbourhoods? The thesis studies the family with tools from
 probability and from dynamics, including large-range analogues of Life's replicators and gliders
-([Evans 1996](../research/bibliography.md#evans1996larger)). She continued the work in a series of
+([Evans 1996](../research/bibliography.md#evans1996larger)). Evans continued the work in a series of
 papers ([Evans 2001](../research/bibliography.md#evans2001larger);
 [Evans 2003](../research/bibliography.md#evans2003larger);
 [Evans 2003, replicators](../research/bibliography.md#evans2003replicators);

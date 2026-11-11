@@ -38,7 +38,7 @@ tables the standard way to write constructions like Codd's.
 
 ## Where it came from
 
-Edgar F. Codd's PhD thesis at the University of Michigan (1965), advised by John H. Holland, and his
+Edgar F. Codd's PhD thesis at the University of Michigan (1965), advised by John H. Holland, and Codd's
 book *Cellular Automata* (1968) reduced von Neumann's 29 states to 8 while keeping computation and
 construction universal, with signals running along wires wrapped in a sheath
 ([Codd 1965](../research/bibliography.md#codd1965propagation);

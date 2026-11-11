@@ -47,6 +47,6 @@ trained the score that decides which runs the search shows people, which brought
 what is beautiful into the search itself.
 
 Craig S. Kaplan answered within hours, and generously, when asked whether JETCARP could use the
-code from his Spectre visualizer, which he had never formally released: he made it available under
-the same BSD licence as his hatviz. JETCARP's hat, spectre and isohedral tilings all rest on his
-work.
+code from Kaplan's Spectre visualizer, which had never been formally released: Kaplan made it
+available under the same BSD licence as Kaplan's hatviz. JETCARP's hat, spectre and isohedral
+tilings all rest on Kaplan's work.

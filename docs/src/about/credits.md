@@ -33,18 +33,19 @@ animated clips, hundreds of them, from which the search learned its score. Her r
 runs the search shows people, and so brought her eye for what is beautiful into the search itself
 (see [Search methods](../research/search-methods.md#explore)).
 
-**Craig S. Kaplan**'s work is under a large part of JETCARP. He is one of the four authors of the
-papers that introduced the [hat and the spectre](../tilings/hat-spectre.md); his hatviz code is the
-basis of JETCARP's hat tiling, his Spectre visualizer of its spectre tiling, and his Tactile library
-of its 81 [isohedral types](../tilings/isohedral.md); and his papers, thesis and book on tiling theory
-and Escherization explain much of what those pages describe. When asked whether JETCARP could use
-the code of his Spectre visualizer, which he had never formally released, he answered within hours,
-and generously: he made it available under the same BSD licence as hatviz. Thank you.
+**Craig S. Kaplan**'s work is under a large part of JETCARP. Kaplan is one of the four authors of the
+papers that introduced the [hat and the spectre](../tilings/hat-spectre.md); Kaplan's hatviz code is
+the basis of JETCARP's hat tiling, Kaplan's Spectre visualizer of its spectre tiling, and Kaplan's
+Tactile library of its 81 [isohedral types](../tilings/isohedral.md); and Kaplan's papers, thesis and
+book on tiling theory and Escherization explain much of what those pages describe. When asked whether
+JETCARP could use the code of the Spectre visualizer, which had never been formally released, Kaplan
+answered within hours, and generously: Kaplan made it available under the same BSD licence as
+hatviz. Thank you.
 
 **James Edmond**'s work on gliders on the hat and spectre gave JETCARP its
 [priority tables](../automata/priority-rules.md), the Spectre glider, and the evolutionary glider
-search that JETCARP reimplements on every tiling, with two small functions adapted from his
-monotile-ca code under its MIT licence. The hat glider that JETCARP's search found is his glider B.
+search that JETCARP reimplements on every tiling, with two small functions adapted from Edmond's
+monotile-ca code under its MIT licence. The hat glider that JETCARP's search found is Edmond's glider B.
 
 **Claude**, Anthropic's AI model: all of JETCARP's code was written by Claude Code, Anthropic's AI
 coding assistant, to Jimmie's design and direction. Claude is acknowledged here, not listed as an author; how the
@@ -64,7 +65,7 @@ Listed in full, with their licences, on the [Licence](licence.md#third-party-wor
   in which Soto Sánchez publishes it, the data file JETCARP converts
   ([k-uniform tilings](../tilings/k-uniform.md)).
 - **James Edmond**: the mutation step and rule notation of monotile-ca.
-- **Bert Wang-Chak Chan**: the *Orbium unicaudatus* pattern from his Lenia repository
+- **Bert Wang-Chak Chan**: the *Orbium unicaudatus* pattern from Chan's Lenia repository
   ([Lenia](../automata/lenia.md)).
 - The authors of the Rust libraries JETCARP is built from, of SQLite, and of the fonts that ship with
   egui (listed in each release's notices).
@@ -140,7 +141,7 @@ credit and source are given:
 [Larger than Life](../automata/larger-than-life.md)
 
 - **David Griffeath**: first imagined the family (early 1990s).
-- **Kellie Michele Evans**: developed it in her 1996 thesis and later papers; Bosco and Bugs.
+- **Kellie Michele Evans**: developed it in a 1996 thesis and later papers; Bosco and Bugs.
 - **Dean Hickerson**: the first bug gun.
 - **Adam P. Goucher**: the lifelib notation for HROT rules.
 
@@ -211,7 +212,7 @@ credit and source are given:
 [Margolus block rules](../automata/margolus.md)
 
 - **Edward Fredkin** and **Tommaso Toffoli**: conservative logic and the billiard-ball model (1982).
-- **Norman Margolus**: the partitioning scheme named after him, the billiard ball machine and Critters.
+- **Norman Margolus**: the partitioning scheme named after Margolus, the billiard ball machine and Critters.
 - **J. Hardy**, **Y. Pomeau** and **O. de Pazzis**: the HPP lattice gas (1973).
 - **dmishin**: the Single Rotation rule (2013).
 
@@ -265,7 +266,7 @@ credit and source are given:
 - **EricG**: Life-like rules on all eight mixed Archimedean tilings and their duals, emulated in
   Golly, with spaceships reported on every Archimedean tiling (ConwayLife forums, 2013); the earliest
   survey of these tilings that we know of, and the reason four of JETCARP's ships are flagged rather
-  than claimed. The one Life ship JETCARP's census finds on 3.3.3.4.4 is probably the one he reported
+  than claimed. The one Life ship JETCARP's census finds on 3.3.3.4.4 is probably the one EricG reported
   there. See [What is new in JETCARP](../research/contributions.md#4-spaceships-on-non-square-tilings).
 - **Peter Taylor**, **Kevin L** and **Martin Büttner** (now Martin Ender): Life on non-square tilings in
   a 2014 Code Golf challenge; Büttner's period-20 spaceship, very likely the one JETCARP's hunts find in

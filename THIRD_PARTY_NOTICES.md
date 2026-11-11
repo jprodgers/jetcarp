@@ -76,7 +76,7 @@ documentation:
 
 - **Evolutionary glider search** (`crates/jetcarp-core/src/evolve.rs`, `evolve/`): the method of
   James Edmond, "Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre"
-  (arXiv:2609.22579), written from the paper and a reading of his repository; the two functions
+  (arXiv:2609.22579), written from the paper and a reading of Edmond's repository; the two functions
   adapted from that repository are listed above.
 - **Spectre glider rule** (`SpectreGlider`): Edmond's published rule (arXiv:2609.22579, Table 7).
 - **Von Neumann's 29-state automaton:** written from J. von Neumann, *Theory of Self-Reproducing

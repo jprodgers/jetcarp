@@ -33,7 +33,7 @@ Magnezones	B3/S123678		LW:List_of_Life-like_rules	no author named
 SnowLife	B3/S1237	Joshua Herman (found by accident while working with Louis Kauffman)	LW:List_of_Life-like_rules; LW:OCA:SnowLife	author named by source
 Corrosion of Conformity	B3/S124		LW:List_of_Life-like_rules; LW:OCA:Corrosion_of_Conformity	no author named
 EightFlock	B3/S128		LW:List_of_Life-like_rules; LW:OCA:EightFlock	no author named
-LowLife	B3/S13	Jean-Claude Heudin (subject of his 1996 Complex Systems paper)	LW:List_of_Life-like_rules; LW:OCA:LowLife	author named by source
+LowLife	B3/S13	Jean-Claude Heudin (subject of Heudin's 1996 Complex Systems paper)	LW:List_of_Life-like_rules; LW:OCA:LowLife	author named by source
 Conway's Life	B3/S23	John Horton Conway (published by Martin Gardner, Oct 1970)	LW:List_of_Life-like_rules; MC	author named by source
 EightLife	B3/S238		LW:List_of_Life-like_rules; LW:OCA:EightLife	no author named
 Shoots and Roots	B3/S245678		LW:List_of_Life-like_rules; LW:OCA:Shoots_and_Roots	no author named
@@ -77,7 +77,7 @@ LowDeath without Death	B368/S012345678		LW:List_of_Life-like_rules	no author nam
 LowFlockDeath	B368/S128		LW:List_of_Life-like_rules	no author named
 Life SkyHigh	B368/S236		LW:List_of_Life-like_rules	no author named
 LowDeath	B368/S238		LW:List_of_Life-like_rules; LW:OCA:LowDeath	no author named
-Morley	B368/S245	Stephen Morley (namesake: Golly named it after him because he studied it extensively); discoverer not named	LW:List_of_Life-like_rules; LW:OCA:Move; MC (“Move”)	author named by source
+Morley	B368/S245	Stephen Morley (namesake: Golly named it after Morley because Morley studied it extensively); discoverer not named	LW:List_of_Life-like_rules; LW:OCA:Move; MC (“Move”)	author named by source
 DryLife without Death	B37/S012345678		LW:List_of_Life-like_rules; LW:OCA:Life_without_death	no author named
 DryFlock	B37/S12		LW:List_of_Life-like_rules	no author named
 Mazectric with Mice	B37/S1234		LW:List_of_Life-like_rules; LW:OCA:Maze	no author named
@@ -94,7 +94,7 @@ Electrified Maze	B45/S12345		LW:List_of_Life-like_rules	no author named
 Oscillators Rule	B45/S1235		LW:List_of_Life-like_rules	no author named
 Walled cities	B45678/S2345	David Macfarlane	LW:List_of_Life-like_rules; LW:OCA:Walled_Cities; MC	author named by source
 Majority	B45678/S5678		LW:List_of_Life-like_rules	no author named
-Vote 4/5	B4678/S35678	Gérard Vichniac (his “Anneal” variant of the voting rule)	LW:List_of_Life-like_rules; LW:OCA:Vote; MC; CAM	author named by source
+Vote 4/5	B4678/S35678	Gérard Vichniac (Vichniac's “Anneal” variant of the voting rule)	LW:List_of_Life-like_rules; LW:OCA:Vote; MC; CAM	author named by source
 Lifeguard 1	B48/S234		LW:List_of_Life-like_rules	no author named
 Rings 'n' Slugs	B56/S14568		LW:List_of_Life-like_rules; LW:OCA:Rings_%27n%27_Slugs	no author named
 Vote	B5678/S45678	Gérard Vichniac (standard voting rule)	LW:List_of_Life-like_rules; LW:OCA:Vote; MC	author named by source

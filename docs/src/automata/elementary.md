@@ -46,17 +46,17 @@ shift; Gustav Hedlund's 1969 paper is the standard reference for that line of wo
 Stephen Wolfram studied the 256 three-neighbour rules systematically in "Statistical mechanics of
 cellular automata" (1983), numbering each rule by its outputs read as a binary number, the scheme
 now called the Wolfram code ([Wolfram 1983](../research/bibliography.md#wolfram1983statistical);
-[Wikipedia: Wolfram code](../research/bibliography.md#wikipediand_wolframcode)). In 1984 he sorted
+[Wikipedia: Wolfram code](../research/bibliography.md#wikipediand_wolframcode)). In 1984 Wolfram sorted
 cellular automaton behaviour into four qualitative classes, from rules that die out to rules with
 complex, long-lived structures ([Wolfram 1984](../research/bibliography.md#wolfram1984universality)),
 and with Olivier Martin and Andrew Odlyzko worked out the algebra of the *additive* rules such as 90
-and 150 ([Martin, Odlyzko and Wolfram 1984](../research/bibliography.md#martin1984algebraic)). He
+and 150 ([Martin, Odlyzko and Wolfram 1984](../research/bibliography.md#martin1984algebraic)). Wolfram
 proposed rule 30 as a random-number generator in 1986
 ([Wolfram 1986](../research/bibliography.md#wolfram1986random)).
 
 Wolfram's 1985 list of open problems asked which cellular automata are computation-universal
 ([Wolfram 1985](../research/bibliography.md#wolfram1985twenty)). Matthew Cook proved that rule 110
-is, by showing it can emulate cyclic tag systems. He presented the proof at the CA98 conference
+is, by showing it can emulate cyclic tag systems. Cook presented the proof at the CA98 conference
 at the Santa Fe Institute; Wolfram Research then took legal action over Cook's nondisclosure
 agreement, and the proof was published in 2004
 ([Cook 2004](../research/bibliography.md#cook2004universality);

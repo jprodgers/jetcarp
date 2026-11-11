@@ -41,13 +41,13 @@ them Linnaean-style names such as *Orbium* and *Scutium*, and studies their form
 a biologist would ([Chan 2019](../research/bibliography.md#chan2019lenia)).
 
 Chan places Lenia at the end of a line of generalisations of Life: Life itself
-([Gardner 1970](../research/bibliography.md#gardner1970life)), his own multi-state program
+([Gardner 1970](../research/bibliography.md#gardner1970life)), Chan's own multi-state program
 "Primordia" from around 2005, Larger than Life ([Evans 2001](../research/bibliography.md#evans2001larger);
 [Evans 2003](../research/bibliography.md#evans2003larger); see [Larger than Life](larger-than-life.md)),
 Marcus Pivato's RealLife, the continuum limit of Larger than Life
 ([Pivato 2007](../research/bibliography.md#pivato2007reallife)), and Stephan Rafler's SmoothLife
 ([Rafler 2011](../research/bibliography.md#rafler2011generalization)). Chan writes that SmoothLife and
-Lenia were developed independently and look strikingly alike, an example of what he calls convergent
+Lenia were developed independently and look strikingly alike, an example of what Chan calls convergent
 evolution, and traces a "phylogeny of the glider" from Life's glider through Larger than Life's bugs
 and SmoothLife's smooth glider to Lenia's creatures ([Chan 2019](../research/bibliography.md#chan2019lenia)).
 
@@ -64,7 +64,7 @@ and search guided by foundation models ([Kumar et al. 2025](../research/bibliogr
 
 ### Notation
 
-JETCARP uses Chan's parameters and the numbering of kernels and growth functions from his code:
+JETCARP uses Chan's parameters and the numbering of kernels and growth functions from Chan's code:
 
 | Parameter | Meaning |
 | --- | --- |

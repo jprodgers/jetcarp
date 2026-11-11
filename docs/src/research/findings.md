@@ -126,15 +126,15 @@ of Guttesen's gliders, or that were very common in their search. Four more joine
 search of the ConwayLife forums found EricG's 2013 exploration of the Archimedean tilings
 ([EricG 2013](bibliography.md#ericg2013tiling2)): `c4c00098` and `9cee5c6a` run in `B2/S2` on 4.8.8,
 where EricG found "many of the B2 rules" to have spaceships, and `852ea9ff` and `a0229739` run in
-`B26` rules on 3.12.12, next to the `B2/S2` and `B26/S3569` rules in which he reported many ships.
-He did not list his ships, and his pattern files are no longer online, so these four wait for a
+`B26` rules on 3.12.12, next to the `B2/S2` and `B26/S3569` rules in which EricG reported many ships.
+EricG did not list the ships, and the pattern files are no longer online, so these four wait for a
 comparison with them. The claimed ships on 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 run in none of the rules
-he named (see [What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
+EricG named (see [What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
 
 Life itself (`B3/S23`), the rule Guttesen searched, deserves a separate word. All eleven of these
 candidates that run in Life turned out to be made of Guttesen's gliders: on 3.6.3.6 every one is a
-pair of his glider g, so no new single Life ship on the kagome tiling survives; on 3.3.4.3.4 one is a
-pair of his snub-square glider, one is a bound pair of it (`2ba58828`, period 16) and one contains a
+pair of glider g, so no new single Life ship on the kagome tiling survives; on 3.3.4.3.4 one is a
+pair of the snub-square glider, one is a bound pair of it (`2ba58828`, period 16) and one contains a
 perturbed copy of it (`98a3c53b`, period 24). But the searches behind these candidates ran Life on only
 a few tilings, so they say little about Life elsewhere. A later census of Life on all 92 Archimedean,
 2-uniform and 3-uniform tilings found Life spaceships on 28 of them, 24 of those 2- or 3-uniform; see
@@ -230,15 +230,15 @@ object, as Life catalogues keep tag-alongs, but it is not counted as a separate 
 - **Compounds.** Ten catalogue entries are two ships that fly side by side and never influence each
   other; JETCARP's object finder stored each pair as one ship. Eight are two of Guttesen's kagome
   glider g (`7e188e44`, `0c8ab3fe`, `be288c7d`, `7c25665e`, `c10cc071`, `c7d48e0c`, `b9c14072`,
-  `dbeb2dbf`), one is two of his snub-square glider (`80d241d2`) and one is two copies of `095a6bf7`
+  `dbeb2dbf`), one is two of Guttesen's snub-square glider (`80d241d2`) and one is two copies of `095a6bf7`
   (`f338d60a`).
-- **Guttesen's gliders.** His glider g on 3.6.3.6 and his period-8 glider on 3.3.4.3.4, both in Life,
-  were found by JETCARP's searches independently; they are his, first posted as Code Golf answers in
+- **Guttesen's gliders.** Glider g on 3.6.3.6 and the period-8 glider on 3.3.4.3.4, both in Life,
+  were found by JETCARP's searches independently; they are Guttesen's, first posted as Code Golf answers in
   November 2024 ([Guttesen 2024](bibliography.md#guttesen2024answers);
   [Guttesen 2026](bibliography.md#guttesen2026game)). EricG had already reported spaceships in Life
   on both tilings in 2013, without describing them ([EricG 2013](bibliography.md#ericg2013tiling2)). JETCARP's 4-to-5-cell kagome ship is exactly
-  his Fig. 4 glider (the same cells in one phase), and its snub-square ship matches his Fig. 5 by eye;
-  a cell-for-cell check awaits his published configurations. His large kagome glider G (period 40) was
+  Guttesen's Fig. 4 glider (the same cells in one phase), and its snub-square ship matches Fig. 5 by eye;
+  a cell-for-cell check awaits Guttesen's published configurations. Guttesen's large kagome glider G (period 40) was
   not found. Glider g also runs in corridors of kagome tiles inside the 3-uniform tilings k3-030,
   k3-032 and k3-039; the snub-square glider runs only on 3.3.4.3.4.
 - **Lattice objects.** Every ship on an isohedral type, and the unnamed ships of the square and

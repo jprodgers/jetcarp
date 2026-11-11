@@ -82,11 +82,11 @@ probability group at the University of Wisconsin–Madison; MCell's documentatio
 discovered and explored by Griffeath ([MCell families](../research/bibliography.md#mcellnd_families)).
 Griffeath described it in "Cyclic random competition" in the *Notices of the AMS* in December 1988
 ([Griffeath 1988](../research/bibliography.md#griffeath1988cyclic)); its random ancestor is the cyclic
-particle system of Bramson and Griffeath ([1989](../research/bibliography.md#bramson1989flux)). His
-student Robert Fisch analysed the one-dimensional version
+particle system of Bramson and Griffeath ([1989](../research/bibliography.md#bramson1989flux)).
+Griffeath's student Robert Fisch analysed the one-dimensional version
 ([Fisch 1990](../research/bibliography.md#fisch1990onedimensional);
 [Fisch 1990b](../research/bibliography.md#fisch1990cyclic)). A. K. Dewdney presented the
-two-dimensional rule as "cyclic space" in *Scientific American* in August 1989; the "demons" of his
+two-dimensional rule as "cyclic space" in *Scientific American* in August 1989; the "demons" of Dewdney's
 title are the spiral cores ([Dewdney 1989](../research/bibliography.md#dewdney1989cellular)). The
 standard reference, which treats the cyclic and Greenberg–Hastings rules together with a range and a
 threshold, is Fisch, Gravner and Griffeath's "Threshold-range scaling of excitable cellular automata"

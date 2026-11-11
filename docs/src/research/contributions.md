@@ -158,7 +158,7 @@ cells, one lattice step along a row per period (c/27), in about a million rules 
 <code>B37/S2,5,6,10</code> up. Right: <code>9cee5c6a</code> on 4.8.8, period 6, 7 to 13 cells, 2 lattice
 steps per period (c/3), in the 128 rules from <code>B2/S2</code> up: the only surviving 4.8.8 candidate
 that does not move at c/2, and it contains no smaller ship. It was among the four strongest until we
-read EricG's 2013 report that many <code>B2</code> rules on 4.8.8 have spaceships; his patterns are not
+read EricG's 2013 report that many <code>B2</code> rules on 4.8.8 have spaceships; EricG's patterns are not
 online, so it is flagged until they can be compared. Scenes
 <code>docs/scenes/tilings/ship-acd0fa8b.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
 </figure>
@@ -187,18 +187,18 @@ spaceships ([drc, Hickerson and wildmyron 2016](bibliography.md#drc2016b2s34h)).
 
 The closest earlier work is EricG's, posted on the ConwayLife forums on 12 June 2013
 ([EricG 2013](bibliography.md#ericg2013tiling2); pentagonal tilings in
-[EricG 2013](bibliography.md#ericg2013tiling1)). He emulated the eight composite Archimedean tilings and
+[EricG 2013](bibliography.md#ericg2013tiling1)). EricG emulated the eight composite Archimedean tilings and
 their eight duals in Golly, with the same neighbours as JETCARP's (cells sharing an edge or a vertex:
 octagons 8 and squares 4 on 4.8.8, squares 12 and triangles 9 on 3.3.3.4.4), and found spaceships in
-Life-like rules on 14 of the 16, among them every Archimedean tiling. He named the rules but not the
+Life-like rules on 14 of the 16, among them every Archimedean tiling. EricG named the rules but not the
 ships: on 4.8.8, "many of the B2 rules" and `B2/S346`; on 3.12.12, `B2/S2` ("generates lots of
 spaceships") and `B26/S3569` and its variants; on 4.6.12, `B2/S2`; on 3.4.6.4, `B3468/S239` and
 `B346/S239`; on 3.3.3.4.4, `B3/S23` and other `B3` rules, `B36/S23` and `B3/S2489`; on 3.3.3.3.6, rules
-such as `B37/S247,10`; and on 3.6.3.6 and 3.3.4.3.4, Life itself. His pattern files were shared from a
-Google Drive folder that no longer opens. JETCARP's six claimed Archimedean ships run in none of his
+such as `B37/S247,10`; and on 3.6.3.6 and 3.3.4.3.4, Life itself. EricG's pattern files were shared from a
+Google Drive folder that no longer opens. JETCARP's six claimed Archimedean ships run in none of the
 named rules: the 3.4.6.4 ship needs `S5` and cannot have `B4` or `B6`, the 3.3.3.4.4 ships need births
-on 4 and his are all `B3` rules, and the 3.3.3.3.6 ship needs `S5` and `S6` and cannot have `S4`. The
-4.8.8 and 3.12.12 ships do run in the `B2` and `B26` rules he describes, so they are flagged.
+on 4 and the named ones are all `B3` rules, and the 3.3.3.3.6 ship needs `S5` and `S6` and cannot have `S4`. The
+4.8.8 and 3.12.12 ships do run in the `B2` and `B26` rules EricG describes, so they are flagged.
 
 In 2014 a Code Golf challenge asked for Life (`B3/S23`) on any grid but a regular one, with
 vertex-sharing neighbours ([Code Golf 2014](bibliography.md#codegolf2014life)). Peter Taylor found only
@@ -208,7 +208,7 @@ its code, is one hexagon, two squares and two triangles, as in the 2-uniform til
 not name the tiling, and its rule is stated only in a comment copied from an earlier answer, but the
 challenge asked for Life. A JETCARP hunt of 500,000 Life soups on each of the two tilings of that type
 found no ship on k2-006 and, on k2-007, a period-20 spaceship of 8 cells moving one lattice step per
-period (c/20) in about one soup in nine, so Büttner's tiling was very likely k2-007 and his ship very
+period (c/20) in about one soup in nine, so Büttner's tiling was very likely k2-007 and Büttner's ship very
 likely this one. It is the earliest spaceship on a k-uniform tiling (k of 2 or more) that we know of.
 JETCARP's claimed ships on k2-006 and k2-007 are of other periods and run in other rules.
 
@@ -220,8 +220,8 @@ are in other rules. We found no other report of Life-like spaceships on k-unifor
 census of Life itself (`B3/S23`, touching neighbours) on all 92 Archimedean, 2-uniform and 3-uniform
 tilings, 50,000 random soups on each
 ([Findings](findings.md#life-on-the-archimedean-and-k-uniform-tilings)). By the searches above, Life has
-not been reported on any 3-uniform tiling before, nor on any 2-uniform tiling but k2-007, where Büttner
-very likely found his ship. Other rules have been run on one 2-uniform tiling, k2-001
+not been reported on any 3-uniform tiling before, nor on any 2-uniform tiling but k2-007, where Büttner's
+ship was very likely found. Other rules have been run on one 2-uniform tiling, k2-001
 ([3.4.6.4; 4.6.12]): a 2017 program described as "Conway's Game of Life on a k-uniform tiling", which
 counts only edge neighbours and scales its thresholds to each tile's number of sides, so is not
 `B3/S23` ([Gillespie and Kobayashi 2017](bibliography.md#gillespie2017conway)), and 2024 videos in
@@ -243,16 +243,16 @@ two or more smaller ships flying together, or a smaller ship with a passenger.
   described the small gliders themselves and built a kagome glider gun, first in Code Golf answers in
   November 2024 and then in a paper
   ([Guttesen 2024](bibliography.md#guttesen2024answers); [Guttesen 2026](bibliography.md#guttesen2026game)),
-  and we call them Guttesen's gliders after his description. In May 2024 a YouTube channel had also
+  and we call them Guttesen's gliders after that description. In May 2024 a YouTube channel had also
   shown Life gliders on the snub square tiling
   ([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)); we have not compared them
   with Guttesen's.
-  JETCARP's searches found both independently: its kagome ship is exactly his glider g, and its
-  snub-square ship matches his figure. Ten catalogue entries turned out to be pairs of ships flying side
-  by side without touching: eight pairs of his glider g, one pair of his snub-square glider and one
+  JETCARP's searches found both independently: its kagome ship is exactly Guttesen's glider g, and its
+  snub-square ship matches Guttesen's figure. Ten catalogue entries turned out to be pairs of ships flying side
+  by side without touching: eight pairs of Guttesen's glider g, one pair of the snub-square glider and one
   pair of a 3.6.3.6 ship. All Life candidates on 3.6.3.6 were such pairs. In Life on 3.3.4.3.4,
-  JETCARP also found two larger ships built around his glider, of periods 16 and 24; we found no
-  earlier report of them, but they are his glider's relatives and flagged as such.
+  JETCARP also found two larger ships built around Guttesen's glider, of periods 16 and 24; we found no
+  earlier report of them, but they are that glider's relatives and flagged as such.
 - **Ships on isohedral tilings.** The 81 isohedral types have only 11 neighbour graphs, those of the
   Laves tilings (see [Findings](findings.md#isohedral-tilings-are-eleven-neighbour-graphs)): 57 types
   are the square, hexagonal or triangular grid in another drawing, and IH27–IH29 are the Cairo tiling.
@@ -284,7 +284,7 @@ two or more smaller ships flying together, or a smaller ship with a passenger.
   <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="A ring of triangles and a square moving across the snub square tiling" width="240" loading="lazy">
 </picture></div>
 <figcaption>Guttesen's gliders in Life (<code>B3/S23</code>), as JETCARP's searches found them
-independently. Left: his glider g on the kagome tiling 3.6.3.6, period 4. Right: his period-8 glider on
+independently. Left: glider g on the kagome tiling 3.6.3.6, period 4. Right: the period-8 glider on
 the snub square tiling 3.3.4.3.4. Both are credited to
 <a href="bibliography.md#guttesen2026game">Guttesen 2026</a>. Scenes
 <code>docs/scenes/tilings/glider-guttesen-kagome.json</code> and
@@ -432,15 +432,15 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
 [Findings](findings.md)). Before the claims above are final, and before the paper:
 
 - Ask on the ConwayLife forums, when the results are posted there, whether any of the spaceship
-  candidates have been seen before, and ask EricG whether his 2013 Tiling Project patterns can be
+  candidates have been seen before, and ask EricG whether the 2013 Tiling Project patterns can be
   shared again, so the flagged 4.8.8 and 3.12.12 ships, and the claimed Archimedean ones, can be
-  compared with his.
+  compared with EricG's.
 - Find Martin Büttner's 2014 period-20 ship, confirm its tiling and rule, and compare it cell for
-  cell with the census's period-20 ship on k2-007, which is very likely his.
+  cell with the census's period-20 ship on k2-007, which is very likely Büttner's.
 - Compare the census's 3.3.3.4.4 ship with EricG's, and look more closely at the large Life ships of
   k3-055, which may share a common engine.
-- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once he
-  publishes them.
+- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once they
+  are published.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.
 - Re-run the key searches just before publication.
 

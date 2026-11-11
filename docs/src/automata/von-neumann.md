@@ -1,7 +1,7 @@
 # Von Neumann's 29-state automaton
 
 John von Neumann designed this automaton in the early 1950s to answer a question about life itself:
-can a machine build a copy of itself, including the instructions for building the next copy? His
+can a machine build a copy of itself, including the instructions for building the next copy? Von Neumann's
 answer was a universal constructor made of cells, each with 29 states, connected to its four
 neighbours. Conway's Life began as a simplification of its ideas. JETCARP runs it on the square
 grid, from the rule as published.
@@ -56,7 +56,7 @@ Von Neumann's work on automata began with "The General and Logical Theory of Aut
 series of lectures at the University of Illinois in 1949, which described a *kinematic*
 self-reproducing machine built from mechanical parts. Arthur W. Burks writes that
 Stanisław Ulam suggested a cellular framework would be easier to treat mathematically. Von Neumann
-then designed an infinite array of square cells, each holding the same 29-state automaton. He began
+then designed an infinite array of square cells, each holding the same 29-state automaton. Von Neumann began
 the manuscript in September 1952 and worked on it until 1953, and left it unfinished
 ([von Neumann 1966](../research/bibliography.md#vonneumann1966theory)).
 

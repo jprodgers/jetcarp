@@ -43,10 +43,10 @@ Robert Berger showed in 1966 that the domino problem for Wang tiles is undecidab
 aperiodic set of tiles ([Berger 1966](../research/bibliography.md#berger1966undecidability)); Raphael M.
 Robinson simplified the construction in 1971 ([Robinson 1971](../research/bibliography.md#robinson1971undecidability)).
 Roger Penrose found much smaller aperiodic sets in the 1970s, reducing them to two tiles, the kite and
-dart and the two rhombs. His US patent, "Set of tiles for covering a surface", was filed in 1976 (with a
+dart and the two rhombs. Penrose's US patent, "Set of tiles for covering a surface", was filed in 1976 (with a
 UK priority date of June 1975) and granted in 1979 ([Penrose 1979, patent](../research/bibliography.md#penrose1979set));
-his own account is "Pentaplexity" ([Penrose 1979](../research/bibliography.md#penrose1979pentaplexity)).
-Martin Gardner made the tilings widely known in his *Scientific American* column of January 1977
+Penrose's own account is "Pentaplexity" ([Penrose 1979](../research/bibliography.md#penrose1979pentaplexity)).
+Martin Gardner's *Scientific American* column of January 1977 made the tilings widely known
 ([Gardner 1977](../research/bibliography.md#gardner1977extraordinary)).
 
 The Robinson triangles are named after Raphael Robinson; Grünbaum and Shephard give the standard

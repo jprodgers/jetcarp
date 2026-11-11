@@ -208,9 +208,9 @@ survives*, *B survives*, or *new objects*; runs can also explode or fail to sett
 
 **What it does.** Evolves rules in which gliders exist. This is **James Edmond's method**, from
 "Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre"
-([Edmond 2026](bibliography.md#edmond2026gliders)), reimplemented in JETCARP from his paper and a
-reading of his repository, with two small functions (the mutation step and the table notation)
-adapted from his code under its MIT licence. JETCARP's part is running the method on every tiling it
+([Edmond 2026](bibliography.md#edmond2026gliders)), reimplemented in JETCARP from that paper and a
+reading of Edmond's repository, with two small functions (the mutation step and the table notation)
+adapted from the repository's code under its MIT licence. JETCARP's part is running the method on every tiling it
 has, periodic and aperiodic, not only the hat and spectre.
 
 **How it scores.** Each genome is a [priority table](../automata/priority-rules.md) of up to eight rows.

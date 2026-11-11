@@ -57,13 +57,13 @@ in three papers in 1969 and 1970
 treated k-uniform tilings in their 1977 survey and in *Tilings and Patterns*
 ([Grünbaum and Shephard 1977](../research/bibliography.md#grunbaum1977tilings);
 [1987](../research/bibliography.md#grunbaum1987tilings)). Darrah Chavey's 1984 thesis gave the number
-of 3-uniform tilings, 61, and his 1989 paper is the standard printed catalogue
+of 3-uniform tilings, 61, and Chavey's 1989 paper is the standard printed catalogue
 ([Chavey 1984](../research/bibliography.md#chavey1984periodic);
 [Chavey 1989](../research/bibliography.md#chavey1989tilings)).
 
-Brian Galebach wrote a program that generates complete sets of k-uniform tilings. His entry in the
+Brian Galebach wrote a program that generates complete sets of k-uniform tilings. Galebach's entry in the
 On-Line Encyclopedia of Integer Sequences records 151 4-uniform and 332 5-uniform tilings (2002) and
-673 6-uniform tilings (2003); his page says the 6-uniform run took about a month of computation and
+673 6-uniform tilings (2003); Galebach's page says the 6-uniform run took about a month of computation and
 reproduced Krötenheerdt's list ([Galebach, OEIS A068599](../research/bibliography.md#galebach2002a068599);
 [Galebach, n-uniform tilings](../research/bibliography.md#galebachnd_uniform)). Marek Čtrnáct later
 extended the counts to k = 13 and, with Eryk Kopczyński, built an online tessellation catalogue

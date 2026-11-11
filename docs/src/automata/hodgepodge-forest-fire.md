@@ -63,8 +63,8 @@ sprout everywhere. Scene <code>docs/scenes/automata/forestfire-square.json</code
 ## Where it came from
 
 **Hodgepodge.** The hodgepodge machine was designed by Martin Gerhardt and Heike Schuster of the
-University of Bielefeld, inspired by catalytic chemical reactions. A. K. Dewdney introduced it to the
-public in his *Scientific American* column "The hodgepodge machine makes waves" in August 1988
+University of Bielefeld, inspired by catalytic chemical reactions. A. K. Dewdney's
+*Scientific American* column "The hodgepodge machine makes waves" introduced it to the public in August 1988
 ([Dewdney 1988](../research/bibliography.md#dewdney1988hodgepodge)), and the CelLab manual credits it
 as invented by Gerhardt and Schuster ([Rucker and Walker 1989](../research/bibliography.md#rucker1989cellab)).
 Their own paper appeared in *Physica D* in 1989

@@ -102,7 +102,7 @@ which is why Wolfram describes two-cell rules on cells "arranged like hexagons o
 **The three-fold hexagon.** Tom McLean's catalogue describes isohedral type IH7 in the same way as this
 family: a hexagon whose adjacent sides pair up, meeting at 120°
 ([McLean](../research/bibliography.md#mcleannd_isohedral)). M. C. Escher drew lizards on a regular
-division of the plane in his drawing no. 25 (1939), and used the same angular lizard in the lithograph
+division of the plane in drawing no. 25 (1939), and used the same angular lizard in the lithograph
 *Reptiles* (1943) ([Kersten 2018](../research/bibliography.md#kersten2018repeating);
 [Schattschneider 1990](../research/bibliography.md#schattschneider1990visions)); we have not found a
 source that states drawing no. 25 is of type IH7, though the shapes agree.

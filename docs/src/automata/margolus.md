@@ -62,7 +62,7 @@ computation, including a billiard-ball model in which logic signals are hard bal
 their elastic collisions ([Fredkin and Toffoli 1982](../research/bibliography.md#fredkin1982conservative)).
 Norman Margolus, in the Information Mechanics Group at MIT with Toffoli, found a very simple
 reversible automaton that runs the billiard-ball model, using the partitioning scheme now named after
-him ([Margolus 1984](../research/bibliography.md#margolus1984physicslike)). He later wrote that the
+Margolus ([Margolus 1984](../research/bibliography.md#margolus1984physicslike)). Margolus later wrote that the
 partitioning technique was first developed for that purpose, and that Toffoli had built the first
 universal invertible automaton earlier by another route
 ([Margolus 1999](../research/bibliography.md#margolus1999crystalline)).

@@ -53,7 +53,7 @@ is enough to recover fluid flow, where the square grid's is not
 
 **The two-parent rules are Wolfram's.** In a note in *A New Kind of Science*, Wolfram observes that
 if the cells on successive steps are arranged "like hexagons or staggered bricks", each cell depends
-on two cells instead of three; he counts 16 two-colour rules and 19,683 three-colour rules, of which
+on two cells instead of three; Wolfram counts 16 two-colour rules and 19,683 three-colour rules, of which
 1,734 are fundamentally different ([Wolfram 2002](../research/bibliography.md#wolfram2002new), p. 885).
 `HexW` and `HexW3` are exactly this family. Matej Kerekrety's 2020 web tool also draws the 16 binary
 rules on hexagons, along with the 256 elementary rules on squares and pentagons
@@ -112,7 +112,7 @@ rules, three of them chaotic (153, 165 and 195). The labels are a quick heuristi
 
 ## What is new here
 
-The two-parent rules are not new: they are Wolfram's two-cell rules, drawn on hexagons as he
+The two-parent rules are not new: they are Wolfram's two-cell rules, drawn on hexagons as Wolfram
 describes, and Kerekrety's tool draws the binary ones too.
 
 The three-parent rules are built from standard ingredients, but we found no earlier source that

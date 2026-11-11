@@ -118,7 +118,7 @@ claim was made:
   [Findings](../research/findings.md#isohedral-tilings-are-eleven-neighbour-graphs)).
 - **A hat glider that was Edmond's glider B.** JETCARP's evolutionary search returned a table that
   looked unlike any of Edmond's, so its glider at first looked new. With the states renamed, it gives
-  the same evolution as his glider B, cell for cell; the credit is his (see
+  the same evolution as Edmond's glider B, cell for cell; the credit is Edmond's (see
   [Findings](../research/findings.md#the-hat-glider-is-edmonds-glider-b)).
 - **Compound ships.** Ten of the 72 candidate ships were two smaller ships flying side by side, eight
   of them pairs of H. S. Guttesen's kagome glider.

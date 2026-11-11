@@ -62,7 +62,7 @@ Roger Penrose's used two ([Berger 1966](../research/bibliography.md#berger1966un
 aperiodic when combined with matching rules ([Socolar and Taylor 2011](../research/bibliography.md#socolar2011aperiodic)).
 
 David Smith, a hobbyist in Yorkshire, England, found the hat in the autumn of 2022, working largely by
-hand with the help of Jaap Scherphuis's PolyForm Puzzle Solver, and emailed Craig S. Kaplan to ask him to study the shape with his software
+hand with the help of Jaap Scherphuis's PolyForm Puzzle Solver, and emailed Craig S. Kaplan to ask that the shape be studied with Kaplan's software
 ([University of Waterloo 2023](../research/bibliography.md#uwaterloo2023trick)). Smith, Joseph Samuel
 Myers, Kaplan and Chaim Goodman-Strauss posted "An aperiodic monotile" in March 2023, and it was
 published in *Combinatorial Theory* in 2024. Their proof groups hats into four *metatiles* with a
@@ -107,7 +107,7 @@ though we count those only as direct applications; and it computes sandpile iden
 single-source sandpiles on both monotiles, where our search found no earlier sandpile work at all (see
 [The Abelian sandpile](../automata/sandpile.md#what-is-new-here) and
 [What is new in JETCARP](../research/contributions.md)). The hat glider found by JETCARP's search is
-James Edmond's hat glider B with its states renamed, and the credit is his; JETCARP adds only a check
+James Edmond's hat glider B with its states renamed, and the credit is Edmond's; JETCARP adds only a check
 that it runs for a million rings of tiles on a sliding window (see
 [Priority rules](../automata/priority-rules.md#what-is-new-here)).
 

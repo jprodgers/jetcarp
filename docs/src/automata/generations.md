@@ -51,7 +51,7 @@ but the 1987 book shows it was published by then. Rudy Rucker and John Walker's 
 [CelLab rules](../research/bibliography.md#walkernd_cellabrules)).
 
 The family got its name and its notation from Mirek Wójtowicz's MCell ("Mirek's Cellebration"), a
-Windows program he began in January 1999
+Windows program Wójtowicz began in January 1999
 ([Wójtowicz 2024](../research/bibliography.md#wojtowicz2024mcell)). MCell made Generations a named
 family with a survival/birth/states notation, and its documentation calls it perhaps the most
 beautiful family in the program ([MCell families](../research/bibliography.md#wojtowicznd_families)).

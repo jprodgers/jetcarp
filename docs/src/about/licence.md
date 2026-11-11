@@ -30,14 +30,14 @@ summary:
 | What | File | Source | Licence |
 | --- | --- | --- | --- |
 | Hat tiling substitution | `crates/jetcarp-core/src/hat.rs` | Ported from Craig S. Kaplan's [hatviz](https://github.com/isohedral/hatviz) | BSD 3-Clause, © 2023 Craig S. Kaplan |
-| Spectre substitution | `crates/jetcarp-core/src/spectre.rs` | Ported, by way of JETCARP's JavaScript prototype, from Craig S. Kaplan's Spectre visualizer | BSD 3-Clause, © 2023 Craig S. Kaplan, by his permission (below) |
+| Spectre substitution | `crates/jetcarp-core/src/spectre.rs` | Ported, by way of JETCARP's JavaScript prototype, from Craig S. Kaplan's Spectre visualizer | BSD 3-Clause, © 2023 Craig S. Kaplan, by Kaplan's permission (below) |
 | Isohedral tiling tables | `crates/jetcarp-core/src/isohedral/` | Converted from Craig S. Kaplan's [tactile-js](https://github.com/isohedral/tactile-js) | BSD 3-Clause, © 2018 Craig S. Kaplan |
 | k-uniform tilings | `crates/jetcarp-core/data/tilings/kuniform.json`, from `tools/data/JSON_Galebach.json` | J. E. Soto Sánchez's Galebach collection, which encodes Brian Galebach's catalogue in the integer representation of Soto Sánchez, Weyrich, Medeiros e Sá and de Figueiredo (2021) | CC BY 4.0, with changes (below) |
 | Evolutionary search: mutation step and rule notation | `crates/jetcarp-core/src/evolve.rs` (`mutate`), `crates/jetcarp-core/src/evolve/priority.rs` (`PriorityRule::notation`) | Adapted from James Edmond's [monotile-ca](https://github.com/jamesedmond/monotile-ca) | MIT, © 2026 James Edmond (monotile-ca is MIT OR Apache-2.0; JETCARP takes it under MIT) |
 | The Lenia pattern *Orbium unicaudatus* | `crates/jetcarp-core/src/lenia.rs` (the `ORBIUM` constant only) | `Python/animals.json` in Bert Chan's [Lenia](https://github.com/Chakazul/Lenia) | MIT, © 2018 Bert Chan |
 
 **The Spectre visualizer.** Kaplan's `spectre.js` was published without a licence. Asked whether
-JETCARP could use it, he made it available to JETCARP under BSD 3-Clause, the same terms as hatviz,
+JETCARP could use it, Kaplan made it available to JETCARP under BSD 3-Clause, the same terms as hatviz,
 by email to Jimmie Rodgers on 10 November 2026.
 
 **The k-uniform data.** JETCARP converted the data: `tools/gen_kuniform.py` rebuilds each tiling's
@@ -50,10 +50,10 @@ tilings should credit the catalogue and its encoding (see [Citing JETCARP](citin
 These carry no licence obligation, but the work they come from is credited here and on the pages that
 describe them:
 
-- **The evolutionary glider search**, James Edmond's method, written from his paper (arXiv:2609.22579)
-  and a reading of his repository, apart from the two functions listed above (see
+- **The evolutionary glider search**, James Edmond's method, written from Edmond's paper (arXiv:2609.22579)
+  and a reading of Edmond's repository, apart from the two functions listed above (see
   [Search methods](../research/search-methods.md#evolutionary-glider-search)).
-- **The Spectre glider rule** (`SpectreGlider`), Edmond's published rule (Table 7 of his paper).
+- **The Spectre glider rule** (`SpectreGlider`), Edmond's published rule (Table 7 of Edmond's paper).
 - **Von Neumann's 29-state automaton**, written from von Neumann's *Theory of Self-Reproducing
   Automata*, edited by A. W. Burks (1966), with no text, figures, rule files or patterns from other
   programs.
