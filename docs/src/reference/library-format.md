@@ -53,6 +53,16 @@ phases=<phase 0>;<phase 1>;...
   - Its own members come in a fixed order: `family`, then `params` and `edges` (each only if the
     tiling has them), then `boundary`. This is the order every id has used, so this one object does
     not sort its members as RFC 8785 would (which would put `boundary` first).
+  - `params` is there whenever the tiling's spec has a parameters value, even an empty object
+    (`"params":{}`). On the four aperiodic families (`hat`, `spectre`, `penrose-kd`,
+    `penrose-rhomb`) its `level` is taken out first, and `params` is left out if that leaves it
+    empty.
+  - `edges` is there whenever the spec has an edge list, even an empty one. Each edge is written as
+    the engine reads it, not as the spec spelled it: its `mode` (`J`, `U`, `S` or `I`), `curved`
+    (`true` when the spec leaves it out) and `nodes` (an empty list when left out), each node with
+    its `t` and `d` only. Any other member of an edge or a node is dropped. RFC 8785 then sorts
+    each edge's members (`curved`, `mode`, `nodes`) and each node's (`d`, `t`).
+  - `boundary` is always `"dead"`, and the size is never part of the key.
   - Every member's value is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) canonical JSON:
     object keys sorted by their UTF-16 code units at every depth, no whitespace, strings escaped as
     RFC 8785 says, and numbers as ECMAScript writes them (`1`, not `1.0`; `0.000001` but `1e-7`;
@@ -62,22 +72,33 @@ phases=<phase 0>;<phase 1>;...
     `{"family":"cairo","params":{"a":[1e-7,0.000001],"b":1},"boundary":"dead"}`.
   - JETCARP's tests check the key against RFC 8785's own samples and against 600 lines written
     with an independent implementation, the Python `rfc8785` package
-    (`crates/jetcarp-core/tests/data/jcs_vectors.txt`, made by `tools/jcs_vectors.py`).
+    (`crates/jetcarp-core/tests/data/jcs_vectors.txt`, made by `tools/jcs_vectors.py`), and check
+    that the function below, transcribed, gives every tiling line of that file.
 
   In Python, with the `rfc8785` package and a tiling `t` as JETCARP writes it (in a scene, say),
   read from JSON:
 
   ```python
   import rfc8785
+
+  APERIODIC = {"hat", "spectre", "penrose-kd", "penrose-rhomb"}
+
   def tiling_key(t):
       jcs = lambda v: rfc8785.dumps(v).decode()
       out = ['"family":' + jcs(t["family"])]
-      out += [f'"{k}":' + jcs(t[k]) for k in ("params", "edges") if t.get(k) is not None]
+      params = t.get("params")
+      if isinstance(params, dict) and t["family"] in APERIODIC:
+          params = {k: v for k, v in params.items() if k != "level"} or None
+      if params is not None:
+          out.append('"params":' + jcs(params))
+      if t.get("edges") is not None:
+          edges = [{"mode": e["mode"], "curved": e.get("curved", True),
+                    "nodes": [{"t": n["t"], "d": n["d"]} for n in e.get("nodes", [])]}
+                   for e in t["edges"]]
+          out.append('"edges":' + jcs(edges))
       return "{" + ",".join(out + ['"boundary":"dead"']) + "}"
   ```
 
-  (On the four aperiodic families, take `level` out of `params` first, and leave `params` out if
-  nothing is left.)
 - `d` is the displacement per period in lattice steps, in the canonical orientation (`0,0` for still
   lifes and oscillators).
 - `rule` is the exact rule only for puffers, movers, guns and `other`, whose stored phases do not
