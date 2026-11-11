@@ -370,8 +370,9 @@ human keep/maybe/drop ratings of animated clips, the general technique of learni
 preferences ([Christiano et al. 2017](bibliography.md#christiano2017deep)); in Picbreeder people chose
 directly, with no model in between
 ([Secretan et al. 2008](bibliography.md#secretan2008picbreeder);
-[2011](bibliography.md#secretan2011picbreeder)). Most of the clips were rated by Emily Teich, whose eye
-for what is beautiful is built into the score. Other automated discovery in artificial life uses
+[2011](bibliography.md#secretan2011picbreeder)). Jimmie Rodgers and Emily Teich rated the first two
+rounds together and Jimmie Rodgers the last two, so both their eyes for what is beautiful are built
+into the score. Other automated discovery in artificial life uses
 learned goal spaces ([Reinke, Etcheverry and Oudeyer 2020](bibliography.md#reinke2020intrinsically))
 or foundation models in place of human judgement
 ([Kumar et al. 2025](bibliography.md#kumar2025automating)). Earlier cellular automaton searches of
@@ -447,5 +448,5 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
 ## Credits
 
 These findings were made with JETCARP by Jimmie Rodgers. The evolutionary glider search is James
-Edmond's method, reimplemented. Emily Teich rated most of the clips that taught the exploratory search
-what to show.
+Edmond's method, reimplemented. Emily Teich and Jimmie Rodgers rated the clips that taught the exploratory
+search what to show.

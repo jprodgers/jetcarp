@@ -9,7 +9,7 @@
 //! stopped job.
 //!
 //! The reviews are the ratings the score was fitted to (the taste rounds' keep, maybe, and drop,
-//! most of them Emily Teich's): clips go out, verdicts come back as rating files, and a refit
+//! rated by Jimmie Rodgers and Emily Teich): clips go out, verdicts come back as rating files, and a refit
 //! score is applied to every stored run by `search.rescore`. Reviews are kept in the library
 //! (ratings of target kind `search_run`), so deleting a search's folder keeps them.
 

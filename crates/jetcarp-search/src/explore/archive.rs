@@ -62,7 +62,7 @@ pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
 }
 
 /// How much people liked runs like this one, 0 to 3: a logistic fit to 829 field-rule clips rated
-/// by eye over four rounds, most of them by Emily Teich (keep 1, maybe 0.45, drop 0; ridge penalty
+/// by eye over four rounds by Jimmie Rodgers and Emily Teich (keep 1, maybe 0.45, drop 0; ridge penalty
 /// 8, family terms penalty 5;
 /// row rules and WireWorld circuits are judged elsewhere). Fitted to the first three rounds, it
 /// reached AUC 0.84 for keep against drop on the fourth, which it had not seen. The ratings favour

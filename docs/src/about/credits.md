@@ -28,8 +28,8 @@ knowledge, new, each with its evidence on [What is new in JETCARP](../research/c
 
 ## Acknowledgements
 
-**Emily Teich** applied her aesthetics to JETCARP's exploratory search. She rated most of the
-animated clips, hundreds of them, from which the search learned its score. Her ratings decide which
+**Emily Teich** applied her aesthetics to JETCARP's exploratory search. With Jimmie Rodgers she
+rated the first two rounds of animated clips, 428 of them, from which the search learned its score. Her ratings decide which
 runs the search shows people, and so brought her eye for what is beautiful into the search itself
 (see [Search methods](../research/search-methods.md#explore)).
 
