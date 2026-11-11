@@ -12,20 +12,22 @@
 //! - seen counts add up (less the copies sighted in rules the record failed in), and so do
 //!   sightings per (rule, job): copies and soups summed, first seen the earliest, last seen the
 //!   latest; its rules are all the rules any of them verified in, each first seen the earliest;
-//! - the name is the earliest record's name (by CART's `created`, then id); another record's
-//!   different name goes into the notes as "Also named in CART: ..."; notes are kept, the
-//!   earliest first, and tags are joined; the rating is the highest; the curation state is the
-//!   first that is not `new`;
-//! - its `created` is the earliest, and its provenance (the run it came from, with the moment of
-//!   the find in that run, up to an hour before CART stored it) is the earliest record's. The
-//!   interest score is computed again from the seen count, and the label is made again from the
-//!   new id (CART's labels were all generated, from the old id).
+//! - the records are taken in the order they were found (the moment of the find: the earliest of
+//!   a record's own provenance date, the find in its run, and CART's `created`, which can be up to
+//!   an hour later; then id). The name is the first one's; another record's different name goes
+//!   into the notes as "Also named in CART: ..."; notes are kept, the first first, and tags are
+//!   joined; the rating is the highest; the curation state is the first that is not `new`;
+//! - its provenance (the run it came from) is the first one's, dated by the earliest find, and
+//!   its `created` is the earliest. The interest score is computed again from the seen count, and
+//!   the label is made again from the new id (CART's labels were all generated, from the old id).
 //!
 //! **Provenance.** Row 0 is how the record was found: `found`, by Jimmie Rodgers (ORCID iD
-//! 0009-0003-8775-6483), on the date CART stored it (`created`, the earliest where records were
-//! merged), from its source (`hunt`, `search`), by the job whose sighting
-//! of it came first, with engine version `CART <version>` and the geometry pin it was verified
-//! with today. Row 1 is `imported`: now, by this engine, from `CART catalog <file name>`.
+//! 0009-0003-8775-6483), at the moment of the earliest find (the record's own provenance date),
+//! from its source (`hunt`, `search`), by the job whose sighting of it came first, with the engine
+//! version its records state (`CART <version>` for CART's `cart_version`, the version as written
+//! for a JETCARP catalog's `jetcarp_version`) and the geometry pin it was verified with today.
+//! Row 1 is `imported`: now, by this engine, from `CART catalog <file name>` (`JETCARP catalog
+//! <file name>` for JETCARP's own catalogs from before content ids, which the tool reads too).
 //!
 //! **Jobs.** CART's jobs become finished jobs of the library (uuids made from their CART rows, so a
 //! second run finds them), with their spec and progress (absolute paths cut to file names, CART
@@ -216,8 +218,35 @@ struct Cart {
     period: u64,
     rule: String,
     created: String,
+    /// The moment of the find: the earliest of its provenance date and `created`.
+    found: String,
+    /// The engine that found it, as the record states it ([`found_with`]).
+    found_with: String,
     seen: u64,
     rec: PatternRecord,
+}
+
+/// The engine that found a record, as its body states it: `CART <version>` for CART's
+/// `cart_version`, the version as written for a JETCARP catalog's `jetcarp_version`.
+fn found_with(prov: &Value) -> String {
+    match (prov.get("cart_version"), prov.get("jetcarp_version")) {
+        (Some(v), _) => match v.as_str().unwrap_or("") {
+            "" => "CART".to_string(),
+            v => format!("CART {v}"),
+        },
+        (None, Some(v)) => v.as_str().unwrap_or("").to_string(),
+        _ => String::new(),
+    }
+}
+
+/// The earlier of two UTC dates (`YYYY-MM-DDTHH:MM:SSZ`, so they compare as text), either when
+/// the other is empty.
+fn earliest(a: &str, b: &str) -> String {
+    match (a, b) {
+        ("", b) => b.to_string(),
+        (a, "") => a.to_string(),
+        (a, b) => a.min(b).to_string(),
+    }
 }
 
 fn sql(e: rusqlite::Error) -> String {
@@ -267,6 +296,34 @@ fn open_cart(p: &Path) -> Result<Connection, String> {
         }
     }
     Ok(c)
+}
+
+/// Who made a catalog, from what its records state: (`CART`, `CART`) for CART's, (`JETCARP`,
+/// `<version>`) for one of JETCARP's own from before content ids. The second is its jobs' engine
+/// version.
+fn made_by(c: &Connection) -> Result<(&'static str, String), String> {
+    let mut st = c
+        .prepare("SELECT body FROM patterns ORDER BY rowid LIMIT 200")
+        .map_err(sql)?;
+    let mut q = st.query([]).map_err(sql)?;
+    let mut seen: BTreeMap<String, u64> = BTreeMap::new();
+    while let Some(r) = q.next().map_err(sql)? {
+        let Ok(text) = body_text(r.get_ref(0).map_err(sql)?) else {
+            continue;
+        };
+        let body: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        *seen.entry(found_with(&body["provenance"])).or_default() += 1;
+    }
+    let most = seen
+        .into_iter()
+        .max_by_key(|x| x.1)
+        .map(|x| x.0)
+        .unwrap_or_else(|| "CART".into());
+    Ok(if most == "CART" || most.starts_with("CART ") {
+        ("CART", "CART".to_string())
+    } else {
+        ("JETCARP", most)
+    })
 }
 
 fn has_table(c: &Connection, t: &str) -> bool {
@@ -373,6 +430,7 @@ fn read_tiling(
                 "created": created,
                 "updated": r.get::<_, String>(24)?,
             });
+            let with = found_with(&body["provenance"]);
             Ok(match serde_json::from_value::<PatternRecord>(v) {
                 Ok(rec) => Ok(Cart {
                     id,
@@ -380,7 +438,9 @@ fn read_tiling(
                     class,
                     period: period as u64,
                     rule,
+                    found: earliest(&rec.provenance.date, &created),
                     created,
+                    found_with: with,
                     seen: seen.max(0) as u64,
                     rec,
                 }),
@@ -693,7 +753,9 @@ fn run_in(o: &Options) -> Result<Report, String> {
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| "catalog.sqlite".into());
-    let origin = Origin::found_elsewhere(FINDER, ORCID, &format!("CART catalog {file_name}"));
+    let made_by = made_by(&cart)?;
+    let origin =
+        Origin::found_elsewhere(FINDER, ORCID, &format!("{} catalog {file_name}", made_by.0));
 
     // The library, made if new; a second connection writes what the library's own API has no
     // call for (jobs with their dates, sightings with theirs, census rows).
@@ -874,13 +936,14 @@ fn run_in(o: &Options) -> Result<Report, String> {
                     tx.execute(
                         "INSERT INTO jobs (uuid, kind, spec, status, progress, engine_version,
                             created, updated, finished)
-                         VALUES (?1, ?2, ?3, ?4, ?5, 'CART', ?6, ?7, ?8)",
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                         params![
                             uuid,
                             j.kind,
                             spec.to_string(),
                             status,
                             progress.to_string(),
+                            made_by.1,
                             j.created,
                             j.updated,
                             j.finished.clone().unwrap_or_else(|| j.updated.clone()),
@@ -1053,7 +1116,7 @@ fn run_in(o: &Options) -> Result<Report, String> {
         let by_cart: HashMap<usize, &Done> = done.iter().map(|d| (d.cart, d)).collect();
         for g in &mut groups {
             g.members.sort_by(|&a, &b| {
-                (&carts[a].created, &carts[a].id).cmp(&(&carts[b].created, &carts[b].id))
+                (&carts[a].found, &carts[a].id).cmp(&(&carts[b].found, &carts[b].id))
             });
             if g.members.len() > 1 {
                 rep.merged_groups += 1;
@@ -1176,14 +1239,16 @@ fn run_in(o: &Options) -> Result<Report, String> {
                 notes.push(format!("Also named in CART: {}", names[1..].join(", ")));
             }
             rec.notes = notes.join("\n\n");
-            rec.created = cs[0].created.clone();
+            rec.created = cs
+                .iter()
+                .map(|c| c.created.as_str())
+                .min()
+                .unwrap()
+                .to_string();
             rec.updated = jetcarp_core::pattern::now_utc();
             rec.provenance = base.provenance.clone();
-            rec.provenance.jetcarp_version = if base.provenance.jetcarp_version.is_empty() {
-                "CART".into()
-            } else {
-                format!("CART {}", base.provenance.jetcarp_version)
-            };
+            rec.provenance.date = cs[0].found.clone();
+            rec.provenance.jetcarp_version = cs[0].found_with.clone();
             if rec.provenance.source.is_empty() {
                 rec.provenance.source = serde_json::to_value(base.discovered_by)
                     .ok()

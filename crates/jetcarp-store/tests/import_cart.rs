@@ -112,25 +112,45 @@ CREATE TABLE census_rows (job_id INTEGER NOT NULL, idx INTEGER NOT NULL, rule TE
 PRAGMA user_version = 6;
 ";
 
-/// A CART row for a record, its body deflated as CART stored it.
+/// Who wrote a catalog: CART (`cart_version` 0.1.0) or a JETCARP build from before content ids
+/// (`jetcarp_version` 0.4.0).
+#[derive(Clone, Copy, PartialEq)]
+enum Maker {
+    Cart,
+    Jetcarp,
+}
+
+/// A catalog row for a record, its body deflated as CART stored it: found in its run at `found`,
+/// stored at `created`.
+#[allow(clippy::too_many_arguments)]
 fn put(
     c: &Connection,
+    maker: Maker,
     id: &str,
     r: &PatternRecord,
     name: Option<&str>,
     notes: &str,
+    found: &str,
     created: &str,
 ) {
+    let (key, version) = match maker {
+        Maker::Cart => ("cart_version", "0.1.0"),
+        Maker::Jetcarp => ("jetcarp_version", "0.4.0"),
+    };
+    let mut verified = json!({"periods": 16, "generations": 16 * r.period, "field": "frame",
+        "date": created});
+    verified[key] = json!(version);
+    let mut provenance = json!({"source": "hunt", "rng_state": 7, "soup": 3, "density": 0.5,
+        "generation": 120, "date": found});
+    provenance[key] = json!(version);
     let body = json!({
         "format": 2,
         "tiling": r.tiling,
         "displacement_xy": r.displacement_xy,
         "bbox": r.bbox,
         "phases": r.phases,
-        "verified": {"periods": 16, "generations": 16 * r.period, "field": "frame",
-            "cart_version": "0.1.0", "date": created},
-        "provenance": {"source": "hunt", "rng_state": 7, "soup": 3, "density": 0.5,
-            "generation": 120, "cart_version": "0.1.0", "date": created},
+        "verified": verified,
+        "provenance": provenance,
     });
     let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
     enc.write_all(body.to_string().as_bytes()).unwrap();
@@ -167,7 +187,7 @@ fn put(
 
 /// The CART catalog: rules 1 B3/S23, 2 B36/S23, 3 B3/S0; jobs 0 (by hand), 1 and 2 (hunts), 3
 /// (a census).
-fn cart_catalog(path: &std::path::Path) {
+fn cart_catalog(path: &std::path::Path, maker: Maker) {
     let c = Connection::open(path).unwrap();
     c.execute_batch(SCHEMA).unwrap();
     for (id, n) in [(1, "B3/S23"), (2, "B36/S23"), (3, "B3/S0")] {
@@ -203,37 +223,46 @@ fn cart_catalog(path: &std::path::Path) {
     dot.min_cells = 1;
     dot.max_cells = 1;
     dot.bbox = [0, 0, 0, 0];
+    // Found first (15:50), though stored last.
     put(
         &c,
+        maker,
         "aaaa000000000001",
         &glider,
         None,
         "",
+        "2026-11-06T15:50:00Z",
         "2026-11-06T17:00:00Z",
     );
-    // The same glider turned a quarter turn, stored earlier, with a note.
+    // The same glider turned a quarter turn, found later but stored first, with a note.
     put(
         &c,
+        maker,
         "bbbb000000000002",
         &turned(&glider),
         None,
         "turned copy",
+        "2026-11-06T15:55:00Z",
         "2026-11-06T16:00:00Z",
     );
     put(
         &c,
+        maker,
         "cccc000000000003",
         &block,
         Some("block"),
         "",
+        "2026-11-06T16:29:00Z",
         "2026-11-06T16:30:00Z",
     );
     put(
         &c,
+        maker,
         "dddd000000000004",
         &dot,
         None,
         "",
+        "2026-11-06T16:44:00Z",
         "2026-11-06T16:45:00Z",
     );
     c.execute_batch(
@@ -261,7 +290,7 @@ fn cart_catalog(path: &std::path::Path) {
 fn a_cart_catalog_comes_in_once_verified_with_its_history() {
     let d = dir("small");
     let catalog = d.join("catalog.sqlite");
-    cart_catalog(&catalog);
+    cart_catalog(&catalog, Maker::Cart);
     let lib = Library::open(d.join("library"));
     // Another importer got there first: a search and a rating of one of its runs.
     let search = lib
@@ -316,7 +345,9 @@ fn a_cart_catalog_comes_in_once_verified_with_its_history() {
     let gl = lib.get(&g.id).unwrap();
     // Seen counts add up; the earliest record's date and note come along; its rules are both.
     assert_eq!(gl.seen, 15);
+    // Stored first at 16:00; found first at 15:50, which its own provenance and row 0 both say.
     assert_eq!(gl.created, "2026-11-06T16:00:00Z");
+    assert_eq!(gl.provenance.date, "2026-11-06T15:50:00Z");
     assert_eq!(gl.notes, "turned copy");
     assert_eq!(gl.rules, vec!["B3/S23".to_string(), "B36/S23".to_string()]);
     assert_eq!(gl.provenance.jetcarp_version, "CART 0.1.0");
@@ -334,7 +365,7 @@ fn a_cart_catalog_comes_in_once_verified_with_its_history() {
     assert_eq!(h[0].kind, "found");
     assert_eq!(h[0].finder, "Jimmie Rodgers");
     assert_eq!(h[0].orcid, "0009-0003-8775-6483");
-    assert_eq!(h[0].date, "2026-11-06T16:00:00Z");
+    assert_eq!(h[0].date, "2026-11-06T15:50:00Z");
     assert_eq!(h[0].engine_version, "CART 0.1.0");
     assert_eq!(h[0].source, "hunt");
     assert_eq!(h[0].geometry_pin, gl.geometry_pin);
@@ -434,4 +465,38 @@ fn a_cart_catalog_comes_in_once_verified_with_its_history() {
             .len(),
         1
     );
+}
+
+#[test]
+fn a_jetcarp_catalog_keeps_the_engine_version_its_records_state() {
+    let d = dir("jetcarp");
+    let catalog = d.join("hunts.sqlite");
+    cart_catalog(&catalog, Maker::Jetcarp);
+    let o = import::Options {
+        cart: catalog,
+        library: d.join("library"),
+        report: Some(d.join("report")),
+        threads: 2,
+    };
+    let r = import::run(&o).unwrap();
+    assert_eq!((r.records, r.failed, r.ids), (4, 1, 2), "{}", r.text);
+    let lib = Library::open(d.join("library"));
+    let b = lib.get("block").unwrap();
+    assert_eq!(b.provenance.jetcarp_version, "0.4.0");
+    let h = lib.provenance("pattern", &b.id).unwrap();
+    assert_eq!(
+        (h[0].kind.as_str(), h[0].engine_version.as_str()),
+        ("found", "0.4.0")
+    );
+    assert_eq!(h[0].date, "2026-11-06T16:29:00Z");
+    assert_eq!(h[1].source, "JETCARP catalog hunts.sqlite");
+    let c = Connection::open(lib.path()).unwrap();
+    let versions: Vec<String> = c
+        .prepare("SELECT DISTINCT engine_version FROM jobs WHERE id > 0")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(versions, vec!["0.4.0".to_string()]);
 }

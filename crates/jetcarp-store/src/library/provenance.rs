@@ -12,8 +12,9 @@
 //! again by `jetcarp library reverify`, with the new pin).
 //!
 //! A record **found elsewhere** and imported with its history ([`Origin::found_elsewhere`]) keeps
-//! its discovery as row 0: `found`, by the finder the importer names, on the date it was first
-//! stored where it was found (its `created`), from its own source, with the engine that found it
+//! its discovery as row 0: `found`, by the finder the importer names, at the moment of the find
+//! (the earliest of its own `provenance.date` and its `created`), from its own source, with the
+//! engine that found it
 //! (`provenance.jetcarp_version`) and the pin it was verified with here; the machine is not
 //! known. Row 1 is then `imported`: now, by this engine, from the importer's source.
 //!
@@ -59,9 +60,9 @@ impl Origin {
         }
     }
     /// Found elsewhere by `finder` (with ORCID iD `orcid`), and imported from `source`. A record
-    /// stored with this origin gets two rows: row 0 `found`, by the finder, on the date it was
-    /// first stored where it was found (its `created`; else its `provenance.date`), from its own
-    /// source, with the engine that found it (`provenance.jetcarp_version`)
+    /// stored with this origin gets two rows: row 0 `found`, by the finder, at the moment of the
+    /// find (the earliest of its `provenance.date` and its `created`), from its own source, with
+    /// the engine that found it (`provenance.jetcarp_version`)
     /// and the pin it was verified with here; row 1 `imported`, now, by this engine, from
     /// `source`. It keeps its seen count, but no sighting is credited for it (the importer adds
     /// the sightings it knows of).

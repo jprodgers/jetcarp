@@ -661,9 +661,10 @@ fn add_in(
                 job,
                 &rec.geometry_pin,
                 &rec.provenance.source,
-                // A record found elsewhere: when it was first stored there.
-                if origin.found_by.is_some() && !rec.created.is_empty() {
-                    &rec.created
+                // A record found elsewhere: the moment of the find, the earliest of its own date
+                // and when it was stored there.
+                if origin.found_by.is_some() {
+                    found_date(&rec)
                 } else {
                     &rec.provenance.date
                 },
@@ -711,6 +712,16 @@ fn add_in(
         put_sighting(tx, &id, rid, job, count, soups, &now)?;
     }
     Ok(out)
+}
+
+/// When a record was found: the earliest of its own provenance date and its `created` (dates
+/// are UTC `YYYY-MM-DDTHH:MM:SSZ`, so they compare as text); either when the other is empty.
+fn found_date(rec: &PatternRecord) -> &str {
+    match (rec.provenance.date.as_str(), rec.created.as_str()) {
+        ("", c) => c,
+        (d, "") => d,
+        (d, c) => d.min(c),
+    }
 }
 
 /// A `pattern_rules` row: a rule a pattern was verified in (the longer verification kept).
