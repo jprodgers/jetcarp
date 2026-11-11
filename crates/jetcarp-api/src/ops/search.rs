@@ -1375,6 +1375,7 @@ impl ExploreIn {
             import,
             import_only: self.import_only,
             uuid: String::new(),
+            seal_rows: None,
         })
     }
 }

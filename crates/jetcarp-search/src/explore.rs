@@ -5,22 +5,27 @@
 //!
 //! - [`archive`]: scores, behaviour bins, and the archive of the best runs of each niche.
 //! - [`job`]: the search ([`job::Search`]), run in steps.
-//! - [`store`]: its working database (`searches/<uuid>/search.sqlite` beside the catalog):
-//!   every run, reviews, and the search's state, so a stopped search carries on without reading
-//!   its runs again; and importing an old CART explore database.
+//! - [`runs`]: its run records, sealed Parquet segments ([`segments`]) and the newest runs in
+//!   its working database ([`store`], `searches/<uuid>/search.sqlite` beside the library, with
+//!   the search's state, so a stopped search carries on without reading its runs again); and
+//!   importing an old CART explore database.
+//! - [`reviews`]: verdicts on runs, kept as ratings in the library.
 //! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and publishing the atlas Quick
 //!   Start reads.
 
 pub mod archive;
 pub mod atlas;
 pub mod job;
+pub mod reviews;
+pub mod runs;
+pub mod segments;
 pub mod sheet;
 pub mod store;
 
-/// A read-only database handle (a search's database, opened for queries).
-pub type Db = rusqlite::Connection;
+/// A search's runs opened for reading.
+pub type Db = runs::Runs;
 
-/// Open a search database for reading.
+/// Open a search's runs for reading (`path`: its working database, `search.sqlite`).
 pub fn open_read(path: &std::path::Path) -> Result<Db, String> {
-    store::open_read(path)
+    runs::Runs::open_read(path)
 }

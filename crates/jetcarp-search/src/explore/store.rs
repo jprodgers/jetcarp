@@ -1,12 +1,11 @@
-//! An explore search's working database (`searches/<uuid>/search.sqlite` beside the catalog):
-//! every run it measured, the reviews people gave them, and the search's own state, so a stopped
-//! search carries on from where it was without reading its runs again.
+//! An explore search's working database (`searches/<uuid>/search.sqlite` beside the library):
+//! the runs not yet sealed into Parquet segments ([`crate::explore::runs`]), and the search's
+//! own state, so a stopped search carries on from where it was without reading its runs again.
 //!
 //! | Table | What |
 //! | --- | --- |
-//! | `runs` | one row per run: candidate, fate, score, behaviour bin, features (80-byte blob of 20 `f32`); `stage` 1 screened, 2 confirmed on a bigger grid (`parent` the screened run) |
-//! | `reviews` | a verdict on a run (`keep`, `maybe`, `drop`), with a note, who gave it, and where it came from (`review`, a ratings folder, an imported database) |
-//! | `elites` | the archive: each elite run's id and tiling group (its niche is its family, that group, and its bin) |
+//! | `runs` | the runs not yet sealed, one row each: candidate, fate, score, behaviour bin, features (80-byte blob of 20 `f32`); `stage` 1 screened, 2 confirmed on a bigger grid (`parent` the screened run) |
+//! | `elites` | the archive: each elite run's id, tiling group (its niche is its family, that group, and its bin), and the candidate and measures the search needs of it (the columns of `runs` it reads), so loading never reads the runs |
 //! | `confirmed` | elites confirmed on bigger grids |
 //! | `coverage` | screened runs per tiling, family, and seed kind (where the search tries next) |
 //! | `families` | screened runs per family, with their score sum and best score |
@@ -15,15 +14,17 @@
 //!
 //! Each step of a search writes its runs and what they changed in all of these in one
 //! transaction ([`write`]), so the database always holds a state the search reached. Loading
-//! ([`load`]) reads the elites' runs, the small tables, and the seen blobs, never the whole of
-//! `runs`: a search of 15 million runs loads in seconds.
+//! ([`load`]) reads the elites, the small tables, and the seen blobs, never `runs`: a search of
+//! 15 million runs loads in about a second.
 //!
-//! The `runs` and `reviews` tables are those of CART's explore databases (with two more review
-//! columns), so the contact sheets, the atlas, and the fit scripts read either; [`import`]
-//! copies an old database's runs and reviews into a new search and rebuilds its state from them
-//! once.
+//! Reviews of runs are not here: they are ratings in the library (target kind `search_run`; see
+//! [`crate::explore::reviews`]), so a search folder can be deleted or shared without them.
+//!
+//! The `runs` table has the columns of CART's explore databases; [`Import`] reads such a
+//! database for a new search, which writes its runs straight into sealed segments.
 
-use crate::explore::archive::{self, Archive, Eval};
+use crate::explore::archive::{Archive, Eval};
+use crate::explore::segments::RunRec;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features};
 use jetcarp_core::explore::space::{ALL_FAMS, Fam};
@@ -33,8 +34,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-/// What `meta.format` says.
-pub const FORMAT: &str = "jetcarp-explore 1";
+/// What `meta.format` says. Format 1 (before sealed segments) kept every run in `runs`, the
+/// reviews in `reviews`, and only ids in `elites`; [`open`] brings such a database up to 2 and
+/// [`crate::explore::runs::Runs::open`] seals its runs.
+pub const FORMAT: &str = "jetcarp-explore 2";
 
 /// Seen blobs past this many are merged into one when a search is loaded.
 const MERGE_SEEN: i64 = 64;
@@ -128,31 +131,37 @@ pub fn feat_from_blob(b: &[u8]) -> Features {
     }
 }
 
+/// The columns of `runs`, in order.
+pub const RUN_COLS: &str = "id,stage,parent,tiling,nb,fam,rule,seed,seed_kind,cells,gens,steps,\
+                            rng,origin,fate,settle,period,score,bin,feats,ts";
+
+/// The columns of `elites` after its id and group: what [`eval_at`] reads.
+pub const EVAL_COLS: &str =
+    "tiling,nb,fam,rule,seed,cells,gens,steps,rng,origin,fate,score,bin,feats";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY, stage INT NOT NULL, parent INT, tiling TEXT NOT NULL, nb INT,
   fam TEXT NOT NULL, rule TEXT NOT NULL, seed TEXT NOT NULL, seed_kind TEXT, cells INT,
   gens INT, steps INT, rng INT, origin TEXT, fate TEXT, settle INT, period INT,
   score REAL, bin INT, feats BLOB, ts INT);
-CREATE TABLE IF NOT EXISTS reviews(run_id INT, verdict TEXT, note TEXT, ts INT, rater TEXT,
-  source TEXT);
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
-CREATE TABLE IF NOT EXISTS elites(id INTEGER PRIMARY KEY, grp INT NOT NULL);
+CREATE TABLE IF NOT EXISTS elites(id INTEGER PRIMARY KEY, grp INT NOT NULL, tiling TEXT,
+  nb INT, fam TEXT, rule TEXT, seed TEXT, cells INT, gens INT, steps INT, rng INT, origin TEXT,
+  fate TEXT, score REAL, bin INT, feats BLOB);
 CREATE TABLE IF NOT EXISTS confirmed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS coverage(tiling TEXT NOT NULL, fam TEXT NOT NULL,
   seed_kind TEXT NOT NULL, n INT NOT NULL, PRIMARY KEY(tiling, fam, seed_kind)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS families(fam TEXT PRIMARY KEY, runs INT NOT NULL,
   score_sum REAL NOT NULL, best REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS seen(seq INTEGER PRIMARY KEY, data BLOB NOT NULL);
-";
-
-const INDEXES: &str = "
 CREATE INDEX IF NOT EXISTS runs_score ON runs(score);
-CREATE INDEX IF NOT EXISTS runs_parent ON runs(parent);
-CREATE INDEX IF NOT EXISTS reviews_run ON reviews(run_id);
+DROP INDEX IF EXISTS runs_parent;
 ";
 
-/// Open (and create) a working database for writing.
+/// Open (and create) a working database for writing. A format 1 database's elites gain their
+/// candidates and measures from its runs (its runs are sealed by
+/// [`crate::explore::runs::Runs::open`], its reviews moved by [`crate::explore::reviews::move_old`]).
 pub fn open(path: &Path) -> Result<Connection, String> {
     if let Some(d) = path.parent() {
         std::fs::create_dir_all(d).map_err(|x| format!("{}: {x}", d.display()))?;
@@ -165,21 +174,25 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     )
     .map_err(e)?;
     c.execute_batch(SCHEMA).map_err(e)?;
-    // A review table from before the rater and source columns.
-    for col in ["rater", "source"] {
-        let has: bool = c
-            .prepare("SELECT 1 FROM pragma_table_info('reviews') WHERE name = ?1")
-            .map_err(e)?
-            .exists([col])
-            .map_err(e)?;
-        if !has {
-            c.execute_batch(&format!("ALTER TABLE reviews ADD COLUMN {col} TEXT"))
-                .map_err(e)?;
+    // Format 1: elites held only ids.
+    let has_tiling: bool = c
+        .prepare("SELECT 1 FROM pragma_table_info('elites') WHERE name = 'tiling'")
+        .map_err(e)?
+        .exists([])
+        .map_err(e)?;
+    if !has_tiling {
+        let mut sql = String::from("BEGIN;");
+        for (n, t) in EVAL_COLS.split(',').zip([
+            "TEXT", "INT", "TEXT", "TEXT", "TEXT", "INT", "INT", "INT", "INT", "TEXT", "TEXT",
+            "REAL", "INT", "BLOB",
+        ]) {
+            sql += &format!("ALTER TABLE elites ADD COLUMN {n} {t};");
         }
-    }
-    let importing = meta_get(&c, "import_done")?.is_some_and(|v| v == "0");
-    if !importing {
-        c.execute_batch(INDEXES).map_err(e)?;
+        sql += &format!(
+            "UPDATE elites SET ({EVAL_COLS}) = (SELECT {EVAL_COLS} FROM runs r WHERE r.id = elites.id);
+             COMMIT;"
+        );
+        c.execute_batch(&sql).map_err(e)?;
     }
     c.execute(
         "INSERT OR IGNORE INTO meta(k, v) VALUES('format', ?1)",
@@ -201,18 +214,30 @@ pub fn open_read(path: &Path) -> Result<Connection, String> {
     Ok(c)
 }
 
-pub fn meta_get(c: &Connection, k: &str) -> Result<Option<String>, String> {
-    let has: bool = c
-        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'")
+/// Does the database have this table?
+pub fn has_table(c: &Connection, t: &str) -> Result<bool, String> {
+    c.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1")
         .map_err(e)?
-        .exists([])
-        .map_err(e)?;
-    if !has {
+        .exists([t])
+        .map_err(e)
+}
+
+pub fn meta_get(c: &Connection, k: &str) -> Result<Option<String>, String> {
+    if !has_table(c, "meta")? {
         return Ok(None);
     }
     c.query_row("SELECT v FROM meta WHERE k = ?1", [k], |r| r.get(0))
         .optional()
         .map_err(e)
+}
+
+pub fn meta_set(c: &Connection, k: &str, v: &str) -> Result<(), String> {
+    c.execute(
+        "INSERT OR REPLACE INTO meta(k, v) VALUES(?1, ?2)",
+        params![k, v],
+    )
+    .map_err(e)?;
+    Ok(())
 }
 
 /// Screened runs of a family, with their score sum and best score.
@@ -269,8 +294,8 @@ pub struct Delta {
     /// Screened runs to add per (tiling, family, seed kind).
     pub coverage: HashMap<(String, Fam, String), u32>,
     pub families: HashMap<Fam, FamStat>,
-    /// Elites added (with their tiling group) or dropped.
-    pub elites: Vec<(i64, Option<u8>)>,
+    /// Elites added (with their tiling group and run) or dropped.
+    pub elites: Vec<(i64, Option<(u8, Eval)>)>,
     pub confirmed: Vec<i64>,
     pub meta: Vec<(String, String)>,
 }
@@ -287,7 +312,7 @@ impl Delta {
     }
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -304,14 +329,42 @@ pub fn write(c: &mut Connection, d: &Delta) -> Result<(), String> {
     tx.commit().map_err(e)
 }
 
+/// Insert or replace an elite with its run's candidate and measures.
+pub(crate) fn put_elite(tx: &Connection, id: i64, grp: u8, ev: &Eval) -> Result<(), String> {
+    let c = &ev.cand;
+    tx.prepare_cached(&format!(
+        "INSERT OR REPLACE INTO elites(id, grp, {EVAL_COLS})
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ))
+    .map_err(e)?
+    .execute(params![
+        id,
+        grp,
+        c.tiling,
+        c.nb as u8,
+        c.fam.name(),
+        c.rule,
+        serde_json::to_string(&c.seed).unwrap_or_default(),
+        c.cells,
+        c.gens,
+        c.steps,
+        c.rng as i64,
+        c.origin,
+        fate_name(ev.fate),
+        ev.score as f64,
+        ev.bin,
+        feat_blob(&ev.feat),
+    ])
+    .map_err(e)?;
+    Ok(())
+}
+
 fn write_in(tx: &rusqlite::Transaction, d: &Delta) -> Result<(), String> {
     {
         let mut st = tx
-            .prepare_cached(
-                "INSERT INTO runs(id,stage,parent,tiling,nb,fam,rule,seed,seed_kind,cells,gens,
-                 steps,rng,origin,fate,settle,period,score,bin,feats,ts)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            )
+            .prepare_cached(&format!(
+                "INSERT INTO runs({RUN_COLS}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            ))
             .map_err(e)?;
         let t = now();
         for b in &d.rows {
@@ -368,17 +421,16 @@ fn write_in(tx: &rusqlite::Transaction, d: &Delta) -> Result<(), String> {
             st.execute(params![f.name(), s.runs as i64, s.score_sum, s.best])
                 .map_err(e)?;
         }
-        let mut add = tx
-            .prepare_cached("INSERT OR REPLACE INTO elites(id, grp) VALUES(?1, ?2)")
-            .map_err(e)?;
         let mut drop = tx
             .prepare_cached("DELETE FROM elites WHERE id = ?1")
             .map_err(e)?;
         for (id, g) in &d.elites {
             match g {
-                Some(g) => add.execute(params![id, g]).map_err(e)?,
-                None => drop.execute([id]).map_err(e)?,
-            };
+                Some((g, ev)) => put_elite(tx, *id, *g, ev)?,
+                None => {
+                    drop.execute([id]).map_err(e)?;
+                }
+            }
         }
         let mut st = tx
             .prepare_cached("INSERT OR IGNORE INTO confirmed(id) VALUES(?1)")
@@ -400,7 +452,7 @@ fn write_in(tx: &rusqlite::Transaction, d: &Delta) -> Result<(), String> {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LoadStats {
     pub seconds: f64,
-    /// Elites read with their runs (the only rows of `runs` loading reads).
+    /// Elites read with their runs' candidates and measures (from `elites`).
     pub elites: u64,
     pub runs_read: u64,
     /// Identities in the seen set, and the blobs they were in.
@@ -434,10 +486,9 @@ impl Saved {
     }
 }
 
-/// A stored run's candidate and measures, from the columns `tiling, nb, fam, rule, seed, cells,
-/// gens, steps, rng, origin, fate, score, bin, feats` starting at `at`. `None` when its family
-/// or seed does not read.
-fn eval_at(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Eval>> {
+/// A stored run's candidate and measures, from the columns of [`EVAL_COLS`] starting at `at`.
+/// `None` when its family or seed does not read.
+pub fn eval_at(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Eval>> {
     let fam: String = r.get(at + 2)?;
     let seed: String = r.get(at + 4)?;
     let Some(fam) = fam_named(&fam) else {
@@ -471,22 +522,78 @@ fn eval_at(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<Eval>> {
     }))
 }
 
-const EVAL_COLS: &str = "tiling,nb,fam,rule,seed,cells,gens,steps,rng,origin,fate,score,bin,feats";
+/// A run's candidate and measures. `None` when its family or seed does not read.
+pub fn eval_of(r: &RunRec) -> Option<Eval> {
+    let fam = fam_named(&r.fam)?;
+    let seed = serde_json::from_str(&r.seed).ok()?;
+    Some(Eval {
+        cand: Cand {
+            tiling: r.tiling.clone(),
+            nb: if r.nb == 0 { Nb::Touch } else { Nb::Edge },
+            fam,
+            rule: r.rule.clone(),
+            seed,
+            cells: r.cells as u32,
+            gens: r.gens as u32,
+            steps: r.steps as u32,
+            rng: r.rng as u64,
+            origin: r.origin.clone(),
+        },
+        fate: fate_parse(&r.fate),
+        score: r.score as f32,
+        bin: r.bin as u32,
+        feat: r.feat,
+    })
+}
 
-/// Load a search's state: the elites (with their runs), the confirmed set, coverage, family
-/// totals, the seen set, and the counters. The seen blobs are merged into one when there are many.
+/// A row of `runs` (the columns of [`RUN_COLS`] from `at`) as a run. NULLs read as the search
+/// reads them (no random state 0, one step per generation, ...).
+pub fn rec_at(r: &rusqlite::Row, at: usize) -> rusqlite::Result<RunRec> {
+    let oi = |k: usize| -> rusqlite::Result<Option<i64>> { r.get::<_, Option<i64>>(at + k) };
+    let os = |k: usize| -> rusqlite::Result<String> {
+        Ok(r.get::<_, Option<String>>(at + k)?.unwrap_or_default())
+    };
+    let settle = oi(15)?.unwrap_or(0);
+    let period = oi(16)?.unwrap_or(0);
+    let mut feat = feat_from_blob(&r.get::<_, Option<Vec<u8>>>(at + 19)?.unwrap_or_default());
+    feat.settle = settle as u32;
+    feat.period = period as u32;
+    Ok(RunRec {
+        id: r.get(at)?,
+        stage: oi(1)?.unwrap_or(1),
+        parent: oi(2)?,
+        tiling: os(3)?,
+        nb: oi(4)?.unwrap_or(0),
+        fam: os(5)?,
+        rule: os(6)?,
+        seed: os(7)?,
+        seed_kind: os(8)?,
+        cells: oi(9)?.unwrap_or(0),
+        gens: oi(10)?.unwrap_or(0),
+        steps: oi(11)?.unwrap_or(1),
+        rng: oi(12)?.unwrap_or(0),
+        origin: os(13)?,
+        fate: os(14)?,
+        settle,
+        period,
+        score: r.get::<_, Option<f64>>(at + 17)?.unwrap_or(0.0),
+        bin: oi(18)?.unwrap_or(0),
+        feat,
+        ts: oi(20)?.unwrap_or(0),
+    })
+}
+
+/// Load a search's state: the elites (with their runs' candidates and measures), the confirmed
+/// set, coverage, family totals, the seen set, and the counters. The seen blobs are merged into
+/// one when there are many. `next_id` here counts the unsealed runs only (the caller knows the
+/// sealed ones).
 pub fn load(c: &mut Connection) -> Result<Saved, String> {
     let t0 = std::time::Instant::now();
     let mut s = Saved::default();
     {
         let mut st = c
             .prepare(&format!(
-                "SELECT e.id, e.grp, {} FROM elites e JOIN runs r ON r.id = e.id ORDER BY e.id",
-                EVAL_COLS
-                    .split(',')
-                    .map(|x| format!("r.{x}"))
-                    .collect::<Vec<_>>()
-                    .join(",")
+                "SELECT id, grp, {EVAL_COLS} FROM elites ORDER BY id"
             ))
             .map_err(e)?;
         let mut rows = st.query([]).map_err(e)?;
@@ -577,247 +684,73 @@ pub fn load(c: &mut Connection) -> Result<Saved, String> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Reviews
+// Reviews of a format 1 database
 
-/// A verdict on a run.
-pub const VERDICTS: [&str; 3] = ["keep", "maybe", "drop"];
+/// A review as an old database holds it: run, verdict, note, time (seconds since 1970), rater,
+/// source.
+pub type OldReview = (i64, String, String, i64, String, String);
 
-/// Record a verdict on a run (`keep`, `maybe`, `drop`). The run must exist.
-pub fn add_review(
-    c: &Connection,
-    run: i64,
-    verdict: &str,
-    note: &str,
-    rater: &str,
-    source: &str,
-) -> Result<(), String> {
-    if !VERDICTS.contains(&verdict) {
-        return Err(format!(
-            "a verdict is keep, maybe, or drop, not '{verdict}'"
-        ));
+/// The reviews of a database from before reviews moved to the library (format 1, or CART's),
+/// if it still has its `reviews` table.
+pub fn old_reviews(c: &Connection) -> Result<Vec<OldReview>, String> {
+    if !has_table(c, "reviews")? {
+        return Ok(vec![]);
     }
-    let has: bool = c
-        .prepare_cached("SELECT 1 FROM runs WHERE id = ?1")
+    let cols: Vec<String> = c
+        .prepare("SELECT name FROM pragma_table_info('reviews')")
         .map_err(e)?
-        .exists([run])
-        .map_err(e)?;
-    if !has {
-        return Err(format!("no run {run}"));
-    }
-    c.execute(
-        "INSERT INTO reviews(run_id, verdict, note, ts, rater, source) VALUES(?1,?2,?3,?4,?5,?6)",
-        params![run, verdict, note, now(), rater, source],
-    )
-    .map_err(e)?;
-    Ok(())
-}
-
-/// What a ratings folder held.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct RatingsRead {
-    pub files: u64,
-    pub recorded: u64,
-    /// Files whose run is not in this search.
-    pub unknown_runs: u64,
-    /// Files that did not read as a rating.
-    pub unreadable: u64,
-    /// Ratings already recorded from this folder, skipped.
-    pub already: u64,
-}
-
-/// Record the ratings in a folder of rating files, as the clip-rating page saves them:
-/// `<run id>.json` holding `{"verdict": "keep", "ts": <ms>}` (or that inside `data`), with an
-/// optional `note`. A rating already recorded from the same folder is skipped.
-pub fn import_ratings(c: &mut Connection, dir: &Path, rater: &str) -> Result<RatingsRead, String> {
-    let rd = std::fs::read_dir(dir).map_err(|x| format!("{}: {x}", dir.display()))?;
-    let source = format!("ratings:{}", dir.display());
-    let mut out = RatingsRead::default();
-    let mut files: Vec<PathBuf> = rd
-        .flatten()
-        .map(|d| d.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    files.sort();
-    let tx = c.transaction().map_err(e)?;
-    for p in files {
-        let Some(run) = p
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .and_then(|s| s.parse::<i64>().ok())
-        else {
-            continue;
-        };
-        out.files += 1;
-        let v: Option<serde_json::Value> = std::fs::read_to_string(&p)
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok());
-        let Some(v) = v else {
-            out.unreadable += 1;
-            continue;
-        };
-        let v = v.get("data").cloned().unwrap_or(v);
-        let Some(verdict) = v
-            .get("verdict")
-            .and_then(|x| x.as_str())
-            .filter(|x| VERDICTS.contains(x))
-        else {
-            out.unreadable += 1;
-            continue;
-        };
-        let note = v.get("note").and_then(|x| x.as_str()).unwrap_or("");
-        // Rating pages write milliseconds.
-        let ts = v
-            .get("ts")
-            .and_then(|x| x.as_i64())
-            .map(|t| if t > 100_000_000_000 { t / 1000 } else { t })
-            .unwrap_or_else(now);
-        let known: bool = tx
-            .prepare_cached("SELECT 1 FROM runs WHERE id = ?1")
-            .map_err(e)?
-            .exists([run])
-            .map_err(e)?;
-        if !known {
-            out.unknown_runs += 1;
-            continue;
-        }
-        let dup: bool = tx
-            .prepare_cached("SELECT 1 FROM reviews WHERE run_id = ?1 AND source = ?2")
-            .map_err(e)?
-            .exists(params![run, source])
-            .map_err(e)?;
-        if dup {
-            out.already += 1;
-            continue;
-        }
-        tx.execute(
-            "INSERT INTO reviews(run_id, verdict, note, ts, rater, source) VALUES(?1,?2,?3,?4,?5,?6)",
-            params![run, verdict, note, ts, rater, source],
-        )
-        .map_err(e)?;
-        out.recorded += 1;
-    }
-    tx.commit().map_err(e)?;
-    Ok(out)
-}
-
-/// Reviews per verdict.
-pub fn review_counts(c: &Connection) -> Result<Vec<(String, u64)>, String> {
-    let mut st = c
-        .prepare("SELECT verdict, COUNT(*) FROM reviews GROUP BY verdict ORDER BY verdict")
-        .map_err(e)?;
-    st.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64)))
+        .query_map([], |r| r.get(0))
         .map_err(e)?
         .collect::<Result<_, _>>()
-        .map_err(e)
-}
-
-// ---------------------------------------------------------------------------------------------
-// Rescoring
-
-/// What [`rescore`] did.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Rescored {
-    pub runs: u64,
-    /// Runs whose score changed (only these are written).
-    pub changed: u64,
-    pub elites: u64,
-    pub niches: u64,
-}
-
-/// Recompute every stored score from the stored features (after [`archive::score`] changes), then
-/// rebuild the archive and the family totals from the screened runs with their new scores. Reads
-/// every run: run it on a stopped search. `group_of` gives a tiling's group; `progress` is told
-/// the runs done so far and whether to go on.
-pub fn rescore(
-    c: &mut Connection,
-    group_of: &dyn Fn(&str) -> u8,
-    progress: &dyn Fn(u64) -> bool,
-) -> Result<Rescored, String> {
-    let mut out = Rescored::default();
-    let mut arch = Archive::default();
-    let mut fams: HashMap<Fam, FamStat> = HashMap::new();
-    let mut scores: Vec<(i64, f64)> = Vec::new();
-    {
-        let mut st = c
-            .prepare(&format!(
-                "SELECT id, stage, {EVAL_COLS} FROM runs ORDER BY id"
-            ))
-            .map_err(e)?;
-        let mut rows = st.query([]).map_err(e)?;
-        while let Some(r) = rows.next().map_err(e)? {
-            let id: i64 = r.get(0).map_err(e)?;
-            let stage: i64 = r.get(1).map_err(e)?;
-            let Some(mut ev) = eval_at(r, 2).map_err(e)? else {
-                continue;
-            };
-            let old = ev.score;
-            ev.score = archive::score(ev.fate, &ev.feat, ev.cand.gens, ev.cand.fam);
-            if ev.score != old {
-                scores.push((id, ev.score as f64));
-            }
-            out.runs += 1;
-            if out.runs.is_multiple_of(100_000) && !progress(out.runs) {
-                return Err("rescoring was stopped; nothing was changed".into());
-            }
-            if stage == 1 {
-                fams.entry(ev.cand.fam).or_default().add(ev.score as f64);
-                let g = group_of(&ev.cand.tiling);
-                arch.offer(id, ev, g);
-            }
-        }
-    }
-    let changes = arch.take_changes();
-    out.changed = scores.len() as u64;
-    let tx = c.transaction().map_err(e)?;
-    if !scores.is_empty() {
-        tx.execute_batch("DROP INDEX IF EXISTS runs_score")
-            .map_err(e)?;
-    }
-    {
-        let mut st = tx
-            .prepare("UPDATE runs SET score = ?1 WHERE id = ?2")
-            .map_err(e)?;
-        for (id, s) in &scores {
-            st.execute(params![s, id]).map_err(e)?;
-        }
-        tx.execute("DELETE FROM elites", []).map_err(e)?;
-        let mut st = tx
-            .prepare("INSERT INTO elites(id, grp) VALUES(?1, ?2)")
-            .map_err(e)?;
-        for (id, g) in changes {
-            if let Some(g) = g {
-                st.execute(params![id, g]).map_err(e)?;
-                out.elites += 1;
-            }
-        }
-        tx.execute("DELETE FROM families", []).map_err(e)?;
-        let mut st = tx
-            .prepare("INSERT INTO families(fam, runs, score_sum, best) VALUES(?1, ?2, ?3, ?4)")
-            .map_err(e)?;
-        for (f, s) in &fams {
-            st.execute(params![f.name(), s.runs as i64, s.score_sum, s.best])
-                .map_err(e)?;
-        }
-    }
-    tx.execute_batch("CREATE INDEX IF NOT EXISTS runs_score ON runs(score)")
         .map_err(e)?;
-    tx.commit().map_err(e)?;
-    out.niches = arch.cells.len() as u64;
-    Ok(out)
+    let opt = |n: &str| {
+        if cols.iter().any(|c| c == n) {
+            format!("COALESCE({n}, '')")
+        } else {
+            "''".into()
+        }
+    };
+    let mut st = c
+        .prepare(&format!(
+            "SELECT run_id, verdict, COALESCE(note, ''), COALESCE(ts, 0), {}, {} FROM reviews
+             ORDER BY rowid",
+            opt("rater"),
+            opt("source")
+        ))
+        .map_err(e)?;
+    st.query_map([], |r| {
+        Ok((
+            r.get(0)?,
+            r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            r.get(2)?,
+            r.get(3)?,
+            r.get(4)?,
+            r.get(5)?,
+        ))
+    })
+    .map_err(e)?
+    .collect::<Result<_, _>>()
+    .map_err(e)
+}
+
+/// Drop a format 1 database's `reviews` table (once its reviews are in the library).
+pub fn drop_old_reviews(c: &Connection) -> Result<(), String> {
+    c.execute_batch("DROP INDEX IF EXISTS reviews_run; DROP TABLE IF EXISTS reviews;")
+        .map_err(e)
 }
 
 // ---------------------------------------------------------------------------------------------
 // Importing an old database
 
-/// One row of an old database's `runs`, as it is, with its candidate and measures when they read.
+/// One row of an old database's `runs`, with its candidate and measures when they read.
 pub struct OldRun {
     pub id: i64,
     pub stage: i64,
     pub parent: Option<i64>,
     pub seed_kind: Option<String>,
     pub ev: Option<Eval>,
-    /// The row's columns in `runs` order, to copy.
-    pub raw: Vec<rusqlite::types::Value>,
+    /// The row, to store as it is.
+    pub rec: RunRec,
 }
 
 /// An old explore database being imported, read in id order.
@@ -834,12 +767,7 @@ impl Import {
     /// Open an old database (read only), to go on after run `last`.
     pub fn open(path: &Path, last: i64) -> Result<Import, String> {
         let old = open_read(path)?;
-        let has: bool = old
-            .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runs'")
-            .map_err(e)?
-            .exists([])
-            .map_err(e)?;
-        if !has {
+        if !has_table(&old, "runs")? {
             return Err(format!(
                 "{} is not an explore database (it has no runs table)",
                 path.display()
@@ -861,26 +789,20 @@ impl Import {
         let mut st = self
             .old
             .prepare_cached(&format!(
-                "SELECT id,stage,parent,seed_kind,{EVAL_COLS},
-                 id,stage,parent,tiling,nb,fam,rule,seed,seed_kind,cells,gens,steps,rng,origin,
-                 fate,settle,period,score,bin,feats,ts
-                 FROM runs WHERE id > ?1 ORDER BY id LIMIT ?2"
+                "SELECT {RUN_COLS} FROM runs WHERE id > ?1 ORDER BY id LIMIT ?2"
             ))
             .map_err(e)?;
         let mut rows = st.query(params![self.last, n as i64]).map_err(e)?;
         let mut out = Vec::new();
         while let Some(r) = rows.next().map_err(e)? {
-            let raw: Vec<rusqlite::types::Value> = (18..39)
-                .map(|i| r.get::<_, rusqlite::types::Value>(i))
-                .collect::<Result<_, _>>()
-                .map_err(e)?;
+            let rec = rec_at(r, 0).map_err(e)?;
             out.push(OldRun {
-                id: r.get(0).map_err(e)?,
-                stage: r.get::<_, Option<i64>>(1).map_err(e)?.unwrap_or(1),
-                parent: r.get(2).map_err(e)?,
-                seed_kind: r.get(3).map_err(e)?,
-                ev: eval_at(r, 4).map_err(e)?,
-                raw,
+                id: rec.id,
+                stage: rec.stage,
+                parent: rec.parent,
+                seed_kind: r.get(8).map_err(e)?,
+                ev: eval_of(&rec),
+                rec,
             });
         }
         if let Some(l) = out.last() {
@@ -889,200 +811,35 @@ impl Import {
         Ok(out)
     }
 
-    /// The old database's reviews (`run_id, verdict, note, ts`).
-    pub fn reviews(&self) -> Result<Vec<(i64, String, String, i64)>, String> {
-        let has: bool = self
-            .old
-            .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'reviews'")
-            .map_err(e)?
-            .exists([])
-            .map_err(e)?;
-        if !has {
-            return Ok(vec![]);
-        }
-        let mut st = self
-            .old
-            .prepare("SELECT run_id, verdict, COALESCE(note, ''), COALESCE(ts, 0) FROM reviews")
-            .map_err(e)?;
-        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-            .map_err(e)?
-            .collect::<Result<_, _>>()
-            .map_err(e)
+    /// The old database's reviews.
+    pub fn reviews(&self) -> Result<Vec<OldReview>, String> {
+        old_reviews(&self.old)
     }
 }
 
-/// Copy old rows into `runs` as they are (same ids), with what they changed, in one transaction.
-pub fn write_imported(
-    c: &mut Connection,
-    rows: &[OldRun],
-    delta: &Delta,
-    reviews: &[(i64, String, String, i64)],
-    source: &str,
-) -> Result<(), String> {
-    let tx = c.transaction().map_err(e)?;
-    {
-        let mut st = tx
-            .prepare_cached(
-                "INSERT OR REPLACE INTO runs(id,stage,parent,tiling,nb,fam,rule,seed,seed_kind,
-                 cells,gens,steps,rng,origin,fate,settle,period,score,bin,feats,ts)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            )
-            .map_err(e)?;
-        for r in rows {
-            st.execute(rusqlite::params_from_iter(r.raw.iter()))
-                .map_err(e)?;
-        }
-        let mut st = tx
-            .prepare_cached(
-                "INSERT INTO reviews(run_id, verdict, note, ts, rater, source)
-                 VALUES(?1, ?2, ?3, ?4, '', ?5)",
-            )
-            .map_err(e)?;
-        for (run, v, note, ts) in reviews {
-            st.execute(params![run, v, note, ts, source]).map_err(e)?;
-        }
-    }
-    write_in(&tx, delta)?;
-    tx.commit().map_err(e)
-}
-
-/// Start importing `from` into a new search: its indexes are dropped until the import is done
-/// (copying millions of rows is faster without them), and `meta` says what is being imported.
+/// Start importing `from` into a new search: `meta` says what is being imported.
 pub fn begin_import(c: &Connection, from: &Path) -> Result<(), String> {
-    c.execute_batch(
-        "DROP INDEX IF EXISTS runs_score; DROP INDEX IF EXISTS runs_parent;
-         DROP INDEX IF EXISTS reviews_run;",
-    )
-    .map_err(e)?;
     for (k, v) in [
         ("import_from", from.display().to_string()),
         ("import_done", "0".into()),
         ("import_last", "0".into()),
     ] {
-        c.execute(
-            "INSERT OR REPLACE INTO meta(k, v) VALUES(?1, ?2)",
-            params![k, v],
-        )
-        .map_err(e)?;
+        meta_set(c, k, &v)?;
     }
     Ok(())
 }
 
-/// Build the indexes an import leaves out (after the last row is in).
-pub fn finish_import(c: &Connection) -> Result<(), String> {
-    c.execute_batch(INDEXES).map_err(e)
-}
-
-// ---------------------------------------------------------------------------------------------
-// Finding runs
-
-/// Which stored runs to list.
-#[derive(Clone, Debug, Default)]
-pub struct RunFilter {
-    /// These runs, in this order (instead of the rest).
-    pub ids: Option<Vec<i64>>,
-    /// One `SELECT` returning run ids (instead of the rest).
-    pub sql: Option<String>,
-    pub family: Option<Fam>,
-    pub tiling: Option<String>,
-    /// died, froze, cycle, running.
-    pub fate: Option<String>,
-    pub min_score: Option<f64>,
-    /// 1 screened (the default), 2 confirmation runs.
-    pub stage: Option<u8>,
-    /// Only reviewed runs: `any`, or a verdict.
-    pub reviewed: Option<String>,
-    /// `score` (best first, the default), `newest`, or `id`.
-    pub order: Option<String>,
-}
-
-/// The ids of the runs a filter names, in order, at most `limit`.
-pub fn run_ids(c: &Connection, f: &RunFilter, limit: usize) -> Result<Vec<i64>, String> {
-    let collect = |sql: &str| -> Result<Vec<i64>, String> {
-        let mut st = c.prepare(sql).map_err(|x| format!("sql: {x}"))?;
-        st.query_map([], |r| r.get::<_, i64>(0))
-            .and_then(|it| it.collect::<Result<Vec<i64>, _>>())
-            .map_err(|x| format!("sql: {x}"))
-    };
-    if let Some(ids) = &f.ids {
-        if ids.is_empty() {
-            return Ok(vec![]);
+/// Rebuild `elites` from an archive (every elite, with its run).
+pub(crate) fn put_archive(tx: &Connection, a: &Archive) -> Result<u64, String> {
+    tx.execute("DELETE FROM elites", []).map_err(e)?;
+    let mut n = 0;
+    for list in a.cells.values() {
+        for (id, _) in list {
+            if let (Some(ev), Some(g)) = (a.runs.get(id), a.group(*id)) {
+                put_elite(tx, *id, g, ev)?;
+                n += 1;
+            }
         }
-        let list: Vec<String> = ids.iter().map(i64::to_string).collect();
-        let found: HashSet<i64> = collect(&format!(
-            "SELECT id FROM runs WHERE id IN ({})",
-            list.join(",")
-        ))?
-        .into_iter()
-        .collect();
-        let mut seen = HashSet::new();
-        return Ok(ids
-            .iter()
-            .copied()
-            .filter(|i| found.contains(i) && seen.insert(*i))
-            .take(limit)
-            .collect());
     }
-    if let Some(s) = &f.sql {
-        let t = s.trim().trim_end_matches(';');
-        if !t.to_ascii_lowercase().starts_with("select") || t.contains(';') {
-            return Err("sql must be a single SELECT that returns run ids".into());
-        }
-        return collect(&format!("SELECT * FROM ({t}) LIMIT {limit}"));
-    }
-    let mut w = vec![format!("stage = {}", f.stage.unwrap_or(1))];
-    if let Some(x) = f.family {
-        w.push(format!("fam = '{}'", x.name()));
-    }
-    if let Some(t) = &f.tiling {
-        w.push(format!("tiling = '{}'", t.replace('\'', "''")));
-    }
-    if let Some(x) = &f.fate {
-        if !["died", "froze", "cycle", "running"].contains(&x.as_str()) {
-            return Err(format!("a fate is died, froze, cycle, or running, not {x}"));
-        }
-        w.push(format!("fate = '{x}'"));
-    }
-    if let Some(m) = f.min_score {
-        if !m.is_finite() {
-            return Err("min_score must be a number".into());
-        }
-        w.push(format!("score >= {m}"));
-    }
-    match f.reviewed.as_deref() {
-        None => {}
-        Some("any") => w.push("id IN (SELECT run_id FROM reviews)".into()),
-        Some(v) if VERDICTS.contains(&v) => w.push(format!(
-            "id IN (SELECT run_id FROM reviews WHERE verdict = '{v}')"
-        )),
-        Some(v) => return Err(format!("reviewed is any, keep, maybe, or drop, not {v}")),
-    }
-    let order = match f.order.as_deref().unwrap_or("score") {
-        "score" => "score DESC, id",
-        "newest" => "id DESC",
-        "id" => "id",
-        o => return Err(format!("order is score, newest, or id, not {o}")),
-    };
-    collect(&format!(
-        "SELECT id FROM runs WHERE {} ORDER BY {order} LIMIT {limit}",
-        w.join(" AND ")
-    ))
-}
-
-/// The stored runs `ids` names, in that order.
-pub fn runs_by_ids(
-    c: &Connection,
-    ids: &[i64],
-) -> Result<Vec<crate::explore::sheet::RunRow>, String> {
-    if ids.is_empty() {
-        return Ok(vec![]);
-    }
-    let list: Vec<String> = ids.iter().map(i64::to_string).collect();
-    let mut found = crate::explore::sheet::query_runs(
-        c,
-        &format!("SELECT id FROM runs WHERE id IN ({})", list.join(",")),
-    )?;
-    let pos: HashMap<i64, usize> = ids.iter().enumerate().map(|(i, x)| (*x, i)).collect();
-    found.sort_by_key(|r| pos.get(&r.id).copied().unwrap_or(usize::MAX));
-    Ok(found)
+    Ok(n)
 }

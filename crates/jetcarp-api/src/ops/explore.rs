@@ -1,15 +1,17 @@
-//! `search.*` on an explore job's run records (its working database,
-//! `searches/<uuid>/search.sqlite` beside the catalog): find runs (`search.runs`), a contact
-//! sheet of them (`search.sheet`), one run as a scene (`search.run_scene`), try a configuration
-//! of one's own now (`search.try`), record a verdict on runs (`search.review`, one at a time or
-//! a folder of rating files), recompute every score after the score changes (`search.rescore`),
-//! and animated clips of a sample for rating (`search.clips`). Each takes the job (default: the
-//! newest explore job of the catalog) and reads its database while it runs; rescoring waits for
-//! a stopped job.
+//! `search.*` on an explore job's run records (`searches/<uuid>/` beside the library: sealed
+//! Parquet segments and the working database `search.sqlite`; `jetcarp_search::explore::runs`):
+//! find runs (`search.runs`), a contact sheet of them (`search.sheet`), one run as a scene
+//! (`search.run_scene`), try a configuration of one's own now (`search.try`), record a verdict on
+//! runs (`search.review`, one at a time or a folder of rating files), recompute every score after
+//! the score changes (`search.rescore`), seal the newest runs into a segment (`search.seal`), and
+//! animated clips of a sample for rating (`search.clips`). Each takes the job (default: the newest
+//! explore job of the library) and reads its runs while it runs; rescoring and sealing wait for a
+//! stopped job.
 //!
 //! The reviews are the ratings the score was fitted to (the taste rounds' keep, maybe, and drop,
 //! most of them Emily Teich's): clips go out, verdicts come back as rating files, and a refit
-//! score is applied to every stored run by `search.rescore`.
+//! score is applied to every stored run by `search.rescore`. Reviews are kept in the library
+//! (ratings of target kind `search_run`), so deleting a search's folder keeps them.
 
 use super::library::catalog_err;
 use crate::args;
@@ -23,8 +25,10 @@ use jetcarp_core::topology::Nb;
 use jetcarp_search::explore::Db;
 use jetcarp_search::explore::atlas;
 use jetcarp_search::explore::job::{tiling_groups, try_one};
+use jetcarp_search::explore::reviews;
+use jetcarp_search::explore::runs::{RunFilter, Runs};
 use jetcarp_search::explore::sheet::{self, RunRow};
-use jetcarp_search::explore::store::{self, RunFilter, feat_from_blob, review_counts};
+use jetcarp_search::explore::store::{self, feat_from_blob};
 use jetcarp_search::jobs::{self, Lease};
 use jetcarp_store::Library;
 use jetcarp_store::library::JobRow;
@@ -60,9 +64,9 @@ pub fn explore_job(cx: &Ctx, job: Option<i64>) -> Result<(Library, JobRow, PathB
     Ok((lib, row, path))
 }
 
-/// The job's database for reading.
+/// The job's runs for reading.
 fn read_db(path: &std::path::Path) -> Result<Db, ApiError> {
-    store::open_read(path)
+    Runs::open_read(path)
         .map_err(|e| ApiError::not_found(e).hint("the job has not run yet: jobs.resume runs it"))
 }
 
@@ -168,9 +172,6 @@ pub struct RunsIn {
     /// These runs, instead of the filters.
     #[serde(default)]
     pub ids: Option<Vec<i64>>,
-    /// Instead of the filters: one SELECT returning run ids (read only; columns id, stage, parent, tiling, nb, fam, rule, seed, seed_kind, cells, gens, steps, rng, origin, fate, settle, period, score, bin, ts; tables runs, reviews, elites, confirmed).
-    #[serde(default)]
-    pub sql: Option<String>,
     /// score (default, best first), newest, or id.
     #[serde(default)]
     pub order: Option<String>,
@@ -181,14 +182,14 @@ pub struct RunsIn {
 
 /// Runs found.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
-pub struct Runs {
+pub struct RunList {
     pub job: i64,
-    /// The job's database.
+    /// The job's working database (its sealed segments are in `runs/` beside it).
     pub db: String,
     pub runs: Vec<RunLine>,
 }
 
-impl Report for Runs {
+impl Report for RunList {
     fn text(&self) -> String {
         let mut s = String::new();
         for r in &self.runs {
@@ -213,34 +214,36 @@ impl RunsIn {
         };
         Ok(RunFilter {
             ids: self.ids.clone(),
-            sql: self.sql.clone(),
             family,
             tiling: self.tiling.clone(),
             fate: self.fate.clone(),
             min_score: self.min_score,
             stage: self.stage,
             reviewed: self.reviewed.clone(),
+            within: None,
             order: self.order.clone(),
         })
     }
 }
 
-/// The runs a filter names, in order, at most `limit`.
-fn find(c: &Db, f: &RunFilter, limit: usize) -> Result<Vec<RunRow>, ApiError> {
-    let ids = store::run_ids(c, f, limit).map_err(invalid)?;
-    store::runs_by_ids(c, &ids).map_err(ApiError::engine)
+/// The runs a filter names, in order, at most `limit` (`reviewed` read from the library).
+fn find(lib: &Library, c: &Db, f: &RunFilter, limit: usize) -> Result<Vec<RunRow>, ApiError> {
+    let mut f = f.clone();
+    reviews::resolve(lib, &c.uuid(), &mut f).map_err(invalid)?;
+    let ids = c.ids(&f, limit).map_err(invalid)?;
+    c.rows(&ids).map_err(ApiError::engine)
 }
 
 /// `search.runs`.
 pub struct SearchRuns;
 impl Op for SearchRuns {
     const NAME: &'static str = "search.runs";
-    const SUMMARY: &'static str = "List an explore job's stored runs, best first, with their measures: filtered by family, tiling, fate, score, movers, stage, or review, or chosen by id or SQL.";
+    const SUMMARY: &'static str = "List an explore job's stored runs, best first, with their measures: filtered by family, tiling, fate, score, movers, stage, or review, or chosen by id.";
     const READ_ONLY: bool = true;
     type In = RunsIn;
-    type Out = Runs;
-    fn run(cx: &Ctx, a: RunsIn, _: &dyn Progress) -> Result<Runs, ApiError> {
-        let (_, row, path) = explore_job(cx, a.job)?;
+    type Out = RunList;
+    fn run(cx: &Ctx, a: RunsIn, _: &dyn Progress) -> Result<RunList, ApiError> {
+        let (lib, row, path) = explore_job(cx, a.job)?;
         let c = read_db(&path)?;
         let limit = a.limit.unwrap_or(40).max(1);
         // Movers are inside the features: read more, then filter.
@@ -249,12 +252,12 @@ impl Op for SearchRuns {
         } else {
             limit
         };
-        let mut rs = find(&c, &a.filter()?, fetch)?;
+        let mut rs = find(&lib, &c, &a.filter()?, fetch)?;
         if let Some(m) = a.min_movers {
             rs.retain(|r| feat_from_blob(&r.feats).movers >= m);
         }
         rs.truncate(limit);
-        Ok(Runs {
+        Ok(RunList {
             job: row.id,
             db: path.display().to_string(),
             runs: rs.iter().map(RunLine::of).collect(),
@@ -282,9 +285,6 @@ pub struct SheetIn {
     /// Run ids to show.
     #[serde(default)]
     pub ids: Option<Vec<i64>>,
-    /// Instead of ids: one SELECT returning run ids (as search.runs takes it).
-    #[serde(default)]
-    pub sql: Option<String>,
     /// Pixels per thumbnail (default 200).
     #[serde(default = "px_default")]
     pub px: u32,
@@ -348,21 +348,20 @@ impl Op for SearchSheet {
     type In = SheetIn;
     type Out = RunSheet;
     fn run(cx: &Ctx, a: SheetIn, _: &dyn Progress) -> Result<RunSheet, ApiError> {
-        let (_, row, path) = explore_job(cx, a.job)?;
+        let (lib, row, path) = explore_job(cx, a.job)?;
         let c = read_db(&path)?;
         if !(16..=2000).contains(&a.px) || a.cols == 0 {
             return Err(invalid("px must be 16 to 2000 and cols at least 1"));
         }
         let max = a.max.unwrap_or(36).max(1);
-        if a.ids.is_none() && a.sql.is_none() {
-            return Err(invalid("give ids or sql"));
+        if a.ids.is_none() {
+            return Err(invalid("give ids (search.runs finds them)"));
         }
         let q = RunFilter {
             ids: a.ids.clone(),
-            sql: a.sql.clone(),
             ..Default::default()
         };
-        let runs = find(&c, &q, max)?;
+        let runs = find(&lib, &c, &q, max)?;
         if runs.is_empty() {
             return Err(ApiError::not_found("no runs to draw"));
         }
@@ -452,7 +451,8 @@ impl Op for SearchRunScene {
     fn run(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunScene, ApiError> {
         let (_, row, path) = explore_job(cx, a.job)?;
         let c = read_db(&path)?;
-        let r = store::runs_by_ids(&c, &[a.run])
+        let r = c
+            .rows(&[a.run])
             .map_err(ApiError::engine)?
             .pop()
             .ok_or_else(|| ApiError::not_found(format!("no run {} in job {}", a.run, row.id)))?;
@@ -721,14 +721,14 @@ impl Op for SearchReview {
     type In = ReviewIn;
     type Out = Reviewed;
     fn run(cx: &Ctx, a: ReviewIn, _: &dyn Progress) -> Result<Reviewed, ApiError> {
-        let (_, row, path) = explore_job(cx, a.job)?;
+        let (lib, row, path) = explore_job(cx, a.job)?;
         if !path.is_file() {
             return Err(ApiError::not_found(format!(
                 "job {} has no runs yet",
                 row.id
             )));
         }
-        let mut c = store::open(&path).map_err(ApiError::engine)?;
+        let c = read_db(&path)?;
         let rater = a.rater.clone().unwrap_or_else(|| "user".into());
         let mut out = Reviewed {
             job: row.id,
@@ -742,7 +742,7 @@ impl Op for SearchReview {
         match (&a.from, a.run, &a.verdict) {
             (Some(dir), None, None) => {
                 let d = cx.fs.readable(dir)?;
-                let r = store::import_ratings(&mut c, &d, &rater).map_err(ApiError::io)?;
+                let r = reviews::import_ratings(&lib, &c, &d, &rater).map_err(ApiError::io)?;
                 out.recorded = r.recorded;
                 out.files = r.files;
                 out.unknown_runs = r.unknown_runs;
@@ -751,7 +751,8 @@ impl Op for SearchReview {
             }
             (None, Some(run), Some(v)) => {
                 let v = v.trim().to_ascii_lowercase();
-                store::add_review(
+                reviews::add_review(
+                    &lib,
                     &c,
                     run,
                     &v,
@@ -774,7 +775,7 @@ impl Op for SearchReview {
                 ));
             }
         }
-        out.counts = review_counts(&c).map_err(ApiError::engine)?;
+        out.counts = reviews::review_counts(&lib, &c.uuid()).map_err(ApiError::engine)?;
         Ok(out)
     }
 }
@@ -795,19 +796,31 @@ pub struct RescoreIn {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Rescored {
     pub job: i64,
-    /// Runs rescored, and those whose score changed (only these were written).
+    /// Runs rescored, and those whose score changed.
     pub runs: u64,
     pub changed: u64,
     /// The archive rebuilt from the new scores: its elites and niches.
     pub elites: u64,
     pub niches: u64,
+    /// Score sidecars written (`scores-<version>/`, one per sealed segment whose scores changed;
+    /// segments are never rewritten), and the rescore's version (0: none needed).
+    pub sidecars: u64,
+    pub version: u32,
     pub seconds: f64,
 }
 
 impl Report for Rescored {
     fn text(&self) -> String {
+        let side = if self.sidecars > 0 {
+            format!(
+                "; {} score sidecar(s) in scores-{}/",
+                self.sidecars, self.version
+            )
+        } else {
+            String::new()
+        };
         format!(
-            "rescored {} runs of explore job {} ({} scores changed); the archive now holds {} elites in {} niches ({:.1} s)\n",
+            "rescored {} runs of explore job {} ({} scores changed{side}); the archive now holds {} elites in {} niches ({:.1} s)\n",
             self.runs, self.job, self.changed, self.elites, self.niches, self.seconds
         )
     }
@@ -841,14 +854,15 @@ impl Op for SearchRescore {
                 row.id
             )));
         }
-        let mut c = store::open(&path).map_err(ApiError::engine)?;
         let groups = tiling_groups();
         let g = |k: &str| groups.get(k).copied().unwrap_or(0);
-        let r = store::rescore(&mut c, &g, &|n| {
-            p.report(n, None, &format!("rescored {n} runs"));
-            !p.cancelled()
-        })
-        .map_err(ApiError::engine);
+        let r = Runs::open(&path).and_then(|mut c| {
+            c.rescore(&g, &|n| {
+                p.report(n, None, &format!("rescored {n} runs"));
+                !p.cancelled()
+            })
+        });
+        let r = r.map_err(ApiError::engine);
         lease.release(false);
         let r = r?;
         // The saved progress shows the rebuilt archive at the job's next run; say so now.
@@ -864,6 +878,94 @@ impl Op for SearchRescore {
             changed: r.changed,
             elites: r.elites,
             niches: r.niches,
+            sidecars: r.sidecars,
+            version: r.version,
+            seconds: t0.elapsed().as_secs_f64(),
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// search.seal
+
+/// The job whose newest runs to seal.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SealIn {
+    /// The explore job (default: the newest).
+    #[serde(default)]
+    pub job: Option<i64>,
+}
+
+/// What sealing did.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct Sealed {
+    pub job: i64,
+    /// The segments written (relative to the search folder), and their runs.
+    pub segments: Vec<String>,
+    pub runs: u64,
+    /// The search folder.
+    pub folder: String,
+    pub seconds: f64,
+}
+
+impl Report for Sealed {
+    fn text(&self) -> String {
+        if self.segments.is_empty() {
+            return format!(
+                "explore job {}: every run is sealed already ({})\n",
+                self.job, self.folder
+            );
+        }
+        format!(
+            "sealed {} run(s) of explore job {} into {} in {} ({:.1} s)\n",
+            self.runs,
+            self.job,
+            self.segments.join(", "),
+            self.folder,
+            self.seconds
+        )
+    }
+}
+
+/// `search.seal`.
+pub struct SearchSeal;
+impl Op for SearchSeal {
+    const NAME: &'static str = "search.seal";
+    const SUMMARY: &'static str = "Seal a stopped explore job's newest runs (those still in its working database) into Parquet segments, so its folder holds every run in Parquet (before sharing it); a search seals every million runs by itself.";
+    const READ_ONLY: bool = false;
+    type In = SealIn;
+    type Out = Sealed;
+    fn run(cx: &Ctx, a: SealIn, _: &dyn Progress) -> Result<Sealed, ApiError> {
+        let t0 = Instant::now();
+        let (lib, row, path) = explore_job(cx, a.job)?;
+        if !path.is_file() {
+            return Err(ApiError::not_found(format!(
+                "job {} has no runs yet",
+                row.id
+            )));
+        }
+        let lease = Lease::acquire(&lib, row.id).map_err(|e| {
+            ApiError::conflict(format!("job {} is running: {e}", row.id))
+                .hint("stop it first (jobs.stop), then seal")
+        })?;
+        if cx.registry().is_running(&lib, row.id) {
+            return Err(ApiError::conflict(format!(
+                "job {} is running here",
+                row.id
+            )));
+        }
+        let r = Runs::open(&path).and_then(|mut c| c.seal_all());
+        lease.release(false);
+        let done = r.map_err(ApiError::engine)?;
+        Ok(Sealed {
+            job: row.id,
+            runs: done.iter().map(|s| s.rows).sum(),
+            segments: done.into_iter().map(|s| s.file).collect(),
+            folder: path
+                .parent()
+                .map(|d| d.display().to_string())
+                .unwrap_or_default(),
             seconds: t0.elapsed().as_secs_f64(),
         })
     }

@@ -92,6 +92,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<explore::SearchTry>::NEW,
     &Plain::<explore::SearchReview>::NEW,
     &Plain::<explore::SearchRescore>::NEW,
+    &Plain::<explore::SearchSeal>::NEW,
     &Plain::<explore::SearchClips>::NEW,
     &Plain::<jobs::JobsList>::NEW,
     &Plain::<jobs::JobsStatus>::NEW,

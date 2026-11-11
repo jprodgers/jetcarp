@@ -1,6 +1,7 @@
 //! Contact sheets of search results.
 
-use crate::explore::store::feat_from_blob;
+use crate::explore::segments::RunRec;
+use crate::explore::store::{feat_blob, feat_from_blob};
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::space::{ALL_FAMS, Fam, sized_spec};
 use jetcarp_core::render::{Image, RenderOptions, render_fitted};
@@ -8,7 +9,6 @@ use jetcarp_core::sheet::{Label, labelled_sheet_scaled};
 use jetcarp_core::topology::Nb;
 use jetcarp_core::world::World;
 use rayon::prelude::*;
-use rusqlite::Connection;
 
 /// A stored run as a row.
 #[derive(Clone, Debug)]
@@ -26,74 +26,37 @@ pub struct RunRow {
     pub feats: Vec<u8>,
 }
 
-/// Read runs. `sql` is a query that returns `id` first (typically `SELECT id FROM runs WHERE ...`).
-pub fn query_runs(conn: &Connection, sql: &str) -> Result<Vec<RunRow>, String> {
-    let e = |x: rusqlite::Error| x.to_string();
-    let mut st = conn.prepare(sql).map_err(e)?;
-    let ids: Vec<i64> = st
-        .query_map([], |r| r.get(0))
-        .map_err(e)?
-        .collect::<Result<_, _>>()
-        .map_err(e)?;
-    let mut out = Vec::with_capacity(ids.len());
-    let mut st = conn
-        .prepare(
-            "SELECT tiling,nb,fam,rule,seed,cells,gens,steps,rng,origin,fate,score,bin,feats,
-             stage,parent,seed_kind FROM runs WHERE id=?",
-        )
-        .map_err(e)?;
-    for id in ids {
-        let row = st.query_row([id], |r| {
-            let fam: String = r.get(2)?;
-            let seed: String = r.get(4)?;
-            Ok((
-                Cand {
-                    tiling: r.get(0)?,
-                    nb: if r.get::<_, i64>(1)? == 0 {
-                        Nb::Touch
-                    } else {
-                        Nb::Edge
-                    },
-                    fam: ALL_FAMS
-                        .iter()
-                        .copied()
-                        .find(|f| f.name() == fam)
-                        .unwrap_or(Fam::LifeLike),
-                    rule: r.get(3)?,
-                    seed: serde_json::from_str(&seed)
-                        .unwrap_or(jetcarp_core::world::SeedSpec::Empty),
-                    cells: r.get::<_, i64>(5)? as u32,
-                    gens: r.get::<_, i64>(6)? as u32,
-                    steps: r.get::<_, i64>(7)? as u32,
-                    rng: r.get::<_, i64>(8)? as u64,
-                    origin: r.get(9)?,
-                },
-                r.get::<_, String>(10)?,
-                r.get::<_, f64>(11)?,
-                r.get::<_, i64>(12)?,
-                r.get::<_, Vec<u8>>(13)?,
-                (
-                    r.get::<_, Option<i64>>(14)?.unwrap_or(1),
-                    r.get::<_, Option<i64>>(15)?,
-                    r.get::<_, Option<String>>(16)?.unwrap_or_default(),
-                ),
-            ))
-        });
-        if let Ok((cand, fate, score, bin, feats, (stage, parent, seed_kind))) = row {
-            out.push(RunRow {
-                id,
-                stage,
-                parent,
-                seed_kind,
-                cand,
-                fate,
-                score,
-                bin,
-                feats,
-            });
+impl RunRow {
+    /// A stored run as a row (an unknown family reads as Life-like, a seed that does not read as
+    /// empty).
+    pub fn of(r: &RunRec) -> RunRow {
+        RunRow {
+            id: r.id,
+            stage: r.stage,
+            parent: r.parent,
+            seed_kind: r.seed_kind.clone(),
+            cand: Cand {
+                tiling: r.tiling.clone(),
+                nb: if r.nb == 0 { Nb::Touch } else { Nb::Edge },
+                fam: ALL_FAMS
+                    .iter()
+                    .copied()
+                    .find(|f| f.name() == r.fam)
+                    .unwrap_or(Fam::LifeLike),
+                rule: r.rule.clone(),
+                seed: serde_json::from_str(&r.seed).unwrap_or(jetcarp_core::world::SeedSpec::Empty),
+                cells: r.cells as u32,
+                gens: r.gens as u32,
+                steps: r.steps as u32,
+                rng: r.rng as u64,
+                origin: r.origin.clone(),
+            },
+            fate: r.fate.clone(),
+            score: r.score,
+            bin: r.bin,
+            feats: feat_blob(&r.feat),
         }
     }
-    Ok(out)
 }
 
 /// Replay a run to `gens` generations and return the world.

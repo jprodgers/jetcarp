@@ -2,13 +2,17 @@
 //! families, rules, and seeds ([`crate::explore::job::Search`]) as a catalog job, stopped,
 //! budgeted, and carried on like the others.
 //!
-//! **Its folder.** A job's working state is its own database, `searches/<uuid>/search.sqlite`
-//! beside the catalog ([`work_dir`]; the uuid is made with the job and kept in its spec): every
-//! run it measured, the reviews of them, and the search's archive, confirmed set, coverage,
-//! family totals, seen set, and counters ([`crate::explore::store`]). Each step writes its runs
-//! and what they changed there in one transaction; the catalog row holds the progress, and no
-//! checkpoint (the folder is the checkpoint). A resumed job loads the saved state, never every
-//! run, so a search of millions of runs carries on within seconds.
+//! **Its folder.** A job's working state is its own folder, `searches/<uuid>/` beside the library
+//! ([`work_dir`]; the uuid is made with the job and kept in its spec): its runs, sealed into
+//! Parquet segments a million at a time (`runs/`, listed in `manifest.json`;
+//! [`crate::explore::runs`]), and its working database `search.sqlite` with the newest runs and
+//! the search's archive, confirmed set, coverage, family totals, seen set, and counters
+//! ([`crate::explore::store`]). Each step writes its runs and what they changed there in one
+//! transaction, then seals a segment if a million runs are waiting; stopping seals nothing. The
+//! library row holds the progress, and no checkpoint (the folder is the checkpoint). A resumed
+//! job loads the saved state, never its runs, so a search of millions of runs carries on within
+//! about a second. Reviews of its runs are ratings in the library
+//! ([`crate::explore::reviews`]).
 //!
 //! **Not deterministic.** The GPU and CPU rounds share the archive as they run, so a stopped
 //! search *continues* from its archive rather than resuming exactly as an uninterrupted one
@@ -22,18 +26,20 @@
 //! of memory the run stops (paused). The item budget counts screened runs.
 //!
 //! **Importing.** A job made with `import` (an old CART explore database) first copies that
-//! database's runs and reviews into its own, in steps of a few seconds, rebuilding the archive,
-//! coverage, and seen set from them once, as the old search did on every restart; with
-//! `import_only` it then stops (paused), else it searches on from the imported archive.
+//! database's runs into sealed segments of its own, in steps of a few seconds, rebuilding the
+//! archive, coverage, and seen set from them once, as the old search did on every restart; its
+//! progress is committed with each segment, so an import stopped part way goes on from its last
+//! segment. Its reviews go to the library. With `import_only` it then stops (paused), else it
+//! searches on from the imported archive.
 
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
 use crate::dashboard::JobSummary;
 use crate::explore::job::{FamilyLine, Search, Settings, StepLimits};
+use crate::explore::runs::{Building, Runs, SEAL_ROWS};
 use crate::explore::store::{self, Import, LoadStats};
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_store::library::JobRow;
 use jetcarp_store::{JobStatus, Library};
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -71,6 +77,9 @@ pub struct ExploreSpec {
     /// The search's folder, `searches/<uuid>` beside the catalog (made with the job).
     #[serde(default)]
     pub uuid: String,
+    /// Runs per sealed segment (default a million; smaller only for tests).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seal_rows: Option<u64>,
 }
 
 /// An import under way, as the progress shows it.
@@ -165,7 +174,7 @@ pub fn work_dir(lib: &Library, row: &JobRow) -> Result<PathBuf, String> {
     Ok(lib.folder().join("searches").join(uuid))
 }
 
-/// An explore job's working database (`<work_dir>/search.sqlite`).
+/// An explore job's working database (`<work_dir>/search.sqlite`; its segments are beside it).
 pub fn db_path(lib: &Library, row: &JobRow) -> Result<PathBuf, String> {
     if row.kind != KIND_NAME {
         return Err(format!("job {} is a {} job, not explore", row.id, row.kind));
@@ -185,6 +194,9 @@ pub fn start(lib: &Library, spec: &ExploreSpec) -> Result<i64, String> {
         Import::open(p, 0)?;
     } else if spec.import_only {
         return Err("import_only needs an import".into());
+    }
+    if spec.seal_rows == Some(0) {
+        return Err("seal_rows must be at least 1".into());
     }
     let mut spec = spec.clone();
     if spec.uuid.is_empty() {
@@ -305,7 +317,9 @@ pub struct ExploreRun {
 struct Running {
     spec: ExploreSpec,
     search: Search,
-    db: Connection,
+    runs: Runs,
+    /// An import's segment being written.
+    building: Option<Building>,
     pool: rayon::ThreadPool,
     folder: PathBuf,
     job: i64,
@@ -347,31 +361,56 @@ impl ExploreRun {
             .ok_or_else(|| "the search was not restored".into())
     }
 
-    /// Copy old runs for about a step; at the end the reviews, the indexes, and (with
-    /// `import_only`) a stop.
+    /// Copy old runs into sealed segments for about a step, committing the import's progress
+    /// with each segment; at the end the last segment, the reviews (to the library), and (with
+    /// `import_only`) a stop. A stop part way leaves the segment being written unfinished: the
+    /// next session writes it again from the last segment committed.
     fn import_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
         let r = self.running()?;
         let t = Instant::now();
         r.rss = rss_gb();
+        let seal = r.spec.seal_rows.unwrap_or(SEAL_ROWS).max(1);
         let Some(imp) = r.import.as_mut() else {
             return Ok(());
         };
         loop {
-            let rows = imp.next(IMPORT_BATCH)?;
-            if rows.is_empty() {
+            let have = r.building.as_ref().map_or(0, |b| b.rows());
+            let rows = imp.next((seal - have.min(seal)).clamp(1, IMPORT_BATCH as u64) as usize)?;
+            let end = rows.is_empty();
+            if !end {
+                r.search.import(&rows);
+                if r.building.is_none() {
+                    r.building = Some(r.runs.begin_segment()?);
+                }
+                let b = r.building.as_mut().unwrap();
+                for row in rows {
+                    b.push(row.rec)?;
+                }
+                if let Some(p) = r.import_progress.as_mut() {
+                    p.last = imp.last;
+                }
+            }
+            let full = r.building.as_ref().is_some_and(|b| b.rows() >= seal);
+            if (full || end)
+                && let Some(b) = r.building.take()
+            {
+                let last = b.last_id();
+                r.runs.finish_segment(b, None)?;
+                let mut d = r.search.take_delta();
+                d.meta.push(("import_last".into(), last.to_string()));
+                d.meta
+                    .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
+                r.runs.write(&d)?;
+            }
+            if end {
                 let reviews = imp.reviews()?;
                 let source = format!("import:{}", imp.path.display());
+                crate::explore::reviews::import_old(cx.lib, &r.runs.uuid(), &reviews, &source)?;
                 let mut d = r.search.take_delta();
                 d.meta.push(("import_done".into(), "1".into()));
-                d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
-                store::write_imported(&mut r.db, &[], &d, &reviews, &source)?;
-                store::finish_import(&r.db)?;
-                // The indexes take a while on a large import: count that time too.
-                let d = store::Delta {
-                    meta: vec![("elapsed_s".into(), elapsed(r).to_string())],
-                    ..Default::default()
-                };
-                store::write(&mut r.db, &d)?;
+                d.meta
+                    .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
+                r.runs.write(&d)?;
                 r.import = None;
                 if let Some(p) = r.import_progress.as_mut() {
                     p.done = true;
@@ -381,15 +420,6 @@ impl ExploreRun {
                     cx.stop.store(true, Ordering::SeqCst);
                 }
                 return Ok(());
-            }
-            r.search.import(&rows);
-            let mut d = r.search.take_delta();
-            d.meta.push(("import_last".into(), imp.last.to_string()));
-            d.meta
-                .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
-            store::write_imported(&mut r.db, &rows, &d, &[], "")?;
-            if let Some(p) = r.import_progress.as_mut() {
-                p.last = imp.last;
             }
             if t.elapsed().as_secs_f64() >= STEP_S || cx.stopped() {
                 return Ok(());
@@ -412,13 +442,16 @@ impl Strategy for ExploreRun {
             .map_err(|e| format!("job {}: {e}", cx.job))?;
         let folder = work_dir(cx.lib, cx.row)?;
         let path = folder.join("search.sqlite");
-        let mut db = store::open(&path)?;
+        let mut runs = Runs::open(&path)?;
+        crate::explore::reviews::move_old(cx.lib, &runs)?;
+        runs.set_spec(&cx.row.spec)?;
         if let Some(from) = &spec.import
-            && store::meta_get(&db, "import_done")?.is_none()
+            && store::meta_get(&runs.db, "import_done")?.is_none()
         {
-            store::begin_import(&db, from)?;
+            store::begin_import(&runs.db, from)?;
         }
-        let saved = store::load(&mut db)?;
+        let mut saved = store::load(&mut runs.db)?;
+        saved.next_id = saved.next_id.max(runs.max_id()? + 1);
         let loaded = saved.stats.clone();
         let elapsed_before = saved.meta_f64("elapsed_s");
         let importing = saved.meta.get("import_done").is_some_and(|v| v == "0");
@@ -459,7 +492,8 @@ impl Strategy for ExploreRun {
         self.st = Some(Running {
             spec,
             search,
-            db,
+            runs,
+            building: None,
             pool,
             folder,
             job: cx.job,
@@ -530,7 +564,8 @@ impl Strategy for ExploreRun {
         }
         let mut d = r.search.take_delta();
         d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
-        store::write(&mut r.db, &d)?;
+        r.runs.write(&d)?;
+        r.runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
         let (t, n) = r.rate;
         let dt = t.elapsed().as_secs_f64();
         if dt >= 5.0 {

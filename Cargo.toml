@@ -48,6 +48,9 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 flate2 = "1.1.10"
 gif = { version = "0.14.2", default-features = false, features = ["std"] }
 image-webp = "0.2.4"
+# Explore run segments (Parquet): the file format only, zstd only, no Arrow.
+parquet = { version = "60.1.0", default-features = false, features = ["zstd"] }
+bytes = "1.12"
 
 # Simulation code is slow unoptimized; keep debug builds debuggable but usable.
 [profile.dev]

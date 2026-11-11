@@ -1,15 +1,15 @@
 //! `jetcarp jobs`: the catalog's jobs, whatever started them: `list`, `status`, `stop`,
 //! `resume`, `report`, `remove` (the operations `jobs.*`); and an explore job's run records:
-//! `runs`, `sheet`, `scene`, `review`, `clips`, `rescore` (`search.runs`, `search.sheet`,
-//! `search.run_scene`, `search.review`, `search.clips`, `search.rescore`).
+//! `runs`, `sheet`, `scene`, `review`, `clips`, `rescore`, `seal` (`search.runs`, `search.sheet`,
+//! `search.run_scene`, `search.review`, `search.clips`, `search.rescore`, `search.seal`).
 
 use crate::search_cmd::CliProgress;
 use crate::show;
 use anyhow::{Context, Result};
 use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::explore::{
-    ClipsIn, RescoreIn, ReviewIn, RunIn, RunsIn, SearchClips, SearchRescore, SearchReview,
-    SearchRunScene, SearchRuns, SearchSheet, SheetIn,
+    ClipsIn, RescoreIn, ReviewIn, RunIn, RunsIn, SealIn, SearchClips, SearchRescore, SearchReview,
+    SearchRunScene, SearchRuns, SearchSeal, SearchSheet, SheetIn,
 };
 use jetcarp_api::ops::jobs::{
     JobIn, JobsList, JobsRemove, JobsReport, JobsResume, JobsStatus, JobsStop, ListIn, RemoveIn,
@@ -150,8 +150,12 @@ enum JobsCmd {
     /// manifest, for rating by eye.
     Clips(Box<ClipsArgs>),
     /// Recompute every stored score of a stopped explore job from its stored measures (after
-    /// the score changes), and rebuild its archive.
+    /// the score changes), and rebuild its archive. Sealed segments are not rewritten: their new
+    /// scores go in a sidecar per segment (`scores-<n>/` in the search folder).
     Rescore { job: Option<i64> },
+    /// Seal a stopped explore job's newest runs (those not yet in a Parquet segment), so its
+    /// folder holds every run in Parquet; a search seals every million runs by itself.
+    Seal { job: Option<i64> },
 }
 
 #[derive(clap::Args)]
@@ -179,9 +183,6 @@ struct RunsArgs {
     /// These runs (comma separated) instead of the filters.
     #[arg(long, value_delimiter = ',')]
     ids: Option<Vec<i64>>,
-    /// One SELECT returning run ids instead of the filters (`SELECT id FROM runs WHERE ...`).
-    #[arg(long)]
-    sql: Option<String>,
     /// score (default), newest, or id.
     #[arg(long)]
     order: Option<String>,
@@ -195,12 +196,9 @@ struct SheetArgs {
     /// Where to write the PNG.
     #[arg(long, alias = "out")]
     png: PathBuf,
-    /// Runs to show, comma separated.
+    /// Runs to show, comma separated (`jetcarp jobs runs` finds them).
     #[arg(long, value_delimiter = ',')]
     ids: Option<Vec<i64>>,
-    /// One SELECT returning run ids (`SELECT id FROM runs WHERE ...`).
-    #[arg(long)]
-    sql: Option<String>,
     /// Pixels per thumbnail.
     #[arg(long, default_value_t = 220)]
     px: u32,
@@ -345,7 +343,6 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 stage: r.stage,
                 reviewed: r.reviewed,
                 ids: r.ids,
-                sql: r.sql,
                 order: r.order,
                 limit: Some(r.limit),
             };
@@ -356,7 +353,6 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
             let i = SheetIn {
                 job: a.job,
                 ids: a.ids,
-                sql: a.sql,
                 px: a.px,
                 cols: a.cols,
                 fracs: Some(a.fracs),
@@ -415,6 +411,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
             p.finish();
             show(&r?, json)
         }
+        JobsCmd::Seal { job } => show(&SearchSeal::run(&cx, SealIn { job }, &Quiet)?, json),
         JobsCmd::Remove {
             job,
             delete_results,

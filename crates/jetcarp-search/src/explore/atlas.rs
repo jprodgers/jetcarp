@@ -1,10 +1,13 @@
 //! The atlas: the published result of a search, the file Quick Start browses. Entries are
-//! selected from a search database, given a category and palette, and stored with a mature
-//! state so a preview can start where the action is. This is the writing half (choosing,
+//! selected from a search's runs ([`Runs`]: its sealed segments and working database), given a
+//! category and palette, and stored with a mature state so a preview can start where the action
+//! is. This is the writing half (choosing,
 //! scoring, and writing entries); finding and reading the file is `jetcarp_store::atlas`.
 
 use crate::explore::job::feat_from_blob;
-use crate::explore::sheet::{RunRow, query_runs};
+use crate::explore::runs::{RunFilter, Runs, top_n};
+use crate::explore::segments::{col, cols};
+use crate::explore::sheet::RunRow;
 use flate2::Compression;
 use flate2::write::DeflateEncoder;
 use jetcarp_core::explore::cand::Cand;
@@ -210,17 +213,37 @@ pub fn create(path: &Path) -> Result<Connection, String> {
 }
 
 /// Worst-seed confirmed score of each parent run.
-fn confirmed_scores(conn: &Connection) -> Result<HashMap<i64, f64>, String> {
-    let e = |x: rusqlite::Error| x.to_string();
-    let mut st = conn
-        .prepare("SELECT parent, MIN(score) FROM runs WHERE stage=2 GROUP BY parent")
-        .map_err(e)?;
-    let rows: Vec<(i64, f64)> = st
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
-        .map_err(e)?
-        .flatten()
-        .collect();
-    Ok(rows.into_iter().collect())
+fn confirmed_scores(runs: &Runs) -> Result<HashMap<i64, f64>, String> {
+    let rows: Vec<(i64, f64)> = runs.scan(
+        cols(&[col::STAGE, col::PARENT, col::SCORE]),
+        &|s, _, rg| {
+            s.int_range(rg, col::STAGE)
+                .is_none_or(|(lo, hi)| lo <= 2 && 2 <= hi)
+        },
+        &|b, out| {
+            for i in 0..b.len {
+                if b.stage(i) == 2
+                    && let Some(p) = b.opt_i64(col::PARENT, i)
+                {
+                    out.push((p, b.score(i)));
+                }
+            }
+        },
+    )?;
+    let mut m: HashMap<i64, f64> = HashMap::new();
+    for (p, s) in rows {
+        let x = m.entry(p).or_insert(s);
+        if s < *x {
+            *x = s;
+        }
+    }
+    Ok(m)
+}
+
+/// Screened runs only.
+fn screened(s: &crate::explore::segments::Segment, rg: usize) -> bool {
+    s.int_range(rg, col::STAGE)
+        .is_none_or(|(lo, hi)| lo <= 1 && 1 <= hi)
 }
 
 fn tiling_group(key: &str) -> String {
@@ -232,15 +255,22 @@ fn tiling_group(key: &str) -> String {
 }
 
 /// Select runs for the atlas: a list of `(parent run, confirmed score, category)`.
-pub fn select(
-    conn: &Connection,
-    opts: &AtlasOpts,
-) -> Result<Vec<(RunRow, f64, &'static str)>, String> {
-    let scores = confirmed_scores(conn)?;
-    let runs = query_runs(
-        conn,
-        "SELECT id FROM runs WHERE stage=1 AND (seed_kind='point' OR id IN (SELECT DISTINCT parent FROM runs WHERE stage=2))",
+pub fn select(db: &Runs, opts: &AtlasOpts) -> Result<Vec<(RunRow, f64, &'static str)>, String> {
+    let scores = confirmed_scores(db)?;
+    let ids: Vec<i64> = db.scan(
+        cols(&[col::ID, col::STAGE, col::SEED_KIND]),
+        &|s, _, rg| screened(s, rg),
+        &|b, out| {
+            for i in 0..b.len {
+                if b.stage(i) == 1
+                    && (b.bytes(col::SEED_KIND, i) == b"point" || scores.contains_key(&b.id(i)))
+                {
+                    out.push(b.id(i));
+                }
+            }
+        },
     )?;
+    let runs = db.rows(&ids)?;
     // Best-first by the worst-seed score.
     let mut scored: Vec<(RunRow, f64, &'static str)> = runs
         .into_iter()
@@ -294,7 +324,7 @@ pub fn select(
         *rc += 1;
         out.push((r, s, c));
     }
-    let contrast = contrast_picks(conn, &out)?;
+    let contrast = contrast_picks(db, &out)?;
     let budget = opts.max_entries.saturating_sub(contrast.len());
     let mut out = trim_keeping_floor(out, budget, THIN_FAMILY, |x| x.0.cand.fam);
     out.extend(contrast);
@@ -379,7 +409,7 @@ const ENDINGS_PER_NICHE: usize = 2;
 /// Entries the score would never pick: the best screened runs of families with few confirmed
 /// ones, so every family appears, and runs that die or freeze, for contrast.
 fn contrast_picks(
-    conn: &Connection,
+    db: &Runs,
     chosen: &[(RunRow, f64, &'static str)],
 ) -> Result<Vec<(RunRow, f64, &'static str)>, String> {
     let mut used: HashSet<i64> = chosen.iter().map(|(r, _, _)| r.id).collect();
@@ -394,18 +424,35 @@ fn contrast_picks(
             continue;
         }
         // WireWorld contrast means circuits, the busy ones first.
-        let order = if fam == Fam::WireWorld {
-            "(seed_kind='circuit') DESC, score DESC"
+        let ids = if fam == Fam::WireWorld {
+            let mut v: Vec<(bool, f64, i64)> = db.scan(
+                cols(&[col::ID, col::STAGE, col::FAM, col::SEED_KIND, col::SCORE]),
+                &|s, _, rg| screened(s, rg),
+                &|b, out| {
+                    for i in 0..b.len {
+                        if b.stage(i) == 1 && b.bytes(col::FAM, i) == fam.name().as_bytes() {
+                            out.push((
+                                b.bytes(col::SEED_KIND, i) != b"circuit",
+                                -b.score(i),
+                                b.id(i),
+                            ));
+                        }
+                    }
+                },
+            )?;
+            v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
+            v.truncate(3000);
+            v.into_iter().map(|x| x.2).collect()
         } else {
-            "score DESC"
+            db.ids(
+                &RunFilter {
+                    family: Some(fam),
+                    ..Default::default()
+                },
+                3000,
+            )?
         };
-        let mut runs = query_runs(
-            conn,
-            &format!(
-                "SELECT id FROM runs WHERE stage=1 AND fam='{}' ORDER BY {order} LIMIT 3000",
-                fam.name()
-            ),
-        )?;
+        let mut runs = db.rows(&ids)?;
         if fam == Fam::WireWorld {
             runs.sort_by_key(|r| !busy_circuit(&r.cand.seed, &r.fate));
         }
@@ -442,11 +489,20 @@ fn contrast_picks(
         .into_iter()
         .map(|t| (t.key, t.group))
         .collect();
-    let endings = query_runs(
-        conn,
-        "SELECT id FROM runs WHERE stage=1 AND fate IN ('died','froze') AND id % 97 = 0
-         ORDER BY score DESC LIMIT 60000",
+    let mut ends: Vec<(f64, i64)> = db.scan(
+        cols(&[col::ID, col::STAGE, col::FATE, col::SCORE]),
+        &|s, _, rg| screened(s, rg),
+        &|b, out| {
+            for i in 0..b.len {
+                let f = b.bytes(col::FATE, i);
+                if b.stage(i) == 1 && (f == b"died" || f == b"froze") && b.id(i) % 97 == 0 {
+                    out.push((b.score(i), b.id(i)));
+                }
+            }
+        },
     )?;
+    top_n(&mut ends, 60_000);
+    let endings = db.rows(&ends.iter().map(|x| x.1).collect::<Vec<_>>())?;
     let mut per: HashMap<(&'static str, Fam, String), usize> = HashMap::new();
     for r in endings {
         let c = categorize(&r.fate, &feat_from_blob(&r.feats), r.cand.fam, r.cand.gens);
@@ -525,9 +581,9 @@ fn make_entry(run: &RunRow, score: f64, cat: &str, group: &str) -> Result<AtlasE
     })
 }
 
-/// Build an atlas file from a search database.
-pub fn build(conn: &Connection, out: &Path, opts: &AtlasOpts) -> Result<usize, String> {
-    let picks = select(conn, opts)?;
+/// Build an atlas file from a search's runs.
+pub fn build(db: &Runs, out: &Path, opts: &AtlasOpts) -> Result<usize, String> {
+    let picks = select(db, opts)?;
     let groups: HashMap<String, String> = jetcarp_core::explore::space::all_tilings()
         .into_iter()
         .map(|t| (t.key, t.group))
@@ -577,21 +633,35 @@ pub fn build(conn: &Connection, out: &Path, opts: &AtlasOpts) -> Result<usize, S
 }
 
 /// A stratified sample of screened runs for a person to rate: spread over categories and
-/// families, half strong and half random, so ratings can calibrate the score.
-pub fn taste_sample(
-    conn: &Connection,
-    n: usize,
-    seed: u64,
-) -> Result<Vec<(RunRow, &'static str)>, String> {
-    let strong = query_runs(
-        conn,
-        "SELECT id FROM runs WHERE stage=1 ORDER BY score DESC LIMIT 12000",
-    )?;
-    let any = query_runs(
-        conn,
-        "SELECT id FROM runs WHERE stage=1 AND score>0.2 ORDER BY RANDOM() LIMIT 12000",
+/// families, half strong and half random (drawn with `seed`), so ratings can calibrate the score.
+pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'static str)>, String> {
+    let strong = db.rows(&db.ids(&RunFilter::default(), 12_000)?)?;
+    let mut pool: Vec<i64> = db.scan(
+        cols(&[col::ID, col::STAGE, col::SCORE]),
+        &|s, side, rg| {
+            screened(s, rg)
+                && side
+                    .and_then(|x| x.float_max(rg, col::SCORE))
+                    .or_else(|| s.float_max(rg, col::SCORE))
+                    .is_none_or(|m| m > 0.2)
+        },
+        &|b, out| {
+            out.extend(
+                (0..b.len)
+                    .filter(|&i| b.stage(i) == 1 && b.score(i) > 0.2)
+                    .map(|i| b.id(i)),
+            )
+        },
     )?;
     let mut rng = jetcarp_core::rng::Rng::new(seed);
+    // A random 12,000 of them (the first part of a shuffle).
+    let take = pool.len().min(12_000);
+    for i in 0..take {
+        let j = i + rng.below((pool.len() - i) as u64) as usize;
+        pool.swap(i, j);
+    }
+    pool.truncate(take);
+    let any = db.rows(&pool)?;
     let mut by: HashMap<&'static str, (Vec<RunRow>, Vec<RunRow>)> = HashMap::new();
     let cat = |r: &RunRow| {
         let f = feat_from_blob(&r.feats);
@@ -631,10 +701,11 @@ pub fn taste_sample(
     Ok(out)
 }
 
-/// Stored runs with their categories, in database order.
-pub fn runs_by_id(conn: &Connection, ids: &[i64]) -> Result<Vec<(RunRow, &'static str)>, String> {
-    let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
-    let runs = query_runs(conn, &format!("SELECT id FROM runs WHERE id IN ({list})"))?;
+/// Stored runs with their categories, in id order.
+pub fn runs_by_id(db: &Runs, ids: &[i64]) -> Result<Vec<(RunRow, &'static str)>, String> {
+    let mut ids = ids.to_vec();
+    ids.sort_unstable();
+    let runs = db.rows(&ids)?;
     Ok(runs
         .into_iter()
         .map(|r| {

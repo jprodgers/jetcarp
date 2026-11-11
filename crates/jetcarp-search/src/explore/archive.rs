@@ -201,9 +201,14 @@ impl Archive {
         self.runs.insert(id, ev);
     }
 
+    /// An elite's tiling group.
+    pub fn group(&self, id: i64) -> Option<u8> {
+        self.groups.get(&id).copied()
+    }
+
     /// The elites added and dropped since the last call, as each one's last state: its tiling
-    /// group when it is an elite now, `None` when it was dropped.
-    pub fn take_changes(&mut self) -> Vec<(i64, Option<u8>)> {
+    /// group and run when it is an elite now, `None` when it was dropped.
+    pub fn take_changes(&mut self) -> Vec<(i64, Option<(u8, Eval)>)> {
         let mut last: HashMap<i64, bool> = HashMap::new();
         let mut order = Vec::new();
         for (id, added) in std::mem::take(&mut self.changes) {
@@ -214,10 +219,10 @@ impl Archive {
         order
             .into_iter()
             .map(|id| {
-                (
-                    id,
-                    last[&id].then(|| self.groups.get(&id).copied()).flatten(),
-                )
+                let now = last[&id]
+                    .then(|| Some((*self.groups.get(&id)?, self.runs.get(&id)?.clone())))
+                    .flatten();
+                (id, now)
             })
             .collect()
     }

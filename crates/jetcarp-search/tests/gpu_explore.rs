@@ -6,6 +6,7 @@
 
 use jetcarp_gpu::batch::BatchSim;
 use jetcarp_search::explore::job::try_one;
+use jetcarp_search::explore::runs::{RunFilter, Runs};
 use jetcarp_search::explore::store;
 use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner};
@@ -60,13 +61,12 @@ fn explore_runs_measured_on_the_gpu_match_the_cpu() {
     assert_eq!(p.backend, name);
     assert!(p.gpu_error.is_none(), "{:?}", p.gpu_error);
     assert!(p.screened >= 1200, "{}", p.screened);
-    let c = store::open_read(&db_path(&lib, &lib.job(job).unwrap()).unwrap()).unwrap();
+    let c = Runs::open_read(&db_path(&lib, &lib.job(job).unwrap()).unwrap()).unwrap();
     // Screened runs spread over the families, and the confirmation runs.
-    let mut ids = store::run_ids(&c, &store::RunFilter::default(), 150).unwrap();
+    let mut ids = c.ids(&RunFilter::default(), 150).unwrap();
     ids.extend(
-        store::run_ids(
-            &c,
-            &store::RunFilter {
+        c.ids(
+            &RunFilter {
                 stage: Some(2),
                 ..Default::default()
             },
@@ -74,7 +74,7 @@ fn explore_runs_measured_on_the_gpu_match_the_cpu() {
         )
         .unwrap(),
     );
-    let rows = store::runs_by_ids(&c, &ids).unwrap();
+    let rows = c.rows(&ids).unwrap();
     assert!(rows.iter().any(|r| r.stage == 2), "no confirmation runs");
     let mut fams = std::collections::BTreeSet::new();
     for r in &rows {

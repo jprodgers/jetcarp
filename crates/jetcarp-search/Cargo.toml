@@ -19,6 +19,8 @@ serde_json = { workspace = true, features = ["float_roundtrip"] }
 rusqlite.workspace = true
 flate2.workspace = true
 memory-stats = "1.2.0"
+parquet.workspace = true
+bytes.workspace = true
 
 [dev-dependencies]
 # The GPU strategies' tests: a hunt and an explore search on the GPU equal the CPU's.

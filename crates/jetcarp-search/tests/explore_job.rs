@@ -1,9 +1,13 @@
 //! Explore searches as catalog jobs (`jetcarp_search::jobs::explore`): started, stopped (by the
 //! budget and by the handle), and continued from the archive saved in their working database;
 //! a resumed search reads its saved state, not its runs; the GPU loop on a backend; an old
-//! explore database imported; rescoring rebuilding the archive.
+//! explore database imported into sealed segments, its reviews into the library; rescoring
+//! rebuilding the archive; reviews in the library.
 
 use jetcarp_core::explore::batch::CpuBatch;
+use jetcarp_search::explore::reviews;
+use jetcarp_search::explore::runs::{RunFilter, Runs};
+use jetcarp_search::explore::segments::{col, cols};
 use jetcarp_search::explore::store;
 use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner, Stopped};
@@ -60,8 +64,8 @@ fn opts(threads: usize, budget: Budget) -> RunOptions {
     }
 }
 
-fn db(lib: &Library, job: i64) -> Connection {
-    store::open_read(&db_path(lib, &lib.job(job).unwrap()).unwrap()).unwrap()
+fn db(lib: &Library, job: i64) -> Runs {
+    Runs::open_read(&db_path(lib, &lib.job(job).unwrap()).unwrap()).unwrap()
 }
 
 fn count(c: &Connection, sql: &str) -> i64 {
@@ -70,41 +74,64 @@ fn count(c: &Connection, sql: &str) -> i64 {
         .unwrap_or(0)
 }
 
-/// The working database agrees with itself and with the progress.
-fn consistent(c: &Connection, p: &ExploreProgress) {
-    let screened = count(c, "SELECT COUNT(*) FROM runs WHERE stage = 1") as u64;
+/// The runs and working database agree with themselves and with the progress.
+fn consistent(r: &Runs, p: &ExploreProgress) {
+    let c = &r.db;
+    let screened = r.count(Some(1)).unwrap();
     assert_eq!(screened, p.screened, "screened runs");
-    assert_eq!(
-        count(c, "SELECT COUNT(*) FROM runs WHERE stage = 2") as u64,
-        p.confirmed
-    );
+    assert_eq!(r.count(Some(2)).unwrap(), p.confirmed);
     assert_eq!(count(c, "SELECT SUM(n) FROM coverage") as u64, screened);
     assert_eq!(count(c, "SELECT SUM(runs) FROM families") as u64, screened);
     assert_eq!(count(c, "SELECT COUNT(*) FROM elites") as u64, p.elites);
-    // Every elite is a screened run, and at most three share a niche.
-    assert_eq!(
-        count(
-            c,
-            "SELECT COUNT(*) FROM elites e JOIN runs r ON r.id = e.id WHERE r.stage = 1"
-        ) as u64,
-        p.elites
-    );
+    // Every elite is a screened run, its stored candidate that run's, and at most three share a
+    // niche.
+    let elites: Vec<(i64, String, String)> = c
+        .prepare("SELECT id, rule, tiling FROM elites")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .map(|x| x.unwrap())
+        .collect();
+    let ids: Vec<i64> = elites.iter().map(|e| e.0).collect();
+    let got = r
+        .fetch(&ids, cols(&[col::STAGE, col::RULE, col::TILING]))
+        .unwrap();
+    for (id, rule, tiling) in &elites {
+        let run = &got[id];
+        assert_eq!(
+            (run.stage, &run.rule, &run.tiling),
+            (1, rule, tiling),
+            "elite {id}"
+        );
+    }
     assert!(
         count(
             c,
-            "SELECT MAX(k) FROM (SELECT COUNT(*) AS k FROM elites e JOIN runs r ON r.id = e.id
-             GROUP BY r.fam, e.grp, r.bin)"
+            "SELECT MAX(k) FROM (SELECT COUNT(*) AS k FROM elites GROUP BY fam, grp, bin)"
         ) <= 3
     );
     // Every confirmation run's parent is marked confirmed.
-    assert_eq!(
-        count(
-            c,
-            "SELECT COUNT(DISTINCT parent) FROM runs WHERE stage = 2 AND parent NOT IN
-             (SELECT id FROM confirmed)"
-        ),
-        0
-    );
+    let parents: Vec<i64> = r
+        .scan(
+            cols(&[col::STAGE, col::PARENT]),
+            &|_, _, _| true,
+            &|b, out| {
+                out.extend(
+                    (0..b.len)
+                        .filter(|&i| b.stage(i) == 2)
+                        .map(|i| b.i64(col::PARENT, i)),
+                )
+            },
+        )
+        .unwrap();
+    let confirmed: std::collections::HashSet<i64> = c
+        .prepare("SELECT id FROM confirmed")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|x| x.unwrap())
+        .collect();
+    assert!(parents.iter().all(|p| confirmed.contains(p)));
     let blobs: Vec<Vec<u8>> = c
         .prepare("SELECT data FROM seen")
         .unwrap()
@@ -230,8 +257,8 @@ fn resume_reads_the_saved_state_not_every_run() {
         .unwrap();
     let p1 = progress(&out.progress);
     let c = db(&lib, job);
-    let coverage = count(&c, "SELECT SUM(n) FROM coverage");
-    let elites = count(&c, "SELECT COUNT(*) FROM elites");
+    let coverage = count(&c.db, "SELECT SUM(n) FROM coverage");
+    let elites = count(&c.db, "SELECT COUNT(*) FROM elites");
     drop(c);
     // Every run that is not an elite is deleted: a search that rebuilt its state from its runs
     // would now see a fraction of its coverage and counters.
@@ -261,11 +288,11 @@ fn resume_reads_the_saved_state_not_every_run() {
     assert!(p2.elites >= p1.elites);
     let c = db(&lib, job);
     assert_eq!(
-        count(&c, "SELECT SUM(n) FROM coverage") as u64,
+        count(&c.db, "SELECT SUM(n) FROM coverage") as u64,
         coverage as u64 + (p2.screened - p1.screened)
     );
     assert_eq!(
-        count(&c, "SELECT SUM(runs) FROM families") as u64,
+        count(&c.db, "SELECT SUM(runs) FROM families") as u64,
         p2.screened
     );
 }
@@ -286,24 +313,16 @@ fn the_gpu_loop_runs_on_a_backend() {
     consistent(&c, &p);
     // The batch loop ran the families a GPU runs, and each run it measured replays to the same
     // measures on the CPU's own loop.
-    let ids: Vec<i64> = c
-        .prepare("SELECT id FROM runs WHERE stage = 1 ORDER BY id LIMIT 40")
-        .unwrap()
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .map(|x| x.unwrap())
-        .collect();
-    let rows = jetcarp_search::explore::sheet::query_runs(
-        &c,
-        &format!(
-            "SELECT id FROM runs WHERE id IN ({})",
-            ids.iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        ),
-    )
-    .unwrap();
+    let ids = c
+        .ids(
+            &RunFilter {
+                order: Some("id".into()),
+                ..Default::default()
+            },
+            40,
+        )
+        .unwrap();
+    let rows = c.rows(&ids).unwrap();
     assert!(!rows.is_empty());
     for r in rows {
         let ev = jetcarp_search::explore::job::try_one(r.cand.clone()).unwrap();
@@ -322,7 +341,7 @@ fn the_gpu_loop_runs_on_a_backend() {
 fn an_old_database_is_imported_then_searched_on() {
     let dir = scratch("import");
     // An old search's database: a job's runs, as CART's explore databases hold them (its own
-    // tables but `runs`, `reviews`, and `meta` dropped).
+    // tables but `runs` and `meta` dropped, and a `reviews` table).
     let lib0 = Library::open(dir.join("old").join("library.sqlite"));
     let j0 = make(&lib0, small(json!({})));
     let out = Runner::new(lib0.clone())
@@ -341,16 +360,16 @@ fn an_old_database_is_imported_then_searched_on() {
         c.execute_batch(
             "DROP TABLE elites; DROP TABLE confirmed; DROP TABLE coverage; DROP TABLE families;
              DROP TABLE seen; DELETE FROM meta;
-             CREATE TABLE r2(run_id INT, verdict TEXT, note TEXT, ts INT);
-             INSERT INTO r2 SELECT id, 'keep', 'nice', 5 FROM runs WHERE stage = 1 LIMIT 3;
-             DROP TABLE reviews; ALTER TABLE r2 RENAME TO reviews;",
+             CREATE TABLE reviews(run_id INT, verdict TEXT, note TEXT, ts INT);
+             INSERT INTO reviews SELECT id, 'keep', 'nice', 5 FROM runs WHERE stage = 1 LIMIT 3;",
         )
         .unwrap();
     }
     let lib = Library::open(dir.join("new").join("library.sqlite"));
+    // Segments of 100 runs, so the import writes several.
     let job = make(
         &lib,
-        small(json!({"import": old.display().to_string(), "import_only": true})),
+        small(json!({"import": old.display().to_string(), "import_only": true, "seal_rows": 100})),
     );
     let out = Runner::new(lib.clone())
         .run(job, &opts(2, Budget::default()))
@@ -371,19 +390,25 @@ fn an_old_database_is_imported_then_searched_on() {
     assert!(p.seen <= p0.seen && p.seen >= p.screened + p.confirmed);
     let c = db(&lib, job);
     consistent(&c, &p);
-    assert_eq!(
-        count(
-            &c,
-            "SELECT COUNT(*) FROM reviews WHERE source LIKE 'import:%'"
-        ),
-        3
+    // Every run went straight into segments of 100 (the last one shorter).
+    let n = p.screened + p.confirmed;
+    assert_eq!(c.manifest.rows(), n);
+    assert_eq!(c.manifest.segments.len() as u64, n.div_ceil(100));
+    assert!(
+        c.manifest
+            .segments
+            .iter()
+            .rev()
+            .skip(1)
+            .all(|s| s.rows == 100)
     );
-    assert_eq!(
-        count(
-            &c,
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'runs_score'"
-        ),
-        1
+    assert_eq!(count(&c.db, "SELECT COUNT(*) FROM runs"), 0);
+    // The reviews went to the library.
+    let rv = lib.run_reviews(&c.uuid()).unwrap();
+    assert_eq!(rv.len(), 3);
+    assert!(
+        rv.iter()
+            .all(|r| r.source.starts_with("import:") && r.verdict == "keep")
     );
     drop(c);
     // Searched on from the imported archive: new ids follow the old ones.
@@ -396,11 +421,13 @@ fn an_old_database_is_imported_then_searched_on() {
     let c = db(&lib, job);
     consistent(&c, &p2);
     let old_max = count(&Connection::open(&old).unwrap(), "SELECT MAX(id) FROM runs");
+    let newer: Vec<i64> = c
+        .scan(1 << col::ID, &|_, _, _| true, &|b, out| {
+            out.extend((0..b.len).map(|i| b.id(i)).filter(|i| *i > old_max))
+        })
+        .unwrap();
     assert_eq!(
-        count(
-            &c,
-            &format!("SELECT COUNT(*) FROM runs WHERE id > {old_max}")
-        ) as u64,
+        newer.len() as u64,
         (p2.screened - p.screened) + (p2.confirmed - p.confirmed)
     );
     // A job cannot import what is not an explore database.
@@ -432,25 +459,27 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
         .unwrap();
     let p = progress(&out.progress);
     let path = db_path(&lib, &lib.job(job).unwrap()).unwrap();
-    let mut c = store::open(&path).unwrap();
+    let mut runs = Runs::open(&path).unwrap();
     // Scores knocked out of shape, then recomputed from the stored features.
-    let before: Vec<(i64, f64)> = c
+    let before: Vec<(i64, f64)> = runs
+        .db
         .prepare("SELECT id, score FROM runs ORDER BY id")
         .unwrap()
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
         .unwrap()
         .map(|x| x.unwrap())
         .collect();
-    c.execute("UPDATE runs SET score = -1", []).unwrap();
+    runs.db.execute("UPDATE runs SET score = -1", []).unwrap();
     let groups = jetcarp_search::explore::job::tiling_groups();
     let g = |k: &str| groups.get(k).copied().unwrap_or(0);
-    let r = store::rescore(&mut c, &g, &|_| true).unwrap();
+    let r = runs.rescore(&g, &|_| true).unwrap();
     assert_eq!(
         (r.runs as usize, r.changed as usize),
         (before.len(), before.len())
     );
     assert_eq!((r.elites, r.niches), (p.elites, p.niches));
-    let after: Vec<(i64, f64)> = c
+    let after: Vec<(i64, f64)> = runs
+        .db
         .prepare("SELECT id, score FROM runs ORDER BY id")
         .unwrap()
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
@@ -459,15 +488,18 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
         .collect();
     assert_eq!(after, before);
     // Again: nothing changes, nothing is written.
-    let r = store::rescore(&mut c, &g, &|_| true).unwrap();
-    assert_eq!((r.changed, r.elites), (0, p.elites));
-    // Reviews: one at a time, and a folder of rating files (as the rating page saves them).
-    let id: i64 = c
+    let r = runs.rescore(&g, &|_| true).unwrap();
+    assert_eq!((r.changed, r.elites, r.sidecars), (0, p.elites, 0));
+    // Reviews (in the library): one at a time, and a folder of rating files (as the rating page
+    // saves them).
+    let id: i64 = runs
+        .db
         .query_row("SELECT MIN(id) FROM runs WHERE stage = 1", [], |r| r.get(0))
         .unwrap();
-    store::add_review(&c, id, "keep", "busy", "user", "review").unwrap();
-    assert!(store::add_review(&c, id, "great", "", "user", "review").is_err());
-    assert!(store::add_review(&c, -5, "keep", "", "user", "review").is_err());
+    let c = &runs;
+    reviews::add_review(&lib, c, id, "keep", "busy", "user", "review").unwrap();
+    assert!(reviews::add_review(&lib, c, id, "great", "", "user", "review").is_err());
+    assert!(reviews::add_review(&lib, c, -5, "keep", "", "user", "review").is_err());
     let rd = dir.join("ratings");
     std::fs::create_dir_all(&rd).unwrap();
     std::fs::write(
@@ -482,22 +514,25 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
     .unwrap();
     std::fs::write(rd.join("99999999.json"), r#"{"verdict": "keep"}"#).unwrap();
     std::fs::write(rd.join("12.json"), "not json").unwrap();
-    let got = store::import_ratings(&mut c, &rd, "").unwrap();
+    let got = reviews::import_ratings(&lib, c, &rd, "").unwrap();
     assert_eq!(
         (got.files, got.recorded, got.unknown_runs, got.unreadable),
         (4, 2, 1, 1)
     );
     // Again: nothing new.
-    let again = store::import_ratings(&mut c, &rd, "").unwrap();
+    let again = reviews::import_ratings(&lib, c, &rd, "").unwrap();
     assert_eq!((again.recorded, again.already), (0, 2));
     assert_eq!(
-        store::review_counts(&c).unwrap(),
+        reviews::review_counts(&lib, &c.uuid()).unwrap(),
         vec![("drop".into(), 1), ("keep".into(), 1), ("maybe".into(), 1)]
     );
-    let ts: i64 = c
-        .query_row("SELECT ts FROM reviews WHERE verdict = 'drop'", [], |r| {
-            r.get(0)
-        })
+    let drop = lib
+        .run_reviews(&c.uuid())
+        .unwrap()
+        .into_iter()
+        .find(|r| r.verdict == "drop")
         .unwrap();
-    assert_eq!(ts, 1794168214);
+    assert_eq!(drop.created, jetcarp_core::pattern::utc_of(1794168214));
+    assert_eq!(drop.run, id + 1);
+    let _ = store::FORMAT;
 }

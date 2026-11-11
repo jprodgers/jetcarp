@@ -223,22 +223,16 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
     let v = call_json(
         &cx,
         "search.runs",
-        json!({"job": job, "sql": format!("SELECT id FROM runs WHERE id = {best}")}),
-    )
-    .unwrap();
-    assert_eq!(v["runs"][0]["id"], best);
-    let v = call_json(
-        &cx,
-        "search.runs",
         json!({"job": job, "ids": [best, -3, best]}),
     )
     .unwrap();
     assert_eq!(v["runs"].as_array().unwrap().len(), 1);
+    // SQL over the runs is gone (they are in Parquet segments: DuckDB reads those).
     fails(
         call_json(
             &cx,
             "search.runs",
-            json!({"job": job, "sql": "DELETE FROM runs"}),
+            json!({"job": job, "sql": "SELECT id FROM runs"}),
         ),
         ErrorKind::Invalid,
     );
@@ -369,4 +363,33 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
     assert!(p["entries"].as_u64().unwrap() > 0, "{p}");
     let entries = jetcarp_store::atlas::load(&atlas).unwrap();
     assert_eq!(entries.len() as u64, p["entries"].as_u64().unwrap());
+    // Sealed on request: every run in Parquet, the same runs listed.
+    let sealed = call_json(&cx, "search.seal", json!({"job": job})).unwrap();
+    assert_eq!(
+        sealed["segments"],
+        json!(["runs/part-000001.parquet"]),
+        "{sealed}"
+    );
+    let again = call_json(&cx, "search.seal", json!({"job": job})).unwrap();
+    assert_eq!(again["segments"], json!([]));
+    let v3 = call_json(&cx, "search.runs", json!({"job": job, "limit": 10})).unwrap();
+    assert_eq!(v3["runs"], v2["runs"]);
+    let v = call_json(&cx, "search.runs", json!({"job": job, "reviewed": "any"})).unwrap();
+    assert_eq!(v["runs"].as_array().unwrap().len(), 3);
+    // Deleting the job with its folder keeps the reviews: they are in the library.
+    let folder = std::path::PathBuf::from(sealed["folder"].as_str().unwrap());
+    let uuid = folder.file_name().unwrap().to_string_lossy().into_owned();
+    let gone = call_json(
+        &cx,
+        "jobs.remove",
+        json!({"job": job, "delete_results": true}),
+    )
+    .unwrap();
+    assert_eq!(gone["folder_deleted"], true, "{gone}");
+    assert!(!folder.exists());
+    let left = cx.library().run_review_counts(&uuid).unwrap();
+    assert_eq!(
+        left,
+        vec![("drop".into(), 1), ("keep".into(), 1), ("maybe".into(), 1)]
+    );
 }

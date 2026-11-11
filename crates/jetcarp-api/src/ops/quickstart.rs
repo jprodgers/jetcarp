@@ -986,7 +986,7 @@ impl Op for QuickstartPublish {
     fn run(cx: &Ctx, a: PublishIn, _: &dyn Progress) -> Result<Published, ApiError> {
         use jetcarp_store::atlas;
         let (_, row, path) = super::explore::explore_job(cx, a.job)?;
-        let conn = jetcarp_search::explore::store::open_read(&path).map_err(ApiError::not_found)?;
+        let conn = jetcarp_search::explore::open_read(&path).map_err(ApiError::not_found)?;
         if a.per_niche == 0 || a.max_entries == 0 {
             return Err(ApiError::invalid(
                 "per_niche and max_entries must be at least 1",

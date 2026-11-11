@@ -84,7 +84,7 @@ pub fn definitions() -> Vec<Value> {
             "explore_query",
             "Find runs",
             true,
-            "Lists an explore search's stored runs, best first, with their measures. Filter with `family` (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), `tiling`, `fate` (died, froze, cycle, running), `min_score`, `min_movers`, `stage` (1 screened, 2 confirmed on bigger grids; default 1), `reviewed` (any, keep, maybe, drop); or give `sql` that returns run ids (`SELECT id FROM runs WHERE ...`, read only: columns id, stage, parent, tiling, nb, fam, rule, seed, seed_kind, cells, gens, steps, rng, origin, fate, settle, period, score, bin, ts). Scores run about 0 to 3; higher is more interesting.",
+            "Lists an explore search's stored runs, best first, with their measures. Filter with `family` (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), `tiling`, `fate` (died, froze, cycle, running), `min_score`, `min_movers`, `stage` (1 screened, 2 confirmed on bigger grids; default 1), `reviewed` (any, keep, maybe, drop). Scores run about 0 to 3; higher is more interesting. For other questions, the search folder's sealed runs are Parquet files (runs/part-*.parquet beside search.sqlite) that DuckDB, Polars or pyarrow read directly.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "description": JOB},
                 "family": {"type": "string", "description": "Only this rule family."},
@@ -94,7 +94,6 @@ pub fn definitions() -> Vec<Value> {
                 "min_movers": {"type": "integer", "description": "Only runs with at least this many moving objects."},
                 "stage": {"type": "integer", "enum": [1, 2], "description": "1 screened (default), 2 confirmed on bigger grids."},
                 "reviewed": {"type": "string", "enum": ["any", "keep", "maybe", "drop"], "description": "Only reviewed runs."},
-                "sql": {"type": "string", "description": "A single SELECT returning run ids, instead of the filters."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": MAX_ROWS, "description": "Most runs to return (default 40)."}
             }, "additionalProperties": false}),
         ),
@@ -102,11 +101,10 @@ pub fn definitions() -> Vec<Value> {
             "explore_sheet",
             "Contact sheet of runs",
             true,
-            "Returns a picture of an explore search's runs at several moments, labelled with id, tiling, score, fate, rule, and measures, so they can be judged by eye. Give `ids` or `sql` (at most 36 runs).",
+            "Returns a picture of an explore search's runs at several moments, labelled with id, tiling, score, fate, rule, and measures, so they can be judged by eye. Give `ids` (at most 36 runs; explore_query finds them).",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "description": JOB},
                 "ids": {"type": "array", "items": {"type": "integer"}, "description": "Run ids to show."},
-                "sql": {"type": "string", "description": "A single SELECT returning run ids, instead of ids."},
                 "px": {"type": "integer", "minimum": 64, "maximum": 400, "description": "Thumbnail size (default 200)."},
                 "cols": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Thumbnails per row (default 8)."},
                 "fracs": {"type": "array", "items": {"type": "number"}, "description": "Moments, as fractions of the run (default [0.25, 1])."},
@@ -326,7 +324,6 @@ fn query(args: &Value) -> Res {
             "min_movers",
             "stage",
             "reviewed",
-            "sql",
             "limit",
         ],
     )?;
@@ -339,7 +336,6 @@ fn query(args: &Value) -> Res {
         min_movers: int(args, "min_movers")?.map(|m| m.max(0) as u32),
         stage: int(args, "stage")?.map(|s| s.clamp(1, 2) as u8),
         reviewed: string(args, "reviewed")?.map(String::from),
-        sql: string(args, "sql")?.map(String::from),
         limit: Some(int(args, "limit")?.unwrap_or(40).clamp(1, MAX_ROWS) as usize),
         ..Default::default()
     };
@@ -350,10 +346,7 @@ fn query(args: &Value) -> Res {
 }
 
 fn sheet_tool(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &["job", "ids", "sql", "px", "cols", "fracs", "palette"],
-    )?;
+    check_unknown(args, &["job", "ids", "px", "cols", "fracs", "palette"])?;
     let ids = args.get("ids").and_then(Value::as_array).map(|a| {
         a.iter()
             .filter_map(Value::as_i64)
@@ -367,7 +360,6 @@ fn sheet_tool(args: &Value) -> Res {
     let a = SheetIn {
         job: job_arg(args)?,
         ids,
-        sql: string(args, "sql")?.map(String::from),
         px: int(args, "px")?.unwrap_or(200).clamp(64, 400) as u32,
         cols: int(args, "cols")?.unwrap_or(8).clamp(1, 20) as u32,
         fracs,
