@@ -373,6 +373,10 @@ impl Op for SearchSheet {
             .palette
             .as_deref()
             .map_or(vec![], |p| p.split(',').map(str::trim).collect());
+        // Checked here: a run drawn in an unknown palette would come out blank.
+        for n in &names {
+            jetcarp_core::render::builtin_palette(n).map_err(invalid)?;
+        }
         let img = if names.len() > 1 {
             sheet::palette_sheet(&runs, &names, fracs[0], a.px)
         } else {

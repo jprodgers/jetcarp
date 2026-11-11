@@ -114,7 +114,9 @@ A few limits apply:
 - Until JETCARP 1.0, a release may change how a rule or a tiling behaves. Such changes are deliberate
   and listed in the [changelog](../about/changelog.md), but an old scene may then reach a different
   hash. Scenes on Penrose rhombs saved by CART, JETCARP's predecessor, already do.
-- A scene that names a palette the other person does not have still opens, drawn in Ember.
+- Palettes you made travel inside the scene. A scene that names a palette the other person's
+  JETCARP does not know (a built-in palette added in a later release, or a misspelt name) is
+  refused, with the list of names it does know.
 
 ## Get the scene back from a picture
 

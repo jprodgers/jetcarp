@@ -520,6 +520,61 @@ fn one_palette_on_four_cas() {
     assert!(w.palette_names().contains(&"Sunset".to_string()));
 }
 
+// A palette name the world does not know (a typo, or another case) is refused with the names,
+// rather than quietly drawn in the default palette: in a scene, a new CA, or a change.
+#[test]
+fn an_unknown_palette_is_refused() {
+    use jetcarp_core::render::Palette;
+    let mut w = World::new(square(20, 20, Boundary::Wrap), 1).unwrap();
+    let mut ca = CaSpec::new("B3/S23");
+    ca.palette = Some("ember".into());
+    let e = w.apply(Command::AddCa { ca: ca.clone() }).unwrap_err();
+    assert!(
+        e.contains("no palette named 'ember'") && e.contains("Palettes: Ember, Tide"),
+        "{e}"
+    );
+    assert!(w.cas.is_empty() && w.log().is_empty());
+    // The same CA in a scene.
+    let mut sc = w.to_scene();
+    sc.cas = vec![ca];
+    let e = World::from_scene(&sc).err().unwrap();
+    assert!(e.contains("no palette named"), "{e}");
+    // Built-ins, hex colours, and the world's own palettes are all fine.
+    let id = w
+        .apply(Command::AddCa {
+            ca: CaSpec::new("B3/S23"),
+        })
+        .unwrap()
+        .new_id
+        .unwrap();
+    w.apply(Command::SetPalette {
+        palette: Palette::new("Mine", vec![[1, 2, 3]]),
+    })
+    .unwrap();
+    for p in ["Tide", "#4fc3ff", "#103050-#4fc3ff", "Mine"] {
+        let change = CaChange {
+            palette: Some(p.into()),
+            ..Default::default()
+        };
+        w.apply(Command::UpdateCa { id, change }).unwrap();
+    }
+    // A refused change leaves the CA as it was, its rule too.
+    let change = CaChange {
+        rule: Some("B36/S23".into()),
+        palette_neg: Some("Nonesuch".into()),
+        ..Default::default()
+    };
+    let e = w.apply(Command::UpdateCa { id, change }).unwrap_err();
+    assert!(e.contains("'Nonesuch'") && e.contains("Mine"), "{e}");
+    assert_eq!(
+        (
+            w.ca(id).unwrap().rule.notation(),
+            w.ca(id).unwrap().palette.as_str()
+        ),
+        ("B3/S23".to_string(), "Mine")
+    );
+}
+
 // The identity I of the sandpile group satisfies stab(I + I) = I; check on several grids.
 #[test]
 fn sandpile_identity_is_idempotent() {

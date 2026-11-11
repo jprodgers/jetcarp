@@ -85,7 +85,7 @@ pub struct RulesIn {
     /// Start from a random top row with this density instead of one cell.
     #[serde(default)]
     pub random_row: Option<f64>,
-    /// Default Ember.
+    /// A built-in palette or hex colours like `#103050-#4fc3ff` (default Ember).
     #[serde(default = "palette_default")]
     pub palette: String,
     /// The PNG to write.

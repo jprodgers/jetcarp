@@ -1425,6 +1425,8 @@ impl World {
     }
     /// Whether [`palette`](Self::palette) knows `name` (one of the world's own palettes, a
     /// built-in, or hex colours like `#4fc3ff` or `#103050-#4fc3ff`) rather than falling back.
+    /// Adding or changing a CA checks its palettes with this, so a scene, script, or command
+    /// that names an unknown palette is refused with the names it could use.
     pub fn check_palette(&self, name: &str) -> Result<(), String> {
         let known = self.palettes.iter().any(|p| p.name == name)
             || Palette::builtin(name).is_some()
@@ -1459,6 +1461,10 @@ impl World {
     pub fn add_ca(&mut self, spec: CaSpec) -> Result<u32, String> {
         let (rule, nb_from_text) = Rule::parse(&spec.rule)?;
         self.check_rule(&rule)?;
+        // A misspelt palette is refused rather than quietly drawn in the default.
+        for p in [&spec.palette, &spec.palette_neg].into_iter().flatten() {
+            self.check_palette(p)?;
+        }
         let kind = self.kind_of(&rule);
         let affects = if kind == FieldKind::Height {
             false
@@ -1534,6 +1540,10 @@ impl World {
 
     fn update_ca(&mut self, id: u32, ch: &CaChange) -> Result<(), String> {
         let i = self.ca_index(id)?;
+        // Checked before anything changes, so a refused change leaves the CA as it was.
+        for p in [&ch.palette, &ch.palette_neg].into_iter().flatten() {
+            self.check_palette(p)?;
+        }
         if let Some(r) = &ch.rule {
             let (rule, nb) = Rule::parse(r)?;
             self.check_rule(&rule)?;

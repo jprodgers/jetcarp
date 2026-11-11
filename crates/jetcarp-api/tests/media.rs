@@ -370,6 +370,16 @@ fn contact_sheets() {
         ),
         ErrorKind::Invalid,
     );
+    // A palette name in the wrong case is refused, not drawn in Ember.
+    let e = fails(
+        SheetRules::run(
+            &cx,
+            serde_json::from_value(json!({"png": png, "count": 2, "palette": "tide"})).unwrap(),
+            &Quiet,
+        ),
+        ErrorKind::Invalid,
+    );
+    assert!(e.message.contains("no palette named 'tide'"), "{e}");
     let iso = dir.join("iso.png");
     let s = SheetIsohedral::run(
         &cx,

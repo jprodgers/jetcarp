@@ -109,6 +109,8 @@ enum Cmd {
         /// Start from a random top row with this density instead of one cell.
         #[arg(long)]
         random_row: Option<f64>,
+        /// A palette (`jetcarp palettes` lists them; names are case-sensitive) or hex colours
+        /// like `#103050-#4fc3ff`.
         #[arg(long, default_value = "Ember")]
         palette: String,
         #[arg(long)]

@@ -64,8 +64,8 @@ as Verdigris, end on a bright stop, so a pattern that has settled stays vivid un
   and stage; the app saves the palettes you make there.
 
 Names are matched exactly, capitals included: the scene's own palettes first, then the built-in
-ones, then hex colours. A scene
-whose automaton names a palette that does not exist still loads, and that automaton is drawn in Ember.
+ones, then hex colours. A name that matches none of them (`ember`, say) is refused with the list of
+names, wherever it appears: in a scene, a command or script, or a `--palette` option.
 
 ## How a palette colours cells
 
