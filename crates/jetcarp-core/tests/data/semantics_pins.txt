@@ -1,0 +1,25 @@
+# Pinned rule semantics (tests/semantics_pins.rs): rule family, its semantics version
+# in RULE_SEMANTICS when pinned, and the state hash its scene reaches.
+ant	1	e90442b79a8a8f16
+cyclic	1	aa3fa422052046aa
+elementary	1	464035affc392ba0
+forest_fire	1	1d7380d793771b68
+generations	1	7ab6d293b7c5f6d5
+greenberg_hastings	1	d01cd8a40f95b389
+hext	1	91cad28e1c6ba643
+hexw	1	5e42eaa0e46b0431
+hodgepodge	1	34f10a4082834571
+jaca	1	37f5a88f7057a799
+jvn29	1	c62459a48f7b74a6
+layered	1	7f5e0380a3e97067
+lenia	1	0b80d3fba355d51d
+lifelike	1	76ec7f2a1b8b93bc
+ltl	1	b68415cc96697c2d
+margolus	1	88d77936a0873edb
+priority	1	adb6757433dc0152
+rps	1	8288591a9c6bd5cf
+sandpile	1	1f0ca50f6077be83
+spectre_glider	1	9e6cf02919413258
+table	1	fcd7192ad3262d05
+turmite	1	8a38127cfda36304
+wireworld	1	10718aa522d97ba0
