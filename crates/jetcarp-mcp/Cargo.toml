@@ -11,13 +11,11 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-rusqlite = { workspace = true }
 dirs = { workspace = true }
 jetcarp-core.workspace = true
 jetcarp-api.workspace = true
 jetcarp-script.workspace = true
 serde_json.workspace = true
-png.workspace = true
 
 [[bin]]
 name = "jetcarp-mcp"

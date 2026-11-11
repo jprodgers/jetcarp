@@ -1,6 +1,4 @@
-//! Small helpers: base64 and in-memory PNG encoding.
-
-use jetcarp_core::render::Image;
+//! Small helpers: base64.
 
 const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -27,24 +25,6 @@ pub fn base64(data: &[u8]) -> String {
         });
     }
     out
-}
-
-/// Encode an RGBA image as PNG bytes, with text chunks.
-pub fn png_bytes(img: &Image, text: &[(&str, String)]) -> Result<Vec<u8>, String> {
-    let mut buf = Vec::new();
-    {
-        let mut enc = png::Encoder::new(&mut buf, img.width, img.height);
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        for (k, v) in text {
-            enc.add_itxt_chunk(k.to_string(), v.clone())
-                .map_err(|e| e.to_string())?;
-        }
-        let mut wr = enc.write_header().map_err(|e| e.to_string())?;
-        wr.write_image_data(&img.rgba).map_err(|e| e.to_string())?;
-        wr.finish().map_err(|e| e.to_string())?;
-    }
-    Ok(buf)
 }
 
 #[cfg(test)]

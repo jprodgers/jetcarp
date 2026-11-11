@@ -1,21 +1,24 @@
-//! MCP tools for the exploratory search (`jetcarp_core::explore`), so a model can run a search,
-//! look at what it finds, try ideas of its own, and record what it thinks.
+//! MCP tools for the exploratory search, so a model can run a search, look at what it finds, try
+//! ideas of its own, and record what it thinks. Each calls an operation: an explore search is a
+//! catalog job (`search.start` with strategy `explore`, `jobs.status`, `jobs.stop`), and its runs
+//! are read through `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, and
+//! `search.review`. A search is named by its `job` (default: the newest explore job).
 //!
-//! A database is `db`: a path, or a bare name inside `<data>/explore`
-//! (default `search`).
+//! `explore_start` runs the search in a process of its own (`jetcarp jobs resume JOB`) when this
+//! server is the `jetcarp` program, so it outlives the client and uses the GPU; elsewhere (inside
+//! the app, in tests) on a thread of this process. The tool names are as before (step 11 of the
+//! architecture plan regroups them).
 
-use crate::tools::{Res, ToolOutput, check_unknown, int, string, tool};
+use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool};
 use crate::util;
-use jetcarp_api::args;
-use jetcarp_core::explore::cand::Cand;
-use jetcarp_core::explore::job::{feat_from_blob, try_one};
-use jetcarp_core::explore::sheet::{self, RunRow};
-use jetcarp_core::explore::space::{Fam, sized_spec};
-use jetcarp_core::rules::Rule;
-use jetcarp_core::topology::Nb;
-use rusqlite::{Connection, OpenFlags};
+use jetcarp_api::op::{self, Op, Quiet};
+use jetcarp_api::ops::explore::{
+    ReviewIn, RunIn, RunsIn, SearchReview, SearchRunScene, SearchRuns, SearchSheet, SearchTry,
+    SheetIn, TryIn,
+};
+use jetcarp_api::ops::jobs::{JobIn, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut};
+use jetcarp_api::ops::search::{BudgetIn, ExploreIn, SearchStart, SearchStartIn};
 use serde_json::{Value, json};
-use std::path::PathBuf;
 
 pub const NAMES: &[&str] = &[
     "explore_start",
@@ -35,22 +38,7 @@ pub fn handles(name: &str) -> bool {
 const MAX_ROWS: i64 = 200;
 const MAX_SHEET: usize = 36;
 
-fn db_path(args: &Value) -> Result<PathBuf, String> {
-    let name = string(args, "db")?.unwrap_or("search");
-    if name.contains('/') || name.ends_with(".sqlite") {
-        return Ok(PathBuf::from(name));
-    }
-    Ok(jetcarp_core::paths::explore_dir().join(format!("{name}.sqlite")))
-}
-
-fn read(args: &Value) -> Result<Connection, String> {
-    let p = db_path(args)?;
-    Connection::open_with_flags(&p, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| format!("{}: {e}", p.display()))
-}
-
-const DB: &str =
-    "Database: a path, or a name inside the data folder's explore folder (default \"search\").";
+const JOB: &str = "The explore search's job id (default: the newest explore job).";
 
 pub fn definitions() -> Vec<Value> {
     vec![
@@ -58,41 +46,54 @@ pub fn definitions() -> Vec<Value> {
             "explore_start",
             "Start a search",
             false,
-            "Starts the broad search over tilings, rules, seeds in the background, and returns at once (explore_status watches, explore_stop stops). It runs for `hours`, resumes from the database if it already exists, uses the GPU when one is available, and stores every run in SQLite. The search keeps the best run of each kind of behaviour on each rule family and tiling group, breeds from those, and re-checks the best on bigger grids with more seeds.",
+            "Starts (or with `resume` carries on) the broad search over tilings, rule families, rules, and seeds, and returns its job id at once (explore_status follows it, explore_stop stops it). It runs for `hours` (or `minutes`), uses the GPU when there is one (`gpu`, default true), and stores every run in the job's own database. The search keeps the best runs of each kind of behaviour on each rule family and tiling group, breeds from those, and re-checks the best on bigger grids with more seeds. It is not deterministic: a stopped search continues from its archive. Example: {\"hours\": 2}; small: {\"minutes\": 2, \"tilings\": \"square,hex\", \"families\": \"life_like,cyclic\", \"screen_cells\": 4000}.",
             json!({"type": "object", "properties": {
-                "db": {"type": "string", "description": DB},
                 "hours": {"type": "number", "description": "Hours to run (default 1)."},
-                "gpu": {"type": "boolean", "description": "Use the GPU (default true)."},
-                "cpu_threads": {"type": "integer", "minimum": 1, "description": "CPU threads for rules the GPU cannot run (default 12)."}
+                "minutes": {"type": "number", "description": "Minutes to run, instead of hours."},
+                "gpu": {"type": "boolean", "description": "Use the GPU when there is one (default true)."},
+                "cpu_threads": {"type": "integer", "minimum": 1, "description": "Worker threads (default: all cores)."},
+                "tilings": {"type": "string", "description": "Only these tiling keys, comma separated (default all, about 940)."},
+                "families": {"type": "string", "description": "Only these rule families, comma separated (default all)."},
+                "screen_cells": {"type": "integer", "minimum": 64, "description": "Cells of a screening run (default 16000)."},
+                "screen_gens": {"type": "integer", "minimum": 1, "description": "Generations of a screening run (default 1024)."},
+                "confirm_cells": {"type": "integer", "minimum": 64, "description": "Cells of a confirmation run, the best runs again on a bigger grid (default 64000)."},
+                "confirm_gens": {"type": "integer", "minimum": 1, "description": "Generations of a confirmation run (default 4096)."},
+                "label": {"type": "string", "description": "A name to find the job by."},
+                "resume": {"type": "integer", "minimum": 1, "description": "Carry on this explore job instead of starting one."},
+                "detach": {"type": "boolean", "description": "Run in a process of its own, outliving this server (default true where the server can)."}
             }, "additionalProperties": false}),
         ),
         tool(
             "explore_status",
             "Search progress",
             true,
-            "Progress of a search: runs measured, runs per second, how many elites and behaviour niches it holds, and a table of the runs by rule family (count, mean and best score).",
-            json!({"type": "object", "properties": {"db": {"type": "string", "description": DB}}, "additionalProperties": false}),
+            "Progress of an explore search: runs measured, runs per second, how many elites and behaviour niches it holds, its status, and a table of its runs by rule family (count, mean and best score). Without `job` and with `list`: every explore job.",
+            json!({"type": "object", "properties": {
+                "job": {"type": "integer", "description": JOB},
+                "list": {"type": "boolean", "description": "List every explore job instead."}
+            }, "additionalProperties": false}),
         ),
         tool(
             "explore_stop",
             "Stop a search",
             false,
-            "Asks a running search to stop at its next checkpoint. Everything it found stays in the database, and explore_start resumes from there.",
-            json!({"type": "object", "properties": {"db": {"type": "string", "description": DB}}, "additionalProperties": false}),
+            "Asks a running explore search to stop at its next checkpoint (a few seconds), wherever it runs. Everything it found stays in its database, and explore_start {\"resume\": job} continues it.",
+            json!({"type": "object", "properties": {"job": {"type": "integer", "description": JOB}}, "additionalProperties": false}),
         ),
         tool(
             "explore_query",
             "Find runs",
             true,
-            "Lists stored runs, best first, with their measures. Filter with `family` (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), `tiling`, `fate` (died, froze, cycle, running), `min_score`, `min_movers`, `stage` (1 screened, 2 confirmed on bigger grids; default 1); or give `sql` that returns run ids (`SELECT id FROM runs WHERE ...`, read only: columns id, stage, parent, tiling, nb, fam, rule, seed, seed_kind, cells, gens, steps, rng, origin, fate, settle, period, score, bin, ts). Scores run about 0 to 4; higher is more interesting.",
+            "Lists an explore search's stored runs, best first, with their measures. Filter with `family` (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), `tiling`, `fate` (died, froze, cycle, running), `min_score`, `min_movers`, `stage` (1 screened, 2 confirmed on bigger grids; default 1), `reviewed` (any, keep, maybe, drop); or give `sql` that returns run ids (`SELECT id FROM runs WHERE ...`, read only: columns id, stage, parent, tiling, nb, fam, rule, seed, seed_kind, cells, gens, steps, rng, origin, fate, settle, period, score, bin, ts). Scores run about 0 to 3; higher is more interesting.",
             json!({"type": "object", "properties": {
-                "db": {"type": "string", "description": DB},
+                "job": {"type": "integer", "description": JOB},
                 "family": {"type": "string", "description": "Only this rule family."},
                 "tiling": {"type": "string", "description": "Only this tiling key."},
                 "fate": {"type": "string", "enum": ["died", "froze", "cycle", "running"], "description": "Only runs that ended this way."},
                 "min_score": {"type": "number", "description": "Only runs with at least this score."},
                 "min_movers": {"type": "integer", "description": "Only runs with at least this many moving objects."},
                 "stage": {"type": "integer", "enum": [1, 2], "description": "1 screened (default), 2 confirmed on bigger grids."},
+                "reviewed": {"type": "string", "enum": ["any", "keep", "maybe", "drop"], "description": "Only reviewed runs."},
                 "sql": {"type": "string", "description": "A single SELECT returning run ids, instead of the filters."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": MAX_ROWS, "description": "Most runs to return (default 40)."}
             }, "additionalProperties": false}),
@@ -101,9 +102,9 @@ pub fn definitions() -> Vec<Value> {
             "explore_sheet",
             "Contact sheet of runs",
             true,
-            "Returns a picture of runs at several moments, labelled with id, tiling, score, fate, rule, and measures, so they can be judged by eye. Give `ids` or `sql` (at most 36 runs).",
+            "Returns a picture of an explore search's runs at several moments, labelled with id, tiling, score, fate, rule, and measures, so they can be judged by eye. Give `ids` or `sql` (at most 36 runs).",
             json!({"type": "object", "properties": {
-                "db": {"type": "string", "description": DB},
+                "job": {"type": "integer", "description": JOB},
                 "ids": {"type": "array", "items": {"type": "integer"}, "description": "Run ids to show."},
                 "sql": {"type": "string", "description": "A single SELECT returning run ids, instead of ids."},
                 "px": {"type": "integer", "minimum": 64, "maximum": 400, "description": "Thumbnail size (default 200)."},
@@ -132,9 +133,9 @@ pub fn definitions() -> Vec<Value> {
             "explore_scene",
             "Scene of a run",
             true,
-            "Returns a stored run as scene JSON, ready for load_scene, to open and explore it in detail.",
+            "Returns an explore search's stored run as scene JSON, ready for load_scene, to open and explore it in detail.",
             json!({"type": "object", "properties": {
-                "db": {"type": "string", "description": DB},
+                "job": {"type": "integer", "description": JOB},
                 "id": {"type": "integer", "description": "Run id, from explore_query."}
             }, "required": ["id"], "additionalProperties": false}),
         ),
@@ -142,9 +143,9 @@ pub fn definitions() -> Vec<Value> {
             "explore_review",
             "Record a judgement",
             false,
-            "Records what you think of a run: verdict `keep`, `maybe`, or `drop`, and a note. Reviews are used when choosing what is published and to tune the score.",
+            "Records what you think of an explore search's run: verdict `keep`, `maybe`, or `drop`, and a note. Reviews are used when choosing what is published and to tune the score.",
             json!({"type": "object", "properties": {
-                "db": {"type": "string", "description": DB},
+                "job": {"type": "integer", "description": JOB},
                 "id": {"type": "integer", "description": "Run id, from explore_query."},
                 "verdict": {"type": "string", "enum": ["keep", "maybe", "drop"], "description": "Your judgement."},
                 "note": {"type": "string", "description": "What you saw, in a sentence."}
@@ -153,178 +154,232 @@ pub fn definitions() -> Vec<Value> {
     ]
 }
 
-fn row_json(r: &RunRow) -> Value {
-    let f = feat_from_blob(&r.feats);
-    json!({
-        "id": r.id, "tiling": r.cand.tiling, "family": r.cand.fam.name(), "rule": r.cand.rule,
-        "nb": if r.cand.nb == Nb::Edge {"edge"} else {"touch"},
-        "seed": r.cand.seed.describe(), "cells": r.cand.cells, "gens": r.cand.gens,
-        "fate": r.fate, "score": (r.score * 100.0).round() / 100.0,
-        "settle": f.settle, "period": f.period, "density": f.density_late,
-        "activity": f.activity_late, "movers": f.movers, "smooth": f.smooth,
-    })
-}
-
-fn find_jetcarp() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    if exe.file_name().is_some_and(|n| n == "jetcarp") {
-        return Ok(exe);
-    }
-    let sib = exe.with_file_name("jetcarp");
-    if sib.exists() {
-        return Ok(sib);
-    }
-    Ok(PathBuf::from("jetcarp"))
+fn num(args: &Value, key: &str) -> Option<f64> {
+    args.get(key).and_then(Value::as_f64)
 }
 
 fn start(args: &Value) -> Res {
-    check_unknown(args, &["db", "hours", "gpu", "cpu_threads"])?;
-    let db = db_path(args)?;
-    if let Some(p) = db.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-    }
-    let hours = args.get("hours").and_then(Value::as_f64).unwrap_or(1.0);
-    let mut c = std::process::Command::new(find_jetcarp()?);
-    c.args(["explore", "run", "--db"]).arg(&db);
-    c.args(["--hours", &hours.to_string()]);
-    if let Some(t) = int(args, "cpu_threads")? {
-        c.args(["--cpu-threads", &t.to_string()]);
-    }
-    if args.get("gpu").and_then(Value::as_bool) == Some(false) {
-        c.arg("--no-gpu");
-    }
-    let log = std::fs::File::create(db.with_extension("log")).map_err(|e| e.to_string())?;
-    c.stdout(log.try_clone().map_err(|e| e.to_string())?)
-        .stderr(log);
-    let child = c.spawn().map_err(|e| e.to_string())?;
+    check_unknown(
+        args,
+        &[
+            "hours",
+            "minutes",
+            "gpu",
+            "cpu_threads",
+            "tilings",
+            "families",
+            "screen_cells",
+            "screen_gens",
+            "confirm_cells",
+            "confirm_gens",
+            "label",
+            "resume",
+            "detach",
+        ],
+    )?;
+    let minutes = match (num(args, "minutes"), num(args, "hours")) {
+        (Some(m), _) => m,
+        (None, Some(h)) => h * 60.0,
+        (None, None) => 60.0,
+    };
+    let gpu = args.get("gpu").and_then(Value::as_bool).unwrap_or(true);
+    let spec = ExploreIn {
+        tilings: string(args, "tilings")?.map(|s| json!(s)),
+        families: string(args, "families")?.map(|s| json!(s)),
+        screen_cells: int(args, "screen_cells")?.map(|x| x.max(64) as u32),
+        screen_gens: int(args, "screen_gens")?.map(|x| x.max(1) as u32),
+        confirm_cells: int(args, "confirm_cells")?.map(|x| x.max(64) as u32),
+        confirm_gens: int(args, "confirm_gens")?.map(|x| x.max(1) as u32),
+        gpu: Some(gpu),
+        ..Default::default()
+    };
+    let cx = ctx();
+    let detach =
+        args.get("detach").and_then(Value::as_bool).unwrap_or(true) && cx.platform.can_detach();
+    let a = SearchStartIn {
+        strategy: Some("explore".into()),
+        spec: op::to_value(&spec),
+        label: string(args, "label")?.map(String::from),
+        resume: int(args, "resume")?,
+        budget: Some(BudgetIn {
+            minutes: Some(minutes),
+            ..Default::default()
+        }),
+        threads: int(args, "cpu_threads")?.map(|t| t.max(0) as usize),
+        gpu,
+        background: !detach,
+        detach,
+        ..Default::default()
+    };
+    let out = SearchStart::run(cx, a, &Quiet).map_err(err)?;
     Ok(ToolOutput::json(&json!({
-        "started": true, "pid": child.id(), "db": db, "hours": hours,
-        "note": "poll explore_status; results accumulate in the database as it runs"
+        "job": out.job,
+        "started": out.created,
+        "mode": out.mode,
+        "minutes": minutes,
+        "folder": out.progress.get("folder"),
+        "note": format!(
+            "The search runs {}: poll explore_status {{\"job\": {}}}; explore_stop stops it, and explore_start {{\"resume\": {}}} continues it. Results accumulate in its database as it runs.",
+            if out.mode == "detached" { "in a process of its own" } else { "in the background" },
+            out.job,
+            out.job
+        ),
     })))
 }
 
+/// The `job` argument (`None`: the operation takes the newest explore job).
+fn job_arg(args: &Value) -> Result<Option<i64>, String> {
+    int(args, "job")
+}
+
 fn status(args: &Value) -> Res {
-    check_unknown(args, &["db"])?;
-    let db = db_path(args)?;
-    let live = std::fs::read_to_string(db.with_extension("status.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok());
-    let conn = read(args)?;
-    let e = |x: rusqlite::Error| x.to_string();
-    let mut st = conn
-        .prepare(
-            "SELECT fam, COUNT(*), ROUND(AVG(score),2), ROUND(MAX(score),2) FROM runs
-             WHERE stage=1 GROUP BY fam ORDER BY COUNT(*) DESC",
+    check_unknown(args, &["job", "list"])?;
+    if args.get("list").and_then(Value::as_bool) == Some(true) {
+        let l = JobsList::run(
+            ctx(),
+            ListIn {
+                kind: Some("explore".into()),
+                ..Default::default()
+            },
+            &Quiet,
         )
-        .map_err(e)?;
-    let fams: Vec<Value> = st
-        .query_map([], |r| {
-            Ok(json!({
-                "family": r.get::<_, String>(0)?, "runs": r.get::<_, i64>(1)?,
-                "mean_score": r.get::<_, f64>(2)?, "best_score": r.get::<_, f64>(3)?,
-            }))
-        })
-        .map_err(e)?
-        .flatten()
-        .collect();
-    Ok(ToolOutput::json(&json!({"live": live, "families": fams})))
+        .map_err(err)?;
+        let jobs: Vec<Value> = l
+            .jobs
+            .iter()
+            .map(
+                |j| json!({"job": j.job, "status": j.status, "line": j.line, "updated": j.updated}),
+            )
+            .collect();
+        return Ok(ToolOutput::json(&json!({"jobs": jobs})));
+    }
+    let job = match job_arg(args)? {
+        Some(j) => j,
+        None => {
+            jetcarp_api::ops::explore::explore_job(ctx(), None)
+                .map_err(err)?
+                .1
+                .id
+        }
+    };
+    let StatusOut::One(v) = JobsStatus::run(
+        ctx(),
+        StatusIn {
+            job: Some(job),
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .map_err(err)?
+    else {
+        return Err(format!("no job {job}"));
+    };
+    if v.kind != "explore" {
+        return Err(format!("job {job} is a {} job, not explore", v.kind));
+    }
+    let p = &v.progress;
+    Ok(ToolOutput::json(&json!({
+        "job": v.job,
+        "status": v.status,
+        "line": v.line,
+        "screened": p.get("screened"),
+        "confirmed": p.get("confirmed"),
+        "per_sec": p.get("per_s"),
+        "elites": p.get("elites"),
+        "niches": p.get("niches"),
+        "confirmed_elites": p.get("confirmed_elites"),
+        "elapsed_s": p.get("elapsed_s"),
+        "backend": p.get("backend"),
+        "families": p.get("families"),
+        "continues": "resuming continues the search from its archive (it is not deterministic)",
+    })))
 }
 
 fn stop(args: &Value) -> Res {
-    check_unknown(args, &["db"])?;
-    let db = db_path(args)?;
-    std::fs::write(db.with_extension("stop"), "stop").map_err(|e| e.to_string())?;
-    Ok(ToolOutput::text("asked the search to stop"))
-}
-
-fn safe_sql(sql: &str) -> Result<String, String> {
-    let t = sql.trim().trim_end_matches(';');
-    if !t.to_ascii_lowercase().starts_with("select") || t.contains(';') {
-        return Err("sql must be a single SELECT that returns run ids".into());
-    }
-    Ok(t.to_string())
+    check_unknown(args, &["job"])?;
+    let job = match job_arg(args)? {
+        Some(j) => j,
+        None => {
+            jetcarp_api::ops::explore::explore_job(ctx(), None)
+                .map_err(err)?
+                .1
+                .id
+        }
+    };
+    let s = JobsStop::run(ctx(), JobIn { job }, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(&json!({
+        "job": job,
+        "stopping": s.stopping,
+        "note": format!("It stops at its next checkpoint; explore_start {{\"resume\": {job}}} continues it."),
+    })))
 }
 
 fn query(args: &Value) -> Res {
     check_unknown(
         args,
         &[
-            "db",
+            "job",
             "family",
             "tiling",
             "fate",
             "min_score",
             "min_movers",
             "stage",
+            "reviewed",
             "sql",
             "limit",
         ],
     )?;
-    let conn = read(args)?;
-    let limit = int(args, "limit")?.unwrap_or(40).clamp(1, MAX_ROWS);
-    let sql = if let Some(s) = string(args, "sql")? {
-        format!("SELECT * FROM ({}) LIMIT {limit}", safe_sql(s)?)
-    } else {
-        let mut w = vec![format!("stage={}", int(args, "stage")?.unwrap_or(1))];
-        let quote = |s: &str| s.replace('\'', "''");
-        if let Some(f) = string(args, "family")? {
-            w.push(format!("fam='{}'", quote(f)));
-        }
-        if let Some(f) = string(args, "tiling")? {
-            w.push(format!("tiling='{}'", quote(f)));
-        }
-        if let Some(f) = string(args, "fate")? {
-            w.push(format!("fate='{}'", quote(f)));
-        }
-        if let Some(m) = args.get("min_score").and_then(Value::as_f64) {
-            w.push(format!("score>={m}"));
-        }
-        format!(
-            "SELECT id FROM runs WHERE {} ORDER BY score DESC LIMIT {limit}",
-            w.join(" AND ")
-        )
+    let a = RunsIn {
+        job: job_arg(args)?,
+        family: string(args, "family")?.map(String::from),
+        tiling: string(args, "tiling")?.map(String::from),
+        fate: string(args, "fate")?.map(String::from),
+        min_score: num(args, "min_score"),
+        min_movers: int(args, "min_movers")?.map(|m| m.max(0) as u32),
+        stage: int(args, "stage")?.map(|s| s.clamp(1, 2) as u8),
+        reviewed: string(args, "reviewed")?.map(String::from),
+        sql: string(args, "sql")?.map(String::from),
+        limit: Some(int(args, "limit")?.unwrap_or(40).clamp(1, MAX_ROWS) as usize),
+        ..Default::default()
     };
-    let mut rows = sheet::query_runs(&conn, &sql)?;
-    if let Some(m) = int(args, "min_movers")? {
-        rows.retain(|r| feat_from_blob(&r.feats).movers as i64 >= m);
-    }
-    let v: Vec<Value> = rows.iter().map(row_json).collect();
-    Ok(ToolOutput::json(&json!({"runs": v})))
+    let r = SearchRuns::run(ctx(), a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(
+        &json!({"job": r.job, "runs": op::to_value(&r.runs)}),
+    ))
 }
 
 fn sheet_tool(args: &Value) -> Res {
     check_unknown(
         args,
-        &["db", "ids", "sql", "px", "cols", "fracs", "palette"],
+        &["job", "ids", "sql", "px", "cols", "fracs", "palette"],
     )?;
-    let conn = read(args)?;
-    let sql = if let Some(s) = string(args, "sql")? {
-        safe_sql(s)?
-    } else if let Some(a) = args.get("ids").and_then(Value::as_array) {
-        let ids: Vec<String> = a
-            .iter()
+    let ids = args.get("ids").and_then(Value::as_array).map(|a| {
+        a.iter()
             .filter_map(Value::as_i64)
-            .map(|i| i.to_string())
-            .collect();
-        format!("SELECT id FROM runs WHERE id IN ({})", ids.join(","))
-    } else {
-        return Err("give ids or sql".into());
-    };
-    let mut rows = sheet::query_runs(&conn, &sql)?;
-    rows.truncate(MAX_SHEET);
-    let fracs: Vec<f64> = args
+            .take(MAX_SHEET)
+            .collect::<Vec<i64>>()
+    });
+    let fracs = args
         .get("fracs")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_f64).collect())
-        .unwrap_or_else(|| vec![0.25, 1.0]);
-    let px = int(args, "px")?.unwrap_or(200).clamp(64, 400) as u32;
-    let cols = int(args, "cols")?.unwrap_or(8).clamp(1, 20) as u32;
-    let img = sheet::sheet(&rows, &fracs, px, cols, string(args, "palette")?);
-    let bytes = util::png_bytes(&img, &[])?;
+        .map(|a| a.iter().filter_map(Value::as_f64).collect());
+    let a = SheetIn {
+        job: job_arg(args)?,
+        ids,
+        sql: string(args, "sql")?.map(String::from),
+        px: int(args, "px")?.unwrap_or(200).clamp(64, 400) as u32,
+        cols: int(args, "cols")?.unwrap_or(8).clamp(1, 20) as u32,
+        fracs,
+        palette: string(args, "palette")?.map(String::from),
+        max: Some(MAX_SHEET),
+        png: None,
+    };
+    let s = SearchSheet::run(ctx(), a, &Quiet).map_err(err)?;
     Ok(ToolOutput {
         content: vec![
-            json!({"type": "text", "text": format!("{} runs", rows.len())}),
-            json!({"type": "image", "data": util::base64(&bytes), "mimeType": "image/png"}),
+            json!({"type": "text", "text": format!("{} runs", s.runs.len())}),
+            json!({"type": "image", "data": util::base64(&s.bytes), "mimeType": "image/png"}),
         ],
         is_error: false,
     })
@@ -335,88 +390,64 @@ fn try_tool(args: &Value) -> Res {
         args,
         &["tiling", "rule", "seed", "nb", "cells", "gens", "rng", "px"],
     )?;
-    let tiling = string(args, "tiling")?.ok_or("tiling is required")?;
-    let text = string(args, "rule")?.ok_or("rule is required")?;
-    let (rule, nb0) = Rule::parse(text)?;
-    let fam = Fam::of(&rule);
-    let nb = match string(args, "nb")? {
-        Some(o) => args::nb_word(o).ok_or_else(|| format!("nb must be touch or edge, got {o}"))?,
-        None => nb0.unwrap_or(Nb::Touch),
+    let a = TryIn {
+        tiling: string(args, "tiling")?.ok_or("tiling is required")?.into(),
+        rule: string(args, "rule")?.ok_or("rule is required")?.into(),
+        seed: args.get("seed").cloned().filter(|v| !v.is_null()),
+        nb: string(args, "nb")?.map(String::from),
+        cells: Some(int(args, "cells")?.unwrap_or(16000).clamp(100, 100_000) as u32),
+        gens: Some(int(args, "gens")?.unwrap_or(1024).clamp(1, 8000) as u32),
+        rng: int(args, "rng")?.map(|r| r as u64),
+        px: Some(int(args, "px")?.unwrap_or(420).clamp(64, 800) as u32),
+        png: None,
     };
-    let cells = int(args, "cells")?.unwrap_or(16000).clamp(100, 100_000) as u32;
-    let gens = int(args, "gens")?.unwrap_or(1024).clamp(1, 8000) as u32;
-    let rng = int(args, "rng")?.unwrap_or(1) as u64;
-    let (spec, topo) = sized_spec(tiling, cells)?;
-    let seed = match args.get("seed") {
-        Some(v) if !v.is_null() => args::parse_seed(v)?,
-        _ => jetcarp_core::world::default_seed(&rule, topo.len()),
-    };
-    let cand = Cand {
-        tiling: tiling.to_string(),
-        nb,
-        fam,
-        rule: rule.notation(),
-        seed,
-        cells,
-        gens,
-        steps: 1,
-        rng,
-        origin: "try".into(),
-    };
-    let ev = try_one(cand.clone())?;
-    let _ = spec;
-    let px = int(args, "px")?.unwrap_or(420).clamp(64, 800) as u32;
-    let img = sheet::thumb(&cand, 1.0, px, None).ok_or("could not render")?;
-    let bytes = util::png_bytes(&img, &[])?;
-    let f = &ev.feat;
+    let t = SearchTry::run(ctx(), a, &Quiet).map_err(err)?;
     let text = json!({
-        "fate": format!("{:?}", ev.fate).to_lowercase(), "score": ev.score, "settle": f.settle,
-        "period": f.period, "density": f.density_late, "activity": f.activity_late,
-        "movers": f.movers, "mover_speed": f.mover_speed, "smooth": f.smooth, "entropy": f.entropy,
+        "family": t.family, "fate": t.fate, "score": t.score, "category": t.category,
+        "settle": t.settle, "period": t.period, "density": t.density, "activity": t.activity,
+        "movers": t.movers, "mover_speed": t.mover_speed, "smooth": t.smooth, "entropy": t.entropy,
     });
     Ok(ToolOutput {
         content: vec![
             json!({"type": "text", "text": text.to_string()}),
-            json!({"type": "image", "data": util::base64(&bytes), "mimeType": "image/png"}),
+            json!({"type": "image", "data": util::base64(&t.png), "mimeType": "image/png"}),
         ],
         is_error: false,
     })
 }
 
 fn scene(args: &Value) -> Res {
-    check_unknown(args, &["db", "id"])?;
-    let conn = read(args)?;
-    let id = int(args, "id")?.ok_or("id is required")?;
-    let rows = sheet::query_runs(&conn, &format!("SELECT id FROM runs WHERE id={id}"))?;
-    let r = rows.first().ok_or_else(|| format!("no run {id}"))?;
-    let (spec, _) = sized_spec(&r.cand.tiling, r.cand.cells)?;
-    Ok(ToolOutput::json(
-        &serde_json::to_value(r.cand.scene(&spec)).map_err(|e| e.to_string())?,
-    ))
+    check_unknown(args, &["job", "id"])?;
+    let a = RunIn {
+        job: job_arg(args)?,
+        run: int(args, "id")?.ok_or("id is required")?,
+        save: None,
+    };
+    let r = SearchRunScene::run(ctx(), a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::json(&r.scene))
 }
 
 fn review(args: &Value) -> Res {
-    check_unknown(args, &["db", "id", "verdict", "note"])?;
-    let db = db_path(args)?;
-    let id = int(args, "id")?.ok_or("id is required")?;
-    let verdict = string(args, "verdict")?.ok_or("verdict is required")?;
-    if !matches!(verdict, "keep" | "maybe" | "drop") {
-        return Err("verdict must be keep, maybe, or drop".into());
-    }
-    let note = string(args, "note")?.unwrap_or("");
-    let c = Connection::open(&db).map_err(|e| e.to_string())?;
-    c.busy_timeout(std::time::Duration::from_secs(10))
-        .map_err(|e| e.to_string())?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    c.execute(
-        "INSERT INTO reviews(run_id, verdict, note, ts) VALUES(?,?,?,?)",
-        rusqlite::params![id, verdict, note, now],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(ToolOutput::text(format!("recorded {verdict} for run {id}")))
+    check_unknown(args, &["job", "id", "verdict", "note"])?;
+    let a = ReviewIn {
+        job: job_arg(args)?,
+        run: Some(int(args, "id")?.ok_or("id is required")?),
+        verdict: Some(
+            string(args, "verdict")?
+                .ok_or("verdict is required")?
+                .into(),
+        ),
+        note: string(args, "note")?.map(String::from),
+        rater: Some("model".into()),
+        from: None,
+    };
+    let r = SearchReview::run(ctx(), a, &Quiet).map_err(err)?;
+    Ok(ToolOutput::text(format!(
+        "recorded {} for run {} of job {}",
+        args["verdict"].as_str().unwrap_or(""),
+        args["id"],
+        r.job
+    )))
 }
 
 pub fn call(name: &str, args: &Value) -> Res {

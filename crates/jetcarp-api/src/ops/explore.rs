@@ -39,10 +39,7 @@ fn invalid(e: impl Into<String>) -> ApiError {
 }
 
 /// An explore job of the catalog (`None`: the newest), with its working database's path.
-pub(crate) fn explore_job(
-    cx: &Ctx,
-    job: Option<i64>,
-) -> Result<(Library, JobRow, PathBuf), ApiError> {
+pub fn explore_job(cx: &Ctx, job: Option<i64>) -> Result<(Library, JobRow, PathBuf), ApiError> {
     let lib = cx.library();
     let row = match job {
         Some(j) => lib.job(j).map_err(|e| ApiError::not_found(e))?,

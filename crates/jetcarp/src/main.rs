@@ -544,6 +544,8 @@ fn main() -> Result<()> {
         Cmd::App(a) => app_cmd::run(a)?,
         Cmd::Host(a) => host_cmd::run(a)?,
         Cmd::Mcp { app, port, token } => {
+            // The tools get this machine: the GPU, and jobs in processes of their own.
+            jetcarp_mcp::tools::set_platform(std::sync::Arc::new(platform::Machine));
             jetcarp_mcp::stdio::run(app, port, token).map_err(anyhow::Error::msg)?
         }
         Cmd::Rules => show(

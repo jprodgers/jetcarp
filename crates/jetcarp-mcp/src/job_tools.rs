@@ -148,7 +148,7 @@ pub fn definitions() -> Vec<Value> {
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id (default: list jobs)."},
                 "wait_s": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Wait up to this many seconds for the job to stop running (default 0: answer now)."},
-                "kind": {"type": "string", "enum": ["hunt", "ants", "pile", "evolve", "mover", "search", "collide", "census"], "description": "List only this kind."},
+                "kind": {"type": "string", "enum": ["hunt", "ants", "pile", "evolve", "mover", "search", "collide", "census", "explore"], "description": "List only this kind."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Most jobs listed (default 30)."},
             }, "additionalProperties": false}),
         ),
@@ -156,7 +156,7 @@ pub fn definitions() -> Vec<Value> {
             "job_stop",
             "Stop a job",
             false,
-            "Stops a running job at its next checkpoint (a few seconds; a pile cancels the step in flight): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, or census. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, or mover_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
+            "Stops a running job at its next checkpoint (a few seconds; a pile cancels the step in flight): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, census, or explore search. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, mover_start, or explore_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id."},
             }, "required": ["job"], "additionalProperties": false}),
@@ -568,6 +568,7 @@ fn stop(args: &Value) -> Res {
         "hunt" => format!("hunt_start {{\"resume\": {job}}}"),
         "ants" => format!("ants_start {{\"resume\": {job}}}"),
         "evolve" => format!("evolve_start {{\"resume\": {job}}}"),
+        "explore" => format!("explore_start {{\"resume\": {job}}} (it continues from its archive)"),
         "mover" => format!("mover_start {{\"resume\": {job}}}"),
         "pile" => format!("pile_start {{\"resume\": {job}}}"),
         _ => format!("`jetcarp jobs resume {job}`"),

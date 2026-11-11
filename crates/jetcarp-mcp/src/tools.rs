@@ -471,11 +471,26 @@ pub(crate) fn check_unknown(args: &Value, allowed: &[&str]) -> Result<(), String
     Ok(())
 }
 
-/// What the tools run with: the interactive limits ([`Limits::INTERACTIVE`]) and files anywhere
-/// (paths come from the client, as they always have).
+static PLATFORM: OnceLock<std::sync::Arc<dyn jetcarp_api::Platform>> = OnceLock::new();
+
+/// The machine the tools run on: the `jetcarp` program sets its own before it serves (the GPU,
+/// jobs in processes of their own); without one, the tools run headless. Set it before the first
+/// tool call (first call wins).
+pub fn set_platform(p: std::sync::Arc<dyn jetcarp_api::Platform>) {
+    let _ = PLATFORM.set(p);
+}
+
+/// What the tools run with: the interactive limits ([`Limits::INTERACTIVE`]), files anywhere
+/// (paths come from the client, as they always have), and the platform set by [`set_platform`].
 pub fn ctx() -> &'static Ctx {
     static CX: OnceLock<Ctx> = OnceLock::new();
-    CX.get_or_init(Ctx::interactive)
+    CX.get_or_init(|| {
+        let cx = Ctx::interactive();
+        match PLATFORM.get() {
+            Some(p) => cx.with_platform(p.clone()),
+            None => cx,
+        }
+    })
 }
 
 /// An operation's error as the tool's error text.
