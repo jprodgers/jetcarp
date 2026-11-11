@@ -1,5 +1,5 @@
 """B/S and Generations notation (docs/src/reference/rule-notation.md), read only to cross-check the
-`rules` table's masks: replay itself uses the masks, as the spec intends (section 11)."""
+`rules` table's masks: replay itself uses the masks, as the spec intends (pack-format.md, `rules`)."""
 
 import re
 

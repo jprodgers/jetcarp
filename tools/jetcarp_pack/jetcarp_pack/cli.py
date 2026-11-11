@@ -12,7 +12,7 @@ from . import authenticity, browse, integrity, replay
 from .limits import Limits
 from .pack import Pack, open_pack
 from .report import Report
-from .store import Store, StoreError
+from .store import StoreError, open_store
 
 
 def _dump(value):
@@ -20,7 +20,8 @@ def _dump(value):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="jetcarp-pack", description="An independent reader for JETCARP pack format 1.0.")
+    p = argparse.ArgumentParser(prog="jetcarp-pack", description="An independent reader for JETCARP pack format 1.0 "
+                                                                 "(a store, or an export: a folder with pack.json).")
     sub = p.add_subparsers(dest="command", required=True)
 
     def add(name, help_):
@@ -63,7 +64,7 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     try:
-        store = Store(args.store, Limits())
+        store = open_store(args.store, Limits())
     except StoreError as e:
         print(f"jetcarp-pack: {e.message}", file=sys.stderr)
         return 2

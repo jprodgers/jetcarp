@@ -1,5 +1,5 @@
-"""Conformance level 0, browse (pack spec section 16): list a pack's tables, show rows, and find a
-record by id. Every object is still checked against its hash before it is shown (section 4)."""
+"""Conformance level 0, browse (pack-format.md, "Conformance levels"): list a pack's tables, show rows,
+and find a record by id. Every object is still checked against its hash before it is shown."""
 
 import json
 
@@ -8,9 +8,11 @@ from .pack import check_store_marker, list_refs, sh
 
 
 def info(store, report):
-    out = {"store": store.root, "refs": [], "keys": []}
+    out = {"store": store.root, "export": store.is_export, "refs": [], "keys": []}
     if not check_store_marker(store, report):
         return out
+    if store.is_export:
+        out["manifest"] = store.manifest_hash
     for feed, (_, ref) in sorted(list_refs(store, report).items()):
         entry = {"feed": feed, "seq": ref.get("seq"), "publisher": ref.get("publisher"),
                  "manifest": ref.get("manifest"), "updated": ref.get("updated")}
@@ -57,7 +59,7 @@ def retractions(pack):
     out = {}
     for x in pack.manifest.get("retracts", []) or []:
         if isinstance(x, dict) and isinstance(x.get("target"), str):
-            out[x["target"]] = {"by": pack.manifest.get("publisher"), "reason": x.get("reason"), "date": x.get("date")}
+            out[x["target"]] = {"by": x.get("publisher"), "reason": x.get("reason"), "date": x.get("date")}
     return out
 
 
@@ -102,10 +104,10 @@ def find(pack, query):
             out["events"][t] = found
     latest = {}
     for a in out["events"].get("annotations", []):
-        # Section 24 fix 2 orders a publisher's annotations by manifest history; rows do not say
-        # which version added them, so this falls back to date, then the value's bytes (choice).
+        # Latest wins: the highest rev, then the later date, then the greater value by its bytes.
         k = (a["publisher"], a["field"])
-        if k not in latest or (a["date"], a["value"].encode()) > (latest[k]["date"], latest[k]["value"].encode()):
+        rank = (a["rev"], a["date"], a["value"].encode())
+        if k not in latest or rank > (latest[k]["rev"], latest[k]["date"], latest[k]["value"].encode()):
             latest[k] = a
     if latest:
         out["annotations_latest"] = [{"publisher": p, "field": f, "value": a["value"]} for (p, f), a in sorted(latest.items())]

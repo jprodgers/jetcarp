@@ -1,10 +1,10 @@
-"""Opening one version of a pack: its manifest, its indexes and its Parquet parts (pack spec
-sections 4, 5, 8, 15 and 17).
+"""Opening one version of a pack: its manifest, its indexes and its Parquet parts
+(docs/src/reference/pack-format.md: "The store", "The manifest", "Tables, indexes and parts",
+"Versions and compatibility", "Limits").
 
 Everything read is checked as it is read: object hashes (a reader MUST check them before use), the
-refusals of section 15 (unknown major version, unknown `requires`, unknown schema number), and the
-limits of section 17. Problems go into a Report; a refused object is left out and the rest is still
-read, so a check reports everything it can.
+refusals (an unknown major version, `requires` or schema number), and the limits. Problems go into a
+Report; a refused object is left out and the rest is still read, so a check reports all it can.
 """
 
 import pyarrow as pa
@@ -13,8 +13,9 @@ import pyarrow.parquet as pq
 
 from . import identity as ident
 from . import jcs, safejson, schemas
+from .parquet_limits import ParquetLimitError, check_footer, page_totals
 from .report import Report
-from .store import StoreError, check_hash, FEED_RE, FINGERPRINT_RE
+from .store import StoreError, check_hash, FEED_RE, FINGERPRINT_RE, PARTITION_RE
 
 KNOWN_REQUIRES = frozenset()  # 1.0 defines no features for `requires`
 PACK_FORMAT, INDEX_FORMAT, STORE_FORMAT = "jetcarp-pack", "jetcarp-index", "jetcarp-store"
@@ -26,7 +27,10 @@ def sh(h):
 
 
 def check_store_marker(store, report):
-    """jetcarp-store.json: {"format":"jetcarp-store","version":"1.0"}. Returns False to refuse."""
+    """jetcarp-store.json: {"format":"jetcarp-store","version":"1.0"}. Returns False to refuse.
+    An export has no marker: its pack.json is the manifest."""
+    if store.is_export:
+        return True
     try:
         data, doc = store.read_json_file(("jetcarp-store.json",), "jetcarp-store.json")
     except StoreError as e:
@@ -41,13 +45,15 @@ def check_store_marker(store, report):
                     f"version {doc.get('version')!r} is not a 1.x version; refusing the store")
         return False
     if not safejson.is_canonical(data, doc):
-        report.warn(1, "not-canonical", "jetcarp-store.json", "is not in RFC 8785 canonical form")
+        report.fail(1, "not-canonical", "jetcarp-store.json", "is not in RFC 8785 canonical form")
     return True
 
 
 def list_refs(store, report):
-    """Every refs/<feed>.json, parsed: {feed: (bytes, document)}."""
+    """Every refs/<feed>.json, parsed: {feed: (bytes, document)}. An export has none."""
     out = {}
+    if store.is_export:
+        return out
     try:
         names = store.list(("refs",))
     except StoreError as e:
@@ -57,7 +63,7 @@ def list_refs(store, report):
         where = f"refs/{name}"
         feed = name[:-5] if name.endswith(".json") else None
         if feed is None or not FEED_RE.match(feed):
-            report.warn(0, "ref-name", where, "is not <feed>.json with a feed of letters, digits and -")
+            report.warn(0, "ref-name", where, "is not <feed>.json with a feed of 1 to 64 letters, digits and -")
             continue
         try:
             data, doc = store.read_json_file(("refs", name), where)
@@ -133,6 +139,7 @@ class TableData:
     def __init__(self, spec, index_hash):
         self.spec, self.index_hash = spec, index_hash
         self.indexes = []
+        self.entries = []
         self.parts = []
         self.schema = None
 
@@ -218,6 +225,7 @@ class Pack:
                 entries.append((entry, h))
             for child in reversed(doc.get("children", [])):
                 stack.append((child, depth + 1, f"child of {sh(h)}"))
+        data.entries = [e for e, _ in entries]  # in index order, children after their parent's parts
         for entry, h in entries:
             key = (spec.name, jcs.canonical(entry))
             if self.cache is not None and key in self.cache:
@@ -274,7 +282,7 @@ class Pack:
             self.report.fail(0, "index-format", where, "compacts is not a list")
             return False
         if compacts is not None:
-            self.report.info(0, "index-compacts", where, f"compacts {len(compacts)} earlier parts (section 24 fix 4)")
+            self.report.info(0, "index-compacts", where, f"compacts {len(compacts)} earlier parts (reserved; ignored)")
         if not safejson.is_canonical(raw, doc):
             self.report.fail(1, "not-canonical", where, "is not in RFC 8785 canonical form")
         return True
@@ -301,6 +309,11 @@ class Pack:
         if not isinstance(part, dict) or not all(isinstance(v, str) for v in part.values()):
             self.report.fail(0, "index-entry", where, f"part {sh(entry['object'])}: partition is not an object of strings")
             return False
+        bad = [v for v in part.values() if not PARTITION_RE.match(v)]
+        if bad:
+            self.report.fail(0, "partition-value", where, f"part {sh(entry['object'])}: partition value {bad[0]!r} is not "
+                                                          "1 to 64 lower-case letters, digits, - and _; refused")
+            return False
         for name in ("first", "last"):
             if not isinstance(entry.get(name, ""), str):
                 self.report.fail(0, "index-entry", where, f"part {sh(entry['object'])}: {name} is not a string")
@@ -310,18 +323,31 @@ class Pack:
     # Parts --------------------------------------------------------------------------------
 
     def _read_part(self, spec, entry, index_hash):
-        h = entry["object"]
-        where = f"{spec.name} part {sh(h)}"
+        where = f"{spec.name} part {sh(entry['object'])}"
+        rows = self.read_parquet(spec, entry["object"], where, entry)
+        if rows is None:
+            return None
+        self._check_part_rows(spec, entry, rows, where)
+        return rows
+
+    def read_parquet(self, spec, h, where, entry=None, counted="part hashes"):
+        """The rows of a Parquet object, read under every limit; None if refused. With `entry` (its
+        index entry), its size and row count are checked against it."""
         lim = self.limits
         try:
             f, size = self.store.open_object(h, "parquet", lim.object_bytes)
         except StoreError as e:
             self.report.fail(1 if e.code == "object-hash" else 0, e.code, where, e.message)
             return None
-        self.report.ok(1, "part hashes")
+        self.report.ok(1, counted)
         with f:
-            if size != entry["bytes"]:
+            if entry is not None and size != entry["bytes"]:
                 self.report.fail(1, "part-bytes", where, f"is {size:,} bytes; its index says {entry['bytes']:,}")
+            try:
+                check_footer(f, size)
+            except ParquetLimitError as e:
+                self.report.fail(0, "parquet-footer", where, f"{e}; refused")
+                return None
             try:
                 pf = pq.ParquetFile(f, thrift_string_size_limit=lim.document_bytes,
                                     thrift_container_size_limit=1_000_000)
@@ -330,44 +356,46 @@ class Pack:
             except Exception as e:  # pyarrow raises many kinds; none may crash the reader
                 self.report.fail(0, "parquet-unreadable", where, f"{type(e).__name__}: {str(e)[:200]}")
                 return None
-            if not self._check_parquet_meta(md, size, entry, where):
+            if not self._check_parquet_meta(f, md, size, entry, where):
                 return None
             columns = self._check_columns(spec, arrow_schema, where)
             if columns is None:
                 return None
-            rows = self._decode(pf, spec, columns, size, where)
-        if rows is None:
-            return None
-        self._check_part_rows(spec, entry, rows, where)
-        return rows
+            return self._decode(pf, spec, columns, size, where)
 
-    def _check_parquet_meta(self, md, size, entry, where):
+    def _check_parquet_meta(self, f, md, size, entry, where):
         lim = self.limits
-        if md.num_rows != entry["rows"]:
+        if entry is not None and md.num_rows != entry["rows"]:
             self.report.fail(1, "part-rows", where, f"holds {md.num_rows:,} rows; its index says {entry['rows']:,}")
-        if md.created_by != "jetcarp-pack 1":
-            self.report.warn(1, "parquet-created-by", where, f"created_by is {md.created_by!r}, not 'jetcarp-pack 1'")
-        kv = md.metadata or {}
-        extra = sorted(k.decode("utf-8", "replace") for k in kv if k != b"ARROW:schema")
-        if extra:
-            self.report.warn(1, "parquet-metadata", where, f"has key-value metadata {extra}")
-        uncompressed, codecs, no_stats, no_index = 0, set(), set(), set()
+        try:
+            uncompressed, values = page_totals(f, md)
+        except ParquetLimitError as e:
+            self.report.fail(0, "parquet-pages", where, f"{e}; refused")
+            return False
+        except OSError as e:
+            self.report.fail(0, "parquet-unreadable", where, str(e)[:200])
+            return False
+        if uncompressed > lim.decompression_ratio * size:
+            self.report.fail(0, "decompression-limit", where,
+                             f"its pages decompress to {uncompressed:,} bytes, over {lim.decompression_ratio}x its "
+                             f"{size:,} stored bytes; refused")
+            return False
+        if values > lim.decompression_ratio * size + (1 << 20):
+            self.report.fail(0, "values-limit", where,
+                             f"its data pages hold {values:,} values, over {lim.decompression_ratio} per byte of the "
+                             "part plus 2^20; refused")
+            return False
+        codecs, no_stats, no_index = set(), set(), set()
         for g in range(md.num_row_groups):
             rg = md.row_group(g)
             for c in range(rg.num_columns):
                 col = rg.column(c)
-                uncompressed += max(col.total_uncompressed_size, 0)
                 if col.compression != "ZSTD":
                     codecs.add(col.compression)
                 if not col.is_stats_set:
                     no_stats.add(col.path_in_schema)
                 if not (col.has_column_index and col.has_offset_index):
                     no_index.add(col.path_in_schema)
-        if uncompressed > lim.decompression_ratio * size:
-            self.report.fail(0, "decompression-limit", where,
-                             f"decompresses to {uncompressed:,} bytes, over {lim.decompression_ratio}x its "
-                             f"{size:,} stored bytes; refused")
-            return False
         if codecs:
             self.report.warn(1, "parquet-compression", where, f"uses {sorted(codecs)}, not zstd")
         if no_stats:
@@ -384,7 +412,7 @@ class Pack:
                 if col.required:
                     self.report.fail(0, "schema-column", where, f"has no column {col.name!r}; refused")
                     return None
-                continue
+                continue  # a nullable column left out is read as null
             problems = schemas.type_problems(col.type, arrow_schema.field(col.name).type, col.name)
             if problems:
                 self.report.fail(0, "schema-type", where, "; ".join(problems[:3]) + "; refused")
@@ -434,7 +462,20 @@ class Pack:
                             self.report.fail(0, "phase-limit", where,
                                              f"a phase has {most:,} cells, over the limit of {lim.phase_cells:,}; refused")
                             return None
-                rows.extend(batch.to_pylist())
+                for name in columns:
+                    if self.spec_int32(spec, name):
+                        arr = batch.column(name)
+                        if len(arr) and arr.null_count < len(arr) and not pa.types.is_int32(arr.type):
+                            lo, hi = pc.min_max(arr).values()
+                            if lo.as_py() < -2 ** 31 or hi.as_py() >= 2 ** 31:
+                                self.report.fail(0, "schema-type", where, f"column {name} holds values that do not "
+                                                                          "fit int32; refused")
+                                return None
+                missing = [c.name for c in spec.columns if c.name not in columns]
+                for row in batch.to_pylist():
+                    for name in missing:
+                        row[name] = None
+                    rows.append(row)
         except MemoryError:
             self.report.fail(0, "decoded-limit", where, "ran out of memory while decoding; refused")
             return None
@@ -442,6 +483,11 @@ class Pack:
             self.report.fail(0, "parquet-unreadable", where, f"{type(e).__name__}: {str(e)[:200]}")
             return None
         return rows
+
+    @staticmethod
+    def spec_int32(spec, name):
+        col = spec.column(name)
+        return col is not None and pa.types.is_int32(col.type)
 
     def _check_part_rows(self, spec, entry, rows, where):
         # Sorted, by UTF-8 bytes for text (sections 8 and 23.4), within the part.
@@ -454,8 +500,7 @@ class Pack:
                 self.report.fail(1, "part-sort", where, f"row {n} sorts before row {n - 1} by {', '.join(spec.sort)}")
                 break
             prev = k
-        # first and last: the smallest and largest sort key. For a sort key of several columns the
-        # spec does not say how to write it; the first column's value is used (choice).
+        # first and last: the first sort column's value in the first and last row, as text.
         if rows:
             first, last = _key_text(rows[0].get(spec.sort[0])), _key_text(rows[-1].get(spec.sort[0]))
         else:
@@ -469,21 +514,21 @@ class Pack:
         if set(part) != set(spec.partition):
             self.report.fail(1, "part-partition", where,
                              f"partition has keys {sorted(part)}; table {spec.name} is partitioned by "
-                             f"{sorted(spec.partition) or 'nothing'}")
+                             f"{', '.join(spec.partition) or 'nothing'}")
         else:
-            for key_name, column in spec.partition.items():
-                bad = [n for n, r in enumerate(rows) if r.get(column) != part[key_name]]
+            for column in spec.partition:
+                bad = [n for n, r in enumerate(rows) if r.get(column) != part[column]]
                 if bad:
                     self.report.fail(1, "part-partition", where,
                                      f"row {bad[0]} has {column} {rows[bad[0]].get(column)!r}, but the part is "
-                                     f"partition {key_name}={part[key_name]!r}")
+                                     f"partition {column}={part[column]!r}")
 
 
 def _sort_value(v):
     if isinstance(v, str):
         return (1, v.encode("utf-8", "surrogatepass"))
     if isinstance(v, bool) or v is None:
-        return (0, bytes([int(bool(v))]))
+        return (0, int(bool(v)))  # false before true
     if isinstance(v, (int, float)):
         return (0, v)
     return (2, repr(v).encode())
@@ -518,9 +563,11 @@ def _longest_string(arr):
 
 
 def open_pack(store, report, manifest=None, feed=None):
-    """Pick a manifest: the one given, the feed's ref, or the only ref in the store."""
+    """Pick a manifest: the one given, an export's pack.json, the feed's ref, or the only ref."""
     if manifest:
         return manifest
+    if store.is_export:
+        return store.manifest_hash
     refs = list_refs(store, report)
     if feed:
         if feed not in refs:
