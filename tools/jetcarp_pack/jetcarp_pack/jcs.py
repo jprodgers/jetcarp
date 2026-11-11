@@ -1,9 +1,9 @@
 """RFC 8785, the JSON Canonicalization Scheme (JCS), written from the RFC.
 
 Pack documents (manifests, indexes, refs, key statements, receipts) hold only integers, strings,
-booleans, null, arrays and objects (pack spec section 3), so `canonical()` refuses other numbers
+booleans, null, arrays and objects (pack-format.md, "Encodings"), so `canonical()` refuses other numbers
 unless `allow_floats` is set. Numbers are still written exactly as RFC 8785 says, because the
-identity's `tiling=` line uses RFC 8785 values whose parameters may be floats (spec section 9,
+identity's `tiling=` line uses RFC 8785 values whose parameters may be floats (pack-format.md "Ids",
 library-format.md).
 """
 
@@ -143,15 +143,32 @@ def tiling_key(tiling):
 
     `tiling` is a tiling as JETCARP writes it (a scene's tiling, say): its `family`, optional
     `params` and `edges`. Members come in a fixed order, `family`, `params`, `edges`, then
-    `"boundary":"dead"`; each value is RFC 8785. On the aperiodic families `level` is taken out of
-    `params`, and `params` left out if nothing is left.
+    `"boundary":"dead"`; each value is RFC 8785.
+    - `params` is there whenever the tiling has a parameters value, even `{}`; on the aperiodic
+      families `level` is taken out first, and `params` left out if that leaves it empty.
+    - `edges` is there whenever the tiling has an edge list, even `[]`; each edge is written as the
+      engine reads it: `mode`, `curved` (true when left out) and `nodes` (empty when left out), each
+      node with its `t` and `d` only.
     """
     params = tiling.get("params")
     if tiling["family"] in APERIODIC_FAMILIES and isinstance(params, dict):
         params = {k: v for k, v in params.items() if k != "level"} or None
+    edges = tiling.get("edges")
+    if edges is not None:
+        edges = [normalise_edge(e) for e in edges]
     members = ['"family":' + dumps(tiling["family"], allow_floats=True)]
-    for name, value in (("params", params), ("edges", tiling.get("edges"))):
+    for name, value in (("params", params), ("edges", edges)):
         if value is not None:
             members.append(f'"{name}":' + dumps(value, allow_floats=True))
     members.append('"boundary":"dead"')
     return "{" + ",".join(members) + "}"
+
+
+def normalise_edge(edge):
+    if not isinstance(edge, dict) or "mode" not in edge:
+        raise CanonicalError("an edge is not an object with a mode")
+    nodes = edge.get("nodes", [])
+    if not isinstance(nodes, list) or not all(isinstance(n, dict) and "t" in n and "d" in n for n in nodes):
+        raise CanonicalError("an edge's nodes are not objects with t and d")
+    return {"mode": edge["mode"], "curved": edge.get("curved", True),
+            "nodes": [{"t": n["t"], "d": n["d"]} for n in nodes]}

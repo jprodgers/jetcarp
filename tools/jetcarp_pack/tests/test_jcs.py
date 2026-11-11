@@ -112,6 +112,9 @@ class TilingKeys(unittest.TestCase):
                          '{"family":"spectre","boundary":"dead"}')
         self.assertEqual(jcs.tiling_key({"family": "cairo", "params": {"b": 1.0, "a": [1e-7, 0.000001]}}),
                          '{"family":"cairo","params":{"a":[1e-7,0.000001],"b":1},"boundary":"dead"}')
+        self.assertEqual(jcs.tiling_key({"family": "square", "params": {}}), '{"family":"square","params":{},"boundary":"dead"}')
+        self.assertEqual(jcs.tiling_key({"family": "square", "edges": [{"mode": "J", "x": 1, "nodes": [{"t": 0.5, "d": 0.1, "y": 2}]}]}),
+                         '{"family":"square","edges":[{"curved":true,"mode":"J","nodes":[{"d":0.1,"t":0.5}]}],"boundary":"dead"}')
 
 
 @unittest.skipUnless(os.path.exists(VECTORS), "the repository's jcs_vectors.txt is not here")
@@ -119,10 +122,9 @@ class IndependentVectors(unittest.TestCase):
     """Vectors written by the Python rfc8785 package (tools/jcs_vectors.py), read as data."""
 
     def test_vectors(self):
-        """Every value vector matches. Tiling vectors match the book's tiling_key except where an
-        edge lacks `curved`: the vectors normalise each edge to {mode, curved (default true), nodes},
-        which library-format.md does not say (SPEC_QUESTIONS.md, tiling key edges)."""
-        n = edge_cases = 0
+        """Every value and tiling vector matches, the tiling keys with their edges normalised as
+        library-format.md says (mode, curved true by default, nodes' t and d only)."""
+        n = edges = 0
         with open(VECTORS, encoding="utf-8") as f:
             for line in f:
                 if line.startswith("#") or not line.strip():
@@ -132,16 +134,11 @@ class IndependentVectors(unittest.TestCase):
                 n += 1
                 if kind == "value":
                     self.assertEqual(jcs.dumps(value, allow_floats=True), expected, source)
-                    continue
-                got = jcs.tiling_key(value)
-                if got != expected:
-                    self.assertTrue(any("curved" not in e for e in value.get("edges", [])), source)
-                    value["edges"] = [{"mode": e["mode"], "curved": e.get("curved", True), "nodes": e["nodes"]}
-                                      for e in value["edges"]]
+                else:
+                    edges += "edges" in value
                     self.assertEqual(jcs.tiling_key(value), expected, source)
-                    edge_cases += 1
         self.assertGreater(n, 500)
-        self.assertGreater(edge_cases, 0)
+        self.assertGreater(edges, 100)
 
 
 class SafeJson(unittest.TestCase):
