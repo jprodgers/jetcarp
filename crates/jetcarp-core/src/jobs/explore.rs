@@ -288,19 +288,9 @@ pub fn title(sp: &ExploreSpec) -> String {
     format!("{t}, {f}")
 }
 
-/// The process's resident memory in GB (Linux; 0 elsewhere).
+/// The process's resident memory in GB (its working set on Windows; 0 where it cannot be read).
 pub fn rss_gb() -> f64 {
-    std::fs::read_to_string("/proc/self/status")
-        .ok()
-        .and_then(|t| {
-            t.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| {
-                l.split_whitespace()
-                    .nth(1)
-                    .and_then(|v| v.parse::<f64>().ok())
-            })
-        })
-        .unwrap_or(0.0)
-        / 1_048_576.0
+    memory_stats::memory_stats().map_or(0.0, |m| m.physical_mem as f64 / (1u64 << 30) as f64)
 }
 
 /// A live explore run, with or without a GPU backend.

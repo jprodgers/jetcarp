@@ -2100,6 +2100,7 @@ dependencies = [
  "flate2",
  "gif",
  "image-webp",
+ "memory-stats",
  "png",
  "rayon",
  "rusqlite",

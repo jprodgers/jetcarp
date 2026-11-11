@@ -20,3 +20,4 @@ rusqlite.workspace = true
 flate2.workspace = true
 gif.workspace = true
 image-webp.workspace = true
+memory-stats = "1.2.0"
