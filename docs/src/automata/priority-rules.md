@@ -54,7 +54,10 @@ introduced priority tables, presented as Edmond's own rule family, and found gli
 with a genetic algorithm over four-state tables on the touch neighbourhood. The gliders' headings fall
 on a "six-spoke compass", and the Spectre glider is Edmond's record of the evolved Spectre rule (Table 7 of
 the paper's second version), found with no known rule planted in the search
-([Edmond 2026](../research/bibliography.md#edmond2026gliders)).
+([Edmond 2026](../research/bibliography.md#edmond2026gliders)). Within weeks, Trevorrow's HatLife and
+the new SpectreLife ran Edmond's rules, SpectreLife with the glider rule modified to support eaters,
+oscillators and glider guns
+([Trevorrow 2026](../research/bibliography.md#trevorrow2026spectrelife)).
 
 ## How JETCARP runs it
 
@@ -132,4 +135,5 @@ this family. The comparison is described in [Findings](../research/findings.md#t
 - [Goucher 2012](../research/bibliography.md#goucher2012gliders);
   [Hill, Stepney and Wan 2005](../research/bibliography.md#hill2005penrose);
   [Owens and Stepney 2010](../research/bibliography.md#owens2010game)
-- [Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)
+- [Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife);
+  [Trevorrow 2026](../research/bibliography.md#trevorrow2026spectrelife)

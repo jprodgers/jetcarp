@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 264 works cited across the JETCARP documentation. Every entry was
+These are the 266 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -31,6 +31,8 @@ BibTeX key, so you can link to it directly.
 <span id="bays2005note"></span>Bays, Carter (2005). “A Note on the Game of Life in Hexagonal and Pentagonal Tessellations”. *Complex Systems* 15(3): 245–252. doi:[10.25088/ComplexSystems.15.3.245](https://doi.org/10.25088/ComplexSystems.15.3.245). <small>`bays2005note`</small>
 
 <span id="bays2009cellular"></span>Bays, Carter (2009). “Cellular Automata in Triangular, Pentagonal and Hexagonal Tessellations”. In *Encyclopedia of Complexity and Systems Science*, pp. 892–900. Springer. doi:[10.1007/978-0-387-30440-3_58](https://doi.org/10.1007/978-0-387-30440-3_58). <small>`bays2009cellular`</small>
+
+<span id="bellissimogiorno2026aperiodic"></span>bellissimogiorno (2026). “Game of life on hexagonal, Penrose, and einstein tiling”. ConwayLife.com forums, thread t=7491. <https://conwaylife.com/forums/viewtopic.php?t=7491>; accessed 2026-11-10. <small>`bellissimogiorno2026aperiodic`</small>
 
 <span id="berger1966undecidability"></span>Berger, Robert (1966). “The undecidability of the domino problem”. *Memoirs of the American Mathematical Society*, no. 66. doi:[10.1090/memo/0066](https://doi.org/10.1090/memo/0066). <small>`berger1966undecidability`</small>
 
@@ -527,6 +529,8 @@ BibTeX key, so you can link to it directly.
 <span id="toussaint1983particle"></span>Toussaint, Douglas and Frank Wilczek (1983). “Particle–antiparticle annihilation in diffusive motion”. *Journal of Chemical Physics* 78(5): 2642–2647. doi:[10.1063/1.445022](https://doi.org/10.1063/1.445022). <small>`toussaint1983particle`</small>
 
 <span id="trevorrow2023hatlife"></span>Trevorrow, Andrew (2023). “HatLife”. ConwayLife.com forums, thread t=6015. <https://conwaylife.com/forums/viewtopic.php?p=161425>; accessed 2026-11-10. <small>`trevorrow2023hatlife`</small>
+
+<span id="trevorrow2026spectrelife"></span>Trevorrow, Andrew (2026). “SpectreLife”. ConwayLife.com forums, thread t=7489. <https://conwaylife.com/forums/viewtopic.php?t=7489>; accessed 2026-11-10. <small>`trevorrow2026spectrelife`</small>
 
 <span id="tsukiji2011recognizing"></span>Tsukiji, Tatsuie and Takeo Hagiwara (2011). “Recognizing the Repeatable Configurations of Time-Reversible Generalized Langton's Ant Is PSPACE-Hard”. *Algorithms* 4(1): 1–15. doi:[10.3390/a4010001](https://doi.org/10.3390/a4010001). <small>`tsukiji2011recognizing`</small>
 

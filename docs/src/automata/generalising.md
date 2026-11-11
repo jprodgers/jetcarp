@@ -72,7 +72,12 @@ polyhedral meshes ([Ready](../research/bibliography.md#huttonnd_ready)). Andrew 
 ran Life-like, Larger than Life-style and WireWorld rules on the hat tiling within weeks of its
 discovery ([Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife)), and James Edmond's
 work on the hat and spectre runs Generations and priority-table rules on a general graph
-([Edmond 2026](../research/bibliography.md#edmond2026gliders)). JETCARP builds on all of this.
+([Edmond 2026](../research/bibliography.md#edmond2026gliders)). In October 2026 Trevorrow's SpectreLife
+did for the spectre what HatLife did for the hat, with Edmond's rules
+([Trevorrow 2026](../research/bibliography.md#trevorrow2026spectrelife)), and bellissimogiorno's
+aperiodic-life package runs Life on square, hexagonal and aperiodic tilings
+([bellissimogiorno 2026](../research/bibliography.md#bellissimogiorno2026aperiodic)). JETCARP builds
+on all of this.
 
 ## How JETCARP runs it
 
@@ -153,7 +158,7 @@ JETCARP does not pretend otherwise:
 ## What is new here
 
 None of the ingredients on this page is new on its own, as the history above shows: Ready runs
-arbitrary rules on meshes, HatLife and Edmond's work run several families on the hat and spectre,
+arbitrary rules on meshes, HatLife, SpectreLife and Edmond's work run several families on the hat and spectre,
 and many single families have been run on hexagons, triangles or Penrose tilings. What JETCARP
 adds, to our knowledge, is breadth: one engine that runs every family listed here on every class of
 tiling it supports (lattices, the 1,248 k-uniform tilings, 81 isohedral types, drawn tiles, and the
@@ -191,4 +196,6 @@ do not count them as discoveries. The search behind these statements is summaris
   [ptiles/ant](../research/bibliography.md#ptilesnd_ant)
 - [Ready](../research/bibliography.md#huttonnd_ready);
   [Trevorrow 2023](../research/bibliography.md#trevorrow2023hatlife);
-  [Edmond 2026](../research/bibliography.md#edmond2026gliders)
+  [Edmond 2026](../research/bibliography.md#edmond2026gliders);
+  [Trevorrow 2026](../research/bibliography.md#trevorrow2026spectrelife);
+  [bellissimogiorno 2026](../research/bibliography.md#bellissimogiorno2026aperiodic)
