@@ -64,8 +64,11 @@ as Verdigris, end on a bright stop, so a pattern that has settled stays vivid un
   and stage; the app saves the palettes you make there.
 
 Names are matched exactly, capitals included: the scene's own palettes first, then the built-in
-ones, then hex colours. A name that matches none of them (`ember`, say) is refused with the list of
-names, wherever it appears: in a scene, a command or script, or a `--palette` option.
+ones, then hex colours. A name you type that matches none of them (`ember`, say), in a `--palette`
+option, a command or a script, is refused with the list of names. A scene file that names one still
+loads, so that a scene saved by a later JETCARP with newer palettes opens: the name is kept (saving
+the scene keeps it), that automaton is drawn in Ember, and `jetcarp run`, `jetcarp verify` and the
+app's status line say so ("palette 'Dusk' is unknown here; drawn in Ember").
 
 ## How a palette colours cells
 

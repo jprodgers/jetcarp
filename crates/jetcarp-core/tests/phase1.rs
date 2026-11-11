@@ -521,7 +521,7 @@ fn one_palette_on_four_cas() {
 }
 
 // A palette name the world does not know (a typo, or another case) is refused with the names,
-// rather than quietly drawn in the default palette: in a scene, a new CA, or a change.
+// rather than quietly drawn in the default palette, when a command gives it: a new CA or a change.
 #[test]
 fn an_unknown_palette_is_refused() {
     use jetcarp_core::render::Palette;
@@ -534,11 +534,7 @@ fn an_unknown_palette_is_refused() {
         "{e}"
     );
     assert!(w.cas.is_empty() && w.log().is_empty());
-    // The same CA in a scene.
-    let mut sc = w.to_scene();
-    sc.cas = vec![ca];
-    let e = World::from_scene(&sc).err().unwrap();
-    assert!(e.contains("no palette named"), "{e}");
+    assert!(w.warnings().is_empty());
     // Built-ins, hex colours, and the world's own palettes are all fine.
     let id = w
         .apply(Command::AddCa {
@@ -573,6 +569,60 @@ fn an_unknown_palette_is_refused() {
         ),
         ("B3/S23".to_string(), "Mine")
     );
+}
+
+// A scene file that names a palette this JETCARP does not know (one of a later release's
+// built-ins, or a hand-edited name) still loads: the name is kept, so saving keeps it, the CA is
+// drawn in Ember, and the load says so. Commands in its log are taken the same way.
+#[test]
+fn a_scene_with_an_unknown_palette_loads_and_says_so() {
+    use jetcarp_core::render::Palette;
+    let mut sc = Scene::new(square(20, 20, Boundary::Wrap));
+    let mut ca = CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 });
+    ca.palette = Some("Dusk".into());
+    sc.cas = vec![ca];
+    sc.commands = vec![
+        Command::UpdateCa {
+            id: 1,
+            change: CaChange {
+                palette_neg: Some("Twilight".into()),
+                ..Default::default()
+            },
+        },
+        Command::Step { gens: 3 },
+    ];
+    let w = World::from_scene(&sc).unwrap();
+    assert_eq!(
+        w.warnings(),
+        [
+            "palette 'Dusk' is unknown here; drawn in Ember",
+            "palette 'Twilight' is unknown here; drawn in Ember"
+        ]
+    );
+    assert_eq!(w.cas[0].palette, "Dusk");
+    assert_eq!(w.palette("Dusk"), Palette::builtin("Ember").unwrap());
+    assert_eq!(w.generation, 3);
+    // Saved and loaded again, the names are still there, and so is the warning.
+    let again = World::from_scene(&Scene::from_json(&w.to_scene().to_json()).unwrap()).unwrap();
+    assert_eq!(again.cas[0].palette, "Dusk");
+    assert_eq!(again.cas[0].palette_neg, "Twilight");
+    assert_eq!(again.warnings(), w.warnings());
+    assert_eq!(again.hash_hex(), w.hash_hex());
+    // A reset or a new tiling keeps them too; a command that names one now is refused.
+    let mut w = again;
+    w.apply(Command::Reset).unwrap();
+    w.apply(Command::SetTiling {
+        tiling: square(24, 24, Boundary::Wrap),
+    })
+    .unwrap();
+    assert_eq!(w.cas[0].palette, "Dusk");
+    assert_eq!(w.warnings().len(), 2);
+    let change = CaChange {
+        palette: Some("Dawn".into()),
+        ..Default::default()
+    };
+    let e = w.apply(Command::UpdateCa { id: 1, change }).unwrap_err();
+    assert!(e.contains("no palette named 'Dawn'"), "{e}");
 }
 
 // The identity I of the sandpile group satisfies stab(I + I) = I; check on several grids.

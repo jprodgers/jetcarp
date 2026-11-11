@@ -178,7 +178,14 @@ impl JetcarpApp {
             }
         };
         if ok {
-            self.message = Some((format!("Built {} in {secs:.1} s.", b.what), false));
+            // After a scene's warnings, if it had any (a palette this JETCARP does not know).
+            let built = format!("Built {} in {secs:.1} s.", b.what);
+            let warnings = self.world.warnings();
+            self.message = Some(if b.scene.is_some() && !warnings.is_empty() {
+                (format!("{built} {}", warnings.join("; ")), false)
+            } else {
+                (built, false)
+            });
         }
         if let Some(f) = &mut self.frametime {
             println!("frametime: built {} in {secs:.2} s", b.what);

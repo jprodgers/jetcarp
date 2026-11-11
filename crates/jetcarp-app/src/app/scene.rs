@@ -41,7 +41,9 @@ impl JetcarpApp {
             }
         }
         self.screen = Screen::Sim;
-        self.message = None;
+        // What loading let pass (a palette this JETCARP does not know) goes in the status line.
+        let warnings = self.world.warnings();
+        self.message = (!warnings.is_empty()).then(|| (warnings.join("; "), false));
     }
 
     /// Show a world built elsewhere (a script's `show(w)`, a sweep result) in the main view.

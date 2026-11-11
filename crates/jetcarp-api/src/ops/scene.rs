@@ -143,11 +143,18 @@ impl Op for SceneSave {
 pub struct Verified {
     pub generation: u64,
     pub hash: String,
+    /// What loading it let pass (palettes this JETCARP does not know).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Report for Verified {
     fn text(&self) -> String {
-        format!("ok: generation {} hash {}\n", self.generation, self.hash)
+        let mut s = format!("ok: generation {} hash {}\n", self.generation, self.hash);
+        for w in &self.warnings {
+            let _ = writeln!(s, "warning: {w}");
+        }
+        s
     }
 }
 
@@ -178,6 +185,7 @@ impl Op for SceneVerify {
         Ok(Verified {
             generation: w.generation,
             hash: rec.hash,
+            warnings: w.warnings().to_vec(),
         })
     }
 }
@@ -261,6 +269,9 @@ pub struct RunSummary {
     pub png_size: Option<(u32, u32)>,
     /// Reseed policies and their status.
     pub reseed: Value,
+    /// What loading the scene let pass (palettes this JETCARP does not know).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     #[serde(skip)]
     text: String,
     #[serde(skip)]
@@ -404,7 +415,7 @@ fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiErro
     let mut s = String::new();
     let _ = writeln!(s, "scene:      {}", a.scene);
     let _ = writeln!(s, "tiling:     {}", w.topo.describe());
-    for warning in &w.topo.warnings {
+    for warning in w.topo.warnings.iter().chain(w.warnings()) {
         let _ = writeln!(s, "warning:    {warning}");
     }
     let _ = writeln!(s, "backend:    {backend}");
@@ -488,6 +499,7 @@ fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiErro
         png: a.png,
         png_size,
         reseed,
+        warnings: w.warnings().to_vec(),
         text: s,
         expect: a.expect,
         hash,

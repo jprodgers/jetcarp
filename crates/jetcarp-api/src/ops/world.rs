@@ -670,6 +670,13 @@ impl WorldOp for WorldNew {
         if scene.cas.len() > 32 {
             return Err(ApiError::limit("at most 32 CAs"));
         }
+        // Palettes named here are typed, so an unknown one is refused (a scene file's would load,
+        // drawn in the default, with a warning). A new world has no palettes of its own.
+        for c in &scene.cas {
+            for p in [&c.palette, &c.palette_neg].into_iter().flatten() {
+                render::builtin_palette(p).map_err(ApiError::invalid)?;
+            }
+        }
         host.replace(scene)?;
         Ok(NewWorldOut {
             status: world_status(host),
@@ -697,6 +704,9 @@ pub struct OpenOut {
     pub recorded: Option<Recorded>,
     /// The replay reached the recorded generation and hash (when one was recorded).
     pub replayed_to_record: Option<bool>,
+    /// What loading it let pass (palettes this JETCARP does not know, drawn in the default).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Report for OpenOut {
@@ -709,7 +719,12 @@ impl Report for OpenOut {
             ),
             _ => String::new(),
         };
-        format!("Scene loaded.{check}\n{}", to_pretty(&self.status))
+        let warn: String = self
+            .warnings
+            .iter()
+            .map(|w| format!(" Warning: {w}."))
+            .collect();
+        format!("Scene loaded.{check}{warn}\n{}", to_pretty(&self.status))
     }
 }
 
@@ -738,10 +753,12 @@ impl WorldOp for WorldOpen {
         let replayed = recorded
             .as_ref()
             .map(|r| r.generation == w.generation && r.hash == w.hash_hex());
+        let warnings = w.warnings().to_vec();
         Ok(OpenOut {
             status: world_status(host),
             recorded,
             replayed_to_record: replayed,
+            warnings,
         })
     }
 }

@@ -800,6 +800,15 @@ impl std::fmt::Display for Status {
 // ---------------------------------------------------------------------------------------------
 // World
 
+/// How a CA's palette names are taken: checked, as for a command a person gives, or kept as
+/// written, as for a scene being loaded (which may come from a later JETCARP with palettes this
+/// one lacks).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Palettes {
+    Check,
+    Keep,
+}
+
 #[derive(Clone, Debug)]
 struct Base {
     tiling: TilingSpec,
@@ -848,6 +857,8 @@ pub struct World {
     activity: std::collections::VecDeque<reseeding::Activity>,
     /// Typical tile size, measured on first use (explicit patches sample tiles).
     tile_size: std::sync::OnceLock<f64>,
+    /// What loading a scene let pass but should be told (see [`World::warnings`]).
+    warnings: Vec<String>,
 }
 
 impl World {
@@ -899,6 +910,7 @@ impl World {
             manual_reseeds: 0,
             activity: Default::default(),
             tile_size: Default::default(),
+            warnings: vec![],
         }
     }
 
@@ -930,6 +942,11 @@ impl World {
 
     /// [`from_scene`](Self::from_scene) on a tiling already built, for many scenes on one
     /// topology (Quick Start previews).
+    ///
+    /// A scene's palette names are taken as written: one this JETCARP does not know (a built-in
+    /// palette of a later release, or a hand-edited name) is kept, so saving the scene again keeps
+    /// it, drawn in the default palette, and reported in [`warnings`](Self::warnings). Commands
+    /// a person gives are stricter ([`check_palette`](Self::check_palette)).
     pub fn from_scene_on(scene: &Scene, topo: Arc<Topology>) -> Result<World, String> {
         Self::check_format(scene)?;
         let mut w = World::with_topology(topo, scene.tiling.clone(), scene.rng_state);
@@ -940,7 +957,7 @@ impl World {
         w.palettes = scene.palettes.clone();
         w.base.palettes = scene.palettes.clone();
         for spec in &scene.cas {
-            w.add_ca(spec.clone())?;
+            w.add_ca_as(spec.clone(), Palettes::Keep)?;
         }
         w.base.cas = w.cas.iter().map(|c| c.spec()).collect();
         if let Some(sc) = &scene.script {
@@ -952,10 +969,17 @@ impl World {
             w.base.reseed = scene.reseed.clone();
         }
         for (i, c) in scene.commands.iter().enumerate() {
-            w.apply(c.clone())
+            w.apply_as(c.clone(), Palettes::Keep)
                 .map_err(|e| format!("scene command {}: {e}", i + 1))?;
         }
         Ok(w)
+    }
+
+    /// What loading the scene let pass but should be told: each palette it names that this
+    /// JETCARP does not know (`palette 'Dusk' is unknown here; drawn in Ember`). `jetcarp run`,
+    /// `jetcarp verify`, `world_open` and the app's status line show them.
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 
     pub fn to_scene(&self) -> Scene {
@@ -1000,8 +1024,14 @@ impl World {
             .ok_or_else(|| format!("no CA with id {id}"))
     }
 
-    /// Apply a command and record it in the log.
+    /// Apply a command and record it in the log. A palette it names must be known
+    /// ([`check_palette`](Self::check_palette)).
     pub fn apply(&mut self, cmd: Command) -> Result<Applied, String> {
+        self.apply_as(cmd, Palettes::Check)
+    }
+
+    /// [`apply`](Self::apply), with palette names checked or, replaying a scene, kept.
+    fn apply_as(&mut self, cmd: Command, palettes: Palettes) -> Result<Applied, String> {
         self.flush_pending_reseed();
         let mut out = Applied::default();
         // Library references are resolved to inline cells first, so the log replays without it.
@@ -1031,13 +1061,13 @@ impl World {
             }
             Command::SetRngState { state } => self.rebuild(None, *state)?,
             Command::Reset => self.rebuild(None, self.base.rng_state)?,
-            Command::AddCa { ca } => out.new_id = Some(self.add_ca(ca.clone())?),
+            Command::AddCa { ca } => out.new_id = Some(self.add_ca_as(ca.clone(), palettes)?),
             Command::RemoveCa { id } => {
                 let i = self.ca_index(*id)?;
                 self.cas.remove(i);
                 self.gc_fields();
             }
-            Command::UpdateCa { id, change } => self.update_ca(*id, change)?,
+            Command::UpdateCa { id, change } => self.update_ca(*id, change, palettes)?,
             Command::Seed { id, seed } => {
                 let i = self.ca_index(*id)?;
                 self.apply_seed(i, seed)?;
@@ -1189,10 +1219,12 @@ impl World {
         w.tables = self.tables.clone();
         w.palettes = self.palettes.clone();
         w.base.palettes = self.palettes.clone();
+        w.warnings = self.warnings.clone();
         let script = self.script.clone();
         for s in specs {
-            // CAs that cannot run on the new tiling are dropped with an error.
-            w.add_ca(s)?;
+            // CAs that cannot run on the new tiling are dropped with an error. Their palettes
+            // were taken already (an unknown one from a scene stays as it was).
+            w.add_ca_as(s, Palettes::Keep)?;
         }
         w.base.cas = w.cas.iter().map(|c| c.spec()).collect();
         if script.is_some() {
@@ -1413,6 +1445,21 @@ impl World {
             .or_else(|| Palette::from_hex(name))
             .unwrap_or_else(|| Palette::builtin("Ember").unwrap())
     }
+    /// A palette name a CA is given: refused if unknown ([`Palettes::Check`]), or kept and
+    /// noted in the warnings ([`Palettes::Keep`]).
+    fn take_palette(&mut self, name: &str, palettes: Palettes) -> Result<(), String> {
+        match (self.check_palette(name), palettes) {
+            (Ok(()), _) => Ok(()),
+            (Err(e), Palettes::Check) => Err(e),
+            (Err(_), Palettes::Keep) => {
+                let w = format!("palette '{name}' is unknown here; drawn in Ember");
+                if !self.warnings.contains(&w) {
+                    self.warnings.push(w);
+                }
+                Ok(())
+            }
+        }
+    }
     /// All palette names: built-ins then user palettes.
     pub fn palette_names(&self) -> Vec<String> {
         let mut v: Vec<String> = crate::render::palette_names().map(String::from).collect();
@@ -1425,8 +1472,11 @@ impl World {
     }
     /// Whether [`palette`](Self::palette) knows `name` (one of the world's own palettes, a
     /// built-in, or hex colours like `#4fc3ff` or `#103050-#4fc3ff`) rather than falling back.
-    /// Adding or changing a CA checks its palettes with this, so a scene, script, or command
-    /// that names an unknown palette is refused with the names it could use.
+    /// Adding or changing a CA checks its palettes with this, so a command, script, or option
+    /// that names an unknown palette is refused with the names it could use. A scene being
+    /// loaded keeps such a name instead ([`from_scene`](Self::from_scene), [`warnings`]).
+    ///
+    /// [`warnings`]: Self::warnings
     pub fn check_palette(&self, name: &str) -> Result<(), String> {
         let known = self.palettes.iter().any(|p| p.name == name)
             || Palette::builtin(name).is_some()
@@ -1458,12 +1508,17 @@ impl World {
         }
     }
 
+    /// Add a CA. A palette it names must be known ([`check_palette`](Self::check_palette)).
     pub fn add_ca(&mut self, spec: CaSpec) -> Result<u32, String> {
+        self.add_ca_as(spec, Palettes::Check)
+    }
+
+    fn add_ca_as(&mut self, spec: CaSpec, palettes: Palettes) -> Result<u32, String> {
         let (rule, nb_from_text) = Rule::parse(&spec.rule)?;
         self.check_rule(&rule)?;
         // A misspelt palette is refused rather than quietly drawn in the default.
         for p in [&spec.palette, &spec.palette_neg].into_iter().flatten() {
-            self.check_palette(p)?;
+            self.take_palette(p, palettes)?;
         }
         let kind = self.kind_of(&rule);
         let affects = if kind == FieldKind::Height {
@@ -1538,11 +1593,11 @@ impl World {
         Ok(id)
     }
 
-    fn update_ca(&mut self, id: u32, ch: &CaChange) -> Result<(), String> {
+    fn update_ca(&mut self, id: u32, ch: &CaChange, palettes: Palettes) -> Result<(), String> {
         let i = self.ca_index(id)?;
         // Checked before anything changes, so a refused change leaves the CA as it was.
         for p in [&ch.palette, &ch.palette_neg].into_iter().flatten() {
-            self.check_palette(p)?;
+            self.take_palette(p, palettes)?;
         }
         if let Some(r) = &ch.rule {
             let (rule, nb) = Rule::parse(r)?;

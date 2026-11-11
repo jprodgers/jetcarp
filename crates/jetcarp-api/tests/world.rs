@@ -240,6 +240,74 @@ fn new_world_checks_tiling_size_and_cas() {
     .unwrap();
 }
 
+/// A scene file naming a palette this JETCARP does not know opens (and runs, and verifies) with a
+/// warning, keeping the name; a palette typed in an operation's arguments is refused.
+#[test]
+fn unknown_palettes_warn_in_scenes_and_are_refused_when_typed() {
+    use jetcarp_api::op::Op;
+    use jetcarp_api::ops::scene::{RunIn, SceneRun, SceneSource, SceneVerify};
+    let dir = scratch("unknown-palette");
+    let cx = Ctx::interactive();
+    let mut h = Session::new();
+    let e = fails(
+        WorldNew::run(
+            &cx,
+            &mut h,
+            serde_json::from_value(json!({"tiling": "square", "width": 10, "height": 10,
+                "cas": [{"rule": "Life", "palette": "Dusk"}]}))
+            .unwrap(),
+            &Quiet,
+        ),
+        ErrorKind::Invalid,
+    );
+    assert!(e.message.contains("no palette named 'Dusk'"), "{e}");
+    // The same CA in a scene file.
+    let mut sc = jetcarp_core::Scene::new(TilingSpec::rect("square", 12, 12, Boundary::Wrap));
+    let mut ca = CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 });
+    ca.palette = Some("Dusk".into());
+    sc.cas = vec![ca];
+    let w = World::from_scene(&sc).unwrap();
+    sc.record = Some(w.record());
+    let file = dir.join("dusk.json");
+    std::fs::write(&file, sc.to_json()).unwrap();
+    let warning = "palette 'Dusk' is unknown here; drawn in Ember";
+    let open = WorldOpen::run(
+        &cx,
+        &mut h,
+        OpenIn {
+            path: Some(file.display().to_string()),
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(open.warnings, [warning]);
+    assert!(open.text().contains(&format!("Warning: {warning}.")));
+    assert_eq!(open.status.cas[0].palette, "Dusk");
+    let cli = Ctx::new();
+    let run: RunIn = serde_json::from_value(json!({"scene": file, "gens": 2})).unwrap();
+    let r = SceneRun::run(&cli, run, &Quiet).unwrap();
+    assert!(
+        r.text().contains(&format!("warning:    {warning}\n")),
+        "{}",
+        r.text()
+    );
+    assert_eq!(to_value(&r)["warnings"][0], warning);
+    let v = SceneVerify::run(
+        &cli,
+        SceneSource {
+            path: Some(file.display().to_string()),
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(
+        v.text(),
+        format!("ok: generation 0 hash {}\nwarning: {warning}\n", v.hash)
+    );
+}
+
 /// What `world_status` says of each CA: Larger than Life's own neighbourhood, and a B/S rule's
 /// hexagonal name on the hexagon grid's neighbour graph (and only there).
 #[test]
