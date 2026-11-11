@@ -175,6 +175,8 @@ pub fn all() -> &'static [TableDef] {
                     n("rule", Ty::Str),
                     n("site", site()),
                     n("gun", Ty::Str),
+                    c("family", Ty::Str),
+                    c("semantics", Ty::Str),
                     c("class_group", Ty::Str),
                     c("tiling_group", Ty::Str),
                 ],
@@ -257,6 +259,7 @@ pub fn all() -> &'static [TableDef] {
                     c("value", Ty::Str),
                     n("score_model", Ty::Str),
                     c("date", Ty::Str),
+                    c("rev", Ty::I64),
                 ],
                 sort: &["target", "publisher", "field", "date"],
                 partition: &[],
@@ -306,8 +309,8 @@ pub fn all() -> &'static [TableDef] {
                     c("rule_family", Ty::Str),
                     c("semantics", Ty::Str),
                     n("behaviour", Ty::Str),
-                    n("pin_key", Ty::Str),
-                    n("pin", Ty::Str),
+                    c("pin_key", Ty::Str),
+                    c("pin", Ty::Str),
                     c("tiling_group", Ty::Str),
                 ],
                 sort: &["id"],
@@ -577,6 +580,8 @@ pub struct PatternRow {
     pub rule: Option<String>,
     pub site: Option<SiteRow>,
     pub gun: Option<String>,
+    pub family: String,
+    pub semantics: String,
     pub class_group: String,
     pub tiling_group: String,
 }
@@ -639,6 +644,7 @@ pub struct AnnotationRow {
     pub value: String,
     pub score_model: Option<String>,
     pub date: String,
+    pub rev: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -678,8 +684,8 @@ pub struct QuickstartPackRow {
     pub rule_family: String,
     pub semantics: String,
     pub behaviour: Option<String>,
-    pub pin_key: Option<String>,
-    pub pin: Option<String>,
+    pub pin_key: String,
+    pub pin: String,
     pub tiling_group: String,
 }
 

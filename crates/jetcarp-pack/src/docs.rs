@@ -50,6 +50,9 @@ pub struct Engine {
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Retract {
     pub target: String,
+    /// Whose assertions it withdraws: the publisher id of the version that first listed it.
+    #[serde(default)]
+    pub publisher: String,
     #[serde(default)]
     pub reason: String,
     #[serde(default)]
@@ -223,24 +226,38 @@ pub struct KeyStatement {
     /// The OpenSSH public key (`ssh-ed25519 AAAA...`).
     pub key: String,
     pub fingerprint: String,
-    #[serde(default)]
+    /// Who the publisher is, only if they chose to be named.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub orcid: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub github: String,
     #[serde(default)]
     pub created: String,
-    /// The fingerprint of the key this one replaces (then the statement is signed by that key).
-    #[serde(default)]
+    /// The fingerprint of the key this one succeeds (then the statement is signed by that key).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub supersedes: String,
     #[serde(default)]
     pub revoked: bool,
-    /// Further keys authorised to sign for this publisher (one per machine).
-    #[serde(default)]
-    pub keys: Vec<String>,
+    /// Further keys authorised to sign manifests and refs for this publisher (one per machine).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authorised: Vec<AuthorisedKey>,
     #[serde(default)]
     pub signature: String,
+}
+
+/// A machine key a publisher's statement authorises.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AuthorisedKey {
+    /// The OpenSSH public key.
+    pub key: String,
+    pub fingerprint: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    /// Retired: it signs nothing (its entry stays, so the list only grows).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub revoked: bool,
 }
 
 /// `major.minor` of a version string.

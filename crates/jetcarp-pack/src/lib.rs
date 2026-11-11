@@ -21,6 +21,7 @@
 //! | [`read`] | a store or an export, checked: format, signatures, every hash |
 //! | [`import`] | a checked version into a library |
 //! | [`export`] | one version laid out for people |
+//! | [`rows`] | library records as pack rows, and back |
 //! | [`paths`] | keeping local paths out |
 //!
 //! Arrow and Parquet's Arrow API live only here, so builds that do not use packs (the macOS
@@ -36,6 +37,7 @@ pub mod parquet_io;
 pub mod paths;
 pub mod publish;
 pub mod read;
+pub mod rows;
 pub mod sign;
 pub mod store;
 pub mod tables;

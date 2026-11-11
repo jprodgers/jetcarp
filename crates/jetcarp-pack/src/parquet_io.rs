@@ -34,6 +34,8 @@ pub const CREATED_BY: &str = "jetcarp-pack 1";
 pub const MAX_RATIO: u64 = 64;
 /// Largest string cell.
 pub const MAX_STRING: usize = 1 << 20;
+/// Decoded data may be this much more than [`MAX_RATIO`] times a part's size.
+pub const MAX_DECODED_EXTRA: u64 = 64 << 20;
 /// Largest Parquet footer.
 pub const MAX_FOOTER: u64 = 16 << 20;
 
@@ -269,7 +271,9 @@ pub fn precheck(b: &[u8]) -> Result<(), String> {
         return Err("Parquet file with more than 1024 columns".into());
     }
     let budget = MAX_RATIO.saturating_mul(n as u64);
+    let value_budget = MAX_RATIO.saturating_mul(n as u64).saturating_add(1 << 20);
     let mut total: u64 = 0;
+    let mut values: u64 = 0;
     for rg in meta.row_groups() {
         for col in rg.columns() {
             let (start, len) = col.byte_range();
@@ -280,12 +284,18 @@ pub fn precheck(b: &[u8]) -> Result<(), String> {
             let mut pos = start;
             while pos < end {
                 let hdr = &b[pos as usize..end as usize];
-                let (un, co, hl) = crate::thrift::page_header(hdr)
+                let (un, co, nv, hl) = crate::thrift::page_header(hdr)
                     .map_err(|e| format!("Parquet page header: {e}"))?;
                 total = total.saturating_add(un as u64);
                 if total > budget {
                     return Err(format!(
                         "decompression bomb: pages decompress to more than {MAX_RATIO}× the part's {n} bytes"
+                    ));
+                }
+                values = values.saturating_add(nv as u64);
+                if values > value_budget {
+                    return Err(format!(
+                        "decoding bomb: pages hold more than {MAX_RATIO} values per byte of the part's {n} bytes"
                     ));
                 }
                 pos = pos
@@ -327,11 +337,21 @@ pub fn read_rows(
         let mask = parquet::arrow::ProjectionMask::roots(b.parquet_schema(), roots);
         let reader = b
             .with_projection(mask)
-            .with_batch_size(4096)
+            .with_batch_size(1024)
             .build()
             .map_err(pe)?;
+        let decoded_budget = MAX_RATIO
+            .saturating_mul(bytes.len() as u64)
+            .saturating_add(MAX_DECODED_EXTRA);
+        let mut decoded: u64 = 0;
         for batch in reader {
             let batch = batch.map_err(|e| format!("parquet: {e}"))?;
+            decoded = decoded.saturating_add(batch.get_array_memory_size() as u64);
+            if decoded > decoded_budget {
+                return Err(format!(
+                    "decoding bomb: the part decodes to more than {MAX_RATIO}× its size and 64 MiB"
+                ));
+            }
             check_strings(&batch)?;
             let rows = columns::rows(cols, &batch)?;
             count += rows.len() as u64;

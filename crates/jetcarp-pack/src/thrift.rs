@@ -151,11 +151,12 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// A page header's (uncompressed, compressed) sizes, and the header's own length.
-pub fn page_header(b: &[u8]) -> Result<(i64, i64, usize), String> {
+/// A page header's uncompressed and compressed sizes, its value count (data and dictionary
+/// pages; 0 for others), and the header's own length.
+pub fn page_header(b: &[u8]) -> Result<(i64, i64, i64, usize), String> {
     let mut r = Reader::new(b);
-    let (mut un, mut co) = (-1i64, -1i64);
-    r.fields(0, |id, ty, r, _| {
+    let (mut un, mut co, mut nv) = (-1i64, -1i64, 0i64);
+    r.fields(0, |id, ty, r, depth| {
         Ok(match (id, ty) {
             (2, I32) => {
                 un = r.i32()? as i64;
@@ -165,13 +166,25 @@ pub fn page_header(b: &[u8]) -> Result<(i64, i64, usize), String> {
                 co = r.i32()? as i64;
                 true
             }
+            // DataPageHeader, DictionaryPageHeader, DataPageHeaderV2: field 1 is num_values.
+            (5, STRUCT) | (7, STRUCT) | (8, STRUCT) => {
+                r.fields(depth + 1, |id, ty, r, _| {
+                    Ok(if (id, ty) == (1, I32) {
+                        nv = r.i32()? as i64;
+                        true
+                    } else {
+                        false
+                    })
+                })?;
+                true
+            }
             _ => false,
         })
     })?;
-    if un < 0 || co < 0 {
+    if un < 0 || co < 0 || nv < 0 {
         return Err("parquet page header without its sizes".into());
     }
-    Ok((un, co, r.pos))
+    Ok((un, co, nv, r.pos))
 }
 
 /// Check that a Thrift struct (a Parquet footer) is well formed and nested at most
@@ -191,7 +204,7 @@ mod tests {
         // Field headers: delta 1 type i32 (0x15), zigzag 0; delta 1 i32 (0x15), zigzag(100)=200;
         // delta 1 i32, zigzag(40)=80; delta 2 struct (0x2c), stop; stop.
         let b = [0x15, 0x00, 0x15, 0xc8, 0x01, 0x15, 0x50, 0x2c, 0x00, 0x00];
-        assert_eq!(page_header(&b).unwrap(), (100, 40, 10));
+        assert_eq!(page_header(&b).unwrap(), (100, 40, 0, 10));
         assert!(page_header(&b[..5]).is_err());
         // Structs nested 40 deep are refused.
         let mut deep = vec![0x1c; 40];

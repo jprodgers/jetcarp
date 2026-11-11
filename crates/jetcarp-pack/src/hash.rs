@@ -12,7 +12,8 @@ pub fn hex(bytes: &[u8]) -> String {
     to_hex(&Sha256::digest(bytes))
 }
 
-fn to_hex(d: &[u8]) -> String {
+/// Lower-case hex digits of some bytes.
+pub fn to_hex(d: &[u8]) -> String {
     const H: &[u8; 16] = b"0123456789abcdef";
     let mut s = String::with_capacity(d.len() * 2);
     for b in d {

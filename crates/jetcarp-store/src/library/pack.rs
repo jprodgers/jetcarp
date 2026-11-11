@@ -15,6 +15,7 @@
 //! | --- | --- |
 //! | `pack_imports` | import of a pack version: its manifest hash, feed, publisher, how its signature checked, when, and a report (JSON: counts, and the sample verified) |
 //! | `pack_retractions` | record a publisher retracted: target, publisher, reason, date, the manifest that said so |
+//! | `pack_revoked` | publisher key a pack's key statements revoked: kept for good, so a store serving an older statement cannot undo it |
 
 use super::*;
 use jetcarp_core::pattern::verify::Verification;
@@ -157,6 +158,10 @@ CREATE TABLE IF NOT EXISTS pack_retractions (
     date TEXT NOT NULL,
     manifest TEXT NOT NULL,
     PRIMARY KEY (target_kind, target_id, publisher)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS pack_revoked (
+    fingerprint TEXT PRIMARY KEY,
+    seen TEXT NOT NULL
 ) WITHOUT ROWID;
 ";
 
@@ -855,6 +860,41 @@ impl Library {
             .map_err(e)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(e)
+        })
+    }
+
+    /// Keep keys as revoked for good.
+    pub fn record_revoked(&self, fingerprints: &[String]) -> Result<(), String> {
+        if fingerprints.is_empty() {
+            return Ok(());
+        }
+        let now = now_utc();
+        self.write(|tx| {
+            tx.execute_batch(PACK_TABLES).map_err(e)?;
+            for fp in fingerprints {
+                tx.execute(
+                    "INSERT OR IGNORE INTO pack_revoked (fingerprint, seen) VALUES (?1, ?2)",
+                    params![fp, now],
+                )
+                .map_err(e)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// The keys packs have revoked.
+    pub fn revoked_keys(&self) -> Result<HashSet<String>, String> {
+        self.read(HashSet::new(), |c| {
+            if !has_table(c, "pack_revoked")? {
+                return Ok(HashSet::new());
+            }
+            let mut st = c
+                .prepare("SELECT fingerprint FROM pack_revoked")
+                .map_err(e)?;
+            st.query_map([], |r| r.get::<_, String>(0))
+                .map_err(e)?
+                .collect::<Result<HashSet<_>, _>>()
+                .map_err(e)
         })
     }
 

@@ -139,16 +139,18 @@ pub fn verify_by(pem: &str, namespace: &str, msg: &[u8], openssh: &str) -> Resul
     Ok(())
 }
 
-/// A fingerprint made file-name safe: `:` and `/` become `_`, `+` becomes `-`.
+/// A key's name in file names (`sigs/.../<signer>.sig`, `keys/<signer>.json`): the 64
+/// lower-case hex digits of its SHA-256 digest, the digest its `SHA256:<base64>` fingerprint
+/// writes in base64. No colon (Windows forbids it in names), and no case-only differences (two
+/// base64 names may differ only in case, which case-insensitive file systems would merge).
+/// An unreadable fingerprint gives a name no file has.
 pub fn signer_name(fingerprint: &str) -> String {
-    fingerprint
-        .chars()
-        .map(|c| match c {
-            ':' | '/' => '_',
-            '+' => '-',
-            c => c,
-        })
-        .collect()
+    use std::str::FromStr;
+    ssh_key::Fingerprint::from_str(fingerprint)
+        .ok()
+        .and_then(|f| f.sha256())
+        .map(|d| crate::hash::to_hex(&d))
+        .unwrap_or_else(|| "not-a-fingerprint".into())
 }
 
 /// Is this a fingerprint as `ssh-keygen -l` prints a SHA-256 one?
@@ -240,10 +242,8 @@ mod tests {
         // The private key round-trips through OpenSSH format.
         let again = Signer::from_openssh(&a.private_openssh().unwrap()).unwrap();
         assert_eq!(again.fingerprint(), a.fingerprint());
-        assert_eq!(
-            signer_name("SHA256:ab+c/d"),
-            "SHA256_ab-c_d",
-            "file-name safe"
-        );
+        let name = signer_name(a.fingerprint());
+        assert!(crate::hash::is_hex64(&name), "{name}");
+        assert_eq!(signer_name("SHA256:ab+c/d"), "not-a-fingerprint");
     }
 }
