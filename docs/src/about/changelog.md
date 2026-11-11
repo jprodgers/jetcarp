@@ -59,6 +59,14 @@ and reworked for release in a new repository with a fresh history.
   `--resume`, and `jetcarp jobs report` writes a Markdown summary of what a job searched and found.
 - Dynamics pins: every built-in Quick Start entry must reach a recorded state hash (see
   [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)).
+- Rule-semantics versions: every rule family's meaning has a version (all 1), pinned by one scene per
+  family; every library pattern carries its family's version, and one verified under another version
+  is flagged for re-verification, as after a geometry change (see
+  [Library format](../reference/library-format.md#rule-semantics-versions)).
+- One spelling for a pattern id's tiling line: its values are RFC 8785 canonical JSON, so another
+  program can write the same line and check an id (see
+  [Library format](../reference/library-format.md#the-identity-text-of-a-pattern)). No id of a tiling
+  at its default shape changed.
 - Continuous integration that builds and tests on Linux, Windows and macOS, and builds for macOS on
   Intel and Linux on ARM.
 - Licences: JETCARP's own code and data under the Unlicense or the MIT licence, notices for the work

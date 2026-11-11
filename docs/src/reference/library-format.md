@@ -2,8 +2,9 @@
 
 The pattern library is one SQLite file, `library.sqlite` in the data folder (or wherever
 `JETCARP_LIBRARY` points; see [Folders and environment variables](folders.md)). This page describes
-what a record's id is made of, the geometry pins that tie records to the tiles they ran on, what
-happens when those tiles change, and the tables of the file. Packs will carry the same ids, so the id
+what a record's id is made of, the geometry pins that tie records to the tiles they ran on, the
+rule-semantics versions that tie them to what their rules meant, what happens when either changes,
+and the tables of the file. Packs will carry the same ids, so the id
 scheme below does not change: a change would be a new version line in the identity text.
 
 ## Content ids
@@ -207,6 +208,67 @@ replayed to it. `--all` checks every record, not only the flagged ones.
   becomes an alias (`geometry-change`), so links to it keep working.
 - A record that **fails** stays flagged and is reported, with why. Only `--drop` deletes such records.
 
+## Rule-semantics versions
+
+Geometry pins catch changed tiles; rule-semantics versions catch a changed rule: a parser fix, or a
+change in how a family counts neighbours or states, steps, or draws its randomness, anything that
+makes the same rule, start and seed reach another state on the same tiles. The engine gives every rule
+family a version, a positive integer written as a string, in one table
+(`RULE_SEMANTICS` in `crates/jetcarp-core/src/semantics.rs`). Every family is at `"1"` in JETCARP
+0.4.0. A family's version goes up by one when the meaning of any rule in it changes; a change that
+keeps every rule's meaning, such as a faster step or a new way of writing an old rule, keeps it. The
+version is not part of a record's id.
+
+| Family | Rules | Version |
+| --- | --- | --- |
+| `lifelike` | B/S: `B3/S23`, `B3/S23V` | 1 |
+| `generations` | `B2/S/C3` | 1 |
+| `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 1 |
+| `elementary` | `W30` | 1 |
+| `hexw` | two-parent hexagon rows: `HexW 6`, `HexW3 1234` | 1 |
+| `hext` | three-parent hexagon rows: `HexT 30`, `HexT3 sum 777` | 1 |
+| `layered` | `Layer 2/01` | 1 |
+| `jaca` | `JACA +B3/S23 -B36/S23 blast 2` | 1 |
+| `ant` | turn strings: `Ant RL`, `Turmite LLRR` | 1 |
+| `turmite` | state tables: `Turmite 1R1,1L0/1R1,0N0` | 1 |
+| `wireworld` | `WireWorld` | 1 |
+| `cyclic` | `Cyclic 14/1` | 1 |
+| `greenberg_hastings` | `GH 8/1` | 1 |
+| `rps` | rock-paper-scissors: `RPS 3/3` | 1 |
+| `forest_fire` | `ForestFire 0.01/0.0001` | 1 |
+| `hodgepodge` | `Hodgepodge 100/2/3/28` | 1 |
+| `margolus` | `Margolus BBM` | 1 |
+| `lenia` | `Lenia R=13,T=10,b=1,m=0.15,s=0.015` | 1 |
+| `sandpile` | `Sandpile` | 1 |
+| `jvn29` | von Neumann's 29 states: `JvN29` | 1 |
+| `priority` | priority tables: `Priority 4: …` | 1 |
+| `spectre_glider` | `SpectreGlider` | 1 |
+| `table` | rule tables by name: `Table parity` | 1 |
+
+There is one family for each kind of rule the engine runs ([Rule notation](rule-notation.md) lists
+their forms), with two splits: B/S rules and Generations are apart, though a pattern's identity calls
+both `lifelike`; and an ant is a turn string (one state, each colour repainted the next), a turmite a
+state table. The families that the identity's `model` line names have the same names; its `other` is
+split here into its families.
+
+- **Records.** Every pattern carries its rule's family (`family`) and the version of that family's
+  meaning it was verified under (`semantics`). A pattern written before versions existed has
+  version `1`.
+- **On opening.** A library flags (`needs_reverify`) every pattern whose version is not the running
+  engine's for its family, or whose family the engine does not have, exactly as it flags a changed
+  pin (see [When the geometry changes](#when-the-geometry-changes)). `jetcarp library reverify`
+  checks them again; a pattern that passes gets the engine's version (and keeps its id).
+- **Tests.** The test `crates/jetcarp-core/tests/semantics_pins.rs` runs one small fixed scene per
+  family and pins the state it reaches, with the version it was pinned at
+  (`tests/data/semantics_pins.txt`; see
+  [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)). A change in a
+  family's meaning fails it, with a message to raise that family's version in the table, and
+  writing the pins again (`JETCARP_PIN_WRITE=1`) refuses a family whose state changed while its
+  version did not.
+
+Packs will carry the engine's table as `rule_semantics`, so an importer can flag records made under
+another version in the same way.
+
 ## Provenance
 
 Every record has a history in the table `provenance`. Row 0 says how it came into the library:
@@ -272,14 +334,17 @@ up to 2 the first time it is opened: its ratings gain `verdict` and `source`, an
 named files in per-record folders, are dropped, since media are always made again from their records.
 A library made by a newer JETCARP is refused with a message to update. Catalogs from before schema 1
 (CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or migrated: JETCARP 0.4
-starts a fresh library (see [Records from CART](#records-from-cart)).
+starts a fresh library (see [Records from CART](#records-from-cart)). A library made before
+[rule-semantics versions](#rule-semantics-versions) (of either schema) gains them the first time it is
+opened: its patterns gain `family`, worked out from each one's rule, and `semantics`, version `1`. The
+schema number stays 2, since schema 2 gained them before the 0.4.0 release.
 
 | Table | One row per |
 | --- | --- |
 | `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
 | `engine_pins` | tiling in use: its pin key (its identity key), the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
 | `rules` | rule as run: notation, neighbourhood, steps per generation, family, birth and survival masks |
-| `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
+| `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, its rule's `family` and that family's `semantics` version, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
 | `pattern_rules` | rule a pattern was verified in, with the verification and engine version |
 | `sightings` | pattern seen by a job in a rule: copies, soups, first and last seen |
 | `unstored` | object a hunt counted but did not store as a record |

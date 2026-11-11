@@ -65,7 +65,7 @@ program. Each result on the [Findings](findings.md) page names its scene in the 
 
 ## Pinned geometry and dynamics
 
-Two tests pin JETCARP's behaviour to recorded values, so that a change to a tiling or a rule cannot
+Three tests pin JETCARP's behaviour to recorded values, so that a change to a tiling or a rule cannot
 happen without someone noticing.
 
 - **Geometry pins** (`crates/jetcarp-core/tests/geometry_pins.rs`, values in
@@ -78,6 +78,14 @@ happen without someone noticing.
   `tests/data/dynamics_pins.txt`): every one of the 364 built-in Quick Start entries, which between
   them cover every rule family on many tilings, shrunk to its 4,096-cell preview grid and run for 48
   generations, must reach its pinned state hash.
+- **Rule-semantics pins** (`crates/jetcarp-core/tests/semantics_pins.rs`, values in
+  `tests/data/semantics_pins.txt`): one small fixed scene for each of the 23 rule families of the
+  engine's [rule-semantics versions](../reference/library-format.md#rule-semantics-versions), started
+  from cells the test chooses itself (for ants, the sandpile, Lenia and the row rules, a start of the
+  engine's), must reach its pinned state after 12 to 600 generations. Each
+  row also records the family's version. A change in what a family's rules do fails the test, and the
+  test refuses to pin the new state until the family's version has been raised; a library then flags
+  the records verified under the old version for checking again, as it does after a geometry change.
 
 The pins are rewritten (with `JETCARP_PIN_WRITE=1`) only after a deliberate change, and the change is
 recorded. One was made before this release: the Penrose rhomb construction was rewritten, which

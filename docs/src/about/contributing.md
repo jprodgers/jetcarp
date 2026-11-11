@@ -36,16 +36,20 @@ silicon), and builds it for macOS on Intel and Linux on ARM.
 
 ## The determinism pins
 
-Two tests pin JETCARP's behaviour: `crates/jetcarp-core/tests/geometry_pins.rs` (the cell polygons and
-neighbour lists of every tiling) and `crates/jetcarp-core/tests/dynamics_pins.rs` (the state of every
-built-in Quick Start entry after 48 generations). See
+Three tests pin JETCARP's behaviour: `crates/jetcarp-core/tests/geometry_pins.rs` (the cell polygons
+and neighbour lists of every tiling), `crates/jetcarp-core/tests/dynamics_pins.rs` (the state of every
+built-in Quick Start entry after 48 generations) and `crates/jetcarp-core/tests/semantics_pins.rs`
+(one fixed scene per rule family). See
 [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics).
 
 If your change makes a pin fail, either the change is a mistake, or it deliberately changes what a
-tiling or rule does. Only in the second case, rewrite the pins with
+tiling or rule does. Only in the second case, rewrite the pins. If a rule family's meaning changed,
+first raise that family's version in `RULE_SEMANTICS` (`crates/jetcarp-core/src/semantics.rs`; see
+[Rule-semantics versions](../reference/library-format.md#rule-semantics-versions)): the semantics
+pins refuse to be rewritten for a family whose state changed while its version did not. Then
 
 ```bash
-JETCARP_PIN_WRITE=1 cargo test --release -p jetcarp-core --test geometry_pins --test dynamics_pins
+JETCARP_PIN_WRITE=1 cargo test --release -p jetcarp-core --test geometry_pins --test dynamics_pins --test semantics_pins
 ```
 
 and say in the commit message which pins changed and why, so the change can be listed in the

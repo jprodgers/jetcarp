@@ -289,6 +289,11 @@ Start entries, each with the conditions that end it. See [Rotations](../guides/r
 **Rule range.** Every Life-like or Generations rule in which a pattern runs through exactly the same
 phases, stored with each catalogued pattern. See [Search methods](../research/search-methods.md#how-finds-are-verified).
 
+**Rule-semantics version.** The version of what a rule family's rules mean, raised whenever that
+meaning changes; every family is at 1 in JETCARP 0.4.0. Every pattern stores its family's version,
+and a pattern verified under another version is flagged for re-verification. See
+[Library format](library-format.md#rule-semantics-versions).
+
 **Rule table.** A rule written as a list of explicit transitions. See [Rule tables](../automata/rule-tables.md).
 
 **Run segment.** One of an exploratory search's Parquet files of run records
