@@ -1,7 +1,7 @@
 //! The *Sandpile…* window: build a large sandpile (`jetcarp_core::pile`) as a catalog job, see
 //! the pile drawn live, the doubling step (k of log2 N), and the time left; stop it and resume
-//! it; the result is written to `<Pictures>/JETCARP/piles/<time>_<tiling>-<N>/` like
-//! `jetcarp pile`.
+//! it; the result is written to `piles/<time>_<tiling>-<N>/` in the output folder
+//! (`$JETCARP_OUT`, else `<Pictures>/JETCARP`), like `jetcarp pile`, and the window names it.
 //!
 //! **The job.** *Start* calls the operation `search.start` (strategy `pile`, in the background),
 //! *Stop* calls `jobs.stop`, and *Resume* calls `jobs.resume` (`crate::window_job`), so the pile
@@ -30,6 +30,12 @@ use jetcarp_core::render::Image;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Instant;
+
+/// Where piles are written: `piles` in the output folder the job's context uses
+/// (`crate::window_job::ctx`: `$JETCARP_OUT`, else `<Pictures>/JETCARP`).
+fn piles_folder() -> PathBuf {
+    jetcarp_api::out::out_root(None).join("piles")
+}
 
 /// This window's key in `crate::popout` and the settings file.
 pub const KEY: &str = "sandpile";
@@ -397,12 +403,13 @@ impl PileWindow {
             &mut open,
             |ui| {
                 ui.label(
-                    RichText::new(
+                    RichText::new(format!(
                         "N grains on one spot of an unbounded grid, settled by doubling (N's binary \
                          digits). Writes pile.png, preview.png, pile.json, and a resumable file per \
-                         step to <Pictures>/JETCARP/piles/. The pile runs as a job: the dashboard \
-                         lists it, and a stopped pile resumes from its last finished step.",
-                    )
+                         step to {}. The pile runs as a job: the dashboard lists it, and a stopped \
+                         pile resumes from its last finished step.",
+                        piles_folder().display()
+                    ))
                     .small()
                     .weak(),
                 );
