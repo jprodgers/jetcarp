@@ -248,8 +248,10 @@ Each niche keeps up to three runs, at most one per rule. New candidates are most
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
 supports in large batches while a CPU loop runs the rest. Like the other searches it runs as a job,
-but it keeps every run in an SQLite database of its own, `searches/<uuid>/search.sqlite` beside the
-catalogue, together with its archive, the runs it has confirmed, how often it has tried each tiling,
+but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
+runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
+[Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the
+newest runs, the archive, the runs the search has confirmed, how often it has tried each tiling,
 family and kind of starting pattern, and every candidate it has tried. A stopped search loads that
 saved state and carries on, without reading its millions of runs again.
 
@@ -274,7 +276,8 @@ rather than resuming exactly, unlike the other jobs (see
 [Reproducibility](reproducibility.md#what-is-not-guaranteed-yet)). `jetcarp jobs runs`,
 `jetcarp jobs sheet` and `jetcarp jobs clips` list runs and render contact sheets and animated clips
 for reviewing results by eye, and `jetcarp jobs review` records a verdict on a run, or a folder of
-ratings of the clips, for the next fit of the score.
+ratings of the clips, for the next fit of the score. Verdicts are kept with the library's ratings,
+not in the search's folder, so they outlive it.
 
 **Command.** `jetcarp search explore --hours 8 --gpu`. A database from CART, JETCARP's predecessor,
 is brought in with `jetcarp search explore --import search.sqlite --import-only`.

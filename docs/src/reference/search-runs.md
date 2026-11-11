@@ -53,7 +53,7 @@ another process.
 | `engine_version` | the JETCARP version that last wrote the manifest |
 | `run_schema`, `score_schema` | `jetcarp-explore-runs 1` and `jetcarp-explore-scores 1`: the column layouts below |
 | `created`, `updated` | UTC times |
-| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...) |
+| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...). An imported database is named by its file name only, so a shared folder never shows where it came from on the publisher's disk |
 | `segments` | one per segment, in id order: `file` (relative to the folder), `sha256` and `bytes` of the file, `rows`, `first_id` and `last_id`, `sealed` (UTC) and `engine_version` |
 | `scores` | one per rescore that changed a score: `version` (1, 2, ...), `created`, `engine_version`, and `files`, one per segment it rescored: `segment`, `file`, `sha256`, `bytes`, `rows` |
 

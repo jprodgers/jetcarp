@@ -406,6 +406,40 @@ fn uuid_of(dir: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// The spec as the manifest keeps it. A manifest travels with a shared search folder, so it never
+/// names the publisher's folders: the import file is kept by its file name only (cut at `/` or
+/// `\`, whichever system wrote it). Nothing reads the spec back from the manifest; the job's own
+/// spec, with the full path, stays in the library.
+pub fn shareable_spec(spec: &Value) -> Value {
+    let mut v = spec.clone();
+    if let Some(Value::String(p)) = v.get_mut("import") {
+        *p = p.rsplit(['/', '\\']).next().unwrap_or_default().to_string();
+    }
+    v
+}
+
+#[cfg(test)]
+mod shareable_tests {
+    use super::shareable_spec;
+    use serde_json::json;
+
+    #[test]
+    fn a_manifest_names_the_import_file_but_not_its_folder() {
+        for (path, name) in [
+            ("/home/someone/data/full-15m.sqlite", "full-15m.sqlite"),
+            (r"C:\Users\someone\cart\search.sqlite", "search.sqlite"),
+            ("search.sqlite", "search.sqlite"),
+        ] {
+            let s = json!({"import": path, "seed": 0, "rule": "/2/3"});
+            assert_eq!(
+                shareable_spec(&s),
+                json!({"import": name, "seed": 0, "rule": "/2/3"})
+            );
+        }
+        assert_eq!(shareable_spec(&json!({"seed": 1})), json!({"seed": 1}));
+    }
+}
+
 fn is_tmp(p: &Path) -> bool {
     p.extension().is_some_and(|x| x == "tmp")
 }
@@ -482,10 +516,11 @@ impl Runs {
         uuid_of(&self.dir)
     }
 
-    /// Record the job's spec in the manifest (written when it changed).
+    /// Record the job's spec in the manifest (written when it changed), as [`shareable_spec`].
     pub fn set_spec(&mut self, spec: &Value) -> Result<(), String> {
-        if &self.manifest.spec != spec {
-            self.manifest.spec = spec.clone();
+        let spec = shareable_spec(spec);
+        if self.manifest.spec != spec {
+            self.manifest.spec = spec;
             self.manifest.write(&self.dir)?;
         }
         Ok(())
