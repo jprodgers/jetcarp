@@ -35,8 +35,8 @@ If JETCARP helps your research, please cite it. GitHub's *Cite this repository* 
 ## How JETCARP was made
 
 Jimmie Rodgers designed JETCARP, chose its research directions, and tested it on Linux, Windows
-and macOS. Its code was written with [Claude Code](https://claude.com/claude-code), Anthropic's AI
-coding tool. Every simulation result JETCARP reports is checked by its own test suite or by exact
+and macOS. All of its code was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI
+coding tool; the [documentation](docs/src/about/how-made.md) describes who did what. Every simulation result JETCARP reports is checked by its own test suite or by exact
 verification (for example, exact recurrence for spaceships), but please treat it as you would any
 research software: check the results that matter to you.
 

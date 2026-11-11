@@ -1,8 +1,3 @@
-<!-- DRAFT: Jimmie to review -->
-<!-- Points to check before this page is final: (1) "most of the code" in the second section;
-     (2) whether the clean-room rewrites were done by separate Claude sessions, as written here;
-     (3) anything about CART's history before November 2026 you want to add or correct. -->
-
 # How JETCARP was made
 
 This page says plainly how JETCARP was built, who did what, how its claims were checked, and where
@@ -10,10 +5,11 @@ mistakes were made and caught. It is meant to help you judge how far to trust it
 
 ## From CART to JETCARP
 
-JETCARP grew out of an earlier private project of Jimmie Rodgers's called CART, which began as a
-JavaScript prototype, a tiling editor, and grew into a Rust program with an app, a command line,
-scripting, an MCP server and its searches. In November 2026 CART was copied into a new repository
-with a fresh history, renamed JETCARP, and reworked for public release: standard folders, licences
+JETCARP grew out of CART, a short-lived prototype of Jimmie Rodgers's. CART lasted about a week, in
+early November 2026, and in that time grew into a Rust program with an app, a command line,
+scripting, an MCP server and its searches. Jimmie then decided it was worth serious development
+time. CART was copied into a new repository with a fresh history, renamed JETCARP, and reworked for
+public release: standard folders, licences
 and notices, one program instead of several, a shared layer of operations for every front end, and
 one way of running searches. CART itself is kept private and unchanged. Most of the finds reported in
 this book were made with CART, and every one was run again on JETCARP 0.4.0 before being reported (see
@@ -27,16 +23,21 @@ others are the GPU stepper, the operations shared by the front ends, the app, th
 and screensavers, the Rhai scripting, the MCP server, and the `jetcarp` program that ties them
 together.
 
-It was built with heavy use of Claude Code, Anthropic's AI coding assistant. The division of work
+All of its code was written by Claude Code, Anthropic's AI coding assistant. The division of work
 was this:
 
-- **Jimmie** directed the design and the research: what JETCARP should be, which rules and tilings it
-  should have, what to search for and how to judge it, which questions were worth asking and which
-  claims could be made. JACA and the layered rules are Jimmie's ideas. Jimmie also tested the program
-  on Linux, Windows and macOS, and decided what is claimed in this book.
-- **Claude**, working in Claude Code, wrote most of the code, the tests and the first drafts of this
-  book, and ran many of the searches, audits and checks described below as separate agents, each with
-  a written brief.
+- **Jimmie** was the designer and the tester. Jimmie decided what JETCARP should be and what it should
+  do, which rules and tilings it should have, what to search for and how to judge the results, which
+  questions were worth asking and which claims could be made. Many of the ideas are Jimmie's own,
+  among them JACA and the layered rules. Jimmie asked for the features in the app rather than designing
+  its interface, tested the program on Linux, Windows and macOS (by hand, alongside automated tests and
+  Claude sessions running test plans on each machine), and decided what is claimed in this book.
+- **Claude**, working in Claude Code, wrote all of the code and the tests, designed the app's interface
+  to Jimmie's requests, wrote the first drafts of this book, and ran many of the searches, audits and
+  checks described below as separate agents, each with a written brief.
+
+Jimmie does not take credit for the code: the ideas and the direction are Jimmie's, the execution
+was done by agentic coding.
 
 Claude is acknowledged in the [credits](credits.md), not listed as an author. Every result in this
 book was produced and checked by the program and its tests, not by the assistant's say-so, but an AI
@@ -88,13 +89,18 @@ fixed before release:
   published without a licence. Jimmie asked Kaplan, who made it available under BSD 3-Clause the same
   day (see [Licence](licence.md#third-party-work)).
 - **The Penrose rhomb (P3) construction** followed Jeff Preshing's `penrose.py`, which has no licence.
-  It was replaced by a clean-room rewrite: a separate session, given only the mathematics (golden
-  triangles, Grünbaum and Shephard, de Bruijn) and the interfaces it had to fit, wrote it without
-  seeing the old code or any other Penrose implementation, and checked it against de Bruijn's eight
-  vertex types and the tiling's symmetries. The tiles changed, so the P3 pins were rewritten.
+  It was replaced by a clean-room rewrite: a separate Claude session, which could not see JETCARP's
+  code, was given only the mathematics (golden triangles, Grünbaum and Shephard, de Bruijn) and the
+  interfaces it had to fit. It wrote the construction without seeing the old code or any other Penrose
+  implementation, and checked it against de Bruijn's eight vertex types and the tiling's symmetries.
+  The tiles changed, so the P3 pins were rewritten.
 - **The GNOME extension's window hiding** closely paraphrased the Hanabi extension, which is under the
-  GPL. It was replaced by a clean-room implementation written from GNOME Shell's and Mutter's own
-  sources and a functional description, without access to Hanabi.
+  GPL. It was replaced by a clean-room implementation, written by a separate Claude session from GNOME
+  Shell's and Mutter's own sources and a functional description, without access to Hanabi.
+
+  Both rewrites are independent implementations, but the clean room was not a strict one: the written
+  specifications they worked from were drafted by the Claude session that had seen the old code. They
+  describe what the code must do, not how the old code did it.
 - **Notices** for James Edmond's monotile-ca code, the full CC BY attribution of the k-uniform data,
   and the bundled fonts were added or completed.
 
@@ -116,6 +122,14 @@ claim was made:
   [Findings](../research/findings.md#the-hat-glider-is-edmonds-glider-b)).
 - **Compound ships.** Ten of the 72 candidate ships were two smaller ships flying side by side, eight
   of them pairs of H. S. Guttesen's kagome glider.
+- **Missed prior art.** The first prior-art audit missed EricG's 2013 forum threads on Life-like
+  rules on the Archimedean tilings, and a 2014 Code Golf answer with a Life spaceship on a 2-uniform
+  tiling. Until a second, targeted search of the forums found them, this book claimed ten Archimedean
+  ships and said that no Life-like ship on a k-uniform tiling was known. Four of the ten are now
+  flagged rather than claimed, and the statement was corrected (see
+  [What is new in JETCARP](../research/contributions.md#4-spaceships-on-non-square-tilings)). The same
+  search showed that CART had never run Life itself systematically on the k-uniform tilings, so
+  statements about which ships run in Life rested on what CART happened to search.
 - **Duplicates.** Two ships had each been catalogued twice, at positions with different neighbours
   around them; and importing an old record could give the same pattern several ids, one per phase. The
   duplicates were merged in the claims, and a fix to the ids is planned.

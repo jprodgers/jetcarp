@@ -46,8 +46,8 @@ and generously: he made it available under the same BSD licence as hatviz. Thank
 search that JETCARP reimplements on every tiling, with two small functions adapted from his
 monotile-ca code under its MIT licence. The hat glider that JETCARP's search found is his glider B.
 
-**Claude**, Anthropic's AI model: JETCARP's code was written with Claude Code, Anthropic's AI coding
-assistant, under Jimmie's direction. Claude is acknowledged here, not listed as an author; how the
+**Claude**, Anthropic's AI model: all of JETCARP's code was written by Claude Code, Anthropic's AI
+coding assistant, to Jimmie's design and direction. Claude is acknowledged here, not listed as an author; how the
 work was divided and checked is described in [How JETCARP was made](how-made.md).
 
 **LifeWiki's editors and the ConwayLife.com community** keep the lists of named rules and the credits
