@@ -1,4 +1,4 @@
-"""SSH signatures (the sshsig format of `ssh-keygen -Y sign`; pack spec section 7).
+"""SSH signatures (the sshsig format of `ssh-keygen -Y sign`; pack-format.md, "Signatures and keys").
 
 The signature's armour is parsed here, so a failure can say which key and namespace a signature
 claims; the cryptography is left to `ssh-keygen -Y verify`, with an allowed-signers file holding

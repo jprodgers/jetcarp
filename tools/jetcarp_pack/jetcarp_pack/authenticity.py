@@ -1,82 +1,79 @@
-"""Conformance level 2, authenticity (pack spec sections 6, 7, 14, 16; section 24 fix 1): signatures
-on manifests, refs and key statements, the chain of key statements (further machine keys,
-supersession, revocation), and refs' sequence numbers.
+"""Conformance level 2, authenticity (pack-format.md: "Refs", "Signatures and keys"): signatures on
+manifests, refs and key statements, the chain of key statements (machine keys, successors,
+revocations), and refs' sequence numbers.
 
-The spec leaves several things open here; the choices are marked "(choice)" and listed in
-SPEC_QUESTIONS.md. The main ones:
-- A first key statement is signed by its own key. A superseding statement is signed by the key it
-  supersedes. A revocation is signed by the revoked key or by a key that supersedes it.
-- Further machine keys are listed in the publisher's key statement as `authorised`:
-  [{"key": "ssh-ed25519 ...", "fingerprint": "SHA256:...", "label": "..."}].
-- A publisher is the first key of a supersession chain; feeds are keyed by it in the state file.
-- The revocation's date is its statement's `created`; a manifest whose `created`, or a ref whose
-  `updated`, is not before it is refused.
+The rules, as the spec gives them:
+- Signatures are sshsig, by Ed25519 keys only; a signature by another kind of key counts as none.
+- A manifest's detached signature is taken to be by the key inside it, and the file's `<signer>`
+  (the 64 hex digits of that key's SHA-256) must be that key's.
+- A first key statement is signed by its own key; a successor by the key it supersedes, whose own
+  statement must stand; a revocation by the revoked key or by a successor that key signed.
+- A revoked key signs nothing, whatever the dates say. A successor stands after its predecessor's
+  revocation only if it signed that revocation itself. A revocation, once seen, is kept for good (in
+  the reader's state file).
+- The publisher's id is the first key of its chain. Manifests and refs name the current key; refs
+  are signed by it or by a machine key its statement authorises (and has not revoked).
+- A follower keeps the last (seq, manifest) per (publisher id, feed): the same pair again is no
+  update; the same seq with another manifest, or a lower seq, is refused.
 """
 
+import base64
+import hashlib
 import json
 import os
-import re
 
 from . import identity as ident
 from . import jcs, safejson, sshsig
 from .integrity import manifests_to_check
 from .pack import check_store_marker, list_refs, sh, check_fingerprint
-from .store import StoreError, check_hash, fingerprint_of_signer, signer_name
+from .store import SIGNER_RE, StoreError, check_hash, fingerprint_of_signer, signer_name
 
 STATE_FORMAT = "jetcarp-pack-reader-state"
+ED25519 = "ssh-ed25519"
 
 
 class Key:
-    def __init__(self, fp, doc, raw, where):
-        self.fp, self.doc, self.raw, self.where = fp, doc, raw, where
+    def __init__(self, fp, doc, where):
+        self.fp, self.doc, self.where = fp, doc, where
         self.line = doc.get("key")
-        self.supersedes = doc.get("supersedes") or ""
+        self.supersedes = doc.get("supersedes")
         self.revoked = doc.get("revoked") is True
-        self.created = doc.get("created")
-        self.authorised = {}  # fingerprint -> key line, machine keys (section 24 fix 1; choice of field)
-        self.valid = False  # its statement's signature checked out
-        self.chain_ok = False  # its supersession is confirmed by the old key
+        self.authorised = {}  # fingerprint -> (key line, revoked)
+        self.verified = False  # its signature is by the key that must sign it
         self.signed_by = None
+        self.stands = False
 
 
 class KeyRing:
-    """Every key statement in keys/, checked."""
+    """Every key statement in keys/, checked, with revocations already known."""
 
-    def __init__(self, store, report):
+    def __init__(self, store, report, known_revoked=()):
         self.store, self.r = store, report
         self.keys = {}
-        self.successors = {}
-        timeout = store.limits.subprocess_seconds
+        self.revoked = set(known_revoked)
+        self.timeout = store.limits.subprocess_seconds
         try:
             names = store.list(("keys",))
         except StoreError as e:
             self.r.fail(2, e.code, "keys/", e.message)
             names = []
         for name in names:
-            where = f"keys/{name}"
-            self._load(name, where)
-        # A key's public line is authentic by its fingerprint (the file name), so each statement can
-        # be checked on its own: a first statement against its own key, a successor against the key
-        # it supersedes. Revocations come second, since a successor may sign one.
+            self._load(name, f"keys/{name}")
         for key in self.keys.values():
             if not key.revoked:
-                self._verify(key, timeout)
+                self._verify_statement(key)
         for key in self.keys.values():
             if key.revoked:
-                self._verify(key, timeout)
-        for key in self.keys.values():
-            if key.valid and key.chain_ok and key.supersedes:
-                self.successors.setdefault(key.supersedes, []).append(key)
-        for old, new in self.successors.items():
-            if len(new) > 1:
-                self.r.fail(2, "key-fork", f"keys/{signer_name(old)}.json",
-                            f"is superseded by {len(new)} keys ({', '.join(k.fp for k in new)}); refusing them")
-                for k in new:
-                    k.chain_ok = False
-                self.successors[old] = []
-        n = sum(1 for k in self.keys.values() if k.valid)
+                self._verify_revocation(key)
+        for fp in sorted(self.revoked):
+            k = self.keys.get(fp)
+            if k is not None and not k.revoked:
+                self.r.warn(2, "revocation-kept", k.where, "serves a statement that does not revoke the key, but the "
+                                                           "key was revoked before: it stays revoked")
+        self._settle()
+        n = sum(1 for k in self.keys.values() if k.stands)
         if n:
-            self.r.ok(2, "key statements", n)
+            self.r.ok(2, "key statements standing", n)
 
     def _load(self, name, where):
         if not name.endswith(".json"):
@@ -95,10 +92,14 @@ class KeyRing:
         if not ok or not known:
             self.r.fail(2, "unknown-major", where, f"version {doc.get('version')!r} is not 1.x; refused")
             return
+        if not safejson.is_canonical(raw, doc):
+            self.r.fail(2, "not-canonical", where, "is not in RFC 8785 canonical form; refused")
+            return
         if doc.get("fingerprint") != fp:
             self.r.fail(2, "key-fingerprint", where, f"names fingerprint {doc.get('fingerprint')!r}, not its file's {fp}")
             return
         try:
+            kind, _ = sshsig.parse_public_key(doc.get("key"))
             actual = sshsig.key_fingerprint(doc.get("key"))
         except sshsig.SigError as e:
             self.r.fail(2, "key-format", where, str(e))
@@ -106,20 +107,24 @@ class KeyRing:
         if actual != fp:
             self.r.fail(2, "key-fingerprint", where, f"its key's fingerprint is {actual}, not {fp}")
             return
+        if kind != ED25519:
+            self.r.fail(2, "key-type", where, f"holds a {kind} key; format 1.0 uses Ed25519 keys only")
+            return
         if not ident.is_time(doc.get("created")):
             self.r.fail(2, "key-format", where, f"created {doc.get('created')!r} is not an RFC 3339 UTC time")
-        sup = doc.get("supersedes", "")
-        if sup and not check_fingerprint(sup):
+        sup = doc.get("supersedes")
+        if sup is not None and not check_fingerprint(sup):
             self.r.fail(2, "key-format", where, f"supersedes {sup!r} is not a fingerprint")
             return
         if not isinstance(doc.get("revoked", False), bool):
             self.r.fail(2, "key-format", where, "revoked is not true or false")
             return
+        for member in ("name", "orcid", "github"):
+            if member in doc and (not isinstance(doc[member], str) or not doc[member]):
+                self.r.warn(2, "key-format", where, f"{member} is empty; empty members are left out")
         if doc.get("orcid") and not ident.is_orcid(doc["orcid"]):
             self.r.warn(2, "orcid", where, f"ORCID {doc['orcid']!r} has a wrong check digit")
-        if not safejson.is_canonical(raw, doc):
-            self.r.warn(2, "not-canonical", where, "is not in RFC 8785 canonical form")
-        key = Key(fp, doc, raw, where)
+        key = Key(fp, doc, where)
         authorised = doc.get("authorised", [])
         if not isinstance(authorised, list):
             self.r.fail(2, "key-authorised", where, "authorised is not a list")
@@ -128,99 +133,133 @@ class KeyRing:
             try:
                 if not isinstance(entry, dict):
                     raise sshsig.SigError("is not an object")
+                mkind, _ = sshsig.parse_public_key(entry.get("key"))
                 efp = sshsig.key_fingerprint(entry.get("key"))
                 if entry.get("fingerprint") != efp:
                     raise sshsig.SigError(f"names {entry.get('fingerprint')!r} but its key is {efp}")
-                key.authorised[efp] = entry["key"]
+                if mkind != ED25519:
+                    raise sshsig.SigError(f"is a {mkind} key; Ed25519 only")
+                key.authorised[efp] = (entry["key"], entry.get("revoked") is True)
             except sshsig.SigError as e:
                 self.r.fail(2, "key-authorised", where, f"authorised[{n}] {e}")
         self.keys[fp] = key
 
-    def _verify(self, key, timeout):
+    def _check(self, key, signer):
         doc = dict(key.doc)
         signature = doc.pop("signature", None)
         if not isinstance(signature, str):
-            self.r.fail(2, "unsigned", key.where, "has no signature")
-            return
-        try:
-            body = jcs.canonical(doc)
-        except jcs.CanonicalError as e:
-            self.r.fail(2, "key-format", key.where, str(e))
-            return
-        candidates = []
-        if key.revoked:
-            # A revocation: by the key itself, or by a confirmed successor (choice).
-            candidates.append((key, False))
-            candidates += [(k, False) for k in self.keys.values()
-                           if k.supersedes == key.fp and k.valid and k.chain_ok]
-        else:
-            if key.supersedes:
-                old = self.keys.get(key.supersedes)
-                if old is not None:
-                    candidates.append((old, True))
-                else:
-                    self.r.warn(2, "key-chain", key.where, f"supersedes {key.supersedes}, whose statement is not in keys/")
-            candidates.append((key, False))
-        messages = []
-        for signer, confirms_chain in candidates:
-            ok, msg = sshsig.verify("jetcarp-key", body, signature, signer.line, timeout)
+            return False, "has no signature"
+        return sshsig.verify("jetcarp-key", jcs.canonical(doc), signature, signer.line, self.timeout)
+
+    def _verify_statement(self, key):
+        if key.supersedes is None:
+            ok, msg = self._check(key, key)
             if ok:
-                key.valid, key.signed_by = True, signer.fp
-                key.chain_ok = confirms_chain
-                break
-            messages.append(f"{signer.fp}: {msg}")
-        if not key.valid:
-            self.r.fail(2, "bad-signature", key.where, "signature does not verify: " + "; ".join(messages))
+                key.verified, key.signed_by = True, key.fp
+            else:
+                self.r.fail(2, "bad-signature", key.where, f"a first statement must be signed by its own key: {msg}")
             return
-        if key.supersedes and not key.chain_ok:
-            github = key.doc.get("github")
-            hint = f" (confirm at https://github.com/{github}.keys)" if github else ""
+        old = self.keys.get(key.supersedes)
+        if old is None:
+            self.r.fail(2, "key-chain", key.where, f"supersedes {key.supersedes}, whose statement is not in keys/")
+            return
+        ok, msg = self._check(key, old)
+        if ok:
+            key.verified, key.signed_by = True, old.fp
+            return
+        github = key.doc.get("github")
+        if github and self._check(key, key)[0]:
             self.r.skip(2, "key-unconfirmed", key.where,
                         f"supersedes {key.supersedes} but is signed only by itself; a lost key can be confirmed "
-                        f"through GitHub, which this reader does not do offline{hint}")
+                        f"at https://github.com/{github}.keys, which this reader does not do offline")
+        else:
+            self.r.fail(2, "bad-signature", key.where, f"a successor must be signed by the key it supersedes: {msg}")
+
+    def _verify_revocation(self, key):
+        candidates = [key] + [k for k in self.keys.values() if k.supersedes == key.fp and not k.revoked]
+        for signer in candidates:
+            ok, _ = self._check(key, signer)
+            if ok:
+                key.verified, key.signed_by = True, signer.fp
+                self.revoked.add(key.fp)
+                self.r.info(2, "revoked", key.where, f"revokes {key.fp} (signed by {signer.fp})")
+                return
+        self.r.fail(2, "bad-signature", key.where, "a revocation must be signed by the revoked key or a successor")
+
+    def _settle(self):
+        """Which statements stand, following chains from their first keys."""
+        def stands(key, seen):
+            if key.fp in seen:
+                self.r.fail(2, "key-chain", key.where, "its supersession chain loops")
+                return False
+            if key.revoked:
+                return False
+            if not key.verified:
+                return False
+            if key.supersedes is None:
+                return True
+            old = self.keys.get(key.supersedes)
+            if old is None:
+                return False
+            if old.fp in self.revoked:
+                if old.signed_by != key.fp:
+                    self.r.fail(2, "revoked-key", key.where, f"supersedes {old.fp}, which is revoked, and did not sign "
+                                                             "that revocation itself: it does not stand")
+                    return False
+                return True
+            return stands(old, seen | {key.fp})
+
+        for key in self.keys.values():
+            key.stands = stands(key, frozenset()) and key.fp not in self.revoked
+        successors = {}
+        for key in self.keys.values():
+            if key.stands and key.supersedes:
+                successors.setdefault(key.supersedes, []).append(key)
+        self.successors = {}
+        for old, new in successors.items():
+            if len(new) > 1:
+                self.r.fail(2, "key-fork", f"keys/{signer_name(old)}.json",
+                            f"is superseded by {len(new)} keys ({', '.join(k.fp for k in new)}); refusing them")
+                for k in new:
+                    k.stands = False
+            else:
+                self.successors[old] = new[0]
 
     # Lookups ------------------------------------------------------------------------------
 
     def get(self, fp):
         k = self.keys.get(fp)
-        return k if k is not None and k.valid else None
+        return k if k is not None and k.stands else None
 
     def root(self, fp):
-        """The first key of fp's supersession chain: the publisher's identity (choice)."""
-        seen = set()
-        k = self.get(fp)
-        while k is not None and k.chain_ok and k.supersedes and k.fp not in seen:
+        """The first key of fp's chain: the publisher's id."""
+        k, seen = self.keys.get(fp), set()
+        while k is not None and k.supersedes and k.fp not in seen and k.verified:
             seen.add(k.fp)
-            nxt = self.get(k.supersedes)
+            nxt = self.keys.get(k.supersedes)
             if nxt is None:
                 break
             k = nxt
         return k.fp if k is not None else fp
 
     def current(self, fp):
-        """The newest key that fp's chain leads to (section 6: the publisher's current key)."""
-        seen = set()
-        k = self.get(fp)
-        while k is not None and self.successors.get(k.fp) and k.fp not in seen:
+        """The newest standing key that fp's chain leads to."""
+        k, seen = self.get(fp), set()
+        while k is not None and k.fp in self.successors and k.fp not in seen:
             seen.add(k.fp)
-            k = self.successors[k.fp][0]
+            k = self.successors[k.fp]
         return k
 
     def signing_keys(self, fp):
-        """Keys that sign for publisher fp: its own and its authorised machine keys."""
+        """Keys whose signatures count for publisher key fp: its own and its machine keys, none revoked."""
         k = self.get(fp)
         if k is None:
             return {}
         out = {k.fp: k.line}
-        out.update(k.authorised)
+        for mfp, (line, revoked) in k.authorised.items():
+            if not revoked and mfp not in self.revoked:
+                out[mfp] = line
         return out
-
-    def revocation(self, fp):
-        """The revocation date of a key, if its statement revokes it."""
-        k = self.keys.get(fp)
-        if k is not None and k.valid and k.revoked:
-            return k.created
-        return None
 
 
 def check_authenticity(store, report, manifest=None, state_path=None, update_state=False):
@@ -229,12 +268,12 @@ def check_authenticity(store, report, manifest=None, state_path=None, update_sta
     if not sshsig.available():
         report.skip(2, "no-ssh-keygen", store.root, "ssh-keygen is not installed, so no signature can be checked")
         return
-    ring = KeyRing(store, report)
-    state = load_state(state_path, report) if state_path else None
+    state = load_state(state_path, report) if state_path else {"feeds": {}, "revoked": []}
+    ring = KeyRing(store, report, state["revoked"])
     accepted = {}
     refs = list_refs(store, report)
     for feed, (raw, ref) in sorted(refs.items()):
-        result = check_ref(store, ring, report, feed, raw, ref, state)
+        result = check_ref(store, ring, report, feed, raw, ref, state["feeds"] if state_path else None)
         if result:
             accepted[result[0]] = result[1]
     if state_path is None and refs:
@@ -242,9 +281,8 @@ def check_authenticity(store, report, manifest=None, state_path=None, update_sta
                                             "integer, not against the last accepted (use --state)")
     for h in manifests_to_check(store, report, manifest):
         check_manifest_signatures(store, ring, report, h)
-    check_receipts(store, ring, report)
-    if state_path and update_state and accepted:
-        save_state(state_path, state or {}, accepted)
+    if state_path and update_state:
+        save_state(state_path, state, accepted, ring.revoked)
 
 
 def check_manifest_signatures(store, ring, report, h):
@@ -258,71 +296,69 @@ def check_manifest_signatures(store, ring, report, h):
     if not check_fingerprint(publisher):
         report.fail(2, "publisher", where, f"publisher {publisher!r} is not a fingerprint")
         return
-    hexd = check_hash(h)
-    folder = ("sigs", "sha256", hexd[:2], hexd)
     try:
-        names = store.list(folder)
+        files = store.signature_files(h)
     except StoreError as e:
         report.fail(2, e.code, where, e.message)
         return
-    if not names:
-        report.fail(2, "unsigned", where, f"has no signatures in {'/'.join(folder)}/")
+    if not files:
+        report.fail(2, "unsigned", where, "has no signatures")
+        return
+    if publisher in ring.revoked:
+        report.fail(2, "revoked-key", where, f"its publisher key {publisher} is revoked, and signs nothing")
         return
     if ring.get(publisher) is None:
-        report.fail(2, "no-key", where, f"its publisher {publisher} has no valid statement in keys/")
+        report.fail(2, "no-key", where, f"its publisher {publisher} has no standing statement in keys/")
     allowed = ring.signing_keys(publisher)
-    publisher_ok = False
-    timeout = store.limits.subprocess_seconds
-    for name in names:
-        sw = f"{'/'.join(folder)}/{name}"
-        if not name.endswith(".sig"):
-            report.warn(2, "sig-name", sw, "is not <signer>.sig")
+    by_publisher = []
+    for name, comps in files:
+        sw = "/".join(comps)
+        if not name.endswith(".sig") or not SIGNER_RE.match(name[:-4]):
+            report.warn(2, "sig-name", sw, "is not <64 hex>.sig")
             continue
         try:
-            signer = fingerprint_of_signer(name[:-4])
-            text = store.read(folder + (name,), store.limits.document_bytes).decode("ascii")
+            text = store.read(comps, store.limits.document_bytes).decode("ascii")
+            info = sshsig.parse_signature(text)
         except StoreError as e:
             report.fail(2, e.code, sw, e.message)
             continue
-        except UnicodeDecodeError:
-            report.fail(2, "bad-signature", sw, "is not ASCII armour")
+        except (UnicodeDecodeError, sshsig.SigError) as e:
+            report.fail(2, "bad-signature", sw, f"is not an SSH signature: {e}")
             continue
-        line = allowed.get(signer)
-        endorsement = line is None
-        if endorsement:
-            k = ring.get(signer)
-            if k is None:
-                report.warn(2, "unknown-signer", sw, f"is by {signer}, which has no valid statement in keys/")
-                continue
-            line = k.line
-        ok, msg = sshsig.verify("jetcarp-manifest", data, text, line, timeout)
+        if info["key_type"] != ED25519:
+            report.warn(2, "not-ed25519", sw, f"is by a {info['key_type']} key, which counts as no signature")
+            continue
+        if hashlib.sha256(info["key_blob"]).hexdigest() != name[:-4]:
+            report.fail(2, "sig-name", sw, f"is named for another key: the signature is by {info['fingerprint']}")
+            continue
+        line = f"{ED25519} {base64.b64encode(info['key_blob']).decode()}"
+        ok, msg = sshsig.verify("jetcarp-manifest", data, text, line, store.limits.subprocess_seconds)
         if not ok:
             report.fail(2, "bad-signature", sw, msg)
             continue
-        revoked = ring.revocation(signer)
-        if revoked is not None:
-            if not (isinstance(doc.get("created"), str) and doc["created"] < revoked):
-                report.fail(2, "revoked-key", sw, f"is by {signer}, revoked on {revoked}, and the manifest was "
-                                                  f"created {doc.get('created')}")
-                continue
-            report.warn(2, "revoked-key", sw, f"is by {signer}, revoked later ({revoked})")
-        if endorsement:
-            report.info(2, "endorsement", sw, f"endorsed by {signer}")
-        else:
-            publisher_ok = True
+        signer = info["fingerprint"]
+        if signer in ring.revoked:
+            report.warn(2, "revoked-key", sw, f"is by {signer}, which is revoked: it counts as no signature")
+        elif signer in allowed:
+            by_publisher.append(signer)
             report.ok(2, "manifest signatures")
-    if not publisher_ok:
+        else:
+            report.info(2, "endorsement", sw, f"endorsed by {signer}")
+    if not by_publisher:
         report.fail(2, "no-publisher-signature", where,
-                    f"no valid signature by its publisher {publisher} or the publisher's authorised keys")
+                    f"no valid signature by its publisher {publisher} or a machine key it authorises")
+    elif publisher not in by_publisher and not store.is_export:
+        report.warn(2, "publisher-sig-name", where,
+                    f"is signed only by a machine key, so there is no signature at {signer_name(publisher)}.sig, where "
+                    "a reader over HTTP looks for the publisher's")
 
 
-def check_ref(store, ring, report, feed, raw, ref, state):
+def check_ref(store, ring, report, feed, raw, ref, feeds):
     where = f"refs/{feed}.json"
     seq = ref.get("seq")
-    bad = False
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
         report.fail(2, "ref-seq", where, f"seq {seq!r} is not a positive integer")
-        bad = True
+        return None
     if not ident.is_time(ref.get("updated")):
         report.fail(2, "ref-field", where, f"updated {ref.get('updated')!r} is not an RFC 3339 UTC time")
     publisher = ref.get("publisher")
@@ -330,40 +366,39 @@ def check_ref(store, ring, report, feed, raw, ref, state):
         report.fail(2, "publisher", where, f"publisher {publisher!r} is not a fingerprint")
         return None
     if not safejson.is_canonical(raw, ref):
-        report.warn(2, "not-canonical", where, "is not in RFC 8785 canonical form")
+        report.fail(2, "not-canonical", where, "is not in RFC 8785 canonical form; refused")
+        return None
     body = dict(ref)
     signature = body.pop("signature", None)
     if not isinstance(signature, str):
         report.fail(2, "unsigned", where, "has no signature")
         return None
+    if publisher in ring.revoked:
+        report.fail(2, "revoked-key", where, f"names publisher key {publisher}, which is revoked")
+        return None
     current = ring.current(publisher)
     if current is None:
-        report.fail(2, "no-key", where, f"its publisher {publisher} has no valid statement in keys/")
+        report.fail(2, "no-key", where, f"its publisher {publisher} has no standing statement in keys/")
         return None
     if current.fp != publisher:
         report.fail(2, "superseded-key", where, f"names publisher {publisher}, whose current key is {current.fp}")
         return None
     try:
-        signer = sshsig.parse_signature(signature)["fingerprint"]
+        info = sshsig.parse_signature(signature)
     except sshsig.SigError as e:
         report.fail(2, "bad-signature", where, f"signature {e}")
         return None
     allowed = ring.signing_keys(publisher)
-    if signer not in allowed:
-        report.fail(2, "bad-signature", where, f"is signed by {signer}, which is not {publisher} or one of its "
-                                               "authorised keys")
+    if info["fingerprint"] not in allowed:
+        why = "revoked" if info["fingerprint"] in ring.revoked else f"not {publisher} or a machine key it authorises"
+        report.fail(2, "bad-signature", where, f"is signed by {info['fingerprint']}, which is {why}")
         return None
-    ok, msg = sshsig.verify("jetcarp-ref", jcs.canonical(body), signature, allowed[signer],
+    ok, msg = sshsig.verify("jetcarp-ref", jcs.canonical(body), signature, allowed[info["fingerprint"]],
                             store.limits.subprocess_seconds)
     if not ok:
         report.fail(2, "bad-signature", where, msg)
         return None
-    revoked = ring.revocation(signer)
-    if revoked is not None:
-        report.fail(2, "revoked-key", where, f"is signed by {signer}, revoked on {revoked}")
-        return None
     report.ok(2, "ref signatures")
-    # The manifest it points to belongs to the same feed and publisher.
     try:
         _, m = store.read_json_object(ref["manifest"], "manifest")
     except StoreError as e:
@@ -371,16 +406,13 @@ def check_ref(store, ring, report, feed, raw, ref, state):
         return None
     if not isinstance(m, dict) or m.get("feed") != feed:
         report.fail(2, "ref-manifest", where, f"points to a manifest of feed {m.get('feed') if isinstance(m, dict) else None!r}")
-        bad = True
-    elif ring.root(m.get("publisher", "")) != ring.root(publisher):
-        report.fail(2, "ref-manifest", where, f"points to a manifest by {m.get('publisher')}, not {publisher}")
-        bad = True
-    if bad:
         return None
-    # Rollback (section 6): seq must be greater than the last accepted for this feed.
+    if ring.root(m.get("publisher", "")) != ring.root(publisher):
+        report.fail(2, "ref-manifest", where, f"points to a manifest by {m.get('publisher')}, not {publisher}")
+        return None
     feed_id = f"{ring.root(publisher)} {feed}"
-    if state is not None:
-        last = state.get(feed_id)
+    if feeds is not None:
+        last = feeds.get(feed_id)
         if last is not None:
             if seq < last["seq"]:
                 report.fail(2, "seq-rollback", where, f"seq {seq} is below {last['seq']}, the last accepted; "
@@ -396,57 +428,29 @@ def check_ref(store, ring, report, feed, raw, ref, state):
     return feed_id, {"seq": seq, "manifest": ref["manifest"]}
 
 
-def check_receipts(store, ring, report):
-    """Receipts (section 14): each names its folder's manifest and is signed by its verifier."""
-    for aa in store.list(("receipts", "sha256")):
-        for mhex in store.list(("receipts", "sha256", aa)):
-            for name in store.list(("receipts", "sha256", aa, mhex)):
-                where = f"receipts/sha256/{aa}/{mhex}/{name}"
-                if not re.fullmatch(r"[0-9a-f]{64}\.json", name):
-                    report.warn(2, "receipt-name", where, "is not <64 hex>.json")
-                    continue
-                try:
-                    _, doc = store.read_json_file(("receipts", "sha256", aa, mhex, name), where)
-                except StoreError as e:
-                    report.fail(2, e.code, where, e.message)
-                    continue
-                if not isinstance(doc, dict) or doc.get("format") != "jetcarp-receipt":
-                    report.fail(2, "receipt-format", where, 'format is not "jetcarp-receipt"')
-                    continue
-                if doc.get("manifest") != f"sha256:{mhex}":
-                    report.fail(2, "receipt-manifest", where, f"names {doc.get('manifest')!r}, not its folder's manifest")
-                body = dict(doc)
-                signature = body.pop("signature", "")
-                k = ring.get(doc.get("verifier", ""))
-                if k is None:
-                    report.warn(2, "unknown-signer", where, f"verifier {doc.get('verifier')!r} has no statement in keys/")
-                    continue
-                ok, msg = sshsig.verify("jetcarp-receipt", jcs.canonical(body), signature, k.line,
-                                        store.limits.subprocess_seconds)
-                if ok:
-                    report.ok(2, "receipt signatures")
-                else:
-                    report.fail(2, "bad-signature", where, msg)
-
-
 def load_state(path, report):
+    empty = {"feeds": {}, "revoked": []}
     if not os.path.exists(path):
-        return {}
+        return empty
     try:
         with open(path, "rb") as f:
             doc = safejson.loads(f.read(), max_bytes=16 << 20, what="state file")
-        if doc.get("format") != STATE_FORMAT:
+        if not isinstance(doc, dict) or doc.get("format") != STATE_FORMAT:
             raise ValueError("not a reader state file")
-        return {k: v for k, v in doc.get("feeds", {}).items() if isinstance(v, dict) and isinstance(v.get("seq"), int)}
+        feeds = {k: v for k, v in doc.get("feeds", {}).items() if isinstance(v, dict) and isinstance(v.get("seq"), int)}
+        revoked = [fp for fp in doc.get("revoked", []) if check_fingerprint(fp)]
+        return {"feeds": feeds, "revoked": revoked}
     except (OSError, ValueError) as e:
         report.fail(2, "state", path, f"cannot read the state file: {e}")
-        return {}
+        return empty
 
 
-def save_state(path, state, accepted):
-    state = dict(state)
-    state.update(accepted)
+def save_state(path, state, accepted, revoked):
+    feeds = dict(state["feeds"])
+    feeds.update(accepted)
+    doc = {"format": STATE_FORMAT, "version": "1.0", "feeds": feeds,
+           "revoked": sorted(set(state["revoked"]) | set(revoked))}
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps({"format": STATE_FORMAT, "version": "1.0", "feeds": state}, indent=1, sort_keys=True))
+        f.write(json.dumps(doc, indent=1, sort_keys=True))
     os.replace(tmp, path)
