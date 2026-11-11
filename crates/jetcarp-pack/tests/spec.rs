@@ -67,6 +67,40 @@ fn every_column_is_on_the_page() {
     }
 }
 
+/// The page's table of schema ids lists exactly the ids the code reads and writes.
+#[test]
+fn the_schema_ids_table_is_every_schema_id() {
+    let page = page();
+    let section = page
+        .split("### Schema ids")
+        .nth(1)
+        .and_then(|s| s.split("\n### ").next())
+        .expect("the schema ids on the page");
+    let listed: Vec<String> = section
+        .lines()
+        .filter_map(|l| l.strip_prefix("| `"))
+        .filter_map(|l| l.split_once('`'))
+        .map(|(id, _)| id.to_string())
+        .collect();
+    let mut want: Vec<String> = tables::all()
+        .iter()
+        .chain([tables::reference_patch()])
+        .map(|t| t.schema.to_string())
+        .collect();
+    want.extend(
+        [
+            "jetcarp-search 1",
+            "jetcarp-explore-runs 1",
+            "jetcarp-explore-scores 1",
+        ]
+        .map(String::from),
+    );
+    let (mut a, mut b) = (listed.clone(), want.clone());
+    a.sort();
+    b.sort();
+    assert_eq!(a, b);
+}
+
 #[test]
 fn the_palette_registry_is_every_built_in_palette() {
     let page = page();

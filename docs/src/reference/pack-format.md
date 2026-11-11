@@ -280,8 +280,10 @@ feeds, and keeping the last `seq`, arrive with networking in 0.6.*
  "schema": "jetcarp-patterns 1", "table": "patterns", "version": "1.0"}
 ```
 
-- `table` names the table; `schema` its column layout and version (`jetcarp-<table> <n>`). A reader
-  MUST refuse a schema number it does not know for a table it needs.
+- `table` names the table; `schema` its column layout and version, `jetcarp-<table> <n>` with the
+  table's name exactly as written (so `score_models` is `jetcarp-score_models 1`;
+  [every schema id](#schema-ids) is listed below). A reader MUST refuse a schema number it does not
+  know for a table it needs.
 - `parts`: each Parquet part with its `rows`, its size in `bytes`, its `partition` (an object, empty
   for an unpartitioned table) and `first` and `last`, the value of the table's **first** sort column
   in the part's first and last row, as text (an integer in decimal), for skipping.
@@ -304,6 +306,36 @@ feeds, and keeping the last `seq`, arrive with networking in 0.6.*
 - **Schema evolution.** Adding a nullable column is a minor change: the schema id stays, and readers
   MUST ignore columns they do not know and read a missing nullable column as null. Removing a
   column or changing what one means is a new schema number.
+
+### Schema ids
+
+Every schema id format 1.0 uses, so none has to be derived:
+
+| Schema id | Of | Written in |
+| --- | --- | --- |
+| `jetcarp-tilings 1` | the `tilings` table | its index's `schema` |
+| `jetcarp-rules 1` | the `rules` table | its index's `schema` |
+| `jetcarp-patterns 1` | the `patterns` table | its index's `schema` |
+| `jetcarp-verifications 1` | the `verifications` table | its index's `schema` |
+| `jetcarp-sightings 1` | the `sightings` table | its index's `schema` |
+| `jetcarp-provenance 1` | the `provenance` table | its index's `schema` |
+| `jetcarp-annotations 1` | the `annotations` table | its index's `schema` |
+| `jetcarp-ants 1` | the `ants` table | its index's `schema` |
+| `jetcarp-quickstart 1` | the `quickstart` table | its index's `schema` |
+| `jetcarp-media 1` | the `media` table | its index's `schema` |
+| `jetcarp-aliases 1` | the `aliases` table | its index's `schema` |
+| `jetcarp-ratings 1` | the `ratings` table | its index's `schema` |
+| `jetcarp-raters 1` | the `raters` table | its index's `schema` |
+| `jetcarp-score_models 1` | the `score_models` table | its index's `schema` |
+| `jetcarp-search 1` | a [search index](#search-runs) (`table` `search`) | its `schema` |
+| `jetcarp-explore-runs 1` | an explore search's run segments | the search index's `run_schema` |
+| `jetcarp-explore-scores 1` | an explore search's score sidecars | the search index's `score_schema` |
+| `jetcarp-reference-patch 1` | an aperiodic family's [reference patch](#reference-patches) | nowhere: a `tilings` row names the object |
+
+The documents' `format` members are `jetcarp-store` (`jetcarp-store.json`), `jetcarp-pack` (a
+manifest), `jetcarp-index` (a table index and a search index alike), `jetcarp-ref` and
+`jetcarp-key`, each with `version` `1.0`; a manifest's `engine.schemes.tables` is
+`jetcarp-tables-1`.
 
 ### Partitions
 

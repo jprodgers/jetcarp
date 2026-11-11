@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 pub struct TableDef {
     /// Its name in a manifest's `tables`.
     pub name: &'static str,
-    /// `jetcarp-<table> <n>`.
+    /// `jetcarp-<table> <n>`, the table's name exactly as written (`jetcarp-score_models 1`).
     pub schema: &'static str,
     pub cols: Vec<Col>,
     /// Rows are sorted by these columns (then by the whole row, so the order is total).
@@ -384,7 +384,7 @@ pub fn all() -> &'static [TableDef] {
             },
             TableDef {
                 name: "score_models",
-                schema: "jetcarp-score-models 1",
+                schema: "jetcarp-score_models 1",
                 cols: vec![
                     c("model", Ty::Str),
                     c("version", Ty::Str),
@@ -782,6 +782,10 @@ mod tests {
         for t in all().iter().chain([reference_patch()]) {
             assert!(names.insert(t.name), "{}", t.name);
             assert!(t.schema.ends_with(" 1"), "{}", t.schema);
+            // A table's schema id is `jetcarp-<table> <n>`, its name exactly as written.
+            if t.name != "reference" {
+                assert_eq!(t.schema, format!("jetcarp-{} 1", t.name));
+            }
             for k in t.sort.iter().chain(t.partition) {
                 let col = t.cols.iter().find(|c| c.name == *k);
                 assert!(col.is_some_and(|c| !c.nullable), "{}.{k}", t.name);
