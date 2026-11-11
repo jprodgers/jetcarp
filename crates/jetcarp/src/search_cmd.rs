@@ -584,9 +584,11 @@ pub struct ExploreArgs {
     import_only: bool,
     /// With --import: which old runs are run again on this engine before they are stored,
     /// keeping their ids. auto runs a sample of every tiling's runs again (32 a tiling) and
-    /// re-measures every run of a tiling whose sample does not measure as stored; all
-    /// re-measures every run; none copies them as they are. The search's manifest records what
-    /// was checked and re-measured, and why.
+    /// re-measures every run of a tiling whose sample does not measure as stored (only one
+    /// family's runs when only that family's differ); all re-measures every run; none copies
+    /// them as they are. The search's manifest records what was checked and re-measured, and
+    /// why. With --gpu, the GPU runs Larger than Life, and every rule it runs once it has
+    /// measured a sample as the CPU does.
     #[arg(long, value_name = "auto|all|none")]
     remeasure: Option<String>,
 }

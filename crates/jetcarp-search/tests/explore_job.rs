@@ -565,6 +565,47 @@ fn an_import_re_measures_the_tilings_whose_runs_do_not_reproduce() {
 }
 
 #[test]
+fn an_import_re_measures_one_family_when_only_its_runs_do_not_reproduce() {
+    let dir = scratch("remeasure-family");
+    // As if the way one rule family runs had changed: only the square tiling's Cyclic runs are
+    // off (each family's first run is in the sample, so the change is found).
+    let (old, measured) = old_database(
+        &dir,
+        "UPDATE runs SET settle = settle + 1 WHERE tiling = 'square' AND fam = 'cyclic';",
+    );
+    let cyclic = measured
+        .iter()
+        .filter(|r| r.tiling == "square" && r.fam == "cyclic")
+        .count() as u64;
+    assert!(cyclic > 0);
+    let lib = Library::open(dir.join("new").join("library.sqlite"));
+    let job = make(
+        &lib,
+        small(json!({"import": old.display().to_string(), "import_only": true})),
+    );
+    let out = Runner::new(lib.clone())
+        .run(job, &opts(2, Budget::default()))
+        .unwrap();
+    let m = progress(&out.progress).remeasure.unwrap();
+    assert_eq!((m.runs, m.changed), (cyclic, cyclic));
+    let r = db(&lib, job).manifest.remeasure.unwrap();
+    assert_eq!(r.remeasured.len(), 1);
+    let t = &r.remeasured[0];
+    assert_eq!(
+        (t.tiling.as_str(), t.family.as_deref(), t.runs),
+        ("square", Some("cyclic"), cyclic)
+    );
+    assert!(
+        t.why
+            .ends_with("all cyclic: its cyclic runs are re-measured"),
+        "{}",
+        t.why
+    );
+    // Every run as first measured: the Cyclic ones run again, the rest copied.
+    assert_eq!(text(&imported(&lib, job)), text(&measured));
+}
+
+#[test]
 fn an_import_can_re_measure_every_run_or_none_and_on_a_batch_backend() {
     let dir = scratch("remeasure-modes");
     let (old, measured) = old_database(&dir, "UPDATE runs SET settle = settle + 1;");

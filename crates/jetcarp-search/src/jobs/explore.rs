@@ -35,7 +35,8 @@
 //! **Re-measuring.** Before it copies anything, an import checks the old runs on this engine
 //! ([`crate::explore::remeasure`], `remeasure` auto): a stratified sample of every tiling's runs is
 //! run again and compared exactly with what is stored, and every run of a tiling whose sample
-//! differs is run again as it is copied, keeping its id (on the GPU, for the rules it runs, when
+//! differs (only one family's, when only its runs differ) is run again as it is copied, keeping
+//! its id (on the GPU, for the rules it runs, when
 //! the job has one and it measured the sample as the CPU did). The check and the tilings
 //! re-measured, with why, go in the search's manifest, the progress, and the working database (so
 //! a stopped import goes on with the same decision); `remeasure` all runs every run again, none
@@ -575,7 +576,7 @@ impl ExploreRun {
         ));
         r.runs.write(&d)?;
         r.runs.set_remeasure(&state.record)?;
-        r.grids.keep_only(&|t| state.wants(t));
+        r.grids.keep_only(&|t| state.wants_tiling(t));
         let p = r.remeasure_progress.get_or_insert_with(Default::default);
         p.phase = "copying".into();
         p.backend = state.record.backend.clone();
@@ -613,7 +614,7 @@ impl ExploreRun {
                 if let Some(m) = r.remeasure.as_mut().filter(|m| !m.is_empty()) {
                     let t1 = Instant::now();
                     let idx: Vec<usize> = (0..rows.len())
-                        .filter(|&i| m.wants(&rows[i].rec.tiling))
+                        .filter(|&i| m.wants(&rows[i].rec.tiling, &rows[i].rec.fam))
                         .collect();
                     let refs: Vec<&RunRec> = idx.iter().map(|&i| &rows[i].rec).collect();
                     let gpu = match r.remeasure_gpu {

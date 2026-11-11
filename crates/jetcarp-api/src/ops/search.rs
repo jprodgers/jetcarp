@@ -1336,7 +1336,7 @@ pub struct ExploreIn {
     /// With `import`: stop (paused) once the import is done, instead of searching on.
     #[serde(default)]
     pub import_only: bool,
-    /// With `import`: which old runs are run again on this engine before they are stored, keeping their ids: `auto` (the default) runs a sample of every tiling's runs again and re-measures every run of a tiling whose sample does not measure as stored; `all` re-measures every run; `none` copies them as they are. What was checked and re-measured, and why, is in the search's manifest and the job's progress.
+    /// With `import`: which old runs are run again on this engine before they are stored, keeping their ids: `auto` (the default) runs a sample of every tiling's runs again and re-measures every run of a tiling whose sample does not measure as stored (only one family's runs when only that family's differ); `all` re-measures every run; `none` copies them as they are. What was checked and re-measured, and why, is in the search's manifest and the job's progress.
     #[serde(default)]
     pub remeasure: Option<String>,
 }

@@ -10,9 +10,11 @@
 //! then the families in turn, and within a family its kinds of starting pattern; the
 //! confirmation runs are a stratum of their own), each run again at its recorded settings and
 //! compared exactly with what is stored: fate, settling generation, period, every feature,
-//! score, and behaviour bin ([`diff`]). A tiling with any sampled run that differs is
-//! re-measured in full; the others are copied as they are. [`Remeasure::All`] re-measures every
-//! run, [`Remeasure::None`] none.
+//! score, and behaviour bin ([`diff`]). A tiling whose differing sampled runs span two or more
+//! families is re-measured in full (a change to the tiling shows in every family); when they are
+//! all of one family, the way that rule runs has changed, and only that family's runs on the
+//! tiling are ([`TilingCheck::only_family`]). The others are copied as they are.
+//! [`Remeasure::All`] re-measures every run, [`Remeasure::None`] none.
 //!
 //! **The GPU.** The check runs its sample on the CPU but Larger than Life, which a search runs
 //! on a GPU only (on the CPU a run takes seconds), and runs each tiling's largest batch of
@@ -250,15 +252,27 @@ pub struct TilingCheck {
     pub failed: u64,
     /// The first sampled run that differs.
     pub example: Option<i64>,
+    /// Sampled runs that differ, per rule family.
+    pub families: BTreeMap<String, u64>,
     /// Sampled runs the GPU ran too, and how many of those it measured unlike the CPU.
     pub gpu_runs: u64,
     pub gpu_differ: u64,
 }
 
 impl TilingCheck {
-    /// Is every run of the tiling to be run again?
+    /// Is the tiling (or one of its families) to be run again?
     pub fn remeasure(&self) -> bool {
         self.differ > 0
+    }
+
+    /// The one family whose runs are run again, when only that family's sampled runs differ:
+    /// how a rule runs has changed, not the tiling (whose change would show in every family).
+    /// `None`: every run of the tiling is run again.
+    pub fn only_family(&self) -> Option<&str> {
+        match self.families.len() {
+            1 => self.families.keys().next().map(String::as_str),
+            _ => None,
+        }
     }
 
     /// Why (or why not), in a sentence.
@@ -281,17 +295,25 @@ impl TilingCheck {
         .filter(|x| x.1 > 0)
         .map(|(k, n)| format!("{k} {n}"))
         .collect();
+        let which = match self.only_family() {
+            Some(f) => format!(", all {f}: its {f} runs are re-measured"),
+            None => format!(
+                ", in {} families: every run is re-measured",
+                self.families.len()
+            ),
+        };
         format!(
-            "{} of {} sampled runs measured differently on this engine ({})",
+            "{} of {} sampled runs measured differently on this engine ({}){which}",
             self.differ,
             self.sampled - self.failed,
             parts.join(", ")
         )
     }
 
-    fn add(&mut self, d: &Diff, id: i64) {
+    fn add(&mut self, d: &Diff, id: i64, fam: &str) {
         if d.any() {
             self.differ += 1;
+            *self.families.entry(fam.to_string()).or_default() += 1;
             if self.example.is_none() {
                 self.example = Some(id);
             }
@@ -314,6 +336,9 @@ impl TilingCheck {
 #[serde(default)]
 pub struct Remeasured {
     pub tiling: String,
+    /// The one rule family whose runs were re-measured (none: every run of the tiling).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     pub why: String,
     /// Runs run again, those whose measures changed, and those that could not run (kept as
     /// they were).
@@ -359,6 +384,8 @@ pub struct State {
     pub record: Record,
     /// The tilings to re-measure, and why (auto; `all` re-measures every one).
     pub tilings: BTreeMap<String, String>,
+    /// Of those, the ones re-measured for one rule family only, and that family.
+    pub families: BTreeMap<String, String>,
     /// Per tiling: runs re-measured, changed, and failed, in the segments committed.
     pub counts: BTreeMap<String, (u64, u64, u64)>,
     /// Which runs the GPU named in the record's `backend` measures (none: the CPU runs all).
@@ -378,8 +405,15 @@ impl State {
         }
     }
 
-    /// Is this tiling's every run to be run again?
-    pub fn wants(&self, tiling: &str) -> bool {
+    /// Is this run (of this tiling and family) to be run again?
+    pub fn wants(&self, tiling: &str, fam: &str) -> bool {
+        self.record.mode == "all"
+            || (self.tilings.contains_key(tiling)
+                && self.families.get(tiling).is_none_or(|f| f == fam))
+    }
+
+    /// Are any of this tiling's runs to be run again?
+    pub fn wants_tiling(&self, tiling: &str) -> bool {
         self.record.mode == "all" || self.tilings.contains_key(tiling)
     }
 
@@ -402,6 +436,7 @@ impl State {
             .iter()
             .map(|(t, (n, c, f))| Remeasured {
                 tiling: t.clone(),
+                family: self.families.get(t).cloned(),
                 why: self
                     .tilings
                     .get(t)
@@ -417,6 +452,7 @@ impl State {
             if !self.counts.contains_key(t) {
                 self.record.remeasured.push(Remeasured {
                     tiling: t.clone(),
+                    family: self.families.get(t).cloned(),
                     why: why.clone(),
                     ..Default::default()
                 });
@@ -438,6 +474,10 @@ impl State {
             .iter()
             .filter(|c| c.remeasure())
             .map(|c| (c.tiling.clone(), c.why()))
+            .collect();
+        self.families = checks
+            .iter()
+            .filter_map(|c| Some((c.tiling.clone(), c.only_family()?.to_string())))
             .collect();
         self.commit(&BTreeMap::new());
     }
@@ -509,8 +549,11 @@ pub fn measure(
             None => cpu.push(i),
         }
     }
+    let trace = std::env::var_os("JETCARP_EXPLORE_TRACE").is_some();
     let cpu_part = || -> Vec<(usize, Option<Measured>)> {
-        cpu.par_iter()
+        let t = std::time::Instant::now();
+        let v: Vec<(usize, Option<Measured>)> = cpu
+            .par_iter()
             .map(|&i| {
                 let c = &evals[i].as_ref().unwrap().cand;
                 let m = grids
@@ -518,11 +561,21 @@ pub fn measure(
                     .and_then(|g| measure_on(&g, c));
                 (i, m)
             })
-            .collect()
+            .collect();
+        if trace {
+            eprintln!(
+                "remeasure cpu: {} runs in {:.2} s",
+                v.len(),
+                t.elapsed().as_secs_f64()
+            );
+        }
+        v
     };
     let gpu_part = |be: &mut dyn Backend| -> Result<Vec<(usize, Option<Measured>)>, String> {
+        let t0 = std::time::Instant::now();
         let mut got = Vec::new();
-        for ((tiling, cells, _), idx) in &groups {
+        for ((tiling, cells, key), idx) in &groups {
+            let t = std::time::Instant::now();
             let Some(g) = grids.get(tiling, *cells) else {
                 got.extend(idx.iter().map(|&i| (i, None)));
                 continue;
@@ -533,6 +586,20 @@ pub fn measure(
                 .collect();
             let m = measure_batch(be, &g, &cands)?;
             got.extend(idx.iter().copied().zip(m));
+            if trace {
+                eprintln!(
+                    "remeasure gpu {tiling} {cells} {key}: {} runs in {:.2} s",
+                    idx.len(),
+                    t.elapsed().as_secs_f64()
+                );
+            }
+        }
+        if trace {
+            eprintln!(
+                "remeasure gpu: {} runs in {:.2} s",
+                got.len(),
+                t0.elapsed().as_secs_f64()
+            );
         }
         Ok(got)
     };
@@ -617,7 +684,7 @@ pub fn check_many(
         .collect();
     for ((k, r), m) in all.iter().zip(&now) {
         match m {
-            Some(m) => out[*k].add(&diff(r, m), r.id),
+            Some(m) => out[*k].add(&diff(r, m), r.id, &r.fam),
             None => out[*k].failed += 1,
         }
     }
@@ -710,29 +777,52 @@ mod tests {
             sampled: 32,
             ..Default::default()
         };
+        let d = Diff {
+            fate: true,
+            score: true,
+            ..Default::default()
+        };
+        // Two families differ: the tiling's every run.
         let mut bad = ok.clone();
         bad.tiling = "penrose-rhomb".into();
-        bad.add(
-            &Diff {
-                fate: true,
-                score: true,
-                ..Default::default()
-            },
-            7,
-        );
-        s.decide(&[ok, bad]);
-        assert!(s.wants("penrose-rhomb") && !s.wants("square"));
-        assert_eq!(s.record.remeasured.len(), 1);
+        bad.add(&d, 7, "life_like");
+        bad.add(&d, 9, "cyclic");
+        // One family differs: that family's runs only.
+        let mut one = ok.clone();
+        one.tiling = "hex".into();
+        one.add(&d, 11, "hex_wolfram");
+        one.add(&d, 12, "hex_wolfram");
+        s.decide(&[ok, bad, one]);
+        assert!(s.wants("penrose-rhomb", "life_like") && s.wants("penrose-rhomb", "ltl"));
+        assert!(!s.wants("square", "life_like") && !s.wants_tiling("square"));
+        assert!(s.wants("hex", "hex_wolfram") && !s.wants("hex", "life_like"));
+        assert!(s.wants_tiling("hex"));
+        let r = &s.record.remeasured;
+        assert_eq!(r.len(), 2);
         assert_eq!(
-            s.record.remeasured[0].why,
-            "1 of 32 sampled runs measured differently on this engine (fate 1, score 1)"
+            (r[0].tiling.as_str(), r[0].family.as_deref()),
+            ("hex", Some("hex_wolfram"))
+        );
+        assert_eq!(
+            r[0].why,
+            "2 of 32 sampled runs measured differently on this engine (fate 2, score 2), all \
+             hex_wolfram: its hex_wolfram runs are re-measured"
+        );
+        assert_eq!(
+            (r[1].tiling.as_str(), r[1].family.as_deref()),
+            ("penrose-rhomb", None)
+        );
+        assert_eq!(
+            r[1].why,
+            "2 of 32 sampled runs measured differently on this engine (fate 2, score 2), in 2 \
+             families: every run is re-measured"
         );
         let mut add = BTreeMap::new();
         add.insert("penrose-rhomb".to_string(), (10, 9, 0));
         s.commit(&add);
         s.commit(&add);
         assert_eq!((s.record.runs, s.record.changed), (20, 18));
-        assert_eq!(s.record.remeasured[0].runs, 20);
+        assert_eq!(s.record.remeasured[1].runs, 20);
         assert_eq!(Remeasure::parse("ALL"), Ok(Remeasure::All));
         assert!(Remeasure::parse("some").is_err());
     }
