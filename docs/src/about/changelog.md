@@ -35,9 +35,9 @@ and reworked for release in a new repository with a fresh history.
   search were brought into JETCARP once, before this release, and checked on it (see
   [Records from CART](../reference/library-format.md#records-from-cart) and
   [The search imported from CART](../reference/search-runs.md#the-search-imported-from-cart)).
-- **Penrose rhombs.** The P3 (rhomb) construction was rewritten (see *Changed*), so scenes on
-  `penrose-rhomb` saved by CART lay out their tiles differently and do not replay to their old hashes.
-  The kites-and-darts tiling (P2) is unchanged.
+- **Penrose rhombs.** The P3 (rhomb) construction was rewritten (see *Changed*), so `penrose-rhomb`
+  lays out its tiles differently from CART's, and what ran on it in CART does not replay to the same
+  hashes. The kites-and-darts tiling (P2) is unchanged.
 - **Removed features.** The stage-1 settings search, its score models and the catalogue pipeline built
   on it are gone, with `jetcarp stage1`, `jetcarp pipeline`, `jetcarp media render --setting`, the MCP
   tool `stage1_start` and the matching script functions; so is the Quick Start approval queue. The

@@ -113,7 +113,8 @@ A few limits apply:
   rather than guessing.
 - Until JETCARP 1.0, a release may change how a rule or a tiling behaves. Such changes are deliberate
   and listed in the [changelog](../about/changelog.md), but an old scene may then reach a different
-  hash. Scenes on Penrose rhombs saved by CART, JETCARP's predecessor, already do.
+  hash. The Penrose rhombs already lay out their tiles differently from those of CART, JETCARP's
+  predecessor.
 - Palettes you made travel inside the scene. A scene that names a palette the other person's
   JETCARP does not know (a built-in palette added in a later release, say) still opens, drawn in
   Ember, with a warning; the name is kept, so saving the scene again keeps it.

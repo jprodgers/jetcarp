@@ -147,8 +147,8 @@ described with the method.
   rule, seed and random state.
 - **Before 1.0.** The scene format, and the behaviour of a rule or a tiling, may still change between
   releases. Such changes are deliberate, show up in the pins and are listed in the changelog, but an
-  old scene may then reach a different state. Scenes on Penrose rhombs saved by CART, JETCARP's
-  predecessor, already do.
+  old scene may then reach a different state. The Penrose rhombs already lay out their tiles
+  differently from those of CART, JETCARP's predecessor.
 - **HashLife jumps** reach the same cells as stepping but reset every live cell's age to 1, so their
   state hash differs from the stepped run's; compare `cells_hash` instead.
 - **Hashes are not proofs.** A 64-bit hash is not cryptographic, and two different states could share

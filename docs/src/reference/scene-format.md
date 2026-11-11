@@ -226,9 +226,9 @@ A change to a rule or a tiling's construction changes the state a scene reaches 
 reads the same. JETCARP's tests pin the geometry of every tiling and the dynamics of every built-in
 scene so that such a change cannot happen by accident (see
 [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)). One such change was made
-on purpose before this release: the Penrose rhomb (P3) construction was rewritten, so scenes on
-`penrose-rhomb` saved by CART lay their tiles out differently in JETCARP and do not replay to their
-old hashes.
+on purpose before this release: the Penrose rhomb (P3) construction was rewritten, so `penrose-rhomb`
+lays out its tiles differently from CART's, JETCARP's predecessor, and what ran on it in CART does not
+replay to the same hashes.
 
 ## JSON Schema
 
