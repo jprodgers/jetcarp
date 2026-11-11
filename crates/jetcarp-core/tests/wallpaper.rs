@@ -83,14 +83,21 @@ fn every_palette_renders_with_its_background() {
         0,
     );
     assert_eq!(render::backdrop(&w), (render::BACKGROUND, render::STAGE));
+    // A palette of the world's own, made and then chosen (a palette must exist to be chosen).
     let mut w = soup(
         TilingSpec::rect("square", 20, 20, Boundary::Dead),
-        "Mine",
+        "Ember",
         0,
     );
     let mut mine = Palette::new("Mine", vec![[10, 10, 10], [90, 90, 90]]);
     mine.background = Some([250, 250, 250]);
     w.apply(Command::SetPalette { palette: mine }).unwrap();
+    let id = w.cas[0].id;
+    let change = CaChange {
+        palette: Some("Mine".into()),
+        ..Default::default()
+    };
+    w.apply(Command::UpdateCa { id, change }).unwrap();
     assert_eq!(render::backdrop(&w).0, [250, 250, 250, 255]);
     let back = World::from_scene(&Scene::from_json(&w.to_scene().to_json()).unwrap()).unwrap();
     assert_eq!(render::backdrop(&back).0, [250, 250, 250, 255]);
