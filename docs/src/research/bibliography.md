@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 261 works cited across the JETCARP documentation. Every entry was
+These are the 264 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -188,6 +188,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="giles2002kind"></span>Giles, Jim (2002). “What kind of science is this?”. *Nature* 417(6886): 216–218. doi:[10.1038/417216a](https://doi.org/10.1038/417216a). <small>`giles2002kind`</small>
 
+<span id="gillespie2017conway"></span>Gillespie, Owen and Forest Kobayashi (2017). “Conway-k-regular”. GitHub repository redpanda1234/Conway-k-regular. <https://github.com/redpanda1234/Conway-k-regular>; accessed 2026-11-10. <small>`gillespie2017conway`</small>
+
 <span id="golay1969hexagonal"></span>Golay, Marcel J. E. (1969). “Hexagonal parallel pattern transformations”. *IEEE Transactions on Computers* C-18(8): 733–740. doi:[10.1109/T-C.1969.222756](https://doi.org/10.1109/T-C.1969.222756). <small>`golay1969hexagonal`</small>
 
 <span id="gollynd_changes"></span>Golly developers (n.d.). “Golly Help: Changes”. <https://golly.sourceforge.io/Help/changes.html>; accessed 2026-11-10. <small>`gollynd_changes`</small>
@@ -237,6 +239,8 @@ BibTeX key, so you can link to it directly.
 <span id="grunbaum1987tilings"></span>Grünbaum, Branko and G. C. Shephard (1987). *Tilings and Patterns*. New York: W. H. Freeman. <https://archive.org/details/isbn_0716711931>; ISBN 0-7167-1193-1. <small>`grunbaum1987tilings`</small>
 
 <span id="grunbaum2016tilings"></span>Grünbaum, Branko and G. C. Shephard (2016). *Tilings and Patterns*. 2nd edition. Mineola, NY: Dover. ISBN 978-0-486-46981-2. <small>`grunbaum2016tilings`</small>
+
+<span id="guttesen2024answers"></span>Guttesen, H. S. (2024). “Answers to ‘Implement the game of life on anything but a regular grid’”. Code Golf Stack Exchange, question 35827, as henrisro. <https://codegolf.stackexchange.com/questions/35827>; accessed 2026-11-10. <small>`guttesen2024answers`</small>
 
 <span id="guttesen2026game"></span>Guttesen, H. S. (2026). “Game of Life on Archimedean Lattices: Glider Guns and Phase Dynamics”. [arXiv:2608.27622](https://arxiv.org/abs/2608.27622). <small>`guttesen2026game`</small>
 
@@ -513,6 +517,8 @@ BibTeX key, so you can link to it directly.
 <span id="tainaka1988lattice"></span>Tainaka, Kei-ichi (1988). “Lattice Model for the Lotka-Volterra System”. *Journal of the Physical Society of Japan* 57(8): 2588–2590. doi:[10.1143/JPSJ.57.2588](https://doi.org/10.1143/JPSJ.57.2588). <small>`tainaka1988lattice`</small>
 
 <span id="tainaka1989stationary"></span>Tainaka, Kei-ichi (1989). “Stationary pattern of vortices or strings in biological systems: Lattice version of the Lotka-Volterra model”. *Physical Review Letters* 63(24): 2688–2691. doi:[10.1103/PhysRevLett.63.2688](https://doi.org/10.1103/PhysRevLett.63.2688). <small>`tainaka1989stationary`</small>
+
+<span id="tessellationautomata2024"></span>Tessellation Automata (2024). “Tessellation Automata”. YouTube channel. <https://www.youtube.com/channel/UCJK3gmEXm40zoBlyOtkptQA>; accessed 2026-11-10. <small>`tessellationautomata2024`</small>
 
 <span id="toffoli1987cellular"></span>Toffoli, Tommaso and Norman Margolus (1987). *Cellular Automata Machines: A New Environment for Modeling*. MIT Press Series in Scientific Computation. Cambridge, MA: MIT Press. doi:[10.7551/mitpress/1763.001.0001](https://doi.org/10.7551/mitpress/1763.001.0001); ISBN 0-262-20060-0. <small>`toffoli1987cellular`</small>
 

@@ -271,7 +271,11 @@ credit and source are given:
   a 2014 Code Golf challenge; Büttner's period-20 spaceship, very likely the one JETCARP's hunts find in
   Life on the 2-uniform tiling k2-007, is the earliest ship on a k-uniform tiling that we know of.
 - **H. S. Guttesen**: Life on six Archimedean lattices, with gliders on the kagome and snub square
-  tilings (2026), which JETCARP's searches found again independently.
+  tilings (Code Golf answers in 2024, a paper in 2026), which JETCARP's searches found again
+  independently.
+- **Tessellation Automata** (YouTube, 2024): Life-like rules on many tilings, among them Life gliders on
+  the snub square tiling and other rules on the 2-uniform tiling k2-001; **Owen Gillespie** and
+  **Forest Kobayashi** (2017): a threshold rule on k2-001.
 
 ### Tilings
 

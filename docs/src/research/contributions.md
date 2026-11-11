@@ -26,12 +26,18 @@ The search has known weaknesses:
   through a mirror, and forum coverage is the weakest part of the search. A second pass over the forum
   boards, Code Golf Stack Exchange and code hosts in November 2026 found EricG's 2013 exploration of
   Life-like rules on the Archimedean tilings, which changed the spaceship claims below; its pattern
-  files are no longer online. Hobbyists may well have found other things below without publishing
-  them in papers.
+  files are no longer online. A third pass, aimed at the claim about Life on the 2- and 3-uniform
+  tilings, searched for "2-uniform", "3-uniform", "k-uniform", "demiregular" and the tilings' other
+  names on the forums, LifeWiki, Stack Exchange, GitHub, arXiv, YouTube and Hacker News. It found other
+  rules run on one 2-uniform tiling, and no report of Life on any 2- or 3-uniform tiling but k2-007 (see
+  [below](#4-spaceships-on-non-square-tilings)). Reddit, Discord, the contents of videos, and the tile
+  sets of closed programs such as Visions of Chaos could not be searched. Hobbyists may well have found
+  other things below without publishing them in papers.
 - **Unread full texts.** For a few papers only abstracts or search excerpts could be read; where a
   statement rests on an excerpt, the page that makes it says so.
 - **A fast-moving field.** Several closely related works appeared between August and October 2026
-  (Guttesen's Life on Archimedean lattices, Edmond's monotile gliders). We will re-run the key searches
+  (Guttesen's paper on Life on Archimedean lattices, whose results first appeared as Code Golf answers
+  in 2024, and Edmond's monotile gliders). We will re-run the key searches
   just before publication.
 
 ## Contributions
@@ -213,9 +219,15 @@ are in other rules. We found no other report of Life-like spaceships on k-unifor
 **Claim (to our knowledge): Life on the 2- and 3-uniform tilings.** In November 2026 JETCARP ran a
 census of Life itself (`B3/S23`, touching neighbours) on all 92 Archimedean, 2-uniform and 3-uniform
 tilings, 50,000 random soups on each
-([Findings](findings.md#life-on-the-archimedean-and-k-uniform-tilings)). By the search above, Life has
+([Findings](findings.md#life-on-the-archimedean-and-k-uniform-tilings)). By the searches above, Life has
 not been reported on any 3-uniform tiling before, nor on any 2-uniform tiling but k2-007, where Büttner
-very likely found his ship. The census finds Life spaceships on 19 of the 61 3-uniform tilings and 5 of
+very likely found his ship. Other rules have been run on one 2-uniform tiling, k2-001
+([3.4.6.4; 4.6.12]): a 2017 program described as "Conway's Game of Life on a k-uniform tiling", which
+counts only edge neighbours and scales its thresholds to each tile's number of sides, so is not
+`B3/S23` ([Gillespie and Kobayashi 2017](bibliography.md#gillespie2017conway)), and 2024 videos in
+`B26789/S2345` and in rules not stated
+([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)). Neither reports a spaceship
+there, and the census found no Life ship on k2-001. The census finds Life spaceships on 19 of the 61 3-uniform tilings and 5 of
 the 20 2-uniform ones. After the same checks as the candidates above, 26 of its objects are single
 ships with no flag, on 2 of the 2-uniform and 8 of the 3-uniform tilings, and to our knowledge they
 have not been reported before; 13 of them are large ships of k3-055 that may share a common engine.
@@ -228,9 +240,13 @@ two or more smaller ships flying together, or a smaller ship with a passenger.
 
 - **Guttesen's gliders.** EricG reported spaceships in Life on the kagome (3.6.3.6) and snub square
   tilings in 2013 ([EricG 2013](bibliography.md#ericg2013tiling2)) without describing them. Guttesen
-  described the small gliders themselves and built a kagome glider gun
-  ([Guttesen 2026](bibliography.md#guttesen2026game)), and we call them Guttesen's gliders after his
-  description.
+  described the small gliders themselves and built a kagome glider gun, first in Code Golf answers in
+  November 2024 and then in a paper
+  ([Guttesen 2024](bibliography.md#guttesen2024answers); [Guttesen 2026](bibliography.md#guttesen2026game)),
+  and we call them Guttesen's gliders after his description. In May 2024 a YouTube channel had also
+  shown Life gliders on the snub square tiling
+  ([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)); we have not compared them
+  with Guttesen's.
   JETCARP's searches found both independently: its kagome ship is exactly his glider g, and its
   snub-square ship matches his figure. Ten catalogue entries turned out to be pairs of ships flying side
   by side without touching: eight pairs of his glider g, one pair of his snub-square glider and one

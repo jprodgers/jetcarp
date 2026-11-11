@@ -233,8 +233,9 @@ object, as Life catalogues keep tag-alongs, but it is not counted as a separate 
   `dbeb2dbf`), one is two of his snub-square glider (`80d241d2`) and one is two copies of `095a6bf7`
   (`f338d60a`).
 - **Guttesen's gliders.** His glider g on 3.6.3.6 and his period-8 glider on 3.3.4.3.4, both in Life,
-  were found by JETCARP's searches independently; they are his
-  ([Guttesen 2026](bibliography.md#guttesen2026game)). EricG had already reported spaceships in Life
+  were found by JETCARP's searches independently; they are his, first posted as Code Golf answers in
+  November 2024 ([Guttesen 2024](bibliography.md#guttesen2024answers);
+  [Guttesen 2026](bibliography.md#guttesen2026game)). EricG had already reported spaceships in Life
   on both tilings in 2013, without describing them ([EricG 2013](bibliography.md#ericg2013tiling2)). JETCARP's 4-to-5-cell kagome ship is exactly
   his Fig. 4 glider (the same cells in one phase), and its snub-square ship matches his Fig. 5 by eye;
   a cell-for-cell check awaits his published configurations. His large kagome glider G (period 40) was
@@ -1421,7 +1422,8 @@ ship passed every check, but is so common (in at least one soup in a hundred on 
 census met it) that anyone who ran Life there would see it at once, or lies on a tiling where others
 have run Life before (3.3.4.3.4 and k2-007). For these the question is not whether the ship is new, but whether anyone has
 run Life on that tiling. We know of no one who has run Life on a 3-uniform tiling, or on a 2-uniform
-tiling other than k2-007.
+tiling other than k2-007; other rules have been run on k2-001, where the census found no Life ship (see
+[What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
 
 Most census records are not new objects. JETCARP's object finder stores ships that fly side by side
 as one, so the census lists 124 **compounds**, nearly all pairs (and a few triples) of the commonest
@@ -2274,7 +2276,10 @@ EricG ran Life-like rules on the eight mixed Archimedean tilings in 2013 and rep
 on 3.6.3.6, 3.3.4.3.4 and 3.3.3.4.4 ([EricG 2013](bibliography.md#ericg2013tiling2)). Martin Büttner
 found a period-20 Life ship on a tiling of hexagons, squares and triangles in 2014
 ([Code Golf 2014](bibliography.md#codegolf2014life)). H. S. Guttesen described the kagome glider g
-and the snub-square glider ([Guttesen 2026](bibliography.md#guttesen2026game)). The 2- and 3-uniform
+and the snub-square glider, first in Code Golf answers in 2024
+([Guttesen 2024](bibliography.md#guttesen2024answers); [Guttesen 2026](bibliography.md#guttesen2026game)),
+and a YouTube channel showed Life gliders on the snub square tiling in May 2024
+([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)). The 2- and 3-uniform
 tilings are Galebach's catalogue ([Galebach: uniform tilings](bibliography.md#galebachnd_uniform)).
 
 ## The hat glider is Edmond's glider B
