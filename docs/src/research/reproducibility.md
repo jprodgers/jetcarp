@@ -118,7 +118,7 @@ transaction, so stopping it, a crash or a reboot loses at most the step in fligh
 in a fixed order (soups by index, for example, with each new pattern's record taken from the lowest
 soup index that found it), so they do not depend on the batching either.
 
-The tests in `crates/jetcarp-core/tests/jobs.rs` and beside it check, for every kind of job, that one
+The tests in `crates/jetcarp-search/tests/jobs.rs` and beside it check, for every kind of job, that one
 stopped and resumed, on the same runner or another, ends with exactly the results of one that ran
 through: hunts, ant searches, bounded soup searches, collisions, sandpiles, censuses (the same
 report), movers on a sliding window, and evolutionary searches. They also check that a job left
