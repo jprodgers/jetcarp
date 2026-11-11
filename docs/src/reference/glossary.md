@@ -46,8 +46,8 @@ See [Life-like rules](../automata/life-like.md#b0-rules).
 
 ## C
 
-**Alias.** An old id of a record, kept so that lookups by it still find the record: CART's ids, or an
-id from before a geometry change. See [Library format](library-format.md#aliases).
+**Alias.** An old id of a record, kept so that lookups by it still find the record: an id from before
+a geometry change. See [Library format](library-format.md#aliases).
 
 **Canonical form.** A pattern written from its canonical starting phase, in its canonical orientation,
 at the origin: the form its identity is computed from, so one pattern has one id however it was found

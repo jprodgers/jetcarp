@@ -194,14 +194,37 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
-rows 1, 2, ...: today `reverified`.
+rows 1, 2, ...: today `reverified`. A record found elsewhere and imported with its history keeps its
+discovery as row 0 (`found`, with the finder, source and engine that found it, the date it was first
+stored there, and the pin it was verified with here; the machine is not known), and row 1 is then
+`imported`.
 
 ## Aliases
 
-The table `id_aliases` maps old ids to records: `cart-fnv` (the 64-bit ids of JETCARP's predecessor
-CART, kept when its records are imported), `geometry-change` (an id from before a geometry change) and
-`canonicalised` (an id of a record that was stored in a non-canonical form). Every lookup by id,
-prefix or short id also searches the aliases.
+The table `id_aliases` maps old ids to records: `geometry-change` (an id from before a geometry
+change). Every lookup by id, prefix or short id also searches the aliases.
+
+## Records from CART
+
+CART's catalog was brought into a fresh library once, by a development tool that is not part of the
+released program (`crates/jetcarp-store/examples/import_cart`), and every record was verified again
+on JETCARP 0.4.0 on the way in:
+
+- **Records.** Each record was put in canonical form, which gives it its content id, and verified again
+  in its own rule and in every rule CART had verified it in; its rule range was computed again. A
+  record that failed in every rule was left out, and one that failed in some rules came in with the
+  others only. Records that CART stored twice, as two orientations or phases of one pattern, became
+  one record: their seen counts and sightings add up, the earliest one's name and date are kept
+  (another name goes into the notes), and so are all their notes and tags.
+- **Kept.** Names, notes, tags, curation, seen counts, and sightings per rule and job with their
+  dates; CART's jobs, as finished jobs with their census rows, and the objects a hunt counted without
+  storing them, as counts in its job's progress. Scores and labels were made again. Media were not
+  kept (they are made again from the records), nor were the stage-1 settings and score models.
+- **Ids.** CART's 64-bit ids were not kept, and no alias names them: this book cites the new ids.
+- **Dates.** A record's provenance row 0 is its discovery in CART: `found`, by Jimmie Rodgers (with
+  ORCID iD), on the date CART stored it (the earliest, where records were merged), by the job that
+  saw it first, with engine version `CART 0.1.0` and the geometry pin it was verified with in 0.4.0.
+  Row 1, `imported`, is the import.
 
 ## Tables
 
@@ -211,7 +234,7 @@ up to 2 the first time it is opened: its ratings gain `verdict` and `source`, an
 named files in per-record folders, are dropped, since media are always made again from their records.
 A library made by a newer JETCARP is refused with a message to update. Catalogs from before schema 1
 (CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or migrated: JETCARP 0.4
-starts a fresh library.
+starts a fresh library (see [Records from CART](#records-from-cart)).
 
 | Table | One row per |
 | --- | --- |
