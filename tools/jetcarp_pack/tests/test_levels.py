@@ -292,6 +292,28 @@ class Ratings(StoreTest):
             t["raters"][0]["consent_scope"] = "private"
         self.assertIn("rater-consent", fails(self.build(change)))
 
+    def test_consent_dates_are_times(self):
+        def change(t):
+            t["raters"][0]["consent_date"] = "2026-11-01"
+        self.assertIn("time", fails(self.build(change)))
+
+    def test_a_raters_latest_row_stands(self):
+        # raters is an event table: consent recorded again adds a row, and the latest stands. The
+        # group stops sharing notes later; its earlier note was shared under its earlier consent.
+        def change(t):
+            group = dict(next(r for r in t["raters"] if r["members"]))
+            group.update(consent_date=stores.D3, notes=False)
+            t["raters"].append(group)
+        report = self.build(change)
+        self.assertClean(report)
+        self.assertEqual(report.passed[(1, "ratings rows with consent")], 3)
+
+    def test_a_note_needs_some_row_that_shares_notes(self):
+        def change(t):
+            for r in t["raters"]:
+                r["notes"] = False
+        self.assertIn("rater-consent", fails(self.build(change)))
+
 
 class Authenticity(StoreTest):
     def test_minimal_is_clean(self):

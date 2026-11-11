@@ -344,13 +344,11 @@ def check_manifest_signatures(store, ring, report, h):
             report.ok(2, "manifest signatures")
         else:
             report.info(2, "endorsement", sw, f"endorsed by {signer}")
+    # A machine key's signature is at that key's name: a reader over HTTP looks under the publisher's
+    # key and each key its statement authorises, so a version signed only by a machine key is found.
     if not by_publisher:
         report.fail(2, "no-publisher-signature", where,
                     f"no valid signature by its publisher {publisher} or a machine key it authorises")
-    elif publisher not in by_publisher and not store.is_export:
-        report.warn(2, "publisher-sig-name", where,
-                    f"is signed only by a machine key, so there is no signature at {signer_name(publisher)}.sig, where "
-                    "a reader over HTTP looks for the publisher's")
 
 
 def check_ref(store, ring, report, feed, raw, ref, feeds):

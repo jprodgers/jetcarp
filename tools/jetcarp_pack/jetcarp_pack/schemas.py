@@ -150,7 +150,7 @@ TABLES = {t.name: t for t in [
         _c("rater", S), _c("consent_date", S), _c("consent_scope", S),
         _c("display_name", S, True), _c("orcid", S, True),
         _c("members", pa.list_(S), True), _c("notes", B),
-    ], sort=("rater",), kind="fact", key=("rater",), optional=True),  # fact or event: not said (choice)
+    ], sort=("rater",), kind="event", optional=True),  # each rater's latest row stands
     Table("score_models", [
         _c("model", S), _c("version", S), _c("kind", S), _c("features", pa.list_(S)),
         _c("weights", pa.list_(F64)), _c("intercept", F64), _c("fitted_on", S),
@@ -176,7 +176,6 @@ RULE_FAMILIES_WITH_MASKS = ("lifelike", "generations")
 SCALES = {"keep-maybe-drop 1": ("keep", "maybe", "drop"), "stars-1-5 1": ("1", "2", "3", "4", "5")}
 GUN_MEMBERS = ("ship", "ship_label", "ship_period", "ship_displacement", "ship_speed", "per_period", "ship_phases")
 RANGE_MEMBERS = ("bits", "birth_min", "birth_max", "survive_min", "survive_max", "states_min", "states_max")
-
 
 def normalise_type(t):
     """A type with list field names, string widths and integer and float widths set aside, as readers

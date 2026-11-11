@@ -844,10 +844,13 @@ class Checker:
                 self.r.fail(1, e.code, w, f"object: {e.message}")
 
     def ratings(self):
-        raters = self._facts("raters", lambda r: r["rater"])
-        self.raters = raters
-        for rid, row in raters.items():
-            w = f"raters {rid}"
+        # raters is an event table: consent recorded again adds a row, and each rater's latest row
+        # stands (the greatest consent_date, then the greater row by its RFC 8785 text). A rating's
+        # note needs some row of its rater that shares notes.
+        columns = [c.name for c in schemas.TABLES["raters"].columns]
+        latest, shares_notes = {}, set()
+        for part, n, row in self.pack.rows("raters"):
+            rid, w = row["rater"], part.where(n)
             if not ident.RATER_ID.match(rid or ""):
                 self.r.fail(1, "rater-id", w, "is not rater- and 16 hex digits")
             if row["consent_scope"] != "public-permanent":
@@ -857,6 +860,15 @@ class Checker:
                                           "with whole seconds and Z")
             if row["orcid"] is not None and not ident.is_orcid(row["orcid"]):
                 self.r.warn(1, "orcid", w, f"ORCID {row['orcid']!r} has a wrong check digit")
+            if row["notes"]:
+                shares_notes.add(rid)
+            order = (row["consent_date"] or "", jcs.dumps({c: row[c] for c in columns}).encode())
+            if rid not in latest or order > latest[rid][0]:
+                latest[rid] = (order, row)
+        raters = {rid: v[1] for rid, v in latest.items()}
+        self.raters = raters
+        for rid, row in raters.items():
+            w = f"raters {rid}"
             members = row["members"]
             if members is not None:
                 if not members:
@@ -879,7 +891,7 @@ class Checker:
             rater = raters.get(row["rater"])
             if rater is None:
                 self.r.fail(1, "rater-consent", w, f"rater {row['rater']!r} has no raters row, so no recorded consent")
-            elif row["note"] is not None and not rater["notes"]:
+            elif row["note"] is not None and row["rater"] not in shares_notes:
                 self.r.fail(1, "rater-consent", w, "has a note, but the rater did not agree to share notes")
             if ident.target_kind(row["target"]) is None:
                 self.r.fail(1, "target", w, f"target {ident.short(row['target'])!r} is not a record or search_run target")
