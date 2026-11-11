@@ -1,9 +1,9 @@
 """A tiny pack writer, for tests only: it makes stores to test the reader against, and the stores in
-testdata/ that the Rust importer is checked against. It follows the pack spec as written, with
-pyarrow and this package's RFC 8785.
+testdata/ that JETCARP's own `pack check` and `pack import` are tried on. It follows pack-format.md,
+with pyarrow and this package's RFC 8785.
 
-pyarrow cannot set Parquet's `created_by`, which section 3 requires to be `jetcarp-pack 1`, so the
-writer rewrites that one field in the Thrift footer (`set_created_by`).
+It writes no key-value metadata (`store_schema=False`) and sets `created_by` to `jetcarp-pack 1`, as
+JETCARP does, by rewriting that one field of the Thrift footer: pyarrow has no option for it.
 """
 
 import hashlib
@@ -194,16 +194,16 @@ class StoreWriter:
         first = _key_text(rows[0].get(spec.sort[0])) if rows else ""
         last = _key_text(rows[-1].get(spec.sort[0])) if rows else ""
         if partition is None:
-            partition = {k: rows[0][col] for k, col in spec.partition.items()} if rows else {}
+            partition = {col: rows[0][col] for col in spec.partition} if rows else {}
         return {"object": h, "rows": len(rows), "bytes": len(data), "partition": partition,
                 "first": first, "last": last}
 
     def entries(self, table_name, rows):
-        """One part per partition (section 8.2), in partition order."""
+        """One part per partition, in partition order."""
         spec = schemas.TABLES[table_name]
         groups = {}
         for r in rows:
-            groups.setdefault(tuple(r[col] for col in spec.partition.values()), []).append(r)
+            groups.setdefault(tuple(r[col] for col in spec.partition), []).append(r)
         return [self.part(table_name, groups[k]) for k in sorted(groups)]
 
     def index(self, table_name, entries, children=(), schema=None):
@@ -214,7 +214,7 @@ class StoreWriter:
 
     def tables(self, content, previous=None):
         """Index hashes for {table: rows}. With `previous` ({table: entries}), parts already
-        published are kept and only new rows go into new parts (append-only, section 8.1)."""
+        published are kept and only new rows go into new parts (append-only)."""
         out, entries_out = {}, {}
         previous = previous or {}
         for name in sorted(set(content) | set(previous)):
@@ -244,14 +244,23 @@ class StoreWriter:
         sig = key.sign("jetcarp-manifest", data if payload is None else payload)
         self.write(("sigs", "sha256", hexd[:2], hexd, signer_name(key.fingerprint) + ".sig"), sig.encode("ascii"))
 
-    def key_statement(self, key, created, *, signer=None, supersedes="", revoked=False, name=None,
+    def key_statement(self, key, created, *, signer=None, supersedes=None, revoked=False, name=None,
                       authorised=(), **extra):
+        """`authorised`: (key, label) or (key, label, revoked) for each machine key."""
         doc = {"format": "jetcarp-key", "version": "1.0", "key": key.line, "fingerprint": key.fingerprint,
-               "created": created, "supersedes": supersedes, "revoked": revoked}
+               "created": created, "revoked": revoked}
+        if supersedes:
+            doc["supersedes"] = supersedes
         if name:
             doc["name"] = name
         if authorised:
-            doc["authorised"] = [{"key": k.line, "fingerprint": k.fingerprint, "label": label} for k, label in authorised]
+            doc["authorised"] = []
+            for entry in authorised:
+                k, label = entry[0], entry[1]
+                item = {"key": k.line, "fingerprint": k.fingerprint, "label": label}
+                if len(entry) > 2 and entry[2]:
+                    item["revoked"] = True
+                doc["authorised"].append(item)
         doc.update(extra)
         doc["signature"] = (signer or key).sign("jetcarp-key", jcs.canonical(doc))
         self.write(("keys", signer_name(key.fingerprint) + ".json"), jcs.canonical(doc))

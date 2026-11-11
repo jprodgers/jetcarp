@@ -16,7 +16,7 @@ from jetcarp_pack import authenticity, integrity, jcs, replay
 from jetcarp_pack.limits import Limits
 from jetcarp_pack.pack import list_refs
 from jetcarp_pack.report import FAIL, Report
-from jetcarp_pack.store import Store
+from jetcarp_pack.store import Store, open_store
 
 from . import stores
 from .packwriter import StoreWriter
@@ -35,7 +35,7 @@ def keys():
 
 
 def run(root, level, limits=None, **kw):
-    store = Store(root, limits or Limits())
+    store = open_store(root, limits or Limits())
     report = Report()
     if level == 1:
         integrity.check_store(store, report, kw.get("manifest"))

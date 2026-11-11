@@ -2,21 +2,22 @@
 
 The canonical form here is the one the book's glider implies (library-format.md): over every phase in
 each of the square grid's 8 symmetries, moved so its smallest i and j are 0, the start whose cells,
-sorted by (j, i, k, s), are smallest. It reproduces the book's glider text and id exactly; for other
-patterns it is an inference, and JETCARP's level 4 may disagree (see SPEC_QUESTIONS.md).
+sorted by (j, i, k, s), are smallest. It reproduces the book's glider text and id exactly, and the
+golden packs' block and blinker; for other patterns it is an inference that JETCARP's level 4 tests.
 
-The tilings row's geometry (corners, axis directions, neighbour order) is this writer's guess, since
-section 23.1 leaves it to the engine; only the pin is JETCARP's (the book's square-grid pin).
+The square grid's `tilings` row is pack-format.md's own ("Geometry pins"): its pin and hashes are
+recomputed from it here and must give the spec's values.
 """
 
 from jetcarp_pack import identity as ident
-from jetcarp_pack import jcs
+from jetcarp_pack import jcs, pins
 from jetcarp_pack.replay import Lattice, moved, translation
 
 SQUARE_KEY = jcs.tiling_key({"family": "square"})
-SQUARE_PIN = "0145310ebd49abfe89eb01c42ecaf459"  # library-format.md
-EDGE = [(1, 0), (0, 1), (-1, 0), (0, -1)]
-TOUCH = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+SQUARE_PIN = "0145310ebd49abfe89eb01c42ecaf459"  # library-format.md and pack-format.md
+# pack-format.md's square grid: clockwise on the y-down screen, from the tile's first corner.
+EDGE = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+TOUCH = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]
 SYMMETRIES = [(1, 0, 0, 1), (0, -1, 1, 0), (-1, 0, 0, -1), (0, 1, -1, 0),
               (-1, 0, 0, 1), (1, 0, 0, -1), (0, 1, 1, 0), (0, -1, -1, 0)]
 
@@ -32,14 +33,23 @@ BLINKER = "ooo"
 LWSS = ".o..o/o/o...o/oooo"
 
 
+def lattice_row(pin_key, name, family, a1, a2, tile_types, edge, touch, tiling_group, params=None, edges=None):
+    """A lattice `tilings` row, its pin and hashes computed from its geometry."""
+    row = {"pin_key": pin_key, "name": name, "kind": "lattice", "family": family, "params": params,
+           "edges": edges, "tiling_group": tiling_group, "a1": a1, "a2": a2, "tile_types": tile_types,
+           "edge": edge, "touch": touch, "reference_level": None, "reference": None, "reference_tiles": None}
+    row["polygon_hash"], row["neighbour_hash"], row["pin"] = pins.lattice_hashes(row)
+    return row
+
+
 def square_tiling():
     def offsets(lst):
         return [[{"di": di, "dj": dj, "k": 0} for di, dj in lst]]
-    return {"pin_key": SQUARE_KEY, "pin": SQUARE_PIN, "name": "Square", "kind": "lattice",
-            "a1": [1.0, 0.0], "a2": [0.0, 1.0],
-            "tile_types": [{"shape": 0, "corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}],
-            "edge": offsets(EDGE), "touch": offsets(TOUCH), "family": "square", "params": "{}",
-            "reference_level": None}
+    row = lattice_row(SQUARE_KEY, "Square", "square", [1.0, 0.0], [-0.0, 1.0],
+                      [{"shape": 0, "corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}],
+                      offsets(EDGE), offsets(TOUCH), "square")
+    assert row["pin"] == SQUARE_PIN, row["pin"]
+    return row
 
 
 def cells_from_picture(text, state=1):
@@ -113,10 +123,22 @@ def from_phases(phases, d, rule, *, speed=None, nb="touch", tiling_key=SQUARE_KE
             "semantics": rule["semantics"]}
 
 
-def verification(pattern, rule, publisher, date):
-    return {"pattern_id": pattern["id"], "rule": rule["notation"], "publisher": publisher, "periods": 16,
-            "generations": 16 * pattern["period"], "field": "dead-edged frame 32x32", "engine_version": "0.4.0",
-            "pin": pattern["pin"], "semantics": "1", "date": date, "range": None}
+def verification(pattern, rule, publisher, date, main=True):
+    return {"pattern_id": pattern["id"], "rule": rule["notation"], "publisher": publisher, "main": main,
+            "periods": 16, "generations": 16 * pattern["period"], "field": "dead-edged frame 32x32",
+            "sites": None, "engine_version": "0.4.0", "pin": pattern["pin"], "semantics": rule["semantics"],
+            "date": date, "range": None, "mover": None}
+
+
+def quickstart(pattern, title, date):
+    """A Quick Start entry made from a pattern, its scene modelled on the golden packs' (scene-format.md)."""
+    scene = jcs.dumps({"cas": [{"enabled": True, "rule": "B3/S23", "steps_per_gen": 1}], "format": 1,
+                       "jetcarp_version": "0.4.0", "name": title, "rng_state": 1,
+                       "tiling": {"boundary": "wrap", "family": "square", "size": {"rect": {"h": 32, "w": 32}}}})
+    return {"id": ident.quickstart_id(scene, SQUARE_PIN), "title": title, "description": "A test entry.",
+            "source": f"pattern:{pattern['id']}", "scene": scene, "scene_format": "1", "rule": "B3/S23",
+            "rule_family": "lifelike", "semantics": "1", "behaviour": "spaceship", "pin_key": SQUARE_KEY,
+            "pin": SQUARE_PIN, "tiling_group": "square"}
 
 
 def langtons_ant(steps=12000):
@@ -149,37 +171,39 @@ def langtons_ant(steps=12000):
         onset -= 1
     identity = ident.format_ant_identity(rule="Ant RL", tiling=SQUARE_KEY, start='"empty"')
     return {"id": ident.ant_id(identity, SQUARE_PIN), "identity": identity, "pin_key": SQUARE_KEY,
-            "pin": SQUARE_PIN, "rule": "Ant RL", "kind": "string", "start": '"empty"', "outcome": "highway",
-            "period": period, "dx": dx, "dy": dy, "onset": onset, "steps": steps, "cells": len(visited),
-            "tiling_group": "square", "family": "ant", "semantics": "1"}
+            "pin": SQUARE_PIN, "rule": "Ant RL", "kind": "string", "family": "ant", "semantics": "1",
+            "states": 1, "colors": 2, "start": '"empty"', "outcome": "highway",
+            "period": period, "dx": dx, "dy": dy, "onset": onset, "speed": None, "steps": steps,
+            "cells": len(visited), "run": jcs.dumps({"steps": steps}), "tiling_group": "square"}
 
 
 SEARCH = "0b6f3c2a-5d4e-4f1a-9c8b-7a6e5d4c3b2a"
 
 
-def events(publisher, patterns, date, rule="B3/S23", names=None, search=SEARCH, ants=()):
-    """Verifications, sightings, provenance and names for records, by one publisher."""
+def provenance(target, publisher, date, pin, kind="found", seq=0, search=SEARCH, pack=None, source="search"):
+    return {"target": target, "publisher": publisher, "seq": seq, "kind": kind, "finder": None, "orcid": None,
+            "search_kind": "hunt" if search else None, "search": search, "machine": "linux-x86_64",
+            "engine_version": "0.4.0", "pin": pin, "date": date, "source": source, "pack": pack, "run": None}
+
+
+def events(publisher, patterns, date, rule=LIFE, names=None, search=SEARCH, ants=(), rev=1, quickstarts=()):
+    """Verifications, sightings, provenance and names for records, by one publisher, added by the
+    version whose ref seq is `rev`."""
     names = names or {}
     out = {"verifications": [], "sightings": [], "provenance": [], "annotations": []}
     for p in patterns:
-        out["verifications"].append({
-            "pattern_id": p["id"], "rule": rule, "publisher": publisher, "periods": 16,
-            "generations": 16 * p["period"], "field": "dead-edged frame 32x32", "engine_version": "0.4.0",
-            "pin": p["pin"], "semantics": "1", "date": date, "range": None})
+        out["verifications"].append(verification(p, rule, publisher, date))
         out["sightings"].append({
-            "pattern_id": p["id"], "rule": rule, "publisher": publisher, "source": search,
-            "count": 7, "soups": 5, "first_seen": date, "last_seen": date})
-        out["provenance"].append({
-            "target": f"pattern:{p['id']}", "publisher": publisher, "seq": 0, "kind": "found", "finder": None,
-            "orcid": None, "search_kind": "census", "search": search, "engine_version": "0.4.0",
-            "pin": p["pin"], "date": date, "source": "search"})
+            "pattern_id": p["id"], "rule": rule["notation"], "publisher": publisher, "source": search,
+            "source_kind": "hunt", "count": 7, "soups": 5, "first_seen": date, "last_seen": date})
+        out["provenance"].append(provenance(f"pattern:{p['id']}", publisher, date, p["pin"]))
         if p["id"] in names:
             out["annotations"].append({
                 "target": f"pattern:{p['id']}", "publisher": publisher, "field": "name",
-                "value": jcs.dumps(names[p["id"]]), "score_model": None, "date": date})
+                "value": jcs.dumps(names[p["id"]]), "score_model": None, "date": date, "rev": rev})
     for a in ants:
-        out["provenance"].append({
-            "target": f"ant:{a['id']}", "publisher": publisher, "seq": 0, "kind": "found", "finder": None,
-            "orcid": None, "search_kind": "ants", "search": search, "engine_version": "0.4.0",
-            "pin": a["pin"], "date": date, "source": "search"})
+        out["provenance"].append(provenance(f"ant:{a['id']}", publisher, date, a["pin"]))
+    for q in quickstarts:
+        out["provenance"].append(provenance(f"quickstart:{q['id']}", publisher, date, q["pin"], search=None,
+                                            source="a test scene"))
     return out

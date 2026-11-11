@@ -10,7 +10,7 @@ import unittest
 from jetcarp_pack import browse, jcs
 from jetcarp_pack.pack import Pack
 from jetcarp_pack.report import Report, SKIP
-from jetcarp_pack.store import Store, signer_name
+from jetcarp_pack.store import Store, signer_name  # noqa: F401
 
 from . import content as C
 from . import stores
@@ -25,21 +25,28 @@ class Browse(StoreTest):
         self.assertTrue(pack.ok)
         names = {t["table"]: t["rows"] for t in browse.tables(pack)}
         self.assertEqual(names["patterns"], 3)
-        self.assertEqual(names["ants"], 1)
+        self.assertEqual(names["quickstart"], 1)
         rows = browse.rows(pack, "patterns", ["class=spaceship"], ["id", "period"])
         self.assertEqual(rows, [{"id": C.GLIDER_ID, "period": 4}])
         self.assertEqual(browse.find(pack, C.GLIDER_ID[:8])["record"]["id"], C.GLIDER_ID)
         self.assertEqual(browse.find(pack, "glider")["record"]["id"], C.GLIDER_ID)
+        self.assertEqual(browse.find(pack, "5a0")["matches"], [])  # under 4 digits is no prefix
+        ants = stores.build_ant_run(self.root("ants"), self.keys)
+        pack = Pack(Store(self.root("ants")), ants["manifest"])
         ant = out["records"]["ant"]["id"]
         self.assertEqual(browse.find(pack, ant)["record"]["id"], ant)
-        self.assertEqual(browse.find(pack, "5a0")["matches"], [])  # under 4 digits is no prefix
 
     def test_retracted_record_is_shown_as_retracted(self):
         out = stores.build_retraction(self.root(), self.keys)
         pack = Pack(Store(self.root()), out["manifest"])
         found = browse.find(pack, out["records"]["blinker"]["id"])
         self.assertIn("Test retraction", found["retracted"]["reason"])
-        self.assertNotIn("retracted", browse.find(pack, C.GLIDER_ID))
+        self.assertEqual(found["retracted"]["by"], self.keys.a.fingerprint)
+        glider = browse.find(pack, C.GLIDER_ID)
+        self.assertNotIn("retracted", glider)
+        # Latest wins by rev: version 2's name (rev 2, the same date order aside) over version 1's.
+        self.assertEqual(glider["annotations_latest"], [{"publisher": self.keys.a.fingerprint, "field": "name",
+                                                         "value": '"test glider"'}])
 
 
 class Integrity(StoreTest):
@@ -49,7 +56,45 @@ class Integrity(StoreTest):
         report = run(self.root(), 1)
         self.assertClean(report)
         self.assertEqual(report.passed[(1, "pattern content ids")], 3)
+        self.assertEqual(report.passed[(1, "quickstart content ids")], 1)
+        self.assertEqual(report.passed[(1, "pins recomputed from geometry")], 1)
+
+    def test_ant_ids(self):
+        stores.build_ant_run(self.root(), self.keys)
+        report = run(self.root(), 1)
+        self.assertClean(report)
         self.assertEqual(report.passed[(1, "ant content ids")], 1)
+
+    def test_pin_must_follow_from_geometry(self):
+        stores.build_bad_pin(self.root(), self.keys)
+        self.assertIn("pin", fails(run(self.root(), 1)))
+
+    def test_quickstart_id(self):
+        def change(c):
+            c["quickstart"][0]["title"] = "Renamed"  # not part of the id
+            c["quickstart"][0]["scene"] = c["quickstart"][0]["scene"].replace("Test glider", "Other")
+        self.assertIn("content-id", fails(self.mutated(change)))
+
+    def test_json_cells_in_one_spelling(self):
+        def change(c):
+            c["annotations"][0]["value"] = '"glider" '
+        self.assertIn("cell-not-canonical", fails(self.mutated(change)))
+
+    def test_retractions_are_cumulative(self):
+        stores.build_retraction(self.root(), self.keys)
+        _, ref, _, _ = current(self.root())
+        republish(self.root(), lambda d: d.update(parents=[ref["manifest"]], retracts=[]), self.keys.a)
+        self.assertIn("retraction-dropped", fails(run(self.root(), 1)))
+
+    def test_event_rows_are_not_added_twice(self):
+        out = stores.build_minimal(self.root(), self.keys)
+        w = StoreWriter(self.root(), marker=False)
+        pack = Pack(Store(self.root()), out["manifest"])
+        again = w.part("sightings", [dict(r) for _, _, r in pack.rows("sightings")][:1])
+        index = w.index("sightings", out["entries"]["sightings"] + [again])
+        republish(self.root(), lambda d: d.update(parents=[out["manifest"]], tables=dict(d["tables"], sightings=index)),
+                  self.keys.a)
+        self.assertIn("event-repeated", fails(run(self.root(), 1)))
 
     def test_tampered_object(self):
         stores.build_tampered_object(self.root(), self.keys)
@@ -150,7 +195,7 @@ class Integrity(StoreTest):
         out = stores.build_minimal(self.root(), self.keys)
         w = StoreWriter(self.root(), marker=False)
         e = [dict(x) for x in out["entries"]["patterns"]]
-        e[0]["partition"] = {"class": "gun", "tiling_group": "square"}
+        e[0]["partition"] = {"class_group": "gun", "tiling_group": "square"}
         index = w.index("patterns", e)
         republish(self.root(), lambda d: d["tables"].update(patterns=index), self.keys.a)
         self.assertIn("part-partition", fails(run(self.root(), 1)))
@@ -170,7 +215,7 @@ class Integrity(StoreTest):
         w = StoreWriter(self.root(), marker=False)
         h = w.put(data, "parquet")
         index = w.index("patterns", [{"object": h, "rows": 2, "bytes": len(data),
-                                      "partition": {"class": "x", "tiling_group": "square"},
+                                      "partition": {"class_group": "x", "tiling_group": "square"},
                                       "first": rows[0]["id"], "last": rows[1]["id"]}])
         republish(self.root(), lambda d: d["tables"].update(patterns=index), self.keys.a)
         self.assertIn("part-sort", fails(run(self.root(), 1)))
@@ -186,12 +231,33 @@ class Integrity(StoreTest):
         png = w.put(b"\x89PNG not really", "png")
         part = w.part("media", [{"target": f"pattern:{C.GLIDER_ID}", "kind": "frames", "from_seed": False,
                                  "object": png, "media_type": "image/png", "width": 8, "height": 8, "frames": 1,
-                                 "render_key": "k", "render": "{}"}])
+                                 "bytes": 15, "render_key": "k", "render": "{}"}])
         index = w.index("media", [part])
         republish(self.root(), lambda d: d["tables"].update(media=index), self.keys.a)
         f = fails(run(self.root(), 1))
         self.assertIn("media-kind", f)
         self.assertNotIn("object-hash", f)
+
+
+class Exports(StoreTest):
+    def test_export_is_clean(self):
+        stores.build_export(self.root(), self.keys)
+        report = run(self.root(), 1)
+        self.assertClean(report)
+        self.assertGreater(report.passed[(1, "export files in their places")], 5)
+        self.assertClean(run(self.root(), 2))
+        self.assertEqual(run(self.root(), 3).passed[(3, "patterns replayed")], 3)
+
+    def test_export_layout(self):
+        stores.build_export(self.root(), self.keys)
+        folder = os.path.join(self.root(), "tables", "patterns")
+        a = os.path.join(folder, "class_group=spaceship", "tiling_group=square", "part-000001.parquet")
+        b = os.path.join(folder, "class_group=still_life", "tiling_group=square", "part-000001.parquet")
+        tmp = a + ".swap"
+        os.rename(a, tmp)
+        os.rename(b, a)
+        os.rename(tmp, b)
+        self.assertIn("export-layout", fails(run(self.root(), 1)))
 
 
 class Ratings(StoreTest):
@@ -247,8 +313,8 @@ class Authenticity(StoreTest):
         StoreWriter(self.root(), marker=False).write(
             ("sigs", "sha256", hexd[:2], hexd, signer_name(self.keys.a.fingerprint) + ".sig"), sig.encode())
         report = run(self.root(), 2)
-        self.assertIn("bad-signature", fails(report))
-        self.assertTrue(any("signature is by key" in f.message for f in report.findings))
+        self.assertIn("sig-name", fails(report))  # the file's <signer> is not the signature's key
+        self.assertTrue(any("named for another key" in f.message for f in report.findings))
 
     def test_wrong_namespace(self):
         out = stores.build_minimal(self.root(), self.keys)
@@ -308,12 +374,38 @@ class Authenticity(StoreTest):
         f = fails(run(self.root(), 2))
         self.assertIn("revoked-key", f)
 
-    def test_revoked_after_the_manifest(self):
+    def test_revocation_ignores_dates(self):
         out = stores.build_minimal(self.root(), self.keys)
         StoreWriter(self.root(), marker=False).key_statement(self.keys.a, stores.D3, revoked=True)
         report = run(self.root(), 2, manifest=out["manifest"])
-        self.assertIn("revoked-key", codes(report, "WARN"))  # the manifest was made before
-        self.assertIn("revoked-key", fails(report))  # the ref is current, and its key revoked
+        self.assertIn("revoked-key", fails(report))  # made before the revocation, still refused
+
+    def test_revocation_is_kept(self):
+        """A store that serves the old statement again cannot undo a revocation already seen."""
+        stores.build_minimal(self.root(), self.keys)
+        state = os.path.join(self.tmp, "state.json")
+        self.assertClean(run(self.root(), 2, state=state, accept=True))
+        w = StoreWriter(self.root(), marker=False)
+        statement = os.path.join(self.root(), "keys", signer_name(self.keys.a.fingerprint) + ".json")
+        with open(statement, "rb") as f:
+            good = f.read()
+        w.key_statement(self.keys.a, stores.D2, revoked=True)
+        self.assertIn("revoked-key", fails(run(self.root(), 2, state=state, accept=True)))
+        with open(statement, "wb") as f:
+            f.write(good)
+        report = run(self.root(), 2, state=state)
+        self.assertIn("revoked-key", fails(report))
+        self.assertIn("revocation-kept", codes(report, "WARN"))
+
+    def test_machine_key_revoked_in_place(self):
+        stores.build_revoked_machine_key(self.root(), self.keys)
+        self.assertIn("no-publisher-signature", fails(run(self.root(), 2)))
+
+    def test_successor_after_revocation(self):
+        stores.build_revoked_by_successor(self.root("by-successor"), self.keys)
+        self.assertClean(run(self.root("by-successor"), 2))
+        stores.build_successor_of_self_revoked(self.root("self"), self.keys)
+        self.assertIn("revoked-key", fails(run(self.root("self"), 2)))
 
     def test_machine_key_must_be_authorised(self):
         stores.build_minimal(self.root(), self.keys)
@@ -335,6 +427,12 @@ class Authenticity(StoreTest):
     def test_key_rotation(self):
         stores.build_key_rotation(self.root(), self.keys)
         self.assertClean(run(self.root(), 2))
+
+    def test_ref_must_be_canonical(self):
+        stores.build_minimal(self.root(), self.keys)
+        feed, ref, _, _ = current(self.root())
+        StoreWriter(self.root(), marker=False).write(("refs", f"{feed}.json"), json.dumps(ref).encode())
+        self.assertIn("not-canonical", fails(run(self.root(), 2)))
 
     def test_ref_by_superseded_key(self):
         out = stores.build_key_rotation(self.root(), self.keys)

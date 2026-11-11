@@ -1,4 +1,4 @@
-"""Hostile stores (pack spec section 17): oversized, deep, decompression bombs and path tricks are
+"""Hostile stores (pack-format.md, "Limits"): oversized, deep, decompression bombs and path tricks are
 refused, without crashing or hanging."""
 
 from . import base  # noqa: F401  (first: without pyarrow, this module is skipped)
@@ -134,9 +134,10 @@ class Parquet(StoreTest):
         republish(self.root(), lambda d: d["tables"].update(quickstart=index), self.keys.a)
 
     def scene_rows(self, n, scene):
-        return [{"id": f"q{i:05d}", "title": "t", "description": "d", "source": None, "scene": scene,
-                 "scene_format": "1", "rule_family": "lifelike", "semantics": "1", "pin_key": None, "pin": None,
-                 "tiling_group": "square"} for i in range(n)]
+        return [{"id": f"qs-{i:032x}", "title": "t", "description": "d", "source": None, "scene": scene,
+                 "scene_format": "1", "rule": "B3/S23", "rule_family": "lifelike", "semantics": "1",
+                 "behaviour": None, "pin_key": C.SQUARE_KEY, "pin": C.SQUARE_PIN, "tiling_group": "square"}
+                for i in range(n)]
 
     def test_decompression_ratio(self):
         scene = json.dumps({"pad": "a" * 900_000})
@@ -181,10 +182,32 @@ class Parquet(StoreTest):
         w = StoreWriter(self.root(), marker=False)
         junk = b"PAR1" + b"\x00" * 64 + b"PAR1"
         h = w.put(junk, "parquet")
-        index = w.index("patterns", [{"object": h, "rows": 1, "bytes": len(junk), "partition": {"class": "x",
+        index = w.index("patterns", [{"object": h, "rows": 1, "bytes": len(junk), "partition": {"class_group": "x",
                                       "tiling_group": "y"}, "first": "", "last": ""}])
         republish(self.root(), lambda d: d["tables"].update(patterns=index), self.keys.a)
-        self.assertIn("parquet-unreadable", fails(run(self.root(), 1)))
+        self.assertTrue({"parquet-footer", "parquet-unreadable"} & fails(run(self.root(), 1)))
+
+    def test_footer_limits(self):
+        """A footer that claims more than 16 MiB, or nests Thrift deeper than 32, is refused before
+        pyarrow reads it."""
+        from jetcarp_pack import parquet_limits as pl
+        import io
+        big = b"PAR1" + b"\x00" * 20 + (17 << 20).to_bytes(4, "little") + b"PAR1"
+        with self.assertRaisesRegex(pl.ParquetLimitError, "footer"):
+            pl.check_footer(io.BytesIO(big), len(big))
+        deep = b"\x1c" * 40 + b"\x00" * 41  # struct field 1 holding a struct, 40 deep
+        data = b"PAR1" + deep + len(deep).to_bytes(4, "little") + b"PAR1"
+        with self.assertRaisesRegex(pl.ParquetLimitError, "nests more than 32"):
+            pl.check_footer(io.BytesIO(data), len(data))
+
+    def test_partition_values(self):
+        out = stores.build_minimal(self.root(), self.keys)
+        w = StoreWriter(self.root(), marker=False)
+        e = [dict(x) for x in out["entries"]["patterns"]]
+        e[0]["partition"] = {"class_group": "../../x", "tiling_group": "square"}
+        index = w.index("patterns", e)
+        republish(self.root(), lambda d: d["tables"].update(patterns=index), self.keys.a)
+        self.assertIn("partition-value", fails(run(self.root(), 1)))
 
     def test_wrong_column_type(self):
         stores.build_minimal(self.root(), self.keys)
