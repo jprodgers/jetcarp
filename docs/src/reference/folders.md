@@ -53,8 +53,10 @@ the defaults.
   `catalog.sqlite-jobs/` folder of lock files (one per job, so two programs never run the same job),
   and `media/`, the frames, animations and thumbnails rendered for the catalog. `JETCARP_LIBRARY`
   moves the catalog (see below), and its media and lock files move with it.
-- `explore/`, the exploratory search's databases, and `explore/atlas.sqlite`, the atlas that the
-  Quick Start menu reads (see [Search methods](../research/search-methods.md#explore)).
+- `searches/`, one folder per exploratory search (`searches/<uuid>/search.sqlite`: its runs, reviews
+  and saved state), beside the catalogue and moving with it; and `explore/atlas.sqlite`, the atlas that
+  the Quick Start menu reads, written by `jetcarp quickstart publish` (see
+  [Search methods](../research/search-methods.md#explore)).
 
 **Output.** Everything JETCARP makes for you to look at: pictures, the folders of script runs and
 sweeps (each with a `manifest.json`, and `favourites.json` for the runs you star), `piles/` for large

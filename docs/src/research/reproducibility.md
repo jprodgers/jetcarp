@@ -140,10 +140,11 @@ described with the method.
 - **Graphics adapters.** The GPU equality tests have run on the author's machines and, in CI, on
   Mesa's software renderer; a GPU driver that miscomputes could still give a different answer. A
   run made with `--gpu` can always be checked on the CPU with `jetcarp verify`.
-- **The exploratory search as a whole.** `jetcarp explore` runs a CPU loop and a GPU loop side by side
-  and shares its archive between them, so two searches with the same settings do not try the same
-  candidates in the same order. Each run it stores can be replayed exactly from its tiling, rule, seed
-  and random state.
+- **The exploratory search as a whole.** `jetcarp search explore` runs a CPU loop and a GPU loop side
+  by side and shares its archive between them, so two searches with the same settings do not try the
+  same candidates in the same order, and a stopped search continues from its saved archive rather than
+  resuming exactly as the other jobs do. Each run it stores can be replayed exactly from its tiling,
+  rule, seed and random state.
 - **Before 1.0.** The scene format, and the behaviour of a rule or a tiling, may still change between
   releases. Such changes are deliberate, show up in the pins and are listed in the changelog, but an
   old scene may then reach a different state. Scenes on Penrose rhombs saved by CART, JETCARP's

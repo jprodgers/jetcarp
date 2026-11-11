@@ -89,7 +89,7 @@ Written with a `V` on a B/S rule. See [How JETCARP generalises automata](../auto
 [Elementary rules](../automata/elementary.md).
 
 **Explore.** JETCARP's exploratory, quality-diversity search over tilings, rules and starting patterns
-(`jetcarp explore`). See [Search methods](../research/search-methods.md#explore).
+(`jetcarp search explore`). See [Search methods](../research/search-methods.md#explore).
 
 ## F
 
@@ -172,7 +172,7 @@ per generation from the layer before. See [Layered rules](../automata/layered.md
 ## M
 
 **MAP-Elites.** A quality-diversity search method that keeps the best solutions in each niche of a
-behaviour space; the basis of `jetcarp explore`.
+behaviour space; the basis of `jetcarp search explore`.
 
 **MCP.** The Model Context Protocol, through which AI assistants can drive JETCARP (`jetcarp mcp`). See
 [MCP tools](mcp.md).

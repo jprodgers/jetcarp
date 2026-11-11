@@ -1,7 +1,7 @@
 # Search methods
 
-JETCARP has nine ways of searching: eight run as *jobs* through `jetcarp search <strategy>`, and the
-exploratory search has its own command, `jetcarp explore`. This page describes each one: what it
+JETCARP has nine ways of searching, and each runs as a *job* through `jetcarp search <strategy>`.
+This page describes each one: what it
 does, how it classifies or scores what it sees, how its results are checked, and how to start it. For
 a hands-on introduction see [Searching for patterns](../guides/searching.md); for what the searches
 have found see [Findings](findings.md) and [What is new in JETCARP](contributions.md).
@@ -16,7 +16,7 @@ have found see [Findings](findings.md) and [What is new in JETCARP](contribution
 | [Large sandpiles](#large-sandpiles) | The final state of N grains dropped on one spot | `jetcarp search pile` |
 | [Collisions](#collisions) | What two patterns make when they meet | `jetcarp search collide` |
 | [Evolutionary glider search](#evolutionary-glider-search) | Gliders, by evolving rules (James Edmond's method) | `jetcarp search evolve` |
-| [Explore](#explore) | Interesting runs of any family on any tiling, by quality-diversity search | `jetcarp explore run` |
+| [Explore](#explore) | Interesting runs of any family on any tiling, by quality-diversity search | `jetcarp search explore` |
 
 ## Jobs
 
@@ -26,10 +26,12 @@ few seconds, and after each step it writes the step's finds, its progress and it
 transaction. It can therefore be stopped and carried on at any time, in the same program or another,
 and it ends exactly as it would have without the interruption (see
 [Reproducibility](reproducibility.md#interrupted-searches-end-where-uninterrupted-ones-would)).
-Results never depend on the number of threads.
+Results never depend on the number of threads. The [exploratory search](#explore) is the one
+exception: it is not deterministic, so a stopped one continues from its saved archive instead.
 
-The options shared by every strategy: `--minutes N` and `--limit N` stop the job, still resumable,
-after a time or a number of items; `--resume JOB` carries one on; `--label` names it; `--detach` runs
+The options shared by every strategy: `--minutes N`, `--until TIME` (a Unix time, the same end however
+often the job is resumed) and `--limit N` stop the job, still resumable, after a time or a number of
+items; `--resume JOB` carries one on; `--label` names it; `--detach` runs
 it in a process of its own; `--threads` sets the worker threads; `--library` picks the catalogue. The
 jobs themselves are managed with `jetcarp jobs list`, `status`, `stop`, `resume`, `report` (a Markdown
 summary of what a job searched and found) and `remove`. Ctrl-C stops a job at its next checkpoint.
@@ -245,8 +247,11 @@ shape of what it left (dust, clusters, large structures, smooth regions), and wh
 Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
-supports in large batches while a CPU loop runs the rest. Unlike the other searches it is not a job:
-it has its own command and keeps its results in an SQLite database of its own.
+supports in large batches while a CPU loop runs the rest. Like the other searches it runs as a job,
+but it keeps every run in an SQLite database of its own, `searches/<uuid>/search.sqlite` beside the
+catalogue, together with its archive, the runs it has confirmed, how often it has tried each tiling,
+family and kind of starting pattern, and every candidate it has tried. A stopped search loads that
+saved state and carries on, without reading its millions of runs again.
 
 **How it scores.** Each run is reduced to a fixed set of measurements (when it settled, its density
 and activity early and late, entropy, smoothness, the sizes and number of its parts, how far things
@@ -258,17 +263,21 @@ Teich, whose eye is built into the score. Learning a score from human judgements
 technique of [Christiano et al. 2017](bibliography.md#christiano2017deep). The ratings favour runs that
 settle late, start busy, and build large connected structures rather than dust. Because the
 measurements are stored, the score can be changed and recomputed without rerunning anything
-(`jetcarp explore rescore`).
+(`jetcarp jobs rescore`).
 
 **How results are checked.** The elites are re-run on larger grids (64,000 cells for 4,096
 generations, three times each) to confirm that they were not flukes of a small grid, and the *atlas*
-that the Quick Start menu offers is chosen from the confirmed runs (`jetcarp explore atlas`). Every stored run records its tiling, rule, starting pattern and random
-state, so it can be replayed exactly as a scene, but the search as a whole depends on timing and is
-not reproducible run for run (see [Reproducibility](reproducibility.md#what-is-not-guaranteed-yet)).
-`jetcarp explore sheet` and `jetcarp explore clips` render contact sheets and animated clips for
-reviewing results by eye.
+that the Quick Start menu offers is chosen from the confirmed runs (`jetcarp quickstart publish`). Every stored run records its tiling, rule, starting pattern and random
+state, so it can be replayed exactly as a scene (`jetcarp jobs scene`), but the search as a whole
+depends on timing and is not reproducible run for run: a stopped search *continues* from its archive
+rather than resuming exactly, unlike the other jobs (see
+[Reproducibility](reproducibility.md#what-is-not-guaranteed-yet)). `jetcarp jobs runs`,
+`jetcarp jobs sheet` and `jetcarp jobs clips` list runs and render contact sheets and animated clips
+for reviewing results by eye, and `jetcarp jobs review` records a verdict on a run, or a folder of
+ratings of the clips, for the next fit of the score.
 
-**Command.** `jetcarp explore run --db explore.sqlite --hours 8`.
+**Command.** `jetcarp search explore --hours 8 --gpu`. A database from CART, JETCARP's predecessor,
+is brought in with `jetcarp search explore --import search.sqlite --import-only`.
 
 Its first full run covered about 15 million runs. To our knowledge it is the first exploratory search
 to treat the tiling itself as a search dimension; the evidence and related work are on
