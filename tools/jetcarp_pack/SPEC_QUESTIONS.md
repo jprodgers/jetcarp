@@ -5,14 +5,20 @@ questions were then settled in the normative spec, `docs/src/reference/pack-form
 section lists the settlements). The reader now implements that page, and was cross-checked against
 JETCARP's golden packs and against `jetcarp pack check` and `jetcarp pack import` run as a black box
 on this reader's own test stores. This file records:
-1. what the cross-check found (each disagreement, and which side it points at);
-2. questions the settled spec still leaves;
+1. what the cross-check found (each disagreement, and which side it pointed at), and how each was
+   resolved;
+2. the questions the cross-check left, and how each was answered;
 3. every earlier question, how pack-format.md settled it, and whether the reader now agrees.
 
 ## 1. The cross-check
 
+Every finding below is resolved (see [How each was resolved](#how-each-was-resolved)): JETCARP's
+golden packs now pass every level of this reader with no FAIL and no WARN, and JETCARP accepts and
+refuses this reader's test stores as `testdata/EXPECTED.json` says, apart from the rollback 0.4 is
+documented to accept. The findings are kept as they were found.
+
 **JETCARP's golden packs** (`crates/jetcarp-pack/tests/golden/*`, levels 0 to 3). Every other check
-passes:
+passed:
 - every hash, signature, content id and Quick Start id;
 - every pin, recomputed from the geometry columns, and the Penrose kites-and-darts pin from its
   4,000-tile reference patch;
@@ -21,7 +27,7 @@ passes:
 - retractions cumulative, and no event row added twice;
 - every periodic pattern replayed (the aperiodic ones skip: they are not level 3).
 
-What fails (pinned in `tests/test_rust_golden.py`):
+What failed (pinned then in `tests/test_rust_golden.py`):
 
 | # | Pack | Finding | Points at |
 | --- | --- | --- | --- |
@@ -55,24 +61,49 @@ Disagreements:
 | X7 | negative/rollback | JETCARP 0.4 imports an older version after a newer one. It keeps no `seq`, as the spec says (feeds arrive in 0.6), and the older version brings back a record the newer one retracted. The retraction is kept in `pack_retractions`, so the record stays flagged | nobody yet; worth a line in the spec: 0.4 does not refuse rollbacks |
 | X8 | retraction | JETCARP does not import a retracted record the library lacks (1 pattern added, `retracted 0`); the retraction is recorded | **the spec**, a clarification: "an importer flags it and never deletes the user's copy" does not say whether a retracted record the user lacks is added flagged or left out |
 
-## 2. Questions the settled spec still leaves
+Found while the golden packs were made again:
 
-1. **Schema ids** (X4): list them. `jetcarp-score_models 1` or `jetcarp-score-models 1`?
-2. **`ants.run`** (X5): its shape; also what `ants.speed` (`float64?`) measures (cells per step?).
-3. **Machine-key signatures over HTTP** (X6).
-4. **`consent_date`** (X2): a time, as every other time, or a date?
-5. **The export's part numbering** with child indexes: "in the order its index lists them (children
-   in order)" leaves open whether an index's own parts come before its children's. *Chose:* own
-   parts first, then each child's, depth first. The golden export has no children, so it is
-   untested.
-6. **`raters`** is listed neither as a fact table nor as an event table. *Chose:* facts, keyed by
-   `rater`.
-7. **The settlements table** says `family` and `semantics` are on "every verification". The
-   `verifications` table, and the golden packs, carry `semantics` only.
+| # | Pack | Finding | Points at |
+| --- | --- | --- | --- |
+| X9 | aperiodic | `write_golden_packs` run twice gave two different manifests: the provenance and verifications parts differed | **JETCARP's golden writer**: the library is made by a real search, which stamps each find and its verification with the wall clock, and those times were not fixed |
+
+### How each was resolved
+
+| # | Resolved | Reader now |
+| --- | --- | --- |
+| X1 | **JETCARP**: every row that names a Quick Start entry (provenance, media, ratings, retractions) names its pack id, `quickstart:qs-<hex>`. Real libraries hit this too: they key entries by a pattern's id, a scene's file stem or a sweep's id. A publish writes the pack id in their place, and an import maps it back (to the entry the library has with that pack id, else a new entry under it). pack-format.md says so in Ids | passes |
+| X2 | **JETCARP**: `consent_date` is a time like every other (a bare date in a rater book is written as its midnight, `T00:00:00Z`); pack-format.md says every time in a pack follows the rule | passes; still refuses a date |
+| X3 | **the repository**: `.gitignore` keeps `crates/jetcarp-pack/tests/golden/**/*.png` (checked with `git check-ignore`), and the PNGs are committed with the remade golden packs | passes |
+| X4 | **the spec's rule**: JETCARP reads and writes `jetcarp-score_models 1`, and pack-format.md lists every schema id in one table (the fourteen tables, the search index, an explore search's segments and sidecars, the reference patch). `group-raters` imports into JETCARP (3 ratings) | no change needed |
+| X5 | **the spec and JETCARP**: pack-format.md gives `ants.run`'s members (`limits`: `steps`, `max_period`, `symmetry`; `run`: `outcome`, `steps`, `cells`, `reach`, and `period`, `d`, `onset`, `speed`, `proof`, `symmetry` where they apply) and says `speed` is distance per step in cell sizes and `cells` the coloured cells at the end. JETCARP leaves out an ant it cannot read, with a note naming the ant and member, and imports the rest of the pack. A golden `ants` pack (Langton's ant and LLRR) is imported and run again end to end | checks the members (FAIL `ant-run`); the test writer writes them, so `ant-run` was made again and JETCARP imports its ant |
+| X6 | **the spec, no format change**: a reader over HTTP looks for a manifest's signature under the publisher's key and under each key in the `authorised` list of the publisher's statement | the `publisher-sig-name` WARN is gone |
+| X7 | **the spec**: pack-format.md says plainly that 0.4 keeps no `seq` and so does not refuse a rollback; a record the newer version retracted comes back, flagged through `pack_retractions`. Accepted for 0.4 | unchanged (refuses it with `--state`) |
+| X8 | **the spec**: an importer skips a retracted record its library lacks and adds nothing for it, recording only the retraction. JETCARP now also leaves out such a record's ratings, media and aliases | not an importer |
+| X9 | **JETCARP's golden writer**: the search runs in a scratch library and its finds are copied into the golden one with those times fixed. A test makes and publishes the aperiodic library twice, in different seconds, and compares every file; the golden packs now regenerate byte-identically | passes |
+
+## 2. Questions the cross-check left, answered
+
+1. **Schema ids** (X4): `jetcarp-<table> <n>` with the name as written, so `jetcarp-score_models 1`;
+   all listed in pack-format.md's "Schema ids".
+2. **`ants.run`** (X5): its members are given; `ants.speed` is the distance per step in cell sizes
+   (world units over the square root of a tile's mean area, to 6 decimals), on highways.
+3. **Machine-key signatures over HTTP** (X6): under the publisher's key and each authorised key.
+4. **`consent_date`** (X2): a time, as every other time.
+5. **The export's part numbering** with child indexes: still open. "In the order its index lists
+   them (children in order)" leaves open whether an index's own parts come before its children's.
+   *Chose:* own parts first, then each child's, depth first. The golden export has no children, so
+   it is untested.
+6. **`raters`**: an **event** table, not facts as this reader had chosen. Consent recorded again
+   adds a row, and each rater's latest row stands (greatest `consent_date`, then the greater row by
+   its RFC 8785 text), so a rater can stop being named or sharing notes in a later version, which a
+   fact row would never allow. A note needs some row of its rater that shares notes. The reader now
+   does this.
+7. **The settlements table**: fixed; verifications carry `semantics` only, Quick Start entries
+   `rule_family` and `semantics`.
 8. **`verifications.range`** in the golden packs also has `min_rule` and `max_rule`, beyond the
-   listed members. *Chose:* extra members are allowed (readers ignore members they do not know).
-   Say so for cell JSON too.
-9. **Retracted records the importer lacks** (X8): added flagged, or left out?
+   listed members: still open for cell JSON in general. *Chose:* extra members are allowed (readers
+   ignore members they do not know), as pack-format.md says for documents and now for `ants.run`.
+9. **Retracted records the importer lacks** (X8): skipped; nothing is added for them.
 
 ## 3. The earlier questions, settled
 
@@ -101,7 +132,7 @@ first version of this file.
 | B1 | `first`/`last` of several sort columns | The first sort column's value, as text | Agrees (as chosen) |
 | B2 | Sort order | Within each part; text by UTF-8 bytes, integers by value, `false` before `true` | Agrees |
 | B3 | Partition keys and columns | Named as their columns (`class_group`, `tiling_group`); `class_group` is the class; ants and Quick Start by `tiling_group`; values 1 to 64 of `[a-z0-9_-]` | Agrees; a bad value is refused |
-| B4 | `family` and `semantics` | On patterns, rules, ants, Quick Start entries (and `semantics` on verifications) | Agrees (see question 7 above) |
+| B4 | `family` and `semantics` | On patterns, rules, ants, Quick Start entries (and `semantics` on verifications) | Agrees (the settlements table now says so too) |
 | B5 | `created_by` | Free; JETCARP writes `jetcarp-pack 1`; readers MUST NOT depend on it | Agrees: no longer checked. The test writer still sets it |
 | B6 | Key-value metadata | Writers SHOULD write none; readers ignore any | Agrees: no longer checked |
 | B7 | The same `seq` again | The same manifest is no update; another manifest, or a lower `seq`, is refused | Agrees (as chosen) |
@@ -111,7 +142,7 @@ first version of this file.
 | B11 | Index children | At most 10,000, 8 levels; each index read once, each part counted once | Agrees |
 | B12 | Exports' indexes | `index/`, `history/`, `keys/` | Agrees: exports are read, and every file is checked against the layout |
 | B13 | The search index | Defined: `table` `search`, schema `jetcarp-search 1`, Parquet parts and score sidecars | Agrees: hashes, sizes, segment names, run ids and local paths checked. Runs are not read further |
-| B14 | Keys and signatures over HTTP | The publisher's statement and signature have names the manifest gives; listing waits for 1.1 | Agrees, except question 3 above |
+| B14 | Keys and signatures over HTTP | The publisher's statement and signature have names the manifest gives; listing waits for 1.1 | Agrees, machine-key signatures included (X6) |
 | B15 | Media extensions | `png`, `gif`, `webp`; nothing else | Agrees; `bytes` checked against the file |
 | B16 | Generations populations | Every listed cell counts, ageing cells too | Agrees (as chosen) |
 
@@ -125,7 +156,7 @@ first version of this file.
 | C4 | Unknown tables; `engine.schemes.tables` | Ignored; informational | Agrees |
 | C5 | `params` of a tiling without parameters | Null when the key has none, as the key has them | Agrees (the column, not `"{}"`) |
 | C6 | Rebuilding `pin_key` | The `edges` column was added | Agrees; checked |
-| C7 | Optional tables' types and sorts | Given | Agrees (`raters`: see question 6 above) |
+| C7 | Optional tables' types and sorts | Given | Agrees (`raters` is an event table: question 6 above) |
 | C8 | Group raters | A group's `consent_date` is its latest member's; no nesting; no name or ORCID; every member consented | Agrees; also `notes` must be agreed for a note |
 | C9 | Rater ids | `rater-` and 16 hex digits | Agrees; checked |
 | C10 | Ant `start=` | JSON: `start="empty"` | Agrees |
