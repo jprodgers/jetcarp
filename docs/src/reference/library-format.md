@@ -271,6 +271,8 @@ frames stay ordinary PNG files, and a loop's repeated phases are stored once.
 Deleting a record's media deletes its rows only, never a file, because another row may name the same
 file; `jetcarp media gc` (the operation `media.gc`) deletes the files no row names (with `--dry-run`,
 lists them) and leftover temporary files, leaving files younger than ten minutes in case a render in
-another program has not recorded them yet. Files are written to a temporary name and renamed, so a
+another program has not recorded them yet. Keep one library file per folder: two libraries in one
+folder share its `media` folder, and `media gc` for one would delete the other's files (they can be
+rendered again). Files are written to a temporary name and renamed, so a
 file is never seen half written. The website export (`jetcarp site export`) and
 `jetcarp media export` copy files out under readable names.
