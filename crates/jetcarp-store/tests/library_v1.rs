@@ -416,12 +416,12 @@ fn aliases_resolve_ids_and_short_ids() {
     lib.add(b.clone()).unwrap();
     // A short id works when it is unique.
     assert_eq!(lib.get(&g.id[..8]).unwrap().id, g.id);
-    // CART's 64-bit ids, kept as aliases (the CART importer fills these).
-    lib.add_alias("25e004f4f640c35a", "pattern", &g.id, "cart-fnv")
+    // Ids from before a geometry change, kept as aliases.
+    lib.add_alias("25e004f4f640c35a", "pattern", &g.id, "geometry-change")
         .unwrap();
-    lib.add_alias("aaaa1111aaaa1111", "pattern", &g.id, "cart-fnv")
+    lib.add_alias("aaaa1111aaaa1111", "pattern", &g.id, "geometry-change")
         .unwrap();
-    lib.add_alias("aaaa2222aaaa2222", "pattern", &b.id, "canonicalised")
+    lib.add_alias("aaaa2222aaaa2222", "pattern", &b.id, "geometry-change")
         .unwrap();
     assert_eq!(lib.get("25e004f4f640c35a").unwrap().id, g.id);
     assert_eq!(lib.get("25e004f4").unwrap().id, g.id);
@@ -431,8 +431,10 @@ fn aliases_resolve_ids_and_short_ids() {
         "{e}"
     );
     assert!(lib.add_alias("bbbb", "pattern", &g.id, "because").is_err());
+    // Only geometry changes make aliases: there is no compatibility with CART's ids.
+    assert!(lib.add_alias("bbbb", "pattern", &g.id, "cart-fnv").is_err());
     assert!(
-        lib.add_alias("bbbb", "pattern", "no-such-id", "cart-fnv")
+        lib.add_alias("bbbb", "pattern", "no-such-id", "geometry-change")
             .is_err()
     );
     // Removing the record removes its aliases.

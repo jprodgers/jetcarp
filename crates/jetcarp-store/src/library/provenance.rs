@@ -11,10 +11,15 @@
 //! and takes its history with it). Later events append rows 1, 2, ... (`reverified`: checked
 //! again by `jetcarp library reverify`, with the new pin).
 //!
-//! **Aliases** (table `id_aliases`). An old id of a record (`cart-fnv`: CART's 64-bit FNV ids,
-//! filled by the CART importer; `geometry-change`: the id before a geometry change and
-//! re-verification; `canonicalised`: an id from a record stored in a non-canonical form), so
-//! links and notes that name it keep working: lookups by id or prefix resolve aliases too.
+//! A record **found elsewhere** and imported with its history ([`Origin::found_elsewhere`]) keeps
+//! its discovery as row 0: `found`, by the finder the importer names, on the date it was first
+//! stored where it was found (its `created`), from its own source, with the engine that found it
+//! (`provenance.jetcarp_version`) and the pin it was verified with here; the machine is not
+//! known. Row 1 is then `imported`: now, by this engine, from the importer's source.
+//!
+//! **Aliases** (table `id_aliases`). An old id of a record (`geometry-change`: the id before a
+//! geometry change and re-verification), so links and notes that name it keep working: lookups
+//! by id or prefix resolve aliases too.
 
 use super::{Library, e, now_utc};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -29,6 +34,9 @@ pub struct Origin {
     pub source: Option<String>,
     /// The pack it came in, when it did (step 10's packs).
     pub pack_hash: String,
+    /// Found elsewhere, by this finder (a name and an ORCID iD, either may be empty): see
+    /// [`Origin::found_elsewhere`].
+    pub found_by: Option<(String, String)>,
 }
 
 impl Origin {
@@ -38,6 +46,7 @@ impl Origin {
             kind: "found",
             source: None,
             pack_hash: String::new(),
+            found_by: None,
         }
     }
     /// Imported from records made elsewhere.
@@ -46,6 +55,22 @@ impl Origin {
             kind: "imported",
             source: Some(source.to_string()),
             pack_hash: String::new(),
+            found_by: None,
+        }
+    }
+    /// Found elsewhere by `finder` (with ORCID iD `orcid`), and imported from `source`. A record
+    /// stored with this origin gets two rows: row 0 `found`, by the finder, on the date it was
+    /// first stored where it was found (its `created`; else its `provenance.date`), from its own
+    /// source, with the engine that found it (`provenance.jetcarp_version`)
+    /// and the pin it was verified with here; row 1 `imported`, now, by this engine, from
+    /// `source`. It keeps its seen count, but no sighting is credited for it (the importer adds
+    /// the sightings it knows of).
+    pub fn found_elsewhere(finder: &str, orcid: &str, source: &str) -> Origin {
+        Origin {
+            kind: "found",
+            source: Some(source.to_string()),
+            pack_hash: String::new(),
+            found_by: Some((finder.trim().to_string(), orcid.trim().to_string())),
         }
     }
 }
@@ -76,13 +101,13 @@ pub struct AliasRow {
     pub alias: String,
     pub target_kind: String,
     pub id: String,
-    /// `cart-fnv`, `geometry-change`, or `canonicalised`.
+    /// `geometry-change`.
     pub reason: String,
     pub created: String,
 }
 
 /// The reasons an alias may give.
-pub const ALIAS_REASONS: [&str; 3] = ["cart-fnv", "geometry-change", "canonicalised"];
+pub const ALIAS_REASONS: [&str; 1] = ["geometry-change"];
 
 /// The machine, as provenance records it: operating system and CPU architecture
 /// (`linux-x86_64`), never the host name.
@@ -110,7 +135,9 @@ fn job_of(tx: &Transaction, job: i64) -> Result<(String, String), String> {
         .unwrap_or_default())
 }
 
-/// Write a record's provenance row 0 (nothing if it has one).
+/// Write a record's provenance row 0 (nothing if it has one). `found_with` is the engine that
+/// found it, which row 0 names only for a record found elsewhere ([`Origin::found_elsewhere`]:
+/// then its `imported` row 1 is written too).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn first_in(
     tx: &Transaction,
@@ -121,6 +148,7 @@ pub(super) fn first_in(
     pin: &str,
     source: &str,
     date: &str,
+    found_with: &str,
 ) -> Result<(), String> {
     let (search_kind, job_uuid) = job_of(tx, job)?;
     let now = now_utc();
@@ -129,6 +157,42 @@ pub(super) fn first_in(
     } else {
         date
     };
+    if let Some((finder, orcid)) = &origin.found_by {
+        let n = tx
+            .prepare_cached(
+                "INSERT OR IGNORE INTO provenance (target_kind, target_id, seq, kind, finder,
+                    orcid, search_kind, job_uuid, pack_hash, machine, engine_version,
+                    geometry_pin, source, date)
+                 VALUES (?1, ?2, 0, 'found', ?3, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11)",
+            )
+            .map_err(e)?
+            .execute(params![
+                target_kind,
+                id,
+                finder,
+                orcid,
+                search_kind,
+                job_uuid,
+                origin.pack_hash,
+                found_with,
+                pin,
+                source,
+                date,
+            ])
+            .map_err(e)?;
+        if n == 1 {
+            append_in(
+                tx,
+                target_kind,
+                id,
+                "imported",
+                0,
+                pin,
+                origin.source.as_deref().unwrap_or(""),
+            )?;
+        }
+        return Ok(());
+    }
     tx.prepare_cached(
         "INSERT OR IGNORE INTO provenance (target_kind, target_id, seq, kind, finder, orcid,
             search_kind, job_uuid, pack_hash, machine, engine_version, geometry_pin, source, date)
@@ -356,8 +420,8 @@ impl Library {
         })
     }
 
-    /// Record an old id of a stored record (`cart-fnv`, `geometry-change`, `canonicalised`), so
-    /// lookups by it find the record.
+    /// Record an old id of a stored record (`geometry-change`), so lookups by it find the
+    /// record.
     pub fn add_alias(
         &self,
         alias: &str,

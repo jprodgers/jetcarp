@@ -308,7 +308,17 @@ pub(super) fn put_ant(tx: &Transaction, a: &AntRow, job: i64, now: &str) -> Resu
     )
     .map_err(e)?;
     if old.is_none() {
-        provenance::first_in(tx, "ant", &a.id, &Origin::found(), job, &pin, "search", now)?;
+        provenance::first_in(
+            tx,
+            "ant",
+            &a.id,
+            &Origin::found(),
+            job,
+            &pin,
+            "search",
+            now,
+            "",
+        )?;
     }
     Ok(true)
 }

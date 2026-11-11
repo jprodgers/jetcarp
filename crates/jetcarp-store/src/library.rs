@@ -30,7 +30,7 @@
 //! | `jobs` | search or hunt | `uuid` (the search id, for folders and provenance), `kind`, `spec` (JSON, with its `label`), `status` (`running`, `paused`, `done`, `failed`), `progress` (JSON), `checkpoint` (BLOB), `owner` (`host:pid` running it) and `heartbeat` (seconds since 1970; [`jobs`]), `engine_version` |
 //! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON); read by the census results, the job report, and Rhai's `lib.census_rows` |
 //! | `provenance` | event in a record's history | (`target_kind`, `target_id`, `seq`); `kind` (`found`, `imported`, `reverified`), `finder` and `orcid` (`JETCARP_FINDER`, `JETCARP_ORCID`), `search_kind` and `job_uuid`, `pack_hash`, `machine` (OS and CPU architecture), `engine_version`, `geometry_pin`, `source`, `date`. Row 0 is written once and never rewritten (a trigger refuses it); later rows append ([`provenance`]) |
-//! | `id_aliases` | old id of a record | `alias`, `target_kind`, `id`, `reason` (`cart-fnv`, `geometry-change`, `canonicalised`) |
+//! | `id_aliases` | old id of a record | `alias`, `target_kind`, `id`, `reason` (`geometry-change`) |
 //! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`), `pin_key`, `geometry_pin`, `needs_reverify`, `engine_version` |
 //! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
 //! | `ratings` | rating of a pattern, an ant run, a Quick Start entry, or a search run | `target_kind`, `target_id` (a search run: `<search uuid>:<run id>`), `rater` (`user` or `model:<name>`; a search run's reviewer may be any name), `rating` (1-5), `verdict` (a search run's keep, maybe or drop; rating 5, 3, 1), `note`, `source` |
@@ -661,7 +661,13 @@ fn add_in(
                 job,
                 &rec.geometry_pin,
                 &rec.provenance.source,
-                &rec.provenance.date,
+                // A record found elsewhere: when it was first stored there.
+                if origin.found_by.is_some() && !rec.created.is_empty() {
+                    &rec.created
+                } else {
+                    &rec.provenance.date
+                },
+                &rec.provenance.jetcarp_version,
             )?;
             AddOutcome::Added
         }
@@ -700,7 +706,8 @@ fn add_in(
         }
     };
     put_pattern_rule(tx, &id, rid, &verified, &now)?;
-    if count > 0 {
+    // A record found elsewhere brings its seen count; no sighting is made up for it here.
+    if count > 0 && origin.found_by.is_none() {
         put_sighting(tx, &id, rid, job, count, soups, &now)?;
     }
     Ok(out)
@@ -881,6 +888,19 @@ impl Library {
             job.unwrap_or(0),
             &Origin::found(),
         )
+    }
+
+    /// Add many records that came in another way ([`Origin`]): imported from elsewhere, or found
+    /// elsewhere and imported with their history ([`Origin::found_elsewhere`]: provenance rows
+    /// 0 and 1, the seen count kept, no sighting made up). Otherwise as
+    /// [`add_many`](Self::add_many), with `job` the job that found them (0: none).
+    pub fn add_many_as(
+        &self,
+        recs: Vec<PatternRecord>,
+        job: i64,
+        origin: &Origin,
+    ) -> Result<Vec<Result<AddOutcome, String>>, String> {
+        self.add_batch(recs.into_iter().map(|r| (r, 0)).collect(), job, origin)
     }
 
     fn add_batch(
@@ -1686,6 +1706,7 @@ pub(super) fn quickstart_in(tx: &Transaction, q: &QuickStartRow) -> Result<(), S
             &pin,
             &q.source_kind,
             &q.created,
+            "",
         )?;
     }
     Ok(())

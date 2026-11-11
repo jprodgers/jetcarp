@@ -269,7 +269,7 @@ CREATE TABLE id_aliases (
     alias TEXT PRIMARY KEY,
     target_kind TEXT NOT NULL DEFAULT 'pattern' CHECK (target_kind IN ('pattern', 'ant')),
     id TEXT NOT NULL,
-    reason TEXT NOT NULL CHECK (reason IN ('cart-fnv', 'geometry-change', 'canonicalised')),
+    reason TEXT NOT NULL CHECK (reason IN ('geometry-change')),
     created TEXT NOT NULL
 ) WITHOUT ROWID;
 CREATE INDEX id_aliases_id ON id_aliases (target_kind, id);
