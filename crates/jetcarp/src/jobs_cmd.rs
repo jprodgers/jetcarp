@@ -71,7 +71,8 @@ enum JobsCmd {
         /// Worker threads (default: all cores).
         #[arg(long)]
         threads: Option<usize>,
-        /// Hunts: the start of each soup on the GPU; piles: topple on the GPU.
+        /// Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU
+        /// batch stepper, when there is one.
         #[arg(long)]
         gpu: bool,
         /// Stop at the next checkpoint after this many minutes.

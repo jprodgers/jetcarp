@@ -362,6 +362,7 @@ impl ExploreRun {
     fn import_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
         let r = self.running()?;
         let t = Instant::now();
+        r.rss = rss_gb();
         let Some(imp) = r.import.as_mut() else {
             return Ok(());
         };
@@ -375,6 +376,12 @@ impl ExploreRun {
                 d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
                 store::write_imported(&mut r.db, &[], &d, &reviews, &source)?;
                 store::finish_import(&r.db)?;
+                // The indexes take a while on a large import: count that time too.
+                let d = store::Delta {
+                    meta: vec![("elapsed_s".into(), elapsed(r).to_string())],
+                    ..Default::default()
+                };
+                store::write(&mut r.db, &d)?;
                 r.import = None;
                 if let Some(p) = r.import_progress.as_mut() {
                     p.done = true;

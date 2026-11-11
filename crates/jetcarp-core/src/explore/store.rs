@@ -718,6 +718,8 @@ pub fn review_counts(c: &Connection) -> Result<Vec<(String, u64)>, String> {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Rescored {
     pub runs: u64,
+    /// Runs whose score changed (only these are written).
+    pub changed: u64,
     pub elites: u64,
     pub niches: u64,
 }
@@ -748,8 +750,11 @@ pub fn rescore(
             let Some(mut ev) = eval_at(r, 2).map_err(e)? else {
                 continue;
             };
+            let old = ev.score;
             ev.score = archive::score(ev.fate, &ev.feat, ev.cand.gens, ev.cand.fam);
-            scores.push((id, ev.score as f64));
+            if ev.score != old {
+                scores.push((id, ev.score as f64));
+            }
             out.runs += 1;
             if out.runs.is_multiple_of(100_000) && !progress(out.runs) {
                 return Err("rescoring was stopped; nothing was changed".into());
@@ -762,9 +767,12 @@ pub fn rescore(
         }
     }
     let changes = arch.take_changes();
+    out.changed = scores.len() as u64;
     let tx = c.transaction().map_err(e)?;
-    tx.execute_batch("DROP INDEX IF EXISTS runs_score")
-        .map_err(e)?;
+    if !scores.is_empty() {
+        tx.execute_batch("DROP INDEX IF EXISTS runs_score")
+            .map_err(e)?;
+    }
     {
         let mut st = tx
             .prepare("UPDATE runs SET score = ?1 WHERE id = ?2")
@@ -791,7 +799,7 @@ pub fn rescore(
                 .map_err(e)?;
         }
     }
-    tx.execute_batch("CREATE INDEX runs_score ON runs(score)")
+    tx.execute_batch("CREATE INDEX IF NOT EXISTS runs_score ON runs(score)")
         .map_err(e)?;
     tx.commit().map_err(e)?;
     out.niches = arch.cells.len() as u64;

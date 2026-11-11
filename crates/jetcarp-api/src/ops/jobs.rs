@@ -834,7 +834,7 @@ pub struct ResumeIn {
     /// Worker threads (default 0: all cores).
     #[serde(default)]
     pub threads: Option<usize>,
-    /// Hunts: the GPU soup batches; piles: GPU toppling.
+    /// Hunts: the GPU soup batches; piles: GPU toppling; explore: the GPU batch stepper, when there is one.
     #[serde(default)]
     pub gpu: bool,
     /// Run on a thread of this process and answer at once.

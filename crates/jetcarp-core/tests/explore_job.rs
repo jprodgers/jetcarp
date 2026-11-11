@@ -445,7 +445,10 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
     let groups = jetcarp_core::explore::job::tiling_groups();
     let g = |k: &str| groups.get(k).copied().unwrap_or(0);
     let r = store::rescore(&mut c, &g, &|_| true).unwrap();
-    assert_eq!(r.runs as usize, before.len());
+    assert_eq!(
+        (r.runs as usize, r.changed as usize),
+        (before.len(), before.len())
+    );
     assert_eq!((r.elites, r.niches), (p.elites, p.niches));
     let after: Vec<(i64, f64)> = c
         .prepare("SELECT id, score FROM runs ORDER BY id")
@@ -455,6 +458,9 @@ fn rescoring_rebuilds_the_archive_and_reviews_are_kept() {
         .map(|x| x.unwrap())
         .collect();
     assert_eq!(after, before);
+    // Again: nothing changes, nothing is written.
+    let r = store::rescore(&mut c, &g, &|_| true).unwrap();
+    assert_eq!((r.changed, r.elites), (0, p.elites));
     // Reviews: one at a time, and a folder of rating files (as the rating page saves them).
     let id: i64 = c
         .query_row("SELECT MIN(id) FROM runs WHERE stage = 1", [], |r| r.get(0))

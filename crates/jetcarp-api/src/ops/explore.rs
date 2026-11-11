@@ -790,8 +790,9 @@ pub struct RescoreIn {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Rescored {
     pub job: i64,
-    /// Runs rescored.
+    /// Runs rescored, and those whose score changed (only these were written).
     pub runs: u64,
+    pub changed: u64,
     /// The archive rebuilt from the new scores: its elites and niches.
     pub elites: u64,
     pub niches: u64,
@@ -801,8 +802,8 @@ pub struct Rescored {
 impl Report for Rescored {
     fn text(&self) -> String {
         format!(
-            "rescored {} runs of explore job {}; the archive now holds {} elites in {} niches ({:.1} s)\n",
-            self.runs, self.job, self.elites, self.niches, self.seconds
+            "rescored {} runs of explore job {} ({} scores changed); the archive now holds {} elites in {} niches ({:.1} s)\n",
+            self.runs, self.job, self.changed, self.elites, self.niches, self.seconds
         )
     }
 }
@@ -855,6 +856,7 @@ impl Op for SearchRescore {
         Ok(Rescored {
             job: row.id,
             runs: r.runs,
+            changed: r.changed,
             elites: r.elites,
             niches: r.niches,
             seconds: t0.elapsed().as_secs_f64(),
