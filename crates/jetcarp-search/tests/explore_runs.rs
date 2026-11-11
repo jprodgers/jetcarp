@@ -1,8 +1,9 @@
 //! An explore search's runs across sealed Parquet segments and its working database
 //! (`jetcarp_search::explore::runs`): sealing, recovery from a crash at every step of a seal,
 //! queries over segments matching the same runs unsealed, rescoring into sidecars without
-//! rewriting segments, a database from before segments sealed on open, an import's unfinished
-//! segments dropped, and reviews kept in the library when the search's folder is deleted.
+//! rewriting segments, a database from before segments sealed on open, the manifest's record of
+//! the search imported from CART kept, an import's unfinished segments dropped, and reviews kept
+//! in the library when the search's folder is deleted.
 
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features};
@@ -12,7 +13,7 @@ use jetcarp_core::world::SeedSpec;
 use jetcarp_search::explore::archive::{self, Eval};
 use jetcarp_search::explore::atlas;
 use jetcarp_search::explore::reviews;
-use jetcarp_search::explore::runs::{RunFilter, Runs, SealStop};
+use jetcarp_search::explore::runs::{Manifest, RunFilter, Runs, SealStop};
 use jetcarp_search::explore::segments::{ALL, RunRec, Tuning};
 use jetcarp_search::explore::store::{self, Delta, RunOut};
 use jetcarp_store::Library;
@@ -501,6 +502,52 @@ fn a_database_from_before_segments_is_sealed_on_open() {
         (rv[0].run, rv[0].verdict.as_str(), rv[0].rater.as_str()),
         (7, "keep", "Emily")
     );
+}
+
+#[test]
+fn the_remeasure_record_of_the_search_imported_from_cart_is_read_and_kept() {
+    let dir = scratch("remeasure-record");
+    drop(make(&dir, 250, 50, 0, true));
+    // As the import of CART's search left its manifest: what it checked and re-measured.
+    let path = dir.join("manifest.json");
+    let mut m: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(m.get("remeasure").is_none(), "{m}");
+    let rec = serde_json::json!({
+        "mode": "auto", "engine_version": "0.4.0", "checked": "2026-11-11T12:00:00Z",
+        "sample_per_tiling": 32, "tilings": 3, "sampled": 96, "sampled_differ": 4,
+        "backend": "cpu",
+        "remeasured": [
+            {"tiling": "hex", "why": "3 of 32 sampled runs measured differently",
+             "runs": 80, "changed": 75, "failed": 1},
+            {"tiling": "square", "family": "cyclic", "why": "1 of 32, all cyclic",
+             "runs": 20, "changed": 20, "failed": 0},
+        ],
+        "to_remeasure": 100, "runs": 100, "changed": 95,
+        "check_seconds": 1.5, "remeasure_seconds": 2.25, "done": true,
+    });
+    m["remeasure"] = rec.clone();
+    std::fs::write(&path, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // Read with the rest of the manifest, every field.
+    let mut r = Runs::open(&dir.join("search.sqlite")).unwrap();
+    let got = r.manifest.remeasure.clone().unwrap();
+    assert_eq!(
+        (
+            got.remeasured[1].tiling.as_str(),
+            got.remeasured[1].family.as_deref()
+        ),
+        ("square", Some("cyclic"))
+    );
+    assert_eq!(serde_json::to_value(&got).unwrap(), rec);
+    // Kept as it is when the manifest is written again: a new spec, a seal.
+    r.set_spec(&serde_json::json!({"seed": 9})).unwrap();
+    assert_eq!(r.seal_all().unwrap().len(), 1);
+    drop(r);
+    let again = Manifest::read(&dir).unwrap().unwrap();
+    assert_eq!((again.segments.len(), again.remeasure), (1, Some(got)));
+    let text: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(text["remeasure"], rec);
 }
 
 #[test]

@@ -8,8 +8,7 @@
 //! - [`runs`]: its run records, sealed Parquet segments ([`segments`]) and the newest runs in
 //!   its working database ([`store`], `searches/<uuid>/search.sqlite` beside the library, with
 //!   the search's state, so a stopped search carries on without reading its runs again); and
-//!   importing an old CART explore database, whose runs [`remeasure`] checks (and runs again
-//!   where a tiling no longer reproduces them).
+//!   importing an old CART explore database.
 //! - [`reviews`]: verdicts on runs, kept as ratings in the library.
 //! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and publishing the atlas Quick
 //!   Start reads.
@@ -17,7 +16,6 @@
 pub mod archive;
 pub mod atlas;
 pub mod job;
-pub mod remeasure;
 pub mod reviews;
 pub mod runs;
 pub mod segments;

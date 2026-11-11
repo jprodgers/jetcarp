@@ -126,9 +126,61 @@ pub struct Manifest {
     /// In id order: each one's runs come after the one before's.
     pub segments: Vec<SegmentEntry>,
     pub scores: Vec<ScoreSet>,
-    /// An import's check of the old runs on this engine, and the tilings it re-measured.
+    /// Only in the search imported from CART: how its runs were checked on the engine of the
+    /// import, and which were run again ([`RemeasureRecord`]). Read and kept; nothing writes it
+    /// now.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub remeasure: Option<crate::explore::remeasure::Record>,
+    pub remeasure: Option<RemeasureRecord>,
+}
+
+/// What the one-time import of CART's search checked on the engine of the import and re-measured:
+/// its manifest's `remeasure`, kept as provenance. The importer was removed after the import (it
+/// is in the history up to commit `f3492e8`); this JETCARP reads the record and keeps it, and
+/// never writes a new one.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RemeasureRecord {
+    /// `auto`, `all`, or `none`.
+    pub mode: String,
+    /// The JETCARP that measured, and when the check was made (UTC).
+    pub engine_version: String,
+    pub checked: String,
+    /// The check: runs sampled per tiling at most, tilings, sampled runs, and the sampled runs
+    /// that differ (auto only).
+    pub sample_per_tiling: u64,
+    pub tilings: u64,
+    pub sampled: u64,
+    pub sampled_differ: u64,
+    /// What ran the runs the GPU can run: `cpu`, or the GPU's name.
+    pub backend: String,
+    /// The tilings re-measured, by name.
+    pub remeasured: Vec<Remeasured>,
+    /// Runs to re-measure (as the check counted them; 0 with `all`), runs re-measured in all,
+    /// and those whose measures changed.
+    pub to_remeasure: u64,
+    pub runs: u64,
+    pub changed: u64,
+    /// Seconds the check took, and the re-measuring.
+    pub check_seconds: f64,
+    pub remeasure_seconds: f64,
+    /// Whether every run had been copied.
+    pub done: bool,
+}
+
+/// A tiling the import re-measured, as the manifest lists it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Remeasured {
+    pub tiling: String,
+    /// The one rule family whose runs were re-measured (none: every run of the tiling).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    pub why: String,
+    /// Runs run again, those whose measures changed, and those that could not run (kept as
+    /// they were).
+    pub runs: u64,
+    pub changed: u64,
+    pub failed: u64,
 }
 
 #[cfg(unix)]
@@ -525,16 +577,6 @@ impl Runs {
         let spec = shareable_spec(spec);
         if self.manifest.spec != spec {
             self.manifest.spec = spec;
-            self.manifest.write(&self.dir)?;
-        }
-        Ok(())
-    }
-
-    /// Record an import's check and re-measuring in the manifest (written when it changed).
-    pub fn set_remeasure(&mut self, r: &crate::explore::remeasure::Record) -> Result<(), String> {
-        self.need_write()?;
-        if self.manifest.remeasure.as_ref() != Some(r) {
-            self.manifest.remeasure = Some(r.clone());
             self.manifest.write(&self.dir)?;
         }
         Ok(())
