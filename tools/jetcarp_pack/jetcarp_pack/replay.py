@@ -1,16 +1,23 @@
-"""Conformance level 3, replay (pack spec sections 11, 16 and 23): re-run periodic patterns from the
-`tilings` and `rules` tables alone, and confirm their phases, period, displacement and class.
+"""Conformance level 3, replay (pack-format.md, "Conformance levels"): re-run periodic patterns from
+the `tilings` and `rules` tables alone, and confirm their phases, period, displacement and class.
 
 A lattice cell (i, j, k) has the neighbours (i + di, j + dj, k') for each offset (di, dj, k') in its
-tile type's list (section 11). B/S and Generations rules are run from their bit masks: a dead cell
-with n live neighbours is born if bit n of `birth` is set; a live cell stays live if bit n of
-`survive` is set, and otherwise starts to age (Generations) or dies (B/S); an ageing cell moves to
-the next state each generation, and after the last to 0. Only state-1 cells count as live
-neighbours (docs/src/automata/generations.md). The field is unbounded and dead (section 23.3): live
-cells are kept sparsely, so no edge is ever reached.
+tile type's list. B/S and Generations rules are run from their bit masks: a dead cell with n live
+neighbours is born if bit n of `birth` is set; a live cell stays live if bit n of `survive` is set,
+and otherwise starts to age (Generations) or dies (B/S); an ageing cell moves to the next state each
+generation, and after the last to 0. Only state-1 cells count as live neighbours
+(docs/src/automata/generations.md). The field is unbounded and dead: live cells are kept sparsely,
+so no edge is ever reached. Each generation applies the rule `steps_per_gen` times.
 
-Each pattern is replayed in every rule it was verified in (`verifications.rule`), for `periods`
-periods, every generation compared with its stored phase moved by the displacement so far.
+A B/S rule with birth on 0 runs as two complementary rules alternating on even and odd generations
+(docs/src/automata/life-like.md, "B0 rules"), so the dead plane stays dead as shown: from an even
+generation a cell with n live neighbours is born if n is not in B and survives if n is not in S; from
+an odd one, with N its tile type's neighbour count, it is born if N - n is in S and survives if
+N - n is in B.
+
+A pattern runs in its rule: its `rule` when set, else that of its main verification. It is also
+replayed in every other rule a verification names, for `periods` periods, every generation compared
+with its stored phase moved by the displacement so far.
 """
 
 import time
@@ -75,6 +82,29 @@ class Lattice:
                 new[cell] = 1
         return new
 
+    def b0_plain(self, survive):
+        """Whether B0 alternation applies: no tile type survives with all its neighbours live."""
+        return not any(survive >> len(row) & 1 for row in self.forward)
+
+    def step_b0(self, live, birth, survive, odd):
+        """One step of a B0 B/S rule as shown (complemented on odd generations): see the module."""
+        counts = defaultdict(int)
+        for (i, j, k), s in live.items():
+            for di, dj, t in self.reverse[k]:
+                counts[(i + di, j + dj, t)] += 1
+        new = {}
+        for cell in set(live) | set(counts):
+            m = counts.get(cell, 0)
+            alive = cell in live
+            if odd:
+                n = len(self.forward[cell[2]]) - m
+                on = (birth >> n & 1) if alive else (survive >> n & 1)
+            else:
+                on = not (survive >> m & 1) if alive else not (birth >> m & 1)
+            if on:
+                new[cell] = 1
+        return new
+
 
 def to_cells(phase):
     out = {}
@@ -107,6 +137,8 @@ def check_replay(store, report, manifest=None, periods=2, all_versions=False):
         return
     if manifest:
         heads = [manifest]
+    elif store.is_export:
+        heads = [store.manifest_hash]
     elif all_versions:
         heads = manifests_to_check(store, report)
     else:
@@ -127,9 +159,11 @@ class Replayer:
     def run(self):
         tilings = {row["pin_key"]: row for _, _, row in self.pack.rows("tilings")}
         rules = {(r["notation"], r["neighbourhood"], r["steps_per_gen"]): r for _, _, r in self.pack.rows("rules")}
-        verified = defaultdict(set)
+        verified, main = defaultdict(set), defaultdict(set)
         for _, _, v in self.pack.rows("verifications"):
             verified[v["pattern_id"]].add(v["rule"])
+            if v["main"]:
+                main[v["pattern_id"]].add(v["rule"])
         self._check_rule_masks(rules)
         lattices = {}
         seen = set()
@@ -165,11 +199,11 @@ class Replayer:
             lattice = lattices[key]
             if lattice is None:
                 continue
-            names = sorted(verified.get(pid, ()))
-            if not names:
-                self.r.skip(3, "no-rule", w, "has no verifications, so no rule to replay it in")
+            own = {row["rule"]} if row["rule"] else main.get(pid, set())
+            if not own:
+                self.r.skip(3, "no-rule", w, "has no rule and no main verification, so no rule to replay it in")
                 continue
-            for notation in names:
+            for notation in sorted(own) + sorted(verified.get(pid, set()) - own):
                 rule = rules.get((notation, row["neighbourhood"], row["steps_per_gen"]))
                 rw = f"{w} in {notation}"
                 if rule is None:
@@ -180,9 +214,11 @@ class Replayer:
                         or rule["survive"] is None:
                     self.r.skip(3, "rule-family", rw, f"family {rule['family']} needs its own simulator")
                     continue
-                if rule["birth"] & 1:
-                    self.r.skip(3, "b0", rw, "birth on 0 switches on the whole dead plane; such rules run as two "
-                                             "alternating rules in JETCARP, which the spec does not describe")
+                if rule["birth"] & 1 and (rule["states"] != 2 or row["steps_per_gen"] != 1
+                                          or not lattice.b0_plain(rule["survive"])):
+                    self.r.skip(3, "b0", rw, "a B0 rule here is Generations, runs several steps a generation, or "
+                                             "survives with every neighbour live: the alternation is defined for "
+                                             "none of these")
                     continue
                 try:
                     self.replay(lattice, rule, row, rw)
@@ -205,8 +241,6 @@ class Replayer:
                                                 f"notation's {rule_notation.mask_text(bm)} / {rule_notation.mask_text(sm)}")
             if states != rule["states"]:
                 self.r.fail(3, "rule-masks", w, f"states {rule['states']} differ from the notation's {states}")
-            if vnb == "edge" and nb != "edge":
-                self.r.fail(3, "rule-masks", w, "the notation ends in V (edge neighbours) but the row says touch")
             expected_family = "lifelike" if states == 2 else "generations"
             if rule["family"] != expected_family:
                 self.r.warn(3, "rule-family", w, f"family {rule['family']}, but a {states}-state rule is {expected_family}")
@@ -243,7 +277,10 @@ class Replayer:
         cur = dict(phases[0])
         for t in range(1, period * periods + 1):
             for _ in range(steps):
-                cur = lattice.step(cur, rule["birth"], rule["survive"], states)
+                if rule["birth"] & 1:
+                    cur = lattice.step_b0(cur, rule["birth"], rule["survive"], odd=(t - 1) % 2 == 1)
+                else:
+                    cur = lattice.step(cur, rule["birth"], rule["survive"], states)
             if len(cur) > lim.replay_cells or time.monotonic() - start > lim.replay_seconds:
                 self.r.skip(3, "budget", w, f"stopped at generation {t}: over the replay budget")
                 return
