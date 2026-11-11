@@ -845,6 +845,23 @@ impl Import {
         .map_err(e)
     }
 
+    /// Up to `n` runs after run `after` that `filter` (an SQL condition on the columns of `runs`)
+    /// selects, in id order. Does not move the import on.
+    pub fn select(&self, after: i64, n: usize, filter: &str) -> Result<Vec<RunRec>, String> {
+        let mut st = self
+            .old
+            .prepare_cached(&format!(
+                "SELECT {RUN_COLS} FROM runs WHERE id > ?1 AND ({filter}) ORDER BY id LIMIT ?2"
+            ))
+            .map_err(e)?;
+        let mut rows = st.query(params![after, n as i64]).map_err(e)?;
+        let mut out = Vec::new();
+        while let Some(r) = rows.next().map_err(e)? {
+            out.push(rec_at(r, 0).map_err(e)?);
+        }
+        Ok(out)
+    }
+
     /// The runs at these ids, in id order (ids that are not runs left out).
     pub fn get(&self, ids: &[i64]) -> Result<Vec<RunRec>, String> {
         let mut ids = ids.to_vec();
@@ -898,6 +915,90 @@ pub fn begin_import(c: &Connection, from: &Path) -> Result<(), String> {
         meta_set(c, k, &v)?;
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------
+// An import's re-measured runs, kept until the import copies them
+
+/// New measures of an old run: fate, settle, period, score, bin, and the features.
+pub type NewMeasures = (String, i64, i64, f64, i64, Features);
+
+/// Keep re-measured runs' new measures (table `remeasured`, made when first needed) and `meta`,
+/// in one transaction.
+pub fn put_remeasured(
+    c: &mut Connection,
+    recs: &[RunRec],
+    meta: &[(String, String)],
+) -> Result<(), String> {
+    let tx = c.transaction().map_err(e)?;
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS remeasured(id INTEGER PRIMARY KEY, fate TEXT, settle INT,
+           period INT, score REAL, bin INT, feats BLOB);",
+    )
+    .map_err(e)?;
+    {
+        let mut st = tx
+            .prepare_cached(
+                "INSERT OR REPLACE INTO remeasured(id, fate, settle, period, score, bin, feats)
+                 VALUES(?,?,?,?,?,?,?)",
+            )
+            .map_err(e)?;
+        for r in recs {
+            st.execute(params![
+                r.id,
+                r.fate,
+                r.settle,
+                r.period,
+                r.score,
+                r.bin,
+                feat_blob(&r.feat)
+            ])
+            .map_err(e)?;
+        }
+        let mut st = tx
+            .prepare_cached("INSERT OR REPLACE INTO meta(k, v) VALUES(?1, ?2)")
+            .map_err(e)?;
+        for (k, v) in meta {
+            st.execute(params![k, v]).map_err(e)?;
+        }
+    }
+    tx.commit().map_err(e)
+}
+
+/// The new measures kept for the runs from `lo` to `hi`, by id.
+pub fn remeasured_between(
+    c: &Connection,
+    lo: i64,
+    hi: i64,
+) -> Result<HashMap<i64, NewMeasures>, String> {
+    if !has_table(c, "remeasured")? {
+        return Ok(HashMap::new());
+    }
+    let mut st = c
+        .prepare_cached(
+            "SELECT id, fate, settle, period, score, bin, feats FROM remeasured
+             WHERE id BETWEEN ?1 AND ?2",
+        )
+        .map_err(e)?;
+    st.query_map(params![lo, hi], |r| {
+        let mut f = feat_from_blob(&r.get::<_, Vec<u8>>(6)?);
+        let (settle, period): (i64, i64) = (r.get(2)?, r.get(3)?);
+        f.settle = settle as u32;
+        f.period = period as u32;
+        Ok((
+            r.get::<_, i64>(0)?,
+            (r.get(1)?, settle, period, r.get(4)?, r.get(5)?, f),
+        ))
+    })
+    .map_err(e)?
+    .collect::<Result<_, _>>()
+    .map_err(e)
+}
+
+/// Drop the re-measured runs once the import has copied them.
+pub fn drop_remeasured(c: &Connection) -> Result<(), String> {
+    c.execute_batch("DROP TABLE IF EXISTS remeasured;")
+        .map_err(e)
 }
 
 /// Rebuild `elites` from an archive (every elite, with its run).

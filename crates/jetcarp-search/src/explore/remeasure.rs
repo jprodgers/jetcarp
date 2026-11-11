@@ -19,8 +19,9 @@
 //! **The GPU.** The check runs its sample on the CPU but Larger than Life, which a search runs
 //! on a GPU only (on the CPU a run takes seconds), and runs each tiling's largest batch of
 //! GPU-runnable sampled runs on the GPU as well ([`check_many`]). If the GPU measured them all
-//! as the CPU did, the re-measuring sends it every rule it runs ([`OnGpu::Every`]); else only
-//! Larger than Life ([`OnGpu::LtlOnly`]).
+//! as the CPU did, the re-measuring sends it every rule it runs, and the CPU's threads take runs
+//! from the back of its batches when they have nothing else ([`OnGpu::Shared`]); else the GPU
+//! runs Larger than Life only ([`OnGpu::LtlOnly`]).
 //!
 //! **Where it is recorded:** the search's manifest (`remeasure`, a [`Record`]: which tilings were
 //! re-measured and why, how many runs changed), the job's progress and report, and the working
@@ -92,6 +93,8 @@ struct Pool {
     strata: BTreeMap<String, BTreeMap<String, BinaryHeap<(u64, i64)>>>,
     /// Per family: its first run (the lowest id: the oldest).
     first: BTreeMap<String, i64>,
+    /// Per family: its runs (confirmation runs too).
+    fam_runs: BTreeMap<String, u64>,
 }
 
 /// Draws the check's sample while the runs go by, in any order: the same runs give the same
@@ -108,6 +111,7 @@ impl Sampler {
         self.seen += 1;
         let p = self.tilings.entry(k.tiling.clone()).or_default();
         p.runs += 1;
+        *p.fam_runs.entry(k.fam.clone()).or_default() += 1;
         let (fam, kind) = if k.stage == 1 {
             (k.fam.as_str(), k.seed_kind.as_str())
         } else {
@@ -133,6 +137,14 @@ impl Sampler {
     /// Tilings drawn from so far.
     pub fn tilings(&self) -> usize {
         self.tilings.len()
+    }
+
+    /// A tiling's runs per rule family.
+    pub fn family_runs(&self, tiling: &str) -> BTreeMap<String, u64> {
+        self.tilings
+            .get(tiling)
+            .map(|p| p.fam_runs.clone())
+            .unwrap_or_default()
     }
 
     /// Per tiling: its runs and its sample (ids in order). The sample holds each family's first
@@ -254,6 +266,8 @@ pub struct TilingCheck {
     pub example: Option<i64>,
     /// Sampled runs that differ, per rule family.
     pub families: BTreeMap<String, u64>,
+    /// The tiling's runs per rule family.
+    pub family_runs: BTreeMap<String, u64>,
     /// Sampled runs the GPU ran too, and how many of those it measured unlike the CPU.
     pub gpu_runs: u64,
     pub gpu_differ: u64,
@@ -366,10 +380,12 @@ pub struct Record {
     pub backend: String,
     /// The tilings re-measured, by name.
     pub remeasured: Vec<Remeasured>,
-    /// Runs re-measured in all, and those whose measures changed.
+    /// Runs to re-measure (as the check counted them; 0 with `all`), runs re-measured in all,
+    /// and those whose measures changed.
+    pub to_remeasure: u64,
     pub runs: u64,
     pub changed: u64,
-    /// Seconds the check took, and the re-measuring during the copy.
+    /// Seconds the check took, and the re-measuring.
     pub check_seconds: f64,
     pub remeasure_seconds: f64,
     /// Whether every run has been copied.
@@ -390,6 +406,10 @@ pub struct State {
     pub counts: BTreeMap<String, (u64, u64, u64)>,
     /// Which runs the GPU named in the record's `backend` measures (none: the CPU runs all).
     pub gpu: Option<OnGpu>,
+    /// The re-measuring pass (before the copy): the last old run it has re-measured, and whether
+    /// it has re-measured them all.
+    pub last: i64,
+    pub measured: bool,
 }
 
 impl State {
@@ -419,6 +439,32 @@ impl State {
 
     pub fn is_empty(&self) -> bool {
         self.record.mode != "all" && self.tilings.is_empty()
+    }
+
+    /// The runs to run again, as an SQL condition on the `tiling` and `fam` of a runs table.
+    pub fn filter_sql(&self) -> String {
+        if self.record.mode == "all" {
+            return "1".into();
+        }
+        let q = |s: &str| format!("'{}'", s.replace('\'', "''"));
+        let mut parts = Vec::new();
+        let whole: Vec<String> = self
+            .tilings
+            .keys()
+            .filter(|t| !self.families.contains_key(*t))
+            .map(|t| q(t))
+            .collect();
+        if !whole.is_empty() {
+            parts.push(format!("tiling IN ({})", whole.join(", ")));
+        }
+        for (t, f) in &self.families {
+            parts.push(format!("(tiling = {} AND fam = {})", q(t), q(f)));
+        }
+        if parts.is_empty() {
+            "0".into()
+        } else {
+            parts.join(" OR ")
+        }
     }
 
     /// Add a segment's counts.
@@ -479,6 +525,14 @@ impl State {
             .iter()
             .filter_map(|c| Some((c.tiling.clone(), c.only_family()?.to_string())))
             .collect();
+        self.record.to_remeasure = checks
+            .iter()
+            .filter(|c| c.remeasure())
+            .map(|c| match c.only_family() {
+                Some(f) => c.family_runs.get(f).copied().unwrap_or(0),
+                None => c.runs,
+            })
+            .sum();
         self.commit(&BTreeMap::new());
     }
 }
@@ -509,6 +563,11 @@ impl Grids {
 pub enum OnGpu {
     /// Every run of a rule it can run, as a search with a GPU runs them.
     Every,
+    /// The runs of the rules it can run, shared with the CPU: the GPU takes whole batches from
+    /// the front of each, and the CPU's threads, when they have nothing else, take single runs
+    /// from the back of the batch the GPU is on (never Larger than Life, and only on the smallest
+    /// grids: the CPU runs bigger ones much slower). For when the GPU measures as the CPU does.
+    Shared,
     /// Larger than Life only (a search runs those on a GPU only; on the CPU they take seconds).
     LtlOnly,
 }
@@ -517,9 +576,20 @@ fn is_ltl(c: &jetcarp_core::explore::cand::Cand) -> bool {
     c.fam == jetcarp_core::explore::space::Fam::Ltl
 }
 
-/// Measure runs again: on `gpu` the ones it can run (when given; every one, or Larger than Life
-/// only), the rest on the CPU (on the caller's rayon pool), at the same time. `None` for a run
-/// that does not run.
+/// Most runs in one GPU batch (a search's default batch).
+const GPU_BATCH: usize = 1024;
+
+/// A batch of runs the GPU can run together: its tiling and size, whether they are Larger than
+/// Life, and the runs not yet taken.
+struct Queued {
+    tiling: String,
+    cells: u32,
+    ltl: bool,
+    left: std::collections::VecDeque<usize>,
+}
+
+/// Measure runs again: on `gpu` the ones it can run (when given: [`OnGpu`] says which), the rest
+/// on the CPU (on the caller's rayon pool), at the same time. `None` for a run that does not run.
 pub fn measure(
     runs: &[&RunRec],
     grids: &Grids,
@@ -533,39 +603,88 @@ pub fn measure(
         None => (None, OnGpu::Every),
     };
     // The GPU's share: by tiling, size, and batch key.
-    let mut groups: BTreeMap<(String, u32, String), Vec<usize>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, u32, String), (bool, Vec<usize>)> = BTreeMap::new();
     let mut cpu: Vec<usize> = Vec::new();
     for (i, ev) in evals.iter().enumerate() {
         let Some(ev) = ev else { continue };
+        let ltl = is_ltl(&ev.cand);
         let key = gpu
             .as_deref()
-            .filter(|_| which == OnGpu::Every || is_ltl(&ev.cand))
+            .filter(|_| which != OnGpu::LtlOnly || ltl)
             .and_then(|be| batch_key(be, &ev.cand));
         match key {
             Some(k) => groups
                 .entry((ev.cand.tiling.clone(), ev.cand.cells, format!("{k:?}")))
-                .or_default()
+                .or_insert((ltl, Vec::new()))
+                .1
                 .push(i),
             None => cpu.push(i),
         }
     }
+    let queue: Mutex<Vec<Queued>> = Mutex::new(
+        groups
+            .into_iter()
+            .map(|((tiling, cells, _), (ltl, v))| Queued {
+                tiling,
+                cells,
+                ltl,
+                left: v.into(),
+            })
+            .collect(),
+    );
     let trace = std::env::var_os("JETCARP_EXPLORE_TRACE").is_some();
+    let on_cpu = |i: usize| -> (usize, Option<Measured>) {
+        let c = &evals[i].as_ref().unwrap().cand;
+        let m = grids
+            .get(&c.tiling, c.cells)
+            .and_then(|g| measure_on(&g, c));
+        (i, m)
+    };
+    let own: Mutex<std::collections::VecDeque<usize>> = Mutex::new(cpu.iter().copied().collect());
+    let smallest = queue
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|q| q.cells)
+        .min()
+        .unwrap_or(0);
     let cpu_part = || -> Vec<(usize, Option<Measured>)> {
         let t = std::time::Instant::now();
-        let v: Vec<(usize, Option<Measured>)> = cpu
-            .par_iter()
-            .map(|&i| {
-                let c = &evals[i].as_ref().unwrap().cand;
-                let m = grids
-                    .get(&c.tiling, c.cells)
-                    .and_then(|g| measure_on(&g, c));
-                (i, m)
+        let stolen = std::sync::atomic::AtomicUsize::new(0);
+        // Each thread takes the CPU's own runs, then (shared) runs from the back of the GPU's
+        // batches, one at a time, while there are any.
+        let v: Vec<(usize, Option<Measured>)> = (0..rayon::current_num_threads())
+            .into_par_iter()
+            .flat_map_iter(|_| {
+                let mut got = Vec::new();
+                loop {
+                    if let Some(i) = own.lock().unwrap().pop_front() {
+                        got.push(on_cpu(i));
+                        continue;
+                    }
+                    if which != OnGpu::Shared {
+                        break;
+                    }
+                    // The back of the batch the GPU is on, of the smallest grids only: the
+                    // bigger ones (confirmation runs) take the CPU much longer than the GPU.
+                    let next = queue
+                        .lock()
+                        .unwrap()
+                        .iter_mut()
+                        .find(|q| !q.ltl && q.cells == smallest && !q.left.is_empty())
+                        .and_then(|q| q.left.pop_back());
+                    let Some(i) = next else { break };
+                    stolen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    got.push(on_cpu(i));
+                }
+                got
             })
             .collect();
         if trace {
             eprintln!(
-                "remeasure cpu: {} runs in {:.2} s",
+                "remeasure cpu: {} runs ({} of them the GPU's) in {:.2} s",
                 v.len(),
+                stolen.load(std::sync::atomic::Ordering::Relaxed),
                 t.elapsed().as_secs_f64()
             );
         }
@@ -574,12 +693,38 @@ pub fn measure(
     let gpu_part = |be: &mut dyn Backend| -> Result<Vec<(usize, Option<Measured>)>, String> {
         let t0 = std::time::Instant::now();
         let mut got = Vec::new();
-        for ((tiling, cells, key), idx) in &groups {
-            let t = std::time::Instant::now();
-            let Some(g) = grids.get(tiling, *cells) else {
+        loop {
+            // The next batch: the first group with runs left, as many as the GPU takes at once.
+            let Some((tiling, cells)) = queue
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|q| !q.left.is_empty())
+                .map(|q| (q.tiling.clone(), q.cells))
+            else {
+                break;
+            };
+            // As many as the GPU holds, up to a search's batch, so the CPU can share the rest.
+            let g = grids.get(&tiling, cells);
+            let per = g.as_ref().map_or(usize::MAX, |g| {
+                (be.max_cells() / g.topo.len().next_multiple_of(256)).clamp(1, GPU_BATCH)
+            });
+            let idx: Vec<usize> = {
+                let mut q = queue.lock().unwrap();
+                let Some(q) = q
+                    .iter_mut()
+                    .find(|q| q.tiling == tiling && q.cells == cells && !q.left.is_empty())
+                else {
+                    continue;
+                };
+                let n = per.min(q.left.len());
+                q.left.drain(..n).collect()
+            };
+            let Some(g) = g else {
                 got.extend(idx.iter().map(|&i| (i, None)));
                 continue;
             };
+            let t = std::time::Instant::now();
             let cands: Vec<&jetcarp_core::explore::cand::Cand> = idx
                 .iter()
                 .map(|&i| &evals[i].as_ref().unwrap().cand)
@@ -588,7 +733,7 @@ pub fn measure(
             got.extend(idx.iter().copied().zip(m));
             if trace {
                 eprintln!(
-                    "remeasure gpu {tiling} {cells} {key}: {} runs in {:.2} s",
+                    "remeasure gpu {tiling} {cells}: {} runs in {:.2} s",
                     idx.len(),
                     t.elapsed().as_secs_f64()
                 );
@@ -603,8 +748,9 @@ pub fn measure(
         }
         Ok(got)
     };
+    let has_gpu_work = queue.lock().unwrap().iter().any(|q| !q.left.is_empty());
     let (a, b) = match gpu {
-        Some(be) if !groups.is_empty() => {
+        Some(be) if has_gpu_work => {
             let (a, b) = std::thread::scope(|s| {
                 let h = s.spawn(|| gpu_part(be));
                 let a = cpu_part();

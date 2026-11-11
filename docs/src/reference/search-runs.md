@@ -69,13 +69,15 @@ settings. The sample holds each rule family's first run on the tiling (a databas
 changed while its search ran, and the oldest runs are the likeliest not to reproduce), then takes the
 families in turn and, within each family, its kinds of starting pattern, with the confirmation runs
 as one more group; it is drawn the same way every time. Each is compared exactly with what is stored:
-fate, settling generation, period, every measure,
-score and behaviour class. Every run of a tiling whose sampled runs differ in two or more rule
-families is then run again as it is copied, and stored with its new measures under the same id: a
+fate, settling generation, period, every measure, score and behaviour class.
+
+Every run of a tiling whose sampled runs differ in two or more rule families is then run again: a
 change to the tiling shows in all its families. When the sampled runs that differ are all of one
-family, the way that rule runs has changed rather than the tiling, and only that family's runs on
-the tiling are run again. The other runs are copied as they are. `--remeasure all` runs every run
-again, and `--remeasure none` copies them all as they are.
+family, the way that rule runs has changed rather than the tiling, and only that family's runs on the
+tiling are run again. They are run again before the copy, many at a time, and their new measures are
+kept in the working database (a stopped import goes on from the last of them); the copy then stores
+each with its new measures under the same id, and the other runs as they are. `--remeasure all` runs
+every run again, and `--remeasure none` copies them all as they are.
 
 The check runs the sampled runs on the CPU, but Larger than Life on the GPU when the job has one
 (`--gpu`): a search runs those on a GPU only, and on the CPU each takes seconds. Each tiling's largest
@@ -93,13 +95,13 @@ The manifest's `remeasure` says what was done:
 | `sample_per_tiling`, `tilings`, `sampled`, `sampled_differ` | the check: runs sampled per tiling at most, tilings checked, runs sampled, and those that measured differently |
 | `backend` | what ran the rules a GPU can run: `cpu`, or the GPU and why |
 | `remeasured` | one per tiling run again: `tiling`, `family` (only when just that family's runs were run again), `why` (how many sampled runs differed, in what, and in which families), `runs`, `changed` (runs whose measures changed) and `failed` (runs that could not run again, kept as they were) |
-| `runs`, `changed` | runs re-measured in all, and those whose measures changed |
-| `check_seconds`, `remeasure_seconds` | how long the check took, and the re-measuring during the copy |
+| `to_remeasure`, `runs`, `changed` | runs to re-measure (as the check counted them; 0 with `all`), runs re-measured, and those whose measures changed |
+| `check_seconds`, `remeasure_seconds` | how long the check took, and the re-measuring |
 | `done` | whether the import has copied every run |
 
 A run was re-measured when its tiling is listed in `remeasured` (with its family, when one is named):
-runs have no column of their own for it. The job's progress (`jetcarp jobs status JOB`) and report show the same, while the import runs and
-after.
+runs have no column of their own for it. The job's progress (`jetcarp jobs status JOB`) and report
+show the same, while the import runs and after.
 
 ## Segments
 

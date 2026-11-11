@@ -35,12 +35,14 @@
 //! **Re-measuring.** Before it copies anything, an import checks the old runs on this engine
 //! ([`crate::explore::remeasure`], `remeasure` auto): a stratified sample of every tiling's runs is
 //! run again and compared exactly with what is stored, and every run of a tiling whose sample
-//! differs (only one family's, when only its runs differ) is run again as it is copied, keeping
-//! its id (on the GPU, for the rules it runs, when
-//! the job has one and it measured the sample as the CPU did). The check and the tilings
-//! re-measured, with why, go in the search's manifest, the progress, and the working database (so
-//! a stopped import goes on with the same decision); `remeasure` all runs every run again, none
-//! copies them as they are.
+//! differs (only one family's, when only its runs differ) is run again, keeping its id (on the
+//! GPU, for the rules it runs, when the job has one and it measured the sample as the CPU did).
+//! The runs to re-measure are run in a pass of their own before the copy, many at a time, and
+//! their new measures kept in the working database (table `remeasured`, committed with the
+//! pass's progress, dropped once the copy has stored them). The check and the tilings
+//! re-measured, with why, go in the search's manifest, the progress, and the working database
+//! (so a stopped import goes on with the same decision); `remeasure` all runs every run again,
+//! none copies them as they are.
 
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
 use crate::dashboard::JobSummary;
@@ -68,13 +70,12 @@ pub const KIND_NAME: &str = "explore";
 pub const STEP_S: f64 = 2.0;
 /// Old runs read per import batch (a step reads batches for about [`STEP_S`]).
 const IMPORT_BATCH: usize = 5000;
-/// Old runs read per batch while some tilings are re-measured (a batch's re-measuring runs in
-/// parallel), and while every run is.
-const REMEASURE_BATCH: usize = 20_000;
-const REMEASURE_ALL_BATCH: usize = 2000;
+/// Old runs re-measured at a time: many, so the GPU's batches are full and a run that takes the
+/// CPU minutes (Lenia, a big sandpile, their confirmation runs) hides behind the GPU's work.
+const REMEASURE_CHUNK: usize = 65_536;
 /// Old runs read per step of the check's sampling, and tilings checked at a time.
 const SAMPLE_READ: usize = 250_000;
-const CHECK_TILINGS: usize = 24;
+const CHECK_TILINGS: usize = 320;
 
 /// An explore job: the search's settings, and how to run it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -134,7 +135,9 @@ pub struct RemeasureProgress {
     pub differ: u64,
     /// The tilings whose every run is run again, with why.
     pub tilings_remeasured: Vec<(String, String)>,
-    /// Runs re-measured so far, those whose measures changed, and runs re-measured per second.
+    /// Runs to re-measure, runs re-measured so far, those whose measures changed, and runs
+    /// re-measured per second.
+    pub to_remeasure: u64,
     pub runs: u64,
     pub changed: u64,
     pub per_s: f64,
@@ -413,10 +416,8 @@ struct Running {
     import_progress: Option<ImportProgress>,
     /// An import's check of the old runs, while it is under way.
     check: Option<Check>,
-    /// An import's re-measuring: the decision, and the counts of the segments committed.
+    /// An import's re-measuring: the decision, its progress, and its counts.
     remeasure: Option<remeasure::State>,
-    /// The re-measuring counts of the segment being written.
-    pending: BTreeMap<String, (u64, u64, u64)>,
     grids: remeasure::Grids,
     /// Which runs the GPU re-measures (the check chose; none: the CPU runs them all).
     remeasure_gpu: Option<remeasure::OnGpu>,
@@ -518,7 +519,8 @@ impl ExploreRun {
             let checks = r
                 .pool
                 .install(|| remeasure::check_many(&tilings, grids, gpu))?;
-            for c in checks {
+            for mut c in checks {
+                c.family_runs = ck.sampler.family_runs(&c.tiling);
                 p.checked_tilings += 1;
                 p.sampled += c.sampled;
                 p.differ += c.differ;
@@ -545,7 +547,7 @@ impl ExploreRun {
         let gpu_differ: u64 = ck.done.iter().map(|c| c.gpu_differ).sum();
         state.gpu = backend.as_ref().map(|_| {
             if gpu_differ == 0 {
-                remeasure::OnGpu::Every
+                remeasure::OnGpu::Shared
             } else {
                 remeasure::OnGpu::LtlOnly
             }
@@ -578,70 +580,142 @@ impl ExploreRun {
         r.runs.set_remeasure(&state.record)?;
         r.grids.keep_only(&|t| state.wants_tiling(t));
         let p = r.remeasure_progress.get_or_insert_with(Default::default);
-        p.phase = "copying".into();
+        p.phase = if state.is_empty() {
+            "copying"
+        } else {
+            "re-measuring"
+        }
+        .into();
         p.backend = state.record.backend.clone();
         r.remeasure = Some(state);
         Ok(())
     }
 
-    /// Copy old runs into sealed segments for about a step, re-measuring the runs of the tilings
-    /// chosen, and committing the import's progress (and the re-measuring counts) with each
-    /// segment; at the end the last segment, the reviews (to the library), and (with
-    /// `import_only`) a stop. A stop part way leaves the segment being written unfinished: the
-    /// next session writes it again from the last segment committed.
+    /// One step of an import's re-measuring, before the copy: the next runs to re-measure (by
+    /// tiling and family, in id order, many at a time so the GPU's batches are full and a slow
+    /// run on the CPU holds up few others), run again, and kept with their new measures in the
+    /// working database with the counts, in one transaction, so a stopped import goes on from
+    /// the last chunk.
+    fn remeasure_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
+        let ExploreRun { backend, st, .. } = self;
+        let r = st.as_mut().ok_or("the search was not restored")?;
+        let t = Instant::now();
+        r.rss = rss_gb();
+        let (Some(imp), Some(m)) = (r.import.as_ref(), r.remeasure.as_mut()) else {
+            return Ok(());
+        };
+        let filter = m.filter_sql();
+        loop {
+            let t1 = Instant::now();
+            let rows = imp.select(m.last, REMEASURE_CHUNK, &filter)?;
+            let p = r.remeasure_progress.get_or_insert_with(Default::default);
+            let Some(last) = rows.last().map(|x| x.id) else {
+                m.measured = true;
+                store::put_remeasured(
+                    &mut r.runs.db,
+                    &[],
+                    &[(
+                        "remeasure".into(),
+                        serde_json::to_string(&*m).map_err(|e| e.to_string())?,
+                    )],
+                )?;
+                r.runs.set_remeasure(&m.record)?;
+                p.phase = "copying".into();
+                return Ok(());
+            };
+            let refs: Vec<&RunRec> = rows.iter().collect();
+            let gpu = match r.remeasure_gpu {
+                Some(on) => backend.as_mut().map(|b| (&mut **b as &mut dyn Backend, on)),
+                None => None,
+            };
+            let grids = &r.grids;
+            let got = r.pool.install(|| remeasure::measure(&refs, grids, gpu))?;
+            let mut counts: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
+            let mut fresh = Vec::with_capacity(rows.len());
+            for (row, got) in rows.iter().zip(got) {
+                let e = counts.entry(row.tiling.clone()).or_default();
+                e.0 += 1;
+                let Some(got) = got else {
+                    e.2 += 1;
+                    continue;
+                };
+                e.1 += remeasure::diff(row, &got).any() as u64;
+                let mut rec = row.clone();
+                remeasure::apply(&mut rec, &got);
+                fresh.push(rec);
+            }
+            m.last = last;
+            m.record.remeasure_seconds += t1.elapsed().as_secs_f64();
+            m.commit(&counts);
+            store::put_remeasured(
+                &mut r.runs.db,
+                &fresh,
+                &[
+                    (
+                        "remeasure".into(),
+                        serde_json::to_string(&*m).map_err(|e| e.to_string())?,
+                    ),
+                    ("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)),
+                ],
+            )?;
+            r.runs.set_remeasure(&m.record)?;
+            p.runs = m.record.runs;
+            p.to_remeasure = m.record.to_remeasure;
+            p.changed = m.record.changed;
+            p.per_s = m.record.runs as f64 / m.record.remeasure_seconds.max(1e-9);
+            if t.elapsed().as_secs_f64() >= STEP_S || cx.stopped() {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Copy old runs into sealed segments for about a step, with the new measures of the runs
+    /// re-measured, committing the import's progress with each segment; at the end the last
+    /// segment, the reviews (to the library), and (with `import_only`) a stop. A stop part way
+    /// leaves the segment being written unfinished: the next session writes it again from the
+    /// last segment committed.
     fn import_step(&mut self, cx: &RunCx<'_>) -> Result<(), String> {
         if self.st.as_ref().is_some_and(|r| r.check.is_some()) {
             return self.check_step(cx);
         }
-        let ExploreRun { backend, st, .. } = self;
-        let r = st.as_mut().ok_or("the search was not restored")?;
+        if self
+            .st
+            .as_ref()
+            .and_then(|r| r.remeasure.as_ref())
+            .is_some_and(|m| !m.is_empty() && !m.measured)
+        {
+            return self.remeasure_step(cx);
+        }
+        let r = self.running()?;
         let t = Instant::now();
         r.rss = rss_gb();
         let seal = r.spec.seal_rows.unwrap_or(SEAL_ROWS).max(1);
         let Some(imp) = r.import.as_mut() else {
             return Ok(());
         };
-        let batch = match &r.remeasure {
-            Some(m) if m.record.mode == "all" => REMEASURE_ALL_BATCH,
-            Some(m) if !m.is_empty() => REMEASURE_BATCH,
-            _ => IMPORT_BATCH,
-        };
         loop {
             let have = r.building.as_ref().map_or(0, |b| b.rows());
-            let mut rows = imp.next((seal - have.min(seal)).clamp(1, batch as u64) as usize)?;
+            let mut rows =
+                imp.next((seal - have.min(seal)).clamp(1, IMPORT_BATCH as u64) as usize)?;
             let end = rows.is_empty();
             if !end {
-                if let Some(m) = r.remeasure.as_mut().filter(|m| !m.is_empty()) {
-                    let t1 = Instant::now();
-                    let idx: Vec<usize> = (0..rows.len())
-                        .filter(|&i| m.wants(&rows[i].rec.tiling, &rows[i].rec.fam))
-                        .collect();
-                    let refs: Vec<&RunRec> = idx.iter().map(|&i| &rows[i].rec).collect();
-                    let gpu = match r.remeasure_gpu {
-                        Some(on) => backend.as_mut().map(|b| (&mut **b as &mut dyn Backend, on)),
-                        None => None,
-                    };
-                    let grids = &r.grids;
-                    let got = r.pool.install(|| remeasure::measure(&refs, grids, gpu))?;
-                    let p = r.remeasure_progress.get_or_insert_with(Default::default);
-                    for (&i, got) in idx.iter().zip(got) {
-                        let row = &mut rows[i];
-                        let e = r.pending.entry(row.rec.tiling.clone()).or_default();
-                        e.0 += 1;
-                        p.runs += 1;
-                        let Some(got) = got else {
-                            e.2 += 1;
+                if let Some(m) = r.remeasure.as_ref().filter(|m| !m.is_empty()) {
+                    let (lo, hi) = (rows[0].id, rows[rows.len() - 1].id);
+                    let fresh = store::remeasured_between(&r.runs.db, lo, hi)?;
+                    for row in rows.iter_mut() {
+                        if !m.wants(&row.rec.tiling, &row.rec.fam) {
+                            continue;
+                        }
+                        // A run that could not run again keeps its measures.
+                        let Some((fate, settle, period, score, bin, feat)) = fresh.get(&row.id)
+                        else {
                             continue;
                         };
-                        if remeasure::diff(&row.rec, &got).any() {
-                            e.1 += 1;
-                            p.changed += 1;
-                        }
-                        remeasure::apply(&mut row.rec, &got);
+                        let x = &mut row.rec;
+                        (x.fate, x.settle, x.period, x.score, x.bin, x.feat) =
+                            (fate.clone(), *settle, *period, *score, *bin, *feat);
                         row.ev = store::eval_of(&row.rec);
                     }
-                    m.record.remeasure_seconds += t1.elapsed().as_secs_f64();
-                    p.per_s = p.runs as f64 / m.record.remeasure_seconds.max(1e-9);
                 }
                 r.search.import(&rows);
                 if r.building.is_none() {
@@ -665,17 +739,7 @@ impl ExploreRun {
                 d.meta.push(("import_last".into(), last.to_string()));
                 d.meta
                     .push(("elapsed_s".into(), elapsed_now(r.elapsed_before, r.t0)));
-                if let Some(m) = r.remeasure.as_mut() {
-                    m.commit(&std::mem::take(&mut r.pending));
-                    d.meta.push((
-                        "remeasure".into(),
-                        serde_json::to_string(&*m).map_err(|e| e.to_string())?,
-                    ));
-                }
                 r.runs.write(&d)?;
-                if let Some(m) = &r.remeasure {
-                    r.runs.set_remeasure(&m.record)?;
-                }
             }
             if end {
                 let reviews = imp.reviews()?;
@@ -696,6 +760,8 @@ impl ExploreRun {
                 if let Some(m) = &r.remeasure {
                     r.runs.set_remeasure(&m.record)?;
                 }
+                // The new measures are in the segments now.
+                store::drop_remeasured(&r.runs.db)?;
                 r.grids.keep_only(&|_| false);
                 r.import = None;
                 if let Some(p) = r.import_progress.as_mut() {
@@ -726,7 +792,14 @@ fn remeasure_progress(st: &remeasure::State) -> RemeasureProgress {
     let r = &st.record;
     RemeasureProgress {
         mode: r.mode.clone(),
-        phase: if r.done { "done" } else { "copying" }.into(),
+        phase: if r.done {
+            "done"
+        } else if !st.measured && !st.is_empty() {
+            "re-measuring"
+        } else {
+            "copying"
+        }
+        .into(),
         scanned: 0,
         tilings: r.tilings,
         checked_tilings: r.tilings,
@@ -737,6 +810,7 @@ fn remeasure_progress(st: &remeasure::State) -> RemeasureProgress {
             .iter()
             .map(|(t, w)| (t.clone(), w.clone()))
             .collect(),
+        to_remeasure: r.to_remeasure,
         runs: r.runs,
         changed: r.changed,
         per_s: if r.remeasure_seconds > 0.0 {
@@ -865,7 +939,6 @@ impl Strategy for ExploreRun {
             import_progress,
             check,
             remeasure: decided,
-            pending: BTreeMap::new(),
             grids: remeasure::Grids::default(),
             remeasure_gpu,
             remeasure_progress,
@@ -1018,6 +1091,26 @@ pub fn line(p: &ExploreProgress) -> String {
                         d(m.sampled),
                         d(m.differ),
                         m.tilings_remeasured.len()
+                    );
+                }
+                "re-measuring" => {
+                    let of = if m.to_remeasure > 0 {
+                        format!(" of {}", d(m.to_remeasure))
+                    } else {
+                        String::new()
+                    };
+                    return format!(
+                        "explore {}: re-measuring {file}'s runs on this engine: {}{of} ({:.0}/s, \
+                         {} changed) on {} tilings",
+                        p.job,
+                        d(m.runs),
+                        m.per_s,
+                        d(m.changed),
+                        if m.mode == "all" {
+                            "all".to_string()
+                        } else {
+                            m.tilings_remeasured.len().to_string()
+                        }
                     );
                 }
                 _ => {}

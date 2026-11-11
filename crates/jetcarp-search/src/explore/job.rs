@@ -1352,7 +1352,9 @@ pub fn measure_batch(
     let (nb, gens) = (first.nb, first.gens);
     let per = (be.max_cells() / grid.topo.len().next_multiple_of(256)).max(1);
     let mut out = Vec::with_capacity(cands.len());
+    let trace = std::env::var_os("JETCARP_EXPLORE_TRACE").is_some();
     for chunk in cands.chunks(per) {
+        let t0 = Instant::now();
         let inits: Vec<Option<BatchWorld>> = chunk
             .par_iter()
             .map(|c| {
@@ -1375,11 +1377,13 @@ pub fn measure_batch(
             gens,
             frames_at: frames_for(gens, WINDOW),
         };
+        let t1 = Instant::now();
         let traces = if job.worlds.is_empty() {
             vec![]
         } else {
             be.run(&job)?
         };
+        let t2 = Instant::now();
         if traces.len() != at.len() {
             return Err(format!(
                 "the GPU returned {} traces for {} worlds",
@@ -1392,6 +1396,16 @@ pub fn measure_batch(
             .zip(traces.par_iter())
             .map(|(&i, t)| catch_unwind(AssertUnwindSafe(|| evaluate(grid, chunk[i], t))).ok())
             .collect();
+        if trace {
+            eprintln!(
+                "  batch {} worlds of {} cells: seed {:.2} s, gpu {:.2} s, measure {:.2} s",
+                chunk.len(),
+                grid.topo.len(),
+                (t1 - t0).as_secs_f64(),
+                (t2 - t1).as_secs_f64(),
+                t2.elapsed().as_secs_f64()
+            );
+        }
         let mut got: Vec<Option<Measured>> = vec![None; chunk.len()];
         for (&i, m) in at.iter().zip(measured) {
             got[i] = m;
