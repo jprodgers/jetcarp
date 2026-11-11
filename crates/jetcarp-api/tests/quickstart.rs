@@ -310,7 +310,8 @@ fn the_built_in_examples() {
     assert_eq!(all.examples[0].id, "life");
     assert!(all.not_working.is_none() && all.examples[0].health.is_none());
     assert!(
-        all.text().starts_with("  0 Life on the square grid "),
+        all.text()
+            .starts_with(&format!("  0 {:32} Life on the square grid ", "life")),
         "{}",
         all.text()
     );
@@ -325,13 +326,16 @@ fn the_built_in_examples() {
     assert!(sheet.exists());
     let t = c.text();
     assert!(t.contains("  ok   pop "), "{t}");
+    // The id column fits the ids shown.
+    assert!(t.starts_with("  7 langtons-ant Langton's ant "), "{t}");
+    assert!(t.contains("\n 76 rule:Ant RL  Langton's ant "), "{t}");
     assert!(t.contains("\n2 examples, 0 not working\nwrote "), "{t}");
     // A survey of starting patterns.
     let s = check(json!({"filter": "langton", "survey": true, "gens": 10}));
     assert_eq!(s.examples[0].survey.len(), 16);
     assert!(
         s.text()
-            .starts_with("  7 Langton's ant Ant RL\n      Random"),
+            .starts_with("  7 langtons-ant Langton's ant Ant RL\n      Random"),
         "{}",
         s.text()
     );

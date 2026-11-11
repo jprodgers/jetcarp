@@ -612,7 +612,7 @@ impl Report for Checked {
         }
         if self.mode == 1 {
             for e in &self.examples {
-                let _ = writeln!(s, "{:3} {} {}", e.index, e.name, e.rule);
+                let _ = writeln!(s, "{:3} {} {} {}", e.index, e.id, e.name, e.rule);
                 for r in &e.survey {
                     match (&r.health, &r.error) {
                         (Some(h), _) => {
@@ -636,6 +636,15 @@ impl Report for Checked {
             return s;
         }
         let check = self.not_working.is_some();
+        // The id is what `jetcarp wallpaper`, `media render --quickstart` and scenes' sources
+        // take (the number works too); the column fits the ids shown, up to 32 characters.
+        let idw = self
+            .examples
+            .iter()
+            .map(|e| e.id.chars().count())
+            .max()
+            .unwrap_or(0)
+            .min(32);
         for e in &self.examples {
             let tail = match &e.health {
                 Some(h) => format!(
@@ -650,8 +659,8 @@ impl Report for Checked {
             };
             let _ = writeln!(
                 s,
-                "{:3} {:34} {:24} {:20} {:24}{}",
-                e.index, e.name, e.rule, e.family, e.tiling, tail
+                "{:3} {:idw$} {:34} {:24} {:20} {:24}{}",
+                e.index, e.id, e.name, e.rule, e.family, e.tiling, tail
             );
         }
         if let Some(bad) = self.not_working {
