@@ -582,8 +582,11 @@ impl Search {
     }
 
     /// One step: GPU rounds (with `gpu`) on a thread of their own and CPU rounds on `pool`,
-    /// until the deadline, a stop, or the screened total; a round under way runs to its end.
-    /// Returns the GPU's error, when a GPU round failed (the GPU stops for the rest of the step).
+    /// until the deadline, a stop, or the screened total. The CPU stops handing out candidates
+    /// then (the ones running finish; an elite is confirmed with all its seeds or not at all),
+    /// and the GPU goes on with batches while the CPU finishes, so it is never idle waiting for a
+    /// slow CPU round; a batch under way runs to its end. Returns the GPU's error, when a GPU
+    /// round failed (the GPU stops for the rest of the step).
     pub fn step(
         &self,
         pool: &rayon::ThreadPool,
@@ -597,6 +600,12 @@ impl Search {
         };
         let has_gpu = gpu.is_some();
         let (gpu_fams, cpu_fams, ltl) = families(&self.set.families, has_gpu);
+        let cpu_busy = AtomicBool::new(false);
+        let gpu_go = || {
+            !lim.stop.load(Ordering::SeqCst)
+                && (Instant::now() < lim.until || cpu_busy.load(Ordering::SeqCst))
+                && lim.max_screened.is_none_or(|m| self.screened() < m)
+        };
         std::thread::scope(|sc| {
             let gpu_thread = gpu.map(|be| {
                 let gpu_fams = gpu_fams.clone();
@@ -606,7 +615,7 @@ impl Search {
                     }
                     let mut rng = *self.rng_gpu.lock().unwrap();
                     let keep = |rng: Rng| *self.rng_gpu.lock().unwrap() = rng;
-                    while go() {
+                    while gpu_go() {
                         let round = self.gpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
                         let r = catch_unwind(AssertUnwindSafe(|| {
                             if round.is_multiple_of(8) {
@@ -633,13 +642,15 @@ impl Search {
                 })
             });
             if !cpu_fams.is_empty() {
+                cpu_busy.store(true, Ordering::SeqCst);
                 let mut rng = *self.rng_cpu.lock().unwrap();
                 pool.install(|| {
                     while go() {
-                        self.cpu_round(&mut rng, &cpu_fams);
+                        self.cpu_round(&mut rng, &cpu_fams, &go);
                     }
                 });
                 *self.rng_cpu.lock().unwrap() = rng;
+                cpu_busy.store(false, Ordering::SeqCst);
             }
             gpu_thread.and_then(|t| t.join().unwrap_or(Some("the GPU thread panicked".into())))
         })
@@ -1022,8 +1033,8 @@ impl Search {
     }
 
     /// One CPU round: a tiling and families chosen, candidates made and run on the pool (the
-    /// caller's), and every fourth round a confirmation of elites.
-    fn cpu_round(&self, rng: &mut Rng, fams: &[(Fam, f64)]) {
+    /// caller's) while `go` says so, and every fourth round a confirmation of elites.
+    fn cpu_round(&self, rng: &mut Rng, fams: &[(Fam, f64)], go: &(dyn Fn() -> bool + Sync)) {
         let round = self.cpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
         let threads = rayon::current_num_threads().max(1);
         // Families that run on any tiling, and the ones tied to a native grid (when it is one
@@ -1073,11 +1084,16 @@ impl Search {
         );
         let rows: Vec<RunOut> = cands
             .into_par_iter()
-            .filter_map(|(c, kind)| self.cpu_eval(&grid, c, kind, None, 1))
+            .filter_map(|(c, kind)| {
+                if !go() {
+                    return None;
+                }
+                self.cpu_eval(&grid, c, kind, None, 1)
+            })
             .collect();
         self.publish(rows, 1);
-        if round.is_multiple_of(4) {
-            self.cpu_confirm(fams, threads);
+        if round.is_multiple_of(4) && go() {
+            self.cpu_confirm(fams, threads, go);
         }
     }
 
@@ -1117,29 +1133,32 @@ impl Search {
         })
     }
 
-    fn cpu_confirm(&self, fams: &[(Fam, f64)], threads: usize) {
+    fn cpu_confirm(&self, fams: &[(Fam, f64)], threads: usize, go: &(dyn Fn() -> bool + Sync)) {
         let pending = self.archive.lock().unwrap().unconfirmed(4096);
         let picked: Vec<(i64, Eval)> = pending
             .into_iter()
             .filter(|(_, e)| fams.iter().any(|(f, _)| *f == e.cand.fam))
             .take(threads * 2)
             .collect();
-        let rows: Vec<RunOut> = picked
+        // An elite is confirmed with all its seeds, or (once `go` says stop) not at all.
+        let done: Vec<(i64, Vec<RunOut>)> = picked
             .par_iter()
-            .flat_map(|(id, e)| {
+            .filter_map(|(id, e)| {
+                if !go() {
+                    return None;
+                }
                 let grid = self.grid(&e.cand.tiling, self.set.confirm_cells).ok()?;
                 let rows: Vec<RunOut> = self
                     .confirmations(e, &grid)
                     .into_iter()
                     .filter_map(|c| self.cpu_eval(&grid, c, "confirm".into(), Some(*id), 2))
                     .collect();
-                Some(rows)
+                Some((*id, rows))
             })
-            .flatten()
             .collect();
-        let ids: Vec<i64> = picked.iter().map(|p| p.0).collect();
+        let ids: Vec<i64> = done.iter().map(|d| d.0).collect();
         self.mark_confirmed(&ids);
-        self.publish(rows, 2);
+        self.publish(done.into_iter().flat_map(|d| d.1).collect(), 2);
     }
 }
 
