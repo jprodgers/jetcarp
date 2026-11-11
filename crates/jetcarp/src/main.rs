@@ -11,6 +11,7 @@ use std::path::PathBuf;
 mod ants_cmd;
 mod api_cmd;
 mod app_cmd;
+mod broken_pipe;
 mod demo_cmd;
 mod hashlife_cmd;
 mod host_cmd;
@@ -323,6 +324,19 @@ fn without_json(cmd: &Cmd) -> Option<&'static str> {
 }
 
 fn main() -> Result<()> {
+    // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
+    // command was writing.
+    broken_pipe::install();
+    let r = run();
+    if let Err(e) = &r
+        && broken_pipe::is_broken(e)
+    {
+        broken_pipe::exit();
+    }
+    r
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse_from(args());
     let Some(cmd) = cli.cmd else {
         return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
