@@ -51,6 +51,79 @@ fn d_batch() -> usize {
     1024
 }
 
+/// Cells the search's cache of grids holds at most, in all. A grid costs about 72 bytes a cell
+/// (a 16,000-cell screening grid about 1.1 MB, a 64,000-cell confirming one about 4.3 MB), so
+/// every tiling's grids at both default sizes, as an unbounded cache ends up holding, come to
+/// about 109 million cells and 7.2 GB (the 1,359 tilings measured on Linux: 1.48 GB at 16,000
+/// cells, 5.0 GB for 1,187 of them at 64,000). This keeps the most recently used, about 2.2 GB,
+/// which holds every screening grid with room for the confirming grids in use; a grid let go is
+/// built again in about 25 ms (16,000 cells) or 0.1 to 0.2 s (64,000 cells).
+pub const GRID_CACHE_CELLS: usize = 32_000_000;
+
+/// The grids a search has built, by tiling and size, up to [`GRID_CACHE_CELLS`] cells; past
+/// that the least recently used go (a run still using one keeps it alive until it ends).
+#[derive(Default)]
+struct GridCache {
+    map: HashMap<(String, u32), (Arc<Grid>, u64)>,
+    cells: usize,
+    limit: usize,
+    tick: u64,
+    hits: u64,
+    builds: u64,
+}
+
+impl GridCache {
+    fn new(limit: usize) -> GridCache {
+        GridCache {
+            limit,
+            ..Default::default()
+        }
+    }
+
+    fn get(&mut self, key: &(String, u32)) -> Option<Arc<Grid>> {
+        self.tick += 1;
+        let (g, used) = self.map.get_mut(key)?;
+        *used = self.tick;
+        self.hits += 1;
+        Some(g.clone())
+    }
+
+    /// Keeps `g` (unless another thread built the same grid meanwhile: then that one), letting the
+    /// least recently used others go while the cache is over its limit.
+    fn insert(&mut self, key: (String, u32), g: Arc<Grid>) -> Arc<Grid> {
+        self.tick += 1;
+        self.builds += 1;
+        if let Some((have, used)) = self.map.get_mut(&key) {
+            *used = self.tick;
+            return have.clone();
+        }
+        self.cells += g.topo.len();
+        self.map.insert(key.clone(), (g.clone(), self.tick));
+        while self.cells > self.limit && self.map.len() > 1 {
+            let oldest = self
+                .map
+                .iter()
+                .filter(|(k, _)| **k != key)
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(k, _)| k.clone());
+            let Some(k) = oldest else { break };
+            if let Some((old, _)) = self.map.remove(&k) {
+                self.cells -= old.topo.len();
+            }
+        }
+        g
+    }
+}
+
+/// How the grid cache has done: grids and cells held, look-ups answered from it, grids built.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GridCacheStats {
+    pub grids: usize,
+    pub cells: usize,
+    pub hits: u64,
+    pub builds: u64,
+}
+
 /// A search's settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
@@ -259,7 +332,7 @@ pub struct Search {
     set: Settings,
     tilings: Vec<TilingChoice>,
     tiling_total: f64,
-    grids: Mutex<HashMap<(String, u32), Arc<Grid>>>,
+    grids: Mutex<GridCache>,
     archive: Mutex<Archive>,
     seen: Mutex<Seen>,
     coverage: Mutex<HashMap<(usize, Fam, String), u32>>,
@@ -322,7 +395,7 @@ impl Search {
             set,
             tiling_total,
             tilings,
-            grids: Mutex::new(HashMap::new()),
+            grids: Mutex::new(GridCache::new(GRID_CACHE_CELLS)),
             archive: Mutex::new(saved.archive),
             seen: Mutex::new(Seen {
                 base: saved.seen,
@@ -489,15 +562,24 @@ impl Search {
     }
 
     fn grid(&self, key: &str, cells: u32) -> Result<Arc<Grid>, String> {
-        if let Some(g) = self.grids.lock().unwrap().get(&(key.to_string(), cells)) {
-            return Ok(g.clone());
+        let k = (key.to_string(), cells);
+        if let Some(g) = self.grids.lock().unwrap().get(&k) {
+            return Ok(g);
         }
+        // Built outside the lock, so other rounds go on meanwhile.
         let g = Arc::new(Grid::build(key, cells)?);
-        self.grids
-            .lock()
-            .unwrap()
-            .insert((key.to_string(), cells), g.clone());
-        Ok(g)
+        Ok(self.grids.lock().unwrap().insert(k, g))
+    }
+
+    /// The grid cache's size and how it has done ([`GRID_CACHE_CELLS`]).
+    pub fn grid_cache(&self) -> GridCacheStats {
+        let c = self.grids.lock().unwrap();
+        GridCacheStats {
+            grids: c.map.len(),
+            cells: c.cells,
+            hits: c.hits,
+            builds: c.builds,
+        }
     }
 
     fn pick_tiling(&self, rng: &mut Rng) -> usize {
@@ -1245,4 +1327,38 @@ pub fn tiling_groups() -> HashMap<String, u8> {
     all.iter()
         .map(|t| (t.key.clone(), group_of(&all, &t.key)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_grid_cache_lets_the_least_recently_used_go() {
+        let g = |key: &str| Arc::new(Grid::build(key, 100).unwrap());
+        let (sq, hex, tri) = (g("square"), g("hex"), g("triangle"));
+        let n = sq.topo.len() + hex.topo.len();
+        let mut c = GridCache::new(n + tri.topo.len() - 1);
+        let k = |s: &str| (s.to_string(), 100);
+        c.insert(k("square"), sq.clone());
+        c.insert(k("hex"), hex.clone());
+        assert_eq!(c.cells, n);
+        // The square grid is used again, so the hexagons are the oldest when a third comes.
+        assert!(c.get(&k("square")).is_some());
+        c.insert(k("triangle"), tri.clone());
+        assert!(c.get(&k("hex")).is_none(), "the least recently used went");
+        assert!(c.get(&k("square")).is_some() && c.get(&k("triangle")).is_some());
+        assert_eq!(c.cells, sq.topo.len() + tri.topo.len());
+        assert_eq!((c.hits, c.builds), (3, 3));
+        // A grid built twice (two rounds at once) is kept once.
+        let again = c.insert(k("square"), g("square"));
+        assert!(Arc::ptr_eq(&again, &sq));
+        assert_eq!(c.cells, sq.topo.len() + tri.topo.len());
+        // One grid larger than the limit is still kept, alone.
+        let mut small = GridCache::new(1);
+        small.insert(k("square"), sq.clone());
+        small.insert(k("hex"), hex);
+        assert_eq!(small.map.len(), 1);
+        assert!(small.get(&k("hex")).is_some());
+    }
 }
