@@ -127,12 +127,12 @@ fourth, on 4.8.8, is now flagged):
 
 <figure class="pair">
 <div><picture>
-  <source srcset="../images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-aa7e7357.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
+  <source srcset="../images/tilings/ship-57a0326c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-57a0326c.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
 </picture></div>
 <div><picture>
-  <source srcset="../images/tilings/ship-a13d3fbf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-a13d3fbf.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
+  <source srcset="../images/tilings/ship-3e30b9ff-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-3e30b9ff.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
 </picture></div>
 <figcaption>Left: <code>aa7e7357</code> on the rhombitrihexagonal tiling 3.4.6.4, period 42, 7 to 15
 cells; watch it change shape through its long period while it moves 3 lattice steps (c/14). It runs
@@ -141,17 +141,17 @@ on the elongated triangular tiling 3.3.3.4.4, period 8, 13 to 17 cells, moving 2
 the rows every period (c/4), in the 1,024 rules from <code>B46/S3458</code> up; it also runs unchanged
 in corridors of the 3-uniform tilings k3-051 and k3-052, and its live tiles evolve the same way on six
 more 2- and 3-uniform tilings. Scenes
-<code>docs/scenes/tilings/ship-aa7e7357.json</code> and <code>ship-a13d3fbf.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-57a0326c.json</code> and <code>ship-3e30b9ff.json</code>.</figcaption>
 </figure>
 
 <figure class="pair">
 <div><picture>
-  <source srcset="../images/tilings/ship-acd0fa8b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-acd0fa8b.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
+  <source srcset="../images/tilings/ship-d3cd3951-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-d3cd3951.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
 </picture></div>
 <div><picture>
-  <source srcset="../images/tilings/ship-9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-9cee5c6a.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
+  <source srcset="../images/tilings/ship-504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-504fdf46.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
 </picture></div>
 <figcaption>Left: <code>acd0fa8b</code> on the snub hexagonal tiling 3.3.3.3.6, period 27, 4 to 18
 cells, one lattice step along a row per period (c/27), in about a million rules from
@@ -160,15 +160,15 @@ steps per period (c/3), in the 128 rules from <code>B2/S2</code> up: the only su
 that does not move at c/2, and it contains no smaller ship. It was among the four strongest until we
 read EricG's 2013 report that many <code>B2</code> rules on 4.8.8 have spaceships; EricG's patterns are not
 online, so it is flagged until they can be compared. Scenes
-<code>docs/scenes/tilings/ship-acd0fa8b.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-d3cd3951.json</code> and <code>ship-504fdf46.json</code>.</figcaption>
 </figure>
 
 One ship that was among the strongest before the congruence test shows how far that test reaches:
 
 <figure>
 <picture>
-  <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-7860a67a.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
+  <source srcset="../images/tilings/ship-d8692b4b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-d8692b4b.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
 </picture>
 <figcaption><code>7860a67a</code>, a 7-cell period-4 ship that moves one lattice step every 4
 generations (c/4), here on the 2-uniform tiling k2-003 in the 256 rules from <code>B45/S34</code> up.
@@ -177,7 +177,7 @@ first found it, and its live tiles evolve the same way on k3-013 and k3-019 (whe
 second time, as <code>25e004f4</code>), on k3-051 and k3-052, and on the Archimedean elongated triangular
 tiling 3.3.3.4.4, where the tiles around it have more neighbours. Small, common and running in many
 rules on an Archimedean tiling, it is now flagged as most likely already known. Scene
-<code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-d8692b4b.json</code>.</figcaption>
 </figure>
 
 **Evidence.** Gliders on triangles, hexagons and Cairo pentagons go back to Carter Bays

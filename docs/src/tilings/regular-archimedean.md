@@ -161,34 +161,34 @@ although EricG's patterns are not online to compare. On the hexagonal and triang
 
 <figure class="pair">
 <div><picture>
-  <source srcset="../images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-aa7e7357.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
+  <source srcset="../images/tilings/ship-57a0326c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-57a0326c.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
 </picture></div>
 <div><picture>
-  <source srcset="../images/tilings/ship-acd0fa8b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-acd0fa8b.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
+  <source srcset="../images/tilings/ship-d3cd3951-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-d3cd3951.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
 </picture></div>
 <figcaption>Left: <code>aa7e7357</code> on 3.4.6.4, period 42, moving 3 lattice steps per period, in
 the 1,024 rules from <code>B3/S235</code> up. Right: <code>acd0fa8b</code> on 3.3.3.3.6, period 27, one
 lattice step along a row per period, in about a million rules from <code>B37/S2,5,6,10</code> up. Watch
 each ship pass through shapes that look nothing alike before it repeats one place further on. Scenes
-<code>docs/scenes/tilings/ship-aa7e7357.json</code> and <code>ship-acd0fa8b.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-57a0326c.json</code> and <code>ship-d3cd3951.json</code>.</figcaption>
 </figure>
 
 <figure class="pair">
 <div><picture>
-  <source srcset="../images/tilings/ship-a13d3fbf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-a13d3fbf.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
+  <source srcset="../images/tilings/ship-3e30b9ff-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-3e30b9ff.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
 </picture></div>
 <div><picture>
-  <source srcset="../images/tilings/ship-9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-9cee5c6a.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
+  <source srcset="../images/tilings/ship-504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-504fdf46.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
 </picture></div>
 <figcaption>Left: <code>a13d3fbf</code> on 3.3.3.4.4, period 8, two lattice steps along the rows per
 period, in the 1,024 rules from <code>B46/S3458</code> up. Right: <code>9cee5c6a</code> on 4.8.8,
 period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code> up; it is one of the
 flagged 4.8.8 ships, since EricG found many ships in <code>B2</code> rules there. Scenes
-<code>docs/scenes/tilings/ship-a13d3fbf.json</code> and <code>ship-9cee5c6a.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-3e30b9ff.json</code> and <code>ship-504fdf46.json</code>.</figcaption>
 </figure>
 
 ## Try it
@@ -196,7 +196,7 @@ flagged 4.8.8 ships, since EricG found many ships in <code>B2</code> rules there
 - Quick Start, family *Tiling showcase*: a lively rule and a sandpile on each of the eleven.
 - `jetcarp run docs/scenes/tilings/archimedean-rhombitrihex.json --gens 200 --png 3464.png`
 - Run Life (`B3/S23`) on `trihex` from a random start and look for small gliders, as Guttesen did.
-- `jetcarp run docs/scenes/tilings/ship-aa7e7357.json --gens 126 --png ship.png` runs the period-42
+- `jetcarp run docs/scenes/tilings/ship-57a0326c.json --gens 126 --png ship.png` runs the period-42
   ship for three periods.
 
 ## References

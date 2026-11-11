@@ -267,8 +267,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 <div class="ship-gallery">
 <div class="ship-card" id="ship-aa7e7357">
 <picture>
-  <source srcset="../images/findings/aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/aa7e7357.webp" alt="Spaceship aa7e7357 moving across the rhombitrihexagonal tiling 3.4.6.4" width="212" height="320" loading="lazy">
+  <source srcset="../images/findings/57a0326c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/57a0326c.webp" alt="Spaceship aa7e7357 moving across the rhombitrihexagonal tiling 3.4.6.4" width="212" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>aa7e7357</code> <a class="ship-n" href="#the-60-objects">table row 24</a></p>
 <dl>
@@ -283,8 +283,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-f1b6f83a">
 <picture>
-  <source srcset="../images/findings/f1b6f83a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/f1b6f83a.webp" alt="Spaceship f1b6f83a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/b86608f6-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/b86608f6.webp" alt="Spaceship f1b6f83a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>f1b6f83a</code> <a class="ship-n" href="#the-60-objects">table row 26</a></p>
 <dl>
@@ -299,8 +299,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-a13d3fbf">
 <picture>
-  <source srcset="../images/findings/a13d3fbf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a13d3fbf.webp" alt="Spaceship a13d3fbf moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/3e30b9ff-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/3e30b9ff.webp" alt="Spaceship a13d3fbf moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>a13d3fbf</code> <a class="ship-n" href="#the-60-objects">table row 28</a></p>
 <dl>
@@ -315,8 +315,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-b36f22f2">
 <picture>
-  <source srcset="../images/findings/b36f22f2-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/b36f22f2.webp" alt="Spaceship b36f22f2 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/d36fd2c3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/d36fd2c3.webp" alt="Spaceship b36f22f2 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>b36f22f2</code> <a class="ship-n" href="#the-60-objects">table row 29</a></p>
 <dl>
@@ -331,8 +331,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-ffc6a106">
 <picture>
-  <source srcset="../images/findings/ffc6a106-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/ffc6a106.webp" alt="Spaceship ffc6a106 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/9f3f8ff8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9f3f8ff8.webp" alt="Spaceship ffc6a106 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>ffc6a106</code> <a class="ship-n" href="#the-60-objects">table row 30</a></p>
 <dl>
@@ -347,8 +347,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-acd0fa8b">
 <picture>
-  <source srcset="../images/findings/acd0fa8b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/acd0fa8b.webp" alt="Spaceship acd0fa8b moving across the snub hexagonal tiling 3.3.3.3.6" width="240" height="320" loading="lazy">
+  <source srcset="../images/findings/d3cd3951-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/d3cd3951.webp" alt="Spaceship acd0fa8b moving across the snub hexagonal tiling 3.3.3.3.6" width="240" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>acd0fa8b</code> <a class="ship-n" href="#the-60-objects">table row 31</a></p>
 <dl>
@@ -363,8 +363,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-61627500">
 <picture>
-  <source srcset="../images/findings/61627500-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/61627500.webp" alt="Spaceship 61627500 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/2e4467c0-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/2e4467c0.webp" alt="Spaceship 61627500 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>61627500</code> <a class="ship-n" href="#the-60-objects">table row 38</a></p>
 <dl>
@@ -379,8 +379,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-29af9b20">
 <picture>
-  <source srcset="../images/findings/29af9b20-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/29af9b20.webp" alt="Spaceship 29af9b20 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/6469dbc4-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/6469dbc4.webp" alt="Spaceship 29af9b20 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>29af9b20</code> <a class="ship-n" href="#the-60-objects">table row 39</a></p>
 <dl>
@@ -395,8 +395,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-dcd6b05f">
 <picture>
-  <source srcset="../images/findings/dcd6b05f-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/dcd6b05f.webp" alt="Spaceship dcd6b05f moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/9bebe7ea-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9bebe7ea.webp" alt="Spaceship dcd6b05f moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>dcd6b05f</code> <a class="ship-n" href="#the-60-objects">table row 41</a></p>
 <dl>
@@ -411,8 +411,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-da6eca43">
 <picture>
-  <source srcset="../images/findings/da6eca43-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/da6eca43.webp" alt="Spaceship da6eca43 moving across the 2-uniform tiling k2-006" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/3fcb35b1-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/3fcb35b1.webp" alt="Spaceship da6eca43 moving across the 2-uniform tiling k2-006" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>da6eca43</code> <a class="ship-n" href="#the-60-objects">table row 42</a></p>
 <dl>
@@ -427,8 +427,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-f9773263">
 <picture>
-  <source srcset="../images/findings/f9773263-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/f9773263.webp" alt="Spaceship f9773263 moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/af899881-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/af899881.webp" alt="Spaceship f9773263 moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>f9773263</code> <a class="ship-n" href="#the-60-objects">table row 43</a></p>
 <dl>
@@ -443,8 +443,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-56ddb3e7">
 <picture>
-  <source srcset="../images/findings/56ddb3e7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/56ddb3e7.webp" alt="Spaceship 56ddb3e7 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/3021704c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/3021704c.webp" alt="Spaceship 56ddb3e7 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>56ddb3e7</code> <a class="ship-n" href="#the-60-objects">table row 44</a></p>
 <dl>
@@ -459,8 +459,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-0d9a694c">
 <picture>
-  <source srcset="../images/findings/0d9a694c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/0d9a694c.webp" alt="Spaceship 0d9a694c moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/9c87573c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9c87573c.webp" alt="Spaceship 0d9a694c moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>0d9a694c</code> <a class="ship-n" href="#the-60-objects">table row 45</a></p>
 <dl>
@@ -475,8 +475,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-01d41fa4">
 <picture>
-  <source srcset="../images/findings/01d41fa4-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/01d41fa4.webp" alt="Spaceship 01d41fa4 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/a5564155-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/a5564155.webp" alt="Spaceship 01d41fa4 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>01d41fa4</code> <a class="ship-n" href="#the-60-objects">table row 46</a></p>
 <dl>
@@ -491,8 +491,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-47978a43">
 <picture>
-  <source srcset="../images/findings/47978a43-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/47978a43.webp" alt="Spaceship 47978a43 moving across the 2-uniform tiling k2-013" width="320" height="190" loading="lazy">
+  <source srcset="../images/findings/9d1ccd9c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9d1ccd9c.webp" alt="Spaceship 47978a43 moving across the 2-uniform tiling k2-013" width="320" height="190" loading="lazy">
 </picture>
 <p class="ship-name"><code>47978a43</code> <a class="ship-n" href="#the-60-objects">table row 47</a></p>
 <dl>
@@ -507,8 +507,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-4b87931e">
 <picture>
-  <source srcset="../images/findings/4b87931e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/4b87931e.webp" alt="Spaceship 4b87931e moving across the 2-uniform tiling k2-013" width="272" height="320" loading="lazy">
+  <source srcset="../images/findings/e1067c81-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/e1067c81.webp" alt="Spaceship 4b87931e moving across the 2-uniform tiling k2-013" width="272" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>4b87931e</code> <a class="ship-n" href="#the-60-objects">table row 48</a></p>
 <dl>
@@ -523,8 +523,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-931ac6a1">
 <picture>
-  <source srcset="../images/findings/931ac6a1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/931ac6a1.webp" alt="Spaceship 931ac6a1 moving across the 2-uniform tiling k2-014" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/49a92bbe-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/49a92bbe.webp" alt="Spaceship 931ac6a1 moving across the 2-uniform tiling k2-014" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>931ac6a1</code> <a class="ship-n" href="#the-60-objects">table row 49</a></p>
 <dl>
@@ -539,8 +539,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-29fa9994">
 <picture>
-  <source srcset="../images/findings/29fa9994-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/29fa9994.webp" alt="Spaceship 29fa9994 moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/b79fe209-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/b79fe209.webp" alt="Spaceship 29fa9994 moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>29fa9994</code> <a class="ship-n" href="#the-60-objects">table row 50</a></p>
 <dl>
@@ -555,8 +555,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-dc81d36e">
 <picture>
-  <source srcset="../images/findings/dc81d36e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/dc81d36e.webp" alt="Spaceship dc81d36e moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/b3726ba1-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/b3726ba1.webp" alt="Spaceship dc81d36e moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>dc81d36e</code> <a class="ship-n" href="#the-60-objects">table row 51</a></p>
 <dl>
@@ -571,8 +571,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-5b9c9e68">
 <picture>
-  <source srcset="../images/findings/5b9c9e68-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/5b9c9e68.webp" alt="Spaceship 5b9c9e68 moving across the 3-uniform tiling k3-009" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/7ff20168-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/7ff20168.webp" alt="Spaceship 5b9c9e68 moving across the 3-uniform tiling k3-009" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>5b9c9e68</code> <a class="ship-n" href="#the-60-objects">table row 53</a></p>
 <dl>
@@ -587,8 +587,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-573a43ed">
 <picture>
-  <source srcset="../images/findings/573a43ed-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/573a43ed.webp" alt="Spaceship 573a43ed moving across the 3-uniform tiling k3-032" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/ed99f9a8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/ed99f9a8.webp" alt="Spaceship 573a43ed moving across the 3-uniform tiling k3-032" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>573a43ed</code> <a class="ship-n" href="#the-60-objects">table row 55</a></p>
 <dl>
@@ -603,8 +603,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-e3df3631">
 <picture>
-  <source srcset="../images/findings/e3df3631-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/e3df3631.webp" alt="Spaceship e3df3631 moving across the 3-uniform tiling k3-038" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/6c774748-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/6c774748.webp" alt="Spaceship e3df3631 moving across the 3-uniform tiling k3-038" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>e3df3631</code> <a class="ship-n" href="#the-60-objects">table row 56</a></p>
 <dl>
@@ -619,8 +619,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-df78e126">
 <picture>
-  <source srcset="../images/findings/df78e126-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/df78e126.webp" alt="Spaceship df78e126 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/17453dab-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/17453dab.webp" alt="Spaceship df78e126 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>df78e126</code> <a class="ship-n" href="#the-60-objects">table row 57</a></p>
 <dl>
@@ -635,8 +635,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-9d5c568b">
 <picture>
-  <source srcset="../images/findings/9d5c568b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9d5c568b.webp" alt="Spaceship 9d5c568b moving across the 3-uniform tiling k3-053" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/9242617e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9242617e.webp" alt="Spaceship 9d5c568b moving across the 3-uniform tiling k3-053" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>9d5c568b</code> <a class="ship-n" href="#the-60-objects">table row 58</a></p>
 <dl>
@@ -651,8 +651,8 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </div>
 <div class="ship-card" id="ship-f3d2fa6a">
 <picture>
-  <source srcset="../images/findings/f3d2fa6a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/f3d2fa6a.webp" alt="Spaceship f3d2fa6a moving across the 3-uniform tiling k3-058" width="284" height="320" loading="lazy">
+  <source srcset="../images/findings/2c3cee67-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/2c3cee67.webp" alt="Spaceship f3d2fa6a moving across the 3-uniform tiling k3-058" width="284" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>f3d2fa6a</code> <a class="ship-n" href="#the-60-objects">table row 60</a></p>
 <dl>
@@ -675,8 +675,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 <div class="ship-gallery">
 <div class="ship-card" id="ship-3c6d5ab0">
 <picture>
-  <source srcset="../images/findings/3c6d5ab0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3c6d5ab0.webp" alt="Spaceship 3c6d5ab0 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/ca2f31b0-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/ca2f31b0.webp" alt="Spaceship 3c6d5ab0 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>3c6d5ab0</code> <a class="ship-n" href="#the-60-objects">table row 2</a></p>
 <dl>
@@ -691,8 +691,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-070a054d">
 <picture>
-  <source srcset="../images/findings/070a054d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/070a054d.webp" alt="Spaceship 070a054d moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/2f5d3182-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/2f5d3182.webp" alt="Spaceship 070a054d moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>070a054d</code> <a class="ship-n" href="#the-60-objects">table row 4</a></p>
 <dl>
@@ -707,8 +707,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-3e6ae2f3">
 <picture>
-  <source srcset="../images/findings/3e6ae2f3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3e6ae2f3.webp" alt="Spaceship 3e6ae2f3 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/298db0cf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/298db0cf.webp" alt="Spaceship 3e6ae2f3 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>3e6ae2f3</code> <a class="ship-n" href="#the-60-objects">table row 5</a></p>
 <dl>
@@ -723,8 +723,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-5aec548b">
 <picture>
-  <source srcset="../images/findings/5aec548b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/5aec548b.webp" alt="Spaceship 5aec548b moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/984c5dd5-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/984c5dd5.webp" alt="Spaceship 5aec548b moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>5aec548b</code> <a class="ship-n" href="#the-60-objects">table row 6</a></p>
 <dl>
@@ -739,8 +739,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-616314c5">
 <picture>
-  <source srcset="../images/findings/616314c5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/616314c5.webp" alt="Spaceship 616314c5 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/87759c78-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/87759c78.webp" alt="Spaceship 616314c5 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>616314c5</code> <a class="ship-n" href="#the-60-objects">table row 7</a></p>
 <dl>
@@ -755,8 +755,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-c2f4f14a">
 <picture>
-  <source srcset="../images/findings/c2f4f14a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c2f4f14a.webp" alt="Spaceship c2f4f14a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/c45a97a1-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/c45a97a1.webp" alt="Spaceship c2f4f14a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>c2f4f14a</code> <a class="ship-n" href="#the-60-objects">table row 10</a></p>
 <dl>
@@ -771,8 +771,8 @@ core linked, but is not counted as a discovery. Six more derivatives are flagged
 </div>
 <div class="ship-card" id="ship-5e1adb91">
 <picture>
-  <source srcset="../images/findings/5e1adb91-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/5e1adb91.webp" alt="Spaceship 5e1adb91 moving across the truncated hexagonal tiling 3.12.12" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/25ba593a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/25ba593a.webp" alt="Spaceship 5e1adb91 moving across the truncated hexagonal tiling 3.12.12" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>5e1adb91</code> <a class="ship-n" href="#the-60-objects">table row 22</a></p>
 <dl>
@@ -796,8 +796,8 @@ them, so they are not claimed.
 <div class="ship-gallery">
 <div class="ship-card" id="ship-69c9912a">
 <picture>
-  <source srcset="../images/findings/69c9912a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/69c9912a.webp" alt="Spaceship 69c9912a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/78d55497-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/78d55497.webp" alt="Spaceship 69c9912a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>69c9912a</code> <a class="ship-n" href="#the-60-objects">table row 3</a></p>
 <dl>
@@ -812,8 +812,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-938f9833">
 <picture>
-  <source srcset="../images/findings/938f9833-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/938f9833.webp" alt="Spaceship 938f9833 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/bde55795-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/bde55795.webp" alt="Spaceship 938f9833 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>938f9833</code> <a class="ship-n" href="#the-60-objects">table row 9</a></p>
 <dl>
@@ -828,8 +828,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-c78ceb01">
 <picture>
-  <source srcset="../images/findings/c78ceb01-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c78ceb01.webp" alt="Spaceship c78ceb01 moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
+  <source srcset="../images/findings/30594bf3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/30594bf3.webp" alt="Spaceship c78ceb01 moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>c78ceb01</code> <a class="ship-n" href="#the-60-objects">table row 20</a></p>
 <dl>
@@ -844,8 +844,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-b2c790bb">
 <picture>
-  <source srcset="../images/findings/b2c790bb-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/b2c790bb.webp" alt="Spaceship b2c790bb moving across the truncated hexagonal tiling 3.12.12" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/3aaf02c0-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/3aaf02c0.webp" alt="Spaceship b2c790bb moving across the truncated hexagonal tiling 3.12.12" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>b2c790bb</code> <a class="ship-n" href="#the-60-objects">table row 21</a></p>
 <dl>
@@ -860,8 +860,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-1723afa2">
 <picture>
-  <source srcset="../images/findings/1723afa2-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/1723afa2.webp" alt="Spaceship 1723afa2 moving across the truncated trihexagonal tiling 4.6.12" width="234" height="320" loading="lazy">
+  <source srcset="../images/findings/781cc2ef-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/781cc2ef.webp" alt="Spaceship 1723afa2 moving across the truncated trihexagonal tiling 4.6.12" width="234" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>1723afa2</code> <a class="ship-n" href="#the-60-objects">table row 23</a></p>
 <dl>
@@ -876,8 +876,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-7860a67a">
 <picture>
-  <source srcset="../images/findings/7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/7860a67a.webp" alt="Spaceship 7860a67a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/d8692b4b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/d8692b4b.webp" alt="Spaceship 7860a67a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>7860a67a</code> <a class="ship-n" href="#the-60-objects">table row 25</a></p>
 <dl>
@@ -892,8 +892,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-c15dd310">
 <picture>
-  <source srcset="../images/findings/c15dd310-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c15dd310.webp" alt="Spaceship c15dd310 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/1a403313-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/1a403313.webp" alt="Spaceship c15dd310 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>c15dd310</code> <a class="ship-n" href="#the-60-objects">table row 27</a></p>
 <dl>
@@ -908,8 +908,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-2ba58828">
 <picture>
-  <source srcset="../images/findings/2ba58828-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/2ba58828.webp" alt="Spaceship 2ba58828 moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/c696c65e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/c696c65e.webp" alt="Spaceship 2ba58828 moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>2ba58828</code> <a class="ship-n" href="#the-60-objects">table row 32</a></p>
 <dl>
@@ -924,8 +924,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-98a3c53b">
 <picture>
-  <source srcset="../images/findings/98a3c53b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/98a3c53b.webp" alt="Spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/a5e9ba80-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/a5e9ba80.webp" alt="Spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>98a3c53b</code> <a class="ship-n" href="#the-60-objects">table row 33</a></p>
 <dl>
@@ -940,8 +940,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-8aa7e24c">
 <picture>
-  <source srcset="../images/findings/8aa7e24c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/8aa7e24c.webp" alt="Spaceship 8aa7e24c moving across the trihexagonal (kagome) tiling 3.6.3.6" width="318" height="192" loading="lazy">
+  <source srcset="../images/findings/1df4b31f-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/1df4b31f.webp" alt="Spaceship 8aa7e24c moving across the trihexagonal (kagome) tiling 3.6.3.6" width="318" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>8aa7e24c</code> <a class="ship-n" href="#the-60-objects">table row 35</a></p>
 <dl>
@@ -956,8 +956,8 @@ them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-ea5d187b">
 <picture>
-  <source srcset="../images/findings/ea5d187b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/ea5d187b.webp" alt="Spaceship ea5d187b moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/e08df0a8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/e08df0a8.webp" alt="Spaceship ea5d187b moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>ea5d187b</code> <a class="ship-n" href="#the-60-objects">table row 36</a></p>
 <dl>
@@ -982,8 +982,8 @@ others may well have seen them, so they are not claimed.
 <div class="ship-gallery">
 <div class="ship-card" id="ship-0ed091c9">
 <picture>
-  <source srcset="../images/findings/0ed091c9-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/0ed091c9.webp" alt="Spaceship 0ed091c9 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/9d091ca3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/9d091ca3.webp" alt="Spaceship 0ed091c9 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>0ed091c9</code> <a class="ship-n" href="#the-60-objects">table row 1</a></p>
 <dl>
@@ -998,8 +998,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-7c5b3e65">
 <picture>
-  <source srcset="../images/findings/7c5b3e65-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/7c5b3e65.webp" alt="Spaceship 7c5b3e65 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/feae0172-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/feae0172.webp" alt="Spaceship 7c5b3e65 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>7c5b3e65</code> <a class="ship-n" href="#the-60-objects">table row 8</a></p>
 <dl>
@@ -1014,8 +1014,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-c4c00098">
 <picture>
-  <source srcset="../images/findings/c4c00098-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c4c00098.webp" alt="Spaceship c4c00098 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/7f22824b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/7f22824b.webp" alt="Spaceship c4c00098 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>c4c00098</code> <a class="ship-n" href="#the-60-objects">table row 11</a></p>
 <dl>
@@ -1030,8 +1030,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-9cee5c6a">
 <picture>
-  <source srcset="../images/findings/9cee5c6a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9cee5c6a.webp" alt="Spaceship 9cee5c6a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/504fdf46.webp" alt="Spaceship 9cee5c6a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>9cee5c6a</code> <a class="ship-n" href="#the-60-objects">table row 12</a></p>
 <dl>
@@ -1046,8 +1046,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-25969982">
 <picture>
-  <source srcset="../images/findings/25969982-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/25969982.webp" alt="Spaceship 25969982 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/908dc7a0-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/908dc7a0.webp" alt="Spaceship 25969982 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>25969982</code> <a class="ship-n" href="#the-60-objects">table row 13</a></p>
 <dl>
@@ -1062,8 +1062,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-07ab1946">
 <picture>
-  <source srcset="../images/findings/07ab1946-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/07ab1946.webp" alt="Spaceship 07ab1946 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/87dfbfaf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/87dfbfaf.webp" alt="Spaceship 07ab1946 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>07ab1946</code> <a class="ship-n" href="#the-60-objects">table row 14</a></p>
 <dl>
@@ -1078,8 +1078,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-bdc1c8c7">
 <picture>
-  <source srcset="../images/findings/bdc1c8c7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/bdc1c8c7.webp" alt="Spaceship bdc1c8c7 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/71f3b4b3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/71f3b4b3.webp" alt="Spaceship bdc1c8c7 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>bdc1c8c7</code> <a class="ship-n" href="#the-60-objects">table row 15</a></p>
 <dl>
@@ -1094,8 +1094,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-fff1b887">
 <picture>
-  <source srcset="../images/findings/fff1b887-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/fff1b887.webp" alt="Spaceship fff1b887 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/76897484-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/76897484.webp" alt="Spaceship fff1b887 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>fff1b887</code> <a class="ship-n" href="#the-60-objects">table row 16</a></p>
 <dl>
@@ -1110,8 +1110,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-7e51c0d1">
 <picture>
-  <source srcset="../images/findings/7e51c0d1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/7e51c0d1.webp" alt="Spaceship 7e51c0d1 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/a333894b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/a333894b.webp" alt="Spaceship 7e51c0d1 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>7e51c0d1</code> <a class="ship-n" href="#the-60-objects">table row 17</a></p>
 <dl>
@@ -1126,8 +1126,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-852ea9ff">
 <picture>
-  <source srcset="../images/findings/852ea9ff-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/852ea9ff.webp" alt="Spaceship 852ea9ff moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
+  <source srcset="../images/findings/95528302-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/95528302.webp" alt="Spaceship 852ea9ff moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>852ea9ff</code> <a class="ship-n" href="#the-60-objects">table row 18</a></p>
 <dl>
@@ -1142,8 +1142,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-a0229739">
 <picture>
-  <source srcset="../images/findings/a0229739-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a0229739.webp" alt="Spaceship a0229739 moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
+  <source srcset="../images/findings/18746b1c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/18746b1c.webp" alt="Spaceship a0229739 moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>a0229739</code> <a class="ship-n" href="#the-60-objects">table row 19</a></p>
 <dl>
@@ -1158,8 +1158,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-0ccbe694">
 <picture>
-  <source srcset="../images/findings/0ccbe694-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/0ccbe694.webp" alt="Spaceship 0ccbe694 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/8f790b16-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/8f790b16.webp" alt="Spaceship 0ccbe694 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>0ccbe694</code> <a class="ship-n" href="#the-60-objects">table row 34</a></p>
 <dl>
@@ -1174,8 +1174,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-095a6bf7">
 <picture>
-  <source srcset="../images/findings/095a6bf7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/095a6bf7.webp" alt="Spaceship 095a6bf7 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="242" height="320" loading="lazy">
+  <source srcset="../images/findings/48e9e267-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/48e9e267.webp" alt="Spaceship 095a6bf7 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="242" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>095a6bf7</code> <a class="ship-n" href="#the-60-objects">table row 37</a></p>
 <dl>
@@ -1190,8 +1190,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-58ce78e3">
 <picture>
-  <source srcset="../images/findings/58ce78e3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/58ce78e3.webp" alt="Spaceship 58ce78e3 moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
+  <source srcset="../images/findings/e71e1136-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/e71e1136.webp" alt="Spaceship 58ce78e3 moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>58ce78e3</code> <a class="ship-n" href="#the-60-objects">table row 40</a></p>
 <dl>
@@ -1206,8 +1206,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-47587892">
 <picture>
-  <source srcset="../images/findings/47587892-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/47587892.webp" alt="Spaceship 47587892 moving across the 2-uniform tiling k2-017" width="192" height="320" loading="lazy">
+  <source srcset="../images/findings/2afbf92b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/2afbf92b.webp" alt="Spaceship 47587892 moving across the 2-uniform tiling k2-017" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>47587892</code> <a class="ship-n" href="#the-60-objects">table row 52</a></p>
 <dl>
@@ -1222,8 +1222,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-d37488d1">
 <picture>
-  <source srcset="../images/findings/d37488d1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/d37488d1.webp" alt="Spaceship d37488d1 moving across the 3-uniform tiling k3-022" width="316" height="320" loading="lazy">
+  <source srcset="../images/findings/d5600a12-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/d5600a12.webp" alt="Spaceship d37488d1 moving across the 3-uniform tiling k3-022" width="316" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>d37488d1</code> <a class="ship-n" href="#the-60-objects">table row 54</a></p>
 <dl>
@@ -1238,8 +1238,8 @@ others may well have seen them, so they are not claimed.
 </div>
 <div class="ship-card" id="ship-91205ceb">
 <picture>
-  <source srcset="../images/findings/91205ceb-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/91205ceb.webp" alt="Spaceship 91205ceb moving across the 3-uniform tiling k3-058" width="256" height="320" loading="lazy">
+  <source srcset="../images/findings/ba6acb83-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/findings/ba6acb83.webp" alt="Spaceship 91205ceb moving across the 3-uniform tiling k3-058" width="256" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>91205ceb</code> <a class="ship-n" href="#the-60-objects">table row 59</a></p>
 <dl>
@@ -1517,8 +1517,8 @@ ship that is very likely Büttner's on k2-007.
 <div class="ship-gallery">
 <div class="ship-card" id="life-7e006ed1">
 <picture>
-  <source srcset="../images/life-census/7e006ed1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/7e006ed1.webp" alt="Life spaceship 7e006ed1 moving across the square grid" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/77364004-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/77364004.webp" alt="Life spaceship 7e006ed1 moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>7e006ed1</code> <a class="ship-n" href="#the-life-objects">table row 1</a></p>
 <dl>
@@ -1533,8 +1533,8 @@ ship that is very likely Büttner's on k2-007.
 </div>
 <div class="ship-card" id="life-83051933">
 <picture>
-  <source srcset="../images/life-census/83051933-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/83051933.webp" alt="Life spaceship 83051933 moving across the square grid" width="272" height="272" loading="lazy">
+  <source srcset="../images/life-census/5a080db3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/5a080db3.webp" alt="Life spaceship 83051933 moving across the square grid" width="272" height="272" loading="lazy">
 </picture>
 <p class="ship-name"><code>83051933</code> <a class="ship-n" href="#the-life-objects">table row 2</a></p>
 <dl>
@@ -1549,8 +1549,8 @@ ship that is very likely Büttner's on k2-007.
 </div>
 <div class="ship-card" id="life-eaf14870">
 <picture>
-  <source srcset="../images/life-census/eaf14870-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/eaf14870.webp" alt="Life spaceship eaf14870 moving across the square grid" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/6dd55e69-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/6dd55e69.webp" alt="Life spaceship eaf14870 moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>eaf14870</code> <a class="ship-n" href="#the-life-objects">table row 3</a></p>
 <dl>
@@ -1565,8 +1565,8 @@ ship that is very likely Büttner's on k2-007.
 </div>
 <div class="ship-card" id="life-fbf3fc62">
 <picture>
-  <source srcset="../images/life-census/fbf3fc62-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/fbf3fc62.webp" alt="Life spaceship fbf3fc62 moving across the square grid" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/1376072e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/1376072e.webp" alt="Life spaceship fbf3fc62 moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>fbf3fc62</code> <a class="ship-n" href="#the-life-objects">table row 4</a></p>
 <dl>
@@ -1597,8 +1597,8 @@ ship that is very likely Büttner's on k2-007.
 </div>
 <div class="ship-card" id="life-6ca1d74c">
 <picture>
-  <source srcset="../images/life-census/6ca1d74c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6ca1d74c.webp" alt="Life spaceship 6ca1d74c moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/232055ff-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/232055ff.webp" alt="Life spaceship 6ca1d74c moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>6ca1d74c</code> <a class="ship-n" href="#the-life-objects">table row 6</a></p>
 <dl>
@@ -1629,8 +1629,8 @@ ship that is very likely Büttner's on k2-007.
 </div>
 <div class="ship-card" id="life-6574801c">
 <picture>
-  <source srcset="../images/life-census/6574801c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6574801c.webp" alt="Life spaceship 6574801c moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/fabe952b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/fabe952b.webp" alt="Life spaceship 6574801c moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>6574801c</code> <a class="ship-n" href="#the-life-objects">table row 8</a></p>
 <dl>
@@ -1652,8 +1652,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <div class="ship-gallery">
 <div class="ship-card" id="life-487cf3f7">
 <picture>
-  <source srcset="../images/life-census/487cf3f7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/487cf3f7.webp" alt="Life spaceship 487cf3f7 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/0e3664c5-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/0e3664c5.webp" alt="Life spaceship 487cf3f7 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>487cf3f7</code> <a class="ship-n" href="#the-life-objects">table row 9</a></p>
 <dl>
@@ -1668,8 +1668,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-4392fd90">
 <picture>
-  <source srcset="../images/life-census/4392fd90-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/4392fd90.webp" alt="Life spaceship 4392fd90 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/d02b5ce8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/d02b5ce8.webp" alt="Life spaceship 4392fd90 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>4392fd90</code> <a class="ship-n" href="#the-life-objects">table row 10</a></p>
 <dl>
@@ -1684,8 +1684,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-3b16f6b5">
 <picture>
-  <source srcset="../images/life-census/3b16f6b5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/3b16f6b5.webp" alt="Life spaceship 3b16f6b5 moving across the 3-uniform tiling k3-002" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/ca75ccd6-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/ca75ccd6.webp" alt="Life spaceship 3b16f6b5 moving across the 3-uniform tiling k3-002" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>3b16f6b5</code> <a class="ship-n" href="#the-life-objects">table row 11</a></p>
 <dl>
@@ -1700,8 +1700,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-b62c62bf">
 <picture>
-  <source srcset="../images/life-census/b62c62bf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b62c62bf.webp" alt="Life spaceship b62c62bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/25c5dc4a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/25c5dc4a.webp" alt="Life spaceship b62c62bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>b62c62bf</code> <a class="ship-n" href="#the-life-objects">table row 12</a></p>
 <dl>
@@ -1716,8 +1716,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-c1a8b0bf">
 <picture>
-  <source srcset="../images/life-census/c1a8b0bf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/c1a8b0bf.webp" alt="Life spaceship c1a8b0bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/41eb5c62-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/41eb5c62.webp" alt="Life spaceship c1a8b0bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>c1a8b0bf</code> <a class="ship-n" href="#the-life-objects">table row 13</a></p>
 <dl>
@@ -1732,8 +1732,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-28714e5c">
 <picture>
-  <source srcset="../images/life-census/28714e5c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/28714e5c.webp" alt="Life spaceship 28714e5c moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/8488e7e9-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/8488e7e9.webp" alt="Life spaceship 28714e5c moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>28714e5c</code> <a class="ship-n" href="#the-life-objects">table row 14</a></p>
 <dl>
@@ -1748,8 +1748,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-6573d1df">
 <picture>
-  <source srcset="../images/life-census/6573d1df-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6573d1df.webp" alt="Life spaceship 6573d1df moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/d997330c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/d997330c.webp" alt="Life spaceship 6573d1df moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>6573d1df</code> <a class="ship-n" href="#the-life-objects">table row 15</a></p>
 <dl>
@@ -1764,8 +1764,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-a07330dc">
 <picture>
-  <source srcset="../images/life-census/a07330dc-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/a07330dc.webp" alt="Life spaceship a07330dc moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/4f66f17e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/4f66f17e.webp" alt="Life spaceship a07330dc moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>a07330dc</code> <a class="ship-n" href="#the-life-objects">table row 16</a></p>
 <dl>
@@ -1780,8 +1780,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-6a4efaf6">
 <picture>
-  <source srcset="../images/life-census/6a4efaf6-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6a4efaf6.webp" alt="Life spaceship 6a4efaf6 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/f87a9ed1-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/f87a9ed1.webp" alt="Life spaceship 6a4efaf6 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>6a4efaf6</code> <a class="ship-n" href="#the-life-objects">table row 17</a></p>
 <dl>
@@ -1796,8 +1796,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-b22eedfa">
 <picture>
-  <source srcset="../images/life-census/b22eedfa-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b22eedfa.webp" alt="Life spaceship b22eedfa moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/b6a6a47a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b6a6a47a.webp" alt="Life spaceship b22eedfa moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>b22eedfa</code> <a class="ship-n" href="#the-life-objects">table row 18</a></p>
 <dl>
@@ -1812,8 +1812,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-63cd2160">
 <picture>
-  <source srcset="../images/life-census/63cd2160-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/63cd2160.webp" alt="Life spaceship 63cd2160 moving across the 3-uniform tiling k3-041" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/148310e3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/148310e3.webp" alt="Life spaceship 63cd2160 moving across the 3-uniform tiling k3-041" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>63cd2160</code> <a class="ship-n" href="#the-life-objects">table row 19</a></p>
 <dl>
@@ -1828,8 +1828,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-4241bdcf">
 <picture>
-  <source srcset="../images/life-census/4241bdcf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/4241bdcf.webp" alt="Life spaceship 4241bdcf moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/f6567467-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/f6567467.webp" alt="Life spaceship 4241bdcf moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>4241bdcf</code> <a class="ship-n" href="#the-life-objects">table row 20</a></p>
 <dl>
@@ -1844,8 +1844,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-06aa3aec">
 <picture>
-  <source srcset="../images/life-census/06aa3aec-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/06aa3aec.webp" alt="Life spaceship 06aa3aec moving across the 3-uniform tiling k3-055" width="318" height="192" loading="lazy">
+  <source srcset="../images/life-census/139723e0-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/139723e0.webp" alt="Life spaceship 06aa3aec moving across the 3-uniform tiling k3-055" width="318" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>06aa3aec</code> <a class="ship-n" href="#the-life-objects">table row 21</a></p>
 <dl>
@@ -1860,8 +1860,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-0100430f">
 <picture>
-  <source srcset="../images/life-census/0100430f-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/0100430f.webp" alt="Life spaceship 0100430f moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/65acb120-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/65acb120.webp" alt="Life spaceship 0100430f moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>0100430f</code> <a class="ship-n" href="#the-life-objects">table row 22</a></p>
 <dl>
@@ -1876,8 +1876,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-0af25862">
 <picture>
-  <source srcset="../images/life-census/0af25862-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/0af25862.webp" alt="Life spaceship 0af25862 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/5f371c4c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/5f371c4c.webp" alt="Life spaceship 0af25862 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>0af25862</code> <a class="ship-n" href="#the-life-objects">table row 23</a></p>
 <dl>
@@ -1892,8 +1892,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-28d7a526">
 <picture>
-  <source srcset="../images/life-census/28d7a526-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/28d7a526.webp" alt="Life spaceship 28d7a526 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/5912456d-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/5912456d.webp" alt="Life spaceship 28d7a526 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>28d7a526</code> <a class="ship-n" href="#the-life-objects">table row 24</a></p>
 <dl>
@@ -1908,8 +1908,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-3491af4a">
 <picture>
-  <source srcset="../images/life-census/3491af4a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/3491af4a.webp" alt="Life spaceship 3491af4a moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/fbad7fbf-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/fbad7fbf.webp" alt="Life spaceship 3491af4a moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>3491af4a</code> <a class="ship-n" href="#the-life-objects">table row 25</a></p>
 <dl>
@@ -1924,8 +1924,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-63121d47">
 <picture>
-  <source srcset="../images/life-census/63121d47-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/63121d47.webp" alt="Life spaceship 63121d47 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/ad91d936-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/ad91d936.webp" alt="Life spaceship 63121d47 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>63121d47</code> <a class="ship-n" href="#the-life-objects">table row 26</a></p>
 <dl>
@@ -1940,8 +1940,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-b270dddd">
 <picture>
-  <source srcset="../images/life-census/b270dddd-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b270dddd.webp" alt="Life spaceship b270dddd moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/8130b388-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/8130b388.webp" alt="Life spaceship b270dddd moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>b270dddd</code> <a class="ship-n" href="#the-life-objects">table row 27</a></p>
 <dl>
@@ -1956,8 +1956,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-d0b8f09d">
 <picture>
-  <source srcset="../images/life-census/d0b8f09d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/d0b8f09d.webp" alt="Life spaceship d0b8f09d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/b86bd684-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/b86bd684.webp" alt="Life spaceship d0b8f09d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>d0b8f09d</code> <a class="ship-n" href="#the-life-objects">table row 28</a></p>
 <dl>
@@ -1972,8 +1972,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-f34bd1e7">
 <picture>
-  <source srcset="../images/life-census/f34bd1e7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/f34bd1e7.webp" alt="Life spaceship f34bd1e7 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/50ecb3d5-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/50ecb3d5.webp" alt="Life spaceship f34bd1e7 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>f34bd1e7</code> <a class="ship-n" href="#the-life-objects">table row 29</a></p>
 <dl>
@@ -1988,8 +1988,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-140cd3cc">
 <picture>
-  <source srcset="../images/life-census/140cd3cc-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/140cd3cc.webp" alt="Life spaceship 140cd3cc moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/d878334e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/d878334e.webp" alt="Life spaceship 140cd3cc moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>140cd3cc</code> <a class="ship-n" href="#the-life-objects">table row 30</a></p>
 <dl>
@@ -2004,8 +2004,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-6c80b30d">
 <picture>
-  <source srcset="../images/life-census/6c80b30d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6c80b30d.webp" alt="Life spaceship 6c80b30d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/92b7544a-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/92b7544a.webp" alt="Life spaceship 6c80b30d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>6c80b30d</code> <a class="ship-n" href="#the-life-objects">table row 31</a></p>
 <dl>
@@ -2020,8 +2020,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-9f474023">
 <picture>
-  <source srcset="../images/life-census/9f474023-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/9f474023.webp" alt="Life spaceship 9f474023 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/126db117-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/126db117.webp" alt="Life spaceship 9f474023 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>9f474023</code> <a class="ship-n" href="#the-life-objects">table row 32</a></p>
 <dl>
@@ -2036,8 +2036,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-d26a876d">
 <picture>
-  <source srcset="../images/life-census/d26a876d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/d26a876d.webp" alt="Life spaceship d26a876d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/1ccdebc8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/1ccdebc8.webp" alt="Life spaceship d26a876d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>d26a876d</code> <a class="ship-n" href="#the-life-objects">table row 33</a></p>
 <dl>
@@ -2052,8 +2052,8 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </div>
 <div class="ship-card" id="life-83da34d9">
 <picture>
-  <source srcset="../images/life-census/83da34d9-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/83da34d9.webp" alt="Life spaceship 83da34d9 moving across the 3-uniform tiling k3-057" width="260" height="320" loading="lazy">
+  <source srcset="../images/life-census/f2841d4c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/f2841d4c.webp" alt="Life spaceship 83da34d9 moving across the 3-uniform tiling k3-057" width="260" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>83da34d9</code> <a class="ship-n" href="#the-life-objects">table row 34</a></p>
 <dl>
@@ -2076,8 +2076,8 @@ have run Life. We found no earlier report of any of them.
 <div class="ship-gallery">
 <div class="ship-card" id="life-98a3c53b">
 <picture>
-  <source srcset="../images/life-census/98a3c53b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/98a3c53b.webp" alt="Life spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <source srcset="../images/life-census/a5e9ba80-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/a5e9ba80.webp" alt="Life spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>98a3c53b</code> <a class="ship-n" href="#the-life-objects">table row 35</a></p>
 <dl>
@@ -2092,8 +2092,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-2076694c">
 <picture>
-  <source srcset="../images/life-census/2076694c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/2076694c.webp" alt="Life spaceship 2076694c moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/f89d8f11-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/f89d8f11.webp" alt="Life spaceship 2076694c moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>2076694c</code> <a class="ship-n" href="#the-life-objects">table row 36</a></p>
 <dl>
@@ -2108,8 +2108,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-ac3667f4">
 <picture>
-  <source srcset="../images/life-census/ac3667f4-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/ac3667f4.webp" alt="Life spaceship ac3667f4 moving across the 2-uniform tiling k2-007" width="192" height="320" loading="lazy">
+  <source srcset="../images/life-census/55db03c8-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/55db03c8.webp" alt="Life spaceship ac3667f4 moving across the 2-uniform tiling k2-007" width="192" height="320" loading="lazy">
 </picture>
 <p class="ship-name"><code>ac3667f4</code> <a class="ship-n" href="#the-life-objects">table row 37</a></p>
 <dl>
@@ -2124,8 +2124,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-119e5cea">
 <picture>
-  <source srcset="../images/life-census/119e5cea-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/119e5cea.webp" alt="Life spaceship 119e5cea moving across the 2-uniform tiling k2-011" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/c1d7a48e-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/c1d7a48e.webp" alt="Life spaceship 119e5cea moving across the 2-uniform tiling k2-011" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>119e5cea</code> <a class="ship-n" href="#the-life-objects">table row 38</a></p>
 <dl>
@@ -2140,8 +2140,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-ac1d0f14">
 <picture>
-  <source srcset="../images/life-census/ac1d0f14-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/ac1d0f14.webp" alt="Life spaceship ac1d0f14 moving across the 2-uniform tiling k2-017" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/16bc37c9-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/16bc37c9.webp" alt="Life spaceship ac1d0f14 moving across the 2-uniform tiling k2-017" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>ac1d0f14</code> <a class="ship-n" href="#the-life-objects">table row 39</a></p>
 <dl>
@@ -2156,8 +2156,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-5deb47c2">
 <picture>
-  <source srcset="../images/life-census/5deb47c2-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/5deb47c2.webp" alt="Life spaceship 5deb47c2 moving across the 3-uniform tiling k3-039" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/020ec7b7-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/020ec7b7.webp" alt="Life spaceship 5deb47c2 moving across the 3-uniform tiling k3-039" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>5deb47c2</code> <a class="ship-n" href="#the-life-objects">table row 40</a></p>
 <dl>
@@ -2172,8 +2172,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-98d64885">
 <picture>
-  <source srcset="../images/life-census/98d64885-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/98d64885.webp" alt="Life spaceship 98d64885 moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/dab6fb01-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/dab6fb01.webp" alt="Life spaceship 98d64885 moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>98d64885</code> <a class="ship-n" href="#the-life-objects">table row 41</a></p>
 <dl>
@@ -2188,8 +2188,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-bf101de9">
 <picture>
-  <source srcset="../images/life-census/bf101de9-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/bf101de9.webp" alt="Life spaceship bf101de9 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/e1fcfa73-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/e1fcfa73.webp" alt="Life spaceship bf101de9 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>bf101de9</code> <a class="ship-n" href="#the-life-objects">table row 42</a></p>
 <dl>
@@ -2204,8 +2204,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-49237dd5">
 <picture>
-  <source srcset="../images/life-census/49237dd5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/49237dd5.webp" alt="Life spaceship 49237dd5 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/3792824d-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/3792824d.webp" alt="Life spaceship 49237dd5 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>49237dd5</code> <a class="ship-n" href="#the-life-objects">table row 43</a></p>
 <dl>
@@ -2220,8 +2220,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-adfd2f61">
 <picture>
-  <source srcset="../images/life-census/adfd2f61-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/adfd2f61.webp" alt="Life spaceship adfd2f61 moving across the 3-uniform tiling k3-057" width="320" height="192" loading="lazy">
+  <source srcset="../images/life-census/1e6832e3-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/1e6832e3.webp" alt="Life spaceship adfd2f61 moving across the 3-uniform tiling k3-057" width="320" height="192" loading="lazy">
 </picture>
 <p class="ship-name"><code>adfd2f61</code> <a class="ship-n" href="#the-life-objects">table row 44</a></p>
 <dl>
@@ -2236,8 +2236,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-37db33e3">
 <picture>
-  <source srcset="../images/life-census/37db33e3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/37db33e3.webp" alt="Life spaceship 37db33e3 moving across the 3-uniform tiling k3-059" width="320" height="232" loading="lazy">
+  <source srcset="../images/life-census/93a72ebd-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/93a72ebd.webp" alt="Life spaceship 37db33e3 moving across the 3-uniform tiling k3-059" width="320" height="232" loading="lazy">
 </picture>
 <p class="ship-name"><code>37db33e3</code> <a class="ship-n" href="#the-life-objects">table row 45</a></p>
 <dl>
@@ -2252,8 +2252,8 @@ have run Life. We found no earlier report of any of them.
 </div>
 <div class="ship-card" id="life-b414ad8f">
 <picture>
-  <source srcset="../images/life-census/b414ad8f-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b414ad8f.webp" alt="Life spaceship b414ad8f moving across the 3-uniform tiling k3-061" width="320" height="298" loading="lazy">
+  <source srcset="../images/life-census/58e6d5fc-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/life-census/58e6d5fc.webp" alt="Life spaceship b414ad8f moving across the 3-uniform tiling k3-061" width="320" height="298" loading="lazy">
 </picture>
 <p class="ship-name"><code>b414ad8f</code> <a class="ship-n" href="#the-life-objects">table row 46</a></p>
 <dl>

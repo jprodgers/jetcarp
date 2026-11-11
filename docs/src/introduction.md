@@ -47,8 +47,8 @@ repeats. Scene <code>docs/scenes/automata/priority-spectre-glider.json</code>.</
 
 <figure class="pair">
 <div><picture>
-  <source srcset="images/tilings/ship-aa7e7357-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="images/tilings/ship-aa7e7357.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
+  <source srcset="images/tilings/ship-57a0326c-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="images/tilings/ship-57a0326c.webp" alt="A small cluster of a hexagon, squares and triangles travelling across the 3.4.6.4 tiling" width="264" loading="lazy">
 </picture></div>
 <div><picture>
   <source srcset="images/automata/cyclic-hat-still.png" media="(prefers-reduced-motion: reduce)">
@@ -57,7 +57,7 @@ repeats. Scene <code>docs/scenes/automata/priority-spectre-glider.json</code>.</
 <figcaption>Left: a period-42 spaceship on the rhombitrihexagonal tiling 3.4.6.4, found by JETCARP's
 soup searches and one of the strongest of its candidates: to our knowledge it has not been reported
 before (see <a href="research/contributions.md#4-spaceships-on-non-square-tilings">What is new</a>). Scene
-<code>docs/scenes/tilings/ship-aa7e7357.json</code>. Right: the
+<code>docs/scenes/tilings/ship-57a0326c.json</code>. Right: the
 <a href="automata/cyclic.md">cyclic automaton</a> organising noise into spirals on the hat. Scene
 <code>docs/scenes/automata/cyclic-hat.json</code>.</figcaption>
 </figure>

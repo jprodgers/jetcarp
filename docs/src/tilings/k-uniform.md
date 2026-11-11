@@ -125,8 +125,8 @@ running in corridors; the single ships that passed every check are in
 
 <figure>
 <picture>
-  <source srcset="../images/tilings/ship-7860a67a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/ship-7860a67a.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
+  <source srcset="../images/tilings/ship-d8692b4b-still.png" media="(prefers-reduced-motion: reduce)">
+  <img src="../images/tilings/ship-d8692b4b.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
 </picture>
 <figcaption>A 7-cell period-4 spaceship on the 2-uniform tiling k2-003, moving one lattice step every
 four generations in the 256 rules from <code>B45/S34</code> up. The same ship runs unchanged on k2-004
@@ -134,7 +134,7 @@ and in corridors of the 3-uniform tilings k3-010 and k3-016, where the search fi
 tiles also evolve the same way on k3-013, k3-019, k3-051, k3-052 and on the Archimedean tiling 3.3.3.4.4,
 where the tiles beside its strip have more neighbours, so it is listed on 3.3.3.4.4, and flagged there as
 small and common. Watch the triangles at its front and back take turns. Scene
-<code>docs/scenes/tilings/ship-7860a67a.json</code>.</figcaption>
+<code>docs/scenes/tilings/ship-d8692b4b.json</code>.</figcaption>
 </figure>
 
 Treating the tiling as a dimension of an exploratory search also depends on having this catalogue.

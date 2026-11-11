@@ -167,7 +167,7 @@ fn the_glider_has_one_id_in_every_phase_and_orientation() {
 fn k_uniform_census_ships_have_one_id_in_every_phase_and_orientation() {
     // k2-003 (p16 5c/16), k3-011 (p4 c/4), and the snub square tiling, whose symmetries include
     // glide reflections (each a tile-type permutation with a shift).
-    for (name, period) in [("2076694c", 16), ("28714e5c", 4), ("98a3c53b", 0)] {
+    for (name, period) in [("f89d8f11", 16), ("8488e7e9", 4), ("a5e9ba80", 0)] {
         let s = census_ship(name);
         if period > 0 {
             assert_eq!(s.period, period, "{name}");
