@@ -323,7 +323,8 @@ fn window_runs_resume_exactly() {
     use jetcarp_core::window::job::{MoverJobSpec, MoverProgress, start};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
-    let d = std::env::temp_dir().join(format!("jetcarp-window-job-{}", std::process::id()));
+    let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-window-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     let lib = jetcarp_core::library::Library::open(&d);
     let js = MoverJobSpec {

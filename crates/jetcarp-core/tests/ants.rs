@@ -39,7 +39,8 @@ fn tiling(t: &str) -> TilingSpec {
 }
 
 fn temp_lib(name: &str) -> Library {
-    let d = std::env::temp_dir().join(format!("jetcarp-ants-{name}-{}", std::process::id()));
+    let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-ants-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     Library::open(d.join("catalog.sqlite"))

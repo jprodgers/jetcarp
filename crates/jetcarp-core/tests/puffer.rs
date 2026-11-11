@@ -110,7 +110,8 @@ fn detector_classifies_and_library_stores_a_puffer() {
     assert_eq!(rec.period, 288);
     assert_eq!(rec.phases.len(), 1);
     assert_eq!(rec.speed.as_deref(), Some("c/12 diagonal"));
-    let dir = std::env::temp_dir().join(format!("jetcarp-puffer-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-puffer-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let lib = Library::open(&dir);
     lib.add(rec.clone()).unwrap();

@@ -137,7 +137,8 @@ fn spectre_glider_passes_cross_radius_check() {
 
 #[test]
 fn square_search_finds_an_exact_spaceship() {
-    let lib_dir = std::env::temp_dir().join(format!("jetcarp-evolve-test-{}", std::process::id()));
+    let lib_dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-evolve-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&lib_dir);
     let spec = EvolveSpec {
         tiling: TilingSpec::new("square"),
@@ -213,7 +214,8 @@ fn square_search_finds_an_exact_spaceship() {
 fn hat_search_finds_a_mover() {
     // The published hat result, in a small budget: a glider rule on the hat whose glider the
     // tracker verifies across patch levels.
-    let lib_dir = std::env::temp_dir().join(format!("jetcarp-evolve-hat-{}", std::process::id()));
+    let lib_dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-evolve-hat-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&lib_dir);
     let lib = Library::open(&lib_dir);
     let spec = EvolveSpec {
@@ -282,7 +284,8 @@ fn evolve_job_resumed_equals_uninterrupted() {
     use std::sync::{Arc, Mutex};
     let spec = small("square", 48, 10, 5);
     let whole = evolve(&spec, &|_| true).unwrap();
-    let dir = std::env::temp_dir().join(format!("jetcarp-evolve-job-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-evolve-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let lib = Library::open(dir.join("catalog"));
     let js = EvolveJobSpec {

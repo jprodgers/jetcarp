@@ -41,7 +41,8 @@ fn wait(s: &mut Server, h: &mut Session, job: i64, want: &str) -> Value {
 
 #[test]
 fn hunts_start_report_stop_and_resume_over_mcp() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-mcp-hunt-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-mcp-hunt-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     // SAFETY: the only test in this binary, before any thread reads the environment.
     unsafe { std::env::set_var("JETCARP_LIBRARY", &dir) };

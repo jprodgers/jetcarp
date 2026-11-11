@@ -11,8 +11,8 @@ use jetcarp_core::*;
 use std::path::PathBuf;
 
 fn temp(name: &str) -> (Library, PathBuf) {
-    let root =
-        std::env::temp_dir().join(format!("jetcarp-site-test-{name}-{}", std::process::id()));
+    let root = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-site-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     (Library::open(root.join("catalog")), root.join("site"))
 }

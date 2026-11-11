@@ -11,7 +11,8 @@ struct Host {
 }
 
 fn home(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("jetcarp-host-test-{}-{name}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-host-test-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("config/jetcarp/rotations")).unwrap();
     std::fs::create_dir_all(dir.join("run")).unwrap();

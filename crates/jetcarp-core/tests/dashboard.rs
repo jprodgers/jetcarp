@@ -14,7 +14,8 @@ use jetcarp_core::topology::{Nb, TilingSpec};
 use std::collections::HashMap;
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!("jetcarp-dash-test-{name}-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-dash-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     Library::open(dir)
 }
@@ -425,7 +426,8 @@ fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
     assert!(!s.bars.is_empty(), "outcomes");
 
     // A sandpile: run, then summarised from the row.
-    let dir = std::env::temp_dir().join(format!("jetcarp-dash-pile-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-dash-pile-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let pspec = PileJobSpec {
         pile: jetcarp_core::pile::PileSpec {

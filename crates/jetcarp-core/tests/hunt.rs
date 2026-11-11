@@ -16,7 +16,8 @@ use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec, Topology};
 use std::sync::Arc;
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!("jetcarp-hunt-test-{name}-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-hunt-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     Library::open(dir)
 }

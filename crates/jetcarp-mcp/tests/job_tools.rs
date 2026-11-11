@@ -55,7 +55,8 @@ fn wait(s: &mut Server, h: &mut Session, job: i64, want: &str) -> Value {
 
 #[test]
 fn jobs_ants_piles_files_and_cancel_over_mcp() {
-    let root = std::env::temp_dir().join(format!("jetcarp-mcp-jobs-{}", std::process::id()));
+    let root = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-mcp-jobs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("out")).unwrap();
     // SAFETY: the only test in this binary, before any thread reads the environment.

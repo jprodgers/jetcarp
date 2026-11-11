@@ -16,7 +16,8 @@ use jetcarp_core::topology::{SizeSpec, TilingSpec};
 use std::time::{Duration, Instant};
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!("jetcarp-jobs-test-{name}-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-jobs-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     Library::open(dir)
 }
@@ -797,7 +798,8 @@ fn pile_jobs_stopped_part_way_and_resumed_equal_uninterrupted() {
     use jetcarp_core::pile::{Centre, PileSpec};
     use jetcarp_core::topology::Nb;
     use std::sync::{Arc, Mutex};
-    let dir = std::env::temp_dir().join(format!("jetcarp-jobs-test-pile-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-jobs-test-pile-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let lib = Library::open(dir.join("catalog"));
     let spec = |name: &str| PileJobSpec {

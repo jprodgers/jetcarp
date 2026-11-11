@@ -12,7 +12,7 @@ use jetcarp_core::*;
 use std::collections::HashSet;
 
 fn temp_lib(name: &str) -> Library {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "jetcarp-catalog-test-{name}-{}",
         std::process::id()
     ));
@@ -447,7 +447,8 @@ fn catalog_store_search_jobs_and_sightings() {
 fn phase3_json_library_imports_with_its_quick_start() {
     // A Phase 3 library folder: patterns/<old id>.json (rule-dependent ids, no rules or range)
     // and quickstart/<old id>.json.
-    let dir = std::env::temp_dir().join(format!("jetcarp-catalog-test-p3-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-catalog-test-p3-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("patterns")).unwrap();
     std::fs::create_dir_all(dir.join("quickstart")).unwrap();

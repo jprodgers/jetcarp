@@ -392,7 +392,8 @@ fn saving_creates_folders() {
         "new_world",
         json!({"width": 16, "height": 16, "cas": ["Life"]}),
     ));
-    let dir = std::env::temp_dir().join(format!("jetcarp-mcp-test-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-mcp-test-{}", std::process::id()));
     let png = dir.join("a/b/shot.png");
     let scene = dir.join("c/scene.json");
     ok(&call(
@@ -679,7 +680,8 @@ fn reseed_and_wallpaper_tools() {
     ok(&call(&mut s, &mut h, "reseed", json!({"policies": []})));
     assert!(h.world.reseed_policies().is_empty());
     // Wallpapers: one image, and a span cut per monitor.
-    let dir = std::env::temp_dir().join(format!("jetcarp-mcp-wallpaper-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-mcp-wallpaper-{}", std::process::id()));
     let r: Value = serde_json::from_str(&ok(&call(
         &mut s,
         &mut h,

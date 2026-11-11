@@ -29,7 +29,8 @@ fn text(res: &Value) -> Value {
 
 #[test]
 fn media_render_and_site_export_over_mcp() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-mcp-media-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-mcp-media-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     // SAFETY: the only test in this binary, before any thread reads the environment.
     unsafe { std::env::set_var("JETCARP_LIBRARY", &dir) };

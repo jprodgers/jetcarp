@@ -445,7 +445,8 @@ fn the_settle_watch_fires_without_touching_the_world() {
 
 #[test]
 fn the_store_saves_overrides_built_ins_and_follows_renamed_profiles() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-rotations-test-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-rotations-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut store = RotationStore::at(Some(dir.clone()));
     let builtin_count = store.names().len();

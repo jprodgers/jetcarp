@@ -113,7 +113,7 @@ fn gpu_hunt_equals_cpu_hunt() {
     };
     let mut snaps = Vec::new();
     for use_gpu in [false, true] {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
             "jetcarp-gpu-hunt-test-{use_gpu}-{}",
             std::process::id()
         ));

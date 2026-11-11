@@ -10,7 +10,8 @@ use jetcarp_core::topology::{Boundary, Nb, SizeSpec, TilingSpec};
 use std::collections::BTreeMap;
 
 fn temp_lib(name: &str) -> Library {
-    let d = std::env::temp_dir().join(format!("jetcarp-movers-{name}-{}", std::process::id()));
+    let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-movers-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     Library::open(d)
 }

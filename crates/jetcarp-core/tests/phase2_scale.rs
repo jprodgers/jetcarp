@@ -14,7 +14,8 @@ fn read_png(p: &std::path::Path) -> (u32, u32, Vec<u8>) {
 // The strip-by-strip PNG writer gives exactly the in-memory render.
 #[test]
 fn streaming_png_matches_render() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-stream-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-stream-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     for (k, t) in [
         TilingSpec::rect("square", 90, 60, Boundary::Wrap),

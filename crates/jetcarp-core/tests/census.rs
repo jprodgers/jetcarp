@@ -253,7 +253,8 @@ fn the_bit_parallel_board_gives_the_worlds_census() {
 #[test]
 fn census_jobs_resume_to_the_same_report() {
     use jetcarp_core::library::{JobStatus, Library};
-    let dir = std::env::temp_dir().join(format!("jetcarp-census-job-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-census-job-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let lib = Library::open(&dir);
     let mut s = spec(&[], 2, 300);

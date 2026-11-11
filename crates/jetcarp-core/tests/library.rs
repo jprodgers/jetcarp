@@ -12,7 +12,8 @@ use jetcarp_core::*;
 
 /// A fresh folder under the system temp folder.
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("jetcarp-lib-test-{name}-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-lib-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }

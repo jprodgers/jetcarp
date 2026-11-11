@@ -214,7 +214,8 @@ fn same_result_on_any_thread_count() {
 
 #[test]
 fn save_load_resume() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-pile-test-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-pile-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     for id in ["hex", "spectre"] {
         let mut t = spec_of(id);
@@ -269,7 +270,8 @@ fn save_load_resume() {
 
 #[test]
 fn run_to_dir_writes_everything() {
-    let dir = std::env::temp_dir().join(format!("jetcarp-pile-run-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-pile-run-{}", std::process::id()));
     let mut p = Pile::new(PileSpec {
         tiling: spec_of("trihex"),
         nb: Nb::Edge,
@@ -413,7 +415,8 @@ fn pile_export_and_jobs_keep_the_palette() {
     use jetcarp_core::library::Library;
     use jetcarp_core::pile::export::{ExportOptions, read_look_file, write_look_file};
     use jetcarp_core::pile::job::{self as pilejob, PileJobSpec};
-    let dir = std::env::temp_dir().join(format!("jetcarp-pile-look-{}", std::process::id()));
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-pile-look-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut p = Pile::new(PileSpec {
         tiling: spec_of("square"),
