@@ -52,16 +52,24 @@ the defaults.
   finds*, ratings, and ant and turmite runs, each with its provenance and geometry pin (see
   [Library format](library-format.md)). Beside it, SQLite's own `-wal` and `-shm` files, a
   `library.sqlite-jobs/` folder of lock files (one per job, so two programs never run the same job),
-  and `media/`, the frames, animations and thumbnails rendered for the catalog. `JETCARP_LIBRARY`
-  moves the catalog (see below), and its media and lock files move with it.
-- `searches/`, one folder per exploratory search (`searches/<uuid>/search.sqlite`: its runs, reviews
-  and saved state), beside the catalogue and moving with it; and `explore/atlas.sqlite`, the atlas that
-  the Quick Start menu reads, written by `jetcarp quickstart publish` (see
+  and `media/`, the frames, animations and thumbnails rendered for the library's records, each file
+  stored once under the SHA-256 of its bytes as `media/ab/<sha256>.<ext>` (see
+  [Library format](library-format.md#media-files)). `jetcarp media list KIND ID` shows a record's
+  files, `jetcarp media export KIND ID --to DIR` copies them out under readable names, and
+  `jetcarp media gc` deletes the files no record uses any more. `JETCARP_LIBRARY` moves the library
+  (see below), and its media and lock files move with it.
+- `searches/`, one folder per exploratory search, beside the library and moving with it:
+  `searches/<uuid>/` holds the search's runs as Parquet files (`runs/part-000001.parquet`, a million
+  runs each), a `manifest.json`, and its working database `search.sqlite` (its saved state and its
+  newest runs); see [Search runs](search-runs.md). Reviews of a search's runs are kept in the
+  library, so deleting a search folder keeps them. And `explore/atlas.sqlite`, the atlas that the
+  Quick Start menu reads, written by `jetcarp quickstart publish` (see
   [Search methods](../research/search-methods.md#explore)).
 
 **Output.** Everything JETCARP makes for you to look at: pictures, the folders of script runs and
 sweeps (each with a `manifest.json`, and `favourites.json` for the runs you star), `piles/` for large
-sandpiles, `wallpapers/`, and the run folders of evolutionary searches. Script runs, sweeps, sandpiles and
+sandpiles, `wallpapers/`, `media/<name>` for a scene (or a built-in Quick Start entry) rendered with
+`jetcarp media render`, under readable names, and the run folders of evolutionary searches. Script runs, sweeps, sandpiles and
 evolutionary searches get folders named with the time they were made and a label, such as
 `2026-11-05_14-30-02_my-sweep` or `piles/2026-11-05_14-30-02_hex-10000`. Scripts can write only
 inside the output folder and folders they are explicitly allowed. Commands that write a single file,

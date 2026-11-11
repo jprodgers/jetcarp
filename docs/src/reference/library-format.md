@@ -226,5 +226,48 @@ migrated: JETCARP 0.4 starts a fresh library.
 | `ants` | ant or turmite run: content id, rule, tiling, pin, start, outcome, highway period and displacement, curation, `needs_reverify` |
 | `quickstart` | Quick Start entry: its scene, title, status, pin and `needs_reverify` |
 | `quickstart_usage` | how often the app opened a Quick Start entry (local only) |
-| `ratings` | rating of a pattern, ant run, Quick Start entry or search run |
-| `media` | picture or animation rendered for a record, with its render key and SHA-256 content hash |
+| `ratings` | rating of a pattern, ant run, Quick Start entry or search run (see below) |
+| `media` | picture or animation rendered for a record: its kind and mode, the SHA-256 and extension of its file, its render key (see below) |
+
+## Ratings of search runs
+
+People judge an exploratory search's runs with a verdict, *keep*, *maybe* or *drop*
+(`jetcarp jobs review`). A verdict is a row of `ratings` like any other, so that it stays with the
+library when the search's folder is deleted or shared:
+
+| Column | Holds |
+| --- | --- |
+| `target_kind` | `search_run` |
+| `target_id` | `<search uuid>:<run id>`: the search's folder name and the run's id in its [run records](search-runs.md) |
+| `verdict` | `keep`, `maybe` or `drop` (empty for the 1 to 5 ratings of other records) |
+| `rating` | the rating that stands for the verdict: keep 5, maybe 3, drop 1 |
+| `rater` | who judged: a name, `user` or `model:<name>` |
+| `note` | what was seen, in a sentence |
+| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page), `import:<database>` (an old CART database) |
+| `created` | when (UTC) |
+
+Reading a folder of rating files again records only the ratings not already recorded from it.
+
+## Media files
+
+The pictures and animations rendered for records (`jetcarp media render`) are files in the `media`
+folder beside the library file, named by the SHA-256 of their bytes: `media/ab/<sha256>.<ext>`, where
+`ab` is the hash's first two hexadecimal digits and the extension is `png`, `gif`, `webp` or `txt`.
+Identical renders, such as a pattern alone and the Quick Start entry made from it, are one file.
+
+The table `media` has a row per record, kind and mode: `target_kind` (`pattern`, `quickstart`,
+`ant`) and `target_id`, `kind` (`frames`, `gif` or `webp`, `poster`, `thumb`), `from_seed` (shown
+from the seed, or alone), the file's `hash` and `ext`, the `key` it was rendered with (a hash of the
+inputs, options and house style: another key means the file is out of date), `width`, `height`,
+`frames`, `bytes`, and `render` (JSON: the window, scale, delay, palette and so on).
+
+A sequence of frames is a PNG file per frame and a **frame list**, the `txt` file the `frames` row
+names: the line `jetcarp-frames 1`, then the SHA-256 of each frame, one per line, in order. The
+frames stay ordinary PNG files, and a loop's repeated phases are stored once.
+
+Deleting a record's media deletes its rows only, never a file, because another row may name the same
+file; `jetcarp media gc` (the operation `media.gc`) deletes the files no row names (with `--dry-run`,
+lists them) and leftover temporary files, leaving files younger than ten minutes in case a render in
+another program has not recorded them yet. Files are written to a temporary name and renamed, so a
+file is never seen half written. The website export (`jetcarp site export`) and
+`jetcarp media export` copy files out under readable names.

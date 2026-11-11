@@ -77,6 +77,10 @@ keeps the log of commands since its start. See [Scene file format](scene-format.
 translation carries the live tiles of one onto the other's at every generation. See
 [What is new in JETCARP](../research/contributions.md#how-we-checked).
 
+**Content-addressed file.** A file named by the SHA-256 of its bytes, so the same bytes are stored
+once. The library's media files are kept this way. See
+[Library format](library-format.md#media-files).
+
 **Content id.** A library record's id: 32 hexadecimal digits of SHA-256 over its identity text and
 its tiling's geometry pin. Its first 8 digits are the *short id*. See
 [Library format](library-format.md#content-ids).
@@ -101,7 +105,8 @@ Written with a `V` on a B/S rule. See [How JETCARP generalises automata](../auto
 [Elementary rules](../automata/elementary.md).
 
 **Explore.** JETCARP's exploratory, quality-diversity search over tilings, rules and starting patterns
-(`jetcarp search explore`). See [Search methods](../research/search-methods.md#explore).
+(`jetcarp search explore`). See [Search methods](../research/search-methods.md#explore); its runs are
+kept as described in [Search runs](search-runs.md).
 
 ## F
 
@@ -286,10 +291,17 @@ phases, stored with each catalogued pattern. See [Search methods](../research/se
 
 **Rule table.** A rule written as a list of explicit transitions. See [Rule tables](../automata/rule-tables.md).
 
+**Run segment.** One of an exploratory search's Parquet files of run records
+(`runs/part-000001.parquet`), a million runs each, written when the runs are *sealed* and never
+changed after. See [Search runs](search-runs.md).
+
 ## S
 
 **Scene.** A JSON file that holds a run: tiling, automata, random state and command log. See
 [Scene file format](scene-format.md).
+
+**Score sidecar.** A Parquet file of new scores (`scores-<n>/`) that rescoring writes beside a run
+segment instead of rewriting it. See [Search runs](search-runs.md#score-sidecars).
 
 **Seed.** What an automaton puts on its field at the start: a random soup, one cell, ants, a pile of
 grains and so on. Also the number that starts a random-number generator.
