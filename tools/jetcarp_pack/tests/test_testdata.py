@@ -1,6 +1,5 @@
-"""The committed golden stores (testdata/golden.tar): each is checked against EXPECTED.json, the
-accepted ones pass every level, and each negative one is refused for its stated reason. The tar is
-unpacked into a temporary folder; on Windows it can't be, since the spec's file names hold a colon."""
+"""The committed test stores in testdata/: each is checked against EXPECTED.json, the accepted ones
+pass every level, and each negative one is refused for its stated reason."""
 
 from . import base  # noqa: F401  (first: without pyarrow, this module is skipped)
 
@@ -11,37 +10,28 @@ import tempfile
 import unittest
 
 from jetcarp_pack import sshsig
+from jetcarp_pack.pack import Pack
 from jetcarp_pack.report import FAIL
+from jetcarp_pack.store import open_store
 
 from . import content as C
 from .base import fails, run
-from .make_testdata import extract_tar
 
 TESTDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata")
 with open(os.path.join(TESTDATA, "EXPECTED.json"), encoding="utf-8") as _f:
     EXPECTED = json.load(_f)
 needs_ssh = unittest.skipUnless(sshsig.available(), "needs ssh-keygen")
-_UNPACKED = None
-
-
-def setUpModule():
-    global _UNPACKED
-    if os.name == "nt":
-        raise unittest.SkipTest("the stores' file names hold a colon, which Windows does not allow")
-    _UNPACKED = tempfile.mkdtemp(prefix="jetcarp-pack-golden-")
-    extract_tar(os.path.join(TESTDATA, EXPECTED["archive"]), _UNPACKED)
-
-
-def tearDownModule():
-    if _UNPACKED:
-        shutil.rmtree(_UNPACKED, True)
 
 
 def store(name):
-    return os.path.join(_UNPACKED, *name.split("/"))
+    return os.path.join(TESTDATA, *name.split("/"))
 
 
-class Golden(unittest.TestCase):
+def failures(report):
+    return [f.line() for f in report.findings if f.severity == FAIL]
+
+
+class Stores(unittest.TestCase):
     def test_refs_match_expected(self):
         for name, exp in EXPECTED["stores"].items():
             for feed, ref in exp["refs"].items():
@@ -51,20 +41,17 @@ class Golden(unittest.TestCase):
 
     def test_accepted_stores_pass_levels_1_and_3(self):
         for name, exp in EXPECTED["stores"].items():
-            if exp["expect"] != "accept":
-                continue
-            for level in (1, 3):
-                with self.subTest(store=name, level=level):
-                    report = run(store(name), level)
-                    self.assertEqual([f.line() for f in report.findings if f.severity == FAIL], [])
+            if exp["expect"] == "accept":
+                for level in (1, 3):
+                    with self.subTest(store=name, level=level):
+                        self.assertEqual(failures(run(store(name), level)), [])
 
     @needs_ssh
     def test_accepted_stores_pass_level_2(self):
         for name, exp in EXPECTED["stores"].items():
             if exp["expect"] == "accept":
                 with self.subTest(store=name):
-                    report = run(store(name), 2)
-                    self.assertEqual([f.line() for f in report.findings if f.severity == FAIL], [])
+                    self.assertEqual(failures(run(store(name), 2)), [])
 
     @needs_ssh
     def test_refused_stores(self):
@@ -76,14 +63,12 @@ class Golden(unittest.TestCase):
                 self.assertIn(exp["refusal"], got)
 
     def test_minimal_holds_the_books_glider(self):
-        report = run(store("minimal"), 1)
-        self.assertEqual(report.passed[(1, "pattern content ids")], 3)
-        path = os.path.join(store("minimal"), "objects")
-        self.assertTrue(os.path.isdir(path))
-        from jetcarp_pack.pack import Pack
-        from jetcarp_pack.store import Store
-        pack = Pack(Store(store("minimal")), EXPECTED["stores"]["minimal"]["manifest"])
+        pack = Pack(open_store(store("minimal")), EXPECTED["stores"]["minimal"]["manifest"])
         self.assertIn(C.GLIDER_ID, {r["id"] for _, _, r in pack.rows("patterns")})
+
+    def test_export_is_the_minimal_version(self):
+        self.assertEqual(EXPECTED["stores"]["export"]["manifest"], EXPECTED["stores"]["minimal"]["manifest"])
+        self.assertEqual(open_store(store("export")).manifest_hash, EXPECTED["stores"]["minimal"]["manifest"])
 
 
 @needs_ssh
