@@ -47,10 +47,11 @@ the defaults.
 
 **Data.**
 
-- `catalog.sqlite`, the pattern library: every verified pattern with the rules it works in and where
+- `library.sqlite`, the pattern library: every verified pattern with the rules it works in and where
   it was seen, the jobs and their checkpoints, census results, the Quick Start entries under *My
-  finds*, ratings, and ant and turmite runs. Beside it, SQLite's own `-wal` and `-shm` files, a
-  `catalog.sqlite-jobs/` folder of lock files (one per job, so two programs never run the same job),
+  finds*, ratings, and ant and turmite runs, each with its provenance and geometry pin (see
+  [Library format](library-format.md)). Beside it, SQLite's own `-wal` and `-shm` files, a
+  `library.sqlite-jobs/` folder of lock files (one per job, so two programs never run the same job),
   and `media/`, the frames, animations and thumbnails rendered for the catalog. `JETCARP_LIBRARY`
   moves the catalog (see below), and its media and lock files move with it.
 - `searches/`, one folder per exploratory search (`searches/<uuid>/search.sqlite`: its runs, reviews
@@ -82,7 +83,8 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_CONFIG_DIR` | The settings folder |
 | `JETCARP_DATA_DIR` | The data folder |
 | `JETCARP_OUT` | The output folder |
-| `JETCARP_LIBRARY` | The pattern catalog: a `.sqlite` file, or a folder that holds (or will hold) `catalog.sqlite`. Default `<data>/catalog.sqlite`. Commands that use the catalog also take `--library` |
+| `JETCARP_LIBRARY` | The pattern catalog: a `.sqlite` file, or a folder that holds (or will hold) `library.sqlite`. Default `<data>/library.sqlite`. Commands that use the catalog also take `--library` |
+| `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
 | `JETCARP_ATLAS` | The atlas file the Quick Start menu reads, when set to a file that exists. Otherwise `<data>/explore/atlas.sqlite`, then an `atlas.sqlite` shipped beside the program |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
 | `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |

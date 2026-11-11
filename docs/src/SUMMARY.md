@@ -76,6 +76,7 @@
 - [Command line](reference/cli.md)
 - [Rule notation](reference/rule-notation.md)
 - [Scene file format](reference/scene-format.md)
+- [Library format](reference/library-format.md)
 - [Pack format](reference/pack-format.md)
 - [Scripting (Rhai) API](reference/scripting.md)
 - [MCP tools](reference/mcp.md)

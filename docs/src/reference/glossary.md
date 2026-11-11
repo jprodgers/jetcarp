@@ -46,8 +46,16 @@ See [Life-like rules](../automata/life-like.md#b0-rules).
 
 ## C
 
+**Alias.** An old id of a record, kept so that lookups by it still find the record: CART's ids, or an
+id from before a geometry change. See [Library format](library-format.md#aliases).
+
+**Canonical form.** A pattern written from its canonical starting phase, in its canonical orientation,
+at the origin: the form its identity is computed from, so one pattern has one id however it was found
+or stored. See [Library format](library-format.md#canonical-form).
+
 **Catalogue (catalog).** The SQLite database of verified patterns, ant runs, Quick Start entries and
-jobs; also called the *pattern library*. See [The pattern library](../guides/pattern-library.md).
+jobs, `library.sqlite` in the data folder; also called the *pattern library*. See
+[The pattern library](../guides/pattern-library.md) and [Library format](library-format.md).
 
 **Cell.** One tile of the tiling, holding a state.
 
@@ -68,6 +76,10 @@ keeps the log of commands since its start. See [Scene file format](scene-format.
 **Congruence.** Two ships are congruent, and counted as one object, if one rotation, reflection and
 translation carries the live tiles of one onto the other's at every generation. See
 [What is new in JETCARP](../research/contributions.md#how-we-checked).
+
+**Content id.** A library record's id: 32 hexadecimal digits of SHA-256 over its identity text and
+its tiling's geometry pin. Its first 8 digits are the *short id*. See
+[Library format](library-format.md#content-ids).
 
 **Continuous field.** A field whose cells hold a value between 0 and 1, as in [Lenia](../automata/lenia.md).
 
@@ -110,6 +122,11 @@ states. Agents and some automata take several steps per generation.
 **Generations.** The family of rules with dying states, written `B2/S/C3`. See
 [Generations](../automata/generations.md).
 
+**Geometry pin.** A hash of the geometry a library record ran on: a periodic tiling's unit cell (its
+polygons and neighbour offsets), or an aperiodic record's patch. Every record stores one; when the
+engine's pin differs, the record is flagged for re-verification. Not to be confused with the test
+*pins*. See [Library format](library-format.md#geometry-pins).
+
 **Glider.** A small spaceship. On aperiodic tilings, a pattern that travels with a constant speed and
 heading although it never repeats exactly.
 
@@ -130,6 +147,10 @@ wallpaper or screensaver. See [Wallpapers, screensavers and the background host]
 [Search methods](../research/search-methods.md#soup-hunt).
 
 ## I
+
+**Identity text.** What a pattern's content id is the hash of: its cell-state model, neighbourhood,
+tiling, class, period, displacement and canonical evolution, as lines of text in a fixed form
+(`jetcarp-pattern-v3`). See [Library format](library-format.md#the-identity-text-of-a-pattern).
 
 **Isohedral tiling.** A tiling by one tile in which a symmetry carries any tile to any other.
 Grünbaum and Shephard sorted them into 93 types, IH1 to IH93; JETCARP has the 81 that can be told
@@ -227,6 +248,10 @@ same for the command line, scripts, the app and MCP; `jetcarp api list` lists th
 *dynamics pins* for every built-in Quick Start entry. See
 [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics).
 
+**Provenance.** A library record's history: how it was found or imported, by whom, by which search,
+on which engine and geometry, and when it was checked again. See
+[Library format](library-format.md#provenance).
+
 **Priority table.** James Edmond's rule family: ordered rows of conditions on neighbour counts, the
 first matching row deciding the next state. See [Priority rules](../automata/priority-rules.md).
 
@@ -270,6 +295,9 @@ grains and so on. Also the number that starts a random-number generator.
 
 **Settled.** A run that has stopped changing, or repeats.
 
+**Short id.** The first 8 hexadecimal digits of a content id, accepted by commands wherever an id is,
+when no other record starts with them.
+
 **Sighting.** A record that a job saw a catalogued pattern.
 
 **Sliding window.** The few tiles of an infinite aperiodic tiling kept around a moving pattern,
@@ -296,7 +324,7 @@ states, in practice. See [Reproducibility](../research/reproducibility.md#the-st
 **Still life.** A pattern that does not change.
 
 **Strategy.** A kind of search run as a job (`hunt`, `bounded`, `census`, `ants`, `mover`, `pile`,
-`collide`, `evolve`).
+`collide`, `evolve`, `explore`, and `reverify`, which checks library records again).
 
 **Supertile.** A cluster of tiles that the substitution rules of an aperiodic tiling treat as one
 larger tile.

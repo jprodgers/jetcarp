@@ -13,6 +13,8 @@
 //!   the origin; the period then starts at that phase, in that orientation, at the origin
 //!   (phase rotation, orientation, translation). The displacement is carried into the same
 //!   orientation. Rule tables are not isotropic, so only translations and phase rotation apply.
+//!   Orientation is only as complete as the symmetry search ([`super::symmetry`]: a closed point
+//!   group on every periodic tiling built today, but not proven complete).
 //! - **Aperiodic patches with a pattern graph** (outer-totalistic rules). The stored graph is
 //!   labelled canonically again ([`super::site_graph`]: colour refinement and individualization,
 //!   minimised over the starting phase and, on chiral tilings, a global mirror), which is

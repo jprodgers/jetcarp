@@ -1,0 +1,209 @@
+# Library format
+
+The pattern library is one SQLite file, `library.sqlite` in the data folder (or wherever
+`JETCARP_LIBRARY` points; see [Folders and environment variables](folders.md)). This page describes
+what a record's id is made of, the geometry pins that tie records to the tiles they ran on, what
+happens when those tiles change, and the tables of the file. Packs will carry the same ids, so the id
+scheme below does not change: a change would be a new version line in the identity text.
+
+## Content ids
+
+Every pattern and every ant or turmite run has a **content id**: 32 hexadecimal digits (128 bits)
+of SHA-256 over the record's *identity text*, a newline, and the *geometry pin* of its tiling:
+
+```text
+id = first 32 hex digits of SHA-256(identity text + "\n" + geometry pin)
+```
+
+The first 8 digits are the **short id**, which listings and commands accept wherever an id is asked
+for, as long as no other record (or alias) starts with the same digits. Any unique prefix of 4 or more
+digits works the same way, and so does a pattern's name. Ant ids are written `ant-` followed by the
+content id.
+
+### The identity text of a pattern
+
+The identity text says what a pattern *is*, not the rule it was found in, so the same evolution found
+in several rules is one pattern. It is these lines, joined by a single newline, with no newline at the
+end:
+
+```text
+jetcarp-pattern-v3
+model=<lifelike | wireworld | table | priority | spectre_glider | ...>
+nb=<touch | edge>
+steps=<steps per generation>
+tiling=<tiling key>
+class=<still_life | oscillator | spaceship | puffer | mover | gun | other>
+period=<period>
+d=<di>,<dj>
+rule=<exact rule notation, or empty>
+canonical=<canonical text>
+phases=<phase 0>;<phase 1>;...
+```
+
+- `model` is `lifelike` for B/S and Generations rules (B/S is Generations with two states), otherwise
+  the rule's family.
+- The **tiling key** is the compact JSON of the tiling's identity: its family, shape parameters and
+  edges, with keys in sorted order and `"boundary":"dead"`, but not its size. For example
+  `{"family":"square","boundary":"dead"}`, or `{"family":"periodic","params":{"catalog":"k3-019"},"boundary":"dead"}`.
+- `d` is the displacement per period in lattice steps, in the canonical orientation (`0,0` for still
+  lifes and oscillators).
+- `rule` is the exact rule only for puffers, movers, guns and `other`, whose stored phases do not
+  cover their whole evolution; it is empty for the rest.
+- `canonical` is the canonical picture of phase 0 on one-tile lattices (rows such as `ooo/o/.o`),
+  a `k@i,j` list on lattices with several tile types, or on aperiodic patches `graph ...` or
+  `site r2 ...` followed by 32 hex digits of SHA-256 of the pattern graph's canonical code or the
+  site's description.
+- `phases` lists every phase of one period in order, phase 0 first (puffers and movers: their
+  starting configuration only). Each phase is its live cells `i,j,k,s` (lattice column, row, tile
+  type, state; on aperiodic patches `i` is the tile's label in the pattern's graph or site), separated
+  by single spaces and sorted by row `j`, then column `i`, tile type `k` and state `s`.
+
+For Conway's glider on the square grid the text is
+
+```text
+jetcarp-pattern-v3
+model=lifelike
+nb=touch
+steps=1
+tiling={"family":"square","boundary":"dead"}
+class=spaceship
+period=4
+d=-1,-1
+rule=
+canonical=ooo/o/.o
+phases=0,0,0,1 1,0,0,1 2,0,0,1 0,1,0,1 1,2,0,1;1,-1,0,1 0,0,0,1 1,0,0,1 0,1,0,1 2,1,0,1;0,-1,0,1 1,-1,0,1 0,0,0,1 2,0,0,1 0,1,0,1;0,-1,0,1 1,-1,0,1 -1,0,0,1 0,0,0,1 1,1,0,1
+```
+
+and with the square grid's pin `0145310ebd49abfe89eb01c42ecaf459` its id is
+`5a080db389c0cab3caf884d2596a1e70` (short id `5a080db3`). JETCARP's tests pin both values.
+
+### Canonical form
+
+The identity is computed from the record's cells, never from how they happen to be stored, so one
+pattern has one id whichever phase, orientation or position it was found or written in:
+
+- **Lattice tilings.** Of every stored phase in every symmetry of the tiling (8 on the square grid, 12
+  on the hexagonal grid, the tiling's point group with its tile-type permutation on the Archimedean
+  and k-uniform tilings, glide reflections included), moved to the origin, the smallest is the
+  canonical start; the period is rewritten from that phase, in that orientation, with the
+  displacement turned to match. Rule tables are not isotropic, so for them only the starting phase
+  and the position count. The symmetries are found by searching small integer matrices that carry
+  the tiling's polygons and neighbours onto themselves; on every periodic tiling JETCARP builds
+  they form a closed point group, and a wider search finds no more, but completeness is not proven
+  for tilings added later.
+- **Aperiodic patches, pattern graphs** (outer-totalistic rules). The pattern's tiles, as a labelled
+  graph, are labelled canonically again from the stored graph (minimised over the starting phase and,
+  on chiral tilings such as the hat, a global mirror image), so the patch's rotations and reflections
+  and the pattern's position on the patch do not count.
+- **Aperiodic patches, geometric sites** (rule tables, and patterns too symmetric or too scattered for
+  a graph). The phases are rotated to the start with the smallest description. One gap: the site's
+  anchor tile is taken as stored. JETCARP's own searches always choose the canonical anchor, and an
+  importer that calls JETCARP's canonicalisation rebuilds the site from its patch, which fixes it; a
+  site re-anchored by another tool would get another id.
+
+Two records that are the same live-cell evolution on *different* tiles keep different ids: on another
+tiling, or at an inequivalent position of one tiling (where no symmetry of the tiling carries one onto
+the other). An id names an evolution on its tiles.
+
+### The identity text of an ant
+
+```text
+jetcarp-ant-v1
+rule=<rule notation, such as "Ant RL" or "Turmite 1R1,1L0/1R1,0N0">
+tiling=<tiling key>
+start=<the start as JSON: "empty", or the start cells>
+```
+
+An ant and its mirror image (`RL` and `LR`) are two records, as the searches store them.
+
+## Geometry pins
+
+A record means something only on the tiles it ran on. Every pattern, ant run and Quick Start entry
+stores the **geometry pin** of its tiling: 32 hex digits of SHA-256 over the geometry that its
+behaviour depends on, whatever grid size it was built on.
+
+- **Periodic tilings** (every lattice): the unit cell. The *polygon hash* covers the lattice vectors
+  and, for each tile type, its shape and corners in the unit cell; the *neighbour hash* covers the
+  offset table of both neighbourhoods (edge, then touch): for each tile type, its neighbour slots in
+  order.
+- **Aperiodic tilings** (hat, Spectre, Penrose): the patch the record was found on, named by its spec
+  (family, parameters, edges and substitution level): every tile's shape and corners in tile order,
+  then the neighbour lists of both neighbourhoods and which tiles lie on the open boundary. Two levels
+  of one family are two patches with two pins, so a pattern found on two levels is stored twice.
+
+Floats are hashed by their exact bits, and the tiling code uses JETCARP's own deterministic maths, so
+pins are the same on every platform. The pin is the first 32 hex digits of SHA-256 of the line
+`jetcarp-geometry-v1`, the polygon hash and the neighbour hash (64 hex digits each), separated by
+newlines. The engine's regression test, `crates/jetcarp-core/tests/geometry_pins.rs`, pins every
+tiling's polygons and neighbours separately (see
+[Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)).
+
+### When the geometry changes
+
+The table `engine_pins` keeps the running engine's pin for every tiling the library uses. When a
+library is opened, pins cached by another JETCARP version (or by a build tested against other geometry
+pins) are computed again, and every record whose stored pin differs from the engine's is **flagged**
+(`needs_reverify`). Flagged records are kept, listed, and counted by `jetcarp library info`; they are
+never deleted or failed silently.
+
+`jetcarp library reverify` (the operation `library.reverify`) checks them again as a job, resumable
+with `--job`: a pattern is verified again exactly on the current geometry, an ant run again from its
+start (it must end the same way), and a Quick Start scene built and, if it records a state hash,
+replayed to it. `--all` checks every record, not only the flagged ones.
+
+- A record that **passes** gets the engine's pin, its flag is cleared, and its provenance gains a
+  `reverified` row. If the geometry really changed, its id changes with the pin: the record moves to
+  its new id with its rules, sightings, Quick Start entry, media, ratings and history, and the old id
+  becomes an alias (`geometry-change`), so links to it keep working.
+- A record that **fails** stays flagged and is reported, with why. Only `--drop` deletes such records.
+
+## Provenance
+
+Every record has a history in the table `provenance`. Row 0 says how it came into the library:
+
+| Column | Holds |
+| --- | --- |
+| `kind` | `found` (by a search, a script or a person) or `imported` |
+| `finder`, `orcid` | who, from `JETCARP_FINDER` and `JETCARP_ORCID` (empty when unset) |
+| `search_kind`, `job_uuid` | the job that found it (its kind, such as `hunt`, and its uuid) |
+| `pack_hash` | the pack it came in (for packs) |
+| `machine` | operating system and CPU architecture, such as `linux-x86_64` (never the host name) |
+| `engine_version`, `geometry_pin` | the JETCARP version and the pin it was verified with |
+| `source` | what found it: `search`, `collide A + B`, a scene path, `import <file>` |
+| `date` | when (UTC) |
+
+Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
+rows 1, 2, ...: today `reverified`.
+
+## Aliases
+
+The table `id_aliases` maps old ids to records: `cart-fnv` (the 64-bit ids of JETCARP's predecessor
+CART, kept when its records are imported), `geometry-change` (an id from before a geometry change) and
+`canonicalised` (an id of a record that was stored in a non-canonical form). Every lookup by id,
+prefix or short id also searches the aliases.
+
+## Tables
+
+`PRAGMA user_version` is the schema version, 1, and `PRAGMA application_id` marks the file as a
+JETCARP library. A library made by a newer JETCARP is refused with a message to update. Catalogs from
+before schema 1 (CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or
+migrated: JETCARP 0.4 starts a fresh library.
+
+| Table | One row per |
+| --- | --- |
+| `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
+| `engine_pins` | tiling or patch in use: its pin key, the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
+| `rules` | rule as run: notation, neighbourhood, steps per generation, family, birth and survival masks |
+| `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
+| `pattern_rules` | rule a pattern was verified in, with the verification and engine version |
+| `sightings` | pattern seen by a job in a rule: copies, soups, first and last seen |
+| `unstored` | object a hunt counted but did not store as a record |
+| `jobs` | search: uuid, kind, spec, status, progress, checkpoint, owner and heartbeat, engine version |
+| `census_rows` | rule of a census job and its summary |
+| `provenance` | event in a record's history (see above) |
+| `id_aliases` | old id of a record (see above) |
+| `ants` | ant or turmite run: content id, rule, tiling, pin, start, outcome, highway period and displacement, curation, `needs_reverify` |
+| `quickstart` | Quick Start entry: its scene, title, status, pin and `needs_reverify` |
+| `quickstart_usage` | how often the app opened a Quick Start entry (local only) |
+| `ratings` | rating of a pattern, ant run, Quick Start entry or search run |
+| `media` | picture or animation rendered for a record, with its render key and SHA-256 content hash |

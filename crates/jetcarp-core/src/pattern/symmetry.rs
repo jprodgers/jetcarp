@@ -9,6 +9,13 @@
 //! tile's polygon; the map must also carry every neighbour slot to a neighbour slot. So on 4.8.8,
 //! 3.6.3.6, and the other Archimedean and k-uniform tilings a pattern found in another
 //! orientation gets the same canonical form.
+//!
+//! **Completeness.** The search tries integer matrices with entries from -2 to 2. For each of the
+//! 1,355 periodic tilings JETCARP builds (both neighbourhoods), the maps found form a closed
+//! point group (of order 2, 3, 4, 6, 8, or 12), and widening the search to -3..3 finds no more
+//! (checked in November 2026). That is evidence, not proof: a tiling
+//! added later whose lattice basis is far from reduced could need larger entries, and a symmetry
+//! missed here would let one pattern in two orientations get two ids.
 
 use crate::geom::{P, centroid};
 use crate::objects::LCell;
