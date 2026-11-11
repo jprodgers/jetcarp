@@ -517,11 +517,26 @@ impl LibraryWindow {
         };
         ui.label(RichText::new(r.label()).strong().size(16.0));
         ui.horizontal(|ui| {
-            ui.label(RichText::new(&r.id).monospace().small().weak());
+            // The short id (the first 8 digits, which commands accept); the whole id on hover
+            // and when copied.
+            ui.label(
+                RichText::new(&r.id[..r.id.len().min(8)])
+                    .monospace()
+                    .small()
+                    .weak(),
+            )
+            .on_hover_text(&r.id);
             if ui.small_button("copy id").clicked() {
                 ui.ctx().copy_text(r.id.clone());
             }
         });
+        if r.needs_reverify {
+            ui.colored_label(
+                Color32::from_rgb(230, 160, 60),
+                "Needs re-verification: the engine's geometry for this tiling changed since it \
+                 was verified (jetcarp library reverify)",
+            );
+        }
         // Every phase, side by side.
         if self.strip.as_ref().is_none_or(|s| s.0 != r.id) {
             let tex = render_phases_in(&r, 120, 8, self.palette.as_deref()).map(|img| {

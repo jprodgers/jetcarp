@@ -441,7 +441,7 @@ impl CatalogTools {
                         if ui.small_button("Open").clicked() {
                             open_id = Some(id.clone());
                         }
-                        ui.label(format!("{label} ({})", &id[..id.len().min(10)]));
+                        ui.label(format!("{label} ({})", &id[..id.len().min(8)]));
                         if *new {
                             ui.colored_label(Color32::LIGHT_GREEN, "new");
                         }
