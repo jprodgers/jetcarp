@@ -238,16 +238,16 @@ impl RaterBook {
         if members.len() == 1 {
             return self
                 .get(name)
-                .filter(|r| !r.consent_date.is_empty())
+                .filter(|r| consent_time(&r.consent_date).is_some())
                 .cloned();
         }
         let ok: Vec<&RaterEntry> = members.iter().filter_map(|m| self.get(m)).collect();
-        if ok.len() != members.len() || ok.iter().any(|r| r.consent_date.is_empty()) {
+        if ok.len() != members.len() || ok.iter().any(|r| consent_time(&r.consent_date).is_none()) {
             return None;
         }
         let latest = ok
             .iter()
-            .map(|r| r.consent_date.clone())
+            .filter_map(|r| consent_time(&r.consent_date))
             .max()
             .unwrap_or_default();
         let notes = ok.iter().all(|r| r.notes);
@@ -269,6 +269,17 @@ impl RaterBook {
         self.raters.push(g.clone());
         Some(g)
     }
+}
+
+/// A rater's consent date as a pack writes it: an RFC 3339 UTC time with whole seconds, as
+/// every time in a pack is (a book that holds a bare date, `2026-11-01`, gives its midnight,
+/// `2026-11-01T00:00:00Z`). None when the rater has not consented, or the date is not a time.
+pub fn consent_time(d: &str) -> Option<String> {
+    if crate::docs::is_time(d) {
+        return Some(d.to_string());
+    }
+    let t = format!("{d}T00:00:00Z");
+    crate::docs::is_time(&t).then_some(t)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -491,6 +502,11 @@ pub fn publish(
         ));
     }
     let created = now_or(&opts.created);
+    if !crate::docs::is_time(&created) {
+        return Err(format!(
+            "created '{created}': an RFC 3339 UTC time with whole seconds (2026-11-11T09:02:38Z)"
+        ));
+    }
     let store = Store::create(&opts.to)?;
     let src = Source::Store(store.clone());
     let me = publisher.signer.fingerprint().to_string();
@@ -1071,7 +1087,7 @@ pub fn publish(
                 &inh,
                 &RaterRow {
                     rater: e.id.clone(),
-                    consent_date: e.consent_date.clone(),
+                    consent_date: consent_time(&e.consent_date).unwrap_or_default(),
                     consent_scope: "public-permanent".into(),
                     display_name: (e.show_name && e.members.is_empty()).then(|| e.name.clone()),
                     orcid: (e.show_name && !e.orcid.is_empty()).then(|| e.orcid.clone()),

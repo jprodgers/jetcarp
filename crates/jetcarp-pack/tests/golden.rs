@@ -249,7 +249,7 @@ fn golden_book() -> publish::RaterBook {
     b.raters.push(publish::RaterEntry {
         name: "Golden Publisher A & Test Rater B".into(),
         id: "rater-0000000000002000".into(),
-        consent_date: "2026-11-01".into(),
+        consent_date: "2026-11-01T00:00:00Z".into(),
         show_name: false,
         orcid: String::new(),
         notes: true,

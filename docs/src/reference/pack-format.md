@@ -59,9 +59,11 @@ A pack makes four promises:
   - A reader MUST ignore members it does not know (a later minor version may add them).
 - **JSON in table cells** (scenes, ranges, render settings and the like) is RFC 8785 canonical
   JSON too, but it MAY hold non-integer numbers: a cell is data, not a pack document.
-- **Times** are RFC 3339 strings in UTC with `Z` and whole seconds (`2026-11-11T09:02:38Z`).
-  Times are information: no rule of this format orders anything by a time, except where it breaks
-  a tie that nothing else breaks ([latest wins](#annotations)).
+- **Times** are RFC 3339 strings in UTC with `Z` and whole seconds (`2026-11-11T09:02:38Z`):
+  every time in a pack, in documents and in table columns alike (`raters.consent_date` too; a
+  calendar date alone is written as its midnight, `2026-11-01T00:00:00Z`). Times are
+  information: no rule of this format orders anything by a time, except where it breaks a tie
+  that nothing else breaks ([latest wins](#annotations)).
 - **Parquet tables:**
   - zstd compression; statistics and page indexes (column and offset indexes) written;
   - each part's rows sorted as its table says ([below](#tables-indexes-and-parts));
@@ -663,7 +665,7 @@ group.
 | Column | Meaning |
 | --- | --- |
 | `rater: string` | the id |
-| `consent_date: string` | when the rater consented (a group: its latest member's) |
+| `consent_date: string` | when the rater consented, a [time](#encodings) like every other (a group: its latest member's) |
 | `consent_scope: string` | always `public-permanent` in 1.0 |
 | `display_name: string?`, `orcid: string?` | only if the rater chose to be named; never on a group |
 | `members: list<string>?` | a group's member ids (each with its own row); groups do not nest |

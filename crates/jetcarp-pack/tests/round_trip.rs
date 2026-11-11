@@ -270,6 +270,32 @@ fn quick_start_entries_go_by_their_pack_ids() {
     assert_eq!(v2.manifest.retracts[0].target, tg);
 }
 
+/// Every time in a pack is an RFC 3339 UTC time with whole seconds: a rater book holding a bare
+/// consent date publishes its midnight, and a version's time that is not one is refused.
+#[test]
+fn consent_dates_are_times() {
+    let dir = temp("consent");
+    let lib = small_library(&dir);
+    let p = publisher(5, "Test Publisher");
+    let mut b = book(&["Test Publisher"]);
+    b.raters[0].consent_date = "2026-11-01".into();
+    let store = dir.join("store");
+    run(&lib, &p, &mut b, &options("consent", &store));
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
+    let mut dates = vec![];
+    src.table_rows(&v, "raters", |_, rows| {
+        dates.extend(rows.into_iter().map(|r| r["consent_date"].clone()));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(dates, ["2026-11-01T00:00:00Z"]);
+    let mut o = options("consent", &dir.join("bad"));
+    o.created = Some("2026-11-11".into());
+    let e = jetcarp_pack::publish::publish(&lib, &p, &mut b, &o, &|_| {}).unwrap_err();
+    assert!(e.contains("RFC 3339"), "{e}");
+}
+
 #[test]
 fn the_same_library_gives_the_same_store() {
     let dir = temp("determinism");

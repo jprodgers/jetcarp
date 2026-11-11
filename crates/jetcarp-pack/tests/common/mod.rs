@@ -79,7 +79,7 @@ pub fn book(names: &[&str]) -> RaterBook {
             .map(|(i, n)| RaterEntry {
                 name: n.to_string(),
                 id: format!("rater-{:016x}", 0x1000 + i),
-                consent_date: "2026-11-01".into(),
+                consent_date: "2026-11-01T00:00:00Z".into(),
                 show_name: true,
                 orcid: String::new(),
                 notes: true,

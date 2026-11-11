@@ -288,7 +288,64 @@ pub fn check_format(format: &str, version: &str, want: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// Is this a time as the format writes every time: RFC 3339 in UTC with `Z` and whole seconds
+/// (`2026-11-11T09:02:38Z`), a real day of the calendar?
+pub fn is_time(s: &str) -> bool {
+    let b = s.as_bytes();
+    let shape = b.len() == 20
+        && b.iter().enumerate().all(|(i, c)| match i {
+            4 | 7 => *c == b'-',
+            10 => *c == b'T',
+            13 | 16 => *c == b':',
+            19 => *c == b'Z',
+            _ => c.is_ascii_digit(),
+        });
+    if !shape {
+        return false;
+    }
+    let n = |a: usize, z: usize| s[a..z].parse::<u32>().unwrap_or(u32::MAX);
+    let (y, m, d) = (n(0, 4), n(5, 7), n(8, 10));
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let days = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => 0,
+    };
+    (1..=days).contains(&d) && n(11, 13) < 24 && n(14, 16) < 60 && n(17, 19) < 60
+}
+
 /// Is a feed name letters, digits and `-` (1 to 64 of them)?
 pub fn valid_feed(s: &str) -> bool {
     !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn times_are_utc_with_whole_seconds() {
+        for ok in [
+            "2026-11-11T09:02:38Z",
+            "2026-11-01T00:00:00Z",
+            "2028-02-29T23:59:59Z",
+        ] {
+            assert!(is_time(ok), "{ok}");
+        }
+        for bad in [
+            "2026-11-01",
+            "2026-11-11T09:02:38.5Z",
+            "2026-11-11T09:02:38+00:00",
+            "2026-11-11 09:02:38Z",
+            "2026-02-29T00:00:00Z",
+            "2026-13-01T00:00:00Z",
+            "2026-11-11T24:00:00Z",
+            "2026-11-11T09:02:60Z",
+            "",
+        ] {
+            assert!(!is_time(bad), "{bad}");
+        }
+    }
 }
