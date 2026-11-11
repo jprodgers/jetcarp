@@ -158,11 +158,39 @@ pub struct RemeasureRecord {
     pub to_remeasure: u64,
     pub runs: u64,
     pub changed: u64,
-    /// Seconds the check took, and the re-measuring.
+    /// Seconds the check took, and the re-measuring (read as a number, or as a decimal string,
+    /// as a pack's search index writes them).
+    #[serde(deserialize_with = "f64_or_text")]
     pub check_seconds: f64,
+    #[serde(deserialize_with = "f64_or_text")]
     pub remeasure_seconds: f64,
     /// Whether every run had been copied.
     pub done: bool,
+}
+
+/// A number read from JSON as a number or as a string holding one (a pack's documents write
+/// decimals as strings).
+pub fn f64_or_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    use serde::de::Error;
+    match Value::deserialize(d)? {
+        Value::Number(n) => n.as_f64().ok_or_else(|| D::Error::custom("not a number")),
+        Value::String(s) => s
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|x| x.is_finite())
+            .ok_or_else(|| D::Error::custom(format!("'{s}' is not a number"))),
+        Value::Null => Ok(0.0),
+        other => Err(D::Error::custom(format!("{other} is not a number"))),
+    }
+}
+
+/// [`f64_or_text`] for an optional number.
+pub fn opt_f64_or_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<f64>, D::Error> {
+    match Value::deserialize(d)? {
+        Value::Null => Ok(None),
+        v => f64_or_text(v).map(Some).map_err(serde::de::Error::custom),
+    }
 }
 
 /// A tiling the import re-measured, as the manifest lists it.
@@ -843,6 +871,15 @@ impl Runs {
         (0..m.segments.len())
             .into_par_iter()
             .map(|k| open_segment(files, dir, m, k))
+            .collect()
+    }
+
+    /// The sealed segments' files, in id order.
+    pub fn segment_files(&self) -> Vec<PathBuf> {
+        self.manifest
+            .segments
+            .iter()
+            .map(|s| self.dir.join(&s.file))
             .collect()
     }
 

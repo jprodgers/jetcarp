@@ -298,6 +298,17 @@ impl Seen {
     }
 }
 
+/// A run as [`Search::take_in`] takes it: its id, stage, parent and seed kind, and its candidate
+/// and measures (`None` when its family or seed does not read).
+#[derive(Clone, Debug)]
+pub struct TakenRun {
+    pub id: i64,
+    pub stage: i64,
+    pub parent: Option<i64>,
+    pub seed_kind: String,
+    pub ev: Option<Eval>,
+}
+
 /// What a step has measured and changed, until [`Search::take_delta`].
 #[derive(Default)]
 struct Pending {
@@ -512,6 +523,43 @@ impl Search {
             elites,
             confirmed: p.confirmed,
             meta,
+        }
+    }
+
+    /// Take in runs a search already made (rebuilding a working database from its sealed
+    /// segments, as an imported search's): their identities, and for the screened ones coverage,
+    /// family totals and the archive, offered in id order; the confirmation runs mark their
+    /// elites confirmed. Nothing is run, and the runs are not written again.
+    pub fn take_in(&self, rows: &[TakenRun]) {
+        let mut a = self.archive.lock().unwrap();
+        let mut seen = self.seen.lock().unwrap();
+        let mut cov = self.coverage.lock().unwrap();
+        let mut fams = self.family_totals.lock().unwrap();
+        let mut p = self.pending.lock().unwrap();
+        for r in rows {
+            self.next_id.fetch_max(r.id + 1, Ordering::Relaxed);
+            let Some(ev) = &r.ev else { continue };
+            seen.insert(ev.cand.id_hash());
+            if r.stage != 1 {
+                self.confirmed.fetch_add(1, Ordering::Relaxed);
+                if let Some(parent) = r.parent
+                    && a.confirmed.insert(parent)
+                {
+                    p.confirmed.push(parent);
+                }
+                continue;
+            }
+            self.screened.fetch_add(1, Ordering::Relaxed);
+            let c = &ev.cand;
+            if let Some(i) = self.tiling_index(&c.tiling) {
+                *cov.entry((i, c.fam, r.seed_kind.clone())).or_insert(0) += 1;
+            }
+            *p.coverage
+                .entry((c.tiling.clone(), c.fam, r.seed_kind.clone()))
+                .or_insert(0) += 1;
+            fams.entry(c.fam).or_default().add(ev.score as f64);
+            p.families.entry(c.fam).or_default().add(ev.score as f64);
+            a.offer(r.id, ev.clone(), self.group(&c.tiling));
         }
     }
 

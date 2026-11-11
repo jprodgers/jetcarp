@@ -57,7 +57,11 @@ pub struct ExploreSpec {
     #[serde(default)]
     pub gpu: bool,
     /// Stop (paused) when the process uses more memory than this.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::explore::runs::opt_f64_or_text"
+    )]
     pub max_rss_gb: Option<f64>,
     /// The search's folder, `searches/<uuid>` beside the catalog (made with the job).
     #[serde(default)]
@@ -135,6 +139,100 @@ pub fn new_uuid() -> String {
         b >> 48,
         b & 0xFFFF_FFFF_FFFF
     )
+}
+
+/// What [`rebuild`] made.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct Rebuilt {
+    pub runs: u64,
+    pub screened: u64,
+    pub confirmed: u64,
+    pub elites: u64,
+    pub niches: u64,
+    pub seen: u64,
+    pub seconds: f64,
+}
+
+/// Make the working database of an explore job whose folder holds only sealed segments (a
+/// search imported from a pack): its archive, coverage, family totals, seen set and confirmed
+/// elites rebuilt from the runs, offered in id order with their newest scores, so the job is a
+/// stopped search like any other (its status, runs, report and atlas read it, and it can be
+/// resumed). The job is left paused with its progress written. Its time spent is not known (0)
+/// and its random states start again from its seed; the seen set keeps it from trying a
+/// candidate again.
+pub fn rebuild(lib: &Library, job: i64) -> Result<Rebuilt, String> {
+    use crate::explore::job::TakenRun;
+    use crate::explore::segments as seg;
+    let t0 = Instant::now();
+    let row = lib.job(job)?;
+    let spec: ExploreSpec =
+        serde_json::from_value(row.spec.clone()).map_err(|e| format!("job {job}: {e}"))?;
+    let folder = work_dir(lib, &row)?;
+    let path = folder.join("search.sqlite");
+    if path.exists() {
+        return Err(format!(
+            "job {job} has a working database already ({})",
+            path.display()
+        ));
+    }
+    let mut runs = Runs::open(&path)?;
+    runs.set_spec(&row.spec)?;
+    let search = Search::new(spec.search.clone(), store::Saved::default())?;
+    let mut n = 0u64;
+    for file in runs.segment_files() {
+        let name = file.file_name().map(|f| f.to_os_string());
+        let rows: Vec<TakenRun> = runs.scan(
+            seg::ALL,
+            &|s, _, _| s.path.file_name().map(|f| f.to_os_string()) == name,
+            &|b, out| {
+                for i in 0..b.len {
+                    let r = b.rec(i);
+                    out.push(TakenRun {
+                        id: r.id,
+                        stage: r.stage,
+                        parent: r.parent,
+                        ev: store::eval_of(&r),
+                        seed_kind: r.seed_kind,
+                    });
+                }
+            },
+        )?;
+        n += rows.len() as u64;
+        search.take_in(&rows);
+    }
+    let mut d = search.take_delta();
+    d.meta.push(("elapsed_s".into(), "0".into()));
+    runs.write(&d)?;
+    let (elites, niches) = search.elites();
+    let mut p = ExploreProgress {
+        job,
+        status: "paused".into(),
+        screened: search.screened(),
+        confirmed: search.confirmed(),
+        elites,
+        niches,
+        confirmed_elites: search.confirmed_elites(),
+        seen: search.seen(),
+        tilings_tried: search.tilings_tried(),
+        tilings: search.tiling_count() as u64,
+        families: search.families(),
+        folder: folder.display().to_string(),
+        note: Some("its working database was rebuilt from its sealed runs".into()),
+        backend: "cpu only".into(),
+        ..Default::default()
+    };
+    p.line = line(&p);
+    let v = serde_json::to_value(&p).map_err(|e| e.to_string())?;
+    lib.update_job(job, Some(JobStatus::Paused), Some(&v), None)?;
+    Ok(Rebuilt {
+        runs: n,
+        screened: p.screened,
+        confirmed: p.confirmed,
+        elites,
+        niches,
+        seen: p.seen,
+        seconds: (t0.elapsed().as_secs_f64() * 10.0).round() / 10.0,
+    })
 }
 
 /// The folder of an explore job: `searches/<uuid>` beside the catalog.

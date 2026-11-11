@@ -2056,6 +2056,16 @@ pub(crate) fn run_job(
 
 /// The progress line of a job's progress (its kind's own, else one from its summary).
 pub(crate) fn line_of(k: &dyn jobs::StrategyKind, row: &JobRow, progress: &Value) -> String {
+    // A job a pack's sightings named: nothing ran here, so its counters say nothing (an
+    // imported explore search has a progress of its own, rebuilt from its runs).
+    if let Some(pack) = row.spec.get("imported_from").and_then(|v| v.as_str())
+        && row.kind != jobs::explore::KIND_NAME
+    {
+        return format!(
+            "{} {}: imported from pack {pack} (its finds came with the pack; nothing ran here)",
+            row.kind, row.id
+        );
+    }
     let l = k.line(progress);
     if !l.is_empty() {
         return l;
