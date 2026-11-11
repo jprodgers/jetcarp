@@ -431,3 +431,56 @@ fn search_and_jobs_commands_as_json() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+// `jetcarp pack`: a key, a publish of a small library, a check and an import, through the
+// program, with the tests' own settings folder (the key is made there, never in ~/.ssh).
+#[test]
+fn pack_commands_publish_check_and_import() {
+    let dir = out_root().join(format!("cli-pack-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = glider_catalog(&dir);
+    let l = lib.to_str().unwrap();
+    let p = |name: &str| dir.join(name).display().to_string();
+    let key = json_of(&["--json", "pack", "key", "--name", "Test Publisher"]);
+    assert!(
+        key["fingerprint"].as_str().unwrap().starts_with("SHA256:"),
+        "{key}"
+    );
+    let out = json_of(&[
+        "--json",
+        "pack",
+        "--library",
+        l,
+        "publish",
+        "--feed",
+        "cli-test",
+        "--to",
+        &p("store"),
+        "--created",
+        "2026-11-11T00:00:00Z",
+    ]);
+    assert_eq!(out["seq"], 1);
+    assert!(out["manifest"].as_str().unwrap().starts_with("sha256:"));
+    let check = json_of(&[
+        "--json",
+        "pack",
+        "--library",
+        &p("empty"),
+        "check",
+        &p("store"),
+    ]);
+    assert_eq!(check["signed"], "publisher");
+    assert_eq!(check["dry_run"], true);
+    let imp = json_of(&[
+        "--json",
+        "pack",
+        "--library",
+        &p("lib2"),
+        "import",
+        &p("store"),
+    ]);
+    assert_eq!(imp["report"]["patterns_added"], 1, "{imp}");
+    assert_eq!(imp["report"]["sample"]["passed"], 1);
+    let _ = std::fs::remove_dir_all(dir);
+}

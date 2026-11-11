@@ -49,7 +49,7 @@ and reworked for release in a new repository with a fresh history.
   the version, folders, graphics adapters and desktop integration for bug reports; and
   `jetcarp uninstall`, which undoes what JETCARP set up outside its folders and, if asked, deletes its
   settings and data.
-- A shared layer of 56 named operations that the command line, the scripts and the MCP server call,
+- A shared layer of 74 named operations that the command line, the scripts and the MCP server call,
   each with JSON Schemas for its input and output: `jetcarp api list`, `jetcarp api schema OP` and
   `jetcarp api call OP JSON`. Scripts can call any of them with `jetcarp(op, #{…})`.
 - One job runner for every kind of search. Each job runs in steps of a few seconds with a checkpoint
@@ -67,6 +67,12 @@ and reworked for release in a new repository with a fresh history.
   program can write the same line and check an id (see
   [Library format](../reference/library-format.md#the-identity-text-of-a-pattern)). No id of a tiling
   at its default shape changed.
+- Packs, format 1.0: `jetcarp pack publish` writes the library (or a selection) as a signed,
+  content-addressed store of Parquet tables and canonical JSON that pyarrow, DuckDB or Polars read
+  without JETCARP, `jetcarp pack export` lays a version out for a single download, and
+  `jetcarp pack check` and `jetcarp pack import` check every hash, id and SSH signature (verified in
+  pure Rust) before anything is stored. Ratings are published only with each rater's consent. See
+  [Pack format](../reference/pack-format.md).
 - Continuous integration that builds and tests on Linux, Windows and macOS, and builds for macOS on
   Intel and Linux on ARM.
 - Licences: JETCARP's own code and data under the Unlicense or the MIT licence, notices for the work

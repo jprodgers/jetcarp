@@ -818,8 +818,10 @@ data never carries attribution duties; other publishers may choose any open lice
   goes in `requires`, and a reader that does not know it refuses the pack.
 - **Upgrades.** A new format version is written as a new version whose parent is the old manifest;
   old versions stay readable and citable.
-- **Verification receipts** (`receipts/`, namespace `jetcarp-receipt`) are reserved; JETCARP 0.4
-  writes none and keeps its sample's result in the library.
+- **Verification receipts** (`receipts/`, namespace `jetcarp-receipt`) are reserved: a receipt
+  will be `receipts/sha256/<aa>/<manifest hex>/<receipt hex>.json`, named by the SHA-256 of its
+  own bytes and naming the manifest it checked. JETCARP 0.4 writes none and keeps its sample's
+  result in the library.
 
 ### Golden packs
 
