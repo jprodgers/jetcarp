@@ -14,6 +14,7 @@ use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
 use jetcarp_api::ops::search::{SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::{ApiError, Ctx, Platform};
+use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::job::SoupBatcher;
 use jetcarp_core::jobs::{Live, Viewer, registry};
 use jetcarp_core::library::Library;
@@ -24,10 +25,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// What the app tells the operations about the machine: the GPU soup hunter for hunts, made
-/// once. (Piles topple on the GPU through the toppler the app registers at start.)
+/// once, and a GPU batch stepper for each explore run. (Piles topple on the GPU through the
+/// toppler the app registers at start.)
 pub struct AppPlatform;
 
 impl Platform for AppPlatform {
+    fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
+        jetcarp_gpu::batch::BatchSim::headless().map(|g| Box::new(g) as Box<dyn Backend>)
+    }
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
         static HUNTER: OnceLock<Result<Arc<dyn SoupBatcher>, String>> = OnceLock::new();
         HUNTER

@@ -1,7 +1,9 @@
 //! The *Hunts…* window (Phase 4 deliverable 7): every catalog job (hunts, censuses, ant
-//! searches, piles, movers, evolve and older searches), including jobs another process runs, with
-//! live counters, pause, resume, and stop; a form to start a hunt here; the rule-space heat map of
-//! the selected job; and its newest and rarest finds, animated, to rate or reject.
+//! searches, piles, movers, evolve, explore and older searches), including jobs another process
+//! runs, with live counters, pause, resume, and stop; a form to start a hunt here; the rule-space
+//! heat map of the selected job; and its newest and rarest finds, animated, to rate or reject. A
+//! job that is not deterministic (an explore search) is *continued* rather than resumed: it
+//! carries on from its saved archive, not exactly as an uninterrupted run.
 //!
 //! The UI thread never touches SQLite: a worker thread with its own catalog connection reads
 //! the `jobs` table every [`JOBS_EVERY`] (WAL lets it read while hunts write), recomputes the
@@ -299,16 +301,28 @@ impl Worker {
         if registry().is_running(&self.lib, job) {
             return;
         }
-        let hunt = self.lib.job(job).is_ok_and(|r| r.kind == "hunt");
+        let kind = self.lib.job(job).map(|r| r.kind).unwrap_or_default();
+        // Hunts need the GPU soup hunter; an explore search takes the GPU batch stepper when
+        // there is one and runs on the CPU otherwise (its progress says which).
+        let gpu = match kind.as_str() {
+            "hunt" => self.gpu(gpu),
+            "explore" => gpu,
+            _ => false,
+        };
         let a = ResumeIn {
             job,
             threads: Some(threads),
-            gpu: hunt && self.gpu(gpu),
+            gpu,
             background: true,
             ..Default::default()
         };
+        let verb = if jobs::kind(&kind).deterministic() {
+            "running"
+        } else {
+            "continuing from its archive"
+        };
         match JobsResume::run(&self.cx, a, &Quiet) {
-            Ok(_) => self.msg(format!("Job {job} is running here."), false),
+            Ok(_) => self.msg(format!("Job {job} is {verb} here."), false),
             Err(e) => self.msg(e.to_string(), true),
         }
     }
@@ -1214,13 +1228,9 @@ impl DashWindow {
                                 {
                                     cmd = Some(Cmd::Pause(j.id));
                                 }
+                                let (label, hover) = resume_button(j);
                                 if j.can_resume()
-                                    && ui
-                                        .small_button("Resume here")
-                                        .on_hover_text(
-                                            "Run it in this process from its last checkpoint",
-                                        )
-                                        .clicked()
+                                    && ui.small_button(label).on_hover_text(hover).clicked()
                                 {
                                     cmd = Some(Cmd::Resume(j.id, gpu, threads));
                                 }
@@ -1261,6 +1271,15 @@ impl DashWindow {
             ui.colored_label(col, txt);
             ui.label(RichText::new(&j.title).weak());
         });
+        if j.resumable && !j.deterministic {
+            ui.label(
+                RichText::new(
+                    "Not deterministic: paused, it continues from its saved archive (not exactly as an uninterrupted run would).",
+                )
+                .small()
+                .weak(),
+            );
+        }
         if let Some(e) = &j.error {
             ui.colored_label(Color32::LIGHT_RED, e);
         }
@@ -1674,6 +1693,22 @@ fn truncate(s: &str, n: usize) -> String {
 }
 
 /// Status text and colour (stalled jobs say so).
+/// The button that carries a paused job on here, and what it says on hover: *Resume here* for
+/// a deterministic job, *Continue here* for one that is not (an explore search).
+fn resume_button(j: &JobSummary) -> (&'static str, &'static str) {
+    if j.deterministic {
+        (
+            "Resume here",
+            "Run it in this process from its last checkpoint; it ends exactly as an uninterrupted run",
+        )
+    } else {
+        (
+            "Continue here",
+            "Carry the search on in this process from its saved archive (it is not deterministic: it continues, not exactly as an uninterrupted run)",
+        )
+    }
+}
+
 fn status_label(j: &JobSummary) -> (String, Color32) {
     if j.stale {
         return ("stalled".into(), Color32::from_rgb(0xff, 0x8a, 0x3c));
@@ -1741,9 +1776,13 @@ impl DashWindow {
     pub fn test_pause(&mut self, job: i64) {
         self.send(Cmd::Pause(job));
     }
-    /// *Resume here* on a job's row.
+    /// *Resume here* (or *Continue here*) on a job's row.
     pub fn test_resume(&mut self, job: i64) {
         self.send(Cmd::Resume(job, false, 0));
+    }
+    /// Open the window.
+    pub fn test_open(&mut self) {
+        self.open = true;
     }
 }
 

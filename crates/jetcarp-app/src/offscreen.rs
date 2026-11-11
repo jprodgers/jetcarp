@@ -506,6 +506,79 @@ mod tests {
         w.shutdown(Duration::from_secs(20));
     }
 
+    /// The Hunts dashboard with an explore search (the scratch catalog `JETCARP_LIBRARY`) started
+    /// through `search.start` in the background: seen running (by every front end), paused with
+    /// its *Continue here* button, and continued from its archive.
+    #[test]
+    #[ignore]
+    fn offscreen_dashboard_explore() {
+        use crate::dash_ui::DashWindow;
+        use jetcarp_api::op::{Op, Quiet};
+        use jetcarp_api::ops::search::{SearchStart, SearchStartIn};
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(1300, 900) else {
+            return;
+        };
+        let cx = crate::window_job::ctx(&jetcarp_core::library::Library::default_path());
+        let spec = serde_json::json!({
+            "tilings": "square, hex, trihex, cairo",
+            "families": "life_like, generations, cyclic, hodgepodge, turmite",
+            "screen_cells": 3000, "screen_gens": 160, "confirm_cells": 6000, "confirm_gens": 320,
+        });
+        let r = SearchStart::run(
+            &cx,
+            SearchStartIn {
+                strategy: Some("explore".into()),
+                spec,
+                label: Some("offscreen explore".into()),
+                threads: Some(4),
+                background: true,
+                ..Default::default()
+            },
+            &Quiet,
+        )
+        .unwrap();
+        let job = r.job;
+        let show = |w: &mut DashWindow, ctx: &egui::Context| w.show(ctx);
+        let status = |w: &DashWindow| {
+            w.test_jobs()
+                .into_iter()
+                .find(|j| j.id == job)
+                .map(|j| (j.status.clone(), j.here, j.done, j.deterministic))
+        };
+        let mut w = DashWindow::default();
+        w.test_open();
+        let ok = frames_until(&mut o, 60.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.0 == "running" && s.2 > 500)
+        });
+        assert!(ok, "the search never showed as running: {:?}", status(&w));
+        assert_eq!(status(&w).unwrap().3, false, "explore is not deterministic");
+        shot(&mut o, &mut w, show, &dir, "dashboard-explore-running");
+        seen_running(job);
+        w.test_pause(job);
+        let ok = frames_until(&mut o, 60.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.0 == "paused" && !s.1)
+        });
+        assert!(ok, "the search never showed as paused: {:?}", status(&w));
+        shot(&mut o, &mut w, show, &dir, "dashboard-explore-paused");
+        let before = status(&w).unwrap().2;
+        w.test_resume(job);
+        let ok = frames_until(&mut o, 60.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.0 == "running" && s.1 && s.2 > before + 200)
+        });
+        assert!(ok, "the search never continued: {:?}", status(&w));
+        shot(&mut o, &mut w, show, &dir, "dashboard-explore-continued");
+        w.test_pause(job);
+        frames_until(&mut o, 60.0, &mut w, show, |w| {
+            status(w).is_some_and(|s| s.0 == "paused" && !s.1)
+        });
+        w.shutdown(Duration::from_secs(20));
+    }
+
     /// The Catalog tools window (the scratch catalog `JETCARP_LIBRARY`, where a small soup search
     /// first stores a block and a glider): a collision, then an evolve search seen running,
     /// stopped, and (where it can be) resumed to its end.
