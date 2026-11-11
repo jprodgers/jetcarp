@@ -546,17 +546,7 @@ fn build_graph_site(
         .collect();
     rest.sort_by(|a, b| a.point.partial_cmp(&b.point).unwrap());
     tiles.extend(rest);
-    let mut h = crate::rng::Fnv::default();
-    for x in &code {
-        h.bytes(&x.to_le_bytes());
-    }
-    let canonical = format!(
-        "graph{}{}{} {:016x}",
-        if mover { " start" } else { "" },
-        if degrees { " degrees" } else { "" },
-        if chirality { " chiral" } else { "" },
-        h.0
-    );
+    let canonical = graph_canonical_text(&code, mover, degrees, chirality);
     let site = Site {
         patch: topo.spec.clone(),
         anchor: anchor as u32,
@@ -574,6 +564,68 @@ fn build_graph_site(
         nb: Some(nb),
     };
     Ok((site, out, canonical))
+}
+
+/// A pattern graph's canonical form: `graph`, the flags (` start` for a mover's starting
+/// configuration, ` degrees`, ` chiral`), and 32 hex digits of SHA-256 of its canonical code
+/// (the code's numbers as little-endian `u32`s).
+pub(crate) fn graph_canonical_text(
+    code: &[u32],
+    mover: bool,
+    degrees: bool,
+    chirality: bool,
+) -> String {
+    let mut h = crate::sha256::Sha256::new();
+    for x in code {
+        h.update(&x.to_le_bytes());
+    }
+    format!(
+        "graph{}{}{} {}",
+        if mover { " start" } else { "" },
+        if degrees { " degrees" } else { "" },
+        if chirality { " chiral" } else { "" },
+        &h.finish_hex()[..32]
+    )
+}
+
+/// The canonical labelling of a stored pattern graph, from the graph alone (no patch): the
+/// canonical code, the order (canonical position -> stored cell), the starting phase, and
+/// whether the global mirror was taken. The same as building the graph from the patch gives,
+/// since the stored graph is the patch's graph relabelled, its phases rotated, and (on chiral
+/// tilings) perhaps mirrored. `None` when the graph is too symmetric to label (such patterns
+/// keep a geometric site, so a stored graph never is).
+pub(crate) fn canonical_of(g: &SiteGraph) -> Option<(Vec<u32>, Vec<usize>, usize, bool)> {
+    let p = g.cells.first().map(|c| c.states.len()).unwrap_or(1).max(1);
+    if g.cells.iter().any(|c| c.states.len() != p) {
+        return None;
+    }
+    let gr = G {
+        label: g
+            .cells
+            .iter()
+            .map(|c| [c.shape as u32, c.flip as u32, c.degree])
+            .collect(),
+        states: g.cells.iter().map(|c| c.states.clone()).collect(),
+        adj: g
+            .cells
+            .iter()
+            .map(|c| c.nbrs.iter().map(|&w| w as usize).collect())
+            .collect(),
+        around: g
+            .around
+            .iter()
+            .map(|(t, l)| (t.iter().map(|&w| w as usize).collect(), *l))
+            .collect(),
+    };
+    if gr.adj.iter().flatten().any(|&w| w >= gr.n())
+        || gr
+            .around
+            .iter()
+            .any(|(t, _)| t.iter().any(|&w| w >= gr.n()))
+    {
+        return None;
+    }
+    gr.canonical(g.chirality)
 }
 
 // ---------------------------------------------------------------------------------------------

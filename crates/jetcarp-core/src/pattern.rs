@@ -6,16 +6,20 @@
 //! JSON records ([`PatternRecord::to_json`], one file per pattern) remain the exchange format
 //! for its export and import.
 //!
-//! **Identity and dedup.** A pattern's `id` is rule-free ([`range::identity`]): a hash of the
-//! tiling's identity (family, shape parameters, edges; not size or boundary), neighbourhood,
-//! steps per generation, cell-state model, and the canonical evolution (every phase of one period
-//! in the canonical orientation, plus the displacement). The canonical orientation is the minimum
-//! over every phase and every lattice symmetry of the tiling (8 on squares, 12 on hexagons, the
-//! tiling's own point group with its tile-type permutation on Archimedean and k-uniform tilings;
-//! only translations for rule tables) of the normalized cell list, so the same object found in
-//! another phase, orientation, or rule with the same evolution gets the same id. Adding a pattern
-//! that is already stored adds to its `seen` count and its rules, and keeps the earliest
-//! provenance, the curation fields, and the name.
+//! **Identity and dedup.** A pattern's `id` is a content id: 32 hex digits of SHA-256 over its
+//! rule-free identity text ([`range::identity`]) and the geometry pin of its tiling
+//! ([`range::record_pin`]). The identity covers the tiling's identity (family, shape parameters,
+//! edges; not size or boundary), neighbourhood, steps per generation, cell-state model, and the
+//! canonical evolution (every phase of one period in the canonical orientation, plus the
+//! displacement), computed from the record's cells however they are stored ([`canon`]). The
+//! canonical orientation is the minimum over every phase and every lattice symmetry of the tiling
+//! (8 on squares, 12 on hexagons, the tiling's own point group with its tile-type permutation on
+//! Archimedean and k-uniform tilings; only translations for rule tables) of the normalized cell
+//! list, so the same object found in another phase, orientation, or rule with the same evolution
+//! gets the same id, and so does a record whose phases were written from another start.
+//! Importers call [`PatternRecord::canonicalize`]. Adding a pattern that is already stored adds
+//! to its `seen` count and its rules, and keeps the earliest provenance, the curation fields,
+//! and the name.
 //!
 //! **Rule ranges.** B/S and Generations patterns carry the range of rules they run identically in
 //! ([`range::rule_range`]), so the catalog can answer "every pattern that works in rule R".
@@ -40,6 +44,7 @@ use crate::topology::{Nb, TilingSpec, Topology};
 use crate::world::World;
 use serde::{Deserialize, Serialize};
 
+pub mod canon;
 pub mod collide;
 pub mod movers;
 pub mod paste;
@@ -51,8 +56,9 @@ pub mod split;
 pub mod symmetry;
 pub mod verify;
 
+pub use canon::CanonicalForm;
 pub use paste::{PasteAt, PatternSource};
-pub use range::{RuleRange, identity};
+pub use range::{RuleRange, content_id, identity, pattern_id, record_pin};
 pub use site::Site;
 pub use symmetry::CellMap;
 pub use verify::{Verification, default_periods, verify};
@@ -80,6 +86,19 @@ pub enum PatternClass {
 }
 
 impl PatternClass {
+    /// The class as one word (`still_life`, as the record JSON writes it): what the identity
+    /// text uses.
+    pub fn key(self) -> &'static str {
+        match self {
+            PatternClass::StillLife => "still_life",
+            PatternClass::Oscillator => "oscillator",
+            PatternClass::Spaceship => "spaceship",
+            PatternClass::Puffer => "puffer",
+            PatternClass::Other => "other",
+            PatternClass::Mover => "mover",
+            PatternClass::Gun => "gun",
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             PatternClass::StillLife => "still life",
@@ -279,7 +298,23 @@ pub struct PatternRecord {
     pub state: CurationState,
     pub created: String,
     pub updated: String,
+    /// The geometry pin of the tiling it was verified on ([`range::record_pin`]: the unit
+    /// cell's, or the patch's on aperiodic tilings). Part of the id.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub geometry_pin: String,
+    /// The JETCARP version that last verified it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub engine_version: String,
+    /// Its pin differs from the running engine's: the geometry changed under it, so it must be
+    /// verified again (`jetcarp library reverify`) before it can be trusted.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub needs_reverify: bool,
 }
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// What a gun emits. Directions are in the gun's canonical orientation (as its `phases`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GunInfo {
@@ -714,9 +749,20 @@ pub fn canonical_choice(phases: &[Phase], syms: &[CellMap]) -> Option<(usize, us
 /// first), `d` its displacement per period. Returns (phases in the canonical orientation with
 /// phase 0 at the origin, the displacement in that orientation).
 pub fn canonical_phases(phases: &[Phase], d: [i32; 2], syms: &[CellMap]) -> (Vec<Phase>, [i32; 2]) {
+    let (ph, d, _) = canonical_phases_map(phases, d, syms);
+    (ph, d)
+}
+
+/// [`canonical_phases`], with the index (into `syms`) of the symmetry that takes the given
+/// orientation to the canonical one.
+pub fn canonical_phases_map(
+    phases: &[Phase],
+    d: [i32; 2],
+    syms: &[CellMap],
+) -> (Vec<Phase>, [i32; 2], usize) {
     let p = phases.len();
     let Some((mi, t0)) = canonical_choice(phases, syms) else {
-        return (vec![], d);
+        return (vec![], d, 0);
     };
     let m = &syms[mi];
     let (_, shift) = orient(&phases[t0], m);
@@ -740,7 +786,7 @@ pub fn canonical_phases(phases: &[Phase], d: [i32; 2], syms: &[CellMap]) -> (Vec
             v
         })
         .collect();
-    (out, m.vector(d))
+    (out, m.vector(d), mi)
 }
 
 /// Build a record from an object found by [`crate::objects::find_objects`] in `world`, using the
@@ -936,8 +982,12 @@ pub fn build_record_with(
         state: CurationState::New,
         created: now.clone(),
         updated: now,
+        geometry_pin: String::new(),
+        engine_version: crate::VERSION.into(),
+        needs_reverify: false,
     };
-    rec.id = identity(&rec)?;
+    rec.geometry_pin = range::record_pin(&rec)?.pin;
+    rec.id = pattern_id(&rec)?;
     rec.rescore();
     Ok(rec)
 }

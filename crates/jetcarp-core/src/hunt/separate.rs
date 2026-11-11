@@ -8,7 +8,7 @@
 //! parts (each periodic, and their joint run is exactly the union), puffer, gun, or other (dies,
 //! grows, unsettled). Pieces that die alone are retried together when they lie a few steps apart
 //! (some oscillator phases fall apart). A periodic part's canonical evolution gives its rule-free
-//! catalog id ([`crate::pattern::identity`]), and a second cache keyed by that id holds one
+//! catalog id ([`crate::pattern::pattern_id`]), and a second cache keyed by that id holds one
 //! record per distinct pattern, so a pattern's record (canonical form, rule range) is built once
 //! per thread. The caches only save work: every result is a pure function of the cells.
 

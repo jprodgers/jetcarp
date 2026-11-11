@@ -1,15 +1,41 @@
-//! Rule-free pattern identity and rule ranges.
+//! Rule-free pattern identity, content ids, and rule ranges.
 //!
-//! **Identity.** A pattern's id is a hash of what it *is*, not of the rule it was found in: the
-//! tiling identity, the neighbourhood, steps per generation, the cell-state model (`lifelike` for
-//! B/S and Generations rules, else the rule family: `wireworld`, `table`, `priority`, ...), the
+//! **Identity.** A pattern's id names what it *is*, not the rule it was found in: the tiling
+//! identity, the neighbourhood, steps per generation, the cell-state model (`lifelike` for B/S
+//! and Generations rules, else the rule family: `wireworld`, `table`, `priority`, ...), the
 //! class, period and displacement, the canonical form, and the canonical **evolution**: every
-//! phase of one period, in order, in the canonical orientation. So the Life glider found in
-//! B3/S23 and in B36/S23 is one pattern (its cells evolve the same way in both), while a line of
-//! three cells that blinks in B3/S23 and stays still in B4/S12 is two. Puffers and movers store
-//! only their starting configuration (the rest of their evolution is not recorded), and a gun's
-//! phases leave out the ships once they have left, so their identity also includes the exact
-//! rule.
+//! phase of one period, in order, in the canonical orientation ([`super::canon`], computed from
+//! the record's cells however they are stored). So the Life glider found in B3/S23 and in
+//! B36/S23 is one pattern (its cells evolve the same way in both), while a line of three cells
+//! that blinks in B3/S23 and stays still in B4/S12 is two. Puffers and movers store only their
+//! starting configuration (the rest of their evolution is not recorded), and a gun's phases leave
+//! out the ships once they have left, so their identity also includes the exact rule.
+//!
+//! **The identity text** ([`identity`]; `jetcarp-pattern-v3`) is these lines, joined by `\n`
+//! with no trailing newline, in this order:
+//!
+//! ```text
+//! jetcarp-pattern-v3
+//! model=<cell-state model: lifelike, wireworld, table, priority, spectre_glider, ...>
+//! nb=<touch | edge>
+//! steps=<steps per generation>
+//! tiling=<tiling key: compact JSON of {family, params, edges, boundary: "dead"}, keys sorted>
+//! class=<still_life | oscillator | spaceship | puffer | mover | gun | other>
+//! period=<period>
+//! d=<di>,<dj>          (lattice displacement per period, canonical orientation; 0,0 if none)
+//! rule=<exact rule notation for puffers, movers, guns and other; else empty>
+//! canonical=<canonical text>
+//! phases=<phase 0>;<phase 1>;...   (each phase its cells "i,j,k,s" separated by spaces,
+//!                                   sorted by row j, then column i, tile type k, state s)
+//! ```
+//!
+//! **The id** ([`content_id`]) is the first 32 hex digits (128 bits) of
+//! SHA-256(identity text + `\n` + geometry pin), the pin being the record's tiling's
+//! ([`record_pin`]; [`crate::pin`]). So an id names an evolution *on its geometry*: when the
+//! engine's geometry changes, the pins change, records are flagged for re-verification, and a
+//! record verified again gets a new id (the library keeps the old one as an alias). The first 8
+//! hex digits are the short id people use. Packs carry these ids, so this text must never
+//! change meaning: a change is a new version prefix.
 //!
 //! **Rule ranges.** For an outer-totalistic rule the next state of a cell depends only on its own
 //! state and its number of live (state 1) neighbours. Over one verified period, every live cell
@@ -33,7 +59,6 @@
 //! (at the pattern's site). Other families keep only the exact rules they were verified in.
 
 use super::{PatternClass, PatternRecord, tiling_key};
-use crate::rng::Fnv;
 use crate::rules::Rule;
 use crate::topology::{Boundary, Nb, SizeSpec, TilingSpec, Topology};
 use serde::{Deserialize, Serialize};
@@ -41,8 +66,8 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// Prefix of the identity text (bump it if the identity ever changes meaning).
-pub const IDENTITY_VERSION: &str = "jetcarp-pattern-v2";
+/// First line of the identity text (bump it if the identity ever changes meaning).
+pub const IDENTITY_VERSION: &str = "jetcarp-pattern-v3";
 
 /// Most Generations states JETCARP runs.
 pub const MAX_STATES: u8 = 255;
@@ -72,15 +97,9 @@ pub fn rule_family(rule: &Rule) -> &'static str {
     }
 }
 
-pub(crate) fn hash16(text: &str) -> String {
-    let mut h = Fnv::default();
-    h.bytes(text.as_bytes());
-    format!("{:016x}", h.0)
-}
-
-/// The rule-free id of a record (see the module notes). Reads the tiling, neighbourhood, steps
-/// per generation, class, period, displacement, canonical form, and phases; the rule only for its
-/// cell-state model (and in full for puffers, movers, and `other`).
+/// The identity text of a record (see the module notes): its canonical form, computed from its
+/// cells however they are stored, with the rest of what makes it this pattern. The rule is read
+/// only for its cell-state model (and in full for puffers, movers, guns, and `other`).
 pub fn identity(rec: &PatternRecord) -> Result<String, String> {
     let rule = Rule::parse(&rec.rule)?.0;
     let model = cell_model(&rule);
@@ -90,19 +109,60 @@ pub fn identity(rec: &PatternRecord) -> Result<String, String> {
         }
         _ => String::new(),
     };
-    let d = rec.displacement.unwrap_or([0, 0]);
-    Ok(hash16(&format!(
-        "{IDENTITY_VERSION}|{model}|{:?}|{}|{}|{}|p{}|d{},{}|{exact}|{}|{}",
-        rec.neighborhood,
+    let form = super::canon::canonical_form(rec)?;
+    let d = form.displacement;
+    let nb = match rec.neighborhood {
+        Nb::Touch => "touch",
+        Nb::Edge => "edge",
+    };
+    let phases = form
+        .phases
+        .iter()
+        .map(|p| super::encode_cells(p))
+        .collect::<Vec<_>>()
+        .join(";");
+    Ok(format!(
+        "{IDENTITY_VERSION}\nmodel={model}\nnb={nb}\nsteps={}\ntiling={}\nclass={}\nperiod={}\nd={},{}\nrule={exact}\ncanonical={}\nphases={phases}",
         rec.steps_per_gen,
         tiling_key(&rec.tiling),
-        rec.class.name(),
+        rec.class.key(),
         rec.period,
         d[0],
         d[1],
-        rec.canonical,
-        rec.phases.join(";")
-    )))
+        form.canonical,
+    ))
+}
+
+/// The content id of an identity text on a geometry pin: the first 32 hex digits of
+/// SHA-256(identity + `\n` + pin).
+pub fn content_id(identity: &str, pin: &str) -> String {
+    let mut h = crate::sha256::Sha256::new();
+    h.text(identity);
+    h.text("\n");
+    h.text(pin);
+    crate::sha256::hex(&h.finish()[..16])
+}
+
+/// The geometry pin of the tiling a record runs on: its tiling's unit cell, or on aperiodic
+/// tilings the patch its site was found on.
+pub fn record_pin(rec: &PatternRecord) -> Result<crate::pin::GeometryPin, String> {
+    match &rec.site {
+        Some(s) => crate::pin::geometry_pin(&s.patch),
+        None => crate::pin::geometry_pin(&rec.tiling),
+    }
+}
+
+/// A record's id: [`content_id`] of its [`identity`] on its [`record_pin`] (so it is the same
+/// however the record's phases are stored).
+pub fn pattern_id(rec: &PatternRecord) -> Result<String, String> {
+    Ok(content_id(&identity(rec)?, &record_pin(rec)?.pin))
+}
+
+/// Is `s` a full content id (32 lower-case hex digits)?
+pub fn is_content_id(s: &str) -> bool {
+    s.len() == 32
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 // ---------------------------------------------------------------------------------------------

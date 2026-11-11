@@ -775,8 +775,12 @@ pub fn mover_record(
         state: CurationState::New,
         created: now.clone(),
         updated: now,
+        geometry_pin: String::new(),
+        engine_version: crate::VERSION.into(),
+        needs_reverify: false,
     };
-    rec.id = super::identity(&rec)?;
+    rec.geometry_pin = super::record_pin(&rec)?.pin;
+    rec.id = super::pattern_id(&rec)?;
     rec.rescore();
     Ok(rec)
 }

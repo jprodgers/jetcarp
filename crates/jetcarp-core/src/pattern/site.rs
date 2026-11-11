@@ -116,12 +116,22 @@ pub(super) fn tile_in_frame(topo: &Topology, x: usize, inv: &Affine) -> (Vec<P>,
     (corners, [r4(ip[0]), r4(ip[1])])
 }
 
-fn describe(t: &SiteTile) -> String {
+/// One tile in a geometric site's canonical text: distance, shape, then its corners.
+pub(crate) fn describe(t: &SiteTile) -> String {
     let mut s = format!("{}:{}:", t.dist, t.shape);
     for c in &t.corners {
         s.push_str(&format!("{:.4},{:.4};", c[0], c[1]));
     }
     s
+}
+
+/// The canonical form of a geometric site: `site r<radius>` and 32 hex digits of SHA-256 of its
+/// text (every tile described in order, then each phase's ` |` and ` <tile>:<state>` pairs).
+pub(crate) fn site_canonical(radius: u32, text: &str) -> String {
+    format!(
+        "site r{radius} {}",
+        &crate::sha256::sha256_hex(text.as_bytes())[..32]
+    )
 }
 
 /// Build the site of an object on an explicit patch. `phases` is one period with cell ids in
@@ -247,7 +257,7 @@ pub fn build_site(
         graph: None,
         nb: None,
     };
-    let canonical = format!("site r{SITE_RADIUS} {}", super::range::hash16(&text));
+    let canonical = site_canonical(SITE_RADIUS, &text);
     Ok((site, out, canonical))
 }
 

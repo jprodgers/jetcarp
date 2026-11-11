@@ -152,7 +152,10 @@ fn policy_keeps_large_one_offs_unstored_independent_of_threads_and_batches() {
         .into_iter()
         .map(|r| r.id)
         .collect();
-    let ids: BTreeSet<String> = recs.iter().map(|r| r[..16].to_string()).collect();
+    let ids: BTreeSet<String> = recs
+        .iter()
+        .map(|r| r.split(' ').next().unwrap().to_string())
+        .collect();
     let un: BTreeSet<String> = unstored
         .iter()
         .map(|u| u.split(' ').nth(1).unwrap().to_string())

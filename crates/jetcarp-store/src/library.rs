@@ -644,6 +644,9 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
                 .map(|s| s.lines().map(String::from).collect())
                 .unwrap_or_default(),
             range,
+            geometry_pin: String::new(),
+            engine_version: String::new(),
+            needs_reverify: false,
         })
     })();
     Ok(parts)
@@ -1723,7 +1726,7 @@ impl Library {
                 x.rules = vec![];
                 x.range = None;
                 x.seen = if k == 0 { r.seen } else { 0 };
-                x.id = range::identity(&x)?;
+                x.canonicalize()?;
                 old_ids.push((r.id.clone(), x.id.clone()));
                 items.push(x);
             }
