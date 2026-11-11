@@ -205,10 +205,13 @@ prefix or short id also searches the aliases.
 
 ## Tables
 
-`PRAGMA user_version` is the schema version, 1, and `PRAGMA application_id` marks the file as a
-JETCARP library. A library made by a newer JETCARP is refused with a message to update. Catalogs from
-before schema 1 (CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or
-migrated: JETCARP 0.4 starts a fresh library.
+`PRAGMA user_version` is the schema version, 2, and `PRAGMA application_id` marks the file as a
+JETCARP library. A library of schema 1 (made by development builds before the 0.4 release) is brought
+up to 2 the first time it is opened: its ratings gain `verdict` and `source`, and its media rows, which
+named files in per-record folders, are dropped, since media are always made again from their records.
+A library made by a newer JETCARP is refused with a message to update. Catalogs from before schema 1
+(CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or migrated: JETCARP 0.4
+starts a fresh library.
 
 | Table | One row per |
 | --- | --- |

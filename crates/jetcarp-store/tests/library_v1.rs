@@ -1,4 +1,4 @@
-//! Library schema 1: the file's marks, pins checked on opening, re-verification, provenance,
+//! Library schema 2 (and schema 1 brought up to it): the file's marks, pins checked on opening, re-verification, provenance,
 //! id aliases, and the importer's canonical ids.
 
 use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects, place_rows};
@@ -75,18 +75,18 @@ fn reverify(lib: &Library, all: bool, drop: bool) -> ReverifyProgress {
 }
 
 #[test]
-fn schema_1_is_marked_and_other_files_are_refused() {
+fn the_schema_is_marked_and_other_files_are_refused() {
     let lib = temp_lib("schema");
     assert!(lib.path().ends_with("library.sqlite"));
     lib.add(one("B3/S23", "oo/oo")).unwrap();
     let info = lib.info().unwrap();
-    assert_eq!(info.schema_version, 1);
+    assert_eq!(info.schema_version, 2);
     let c = raw(&lib);
     let app: i64 = c
         .query_row("PRAGMA application_id", [], |r| r.get(0))
         .unwrap();
     assert_eq!(app, jetcarp_store::library::schema::APPLICATION_ID);
-    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("1"));
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("2"));
     let uuid = lib.meta("library_uuid").unwrap().unwrap();
     assert_eq!((uuid.len(), uuid.chars().nth(14)), (36, Some('4')));
     // The old stage 1 tables are gone.
@@ -99,7 +99,7 @@ fn schema_1_is_marked_and_other_files_are_refused() {
         .unwrap();
     assert_eq!(n, 0);
     // A library from a newer JETCARP is refused, with what to do.
-    c.execute_batch("PRAGMA user_version = 2").unwrap();
+    c.execute_batch("PRAGMA user_version = 3").unwrap();
     drop(c);
     let e = Library::open(lib.path()).info().unwrap_err();
     assert!(
@@ -595,4 +595,64 @@ fn ant_ids_are_content_ids_on_their_pin() {
     // Checked again, the ant passes.
     let p = reverify(&lib, true, false);
     assert_eq!((p.checked, p.passed), (1, 1));
+}
+
+#[test]
+fn a_schema_1_library_is_brought_up_to_2_on_opening() {
+    let lib = temp_lib("migrate");
+    let block = one("B3/S23", "oo/oo");
+    lib.add(block.clone()).unwrap();
+    let path = lib.path().to_path_buf();
+    drop(lib);
+    // Schema 1, as JETCARP made it before the 0.4 release: ratings without verdict and source,
+    // media rows naming per-record folders.
+    {
+        let c = Connection::open(&path).unwrap();
+        c.execute_batch(
+            "ALTER TABLE ratings DROP COLUMN verdict; ALTER TABLE ratings DROP COLUMN source;
+             DROP TABLE media;
+             CREATE TABLE media (id INTEGER PRIMARY KEY, target_kind TEXT NOT NULL,
+               target_id TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
+               from_seed INTEGER NOT NULL DEFAULT 0, render TEXT NOT NULL DEFAULT '{}',
+               width INTEGER, height INTEGER, frames INTEGER, bytes INTEGER, key TEXT, hash TEXT,
+               created TEXT NOT NULL, updated TEXT,
+               UNIQUE (target_kind, target_id, kind, from_seed));
+             INSERT INTO media (target_kind, target_id, kind, path, created)
+               VALUES ('pattern', 'abc', 'gif', 'media/pattern/abc/alone/anim.gif', 'x');
+             INSERT INTO ratings (target_kind, target_id, rater, rating, note, created)
+               VALUES ('pattern', 'abc', 'user', 4, 'nice', 'x');
+             UPDATE meta SET value = '1' WHERE key = 'schema';
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&path);
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("2"));
+    let c = Connection::open(&path).unwrap();
+    let v: i64 = c
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(v, 2);
+    // The rating is kept, with the new columns; the old media rows are gone (media are made again).
+    let r = lib.ratings(None).unwrap();
+    assert_eq!(
+        (r.len(), r[0].note.as_str(), r[0].source.as_str()),
+        (1, "nice", "")
+    );
+    assert_eq!(r[0].verdict, None);
+    let n: i64 = c
+        .query_row("SELECT count(*) FROM media", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 0);
+    assert_eq!(
+        lib.get(&block.id).unwrap().id,
+        block.id,
+        "the records are kept"
+    );
+    let has_ext: bool = c
+        .prepare("SELECT 1 FROM pragma_table_info('media') WHERE name = 'ext'")
+        .unwrap()
+        .exists([])
+        .unwrap();
+    assert!(has_ext);
 }

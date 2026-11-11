@@ -8,9 +8,10 @@
 //! read while a long hunt writes. Writes go through `BEGIN IMMEDIATE` transactions; batch them
 //! ([`Library::add_many`], [`Library::add_sightings`]) for speed.
 //!
-//! **Schema.** Version 1 ([`schema`]): `PRAGMA user_version` = 1 and the application id `JETC`.
-//! A library from a newer JETCARP is refused, and so is a catalog from before schema 1 (CART's,
-//! or an early JETCARP's, `catalog.sqlite`): there is no migration from those.
+//! **Schema.** Version 2 ([`schema`]): `PRAGMA user_version` = 2 and the application id `JETC`.
+//! A library of schema 1 (before the 0.4 release) is brought up to 2 when it is opened. A library
+//! from a newer JETCARP is refused, and so is a catalog from before schema 1 (CART's, or an early
+//! JETCARP's, `catalog.sqlite`): there is no migration from those.
 //!
 //! **Ids.** Patterns and ants have content ids: 32 hex digits of SHA-256 over the record's
 //! canonical identity and its tiling's geometry pin (`jetcarp_core::pattern::range`; ants

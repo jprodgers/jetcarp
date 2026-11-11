@@ -1,12 +1,15 @@
-//! The library's schema (version 1), opening a library file, and what is checked on opening.
+//! The library's schema (version 2), opening a library file, and what is checked on opening.
 //!
 //! **Schema.** One script, [`SCHEMA`], makes a new library. `PRAGMA user_version` is the schema
-//! version ([`SCHEMA_VERSION`], 1) and `PRAGMA application_id` marks the file as a JETCARP
+//! version ([`SCHEMA_VERSION`], 2) and `PRAGMA application_id` marks the file as a JETCARP
 //! library ([`APPLICATION_ID`], `JETC`), so a library from a newer JETCARP is refused with a
 //! clear message, and so is a catalog from before schema 1 (CART's, or an early JETCARP build's:
 //! no application id, user versions 1 to 7), which is not migrated: JETCARP 0.4 starts a fresh
-//! library, and CART's records come in through an importer that verifies them again. A later
-//! schema change adds a migration from 1 to 2 here; never edit [`SCHEMA`] once it has shipped.
+//! library, and CART's records come in through an importer that verifies them again.
+//!
+//! **Migrations.** A library of an older schema is brought up to date when it is opened, in one
+//! transaction: schema 1 to 2 ([`migrate_1_2`]). A schema change adds a migration here; never
+//! edit [`SCHEMA`] once it has shipped.
 //!
 //! **Geometry pins on opening.** Every pattern, ant run and Quick Start row stores the geometry
 //! pin of the tiling it was verified on (`geometry_pin`) and the key of that pin (`pin_key`;
@@ -24,12 +27,67 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use std::collections::HashMap;
 
 /// The schema version a library made by this build has (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// `PRAGMA application_id` of a JETCARP library: `JETC` in ASCII.
 pub const APPLICATION_ID: i64 = 0x4A45_5443;
 
-/// The tables of schema 1.
+/// Schema 2's `media` table (content-addressed files: a hash and an extension, not a path).
+const MEDIA_2: &str = r#"
+CREATE TABLE media (
+    id INTEGER PRIMARY KEY,
+    target_kind TEXT NOT NULL CHECK (target_kind IN ('pattern', 'quickstart', 'ant')),
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    from_seed INTEGER NOT NULL DEFAULT 0,
+    hash TEXT NOT NULL,
+    ext TEXT NOT NULL,
+    render TEXT NOT NULL DEFAULT '{}',
+    width INTEGER,
+    height INTEGER,
+    frames INTEGER,
+    bytes INTEGER,
+    key TEXT,
+    created TEXT NOT NULL,
+    updated TEXT,
+    UNIQUE (target_kind, target_id, kind, from_seed)
+);
+CREATE INDEX media_hash ON media (hash);
+"#;
+
+/// Schema 1 (before the 0.4 release) to 2: ratings gain `verdict` and `source` (verdicts on
+/// search runs); media files are content-addressed, so `media` names a file by its hash and
+/// extension instead of a path. Media are always made again from their records, so the old
+/// `media` rows go; their files, in the old per-record folders, are left alone (`media gc`
+/// touches only `media/<two hex digits>/`). Each change is made only where it is missing (a
+/// development build may have made part of it).
+pub fn migrate_1_2(tx: &Transaction) -> Result<(), String> {
+    let has = |table: &str, col: &str| -> Result<bool, String> {
+        tx.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+            .map_err(e)?
+            .exists(params![table, col])
+            .map_err(e)
+    };
+    if !has("ratings", "verdict")? {
+        tx.execute_batch(
+            "ALTER TABLE ratings ADD COLUMN verdict TEXT
+                CHECK (verdict IS NULL OR verdict IN ('keep', 'maybe', 'drop'));",
+        )
+        .map_err(e)?;
+    }
+    if !has("ratings", "source")? {
+        tx.execute_batch("ALTER TABLE ratings ADD COLUMN source TEXT NOT NULL DEFAULT '';")
+            .map_err(e)?;
+    }
+    if !has("media", "ext")? {
+        tx.execute_batch(&format!("DROP TABLE IF EXISTS media; {MEDIA_2}"))
+            .map_err(e)?;
+    }
+    tx.execute_batch("UPDATE meta SET value = '2' WHERE key = 'schema'; PRAGMA user_version = 2;")
+        .map_err(e)
+}
+
+/// The tables of schema 2.
 pub const SCHEMA: &str = r#"
 CREATE TABLE meta (
     key TEXT PRIMARY KEY,
@@ -364,12 +422,36 @@ fn check(c: &Connection) -> Result<bool, String> {
     Ok(false)
 }
 
-/// Make the tables of a new library, or check an existing one's version.
+/// Bring a library of an older schema up to this one, in one transaction.
+fn migrate(c: &mut Connection) -> Result<(), String> {
+    let version = |c: &Connection| -> Result<i64, String> {
+        c.query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(e)
+    };
+    if version(c)? >= SCHEMA_VERSION {
+        return Ok(());
+    }
+    let tx = c
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|x| {
+            format!(
+                "the library has schema 1 and needs updating to {SCHEMA_VERSION}, which needs \
+                 writing to it: {x}"
+            )
+        })?;
+    if version(&tx)? == 1 {
+        migrate_1_2(&tx)?;
+    }
+    tx.commit().map_err(e)
+}
+
+/// Make the tables of a new library, or check an existing one's version (and bring an older
+/// schema up to date).
 fn create_or_check(c: &mut Connection) -> Result<(), String> {
     // An existing library is only read here (so a read-only file opens); a new one is made in a
     // write transaction, its state read again inside it in case another process made it first.
     if check(c)? {
-        return Ok(());
+        return migrate(c);
     }
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
