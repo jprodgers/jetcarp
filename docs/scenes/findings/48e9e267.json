@@ -1,5 +1,5 @@
 {
- "name": "Spaceship 095a6bf7 on 3.6.3.6",
+ "name": "Spaceship 48e9e267 on 3.6.3.6",
  "description": "A period-12 spaceship on the trihexagonal (kagome) tiling 3.6.3.6 (touching neighbours), 5 to 12 cells, moving three lattice steps every 12 generations (c/4). It runs the same way in the 2,048 rules from B38/S23 to B3,8,9,10,11,12/S2,3,6,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 595 times). Flagged to check before claiming: runs in Pedestrian Life (B38/S23) on an Archimedean tiling; contains a perturbed phase of Guttesen's kagome glider g. We found no earlier report, but others may well have seen it, so it is not claimed.",
  "tiling": {
   "family": "trihex",

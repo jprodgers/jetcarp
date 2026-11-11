@@ -168,8 +168,8 @@ although EricG's patterns are not online to compare. On the hexagonal and triang
   <source srcset="../images/tilings/ship-d3cd3951-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-d3cd3951.webp" alt="A ship on the snub hexagonal tiling growing and shrinking as it creeps along a row" width="324" loading="lazy">
 </picture></div>
-<figcaption>Left: <code>aa7e7357</code> on 3.4.6.4, period 42, moving 3 lattice steps per period, in
-the 1,024 rules from <code>B3/S235</code> up. Right: <code>acd0fa8b</code> on 3.3.3.3.6, period 27, one
+<figcaption>Left: <code>57a0326c</code> on 3.4.6.4, period 42, moving 3 lattice steps per period, in
+the 1,024 rules from <code>B3/S235</code> up. Right: <code>d3cd3951</code> on 3.3.3.3.6, period 27, one
 lattice step along a row per period, in about a million rules from <code>B37/S2,5,6,10</code> up. Watch
 each ship pass through shapes that look nothing alike before it repeats one place further on. Scenes
 <code>docs/scenes/tilings/ship-57a0326c.json</code> and <code>ship-d3cd3951.json</code>.</figcaption>
@@ -184,8 +184,8 @@ each ship pass through shapes that look nothing alike before it repeats one plac
   <source srcset="../images/tilings/ship-504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-504fdf46.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
 </picture></div>
-<figcaption>Left: <code>a13d3fbf</code> on 3.3.3.4.4, period 8, two lattice steps along the rows per
-period, in the 1,024 rules from <code>B46/S3458</code> up. Right: <code>9cee5c6a</code> on 4.8.8,
+<figcaption>Left: <code>3e30b9ff</code> on 3.3.3.4.4, period 8, two lattice steps along the rows per
+period, in the 1,024 rules from <code>B46/S3458</code> up. Right: <code>504fdf46</code> on 4.8.8,
 period 6, two lattice steps per period, in the 128 rules from <code>B2/S2</code> up; it is one of the
 flagged 4.8.8 ships, since EricG found many ships in <code>B2</code> rules there. Scenes
 <code>docs/scenes/tilings/ship-3e30b9ff.json</code> and <code>ship-504fdf46.json</code>.</figcaption>

@@ -1,5 +1,5 @@
 {
- "name": "Spaceship 8aa7e24c on 3.6.3.6",
+ "name": "Spaceship 1df4b31f on 3.6.3.6",
  "description": "A period-4 spaceship on the trihexagonal (kagome) tiling 3.6.3.6 (touching neighbours), 7 to 8 cells, moving one lattice step every 4 generations (c/4). It runs the same way in the 16,384 rules from B3/S345 to B3,4,6,8,9,10,11,12/S0,3,4,5,7,8,9,10,11,12; the scene uses the rule it was found in. The same object runs unchanged on k3-030, k3-032 and k3-039. JETCARP's soup search found it on k3-032 (seen 1,347 times). Flagged as most likely already known: small (7 to 8 cells), common (seen 1,347 times) and wide-range (16,384 rules) on an Archimedean tiling. We found no earlier report, but others may well have seen it, so it is not claimed.",
  "tiling": {
   "family": "trihex",

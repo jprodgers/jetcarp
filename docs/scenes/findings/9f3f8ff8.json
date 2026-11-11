@@ -1,5 +1,5 @@
 {
- "name": "Spaceship ffc6a106 on 3.3.3.4.4",
+ "name": "Spaceship 9f3f8ff8 on 3.3.3.4.4",
  "description": "A period-26 spaceship on the elongated triangular tiling 3.3.3.4.4 (touching neighbours), 17 to 26 cells, moving one lattice step every 26 generations (c/26). It runs the same way in the 256 rules from B45679/S3478 to B4,5,6,7,9,10,11,12/S0,1,3,4,7,8,10,11,12; the scene uses the rule it was found in. Its live cells evolve the same way on k2-003, k2-004, k3-010 and k3-016, where the empty tiles around them have other neighbour counts, and on k3-013, k3-019, k3-051 and k3-052. The range of rules depends on the tiling: 256 rules on 3.3.3.4.4, k3-013, k3-019, k3-051 and k3-052; 16 rules on k2-003, k2-004, k3-010 and k3-016. JETCARP's soup search found it on k3-010 (seen once). To our knowledge not reported before.",
  "tiling": {
   "family": "elongtri",

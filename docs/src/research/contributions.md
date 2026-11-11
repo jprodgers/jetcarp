@@ -134,9 +134,9 @@ fourth, on 4.8.8, is now flagged):
   <source srcset="../images/tilings/ship-3e30b9ff-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-3e30b9ff.webp" alt="A cluster of squares and triangles travelling along a row of the 3.3.3.4.4 tiling" width="420" loading="lazy">
 </picture></div>
-<figcaption>Left: <code>aa7e7357</code> on the rhombitrihexagonal tiling 3.4.6.4, period 42, 7 to 15
+<figcaption>Left: <code>57a0326c</code> on the rhombitrihexagonal tiling 3.4.6.4, period 42, 7 to 15
 cells; watch it change shape through its long period while it moves 3 lattice steps (c/14). It runs
-in the 1,024 rules from <code>B3/S235</code> up and only on its own tiling. Right: <code>a13d3fbf</code>
+in the 1,024 rules from <code>B3/S235</code> up and only on its own tiling. Right: <code>3e30b9ff</code>
 on the elongated triangular tiling 3.3.3.4.4, period 8, 13 to 17 cells, moving 2 lattice steps along
 the rows every period (c/4), in the 1,024 rules from <code>B46/S3458</code> up; it also runs unchanged
 in corridors of the 3-uniform tilings k3-051 and k3-052, and its live tiles evolve the same way on six
@@ -153,9 +153,9 @@ more 2- and 3-uniform tilings. Scenes
   <source srcset="../images/tilings/ship-504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-504fdf46.webp" alt="Three octagons and a few squares travelling across the 4.8.8 tiling" width="240" loading="lazy">
 </picture></div>
-<figcaption>Left: <code>acd0fa8b</code> on the snub hexagonal tiling 3.3.3.3.6, period 27, 4 to 18
+<figcaption>Left: <code>d3cd3951</code> on the snub hexagonal tiling 3.3.3.3.6, period 27, 4 to 18
 cells, one lattice step along a row per period (c/27), in about a million rules from
-<code>B37/S2,5,6,10</code> up. Right: <code>9cee5c6a</code> on 4.8.8, period 6, 7 to 13 cells, 2 lattice
+<code>B37/S2,5,6,10</code> up. Right: <code>504fdf46</code> on 4.8.8, period 6, 7 to 13 cells, 2 lattice
 steps per period (c/3), in the 128 rules from <code>B2/S2</code> up: the only surviving 4.8.8 candidate
 that does not move at c/2, and it contains no smaller ship. It was among the four strongest until we
 read EricG's 2013 report that many <code>B2</code> rules on 4.8.8 have spaceships; EricG's patterns are not
@@ -170,11 +170,11 @@ One ship that was among the strongest before the congruence test shows how far t
   <source srcset="../images/tilings/ship-d8692b4b-still.png" media="(prefers-reduced-motion: reduce)">
   <img src="../images/tilings/ship-d8692b4b.webp" alt="A seven-cell ship of squares and triangles travelling across a 2-uniform tiling" width="388" loading="lazy">
 </picture>
-<figcaption><code>7860a67a</code>, a 7-cell period-4 ship that moves one lattice step every 4
+<figcaption><code>d8692b4b</code>, a 7-cell period-4 ship that moves one lattice step every 4
 generations (c/4), here on the 2-uniform tiling k2-003 in the 256 rules from <code>B45/S34</code> up.
 It runs unchanged on k2-004 and in strips of the 3-uniform tilings k3-010 and k3-016, where the search
 first found it, and its live tiles evolve the same way on k3-013 and k3-019 (where it was catalogued a
-second time, as <code>25e004f4</code>), on k3-051 and k3-052, and on the Archimedean elongated triangular
+second time, as <code>388daffd</code>), on k3-051 and k3-052, and on the Archimedean elongated triangular
 tiling 3.3.3.4.4, where the tiles around it have more neighbours. Small, common and running in many
 rules on an Archimedean tiling, it is now flagged as most likely already known. Scene
 <code>docs/scenes/tilings/ship-d8692b4b.json</code>.</figcaption>
@@ -264,7 +264,7 @@ two or more smaller ships flying together, or a smaller ship with a passenger.
   tiling or on 3.6.3.6, and eight more, among them five found in strips of squares and triangles,
   run with the same live tiles on 3.3.3.4.4 or on a 2-uniform tiling; each is claimed only on the
   simplest tiling it runs on.
-- **The same ship catalogued twice.** `25e004f4` is `7860a67a`, and `f62ba07d` is `c15dd310`: the
+- **The same ship catalogued twice.** `388daffd` is `d8692b4b`, and `cf8efa2e` is `1a403313`: the
   same live tiles at every generation, at positions with other neighbour counts around them.
 - **The known Life ships of the census.** Conway's glider and spaceships; Guttesen's two gliders, also
   in the kagome corridors of three 3-uniform tilings; the period-2 ship on 3.3.3.4.4, the only Life ship

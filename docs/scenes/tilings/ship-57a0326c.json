@@ -1,5 +1,5 @@
 {
- "name": "Spaceship aa7e7357 on 3.4.6.4",
+ "name": "Spaceship 57a0326c on 3.4.6.4",
  "description": "A period-42 spaceship on the rhombitrihexagonal tiling 3.4.6.4 (touching neighbours), 7 to 15 cells, moving 3 lattice steps every 42 generations (c/14). It runs the same way in the 1,024 rules from B3/S235 to B3,9,10,11,12/S2,3,5,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 61 times). To our knowledge not reported before.",
  "tiling": {
   "family": "rhombitrihex",

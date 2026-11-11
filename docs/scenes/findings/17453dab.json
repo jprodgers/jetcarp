@@ -1,5 +1,5 @@
 {
- "name": "Spaceship df78e126 on the 3-uniform tiling k3-045",
+ "name": "Spaceship 17453dab on the 3-uniform tiling k3-045",
  "description": "A period-37 spaceship on the 3-uniform tiling k3-045 (touching neighbours), 6 to 23 cells, moving one lattice step every 37 generations (c/37). It runs the same way in the 4,096 rules from B4,5,9,11/S2,3,5,8,9,14 to B4,5,9,10,11,13,14,15,16/S0,2,3,5,8,9,10,11,12,13,14,15,16; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 8 times). To our knowledge not reported before.",
  "tiling": {
   "family": "periodic",

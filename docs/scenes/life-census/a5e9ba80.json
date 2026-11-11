@@ -1,6 +1,6 @@
 {
- "name": "Life spaceship 98a3c53b on snub square tiling 3.3.4.3.4",
- "description": "A period-24 spaceship in Conway's Life (B3/S23) on the snub square tiling 3.3.4.3.4, with touching neighbours, 17 to 50 cells, moving six lattice steps every 24 generations (c/4). It runs the same way in the 8,192 rules from B3/S23 to B3,8,10,11,12/S2,3,10,11,12. JETCARP's Life census met it in 3 of its 50,000 soups on this tiling. It contains a perturbed phase of the smaller ship ad39623ea1fa9718.",
+ "name": "Life spaceship a5e9ba80 on snub square tiling 3.3.4.3.4",
+ "description": "A period-24 spaceship in Conway's Life (B3/S23) on the snub square tiling 3.3.4.3.4, with touching neighbours, 17 to 50 cells, moving six lattice steps every 24 generations (c/4). It runs the same way in the 8,192 rules from B3/S23 to B3,8,10,11,12/S2,3,10,11,12. JETCARP's Life census met it in 3 of its 50,000 soups on this tiling. It contains a perturbed phase of the smaller ship c574f8e3.",
  "tiling": {
   "family": "snubsq",
   "size": {

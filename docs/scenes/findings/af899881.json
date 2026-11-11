@@ -1,5 +1,5 @@
 {
- "name": "Spaceship f9773263 on the 2-uniform tiling k2-007",
+ "name": "Spaceship af899881 on the 2-uniform tiling k2-007",
  "description": "A period-4 spaceship on the 2-uniform tiling k2-007 (touching neighbours), 6 to 13 cells, moving one lattice step every 4 generations (c/4). It runs the same way in the 4,096 rules from B3/S13468 to B3,7,8,9,10,11,12/S0,1,3,4,6,7,8,9,10,11,12; the scene uses the rule it was found in. The same object runs unchanged on k3-028, k3-031 and k3-032. JETCARP's soup search found it on k3-028 (seen 17 times). To our knowledge not reported before.",
  "tiling": {
   "family": "periodic",

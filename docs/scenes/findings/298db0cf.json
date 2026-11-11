@@ -1,6 +1,6 @@
 {
- "name": "Spaceship 3e6ae2f3 on 4.8.8",
- "description": "A period-4 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 9 to 14 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 64 rules from B2/S2 to B278/S25678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 5 times). A derivative ship (69c9912a with a tag-along): kept as a distinct object, not counted as a discovery.",
+ "name": "Spaceship 298db0cf on 4.8.8",
+ "description": "A period-4 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 9 to 14 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 64 rules from B2/S2 to B278/S25678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 5 times). A derivative ship (78d55497 with a tag-along): kept as a distinct object, not counted as a discovery.",
  "tiling": {
   "family": "oct",
   "size": {

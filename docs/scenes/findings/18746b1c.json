@@ -1,6 +1,6 @@
 {
- "name": "Spaceship a0229739 on 3.12.12",
- "description": "A period-2 spaceship on the truncated hexagonal tiling 3.12.12 (touching neighbours), 7 to 9 cells, moving one lattice step every 2 generations (c/2). It runs the same way in the 16,384 rules from B26/S2 to B2,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 6 times). It contains a perturbed phase of the smaller ships 852ea9ff and c78ceb01. To our knowledge not reported before.",
+ "name": "Spaceship 18746b1c on 3.12.12",
+ "description": "A period-2 spaceship on the truncated hexagonal tiling 3.12.12 (touching neighbours), 7 to 9 cells, moving one lattice step every 2 generations (c/2). It runs the same way in the 16,384 rules from B26/S2 to B2,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 6 times). It contains a perturbed phase of the smaller ships 95528302 and 30594bf3. To our knowledge not reported before.",
  "tiling": {
   "family": "trunchex",
   "size": {

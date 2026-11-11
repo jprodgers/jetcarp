@@ -1,6 +1,6 @@
 {
- "name": "Spaceship bdc1c8c7 on 4.8.8",
- "description": "A period-16 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 14 to 20 cells, moving eight lattice steps every 16 generations (c/2). It runs the same way in the 32 rules from B2/S34 to B2568/S3478; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 95 times). A derivative ship (0ed091c9 with a tag-along): kept as a distinct object, not counted as a discovery. Flagged to check before claiming: runs in B2/S34, the rule of the 4.8.8 hunts (Hexagonal Life without its H). We found no earlier report, but others may well have seen it, so it is not claimed.",
+ "name": "Spaceship 71f3b4b3 on 4.8.8",
+ "description": "A period-16 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 14 to 20 cells, moving eight lattice steps every 16 generations (c/2). It runs the same way in the 32 rules from B2/S34 to B2568/S3478; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 95 times). A derivative ship (9d091ca3 with a tag-along): kept as a distinct object, not counted as a discovery. Flagged to check before claiming: runs in B2/S34, the rule of the 4.8.8 hunts (Hexagonal Life without its H). We found no earlier report, but others may well have seen it, so it is not claimed.",
  "tiling": {
   "family": "oct",
   "size": {

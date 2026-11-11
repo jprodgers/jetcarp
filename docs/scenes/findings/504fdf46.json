@@ -1,5 +1,5 @@
 {
- "name": "Spaceship 9cee5c6a on 4.8.8",
+ "name": "Spaceship 504fdf46 on 4.8.8",
  "description": "A period-6 spaceship on the truncated square tiling 4.8.8 (touching neighbours), 7 to 13 cells, moving two lattice steps every 6 generations (c/3). It runs the same way in the 128 rules from B2/S2 to B2578/S25678; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 11 times). To our knowledge not reported before.",
  "tiling": {
   "family": "oct",

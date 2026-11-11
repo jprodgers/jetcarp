@@ -95,12 +95,12 @@ are one object if, after a shift of phase, one rotation, reflection and translat
 tiles of one onto the live tiles of the other at every generation of a period, whatever the neighbour
 counts of the empty tiles around them. It merged two pairs:
 
-- `7860a67a` and `25e004f4` are one 7-cell ship. On k2-003 and k3-016 the squares at the edge of its
+- `d8692b4b` and `388daffd` are one 7-cell ship. On k2-003 and k3-016 the squares at the edge of its
   strip of squares and triangles border another row of squares and touch 10 tiles; on k3-013 and k3-019
   they border a row of triangles and touch 12. The live tiles never notice: every birth and survival
   condition is the same, and the range only looks 16 times larger on k3-013 because counts of 11 and 12,
   which the ship never meets, exist only there.
-- `c15dd310` and `f62ba07d` are one 4-to-5-cell ship, recorded twice on the same tiling k3-019, at two
+- `1a403313` and `cf8efa2e` are one 4-to-5-cell ship, recorded twice on the same tiling k3-019, at two
   positions that no symmetry of the tiling exchanges: one translation, with a shift of two generations,
   carries one onto the other, but the rows beyond its strip are squares on one side and triangles on the
   other, and swapped at the second position. Their ranges are equal.
@@ -108,24 +108,24 @@ counts of the empty tiles around them. It merged two pairs:
 The same test, run against every Archimedean, 2-uniform, 3-uniform and isohedral tiling (an isometric
 copy of each ship's live tiles is placed on the tiling, and JETCARP runs it in a rule that the counts
 there allow), found that eight ships run, with the same live tiles, on a simpler tiling than the one
-they were claimed on: `7860a67a`, `f1b6f83a`, `b36f22f2`, `ffc6a106` and `c15dd310`, found in strips of
+they were claimed on: `d8692b4b`, `b86608f6`, `d36fd2c3`, `9f3f8ff8` and `1a403313`, found in strips of
 squares and triangles inside 2- and 3-uniform tilings, run on the Archimedean elongated triangular tiling
-3.3.3.4.4; `0d9a694c` (from k3-003) runs on k2-012; and `29fa9994` and `dc81d36e` (from k3-015 and
+3.3.3.4.4; `9c87573c` (from k3-003) runs on k2-012; and `b79fe209` and `b3726ba1` (from k3-015 and
 k3-021) run on k2-015. They are listed on the simpler tiling, and so, by the same rules as the others,
-`7860a67a` and `c15dd310` are now flagged: small, common in their searches and wide-range on an
+`d8692b4b` and `1a403313` are now flagged: small, common in their searches and wide-range on an
 Archimedean tiling.
 
 **Flag A** marks ships that are small, turn up often in soups and run in many rules on an Archimedean
-tiling (`69c9912a`, `938f9833`, `c78ceb01`, `b2c790bb`, `1723afa2`, `8aa7e24c`, `7860a67a`, `c15dd310`),
-and the ships built on Guttesen's gliders (`2ba58828`, `98a3c53b` in Life on 3.3.4.3.4, and
-`ea5d187b`). Others may well have
+tiling (`78d55497`, `bde55795`, `30594bf3`, `3aaf02c0`, `781cc2ef`, `1df4b31f`, `d8692b4b`, `1a403313`),
+and the ships built on Guttesen's gliders (`c696c65e`, `a5e9ba80` in Life on 3.3.4.3.4, and
+`e08df0a8`). Others may well have
 seen these; we found no report, and do not write "to our knowledge" for them. **Flag B** marks ships
 that run in a well-known rule on an Archimedean tiling (HighLife, Pedestrian Life, or the
 `B2/S34` rule of the 4.8.8 hunts, which is Hexagonal Life without its `H`), that contain a phase of one
 of Guttesen's gliders, or that were very common in their search. Four more joined Flag B after a second
 search of the ConwayLife forums found EricG's 2013 exploration of the Archimedean tilings
-([EricG 2013](bibliography.md#ericg2013tiling2)): `c4c00098` and `9cee5c6a` run in `B2/S2` on 4.8.8,
-where EricG found "many of the B2 rules" to have spaceships, and `852ea9ff` and `a0229739` run in
+([EricG 2013](bibliography.md#ericg2013tiling2)): `7f22824b` and `504fdf46` run in `B2/S2` on 4.8.8,
+where EricG found "many of the B2 rules" to have spaceships, and `95528302` and `18746b1c` run in
 `B26` rules on 3.12.12, next to the `B2/S2` and `B26/S3569` rules in which EricG reported many ships.
 EricG did not list the ships, and the pattern files are no longer online, so these four wait for a
 comparison with them. The claimed ships on 3.4.6.4, 3.3.3.4.4 and 3.3.3.3.6 run in none of the rules
@@ -134,8 +134,8 @@ EricG named (see [What is new in JETCARP](contributions.md#4-spaceships-on-non-s
 Life itself (`B3/S23`), the rule Guttesen searched, deserves a separate word. All eleven of these
 candidates that run in Life turned out to be made of Guttesen's gliders: on 3.6.3.6 every one is a
 pair of glider g, so no new single Life ship on the kagome tiling survives; on 3.3.4.3.4 one is a
-pair of the snub-square glider, one is a bound pair of it (`2ba58828`, period 16) and one contains a
-perturbed copy of it (`98a3c53b`, period 24). But the searches behind these candidates ran Life on only
+pair of the snub-square glider, one is a bound pair of it (`c696c65e`, period 16) and one contains a
+perturbed copy of it (`a5e9ba80`, period 24). But the searches behind these candidates ran Life on only
 a few tilings, so they say little about Life elsewhere. A later census of Life on all 92 Archimedean,
 2-uniform and 3-uniform tilings found Life spaceships on 28 of them, 24 of those 2- or 3-uniform; see
 [Life on the Archimedean and k-uniform tilings](#life-on-the-archimedean-and-k-uniform-tilings).
@@ -159,66 +159,66 @@ with a clip of it moving.
 
 | | id | runs on (simplest first) | p | d per period | cells | smallest rule (rules in range) | seen | kind | flag |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [`0ed091c9`](#ship-0ed091c9) | 4.8.8 | 2 | (0, 1) | 5–9 | `B2/S3` (512) | 270 | single | B |
-| 2 | [`3c6d5ab0`](#ship-3c6d5ab0) | 4.8.8 | 2 | (0, −1) | 14–16 | `B2/S2` (256) | 8 | derivative: `69c9912a` with a tag-along |  |
-| 3 | [`69c9912a`](#ship-69c9912a) | 4.8.8 | 2 | (0, −1) | 5 | `B2/S2` (512) | 8,034 | single | A |
-| 4 | [`070a054d`](#ship-070a054d) | 4.8.8 | 4 | (−2, 0) | 9–10 | `B2/S2` (256) | 32 | derivative: `938f9833` with a tag-along |  |
-| 5 | [`3e6ae2f3`](#ship-3e6ae2f3) | 4.8.8 | 4 | (0, −2) | 9–14 | `B2/S2` (64) | 5 | derivative: `69c9912a` with a tag-along |  |
-| 6 | [`5aec548b`](#ship-5aec548b) | 4.8.8 | 4 | (0, −2) | 7–10 | `B2/S2` (256) | 92 | derivative: `69c9912a` with a tag-along |  |
-| 7 | [`616314c5`](#ship-616314c5) | 4.8.8 | 4 | (0, −2) | 14–17 | `B2/S2` (256) | 2 | derivative: `69c9912a` with a tag-along |  |
-| 8 | [`7c5b3e65`](#ship-7c5b3e65) | 4.8.8 | 4 | (0, −2) | 10–15 | `B2/S3` (64) | 54 | derivative: `0ed091c9` with a tag-along | B |
-| 9 | [`938f9833`](#ship-938f9833) | 4.8.8 | 4 | (0, −2) | 5–6 | `B2/S2` (256) | 406 | single | A |
-| 10 | [`c2f4f14a`](#ship-c2f4f14a) | 4.8.8 | 4 | (0, −2) | 8–9 | `B2/S2` (256) | 3 | derivative: `c4c00098` with a tag-along |  |
-| 11 | [`c4c00098`](#ship-c4c00098) | 4.8.8 | 4 | (0, −2) | 7 | `B2/S2` (512) | 9 | single, contains a phase of `69c9912a`, `938f9833` | B |
-| 12 | [`9cee5c6a`](#ship-9cee5c6a) | 4.8.8 | 6 | (0, 2) | 7–13 | `B2/S2` (128) | 11 | single | B |
-| 13 | [`25969982`](#ship-25969982) | 4.8.8 | 12 | (6, 0) | 12–18 | `B2/S34` (64) | 2 | derivative: `0ed091c9` with a tag-along | B |
-| 14 | [`07ab1946`](#ship-07ab1946) | 4.8.8 | 16 | (0, 8) | 19–26 | `B2/S34` (16) | 1 | derivative: `0ed091c9` with a tag-along | B |
-| 15 | [`bdc1c8c7`](#ship-bdc1c8c7) | 4.8.8 | 16 | (0, 8) | 14–20 | `B2/S34` (32) | 95 | derivative: `0ed091c9` with a tag-along | B |
-| 16 | [`fff1b887`](#ship-fff1b887) | 4.8.8 | 16 | (0, 8) | 14–28 | `B2/S34` (32) | 271 | single | B |
-| 17 | [`7e51c0d1`](#ship-7e51c0d1) | 4.8.8 | 24 | (12, 0) | 14–21 | `B2/S3` (128) | 1 | single | B |
-| 18 | [`852ea9ff`](#ship-852ea9ff) | 3.12.12 | 2 | (0, −1) | 6–9 | `B26/S2` (32,768) | 39 | single, contains a phase of `c78ceb01` | B |
-| 19 | [`a0229739`](#ship-a0229739) | 3.12.12 | 2 | (0, −1) | 7–9 | `B26/S2` (16,384) | 6 | single, contains a phase of `852ea9ff`, `c78ceb01` | B |
-| 20 | [`c78ceb01`](#ship-c78ceb01) | 3.12.12 | 2 | (0, 1) | 4–5 | `B2/S2` (65,536) | 1,742 | single | A |
-| 21 | [`b2c790bb`](#ship-b2c790bb) | 3.12.12 | 6 | (−2, 4) | 5–8 | `B2/S2` (32,768) | 1,585 | single | A |
-| 22 | [`5e1adb91`](#ship-5e1adb91) | 3.12.12 | 8 | (4, 0) | 12–23 | `B26/S26` (1,024) | 1 | derivative: `852ea9ff` with a tag-along |  |
-| 23 | [`1723afa2`](#ship-1723afa2) | 4.6.12 | 4 | (0, 1) | 5–6 | `B2/S2` (65,536) | 373 | single | A |
-| 24 | [`aa7e7357`](#ship-aa7e7357) | 3.4.6.4 | 42 | (0, 3) | 7–15 | `B3/S235` (1,024) | 61 | single |  |
-| 25 | [`7860a67a`](#ship-7860a67a) (= `25e004f4`) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 4 | (−1, 0) | 7 | `B45/S34` (256 to 4,096) | 447 | single | A |
-| 26 | [`f1b6f83a`](#ship-f1b6f83a) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 4 | (−1, 0) | 12–16 | `B456/S347` (256 to 4,096) | 7 | single |  |
-| 27 | [`c15dd310`](#ship-c15dd310) (= `f62ba07d`) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 5 | (−1, 0) | 4–5 | `B3/S2` (8,192 to 131,072) | 406 | single | A |
-| 28 | [`a13d3fbf`](#ship-a13d3fbf) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 8 | (2, 0) | 13–17 | `B46/S3458` (64 to 1,024) | 2 | single |  |
-| 29 | [`b36f22f2`](#ship-b36f22f2) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 18 | (−1, 0) | 10–14 | `B4567/S3478` (32 to 512) | 45 | single |  |
-| 30 | [`ffc6a106`](#ship-ffc6a106) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 26 | (1, 0) | 17–26 | `B45679/S3478` (16 to 256) | 1 | single |  |
-| 31 | [`acd0fa8b`](#ship-acd0fa8b) | 3.3.3.3.6 | 27 | (−1, 1) | 4–18 | `B37/S2,5,6,10` (1,048,576) | 30 | single |  |
-| 32 | [`2ba58828`](#ship-2ba58828) | 3.3.4.3.4 | 16 | (0, −4) | 15–33 | `B3/S23` (256) | 1 | derivative: a bound pair of Guttesen's snub-square glider | A |
-| 33 | [`98a3c53b`](#ship-98a3c53b) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (128) | 1 | single, contains a phase of Guttesen's snub-square glider | A |
-| 34 | [`0ccbe694`](#ship-0ccbe694) | 3.6.3.6, k3-030, k3-032, k3-039 | 4 | (−1, 0) | 8–9 | `B36/S23` (8,192) | 423 | single, contains a phase of Guttesen's g | B |
-| 35 | [`8aa7e24c`](#ship-8aa7e24c) | 3.6.3.6, k3-030, k3-032, k3-039 | 4 | (−1, 0) | 7–8 | `B3/S345` (16,384) | 1,347 | single | A |
-| 36 | [`ea5d187b`](#ship-ea5d187b) | 3.6.3.6 | 4 | (−1, 0) | 10–13 | `B36/S23` (4,096) | 2 | derivative: Guttesen's g with a tag-along | A |
-| 37 | [`095a6bf7`](#ship-095a6bf7) | 3.6.3.6 | 12 | (0, 3) | 5–12 | `B38/S23` (2,048) | 595 | single, contains a phase of Guttesen's g | B |
-| 38 | [`61627500`](#ship-61627500) | k2-004, k2-003, k3-010, k3-013, k3-016, k3-019 | 3 | (−1, 0) | 4–6 | `B3/S35` (2,048 to 32,768) | 19 | single |  |
-| 39 | [`29af9b20`](#ship-29af9b20) | k2-004, k2-003, k3-010, k3-016 | 5 | (−1, 0) | 5–9 | `B3/S356` (512) | 4 | single |  |
-| 40 | [`58ce78e3`](#ship-58ce78e3) | k2-006, k3-028, k3-029, k3-030 | 10 | (1, 0) | 4–9 | `B36/S23` (4,096) | 43 | single | B |
-| 41 | [`dcd6b05f`](#ship-dcd6b05f) | k2-006, k3-028 | 16 | (1, 0) | 8–11 | `B3/S1346` (2,048) | 13 | single |  |
-| 42 | [`da6eca43`](#ship-da6eca43) | k2-006 | 46 | (−1, 2) | 5–17 | `B38/S345` (512) | 26 | single |  |
-| 43 | [`f9773263`](#ship-f9773263) | k2-007, k3-028, k3-031, k3-032 | 4 | (−1, 0) | 6–13 | `B3/S13468` (4,096) | 17 | single |  |
-| 44 | [`56ddb3e7`](#ship-56ddb3e7) | k2-012, k3-003 | 6 | (−1, 0) | 7 | `B45/S34` (1,024 to 262,144) | 110 | single |  |
-| 45 | [`0d9a694c`](#ship-0d9a694c) | k2-012, k3-003 | 10 | (1, 0) | 4–10 | `B3/S2456` (512 to 131,072) | 254 | single |  |
-| 46 | [`01d41fa4`](#ship-01d41fa4) | k2-012, k3-003 | 14 | (−1, 0) | 11–17 | `B456/S3468` (128 to 32,768) | 11 | single |  |
-| 47 | [`47978a43`](#ship-47978a43) | k2-013 | 6 | (−1, 0) | 9–20 | `B2,10/S1` (4,294,967,296) | 44 | single |  |
-| 48 | [`4b87931e`](#ship-4b87931e) | k2-013 | 17 | (1, −1) | 2–20 | `B2,8,13/S1` (2,147,483,648) | 275 | single |  |
-| 49 | [`931ac6a1`](#ship-931ac6a1) | k2-014, k3-014, k3-020, k3-051 | 4 | (−2, 0) | 5–6 | `B3/S2` (4,096 to 16,384) | 179 | single |  |
-| 50 | [`29fa9994`](#ship-29fa9994) | k2-015, k3-015, k3-021, k3-052 | 32 | (1, 0) | 11–16 | `B4,5,6,7,8,11/S56` (16) | 30 | single |  |
-| 51 | [`dc81d36e`](#ship-dc81d36e) | k2-015, k3-015, k3-021, k3-052 | 44 | (−1, 0) | 11–16 | `B4,5,6,7,8,10/S56` (16) | 35 | single |  |
-| 52 | [`47587892`](#ship-47587892) | k2-017 | 17 | (0, −1) | 3–13 | `B3/S25` (8,192) | 949 | single | B |
-| 53 | [`5b9c9e68`](#ship-5b9c9e68) | k3-009 | 16 | (−1, 0) | 4–10 | `B3478/S23` (134,217,728) | 466 | single |  |
-| 54 | [`d37488d1`](#ship-d37488d1) | k3-022 | 12 | (−1, −1) | 9–11 | `B3/S3457` (1,024) | 1,158 | single | B |
-| 55 | [`573a43ed`](#ship-573a43ed) | k3-032 | 3 | (1, 0) | 10–13 | `B3/S3457` (1,024) | 2 | single |  |
-| 56 | [`e3df3631`](#ship-e3df3631) | k3-038 | 53 | (−1, 0) | 4–24 | `B3/S136` (2,048) | 4 | single |  |
-| 57 | [`df78e126`](#ship-df78e126) | k3-045 | 37 | (1, 0) | 6–23 | `B4,5,9,11/S2,3,5,8,9,14` (4,096) | 8 | single |  |
-| 58 | [`9d5c568b`](#ship-9d5c568b) | k3-053 | 26 | (0, 1) | 3–7 | `B36/S25` (16,384) | 642 | single |  |
-| 59 | [`91205ceb`](#ship-91205ceb) | k3-058 | 12 | (0, 1) | 6–10 | `B37/S25` (16,777,216) | 1,096 | single | B |
-| 60 | [`f3d2fa6a`](#ship-f3d2fa6a) | k3-058 | 22 | (−1, 1) | 4–12 | `B37/S25` (4,194,304) | 359 | single |  |
+| 1 | [`9d091ca3`](#ship-9d091ca3) | 4.8.8 | 2 | (0, 1) | 5–9 | `B2/S3` (512) | 270 | single | B |
+| 2 | [`ca2f31b0`](#ship-ca2f31b0) | 4.8.8 | 2 | (0, −1) | 14–16 | `B2/S2` (256) | 8 | derivative: `78d55497` with a tag-along |  |
+| 3 | [`78d55497`](#ship-78d55497) | 4.8.8 | 2 | (0, −1) | 5 | `B2/S2` (512) | 8,034 | single | A |
+| 4 | [`2f5d3182`](#ship-2f5d3182) | 4.8.8 | 4 | (−2, 0) | 9–10 | `B2/S2` (256) | 32 | derivative: `bde55795` with a tag-along |  |
+| 5 | [`298db0cf`](#ship-298db0cf) | 4.8.8 | 4 | (0, −2) | 9–14 | `B2/S2` (64) | 5 | derivative: `78d55497` with a tag-along |  |
+| 6 | [`984c5dd5`](#ship-984c5dd5) | 4.8.8 | 4 | (0, −2) | 7–10 | `B2/S2` (256) | 92 | derivative: `78d55497` with a tag-along |  |
+| 7 | [`87759c78`](#ship-87759c78) | 4.8.8 | 4 | (0, −2) | 14–17 | `B2/S2` (256) | 2 | derivative: `78d55497` with a tag-along |  |
+| 8 | [`feae0172`](#ship-feae0172) | 4.8.8 | 4 | (0, −2) | 10–15 | `B2/S3` (64) | 54 | derivative: `9d091ca3` with a tag-along | B |
+| 9 | [`bde55795`](#ship-bde55795) | 4.8.8 | 4 | (0, −2) | 5–6 | `B2/S2` (256) | 406 | single | A |
+| 10 | [`c45a97a1`](#ship-c45a97a1) | 4.8.8 | 4 | (0, −2) | 8–9 | `B2/S2` (256) | 3 | derivative: `7f22824b` with a tag-along |  |
+| 11 | [`7f22824b`](#ship-7f22824b) | 4.8.8 | 4 | (0, −2) | 7 | `B2/S2` (512) | 9 | single, contains a phase of `78d55497`, `bde55795` | B |
+| 12 | [`504fdf46`](#ship-504fdf46) | 4.8.8 | 6 | (0, 2) | 7–13 | `B2/S2` (128) | 11 | single | B |
+| 13 | [`908dc7a0`](#ship-908dc7a0) | 4.8.8 | 12 | (6, 0) | 12–18 | `B2/S34` (64) | 2 | derivative: `9d091ca3` with a tag-along | B |
+| 14 | [`87dfbfaf`](#ship-87dfbfaf) | 4.8.8 | 16 | (0, 8) | 19–26 | `B2/S34` (16) | 1 | derivative: `9d091ca3` with a tag-along | B |
+| 15 | [`71f3b4b3`](#ship-71f3b4b3) | 4.8.8 | 16 | (0, 8) | 14–20 | `B2/S34` (32) | 95 | derivative: `9d091ca3` with a tag-along | B |
+| 16 | [`76897484`](#ship-76897484) | 4.8.8 | 16 | (0, 8) | 14–28 | `B2/S34` (32) | 271 | single | B |
+| 17 | [`a333894b`](#ship-a333894b) | 4.8.8 | 24 | (12, 0) | 14–21 | `B2/S3` (128) | 1 | single | B |
+| 18 | [`95528302`](#ship-95528302) | 3.12.12 | 2 | (0, −1) | 6–9 | `B26/S2` (32,768) | 39 | single, contains a phase of `30594bf3` | B |
+| 19 | [`18746b1c`](#ship-18746b1c) | 3.12.12 | 2 | (0, −1) | 7–9 | `B26/S2` (16,384) | 6 | single, contains a phase of `95528302`, `30594bf3` | B |
+| 20 | [`30594bf3`](#ship-30594bf3) | 3.12.12 | 2 | (0, 1) | 4–5 | `B2/S2` (65,536) | 1,742 | single | A |
+| 21 | [`3aaf02c0`](#ship-3aaf02c0) | 3.12.12 | 6 | (−2, 4) | 5–8 | `B2/S2` (32,768) | 1,585 | single | A |
+| 22 | [`25ba593a`](#ship-25ba593a) | 3.12.12 | 8 | (4, 0) | 12–23 | `B26/S26` (1,024) | 1 | derivative: `95528302` with a tag-along |  |
+| 23 | [`781cc2ef`](#ship-781cc2ef) | 4.6.12 | 4 | (0, 1) | 5–6 | `B2/S2` (65,536) | 373 | single | A |
+| 24 | [`57a0326c`](#ship-57a0326c) | 3.4.6.4 | 42 | (0, 3) | 7–15 | `B3/S235` (1,024) | 61 | single |  |
+| 25 | [`d8692b4b`](#ship-d8692b4b) (= `388daffd`) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 4 | (−1, 0) | 7 | `B45/S34` (256 to 4,096) | 447 | single | A |
+| 26 | [`b86608f6`](#ship-b86608f6) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 4 | (−1, 0) | 12–16 | `B456/S347` (256 to 4,096) | 7 | single |  |
+| 27 | [`1a403313`](#ship-1a403313) (= `cf8efa2e`) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 5 | (−1, 0) | 4–5 | `B3/S2` (8,192 to 131,072) | 406 | single | A |
+| 28 | [`3e30b9ff`](#ship-3e30b9ff) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 8 | (2, 0) | 13–17 | `B46/S3458` (64 to 1,024) | 2 | single |  |
+| 29 | [`d36fd2c3`](#ship-d36fd2c3) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 18 | (−1, 0) | 10–14 | `B4567/S3478` (32 to 512) | 45 | single |  |
+| 30 | [`9f3f8ff8`](#ship-9f3f8ff8) | 3.3.3.4.4, k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051, k3-052 | 26 | (1, 0) | 17–26 | `B45679/S3478` (16 to 256) | 1 | single |  |
+| 31 | [`d3cd3951`](#ship-d3cd3951) | 3.3.3.3.6 | 27 | (−1, 1) | 4–18 | `B37/S2,5,6,10` (1,048,576) | 30 | single |  |
+| 32 | [`c696c65e`](#ship-c696c65e) | 3.3.4.3.4 | 16 | (0, −4) | 15–33 | `B3/S23` (256) | 1 | derivative: a bound pair of Guttesen's snub-square glider | A |
+| 33 | [`a5e9ba80`](#ship-a5e9ba80) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (128) | 1 | single, contains a phase of Guttesen's snub-square glider | A |
+| 34 | [`8f790b16`](#ship-8f790b16) | 3.6.3.6, k3-030, k3-032, k3-039 | 4 | (−1, 0) | 8–9 | `B36/S23` (8,192) | 423 | single, contains a phase of Guttesen's g | B |
+| 35 | [`1df4b31f`](#ship-1df4b31f) | 3.6.3.6, k3-030, k3-032, k3-039 | 4 | (−1, 0) | 7–8 | `B3/S345` (16,384) | 1,347 | single | A |
+| 36 | [`e08df0a8`](#ship-e08df0a8) | 3.6.3.6 | 4 | (−1, 0) | 10–13 | `B36/S23` (4,096) | 2 | derivative: Guttesen's g with a tag-along | A |
+| 37 | [`48e9e267`](#ship-48e9e267) | 3.6.3.6 | 12 | (0, 3) | 5–12 | `B38/S23` (2,048) | 595 | single, contains a phase of Guttesen's g | B |
+| 38 | [`2e4467c0`](#ship-2e4467c0) | k2-004, k2-003, k3-010, k3-013, k3-016, k3-019 | 3 | (−1, 0) | 4–6 | `B3/S35` (2,048 to 32,768) | 19 | single |  |
+| 39 | [`6469dbc4`](#ship-6469dbc4) | k2-004, k2-003, k3-010, k3-016 | 5 | (−1, 0) | 5–9 | `B3/S356` (512) | 4 | single |  |
+| 40 | [`e71e1136`](#ship-e71e1136) | k2-006, k3-028, k3-029, k3-030 | 10 | (1, 0) | 4–9 | `B36/S23` (4,096) | 43 | single | B |
+| 41 | [`9bebe7ea`](#ship-9bebe7ea) | k2-006, k3-028 | 16 | (1, 0) | 8–11 | `B3/S1346` (2,048) | 13 | single |  |
+| 42 | [`3fcb35b1`](#ship-3fcb35b1) | k2-006 | 46 | (−1, 2) | 5–17 | `B38/S345` (512) | 26 | single |  |
+| 43 | [`af899881`](#ship-af899881) | k2-007, k3-028, k3-031, k3-032 | 4 | (−1, 0) | 6–13 | `B3/S13468` (4,096) | 17 | single |  |
+| 44 | [`3021704c`](#ship-3021704c) | k2-012, k3-003 | 6 | (−1, 0) | 7 | `B45/S34` (1,024 to 262,144) | 110 | single |  |
+| 45 | [`9c87573c`](#ship-9c87573c) | k2-012, k3-003 | 10 | (1, 0) | 4–10 | `B3/S2456` (512 to 131,072) | 254 | single |  |
+| 46 | [`a5564155`](#ship-a5564155) | k2-012, k3-003 | 14 | (−1, 0) | 11–17 | `B456/S3468` (128 to 32,768) | 11 | single |  |
+| 47 | [`9d1ccd9c`](#ship-9d1ccd9c) | k2-013 | 6 | (−1, 0) | 9–20 | `B2,10/S1` (4,294,967,296) | 44 | single |  |
+| 48 | [`e1067c81`](#ship-e1067c81) | k2-013 | 17 | (1, −1) | 2–20 | `B2,8,13/S1` (2,147,483,648) | 275 | single |  |
+| 49 | [`49a92bbe`](#ship-49a92bbe) | k2-014, k3-014, k3-020, k3-051 | 4 | (−2, 0) | 5–6 | `B3/S2` (4,096 to 16,384) | 179 | single |  |
+| 50 | [`b79fe209`](#ship-b79fe209) | k2-015, k3-015, k3-021, k3-052 | 32 | (1, 0) | 11–16 | `B4,5,6,7,8,11/S56` (16) | 30 | single |  |
+| 51 | [`b3726ba1`](#ship-b3726ba1) | k2-015, k3-015, k3-021, k3-052 | 44 | (−1, 0) | 11–16 | `B4,5,6,7,8,10/S56` (16) | 35 | single |  |
+| 52 | [`2afbf92b`](#ship-2afbf92b) | k2-017 | 17 | (0, −1) | 3–13 | `B3/S25` (8,192) | 949 | single | B |
+| 53 | [`7ff20168`](#ship-7ff20168) | k3-009 | 16 | (−1, 0) | 4–10 | `B3478/S23` (134,217,728) | 466 | single |  |
+| 54 | [`d5600a12`](#ship-d5600a12) | k3-022 | 12 | (−1, −1) | 9–11 | `B3/S3457` (1,024) | 1,158 | single | B |
+| 55 | [`ed99f9a8`](#ship-ed99f9a8) | k3-032 | 3 | (1, 0) | 10–13 | `B3/S3457` (1,024) | 2 | single |  |
+| 56 | [`6c774748`](#ship-6c774748) | k3-038 | 53 | (−1, 0) | 4–24 | `B3/S136` (2,048) | 4 | single |  |
+| 57 | [`17453dab`](#ship-17453dab) | k3-045 | 37 | (1, 0) | 6–23 | `B4,5,9,11/S2,3,5,8,9,14` (4,096) | 8 | single |  |
+| 58 | [`9242617e`](#ship-9242617e) | k3-053 | 26 | (0, 1) | 3–7 | `B36/S25` (16,384) | 642 | single |  |
+| 59 | [`ba6acb83`](#ship-ba6acb83) | k3-058 | 12 | (0, 1) | 6–10 | `B37/S25` (16,777,216) | 1,096 | single | B |
+| 60 | [`2c3cee67`](#ship-2c3cee67) | k3-058 | 22 | (−1, 1) | 4–12 | `B37/S25` (4,194,304) | 359 | single |  |
 
 Two notes on the table. The two k2-013 ships run identically in about 2<sup>32</sup> and 2<sup>31</sup>
 rules because they use very few neighbour counts, although that tiling's dodecagons touch up to 24
@@ -229,9 +229,9 @@ object, as Life catalogues keep tag-alongs, but it is not counted as a separate 
 
 - **Compounds.** Ten catalogue entries are two ships that fly side by side and never influence each
   other; JETCARP's object finder stored each pair as one ship. Eight are two of Guttesen's kagome
-  glider g (`7e188e44`, `0c8ab3fe`, `be288c7d`, `7c25665e`, `c10cc071`, `c7d48e0c`, `b9c14072`,
-  `dbeb2dbf`), one is two of Guttesen's snub-square glider (`80d241d2`) and one is two copies of `095a6bf7`
-  (`f338d60a`).
+  glider g (`76704620`, `3f3cce70`, `6327b0f4`, `9cd171f7`, `98597b1c`, `8054f744`, `fe08fb1a`,
+  `cca8e8f5`), one is two of Guttesen's snub-square glider (`5186d210`) and one is two copies of `48e9e267`
+  (`83f8eebe`).
 - **Guttesen's gliders.** Glider g on 3.6.3.6 and the period-8 glider on 3.3.4.3.4, both in Life,
   were found by JETCARP's searches independently; they are Guttesen's, first posted as Code Golf answers in
   November 2024 ([Guttesen 2024](bibliography.md#guttesen2024answers);
@@ -265,12 +265,12 @@ The 25 single ships that carry no flag. These are the only candidates that [What
 JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our knowledge.
 
 <div class="ship-gallery">
-<div class="ship-card" id="ship-aa7e7357">
+<div class="ship-card" id="ship-57a0326c">
 <picture>
   <source srcset="../images/findings/57a0326c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/57a0326c.webp" alt="Spaceship aa7e7357 moving across the rhombitrihexagonal tiling 3.4.6.4" width="212" height="320" loading="lazy">
+  <img src="../images/findings/57a0326c.webp" alt="Spaceship 57a0326c moving across the rhombitrihexagonal tiling 3.4.6.4" width="212" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>aa7e7357</code> <a class="ship-n" href="#the-60-objects">table row 24</a></p>
+<p class="ship-name"><code>57a0326c</code> <a class="ship-n" href="#the-60-objects">table row 24</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.4.6.4</dd>
 <dt>Period</dt><dd>42, moving 3 lattice steps per period (c/14)</dd>
@@ -281,12 +281,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 6 to 90, every 2nd.</p>
 </div>
-<div class="ship-card" id="ship-f1b6f83a">
+<div class="ship-card" id="ship-b86608f6">
 <picture>
   <source srcset="../images/findings/b86608f6-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/b86608f6.webp" alt="Spaceship f1b6f83a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/b86608f6.webp" alt="Spaceship b86608f6 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>f1b6f83a</code> <a class="ship-n" href="#the-60-objects">table row 26</a></p>
+<p class="ship-name"><code>b86608f6</code> <a class="ship-n" href="#the-60-objects">table row 26</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-010</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -297,12 +297,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 1 to 49.</p>
 </div>
-<div class="ship-card" id="ship-a13d3fbf">
+<div class="ship-card" id="ship-3e30b9ff">
 <picture>
   <source srcset="../images/findings/3e30b9ff-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3e30b9ff.webp" alt="Spaceship a13d3fbf moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/3e30b9ff.webp" alt="Spaceship 3e30b9ff moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>a13d3fbf</code> <a class="ship-n" href="#the-60-objects">table row 28</a></p>
+<p class="ship-name"><code>3e30b9ff</code> <a class="ship-n" href="#the-60-objects">table row 28</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052</dd>
 <dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
@@ -313,12 +313,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="ship-b36f22f2">
+<div class="ship-card" id="ship-d36fd2c3">
 <picture>
   <source srcset="../images/findings/d36fd2c3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/d36fd2c3.webp" alt="Spaceship b36f22f2 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/d36fd2c3.webp" alt="Spaceship d36fd2c3 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>b36f22f2</code> <a class="ship-n" href="#the-60-objects">table row 29</a></p>
+<p class="ship-name"><code>d36fd2c3</code> <a class="ship-n" href="#the-60-objects">table row 29</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-010</dd>
 <dt>Period</dt><dd>18, moving one lattice step per period (c/18)</dd>
@@ -329,12 +329,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 8 to 224, every 4th.</p>
 </div>
-<div class="ship-card" id="ship-ffc6a106">
+<div class="ship-card" id="ship-9f3f8ff8">
 <picture>
   <source srcset="../images/findings/9f3f8ff8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9f3f8ff8.webp" alt="Spaceship ffc6a106 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/9f3f8ff8.webp" alt="Spaceship 9f3f8ff8 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>ffc6a106</code> <a class="ship-n" href="#the-60-objects">table row 30</a></p>
+<p class="ship-name"><code>9f3f8ff8</code> <a class="ship-n" href="#the-60-objects">table row 30</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-010</dd>
 <dt>Period</dt><dd>26, moving one lattice step per period (c/26)</dd>
@@ -345,12 +345,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 364, every 6th.</p>
 </div>
-<div class="ship-card" id="ship-acd0fa8b">
+<div class="ship-card" id="ship-d3cd3951">
 <picture>
   <source srcset="../images/findings/d3cd3951-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/d3cd3951.webp" alt="Spaceship acd0fa8b moving across the snub hexagonal tiling 3.3.3.3.6" width="240" height="320" loading="lazy">
+  <img src="../images/findings/d3cd3951.webp" alt="Spaceship d3cd3951 moving across the snub hexagonal tiling 3.3.3.3.6" width="240" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>acd0fa8b</code> <a class="ship-n" href="#the-60-objects">table row 31</a></p>
+<p class="ship-name"><code>d3cd3951</code> <a class="ship-n" href="#the-60-objects">table row 31</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.3.6</dd>
 <dt>Period</dt><dd>27, moving one lattice step per period (c/27)</dd>
@@ -361,12 +361,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 9 to 144, every 3rd.</p>
 </div>
-<div class="ship-card" id="ship-61627500">
+<div class="ship-card" id="ship-2e4467c0">
 <picture>
   <source srcset="../images/findings/2e4467c0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/2e4467c0.webp" alt="Spaceship 61627500 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
+  <img src="../images/findings/2e4467c0.webp" alt="Spaceship 2e4467c0 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>61627500</code> <a class="ship-n" href="#the-60-objects">table row 38</a></p>
+<p class="ship-name"><code>2e4467c0</code> <a class="ship-n" href="#the-60-objects">table row 38</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-004 (shown); also k2-003, k3-010, k3-013, k3-016 and k3-019</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
@@ -377,12 +377,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 1 to 43.</p>
 </div>
-<div class="ship-card" id="ship-29af9b20">
+<div class="ship-card" id="ship-6469dbc4">
 <picture>
   <source srcset="../images/findings/6469dbc4-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/6469dbc4.webp" alt="Spaceship 29af9b20 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
+  <img src="../images/findings/6469dbc4.webp" alt="Spaceship 6469dbc4 moving across the 2-uniform tiling k2-004" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>29af9b20</code> <a class="ship-n" href="#the-60-objects">table row 39</a></p>
+<p class="ship-name"><code>6469dbc4</code> <a class="ship-n" href="#the-60-objects">table row 39</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-004 (shown); also k2-003, k3-010 and k3-016</dd>
 <dt>Period</dt><dd>5, moving one lattice step per period (c/5)</dd>
@@ -393,12 +393,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 3 to 63.</p>
 </div>
-<div class="ship-card" id="ship-dcd6b05f">
+<div class="ship-card" id="ship-9bebe7ea">
 <picture>
   <source srcset="../images/findings/9bebe7ea-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9bebe7ea.webp" alt="Spaceship dcd6b05f moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
+  <img src="../images/findings/9bebe7ea.webp" alt="Spaceship 9bebe7ea moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>dcd6b05f</code> <a class="ship-n" href="#the-60-objects">table row 41</a></p>
+<p class="ship-name"><code>9bebe7ea</code> <a class="ship-n" href="#the-60-objects">table row 41</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-006 (shown); also k3-028; found on k3-028</dd>
 <dt>Period</dt><dd>16, moving one lattice step per period (c/16)</dd>
@@ -409,12 +409,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 2 to 130, every 3rd.</p>
 </div>
-<div class="ship-card" id="ship-da6eca43">
+<div class="ship-card" id="ship-3fcb35b1">
 <picture>
   <source srcset="../images/findings/3fcb35b1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3fcb35b1.webp" alt="Spaceship da6eca43 moving across the 2-uniform tiling k2-006" width="192" height="320" loading="lazy">
+  <img src="../images/findings/3fcb35b1.webp" alt="Spaceship 3fcb35b1 moving across the 2-uniform tiling k2-006" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>da6eca43</code> <a class="ship-n" href="#the-60-objects">table row 42</a></p>
+<p class="ship-name"><code>3fcb35b1</code> <a class="ship-n" href="#the-60-objects">table row 42</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-006</dd>
 <dt>Period</dt><dd>46, moving (−1, 2) per period</dd>
@@ -425,12 +425,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 11 to 149, every 3rd.</p>
 </div>
-<div class="ship-card" id="ship-f9773263">
+<div class="ship-card" id="ship-af899881">
 <picture>
   <source srcset="../images/findings/af899881-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/af899881.webp" alt="Spaceship f9773263 moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
+  <img src="../images/findings/af899881.webp" alt="Spaceship af899881 moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>f9773263</code> <a class="ship-n" href="#the-60-objects">table row 43</a></p>
+<p class="ship-name"><code>af899881</code> <a class="ship-n" href="#the-60-objects">table row 43</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-007 (shown); also k3-028, k3-031 and k3-032; found on k3-028</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -441,12 +441,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 3 to 43.</p>
 </div>
-<div class="ship-card" id="ship-56ddb3e7">
+<div class="ship-card" id="ship-3021704c">
 <picture>
   <source srcset="../images/findings/3021704c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3021704c.webp" alt="Spaceship 56ddb3e7 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <img src="../images/findings/3021704c.webp" alt="Spaceship 3021704c moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>56ddb3e7</code> <a class="ship-n" href="#the-60-objects">table row 44</a></p>
+<p class="ship-name"><code>3021704c</code> <a class="ship-n" href="#the-60-objects">table row 44</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-012 (shown); also k3-003</dd>
 <dt>Period</dt><dd>6, moving one lattice step per period (c/6)</dd>
@@ -457,12 +457,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="ship-0d9a694c">
+<div class="ship-card" id="ship-9c87573c">
 <picture>
   <source srcset="../images/findings/9c87573c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9c87573c.webp" alt="Spaceship 0d9a694c moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <img src="../images/findings/9c87573c.webp" alt="Spaceship 9c87573c moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>0d9a694c</code> <a class="ship-n" href="#the-60-objects">table row 45</a></p>
+<p class="ship-name"><code>9c87573c</code> <a class="ship-n" href="#the-60-objects">table row 45</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-012 (shown); also k3-003; found on k3-003</dd>
 <dt>Period</dt><dd>10, moving one lattice step per period (c/10)</dd>
@@ -473,12 +473,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 80, every 2nd.</p>
 </div>
-<div class="ship-card" id="ship-01d41fa4">
+<div class="ship-card" id="ship-a5564155">
 <picture>
   <source srcset="../images/findings/a5564155-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a5564155.webp" alt="Spaceship 01d41fa4 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <img src="../images/findings/a5564155.webp" alt="Spaceship a5564155 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>01d41fa4</code> <a class="ship-n" href="#the-60-objects">table row 46</a></p>
+<p class="ship-name"><code>a5564155</code> <a class="ship-n" href="#the-60-objects">table row 46</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-012 (shown); also k3-003</dd>
 <dt>Period</dt><dd>14, moving one lattice step per period (c/14)</dd>
@@ -489,12 +489,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 112, every 2nd.</p>
 </div>
-<div class="ship-card" id="ship-47978a43">
+<div class="ship-card" id="ship-9d1ccd9c">
 <picture>
   <source srcset="../images/findings/9d1ccd9c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9d1ccd9c.webp" alt="Spaceship 47978a43 moving across the 2-uniform tiling k2-013" width="320" height="190" loading="lazy">
+  <img src="../images/findings/9d1ccd9c.webp" alt="Spaceship 9d1ccd9c moving across the 2-uniform tiling k2-013" width="320" height="190" loading="lazy">
 </picture>
-<p class="ship-name"><code>47978a43</code> <a class="ship-n" href="#the-60-objects">table row 47</a></p>
+<p class="ship-name"><code>9d1ccd9c</code> <a class="ship-n" href="#the-60-objects">table row 47</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-013</dd>
 <dt>Period</dt><dd>6, moving one lattice step per period (c/6)</dd>
@@ -505,12 +505,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 4 to 46.</p>
 </div>
-<div class="ship-card" id="ship-4b87931e">
+<div class="ship-card" id="ship-e1067c81">
 <picture>
   <source srcset="../images/findings/e1067c81-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/e1067c81.webp" alt="Spaceship 4b87931e moving across the 2-uniform tiling k2-013" width="272" height="320" loading="lazy">
+  <img src="../images/findings/e1067c81.webp" alt="Spaceship e1067c81 moving across the 2-uniform tiling k2-013" width="272" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>4b87931e</code> <a class="ship-n" href="#the-60-objects">table row 48</a></p>
+<p class="ship-name"><code>e1067c81</code> <a class="ship-n" href="#the-60-objects">table row 48</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-013</dd>
 <dt>Period</dt><dd>17, moving (1, −1) per period</dd>
@@ -521,12 +521,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 7 to 58.</p>
 </div>
-<div class="ship-card" id="ship-931ac6a1">
+<div class="ship-card" id="ship-49a92bbe">
 <picture>
   <source srcset="../images/findings/49a92bbe-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/49a92bbe.webp" alt="Spaceship 931ac6a1 moving across the 2-uniform tiling k2-014" width="320" height="192" loading="lazy">
+  <img src="../images/findings/49a92bbe.webp" alt="Spaceship 49a92bbe moving across the 2-uniform tiling k2-014" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>931ac6a1</code> <a class="ship-n" href="#the-60-objects">table row 49</a></p>
+<p class="ship-name"><code>49a92bbe</code> <a class="ship-n" href="#the-60-objects">table row 49</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-014 (shown); also k3-014, k3-020 and k3-051</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -537,12 +537,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-29fa9994">
+<div class="ship-card" id="ship-b79fe209">
 <picture>
   <source srcset="../images/findings/b79fe209-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/b79fe209.webp" alt="Spaceship 29fa9994 moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
+  <img src="../images/findings/b79fe209.webp" alt="Spaceship b79fe209 moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>29fa9994</code> <a class="ship-n" href="#the-60-objects">table row 50</a></p>
+<p class="ship-name"><code>b79fe209</code> <a class="ship-n" href="#the-60-objects">table row 50</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-015 (shown); also k3-015, k3-021 and k3-052; found on k3-021</dd>
 <dt>Period</dt><dd>32, moving one lattice step per period (c/32)</dd>
@@ -553,12 +553,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 11 to 363, every 6th.</p>
 </div>
-<div class="ship-card" id="ship-dc81d36e">
+<div class="ship-card" id="ship-b3726ba1">
 <picture>
   <source srcset="../images/findings/b3726ba1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/b3726ba1.webp" alt="Spaceship dc81d36e moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
+  <img src="../images/findings/b3726ba1.webp" alt="Spaceship b3726ba1 moving across the 2-uniform tiling k2-015" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>dc81d36e</code> <a class="ship-n" href="#the-60-objects">table row 51</a></p>
+<p class="ship-name"><code>b3726ba1</code> <a class="ship-n" href="#the-60-objects">table row 51</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-015 (shown); also k3-015, k3-021 and k3-052; found on k3-021</dd>
 <dt>Period</dt><dd>44, moving one lattice step per period (c/44)</dd>
@@ -569,12 +569,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 8 to 448, every 7th.</p>
 </div>
-<div class="ship-card" id="ship-5b9c9e68">
+<div class="ship-card" id="ship-7ff20168">
 <picture>
   <source srcset="../images/findings/7ff20168-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/7ff20168.webp" alt="Spaceship 5b9c9e68 moving across the 3-uniform tiling k3-009" width="320" height="192" loading="lazy">
+  <img src="../images/findings/7ff20168.webp" alt="Spaceship 7ff20168 moving across the 3-uniform tiling k3-009" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>5b9c9e68</code> <a class="ship-n" href="#the-60-objects">table row 53</a></p>
+<p class="ship-name"><code>7ff20168</code> <a class="ship-n" href="#the-60-objects">table row 53</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-009</dd>
 <dt>Period</dt><dd>16, moving one lattice step per period (c/16)</dd>
@@ -585,12 +585,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 1 to 81, every 2nd.</p>
 </div>
-<div class="ship-card" id="ship-573a43ed">
+<div class="ship-card" id="ship-ed99f9a8">
 <picture>
   <source srcset="../images/findings/ed99f9a8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/ed99f9a8.webp" alt="Spaceship 573a43ed moving across the 3-uniform tiling k3-032" width="320" height="192" loading="lazy">
+  <img src="../images/findings/ed99f9a8.webp" alt="Spaceship ed99f9a8 moving across the 3-uniform tiling k3-032" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>573a43ed</code> <a class="ship-n" href="#the-60-objects">table row 55</a></p>
+<p class="ship-name"><code>ed99f9a8</code> <a class="ship-n" href="#the-60-objects">table row 55</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-032</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
@@ -601,12 +601,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 0 to 42.</p>
 </div>
-<div class="ship-card" id="ship-e3df3631">
+<div class="ship-card" id="ship-6c774748">
 <picture>
   <source srcset="../images/findings/6c774748-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/6c774748.webp" alt="Spaceship e3df3631 moving across the 3-uniform tiling k3-038" width="320" height="192" loading="lazy">
+  <img src="../images/findings/6c774748.webp" alt="Spaceship 6c774748 moving across the 3-uniform tiling k3-038" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>e3df3631</code> <a class="ship-n" href="#the-60-objects">table row 56</a></p>
+<p class="ship-name"><code>6c774748</code> <a class="ship-n" href="#the-60-objects">table row 56</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-038</dd>
 <dt>Period</dt><dd>53, moving one lattice step per period (c/53)</dd>
@@ -617,12 +617,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 41 to 359, every 6th.</p>
 </div>
-<div class="ship-card" id="ship-df78e126">
+<div class="ship-card" id="ship-17453dab">
 <picture>
   <source srcset="../images/findings/17453dab-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/17453dab.webp" alt="Spaceship df78e126 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
+  <img src="../images/findings/17453dab.webp" alt="Spaceship 17453dab moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>df78e126</code> <a class="ship-n" href="#the-60-objects">table row 57</a></p>
+<p class="ship-name"><code>17453dab</code> <a class="ship-n" href="#the-60-objects">table row 57</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-045</dd>
 <dt>Period</dt><dd>37, moving one lattice step per period (c/37)</dd>
@@ -633,12 +633,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 5 to 264, every 5th.</p>
 </div>
-<div class="ship-card" id="ship-9d5c568b">
+<div class="ship-card" id="ship-9242617e">
 <picture>
   <source srcset="../images/findings/9242617e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9242617e.webp" alt="Spaceship 9d5c568b moving across the 3-uniform tiling k3-053" width="192" height="320" loading="lazy">
+  <img src="../images/findings/9242617e.webp" alt="Spaceship 9242617e moving across the 3-uniform tiling k3-053" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>9d5c568b</code> <a class="ship-n" href="#the-60-objects">table row 58</a></p>
+<p class="ship-name"><code>9242617e</code> <a class="ship-n" href="#the-60-objects">table row 58</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-053</dd>
 <dt>Period</dt><dd>26, moving one lattice step per period (c/26)</dd>
@@ -649,12 +649,12 @@ JETCARP](contributions.md#4-spaceships-on-non-square-tilings) claims, to our kno
 </dl>
 <p class="ship-clip">Clip: generations 11 to 63.</p>
 </div>
-<div class="ship-card" id="ship-f3d2fa6a">
+<div class="ship-card" id="ship-2c3cee67">
 <picture>
   <source srcset="../images/findings/2c3cee67-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/2c3cee67.webp" alt="Spaceship f3d2fa6a moving across the 3-uniform tiling k3-058" width="284" height="320" loading="lazy">
+  <img src="../images/findings/2c3cee67.webp" alt="Spaceship 2c3cee67 moving across the 3-uniform tiling k3-058" width="284" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>f3d2fa6a</code> <a class="ship-n" href="#the-60-objects">table row 60</a></p>
+<p class="ship-name"><code>2c3cee67</code> <a class="ship-n" href="#the-60-objects">table row 60</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-058</dd>
 <dt>Period</dt><dd>22, moving (−1, 1) per period</dd>
@@ -673,115 +673,115 @@ A smaller ship that pulls a passenger along unchanged. Each is kept as a distinc
 core linked, but is not counted as a discovery. Six more derivatives are flagged and shown below.
 
 <div class="ship-gallery">
-<div class="ship-card" id="ship-3c6d5ab0">
+<div class="ship-card" id="ship-ca2f31b0">
 <picture>
   <source srcset="../images/findings/ca2f31b0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/ca2f31b0.webp" alt="Spaceship 3c6d5ab0 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/ca2f31b0.webp" alt="Spaceship ca2f31b0 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>3c6d5ab0</code> <a class="ship-n" href="#the-60-objects">table row 2</a></p>
+<p class="ship-name"><code>ca2f31b0</code> <a class="ship-n" href="#the-60-objects">table row 2</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
 <dt>Cells</dt><dd>14–16</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B2678/S245678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>8 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-69c9912a"><code>69c9912a</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-78d55497"><code>78d55497</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 36.</p>
 </div>
-<div class="ship-card" id="ship-070a054d">
+<div class="ship-card" id="ship-2f5d3182">
 <picture>
   <source srcset="../images/findings/2f5d3182-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/2f5d3182.webp" alt="Spaceship 070a054d moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <img src="../images/findings/2f5d3182.webp" alt="Spaceship 2f5d3182 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>070a054d</code> <a class="ship-n" href="#the-60-objects">table row 4</a></p>
+<p class="ship-name"><code>2f5d3182</code> <a class="ship-n" href="#the-60-objects">table row 4</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>9–10</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B25678/S25678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>32 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-938f9833"><code>938f9833</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-bde55795"><code>bde55795</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-3e6ae2f3">
+<div class="ship-card" id="ship-298db0cf">
 <picture>
   <source srcset="../images/findings/298db0cf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/298db0cf.webp" alt="Spaceship 3e6ae2f3 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/298db0cf.webp" alt="Spaceship 298db0cf moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>3e6ae2f3</code> <a class="ship-n" href="#the-60-objects">table row 5</a></p>
+<p class="ship-name"><code>298db0cf</code> <a class="ship-n" href="#the-60-objects">table row 5</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>9–14</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B278/S25678</code> (64 rules)</dd>
 <dt>Seen</dt><dd>5 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-69c9912a"><code>69c9912a</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-78d55497"><code>78d55497</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-5aec548b">
+<div class="ship-card" id="ship-984c5dd5">
 <picture>
   <source srcset="../images/findings/984c5dd5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/984c5dd5.webp" alt="Spaceship 5aec548b moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/984c5dd5.webp" alt="Spaceship 984c5dd5 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>5aec548b</code> <a class="ship-n" href="#the-60-objects">table row 6</a></p>
+<p class="ship-name"><code>984c5dd5</code> <a class="ship-n" href="#the-60-objects">table row 6</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>7–10</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B2678/S245678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>92 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-69c9912a"><code>69c9912a</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-78d55497"><code>78d55497</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-616314c5">
+<div class="ship-card" id="ship-87759c78">
 <picture>
   <source srcset="../images/findings/87759c78-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/87759c78.webp" alt="Spaceship 616314c5 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/87759c78.webp" alt="Spaceship 87759c78 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>616314c5</code> <a class="ship-n" href="#the-60-objects">table row 7</a></p>
+<p class="ship-name"><code>87759c78</code> <a class="ship-n" href="#the-60-objects">table row 7</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>14–17</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B2678/S245678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>2 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-69c9912a"><code>69c9912a</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-78d55497"><code>78d55497</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 2 to 36.</p>
 </div>
-<div class="ship-card" id="ship-c2f4f14a">
+<div class="ship-card" id="ship-c45a97a1">
 <picture>
   <source srcset="../images/findings/c45a97a1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c45a97a1.webp" alt="Spaceship c2f4f14a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/c45a97a1.webp" alt="Spaceship c45a97a1 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>c2f4f14a</code> <a class="ship-n" href="#the-60-objects">table row 10</a></p>
+<p class="ship-name"><code>c45a97a1</code> <a class="ship-n" href="#the-60-objects">table row 10</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>8–9</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B25678/S25678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>3 times</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-c4c00098"><code>c4c00098</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-7f22824b"><code>7f22824b</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-5e1adb91">
+<div class="ship-card" id="ship-25ba593a">
 <picture>
   <source srcset="../images/findings/25ba593a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/25ba593a.webp" alt="Spaceship 5e1adb91 moving across the truncated hexagonal tiling 3.12.12" width="320" height="192" loading="lazy">
+  <img src="../images/findings/25ba593a.webp" alt="Spaceship 25ba593a moving across the truncated hexagonal tiling 3.12.12" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>5e1adb91</code> <a class="ship-n" href="#the-60-objects">table row 22</a></p>
+<p class="ship-name"><code>25ba593a</code> <a class="ship-n" href="#the-60-objects">table row 22</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.12.12</dd>
 <dt>Period</dt><dd>8, moving 4 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>12–23</dd>
 <dt>Rules</dt><dd><code>B26/S26</code> to <code>B2,6,8,9,10,11,12/S2,6,7,9,10,11,12</code> (1,024 rules)</dd>
 <dt>Seen</dt><dd>1 time</dd>
-<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-852ea9ff"><code>852ea9ff</code></a> with a tag-along; not counted as a discovery.</dd>
+<dt>Verdict</dt><dd><b>Derivative</b>: <a href="#ship-95528302"><code>95528302</code></a> with a tag-along; not counted as a discovery.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 4 to 24.</p>
 </div>
@@ -794,12 +794,12 @@ ships built on Guttesen's gliders. We found no earlier report of them, but other
 them, so they are not claimed.
 
 <div class="ship-gallery">
-<div class="ship-card" id="ship-69c9912a">
+<div class="ship-card" id="ship-78d55497">
 <picture>
   <source srcset="../images/findings/78d55497-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/78d55497.webp" alt="Spaceship 69c9912a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/78d55497.webp" alt="Spaceship 78d55497 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>69c9912a</code> <a class="ship-n" href="#the-60-objects">table row 3</a></p>
+<p class="ship-name"><code>78d55497</code> <a class="ship-n" href="#the-60-objects">table row 3</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
@@ -810,12 +810,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-938f9833">
+<div class="ship-card" id="ship-bde55795">
 <picture>
   <source srcset="../images/findings/bde55795-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/bde55795.webp" alt="Spaceship 938f9833 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/bde55795.webp" alt="Spaceship bde55795 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>938f9833</code> <a class="ship-n" href="#the-60-objects">table row 9</a></p>
+<p class="ship-name"><code>bde55795</code> <a class="ship-n" href="#the-60-objects">table row 9</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -826,12 +826,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-c78ceb01">
+<div class="ship-card" id="ship-30594bf3">
 <picture>
   <source srcset="../images/findings/30594bf3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/30594bf3.webp" alt="Spaceship c78ceb01 moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
+  <img src="../images/findings/30594bf3.webp" alt="Spaceship 30594bf3 moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>c78ceb01</code> <a class="ship-n" href="#the-60-objects">table row 20</a></p>
+<p class="ship-name"><code>30594bf3</code> <a class="ship-n" href="#the-60-objects">table row 20</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.12.12</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
@@ -842,12 +842,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 34.</p>
 </div>
-<div class="ship-card" id="ship-b2c790bb">
+<div class="ship-card" id="ship-3aaf02c0">
 <picture>
   <source srcset="../images/findings/3aaf02c0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/3aaf02c0.webp" alt="Spaceship b2c790bb moving across the truncated hexagonal tiling 3.12.12" width="192" height="320" loading="lazy">
+  <img src="../images/findings/3aaf02c0.webp" alt="Spaceship 3aaf02c0 moving across the truncated hexagonal tiling 3.12.12" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>b2c790bb</code> <a class="ship-n" href="#the-60-objects">table row 21</a></p>
+<p class="ship-name"><code>3aaf02c0</code> <a class="ship-n" href="#the-60-objects">table row 21</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.12.12</dd>
 <dt>Period</dt><dd>6, moving (−2, 4) per period</dd>
@@ -858,12 +858,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 2 to 29.</p>
 </div>
-<div class="ship-card" id="ship-1723afa2">
+<div class="ship-card" id="ship-781cc2ef">
 <picture>
   <source srcset="../images/findings/781cc2ef-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/781cc2ef.webp" alt="Spaceship 1723afa2 moving across the truncated trihexagonal tiling 4.6.12" width="234" height="320" loading="lazy">
+  <img src="../images/findings/781cc2ef.webp" alt="Spaceship 781cc2ef moving across the truncated trihexagonal tiling 4.6.12" width="234" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>1723afa2</code> <a class="ship-n" href="#the-60-objects">table row 23</a></p>
+<p class="ship-name"><code>781cc2ef</code> <a class="ship-n" href="#the-60-objects">table row 23</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.6.12</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -874,44 +874,44 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-7860a67a">
+<div class="ship-card" id="ship-d8692b4b">
 <picture>
   <source srcset="../images/findings/d8692b4b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/d8692b4b.webp" alt="Spaceship 7860a67a moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/d8692b4b.webp" alt="Spaceship d8692b4b moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>7860a67a</code> <a class="ship-n" href="#the-60-objects">table row 25</a></p>
+<p class="ship-name"><code>d8692b4b</code> <a class="ship-n" href="#the-60-objects">table row 25</a></p>
 <dl>
-<dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-016 and, as <code>25e004f4</code>, on k3-013</dd>
+<dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-016 and, as <code>388daffd</code>, on k3-013</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>7</dd>
 <dt>Rules</dt><dd><code>B45/S34</code> to <code>B4,5,8,9,10,11,12/S0,3,4,7,8,9,10,11,12</code> (4,096 rules) on 3.3.3.4.4, k3-013, k3-019, k3-051 and k3-052; <code>B45/S34</code> to <code>B4,5,8,9,10/S0,3,4,7,8,9,10</code> (256 rules) on k2-003, k2-004, k3-010 and k3-016</dd>
-<dt>Seen</dt><dd>447 times (249 as <code>7860a67a</code>, 198 as <code>25e004f4</code>)</dd>
+<dt>Seen</dt><dd>447 times (249 as <code>d8692b4b</code>, 198 as <code>388daffd</code>)</dd>
 <dt>Verdict</dt><dd><b>Flag A</b>, most likely already known: small (7 cells), common (seen 447 times) and wide-range (4,096 rules) on an Archimedean tiling. Single ship.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="ship-c15dd310">
+<div class="ship-card" id="ship-1a403313">
 <picture>
   <source srcset="../images/findings/1a403313-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/1a403313.webp" alt="Spaceship c15dd310 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/findings/1a403313.webp" alt="Spaceship 1a403313 moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>c15dd310</code> <a class="ship-n" href="#the-60-objects">table row 27</a></p>
+<p class="ship-name"><code>1a403313</code> <a class="ship-n" href="#the-60-objects">table row 27</a></p>
 <dl>
-<dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-019 and, as <code>f62ba07d</code>, on k3-019</dd>
+<dt>Tiling</dt><dd>3.3.3.4.4 (shown); also k2-003, k2-004, k3-010, k3-013, k3-016, k3-019, k3-051 and k3-052; found on k3-019 and, as <code>cf8efa2e</code>, on k3-019</dd>
 <dt>Period</dt><dd>5, moving one lattice step per period (c/5)</dd>
 <dt>Cells</dt><dd>4–5</dd>
 <dt>Rules</dt><dd><code>B3/S2</code> to <code>B3,6,7,8,9,10,11,12/S0,2,4,5,6,7,8,9,10,11,12</code> (131,072 rules) on 3.3.3.4.4, k3-013, k3-019, k3-051 and k3-052; <code>B3/S2</code> to <code>B3,6,7,8,9,10/S0,2,4,5,6,7,8,9,10</code> (8,192 rules) on k2-003, k2-004, k3-010 and k3-016</dd>
-<dt>Seen</dt><dd>406 times (229 as <code>c15dd310</code>, 177 as <code>f62ba07d</code>)</dd>
+<dt>Seen</dt><dd>406 times (229 as <code>1a403313</code>, 177 as <code>cf8efa2e</code>)</dd>
 <dt>Verdict</dt><dd><b>Flag A</b>, most likely already known: small (4–5 cells), common (seen 406 times) and wide-range (131,072 rules) on an Archimedean tiling. Single ship.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 55.</p>
 </div>
-<div class="ship-card" id="ship-2ba58828">
+<div class="ship-card" id="ship-c696c65e">
 <picture>
   <source srcset="../images/findings/c696c65e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/c696c65e.webp" alt="Spaceship 2ba58828 moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <img src="../images/findings/c696c65e.webp" alt="Spaceship c696c65e moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>2ba58828</code> <a class="ship-n" href="#the-60-objects">table row 32</a></p>
+<p class="ship-name"><code>c696c65e</code> <a class="ship-n" href="#the-60-objects">table row 32</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>16, moving 4 lattice steps per period (c/4)</dd>
@@ -922,12 +922,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="ship-98a3c53b">
+<div class="ship-card" id="ship-a5e9ba80">
 <picture>
   <source srcset="../images/findings/a5e9ba80-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a5e9ba80.webp" alt="Spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <img src="../images/findings/a5e9ba80.webp" alt="Spaceship a5e9ba80 moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>98a3c53b</code> <a class="ship-n" href="#the-60-objects">table row 33</a></p>
+<p class="ship-name"><code>a5e9ba80</code> <a class="ship-n" href="#the-60-objects">table row 33</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>24, moving 6 lattice steps per period (c/4)</dd>
@@ -938,12 +938,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 15 to 55.</p>
 </div>
-<div class="ship-card" id="ship-8aa7e24c">
+<div class="ship-card" id="ship-1df4b31f">
 <picture>
   <source srcset="../images/findings/1df4b31f-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/1df4b31f.webp" alt="Spaceship 8aa7e24c moving across the trihexagonal (kagome) tiling 3.6.3.6" width="318" height="192" loading="lazy">
+  <img src="../images/findings/1df4b31f.webp" alt="Spaceship 1df4b31f moving across the trihexagonal (kagome) tiling 3.6.3.6" width="318" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>8aa7e24c</code> <a class="ship-n" href="#the-60-objects">table row 35</a></p>
+<p class="ship-name"><code>1df4b31f</code> <a class="ship-n" href="#the-60-objects">table row 35</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.6.3.6 (shown); also k3-030, k3-032 and k3-039; found on k3-032</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -954,12 +954,12 @@ them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-ea5d187b">
+<div class="ship-card" id="ship-e08df0a8">
 <picture>
   <source srcset="../images/findings/e08df0a8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/e08df0a8.webp" alt="Spaceship ea5d187b moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
+  <img src="../images/findings/e08df0a8.webp" alt="Spaceship e08df0a8 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>ea5d187b</code> <a class="ship-n" href="#the-60-objects">table row 36</a></p>
+<p class="ship-name"><code>e08df0a8</code> <a class="ship-n" href="#the-60-objects">table row 36</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.6.3.6</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -980,12 +980,12 @@ reported many spaceships in 2013 without listing them. We found no earlier repor
 others may well have seen them, so they are not claimed.
 
 <div class="ship-gallery">
-<div class="ship-card" id="ship-0ed091c9">
+<div class="ship-card" id="ship-9d091ca3">
 <picture>
   <source srcset="../images/findings/9d091ca3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/9d091ca3.webp" alt="Spaceship 0ed091c9 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/9d091ca3.webp" alt="Spaceship 9d091ca3 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>0ed091c9</code> <a class="ship-n" href="#the-60-objects">table row 1</a></p>
+<p class="ship-name"><code>9d091ca3</code> <a class="ship-n" href="#the-60-objects">table row 1</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
@@ -996,44 +996,44 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="ship-7c5b3e65">
+<div class="ship-card" id="ship-feae0172">
 <picture>
   <source srcset="../images/findings/feae0172-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/feae0172.webp" alt="Spaceship 7c5b3e65 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/feae0172.webp" alt="Spaceship feae0172 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>7c5b3e65</code> <a class="ship-n" href="#the-60-objects">table row 8</a></p>
+<p class="ship-name"><code>feae0172</code> <a class="ship-n" href="#the-60-objects">table row 8</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>10–15</dd>
 <dt>Rules</dt><dd><code>B2/S3</code> to <code>B2568/S3478</code> (64 rules)</dd>
 <dt>Seen</dt><dd>54 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-0ed091c9"><code>0ed091c9</code></a> with a tag-along.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-9d091ca3"><code>9d091ca3</code></a> with a tag-along.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-c4c00098">
+<div class="ship-card" id="ship-7f22824b">
 <picture>
   <source srcset="../images/findings/7f22824b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/7f22824b.webp" alt="Spaceship c4c00098 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/7f22824b.webp" alt="Spaceship 7f22824b moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>c4c00098</code> <a class="ship-n" href="#the-60-objects">table row 11</a></p>
+<p class="ship-name"><code>7f22824b</code> <a class="ship-n" href="#the-60-objects">table row 11</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>7</dd>
 <dt>Rules</dt><dd><code>B2/S2</code> to <code>B245678/S25678</code> (512 rules)</dd>
 <dt>Seen</dt><dd>9 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S2</code> on 4.8.8, among the B2 rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-69c9912a"><code>69c9912a</code></a> and <a href="#ship-938f9833"><code>938f9833</code></a>.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S2</code> on 4.8.8, among the B2 rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-78d55497"><code>78d55497</code></a> and <a href="#ship-bde55795"><code>bde55795</code></a>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-9cee5c6a">
+<div class="ship-card" id="ship-504fdf46">
 <picture>
   <source srcset="../images/findings/504fdf46-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/504fdf46.webp" alt="Spaceship 9cee5c6a moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/504fdf46.webp" alt="Spaceship 504fdf46 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>9cee5c6a</code> <a class="ship-n" href="#the-60-objects">table row 12</a></p>
+<p class="ship-name"><code>504fdf46</code> <a class="ship-n" href="#the-60-objects">table row 12</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>6, moving 2 lattice steps per period (c/3)</dd>
@@ -1044,60 +1044,60 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 2 to 44.</p>
 </div>
-<div class="ship-card" id="ship-25969982">
+<div class="ship-card" id="ship-908dc7a0">
 <picture>
   <source srcset="../images/findings/908dc7a0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/908dc7a0.webp" alt="Spaceship 25969982 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <img src="../images/findings/908dc7a0.webp" alt="Spaceship 908dc7a0 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>25969982</code> <a class="ship-n" href="#the-60-objects">table row 13</a></p>
+<p class="ship-name"><code>908dc7a0</code> <a class="ship-n" href="#the-60-objects">table row 13</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>12, moving 6 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>12–18</dd>
 <dt>Rules</dt><dd><code>B2/S34</code> to <code>B2678/S34678</code> (64 rules)</dd>
 <dt>Seen</dt><dd>2 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-0ed091c9"><code>0ed091c9</code></a> with a tag-along.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-9d091ca3"><code>9d091ca3</code></a> with a tag-along.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 2 to 34.</p>
 </div>
-<div class="ship-card" id="ship-07ab1946">
+<div class="ship-card" id="ship-87dfbfaf">
 <picture>
   <source srcset="../images/findings/87dfbfaf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/87dfbfaf.webp" alt="Spaceship 07ab1946 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/87dfbfaf.webp" alt="Spaceship 87dfbfaf moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>07ab1946</code> <a class="ship-n" href="#the-60-objects">table row 14</a></p>
+<p class="ship-name"><code>87dfbfaf</code> <a class="ship-n" href="#the-60-objects">table row 14</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>16, moving 8 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>19–26</dd>
 <dt>Rules</dt><dd><code>B2/S34</code> to <code>B268/S3478</code> (16 rules)</dd>
 <dt>Seen</dt><dd>1 time</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-0ed091c9"><code>0ed091c9</code></a> with a tag-along.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-9d091ca3"><code>9d091ca3</code></a> with a tag-along.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 6 to 34.</p>
 </div>
-<div class="ship-card" id="ship-bdc1c8c7">
+<div class="ship-card" id="ship-71f3b4b3">
 <picture>
   <source srcset="../images/findings/71f3b4b3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/71f3b4b3.webp" alt="Spaceship bdc1c8c7 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/71f3b4b3.webp" alt="Spaceship 71f3b4b3 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>bdc1c8c7</code> <a class="ship-n" href="#the-60-objects">table row 15</a></p>
+<p class="ship-name"><code>71f3b4b3</code> <a class="ship-n" href="#the-60-objects">table row 15</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>16, moving 8 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>14–20</dd>
 <dt>Rules</dt><dd><code>B2/S34</code> to <code>B2568/S3478</code> (32 rules)</dd>
 <dt>Seen</dt><dd>95 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-0ed091c9"><code>0ed091c9</code></a> with a tag-along.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in <code>B2/S34</code>, the rule of the 4.8.8 hunts (Hexagonal Life without its <code>H</code>). Derivative: <a href="#ship-9d091ca3"><code>9d091ca3</code></a> with a tag-along.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 6 to 38.</p>
 </div>
-<div class="ship-card" id="ship-fff1b887">
+<div class="ship-card" id="ship-76897484">
 <picture>
   <source srcset="../images/findings/76897484-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/76897484.webp" alt="Spaceship fff1b887 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
+  <img src="../images/findings/76897484.webp" alt="Spaceship 76897484 moving across the truncated square tiling 4.8.8" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>fff1b887</code> <a class="ship-n" href="#the-60-objects">table row 16</a></p>
+<p class="ship-name"><code>76897484</code> <a class="ship-n" href="#the-60-objects">table row 16</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>16, moving 8 lattice steps per period (c/2)</dd>
@@ -1108,12 +1108,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 2 to 30.</p>
 </div>
-<div class="ship-card" id="ship-7e51c0d1">
+<div class="ship-card" id="ship-a333894b">
 <picture>
   <source srcset="../images/findings/a333894b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/a333894b.webp" alt="Spaceship 7e51c0d1 moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
+  <img src="../images/findings/a333894b.webp" alt="Spaceship a333894b moving across the truncated square tiling 4.8.8" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>7e51c0d1</code> <a class="ship-n" href="#the-60-objects">table row 17</a></p>
+<p class="ship-name"><code>a333894b</code> <a class="ship-n" href="#the-60-objects">table row 17</a></p>
 <dl>
 <dt>Tiling</dt><dd>4.8.8</dd>
 <dt>Period</dt><dd>24, moving 12 lattice steps per period (c/2)</dd>
@@ -1124,44 +1124,44 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 6 to 46.</p>
 </div>
-<div class="ship-card" id="ship-852ea9ff">
+<div class="ship-card" id="ship-95528302">
 <picture>
   <source srcset="../images/findings/95528302-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/95528302.webp" alt="Spaceship 852ea9ff moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
+  <img src="../images/findings/95528302.webp" alt="Spaceship 95528302 moving across the truncated hexagonal tiling 3.12.12" width="224" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>852ea9ff</code> <a class="ship-n" href="#the-60-objects">table row 18</a></p>
+<p class="ship-name"><code>95528302</code> <a class="ship-n" href="#the-60-objects">table row 18</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.12.12</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
 <dt>Cells</dt><dd>6–9</dd>
 <dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,4,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (32,768 rules)</dd>
 <dt>Seen</dt><dd>39 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-30594bf3"><code>30594bf3</code></a>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 32.</p>
 </div>
-<div class="ship-card" id="ship-a0229739">
+<div class="ship-card" id="ship-18746b1c">
 <picture>
   <source srcset="../images/findings/18746b1c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/18746b1c.webp" alt="Spaceship a0229739 moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
+  <img src="../images/findings/18746b1c.webp" alt="Spaceship 18746b1c moving across the truncated hexagonal tiling 3.12.12" width="232" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>a0229739</code> <a class="ship-n" href="#the-60-objects">table row 19</a></p>
+<p class="ship-name"><code>18746b1c</code> <a class="ship-n" href="#the-60-objects">table row 19</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.12.12</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
 <dt>Cells</dt><dd>7–9</dd>
 <dt>Rules</dt><dd><code>B26/S2</code> to <code>B2,6,7,8,9,10,11,12/S2,5,6,7,8,9,10,11,12</code> (16,384 rules)</dd>
 <dt>Seen</dt><dd>6 times</dd>
-<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-852ea9ff"><code>852ea9ff</code></a> and <a href="#ship-c78ceb01"><code>c78ceb01</code></a>.</dd>
+<dt>Verdict</dt><dd><b>Flag B</b>, check before claiming: runs in B26 rules on 3.12.12, beside the <code>B2/S2</code> and <code>B26/S3569</code> rules where EricG (2013) reported many spaceships without listing them. Single ship; contains a perturbed phase of <a href="#ship-95528302"><code>95528302</code></a> and <a href="#ship-30594bf3"><code>30594bf3</code></a>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 31.</p>
 </div>
-<div class="ship-card" id="ship-0ccbe694">
+<div class="ship-card" id="ship-8f790b16">
 <picture>
   <source srcset="../images/findings/8f790b16-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/8f790b16.webp" alt="Spaceship 0ccbe694 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
+  <img src="../images/findings/8f790b16.webp" alt="Spaceship 8f790b16 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>0ccbe694</code> <a class="ship-n" href="#the-60-objects">table row 34</a></p>
+<p class="ship-name"><code>8f790b16</code> <a class="ship-n" href="#the-60-objects">table row 34</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.6.3.6 (shown); also k3-030, k3-032 and k3-039</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -1172,12 +1172,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="ship-095a6bf7">
+<div class="ship-card" id="ship-48e9e267">
 <picture>
   <source srcset="../images/findings/48e9e267-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/48e9e267.webp" alt="Spaceship 095a6bf7 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="242" height="320" loading="lazy">
+  <img src="../images/findings/48e9e267.webp" alt="Spaceship 48e9e267 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="242" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>095a6bf7</code> <a class="ship-n" href="#the-60-objects">table row 37</a></p>
+<p class="ship-name"><code>48e9e267</code> <a class="ship-n" href="#the-60-objects">table row 37</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.6.3.6</dd>
 <dt>Period</dt><dd>12, moving 3 lattice steps per period (c/4)</dd>
@@ -1188,12 +1188,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 3 to 51.</p>
 </div>
-<div class="ship-card" id="ship-58ce78e3">
+<div class="ship-card" id="ship-e71e1136">
 <picture>
   <source srcset="../images/findings/e71e1136-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/e71e1136.webp" alt="Spaceship 58ce78e3 moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
+  <img src="../images/findings/e71e1136.webp" alt="Spaceship e71e1136 moving across the 2-uniform tiling k2-006" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>58ce78e3</code> <a class="ship-n" href="#the-60-objects">table row 40</a></p>
+<p class="ship-name"><code>e71e1136</code> <a class="ship-n" href="#the-60-objects">table row 40</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-006 (shown); also k3-028, k3-029 and k3-030; found on k3-029</dd>
 <dt>Period</dt><dd>10, moving one lattice step per period (c/10)</dd>
@@ -1204,12 +1204,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 81, every 2nd.</p>
 </div>
-<div class="ship-card" id="ship-47587892">
+<div class="ship-card" id="ship-2afbf92b">
 <picture>
   <source srcset="../images/findings/2afbf92b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/2afbf92b.webp" alt="Spaceship 47587892 moving across the 2-uniform tiling k2-017" width="192" height="320" loading="lazy">
+  <img src="../images/findings/2afbf92b.webp" alt="Spaceship 2afbf92b moving across the 2-uniform tiling k2-017" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>47587892</code> <a class="ship-n" href="#the-60-objects">table row 52</a></p>
+<p class="ship-name"><code>2afbf92b</code> <a class="ship-n" href="#the-60-objects">table row 52</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-017</dd>
 <dt>Period</dt><dd>17, moving one lattice step per period (c/17)</dd>
@@ -1220,12 +1220,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 6 to 57.</p>
 </div>
-<div class="ship-card" id="ship-d37488d1">
+<div class="ship-card" id="ship-d5600a12">
 <picture>
   <source srcset="../images/findings/d5600a12-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/d5600a12.webp" alt="Spaceship d37488d1 moving across the 3-uniform tiling k3-022" width="316" height="320" loading="lazy">
+  <img src="../images/findings/d5600a12.webp" alt="Spaceship d5600a12 moving across the 3-uniform tiling k3-022" width="316" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>d37488d1</code> <a class="ship-n" href="#the-60-objects">table row 54</a></p>
+<p class="ship-name"><code>d5600a12</code> <a class="ship-n" href="#the-60-objects">table row 54</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-022</dd>
 <dt>Period</dt><dd>12, moving (−1, −1) per period</dd>
@@ -1236,12 +1236,12 @@ others may well have seen them, so they are not claimed.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="ship-91205ceb">
+<div class="ship-card" id="ship-ba6acb83">
 <picture>
   <source srcset="../images/findings/ba6acb83-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/findings/ba6acb83.webp" alt="Spaceship 91205ceb moving across the 3-uniform tiling k3-058" width="256" height="320" loading="lazy">
+  <img src="../images/findings/ba6acb83.webp" alt="Spaceship ba6acb83 moving across the 3-uniform tiling k3-058" width="256" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>91205ceb</code> <a class="ship-n" href="#the-60-objects">table row 59</a></p>
+<p class="ship-name"><code>ba6acb83</code> <a class="ship-n" href="#the-60-objects">table row 59</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-058</dd>
 <dt>Period</dt><dd>12, moving one lattice step per period (c/12)</dd>
@@ -1381,7 +1381,7 @@ candidates above:
    object finder saw one spaceship each time, with the recorded period and displacement; a scratch
    catalog recomputed the same range of rules. The object finder cannot do this for a ship whose
    parts lie too far apart to be grouped (it sees the parts of a bound pair as two ships, and the
-   pieces of one large k3-055 ship, `0af25862`, as debris); for those, JETCARP's engine was checked
+   pieces of one large k3-055 ship, `5f371c4c`, as debris); for those, JETCARP's engine was checked
    to repeat the ship, translated, for 12 periods.
 2. Every phase was split into groups and each group run alone, to find **compounds**: two or more
    smaller ships flying together without influencing each other.
@@ -1435,7 +1435,7 @@ bound pairs (five of them made of the snub-square glider) and one large k3-055 s
 smaller k3-055 ship unchanged and drags debris behind it. Six single ships contain a perturbed phase of
 a smaller ship without being built from it, as Life's own heavyweight spaceship contains a phase of the
 lightweight one: the period-24 ship on 3.3.4.3.4 (Guttesen's glider), the period-20 ship of k3-039
-(glider g), the k3-010 ship `b62c62bf` (the lightweight spaceship, which runs unchanged in the strips
+(glider g), the k3-010 ship `25c5dc4a` (the lightweight spaceship, which runs unchanged in the strips
 of squares of k3-010), and three ships of k3-002 and k3-011 that each contain a phase of a smaller ship
 of their own tiling.
 
@@ -1454,52 +1454,52 @@ its card.
 
 | | id | tiling (also runs on) | p | d per period | cells | rules in range | seen (soups) | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [`7e006ed1`](#life-7e006ed1) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 11–15 | `B3/S23` (512) | 45 (45) | known: the middleweight spaceship (MWSS); contains a phase of the LWSS |
-| 2 | [`83051933`](#life-83051933) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−1, −1) | 5 | `B3/S23` (512) | 95,041 (29,732) | known: Conway's glider |
-| 3 | [`eaf14870`](#life-eaf14870) | square (k3-010, 25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 9–12 | `B3/S23` (512) | 135 (133) | known: the lightweight spaceship (LWSS) |
-| 4 | [`fbf3fc62`](#life-fbf3fc62) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 13–18 | `B3/S23` (512) | 11 (11) | known: the heavyweight spaceship (HWSS); contains a phase of the MWSS and the LWSS |
-| 5 | [`c1cda1c4`](#life-c1cda1c4) | 3.6.3.6 (k3-030, k3-032, k3-039) | 4 | (1, 0) | 4–5 | `B3/S23` (8,192) | 245,860 (114,606) | known: Guttesen's kagome glider g |
-| 6 | [`6ca1d74c`](#life-6ca1d74c) | 3.3.3.4.4 (k3-013, k3-019) | 2 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 13,595 (13,052) | known: EricG's 3.3.3.4.4 ship |
-| 7 | [`ad39623e`](#life-ad39623e) | 3.3.4.3.4 | 8 | (0, −2) | 8–15 | `B3/S23` (8,192) | 118,271 (43,179) | known: Guttesen's snub-square glider |
-| 8 | [`6574801c`](#life-6574801c) | k2-007 | 20 | (1, 0) | 6–20 | `B3/S23` (8,192) | 5,772 (5,537) | known: Büttner's period-20 ship |
-| 9 | [`487cf3f7`](#life-487cf3f7) | k2-003 | 13 | (−2, 0) | 12–44 | `B3/S23` (2,048) | 13 (13) | single |
-| 10 | [`4392fd90`](#life-4392fd90) | k2-012 | 3 | (−1, 0) | 10–14 | `B3/S23` (32,768) | 1 (1) | single |
-| 11 | [`3b16f6b5`](#life-3b16f6b5) | k3-002 | 3 | (−1, 0) | 14–16 | `B3/S23` (1,024) | 10 (10) | single; contains a phase of `d45da341` |
-| 12 | [`b62c62bf`](#life-b62c62bf) | k3-010 | 4 | (−2, 0) | 11–15 | `B3/S23` (2,048) | 2 (2) | single; contains a phase of the LWSS |
-| 13 | [`c1a8b0bf`](#life-c1a8b0bf) | k3-010 | 38 | (4, 0) | 8–24 | `B3/S23` (2,048) | 23 (23) | single |
-| 14 | [`28714e5c`](#life-28714e5c) | k3-011 | 4 | (1, 0) | 11–15 | `B3/S23` (8,192) | 8 (8) | single; contains a phase of [`6573d1df`](#life-6573d1df) |
-| 15 | [`6573d1df`](#life-6573d1df) | k3-011 | 4 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 9 (9) | single |
-| 16 | [`a07330dc`](#life-a07330dc) | k3-011 | 4 | (−1, 0) | 11–18 | `B3/S23` (8,192) | 1 (1) | single; contains a phase of [`28714e5c`](#life-28714e5c) and [`6573d1df`](#life-6573d1df) |
-| 17 | [`6a4efaf6`](#life-6a4efaf6) | k3-011 | 9 | (−1, 0) | 9–16 | `B3/S23` (8,192) | 8 (8) | single |
-| 18 | [`b22eedfa`](#life-b22eedfa) | k3-040 | 8 | (2, 0) | 8–12 | `B3/S23` (32,768) | 13 (13) | single |
-| 19 | [`63cd2160`](#life-63cd2160) | k3-041 | 4 | (1, 0) | 12–19 | `B3/S23` (32,768) | 150 (150) | single |
-| 20 | [`4241bdcf`](#life-4241bdcf) | k3-044 | 8 | (1, 0) | 8–18 | `B3/S23` (131,072) | 5 (5) | single |
-| 21 | [`06aa3aec`](#life-06aa3aec) | k3-055 | 20 | (5, 0) | 35–57 | `B3/S23` (8,192) | 185 (185) | single |
-| 22 | [`0100430f`](#life-0100430f) | k3-055 | 32 | (8, 0) | 17–65 | `B3/S23` (8,192) | 21 (21) | single |
-| 23 | [`0af25862`](#life-0af25862) | k3-055 | 32 | (−8, 0) | 28–66 | `B3/S23` (8,192) | 1 (1) | single |
-| 24 | [`28d7a526`](#life-28d7a526) | k3-055 | 32 | (−8, 0) | 73–121 | `B3/S23` (8,192) | 1 (1) | single |
-| 25 | [`3491af4a`](#life-3491af4a) | k3-055 | 32 | (8, 0) | 53–105 | `B3/S23` (8,192) | 7 (7) | single |
-| 26 | [`63121d47`](#life-63121d47) | k3-055 | 32 | (8, 0) | 54–94 | `B3/S23` (8,192) | 1 (1) | single |
-| 27 | [`b270dddd`](#life-b270dddd) | k3-055 | 32 | (−8, 0) | 52–96 | `B3/S23` (8,192) | 8 (8) | single |
-| 28 | [`d0b8f09d`](#life-d0b8f09d) | k3-055 | 32 | (8, 0) | 39–73 | `B3/S23` (8,192) | 3 (3) | single |
-| 29 | [`f34bd1e7`](#life-f34bd1e7) | k3-055 | 32 | (8, 0) | 38–104 | `B3/S23` (8,192) | 4 (4) | single |
-| 30 | [`140cd3cc`](#life-140cd3cc) | k3-055 | 64 | (16, 0) | 63–148 | `B3/S23` (8,192) | 6 (6) | single |
-| 31 | [`6c80b30d`](#life-6c80b30d) | k3-055 | 64 | (16, 0) | 75–149 | `B3/S23` (8,192) | 5 (5) | single |
-| 32 | [`9f474023`](#life-9f474023) | k3-055 | 64 | (16, 0) | 28–84 | `B3/S23` (8,192) | 15 (15) | single |
-| 33 | [`d26a876d`](#life-d26a876d) | k3-055 | 64 | (16, 0) | 103–169 | `B3/S23` (8,192) | 4 (4) | single |
-| 34 | [`83da34d9`](#life-83da34d9) | k3-057 | 12 | (0, −1) | 13–24 | `B3/S23` (8,192) | 57 (57) | single |
-| 35 | [`98a3c53b`](#life-98a3c53b) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (8,192) | 3 (3) | flagged; contains a phase of Guttesen's snub-square glider |
-| 36 | [`2076694c`](#life-2076694c) | k2-003 (k3-010, k3-016) | 16 | (5, 0) | 8–16 | `B3/S23` (2,048) | 1,295 (1,292) | flagged |
-| 37 | [`ac3667f4`](#life-ac3667f4) | k2-007 | 5 | (0, −1) | 16–22 | `B3/S23` (8,192) | 1 (1) | flagged |
-| 38 | [`119e5cea`](#life-119e5cea) | k2-011 (k3-002) | 3 | (1, 0) | 9–11 | `B3/S23` (8,192) | 882 (878) | flagged |
-| 39 | [`ac1d0f14`](#life-ac1d0f14) | k2-017 (k3-053) | 4 | (−1, 0) | 6–9 | `B3/S23` (8,192) | 138,656 (77,024) | flagged |
-| 40 | [`5deb47c2`](#life-5deb47c2) | k3-039 | 20 | (−5, 0) | 7–21 | `B3/S23` (8,192) | 22,100 (17,978) | flagged; contains a phase of glider g |
-| 41 | [`98d64885`](#life-98d64885) | k3-040 | 24 | (4, 0) | 7–23 | `B3/S23` (32,768) | 3,661 (3,567) | flagged |
-| 42 | [`bf101de9`](#life-bf101de9) | k3-044 | 31 | (−2, 0) | 3–18 | `B3/S23` (131,072) | 88,492 (42,183) | flagged |
-| 43 | [`49237dd5`](#life-49237dd5) | k3-045 (k3-046) | 11 | (−2, 0) | 8–16 | `B3/S23` (131,072) | 11,435 (10,811) | flagged |
-| 44 | [`adfd2f61`](#life-adfd2f61) | k3-057 | 8 | (1, 0) | 9–14 | `B3/S23` (8,192) | 6,553 (6,141) | flagged |
-| 45 | [`37db33e3`](#life-37db33e3) | k3-059 | 30 | (1, 1) | 7–23 | `B3/S23` (524,288) | 81,611 (41,207) | flagged |
-| 46 | [`b414ad8f`](#life-b414ad8f) | k3-061 | 22 | (1, 1) | 5–10 | `B3/S23` (524,288) | 34,039 (25,346) | flagged |
+| 1 | [`77364004`](#life-77364004) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 11–15 | `B3/S23` (512) | 45 (45) | known: the middleweight spaceship (MWSS); contains a phase of the LWSS |
+| 2 | [`5a080db3`](#life-5a080db3) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−1, −1) | 5 | `B3/S23` (512) | 95,041 (29,732) | known: Conway's glider |
+| 3 | [`6dd55e69`](#life-6dd55e69) | square (k3-010, 25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 9–12 | `B3/S23` (512) | 135 (133) | known: the lightweight spaceship (LWSS) |
+| 4 | [`1376072e`](#life-1376072e) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 13–18 | `B3/S23` (512) | 11 (11) | known: the heavyweight spaceship (HWSS); contains a phase of the MWSS and the LWSS |
+| 5 | [`47fc3f43`](#life-47fc3f43) | 3.6.3.6 (k3-030, k3-032, k3-039) | 4 | (1, 0) | 4–5 | `B3/S23` (8,192) | 245,860 (114,606) | known: Guttesen's kagome glider g |
+| 6 | [`232055ff`](#life-232055ff) | 3.3.3.4.4 (k3-013, k3-019) | 2 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 13,595 (13,052) | known: EricG's 3.3.3.4.4 ship |
+| 7 | [`c574f8e3`](#life-c574f8e3) | 3.3.4.3.4 | 8 | (0, −2) | 8–15 | `B3/S23` (8,192) | 118,271 (43,179) | known: Guttesen's snub-square glider |
+| 8 | [`fabe952b`](#life-fabe952b) | k2-007 | 20 | (1, 0) | 6–20 | `B3/S23` (8,192) | 5,772 (5,537) | known: Büttner's period-20 ship |
+| 9 | [`0e3664c5`](#life-0e3664c5) | k2-003 | 13 | (−2, 0) | 12–44 | `B3/S23` (2,048) | 13 (13) | single |
+| 10 | [`d02b5ce8`](#life-d02b5ce8) | k2-012 | 3 | (−1, 0) | 10–14 | `B3/S23` (32,768) | 1 (1) | single |
+| 11 | [`ca75ccd6`](#life-ca75ccd6) | k3-002 | 3 | (−1, 0) | 14–16 | `B3/S23` (1,024) | 10 (10) | single; contains a phase of `f3d41f14` |
+| 12 | [`25c5dc4a`](#life-25c5dc4a) | k3-010 | 4 | (−2, 0) | 11–15 | `B3/S23` (2,048) | 2 (2) | single; contains a phase of the LWSS |
+| 13 | [`41eb5c62`](#life-41eb5c62) | k3-010 | 38 | (4, 0) | 8–24 | `B3/S23` (2,048) | 23 (23) | single |
+| 14 | [`8488e7e9`](#life-8488e7e9) | k3-011 | 4 | (1, 0) | 11–15 | `B3/S23` (8,192) | 8 (8) | single; contains a phase of [`d997330c`](#life-d997330c) |
+| 15 | [`d997330c`](#life-d997330c) | k3-011 | 4 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 9 (9) | single |
+| 16 | [`4f66f17e`](#life-4f66f17e) | k3-011 | 4 | (−1, 0) | 11–18 | `B3/S23` (8,192) | 1 (1) | single; contains a phase of [`8488e7e9`](#life-8488e7e9) and [`d997330c`](#life-d997330c) |
+| 17 | [`f87a9ed1`](#life-f87a9ed1) | k3-011 | 9 | (−1, 0) | 9–16 | `B3/S23` (8,192) | 8 (8) | single |
+| 18 | [`b6a6a47a`](#life-b6a6a47a) | k3-040 | 8 | (2, 0) | 8–12 | `B3/S23` (32,768) | 13 (13) | single |
+| 19 | [`148310e3`](#life-148310e3) | k3-041 | 4 | (1, 0) | 12–19 | `B3/S23` (32,768) | 150 (150) | single |
+| 20 | [`f6567467`](#life-f6567467) | k3-044 | 8 | (1, 0) | 8–18 | `B3/S23` (131,072) | 5 (5) | single |
+| 21 | [`139723e0`](#life-139723e0) | k3-055 | 20 | (5, 0) | 35–57 | `B3/S23` (8,192) | 185 (185) | single |
+| 22 | [`65acb120`](#life-65acb120) | k3-055 | 32 | (8, 0) | 17–65 | `B3/S23` (8,192) | 21 (21) | single |
+| 23 | [`5f371c4c`](#life-5f371c4c) | k3-055 | 32 | (−8, 0) | 28–66 | `B3/S23` (8,192) | 1 (1) | single |
+| 24 | [`5912456d`](#life-5912456d) | k3-055 | 32 | (−8, 0) | 73–121 | `B3/S23` (8,192) | 1 (1) | single |
+| 25 | [`fbad7fbf`](#life-fbad7fbf) | k3-055 | 32 | (8, 0) | 53–105 | `B3/S23` (8,192) | 7 (7) | single |
+| 26 | [`ad91d936`](#life-ad91d936) | k3-055 | 32 | (8, 0) | 54–94 | `B3/S23` (8,192) | 1 (1) | single |
+| 27 | [`8130b388`](#life-8130b388) | k3-055 | 32 | (−8, 0) | 52–96 | `B3/S23` (8,192) | 8 (8) | single |
+| 28 | [`b86bd684`](#life-b86bd684) | k3-055 | 32 | (8, 0) | 39–73 | `B3/S23` (8,192) | 3 (3) | single |
+| 29 | [`50ecb3d5`](#life-50ecb3d5) | k3-055 | 32 | (8, 0) | 38–104 | `B3/S23` (8,192) | 4 (4) | single |
+| 30 | [`d878334e`](#life-d878334e) | k3-055 | 64 | (16, 0) | 63–148 | `B3/S23` (8,192) | 6 (6) | single |
+| 31 | [`92b7544a`](#life-92b7544a) | k3-055 | 64 | (16, 0) | 75–149 | `B3/S23` (8,192) | 5 (5) | single |
+| 32 | [`126db117`](#life-126db117) | k3-055 | 64 | (16, 0) | 28–84 | `B3/S23` (8,192) | 15 (15) | single |
+| 33 | [`1ccdebc8`](#life-1ccdebc8) | k3-055 | 64 | (16, 0) | 103–169 | `B3/S23` (8,192) | 4 (4) | single |
+| 34 | [`f2841d4c`](#life-f2841d4c) | k3-057 | 12 | (0, −1) | 13–24 | `B3/S23` (8,192) | 57 (57) | single |
+| 35 | [`a5e9ba80`](#life-a5e9ba80) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (8,192) | 3 (3) | flagged; contains a phase of Guttesen's snub-square glider |
+| 36 | [`f89d8f11`](#life-f89d8f11) | k2-003 (k3-010, k3-016) | 16 | (5, 0) | 8–16 | `B3/S23` (2,048) | 1,295 (1,292) | flagged |
+| 37 | [`55db03c8`](#life-55db03c8) | k2-007 | 5 | (0, −1) | 16–22 | `B3/S23` (8,192) | 1 (1) | flagged |
+| 38 | [`c1d7a48e`](#life-c1d7a48e) | k2-011 (k3-002) | 3 | (1, 0) | 9–11 | `B3/S23` (8,192) | 882 (878) | flagged |
+| 39 | [`16bc37c9`](#life-16bc37c9) | k2-017 (k3-053) | 4 | (−1, 0) | 6–9 | `B3/S23` (8,192) | 138,656 (77,024) | flagged |
+| 40 | [`020ec7b7`](#life-020ec7b7) | k3-039 | 20 | (−5, 0) | 7–21 | `B3/S23` (8,192) | 22,100 (17,978) | flagged; contains a phase of glider g |
+| 41 | [`dab6fb01`](#life-dab6fb01) | k3-040 | 24 | (4, 0) | 7–23 | `B3/S23` (32,768) | 3,661 (3,567) | flagged |
+| 42 | [`e1fcfa73`](#life-e1fcfa73) | k3-044 | 31 | (−2, 0) | 3–18 | `B3/S23` (131,072) | 88,492 (42,183) | flagged |
+| 43 | [`3792824d`](#life-3792824d) | k3-045 (k3-046) | 11 | (−2, 0) | 8–16 | `B3/S23` (131,072) | 11,435 (10,811) | flagged |
+| 44 | [`1e6832e3`](#life-1e6832e3) | k3-057 | 8 | (1, 0) | 9–14 | `B3/S23` (8,192) | 6,553 (6,141) | flagged |
+| 45 | [`93a72ebd`](#life-93a72ebd) | k3-059 | 30 | (1, 1) | 7–23 | `B3/S23` (524,288) | 81,611 (41,207) | flagged |
+| 46 | [`58e6d5fc`](#life-58e6d5fc) | k3-061 | 22 | (1, 1) | 5–10 | `B3/S23` (524,288) | 34,039 (25,346) | flagged |
 
 ### Gallery of the Life objects
 
@@ -1515,12 +1515,12 @@ neighbour graph; Guttesen's two gliders; the ship that is probably EricG's on 3.
 ship that is very likely Büttner's on k2-007.
 
 <div class="ship-gallery">
-<div class="ship-card" id="life-7e006ed1">
+<div class="ship-card" id="life-77364004">
 <picture>
   <source srcset="../images/life-census/77364004-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/77364004.webp" alt="Life spaceship 7e006ed1 moving across the square grid" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/77364004.webp" alt="Life spaceship 77364004 moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>7e006ed1</code> <a class="ship-n" href="#the-life-objects">table row 1</a></p>
+<p class="ship-name"><code>77364004</code> <a class="ship-n" href="#the-life-objects">table row 1</a></p>
 <dl>
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -1531,12 +1531,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-83051933">
+<div class="ship-card" id="life-5a080db3">
 <picture>
   <source srcset="../images/life-census/5a080db3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/5a080db3.webp" alt="Life spaceship 83051933 moving across the square grid" width="272" height="272" loading="lazy">
+  <img src="../images/life-census/5a080db3.webp" alt="Life spaceship 5a080db3 moving across the square grid" width="272" height="272" loading="lazy">
 </picture>
-<p class="ship-name"><code>83051933</code> <a class="ship-n" href="#the-life-objects">table row 2</a></p>
+<p class="ship-name"><code>5a080db3</code> <a class="ship-n" href="#the-life-objects">table row 2</a></p>
 <dl>
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving (−1, −1) per period</dd>
@@ -1547,12 +1547,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="life-eaf14870">
+<div class="ship-card" id="life-6dd55e69">
 <picture>
   <source srcset="../images/life-census/6dd55e69-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/6dd55e69.webp" alt="Life spaceship eaf14870 moving across the square grid" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/6dd55e69.webp" alt="Life spaceship 6dd55e69 moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>eaf14870</code> <a class="ship-n" href="#the-life-objects">table row 3</a></p>
+<p class="ship-name"><code>6dd55e69</code> <a class="ship-n" href="#the-life-objects">table row 3</a></p>
 <dl>
 <dt>Tiling</dt><dd>square (shown); also, unchanged, k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -1563,12 +1563,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-fbf3fc62">
+<div class="ship-card" id="life-1376072e">
 <picture>
   <source srcset="../images/life-census/1376072e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/1376072e.webp" alt="Life spaceship fbf3fc62 moving across the square grid" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/1376072e.webp" alt="Life spaceship 1376072e moving across the square grid" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>fbf3fc62</code> <a class="ship-n" href="#the-life-objects">table row 4</a></p>
+<p class="ship-name"><code>1376072e</code> <a class="ship-n" href="#the-life-objects">table row 4</a></p>
 <dl>
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -1579,12 +1579,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-c1cda1c4">
+<div class="ship-card" id="life-47fc3f43">
 <picture>
   <source srcset="../images/tilings/glider-guttesen-kagome-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/glider-guttesen-kagome.webp" alt="Life spaceship c1cda1c4 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="420" height="252" loading="lazy">
+  <img src="../images/tilings/glider-guttesen-kagome.webp" alt="Life spaceship 47fc3f43 moving across the trihexagonal (kagome) tiling 3.6.3.6" width="420" height="252" loading="lazy">
 </picture>
-<p class="ship-name"><code>c1cda1c4</code> <a class="ship-n" href="#the-life-objects">table row 5</a></p>
+<p class="ship-name"><code>47fc3f43</code> <a class="ship-n" href="#the-life-objects">table row 5</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.6.3.6 (shown); also, unchanged, k3-030, k3-032 and k3-039</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -1595,12 +1595,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 60.</p>
 </div>
-<div class="ship-card" id="life-6ca1d74c">
+<div class="ship-card" id="life-232055ff">
 <picture>
   <source srcset="../images/life-census/232055ff-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/232055ff.webp" alt="Life spaceship 6ca1d74c moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/232055ff.webp" alt="Life spaceship 232055ff moving across the elongated triangular tiling 3.3.3.4.4" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>6ca1d74c</code> <a class="ship-n" href="#the-life-objects">table row 6</a></p>
+<p class="ship-name"><code>232055ff</code> <a class="ship-n" href="#the-life-objects">table row 6</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also, unchanged, k3-013 and k3-019</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
@@ -1611,12 +1611,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="life-ad39623e">
+<div class="ship-card" id="life-c574f8e3">
 <picture>
   <source srcset="../images/tilings/glider-guttesen-snubsq-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="Life spaceship ad39623e moving across the snub square tiling 3.3.4.3.4" width="240" height="400" loading="lazy">
+  <img src="../images/tilings/glider-guttesen-snubsq.webp" alt="Life spaceship c574f8e3 moving across the snub square tiling 3.3.4.3.4" width="240" height="400" loading="lazy">
 </picture>
-<p class="ship-name"><code>ad39623e</code> <a class="ship-n" href="#the-life-objects">table row 7</a></p>
+<p class="ship-name"><code>c574f8e3</code> <a class="ship-n" href="#the-life-objects">table row 7</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
@@ -1627,12 +1627,12 @@ ship that is very likely Büttner's on k2-007.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 56.</p>
 </div>
-<div class="ship-card" id="life-6574801c">
+<div class="ship-card" id="life-fabe952b">
 <picture>
   <source srcset="../images/life-census/fabe952b-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/fabe952b.webp" alt="Life spaceship 6574801c moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/fabe952b.webp" alt="Life spaceship fabe952b moving across the 2-uniform tiling k2-007" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>6574801c</code> <a class="ship-n" href="#the-life-objects">table row 8</a></p>
+<p class="ship-name"><code>fabe952b</code> <a class="ship-n" href="#the-life-objects">table row 8</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-007</dd>
 <dt>Period</dt><dd>20, moving one lattice step per period (c/20)</dd>
@@ -1650,12 +1650,12 @@ ship that is very likely Büttner's on k2-007.
 Single ships that carry no flag. To our knowledge, none of them has been reported before.
 
 <div class="ship-gallery">
-<div class="ship-card" id="life-487cf3f7">
+<div class="ship-card" id="life-0e3664c5">
 <picture>
   <source srcset="../images/life-census/0e3664c5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/0e3664c5.webp" alt="Life spaceship 487cf3f7 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/0e3664c5.webp" alt="Life spaceship 0e3664c5 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>487cf3f7</code> <a class="ship-n" href="#the-life-objects">table row 9</a></p>
+<p class="ship-name"><code>0e3664c5</code> <a class="ship-n" href="#the-life-objects">table row 9</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-003</dd>
 <dt>Period</dt><dd>13, moving 2 lattice steps per period (2c/13)</dd>
@@ -1666,12 +1666,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 6 to 149, every 3rd.</p>
 </div>
-<div class="ship-card" id="life-4392fd90">
+<div class="ship-card" id="life-d02b5ce8">
 <picture>
   <source srcset="../images/life-census/d02b5ce8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/d02b5ce8.webp" alt="Life spaceship 4392fd90 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/d02b5ce8.webp" alt="Life spaceship d02b5ce8 moving across the 2-uniform tiling k2-012" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>4392fd90</code> <a class="ship-n" href="#the-life-objects">table row 10</a></p>
+<p class="ship-name"><code>d02b5ce8</code> <a class="ship-n" href="#the-life-objects">table row 10</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-012</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
@@ -1682,28 +1682,28 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 2 to 44.</p>
 </div>
-<div class="ship-card" id="life-3b16f6b5">
+<div class="ship-card" id="life-ca75ccd6">
 <picture>
   <source srcset="../images/life-census/ca75ccd6-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/ca75ccd6.webp" alt="Life spaceship 3b16f6b5 moving across the 3-uniform tiling k3-002" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/ca75ccd6.webp" alt="Life spaceship ca75ccd6 moving across the 3-uniform tiling k3-002" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>3b16f6b5</code> <a class="ship-n" href="#the-life-objects">table row 11</a></p>
+<p class="ship-name"><code>ca75ccd6</code> <a class="ship-n" href="#the-life-objects">table row 11</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-002</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
 <dt>Cells</dt><dd>14–16</dd>
 <dt>Rules</dt><dd><code>B3/S23</code> to <code>B3789/S23789</code> (1,024 rules)</dd>
 <dt>Seen</dt><dd>10 times, in 10 soups</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <code>d45da341</code>.</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <code>f3d41f14</code>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 43.</p>
 </div>
-<div class="ship-card" id="life-b62c62bf">
+<div class="ship-card" id="life-25c5dc4a">
 <picture>
   <source srcset="../images/life-census/25c5dc4a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/25c5dc4a.webp" alt="Life spaceship b62c62bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/25c5dc4a.webp" alt="Life spaceship 25c5dc4a moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>b62c62bf</code> <a class="ship-n" href="#the-life-objects">table row 12</a></p>
+<p class="ship-name"><code>25c5dc4a</code> <a class="ship-n" href="#the-life-objects">table row 12</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-010</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
@@ -1714,12 +1714,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-c1a8b0bf">
+<div class="ship-card" id="life-41eb5c62">
 <picture>
   <source srcset="../images/life-census/41eb5c62-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/41eb5c62.webp" alt="Life spaceship c1a8b0bf moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/41eb5c62.webp" alt="Life spaceship 41eb5c62 moving across the 3-uniform tiling k3-010" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>c1a8b0bf</code> <a class="ship-n" href="#the-life-objects">table row 13</a></p>
+<p class="ship-name"><code>41eb5c62</code> <a class="ship-n" href="#the-life-objects">table row 13</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-010</dd>
 <dt>Period</dt><dd>38, moving 4 lattice steps per period (2c/19)</dd>
@@ -1730,28 +1730,28 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 6 to 158, every 3rd.</p>
 </div>
-<div class="ship-card" id="life-28714e5c">
+<div class="ship-card" id="life-8488e7e9">
 <picture>
   <source srcset="../images/life-census/8488e7e9-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/8488e7e9.webp" alt="Life spaceship 28714e5c moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/8488e7e9.webp" alt="Life spaceship 8488e7e9 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>28714e5c</code> <a class="ship-n" href="#the-life-objects">table row 14</a></p>
+<p class="ship-name"><code>8488e7e9</code> <a class="ship-n" href="#the-life-objects">table row 14</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>11–15</dd>
 <dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
 <dt>Seen</dt><dd>8 times, in 8 soups</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-6573d1df"><code>6573d1df</code></a>.</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-d997330c"><code>d997330c</code></a>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-6573d1df">
+<div class="ship-card" id="life-d997330c">
 <picture>
   <source srcset="../images/life-census/d997330c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/d997330c.webp" alt="Life spaceship 6573d1df moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/d997330c.webp" alt="Life spaceship d997330c moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>6573d1df</code> <a class="ship-n" href="#the-life-objects">table row 15</a></p>
+<p class="ship-name"><code>d997330c</code> <a class="ship-n" href="#the-life-objects">table row 15</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -1762,28 +1762,28 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="life-a07330dc">
+<div class="ship-card" id="life-4f66f17e">
 <picture>
   <source srcset="../images/life-census/4f66f17e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/4f66f17e.webp" alt="Life spaceship a07330dc moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/4f66f17e.webp" alt="Life spaceship 4f66f17e moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>a07330dc</code> <a class="ship-n" href="#the-life-objects">table row 16</a></p>
+<p class="ship-name"><code>4f66f17e</code> <a class="ship-n" href="#the-life-objects">table row 16</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>11–18</dd>
 <dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,9,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
-<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-28714e5c"><code>28714e5c</code></a> and <a href="#life-6573d1df"><code>6573d1df</code></a>.</dd>
+<dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-8488e7e9"><code>8488e7e9</code></a> and <a href="#life-d997330c"><code>d997330c</code></a>.</dd>
 </dl>
 <p class="ship-clip">Clip: generations 0 to 40.</p>
 </div>
-<div class="ship-card" id="life-6a4efaf6">
+<div class="ship-card" id="life-f87a9ed1">
 <picture>
   <source srcset="../images/life-census/f87a9ed1-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/f87a9ed1.webp" alt="Life spaceship 6a4efaf6 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/f87a9ed1.webp" alt="Life spaceship f87a9ed1 moving across the 3-uniform tiling k3-011" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>6a4efaf6</code> <a class="ship-n" href="#the-life-objects">table row 17</a></p>
+<p class="ship-name"><code>f87a9ed1</code> <a class="ship-n" href="#the-life-objects">table row 17</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>9, moving one lattice step per period (c/9)</dd>
@@ -1794,12 +1794,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 2 to 65.</p>
 </div>
-<div class="ship-card" id="life-b22eedfa">
+<div class="ship-card" id="life-b6a6a47a">
 <picture>
   <source srcset="../images/life-census/b6a6a47a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b6a6a47a.webp" alt="Life spaceship b22eedfa moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/b6a6a47a.webp" alt="Life spaceship b6a6a47a moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>b22eedfa</code> <a class="ship-n" href="#the-life-objects">table row 18</a></p>
+<p class="ship-name"><code>b6a6a47a</code> <a class="ship-n" href="#the-life-objects">table row 18</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-040</dd>
 <dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
@@ -1810,12 +1810,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-63cd2160">
+<div class="ship-card" id="life-148310e3">
 <picture>
   <source srcset="../images/life-census/148310e3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/148310e3.webp" alt="Life spaceship 63cd2160 moving across the 3-uniform tiling k3-041" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/148310e3.webp" alt="Life spaceship 148310e3 moving across the 3-uniform tiling k3-041" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>63cd2160</code> <a class="ship-n" href="#the-life-objects">table row 19</a></p>
+<p class="ship-name"><code>148310e3</code> <a class="ship-n" href="#the-life-objects">table row 19</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-041</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -1826,12 +1826,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 2 to 42.</p>
 </div>
-<div class="ship-card" id="life-4241bdcf">
+<div class="ship-card" id="life-f6567467">
 <picture>
   <source srcset="../images/life-census/f6567467-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/f6567467.webp" alt="Life spaceship 4241bdcf moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/f6567467.webp" alt="Life spaceship f6567467 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>4241bdcf</code> <a class="ship-n" href="#the-life-objects">table row 20</a></p>
+<p class="ship-name"><code>f6567467</code> <a class="ship-n" href="#the-life-objects">table row 20</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-044</dd>
 <dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
@@ -1842,12 +1842,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 2 to 58.</p>
 </div>
-<div class="ship-card" id="life-06aa3aec">
+<div class="ship-card" id="life-139723e0">
 <picture>
   <source srcset="../images/life-census/139723e0-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/139723e0.webp" alt="Life spaceship 06aa3aec moving across the 3-uniform tiling k3-055" width="318" height="192" loading="lazy">
+  <img src="../images/life-census/139723e0.webp" alt="Life spaceship 139723e0 moving across the 3-uniform tiling k3-055" width="318" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>06aa3aec</code> <a class="ship-n" href="#the-life-objects">table row 21</a></p>
+<p class="ship-name"><code>139723e0</code> <a class="ship-n" href="#the-life-objects">table row 21</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
@@ -1858,12 +1858,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 17 to 57.</p>
 </div>
-<div class="ship-card" id="life-0100430f">
+<div class="ship-card" id="life-65acb120">
 <picture>
   <source srcset="../images/life-census/65acb120-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/65acb120.webp" alt="Life spaceship 0100430f moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/65acb120.webp" alt="Life spaceship 65acb120 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>0100430f</code> <a class="ship-n" href="#the-life-objects">table row 22</a></p>
+<p class="ship-name"><code>65acb120</code> <a class="ship-n" href="#the-life-objects">table row 22</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1874,12 +1874,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 19 to 51.</p>
 </div>
-<div class="ship-card" id="life-0af25862">
+<div class="ship-card" id="life-5f371c4c">
 <picture>
   <source srcset="../images/life-census/5f371c4c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/5f371c4c.webp" alt="Life spaceship 0af25862 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/5f371c4c.webp" alt="Life spaceship 5f371c4c moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>0af25862</code> <a class="ship-n" href="#the-life-objects">table row 23</a></p>
+<p class="ship-name"><code>5f371c4c</code> <a class="ship-n" href="#the-life-objects">table row 23</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1890,12 +1890,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 19 to 51.</p>
 </div>
-<div class="ship-card" id="life-28d7a526">
+<div class="ship-card" id="life-5912456d">
 <picture>
   <source srcset="../images/life-census/5912456d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/5912456d.webp" alt="Life spaceship 28d7a526 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/5912456d.webp" alt="Life spaceship 5912456d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>28d7a526</code> <a class="ship-n" href="#the-life-objects">table row 24</a></p>
+<p class="ship-name"><code>5912456d</code> <a class="ship-n" href="#the-life-objects">table row 24</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1906,12 +1906,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 16 to 48.</p>
 </div>
-<div class="ship-card" id="life-3491af4a">
+<div class="ship-card" id="life-fbad7fbf">
 <picture>
   <source srcset="../images/life-census/fbad7fbf-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/fbad7fbf.webp" alt="Life spaceship 3491af4a moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/fbad7fbf.webp" alt="Life spaceship fbad7fbf moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>3491af4a</code> <a class="ship-n" href="#the-life-objects">table row 25</a></p>
+<p class="ship-name"><code>fbad7fbf</code> <a class="ship-n" href="#the-life-objects">table row 25</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1922,12 +1922,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 23 to 55.</p>
 </div>
-<div class="ship-card" id="life-63121d47">
+<div class="ship-card" id="life-ad91d936">
 <picture>
   <source srcset="../images/life-census/ad91d936-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/ad91d936.webp" alt="Life spaceship 63121d47 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/ad91d936.webp" alt="Life spaceship ad91d936 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>63121d47</code> <a class="ship-n" href="#the-life-objects">table row 26</a></p>
+<p class="ship-name"><code>ad91d936</code> <a class="ship-n" href="#the-life-objects">table row 26</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1938,12 +1938,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 19 to 51.</p>
 </div>
-<div class="ship-card" id="life-b270dddd">
+<div class="ship-card" id="life-8130b388">
 <picture>
   <source srcset="../images/life-census/8130b388-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/8130b388.webp" alt="Life spaceship b270dddd moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/8130b388.webp" alt="Life spaceship 8130b388 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>b270dddd</code> <a class="ship-n" href="#the-life-objects">table row 27</a></p>
+<p class="ship-name"><code>8130b388</code> <a class="ship-n" href="#the-life-objects">table row 27</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1954,12 +1954,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 1 to 33.</p>
 </div>
-<div class="ship-card" id="life-d0b8f09d">
+<div class="ship-card" id="life-b86bd684">
 <picture>
   <source srcset="../images/life-census/b86bd684-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/b86bd684.webp" alt="Life spaceship d0b8f09d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/b86bd684.webp" alt="Life spaceship b86bd684 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>d0b8f09d</code> <a class="ship-n" href="#the-life-objects">table row 28</a></p>
+<p class="ship-name"><code>b86bd684</code> <a class="ship-n" href="#the-life-objects">table row 28</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1970,12 +1970,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 19 to 51.</p>
 </div>
-<div class="ship-card" id="life-f34bd1e7">
+<div class="ship-card" id="life-50ecb3d5">
 <picture>
   <source srcset="../images/life-census/50ecb3d5-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/50ecb3d5.webp" alt="Life spaceship f34bd1e7 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/50ecb3d5.webp" alt="Life spaceship 50ecb3d5 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>f34bd1e7</code> <a class="ship-n" href="#the-life-objects">table row 29</a></p>
+<p class="ship-name"><code>50ecb3d5</code> <a class="ship-n" href="#the-life-objects">table row 29</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
@@ -1986,12 +1986,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 22 to 54.</p>
 </div>
-<div class="ship-card" id="life-140cd3cc">
+<div class="ship-card" id="life-d878334e">
 <picture>
   <source srcset="../images/life-census/d878334e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/d878334e.webp" alt="Life spaceship 140cd3cc moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/d878334e.webp" alt="Life spaceship d878334e moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>140cd3cc</code> <a class="ship-n" href="#the-life-objects">table row 30</a></p>
+<p class="ship-name"><code>d878334e</code> <a class="ship-n" href="#the-life-objects">table row 30</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
@@ -2002,12 +2002,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 55 to 119, every 2nd.</p>
 </div>
-<div class="ship-card" id="life-6c80b30d">
+<div class="ship-card" id="life-92b7544a">
 <picture>
   <source srcset="../images/life-census/92b7544a-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/92b7544a.webp" alt="Life spaceship 6c80b30d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/92b7544a.webp" alt="Life spaceship 92b7544a moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>6c80b30d</code> <a class="ship-n" href="#the-life-objects">table row 31</a></p>
+<p class="ship-name"><code>92b7544a</code> <a class="ship-n" href="#the-life-objects">table row 31</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
@@ -2018,12 +2018,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 29 to 93, every 2nd.</p>
 </div>
-<div class="ship-card" id="life-9f474023">
+<div class="ship-card" id="life-126db117">
 <picture>
   <source srcset="../images/life-census/126db117-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/126db117.webp" alt="Life spaceship 9f474023 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/126db117.webp" alt="Life spaceship 126db117 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>9f474023</code> <a class="ship-n" href="#the-life-objects">table row 32</a></p>
+<p class="ship-name"><code>126db117</code> <a class="ship-n" href="#the-life-objects">table row 32</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
@@ -2034,12 +2034,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 23 to 87, every 2nd.</p>
 </div>
-<div class="ship-card" id="life-d26a876d">
+<div class="ship-card" id="life-1ccdebc8">
 <picture>
   <source srcset="../images/life-census/1ccdebc8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/1ccdebc8.webp" alt="Life spaceship d26a876d moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/1ccdebc8.webp" alt="Life spaceship 1ccdebc8 moving across the 3-uniform tiling k3-055" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>d26a876d</code> <a class="ship-n" href="#the-life-objects">table row 33</a></p>
+<p class="ship-name"><code>1ccdebc8</code> <a class="ship-n" href="#the-life-objects">table row 33</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
@@ -2050,12 +2050,12 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 </dl>
 <p class="ship-clip">Clip: generations 12 to 76, every 2nd.</p>
 </div>
-<div class="ship-card" id="life-83da34d9">
+<div class="ship-card" id="life-f2841d4c">
 <picture>
   <source srcset="../images/life-census/f2841d4c-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/f2841d4c.webp" alt="Life spaceship 83da34d9 moving across the 3-uniform tiling k3-057" width="260" height="320" loading="lazy">
+  <img src="../images/life-census/f2841d4c.webp" alt="Life spaceship f2841d4c moving across the 3-uniform tiling k3-057" width="260" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>83da34d9</code> <a class="ship-n" href="#the-life-objects">table row 34</a></p>
+<p class="ship-name"><code>f2841d4c</code> <a class="ship-n" href="#the-life-objects">table row 34</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-057</dd>
 <dt>Period</dt><dd>12, moving one lattice step per period (c/12)</dd>
@@ -2074,12 +2074,12 @@ Single ships that passed every check but are common on their tiling, or lie on a
 have run Life. We found no earlier report of any of them.
 
 <div class="ship-gallery">
-<div class="ship-card" id="life-98a3c53b">
+<div class="ship-card" id="life-a5e9ba80">
 <picture>
   <source srcset="../images/life-census/a5e9ba80-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/a5e9ba80.webp" alt="Life spaceship 98a3c53b moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
+  <img src="../images/life-census/a5e9ba80.webp" alt="Life spaceship a5e9ba80 moving across the snub square tiling 3.3.4.3.4" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>98a3c53b</code> <a class="ship-n" href="#the-life-objects">table row 35</a></p>
+<p class="ship-name"><code>a5e9ba80</code> <a class="ship-n" href="#the-life-objects">table row 35</a></p>
 <dl>
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>24, moving 6 lattice steps per period (c/4)</dd>
@@ -2090,12 +2090,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 15 to 55.</p>
 </div>
-<div class="ship-card" id="life-2076694c">
+<div class="ship-card" id="life-f89d8f11">
 <picture>
   <source srcset="../images/life-census/f89d8f11-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/f89d8f11.webp" alt="Life spaceship 2076694c moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/f89d8f11.webp" alt="Life spaceship f89d8f11 moving across the 2-uniform tiling k2-003" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>2076694c</code> <a class="ship-n" href="#the-life-objects">table row 36</a></p>
+<p class="ship-name"><code>f89d8f11</code> <a class="ship-n" href="#the-life-objects">table row 36</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-003 (shown); also, unchanged, k3-010 and k3-016</dd>
 <dt>Period</dt><dd>16, moving 5 lattice steps per period (5c/16)</dd>
@@ -2106,12 +2106,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="life-ac3667f4">
+<div class="ship-card" id="life-55db03c8">
 <picture>
   <source srcset="../images/life-census/55db03c8-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/55db03c8.webp" alt="Life spaceship ac3667f4 moving across the 2-uniform tiling k2-007" width="192" height="320" loading="lazy">
+  <img src="../images/life-census/55db03c8.webp" alt="Life spaceship 55db03c8 moving across the 2-uniform tiling k2-007" width="192" height="320" loading="lazy">
 </picture>
-<p class="ship-name"><code>ac3667f4</code> <a class="ship-n" href="#the-life-objects">table row 37</a></p>
+<p class="ship-name"><code>55db03c8</code> <a class="ship-n" href="#the-life-objects">table row 37</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-007</dd>
 <dt>Period</dt><dd>5, moving one lattice step per period (c/5)</dd>
@@ -2122,12 +2122,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 3 to 43.</p>
 </div>
-<div class="ship-card" id="life-119e5cea">
+<div class="ship-card" id="life-c1d7a48e">
 <picture>
   <source srcset="../images/life-census/c1d7a48e-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/c1d7a48e.webp" alt="Life spaceship 119e5cea moving across the 2-uniform tiling k2-011" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/c1d7a48e.webp" alt="Life spaceship c1d7a48e moving across the 2-uniform tiling k2-011" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>119e5cea</code> <a class="ship-n" href="#the-life-objects">table row 38</a></p>
+<p class="ship-name"><code>c1d7a48e</code> <a class="ship-n" href="#the-life-objects">table row 38</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-011 (shown); also, unchanged, k3-002</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
@@ -2138,12 +2138,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 42.</p>
 </div>
-<div class="ship-card" id="life-ac1d0f14">
+<div class="ship-card" id="life-16bc37c9">
 <picture>
   <source srcset="../images/life-census/16bc37c9-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/16bc37c9.webp" alt="Life spaceship ac1d0f14 moving across the 2-uniform tiling k2-017" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/16bc37c9.webp" alt="Life spaceship 16bc37c9 moving across the 2-uniform tiling k2-017" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>ac1d0f14</code> <a class="ship-n" href="#the-life-objects">table row 39</a></p>
+<p class="ship-name"><code>16bc37c9</code> <a class="ship-n" href="#the-life-objects">table row 39</a></p>
 <dl>
 <dt>Tiling</dt><dd>k2-017 (shown); also, unchanged, k3-053</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
@@ -2154,12 +2154,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 41.</p>
 </div>
-<div class="ship-card" id="life-5deb47c2">
+<div class="ship-card" id="life-020ec7b7">
 <picture>
   <source srcset="../images/life-census/020ec7b7-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/020ec7b7.webp" alt="Life spaceship 5deb47c2 moving across the 3-uniform tiling k3-039" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/020ec7b7.webp" alt="Life spaceship 020ec7b7 moving across the 3-uniform tiling k3-039" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>5deb47c2</code> <a class="ship-n" href="#the-life-objects">table row 40</a></p>
+<p class="ship-name"><code>020ec7b7</code> <a class="ship-n" href="#the-life-objects">table row 40</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-039</dd>
 <dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
@@ -2170,12 +2170,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 18 to 58.</p>
 </div>
-<div class="ship-card" id="life-98d64885">
+<div class="ship-card" id="life-dab6fb01">
 <picture>
   <source srcset="../images/life-census/dab6fb01-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/dab6fb01.webp" alt="Life spaceship 98d64885 moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/dab6fb01.webp" alt="Life spaceship dab6fb01 moving across the 3-uniform tiling k3-040" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>98d64885</code> <a class="ship-n" href="#the-life-objects">table row 41</a></p>
+<p class="ship-name"><code>dab6fb01</code> <a class="ship-n" href="#the-life-objects">table row 41</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-040</dd>
 <dt>Period</dt><dd>24, moving 4 lattice steps per period (c/6)</dd>
@@ -2186,12 +2186,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 0 to 48.</p>
 </div>
-<div class="ship-card" id="life-bf101de9">
+<div class="ship-card" id="life-e1fcfa73">
 <picture>
   <source srcset="../images/life-census/e1fcfa73-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/e1fcfa73.webp" alt="Life spaceship bf101de9 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/e1fcfa73.webp" alt="Life spaceship e1fcfa73 moving across the 3-uniform tiling k3-044" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>bf101de9</code> <a class="ship-n" href="#the-life-objects">table row 42</a></p>
+<p class="ship-name"><code>e1fcfa73</code> <a class="ship-n" href="#the-life-objects">table row 42</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-044</dd>
 <dt>Period</dt><dd>31, moving 2 lattice steps per period (2c/31)</dd>
@@ -2202,12 +2202,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 29 to 122, every 2nd.</p>
 </div>
-<div class="ship-card" id="life-49237dd5">
+<div class="ship-card" id="life-3792824d">
 <picture>
   <source srcset="../images/life-census/3792824d-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/3792824d.webp" alt="Life spaceship 49237dd5 moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/3792824d.webp" alt="Life spaceship 3792824d moving across the 3-uniform tiling k3-045" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>49237dd5</code> <a class="ship-n" href="#the-life-objects">table row 43</a></p>
+<p class="ship-name"><code>3792824d</code> <a class="ship-n" href="#the-life-objects">table row 43</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-045 (shown); also, unchanged, k3-046</dd>
 <dt>Period</dt><dd>11, moving 2 lattice steps per period (2c/11)</dd>
@@ -2218,12 +2218,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 1 to 45.</p>
 </div>
-<div class="ship-card" id="life-adfd2f61">
+<div class="ship-card" id="life-1e6832e3">
 <picture>
   <source srcset="../images/life-census/1e6832e3-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/1e6832e3.webp" alt="Life spaceship adfd2f61 moving across the 3-uniform tiling k3-057" width="320" height="192" loading="lazy">
+  <img src="../images/life-census/1e6832e3.webp" alt="Life spaceship 1e6832e3 moving across the 3-uniform tiling k3-057" width="320" height="192" loading="lazy">
 </picture>
-<p class="ship-name"><code>adfd2f61</code> <a class="ship-n" href="#the-life-objects">table row 44</a></p>
+<p class="ship-name"><code>1e6832e3</code> <a class="ship-n" href="#the-life-objects">table row 44</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-057</dd>
 <dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
@@ -2234,12 +2234,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 2 to 42.</p>
 </div>
-<div class="ship-card" id="life-37db33e3">
+<div class="ship-card" id="life-93a72ebd">
 <picture>
   <source srcset="../images/life-census/93a72ebd-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/93a72ebd.webp" alt="Life spaceship 37db33e3 moving across the 3-uniform tiling k3-059" width="320" height="232" loading="lazy">
+  <img src="../images/life-census/93a72ebd.webp" alt="Life spaceship 93a72ebd moving across the 3-uniform tiling k3-059" width="320" height="232" loading="lazy">
 </picture>
-<p class="ship-name"><code>37db33e3</code> <a class="ship-n" href="#the-life-objects">table row 45</a></p>
+<p class="ship-name"><code>93a72ebd</code> <a class="ship-n" href="#the-life-objects">table row 45</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-059</dd>
 <dt>Period</dt><dd>30, moving (1, 1) per period</dd>
@@ -2250,12 +2250,12 @@ have run Life. We found no earlier report of any of them.
 </dl>
 <p class="ship-clip">Clip: generations 12 to 72.</p>
 </div>
-<div class="ship-card" id="life-b414ad8f">
+<div class="ship-card" id="life-58e6d5fc">
 <picture>
   <source srcset="../images/life-census/58e6d5fc-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/life-census/58e6d5fc.webp" alt="Life spaceship b414ad8f moving across the 3-uniform tiling k3-061" width="320" height="298" loading="lazy">
+  <img src="../images/life-census/58e6d5fc.webp" alt="Life spaceship 58e6d5fc moving across the 3-uniform tiling k3-061" width="320" height="298" loading="lazy">
 </picture>
-<p class="ship-name"><code>b414ad8f</code> <a class="ship-n" href="#the-life-objects">table row 46</a></p>
+<p class="ship-name"><code>58e6d5fc</code> <a class="ship-n" href="#the-life-objects">table row 46</a></p>
 <dl>
 <dt>Tiling</dt><dd>k3-061</dd>
 <dt>Period</dt><dd>22, moving (1, 1) per period</dd>

@@ -1,5 +1,5 @@
 {
- "name": "Spaceship c78ceb01 on 3.12.12",
+ "name": "Spaceship 30594bf3 on 3.12.12",
  "description": "A period-2 spaceship on the truncated hexagonal tiling 3.12.12 (touching neighbours), 4 to 5 cells, moving one lattice step every 2 generations (c/2). It runs the same way in the 65,536 rules from B2/S2 to B2,6,7,8,9,10,11,12/S2,4,5,6,7,8,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen 1,742 times). Flagged as most likely already known: small (4 to 5 cells), common (seen 1,742 times) and wide-range (65,536 rules) on an Archimedean tiling. We found no earlier report, but others may well have seen it, so it is not claimed.",
  "tiling": {
   "family": "trunchex",

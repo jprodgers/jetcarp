@@ -1,5 +1,5 @@
 {
- "name": "Spaceship 2ba58828 on 3.3.4.3.4",
+ "name": "Spaceship c696c65e on 3.3.4.3.4",
  "description": "A period-16 spaceship on the snub square tiling 3.3.4.3.4 (touching neighbours), 15 to 33 cells, moving four lattice steps every 16 generations (c/4). It runs the same way in the 256 rules from B3/S23 to B3,8,10,11,12/S2,3,9,10,11,12; the scene uses the rule it was found in. Found by JETCARP's soup search (seen once). A derivative ship (a bound pair of Guttesen's snub-square glider): kept as a distinct object, not counted as a discovery. Flagged as most likely already known: runs in Life (B3/S23) on an Archimedean tiling that Guttesen searched; built on Guttesen's snub-square glider. We found no earlier report, but others may well have seen it, so it is not claimed.",
  "tiling": {
   "family": "snubsq",
