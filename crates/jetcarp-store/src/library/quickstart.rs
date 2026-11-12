@@ -177,10 +177,9 @@ impl QuickStartRow {
     /// Fill the columns left empty from the scene, the source and the behaviour: the rule and
     /// its family, the tiling's key and name, and the menu's category, grid group and family.
     pub fn complete(&mut self) {
-        if self.rule.is_empty()
-            && let Some(c) = self.scene.cas.first()
-        {
-            self.rule = c.rule.clone();
+        if self.rule.is_empty() {
+            // The scene's first CA, or the first a command adds (the hat glider's scene).
+            self.rule = jetcarp_core::quickstart::main_rule(&self.scene).0;
         }
         if self.rule_family.is_empty() {
             let first = self.scene.cas.first().map(|c| c.rule.as_str());

@@ -411,8 +411,14 @@ pub(crate) fn tiling_name(t: &TilingSpec) -> String {
         .unwrap_or_else(|| t.family.clone())
 }
 
+/// The scene's main CA: its first, or (for a scene that adds its CAs with commands, such as the
+/// hat glider) the first one a command adds. Its rule notation, state count and family.
 pub fn main_rule(sc: &Scene) -> (String, u32, String) {
-    let Some(ca) = sc.cas.first() else {
+    let added = sc.commands.iter().find_map(|c| match c {
+        crate::world::Command::AddCa { ca } => Some(ca),
+        _ => None,
+    });
+    let Some(ca) = sc.cas.first().or(added) else {
         return (String::new(), 0, "Other".into());
     };
     let (rule, _) = match Rule::parse(&ca.rule) {

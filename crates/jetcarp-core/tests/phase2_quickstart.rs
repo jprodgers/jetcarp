@@ -125,3 +125,20 @@ fn examples_are_reproducible() {
         assert_eq!(run(), run(), "{}", e.scene.name);
     }
 }
+
+#[test]
+fn a_scene_that_adds_its_ca_with_a_command_has_a_main_rule() {
+    // As the hat glider's scene: no CAs of its own, one added by a command.
+    let mut sc = Scene::new(TilingSpec::new("hat"));
+    let rule = "Priority 4: 3|n2>=1->2; 0|n3>=2->0; 0|n2>=1->3; 0|n1>=1->2";
+    sc.commands.push(Command::AddCa {
+        ca: CaSpec::new(rule),
+    });
+    let (r, states, family) = jetcarp_core::quickstart::main_rule(&sc);
+    assert_eq!(r, rule);
+    assert_eq!(states, 4);
+    assert_eq!(family, "Multi-state");
+    // A scene's own CA comes first.
+    sc.cas.push(CaSpec::new("B3/S23"));
+    assert_eq!(jetcarp_core::quickstart::main_rule(&sc).0, "B3/S23");
+}
