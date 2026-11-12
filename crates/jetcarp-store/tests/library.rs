@@ -205,28 +205,40 @@ fn life_objects_round_trip_with_dedup_across_orientations() {
 
 #[test]
 fn compound_objects_split_into_their_parts() {
-    // A toad (vertical phase: two pieces that die alone) two rows from a beehive: the object
-    // finder reports one 12-cell p2 object; the library stores a toad and a beehive.
+    // A toad (vertical phase: two pieces that die alone) two rows from a beehive. The object
+    // finder reports a toad and a beehive; before it split compounds itself it reported one
+    // 12-cell p2 object, which is what it still gives without splitting, and that record splits
+    // into the same two.
     let pats = [
         ("..o./o..o/o..o/.o..", 10, 10),
         ("..o../.o.o./.o.o./..o..", 13, 14),
     ];
     let w = life_world(&pats);
+    let alone = records_of(
+        &life_world(&[(".ooo/ooo.", 5, 5), (".oo./o..o/.oo.", 30, 30)]),
+        "t",
+    );
+    let mut want: Vec<&str> = alone.iter().map(|p| p.id.as_str()).collect();
+    want.sort_unstable();
     let r = find_objects(&w, &ObjectOptions::default()).unwrap();
+    assert_eq!(r.objects.len(), 2, "{}", r.summary_line());
+    let found = records_of(&w, "t");
+    let mut got: Vec<&str> = found.iter().map(|p| p.id.as_str()).collect();
+    got.sort_unstable();
+    assert_eq!(got, want);
+    let opts = ObjectOptions {
+        separate: false,
+        ..Default::default()
+    };
+    let r = find_objects(&w, &opts).unwrap();
     assert_eq!(r.objects.len(), 1, "{}", r.summary_line());
     let o = &r.objects[0];
     let whole = record_from_object(&w, 1, o, prov("t"), DiscoveredBy::User).unwrap();
     assert_eq!((whole.class, whole.cells), (PatternClass::Oscillator, 12));
     let parts =
         pattern::split::records_from_object(&w, 1, o, prov("t"), DiscoveredBy::User).unwrap();
-    let alone = records_of(
-        &life_world(&[(".ooo/ooo.", 5, 5), (".oo./o..o/.oo.", 30, 30)]),
-        "t",
-    );
     let mut got: Vec<&str> = parts.iter().map(|p| p.id.as_str()).collect();
-    let mut want: Vec<&str> = alone.iter().map(|p| p.id.as_str()).collect();
     got.sort_unstable();
-    want.sort_unstable();
     assert_eq!(got, want);
     // Objects that really are one (the pentadecathlon, whose phases also fall apart) stay whole.
     let w = life_world(&[("..o....o../oo.oooo.oo/..o....o..", 10, 10)]);

@@ -66,14 +66,25 @@ pub fn ship_of(c: &Census, cache: &mut Cache, cells: &[LCell]) -> Option<ShipEnt
         return e.clone();
     }
     let e = match c.run_alone(&key, c.max_period) {
-        Run::Periodic { period, d, phases } if d != [0, 0] => c
-            .found(cache, PatternClass::Spaceship, period, d, &phases)
-            .map(|found| ShipEntry {
-                found,
-                period,
-                d,
-                phases,
-            }),
+        Run::Periodic { period, d, phases } if d != [0, 0] => {
+            let parts: Vec<Arc<Found>> = match crate::objects::compound::split(c, &phases, d) {
+                Some(ps) => ps
+                    .iter()
+                    .filter_map(|p| {
+                        c.found(cache, PatternClass::Spaceship, p.period, p.d, &p.phases)
+                    })
+                    .collect(),
+                None => vec![],
+            };
+            c.found(cache, PatternClass::Spaceship, period, d, &phases)
+                .map(|found| ShipEntry {
+                    found,
+                    period,
+                    d,
+                    phases,
+                    parts,
+                })
+        }
         _ => None,
     };
     cache.trim();

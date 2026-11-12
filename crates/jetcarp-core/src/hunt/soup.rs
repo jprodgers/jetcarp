@@ -26,7 +26,7 @@
 //! first time a cell leaves gives the same result.
 
 use super::bits::Universe;
-use super::separate::{Cache, Census, Found, Obj, OtherKind, Part};
+use super::separate::{Cache, Census, Found, Group, Obj, OtherKind, Part};
 use crate::objects::LCell;
 use crate::rng::Rng;
 use crate::topology::Topology;
@@ -252,8 +252,9 @@ pub struct SoupRun {
     region: [i32; 4],
     limits: Limits,
     last_look: Option<[i32; 4]>,
-    /// Ships cut (with their displacement as they flew).
-    pub cut: Vec<(Arc<Found>, [i32; 2])>,
+    /// Ships cut (with their displacement as they flew, and the independent ships they are made
+    /// of when several flew together as one group; empty when one).
+    pub cut: Vec<(Arc<Found>, [i32; 2], Vec<Arc<Found>>)>,
     pub end: Option<End>,
     pub period: u64,
 }
@@ -393,8 +394,8 @@ impl SoupRun {
                 || (d[0] < 0 && beyond[1])
                 || (d[1] > 0 && beyond[2])
                 || (d[1] < 0 && beyond[3]);
-            if away {
-                self.cut.push((ship.found.clone(), d));
+            if away && !bound(c, &groups, x) {
+                self.cut.push((ship.found.clone(), d, ship.parts.clone()));
                 erase.extend_from_slice(&g.cells);
             }
         }
@@ -402,6 +403,49 @@ impl SoupRun {
             self.u.erase(&erase);
         }
     }
+}
+
+/// Is group `x` (a ship) one half of a bound object: with a group near it (within
+/// `piece_distance` neighbour steps past the cutting gap) a spaceship, which runs otherwise
+/// than the two of them alone? Then the ship is not cut yet; the whole object will be, once it
+/// is one group.
+fn bound(c: &Census, groups: &[Group], x: usize) -> bool {
+    use super::separate::Run;
+    use crate::objects::compound::{Runner, horizon, union_is};
+    let r = c.plan.reach_i.max(c.plan.reach_j);
+    let reach = 2 * r + 2 + c.piece_distance as i32 * r;
+    let b = groups[x].bbox;
+    groups.iter().enumerate().any(|(y, h)| {
+        let o = h.bbox;
+        let near = y != x
+            && o[0] - b[1] <= reach
+            && b[0] - o[1] <= reach
+            && o[2] - b[3] <= reach
+            && b[2] - o[3] <= reach;
+        if !near {
+            return false;
+        }
+        let mut both = groups[x].cells.clone();
+        both.extend(h.cells.iter().copied());
+        both.sort_unstable();
+        let Run::Periodic { period, d, .. } = c.run_alone(&both, c.max_period) else {
+            return false;
+        };
+        if d == [0, 0] {
+            return false;
+        }
+        let l = horizon(period);
+        match (
+            c.run(&groups[x].cells, l),
+            c.run(&h.cells, l),
+            c.run(&both, l),
+        ) {
+            (Some(a), Some(other), Some(j)) => {
+                (0..=l as usize).any(|t| !union_is(&a[t], &other[t], &j[t]))
+            }
+            _ => false,
+        }
+    })
 }
 
 /// What one soup gave.
@@ -459,12 +503,18 @@ pub fn finish(c: &Census, cache: &mut Cache, run: SoupRun, index: u64, rng_state
         .into_iter()
         .filter(|f| !guns.contains(&f.id))
         .collect();
-    for (f, _) in run.cut {
+    for (f, _, parts) in run.cut {
         if guns.contains(&f.id) {
             continue;
         }
-        out.escaped += 1;
-        out.objects.push(f);
+        // Ships that flew together as one group are counted as the ships they are.
+        if parts.is_empty() {
+            out.escaped += 1;
+            out.objects.push(f);
+        } else {
+            out.escaped += parts.len() as u32;
+            out.objects.extend(parts);
+        }
     }
     out
 }

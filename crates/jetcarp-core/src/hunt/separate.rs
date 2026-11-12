@@ -6,13 +6,18 @@
 //! before are run alone (bit-parallel, up to the longest period) and classified, as
 //! `objects::find_objects` does: still life, oscillator, spaceship, a group of non-interacting
 //! parts (each periodic, and their joint run is exactly the union), puffer, gun, or other (dies,
-//! grows, unsettled). Pieces that die alone are retried together when they lie a few steps apart
-//! (some oscillator phases fall apart). A periodic part's canonical evolution gives its rule-free
-//! catalog id ([`crate::pattern::pattern_id`]), and a second cache keyed by that id holds one
-//! record per distinct pattern, so a pattern's record (canonical form, rule range) is built once
-//! per thread. The caches only save work: every result is a pure function of the cells.
+//! grows, unsettled). A periodic group is then split into the independent objects it is made of
+//! ([`crate::objects::compound`]: two gliders side by side are two gliders, a pulsar beside
+//! blinkers is a pulsar and blinkers). Pieces that die alone are retried together when they lie a
+//! few steps apart (some oscillator phases fall apart), and failing that with their nearest
+//! periodic neighbours (the far half of a bound pair). A periodic part's canonical evolution
+//! gives its rule-free catalog id ([`crate::pattern::pattern_id`]), and a second cache keyed by
+//! that id holds one record per distinct pattern, so a pattern's record (canonical form, rule
+//! range) is built once per thread. The caches only save work: every result is a pure function of
+//! the cells.
 
 use super::bits::{Plan, Universe};
+use crate::objects::compound::{self, Runner};
 use crate::objects::{LCell, Phase, puffer, translated};
 use crate::pattern::{
     CellMap, DiscoveredBy, PatternClass, PatternRecord, Provenance, RecordParts, build_record_with,
@@ -141,6 +146,9 @@ pub struct ShipEntry {
     pub d: [i32; 2],
     /// One period of phases, starting with the group's cells at the origin.
     pub phases: Vec<Phase>,
+    /// The independent ships it is made of, when it is several flying together
+    /// ([`compound`]); empty when it is one ship.
+    pub parts: Vec<Arc<Found>>,
 }
 
 /// Per-thread caches (pure accelerators; clearing them changes no result).
@@ -151,9 +159,11 @@ pub struct ShipEntry {
 /// threads and rule groups.
 #[derive(Default)]
 pub struct Cache {
-    groups: FastMap<Vec<LCell>, Arc<[Part]>>,
+    groups: FastMap<Vec<LCell>, (Arc<[Part]>, Option<Arc<Env>>)>,
     pub(crate) ships: FastMap<Vec<LCell>, Option<ShipEntry>>,
-    merged: FastMap<Vec<LCell>, Option<Arc<[Part]>>>,
+    merged: FastMap<Vec<LCell>, Option<Merged>>,
+    /// Two periodic groups together (their cells at the origin): do they interact?
+    pairs: FastMap<Vec<LCell>, bool>,
     /// Growth clusters: the object and which of the cluster's groups (by position) it uses.
     growth: FastMap<Vec<LCell>, Option<(Part, Vec<usize>)>>,
     ids: FastMap<String, Arc<Found>>,
@@ -164,6 +174,35 @@ pub struct Cache {
     pub budget: usize,
     /// Times every map was cleared for the byte budget.
     pub flushes: u64,
+}
+
+/// Groups run together as one: their objects, and where their cells are when periodic.
+type Merged = (Arc<[Part]>, Option<Arc<Env>>);
+
+/// Where a periodic group's cells are over one period: its period, displacement per period, and
+/// each phase's bounding box (`[i_min, i_max, j_min, j_max]`, at the group's own origin).
+#[derive(Clone, Debug)]
+pub struct Env {
+    pub period: u64,
+    pub d: [i32; 2],
+    pub boxes: Vec<[i32; 4]>,
+}
+
+impl Env {
+    fn of(period: u64, d: [i32; 2], phases: &[Phase]) -> Env {
+        Env {
+            period,
+            d,
+            boxes: phases.iter().map(|p| bbox_of(p)).collect(),
+        }
+    }
+    /// The bounding box at generation `g`, the group's origin at `o`.
+    fn at(&self, g: u64, o: [i32; 2]) -> [i32; 4] {
+        let b = self.boxes[(g % self.period) as usize];
+        let n = (g / self.period) as i32;
+        let (di, dj) = (o[0] + self.d[0] * n, o[1] + self.d[1] * n);
+        [b[0] + di, b[1] + di, b[2] + dj, b[3] + dj]
+    }
 }
 
 /// Estimated bytes of a key of `n` cells.
@@ -206,6 +245,7 @@ impl Cache {
         if self.bytes > budget {
             self.groups.clear();
             self.merged.clear();
+            self.pairs.clear();
             self.growth.clear();
             self.ids.clear();
             self.ships.clear();
@@ -218,6 +258,9 @@ impl Cache {
         }
         if self.merged.len() > Self::LIMIT / 4 {
             self.merged.clear();
+        }
+        if self.pairs.len() > Self::LIMIT / 4 {
+            self.pairs.clear();
         }
         if self.growth.len() > Self::LIMIT / 16 {
             self.growth.clear();
@@ -533,6 +576,12 @@ impl Census {
 
     /// The objects of one group (cached by its cells, translated to the origin).
     pub fn analyse(&self, cache: &mut Cache, g: &Group) -> Arc<[Part]> {
+        self.analyse_env(cache, g).0
+    }
+
+    /// [`Census::analyse`], with where the group's cells are over one period when they are all
+    /// periodic (at the group's origin, its minimum `i` and `j`).
+    pub fn analyse_env(&self, cache: &mut Cache, g: &Group) -> (Arc<[Part]>, Option<Arc<Env>>) {
         let (key, _) = normalize(&g.cells);
         if let Some(p) = cache.groups.get(&key) {
             cache.hits += 1;
@@ -548,14 +597,43 @@ impl Census {
                 v
             })
             .collect();
-        let parts: Arc<[Part]> = self.analyse_cells(cache, &key, &subs).into();
+        let (parts, env) = self.analyse_cells(cache, &key, &subs);
+        let parts: Arc<[Part]> = parts.into();
+        let env = env.map(Arc::new);
         cache.trim();
-        cache.add_bytes(key_bytes(key.len()) + parts.len() * 48);
-        cache.groups.insert(key, parts.clone());
-        parts
+        cache.add_bytes(
+            key_bytes(key.len())
+                + parts.len() * 48
+                + env.as_ref().map_or(0, |e| e.boxes.len() * 16),
+        );
+        cache.groups.insert(key, (parts.clone(), env.clone()));
+        (parts, env)
     }
 
-    fn analyse_cells(&self, cache: &mut Cache, cells: &[LCell], subs: &[Vec<LCell>]) -> Vec<Part> {
+    /// The independent objects of one period of a periodic run ([`compound`]); the run as one
+    /// object when it does not come apart.
+    pub fn periodic_parts(
+        &self,
+        cache: &mut Cache,
+        period: u64,
+        d: [i32; 2],
+        phases: &[Phase],
+    ) -> Vec<Part> {
+        match compound::split(self, phases, d) {
+            Some(ps) => ps
+                .into_iter()
+                .map(|cp| self.part(cache, cp.period, cp.d, &cp.phases))
+                .collect(),
+            None => vec![self.part(cache, period, d, phases)],
+        }
+    }
+
+    fn analyse_cells(
+        &self,
+        cache: &mut Cache,
+        cells: &[LCell],
+        subs: &[Vec<LCell>],
+    ) -> (Vec<Part>, Option<Env>) {
         if subs.len() > 1 {
             // Parts that provably do not interact: each periodic and stationary, and the joint
             // run is exactly the union of the parts' runs over a common period.
@@ -579,13 +657,35 @@ impl Census {
                 }
             }
             if ok && self.joint_is_union(cells, &runs, l) {
-                return runs
-                    .into_iter()
-                    .map(|(period, d, phases)| self.part(cache, period, d, &phases))
+                // Where the whole group is: the union of its parts, phase by phase.
+                let boxes = (0..l as usize)
+                    .map(|t| {
+                        let mut b = [i32::MAX, i32::MIN, i32::MAX, i32::MIN];
+                        for (_, _, ph) in &runs {
+                            let x = bbox_of(&ph[t % ph.len()]);
+                            b = [
+                                b[0].min(x[0]),
+                                b[1].max(x[1]),
+                                b[2].min(x[2]),
+                                b[3].max(x[3]),
+                            ];
+                        }
+                        b
+                    })
                     .collect();
+                let env = Env {
+                    period: l,
+                    d: [0, 0],
+                    boxes,
+                };
+                let parts = runs
+                    .into_iter()
+                    .flat_map(|(period, d, phases)| self.periodic_parts(cache, period, d, &phases))
+                    .collect();
+                return (parts, Some(env));
             }
         }
-        vec![self.whole(cache, cells)]
+        self.whole_env(cache, cells)
     }
 
     fn joint_is_union(
@@ -617,29 +717,40 @@ impl Census {
         Part { obj, period, d }
     }
 
-    fn whole(&self, cache: &mut Cache, cells: &[LCell]) -> Part {
+    /// The objects of cells run as one group (its independent parts if it is periodic, else one
+    /// puffer, gun, or other), with where the cells are over one period when they are periodic.
+    fn whole_env(&self, cache: &mut Cache, cells: &[LCell]) -> (Vec<Part>, Option<Env>) {
         match self.run_alone(cells, self.max_period) {
-            Run::Periodic { period, d, phases } => self.part(cache, period, d, &phases),
-            Run::Died => Part {
-                obj: Obj::Other(OtherKind::Dies),
-                period: 0,
-                d: [0, 0],
-            },
+            Run::Periodic { period, d, phases } => {
+                let env = Env::of(period, d, &phases);
+                (self.periodic_parts(cache, period, d, &phases), Some(env))
+            }
+            Run::Died => (
+                vec![Part {
+                    obj: Obj::Other(OtherKind::Dies),
+                    period: 0,
+                    d: [0, 0],
+                }],
+                None,
+            ),
             r => {
                 if self.growth_tests
                     && let Some(p) = self.growth(cache, cells)
                 {
-                    return p;
+                    return (vec![p], None);
                 }
-                Part {
-                    obj: Obj::Other(if matches!(r, Run::Grows) {
-                        OtherKind::Grows
-                    } else {
-                        OtherKind::Unsettled
-                    }),
-                    period: 0,
-                    d: [0, 0],
-                }
+                (
+                    vec![Part {
+                        obj: Obj::Other(if matches!(r, Run::Grows) {
+                            OtherKind::Grows
+                        } else {
+                            OtherKind::Unsettled
+                        }),
+                        period: 0,
+                        d: [0, 0],
+                    }],
+                    None,
+                )
             }
         }
     }
@@ -672,39 +783,59 @@ impl Census {
     pub fn census(&self, cache: &mut Cache, cells: &[LCell]) -> Vec<Part> {
         let groups = self.groups(cells);
         let n = groups.len();
-        let parts: Vec<Arc<[Part]>> = groups.iter().map(|g| self.analyse(cache, g)).collect();
+        let (parts, envs): (Vec<Arc<[Part]>>, Vec<Option<Arc<Env>>>) =
+            groups.iter().map(|g| self.analyse_env(cache, g)).unzip();
         let mut absorbed = vec![false; n];
         let mut at_head: FastMap<usize, Arc<[Part]>> = FastMap::default();
+        // Periodic merges of step 1: their groups, cells, and where they are.
+        let mut pieces: Vec<(Vec<usize>, Vec<LCell>, Arc<Env>)> = Vec::new();
         let is_other = |g: usize| parts[g].len() == 1 && matches!(parts[g][0].obj, Obj::Other(_));
-        // 1. Pieces that die alone, retried together.
+        // 1. Pieces that die alone, retried together, and failing that with their nearest
+        //    periodic neighbours (the far half of a bound pair).
         let loose: Vec<usize> = (0..n).filter(|&g| is_other(g)).collect();
-        if loose.len() >= 2 && self.piece_distance > 0 {
-            for c in self
-                .close_clusters(&groups, &loose)
-                .into_iter()
-                .filter(|c| c.len() > 1)
-            {
-                let mut cells: Vec<LCell> = c
-                    .iter()
-                    .flat_map(|&g| groups[g].cells.iter().copied())
-                    .collect();
-                cells.sort_unstable();
-                let (key, _) = normalize(&cells);
-                let got = match cache.merged.get(&key) {
-                    Some(x) => x.clone(),
-                    None => {
-                        let p = self.whole(cache, &key);
-                        let v = (!matches!(p.obj, Obj::Other(_))).then(|| Arc::from(vec![p]));
-                        cache.add_bytes(key_bytes(key.len()) + 48);
-                        cache.merged.insert(key, v.clone());
-                        v
+        if !loose.is_empty() && self.piece_distance > 0 {
+            let periodic: Vec<bool> = (0..n)
+                .map(|g| {
+                    parts[g].iter().all(|p| {
+                        matches!(&p.obj, Obj::Pattern(f) if matches!(
+                            f.class,
+                            PatternClass::StillLife | PatternClass::Oscillator | PatternClass::Spaceship
+                        ))
+                    })
+                })
+                .collect();
+            let mut taken = vec![false; n];
+            for (c, cand) in self.close_clusters(&groups, &loose, &periodic) {
+                let size: usize = c.iter().map(|&g| groups[g].cells.len()).sum();
+                let mut tries: Vec<Vec<usize>> = Vec::new();
+                if c.len() > 1 {
+                    tries.push(c.clone());
+                }
+                if size <= LOOSE_CELLS {
+                    for &p in &cand {
+                        tries.push(c.iter().copied().chain([p]).collect());
                     }
-                };
-                if let Some(p) = got {
-                    for &g in &c {
-                        absorbed[g] = true;
+                    if cand.len() > 1 {
+                        tries.push(c.iter().copied().chain(cand.iter().copied()).collect());
                     }
-                    at_head.insert(c[0], p);
+                }
+                for mut set in tries {
+                    set.sort_unstable();
+                    if set.iter().any(|&g| taken[g]) {
+                        continue;
+                    }
+                    let cells = cells_of(&groups, &set);
+                    if let Some((p, env)) = self.merge_run(cache, &cells) {
+                        for &g in &set {
+                            absorbed[g] = true;
+                            taken[g] = true;
+                        }
+                        at_head.insert(set[0], p);
+                        if let Some(e) = env {
+                            pieces.push((set, cells, e));
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -758,6 +889,32 @@ impl Census {
                 }
             }
         }
+        // 3. Periodic objects (groups, and the merges of step 1) that interact with a neighbour
+        //    (the halves of a bound pair, apart in this phase), run together: one object when
+        //    together they are periodic.
+        let mut units: Vec<(Vec<usize>, Vec<LCell>, Arc<Env>)> = (0..n)
+            .filter(|&g| !absorbed[g])
+            .filter_map(|g| {
+                envs[g]
+                    .clone()
+                    .map(|e| (vec![g], groups[g].cells.clone(), e))
+            })
+            .collect();
+        units.extend(pieces);
+        for set in self.interacting(cache, &units) {
+            let mut members: Vec<usize> = set.iter().flat_map(|&u| units[u].0.clone()).collect();
+            members.sort_unstable();
+            let cells = cells_of(&groups, &members);
+            if let Some((p, _)) = self.merge_run(cache, &cells) {
+                for &u in &set {
+                    at_head.remove(&units[u].0[0]);
+                }
+                for &g in &members {
+                    absorbed[g] = true;
+                }
+                at_head.insert(members[0], p);
+            }
+        }
         let mut out = Vec::new();
         for (g, p) in parts.iter().enumerate() {
             if let Some(m) = at_head.get(&g) {
@@ -767,6 +924,140 @@ impl Census {
                 out.extend(p.iter().cloned());
             }
         }
+        out
+    }
+
+    /// Groups run together as one (`cells` sorted, absolute): their objects and where their
+    /// cells are, when every object is a pattern (cached by the cells at the origin).
+    fn merge_run(&self, cache: &mut Cache, cells: &[LCell]) -> Option<Merged> {
+        let (key, _) = normalize(cells);
+        if let Some(x) = cache.merged.get(&key) {
+            return x.clone();
+        }
+        let (ps, env) = self.whole_env(cache, &key);
+        let v = ps
+            .iter()
+            .all(|p| !matches!(p.obj, Obj::Other(_)))
+            .then(|| (Arc::from(ps), env.map(Arc::new)));
+        cache.add_bytes(key_bytes(key.len()) + 48);
+        cache.merged.insert(key, v.clone());
+        v
+    }
+
+    /// Sets of periodic objects (each its groups, its cells sorted, and where it is at its own
+    /// origin, its minimum `i` and `j`) that interact, as indices in order: two interact when
+    /// running them together differs, at some generation of two common periods and eight more,
+    /// from the union of their runs. Pairs whose envelopes never come within two neighbour steps
+    /// of each other cannot interact and are not run; the answer for a pair's cells is cached.
+    fn interacting(
+        &self,
+        cache: &mut Cache,
+        units: &[(Vec<usize>, Vec<LCell>, Arc<Env>)],
+    ) -> Vec<Vec<usize>> {
+        let n = units.len();
+        if n < 2 {
+            return vec![];
+        }
+        let live: Vec<usize> = (0..n).collect();
+        let (ri, rj) = (2 * self.plan.reach_i, 2 * self.plan.reach_j);
+        let origins: Vec<[i32; 2]> = units
+            .iter()
+            .map(|u| {
+                let b = bbox_of(&u.1);
+                [b[0], b[2]]
+            })
+            .collect();
+        let origin = |g: usize| origins[g];
+        let h = compound::horizon(self.max_period);
+        // Every place an object is over the longest test.
+        let all: Vec<[i32; 4]> = (0..n)
+            .map(|g| {
+                let e = &units[g].2;
+                let mut b = [i32::MAX, i32::MIN, i32::MAX, i32::MIN];
+                for t in [0, h] {
+                    for k in 0..e.period {
+                        let x = e.at(t / e.period * e.period + k, origin(g));
+                        b = [
+                            b[0].min(x[0]),
+                            b[1].max(x[1]),
+                            b[2].min(x[2]),
+                            b[3].max(x[3]),
+                        ];
+                    }
+                }
+                b
+            })
+            .collect();
+        let near = |a: [i32; 4], b: [i32; 4]| {
+            a[0] - b[1] <= ri && b[0] - a[1] <= ri && a[2] - b[3] <= rj && b[2] - a[3] <= rj
+        };
+        let mut order = live.clone();
+        order.sort_by_key(|&g| (all[g][0], g));
+        let mut uf = Uf::new(n);
+        let mut any = false;
+        for (x, &a) in order.iter().enumerate() {
+            for &b in &order[x + 1..] {
+                if all[b][0] - all[a][1] > ri {
+                    break;
+                }
+                if !near(all[a], all[b]) {
+                    continue;
+                }
+                let (ea, eb) = (&units[a].2, &units[b].2);
+                let l = ea.period / gcd(ea.period, eb.period) * eb.period;
+                if l > self.max_period {
+                    continue;
+                }
+                let lh = compound::horizon(l);
+                let (oa, ob) = (origin(a), origin(b));
+                if !(0..=lh).any(|t| near(ea.at(t, oa), eb.at(t, ob))) {
+                    continue;
+                }
+                let mut cells: Vec<LCell> = units[a].1.clone();
+                cells.extend(units[b].1.iter().copied());
+                cells.sort_unstable();
+                let (key, _) = normalize(&cells);
+                let inter = match cache.pairs.get(&key) {
+                    Some(&x) => x,
+                    None => {
+                        let x = match (
+                            self.run(&units[a].1, lh),
+                            self.run(&units[b].1, lh),
+                            self.run(&cells, lh),
+                        ) {
+                            (Some(ra), Some(rb), Some(j)) => (0..=lh as usize)
+                                .any(|t| !compound::union_is(&ra[t], &rb[t], &j[t])),
+                            _ => true,
+                        };
+                        cache.add_bytes(key_bytes(key.len()) + 8);
+                        cache.pairs.insert(key, x);
+                        x
+                    }
+                };
+                if inter {
+                    uf.union(a, b);
+                    any = true;
+                }
+            }
+        }
+        if !any {
+            return vec![];
+        }
+        let mut at: FastMap<usize, usize> = FastMap::default();
+        let mut out: Vec<Vec<usize>> = Vec::new();
+        for &g in &live {
+            let r = uf.find(g);
+            let c = *at.entry(r).or_insert_with(|| {
+                out.push(vec![]);
+                out.len() - 1
+            });
+            out[c].push(g);
+        }
+        out.retain(|s| s.len() > 1);
+        for s in &mut out {
+            s.sort_unstable();
+        }
+        out.sort();
         out
     }
 
@@ -838,15 +1129,28 @@ impl Census {
     }
 
     /// Loose groups within `piece_distance` neighbour steps of each other, clustered (each
-    /// cluster in group order).
-    fn close_clusters(&self, groups: &[Group], loose: &[usize]) -> Vec<Vec<usize>> {
-        let mut owner: FastMap<(i32, i32, u32), usize> = FastMap::default();
+    /// cluster in group order), each with the nearest periodic groups within that distance (at
+    /// most three, nearest first).
+    fn close_clusters(
+        &self,
+        groups: &[Group],
+        loose: &[usize],
+        periodic: &[bool],
+    ) -> Vec<(Vec<usize>, Vec<usize>)> {
+        // Owners: loose groups by their index in `loose`, periodic ones by group.
+        let mut owner: FastMap<(i32, i32, u32), Result<usize, usize>> = FastMap::default();
         for (x, &g) in loose.iter().enumerate() {
             for c in &groups[g].cells {
-                owner.insert((c.i, c.j, c.k), x);
+                owner.insert((c.i, c.j, c.k), Ok(x));
+            }
+        }
+        for (g, grp) in groups.iter().enumerate().filter(|(g, _)| periodic[*g]) {
+            for c in &grp.cells {
+                owner.insert((c.i, c.j, c.k), Err(g));
             }
         }
         let mut uf = Uf::new(loose.len());
+        let mut near: Vec<Vec<(u32, usize)>> = vec![Vec::new(); loose.len()];
         for (x, &g) in loose.iter().enumerate() {
             let mut seen: FastMap<(i32, i32, u32), ()> = groups[g]
                 .cells
@@ -855,15 +1159,19 @@ impl Census {
                 .collect();
             let mut frontier: Vec<(i32, i32, u32)> = seen.keys().copied().collect();
             frontier.sort_unstable();
-            for _ in 0..self.piece_distance {
+            for step in 1..=self.piece_distance {
                 let mut next = Vec::new();
                 for &(i, j, k) in &frontier {
                     for &(di, dj, k2) in &self.n1[k as usize] {
                         let y = (i + di, j + dj, k2);
                         if seen.insert(y, ()).is_none() {
                             next.push(y);
-                            if let Some(&o) = owner.get(&y) {
-                                uf.union(x, o);
+                            match owner.get(&y) {
+                                Some(Ok(o)) => uf.union(x, *o),
+                                Some(Err(p)) if !near[x].iter().any(|n| n.1 == *p) => {
+                                    near[x].push((step, *p))
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -872,17 +1180,98 @@ impl Census {
             }
         }
         let mut at: FastMap<usize, usize> = FastMap::default();
-        let mut out: Vec<Vec<usize>> = Vec::new();
+        let mut out: Vec<(Vec<usize>, Vec<usize>)> = Vec::new();
+        let mut cand: Vec<Vec<(u32, usize)>> = Vec::new();
         for (x, &g) in loose.iter().enumerate() {
             let r = uf.find(x);
             let c = *at.entry(r).or_insert_with(|| {
-                out.push(vec![]);
+                out.push((vec![], vec![]));
+                cand.push(vec![]);
                 out.len() - 1
             });
-            out[c].push(g);
+            out[c].0.push(g);
+            cand[c].extend(near[x].iter().copied());
+        }
+        for (o, mut c) in out.iter_mut().zip(cand) {
+            c.sort_unstable();
+            let mut seen = Vec::new();
+            for (_, p) in c {
+                if !seen.contains(&p) && seen.len() < 3 {
+                    seen.push(p);
+                }
+            }
+            o.1 = seen;
         }
         out
     }
+}
+
+/// Live cells in a loose cluster above which it is not tried with its periodic neighbours.
+const LOOSE_CELLS: usize = 256;
+
+/// A [`Runner`] on the unbounded lattice with the bit-parallel stepper (B/S and Generations
+/// rules), for splitting compounds.
+pub struct BitRunner(pub Arc<Plan>);
+
+impl Runner for BitRunner {
+    fn run(&self, cells: &[LCell], gens: u64) -> Option<Vec<Phase>> {
+        let mut start: Phase = cells.to_vec();
+        start.sort_unstable();
+        let cap = 4 * start.len() + 256;
+        let mut u = Universe::with_cells(self.0.clone(), &start);
+        let mut out = Vec::with_capacity(gens as usize + 1);
+        out.push(start);
+        for _ in 0..gens {
+            if u.is_empty() {
+                out.push(Vec::new());
+                continue;
+            }
+            u.step();
+            if u.population() as usize > cap {
+                return None;
+            }
+            out.push(u.cells());
+        }
+        Some(out)
+    }
+    fn touching(&self, c: &LCell, out: &mut Vec<(i32, i32, u32)>) {
+        for &(di, dj, k) in &self.0.offs[c.k as usize] {
+            out.push((c.i + di, c.j + dj, k));
+        }
+    }
+    fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
+        compound::lattice_close(a, b, (self.0.reach_i, self.0.reach_j))
+    }
+    fn distance(&self, a: &[LCell], b: &[LCell]) -> f64 {
+        compound::lattice_distance(a, b)
+    }
+}
+
+impl Runner for Census {
+    fn run(&self, cells: &[LCell], gens: u64) -> Option<Vec<Phase>> {
+        BitRunner(self.plan.clone()).run(cells, gens)
+    }
+    fn touching(&self, c: &LCell, out: &mut Vec<(i32, i32, u32)>) {
+        for &(di, dj, k) in &self.n1[c.k as usize] {
+            out.push((c.i + di, c.j + dj, k));
+        }
+    }
+    fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
+        compound::lattice_close(a, b, (self.plan.reach_i, self.plan.reach_j))
+    }
+    fn distance(&self, a: &[LCell], b: &[LCell]) -> f64 {
+        compound::lattice_distance(a, b)
+    }
+}
+
+/// The cells of some groups together, sorted.
+fn cells_of(groups: &[Group], set: &[usize]) -> Vec<LCell> {
+    let mut v: Vec<LCell> = set
+        .iter()
+        .flat_map(|&g| groups[g].cells.iter().copied())
+        .collect();
+    v.sort_unstable();
+    v
 }
 
 /// Still life, oscillator, or spaceship from a period and displacement.

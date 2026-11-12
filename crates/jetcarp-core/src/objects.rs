@@ -34,6 +34,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod compound;
 pub mod puffer;
 
 #[derive(Clone, Debug)]
@@ -448,9 +449,15 @@ pub struct LCell {
 pub type Phase = Vec<LCell>;
 
 enum Outcome {
-    Repeat { period: u64, di: i32, dj: i32 },
+    Repeat {
+        period: u64,
+        di: i32,
+        dj: i32,
+    },
     Died,
     Escaped,
+    /// More live cells than the run's cap (only runs with a cap).
+    Grows,
     Unsettled,
 }
 
@@ -474,6 +481,9 @@ struct Ctx {
     frame_spec: TilingSpec,
     /// Lattices: the sparse runner for puffer tests (rules it supports).
     sparse: Option<puffer::Sparse>,
+    /// Lattices, B/S and Generations rules at one step per generation: the bit-parallel
+    /// stepper, for the many short runs that split compounds.
+    bits: Option<Arc<crate::hunt::bits::Plan>>,
 }
 
 fn round8(v: i64) -> u32 {
@@ -512,15 +522,32 @@ impl Ctx {
 
     /// Run `cells` alone for up to `gens` generations; with `stop`, stop at the first exact repeat.
     fn evolve(&self, cells: &[LCell], gens: u64, stop: bool) -> Result<Evolution, String> {
+        self.evolve_capped(cells, gens, stop, usize::MAX)
+    }
+
+    /// [`Ctx::evolve`], stopping as `Grows` once more than `cap` cells are live.
+    fn evolve_capped(
+        &self,
+        cells: &[LCell],
+        gens: u64,
+        stop: bool,
+        cap: usize,
+    ) -> Result<Evolution, String> {
         let mut start: Phase = cells.to_vec();
         start.sort_unstable();
         match self.lattice() {
-            Some(_) => self.evolve_lattice(start, gens, stop),
-            None => self.evolve_explicit(start, gens, stop),
+            Some(_) => self.evolve_lattice(start, gens, stop, cap),
+            None => self.evolve_explicit(start, gens, stop, cap),
         }
     }
 
-    fn evolve_lattice(&self, start: Phase, gens: u64, stop: bool) -> Result<Evolution, String> {
+    fn evolve_lattice(
+        &self,
+        start: Phase,
+        gens: u64,
+        stop: bool,
+        cap: usize,
+    ) -> Result<Evolution, String> {
         let e = self.reach;
         let big = (gens as i64 + 1) * e as i64 + 1;
         let mut margin = 2 * e as i64 + 2;
@@ -590,6 +617,12 @@ impl Ctx {
                         outcome: Outcome::Died,
                     });
                 }
+                if live.len() > cap {
+                    return Ok(Evolution {
+                        phases,
+                        outcome: Outcome::Grows,
+                    });
+                }
                 if stop && let Some((di, dj)) = translated(&phases[0], &live) {
                     return Ok(Evolution {
                         phases,
@@ -605,7 +638,13 @@ impl Ctx {
         }
     }
 
-    fn evolve_explicit(&self, start: Phase, gens: u64, stop: bool) -> Result<Evolution, String> {
+    fn evolve_explicit(
+        &self,
+        start: Phase,
+        gens: u64,
+        stop: bool,
+        cap: usize,
+    ) -> Result<Evolution, String> {
         let cells = start.iter().map(|c| [c.i as u32, c.s as u32]).collect();
         let mut world = self.new_world(self.topo.clone(), cells)?;
         let fi = world.cas[0].field;
@@ -628,6 +667,12 @@ impl Ctx {
                 return Ok(Evolution {
                     phases,
                     outcome: Outcome::Died,
+                });
+            }
+            if live.len() > cap {
+                return Ok(Evolution {
+                    phases,
+                    outcome: Outcome::Grows,
                 });
             }
             if stop && live == phases[0] {
@@ -669,7 +714,7 @@ impl Ctx {
             Outcome::Died => ObjClass::Other {
                 reason: "dies".into(),
             },
-            Outcome::Escaped | Outcome::Unsettled => {
+            Outcome::Escaped | Outcome::Grows | Outcome::Unsettled => {
                 if let Some(sp) = &self.sparse
                     && let Some(f) =
                         puffer::detect(sp, &ev.phases[0], self.max_period, puffer::TEST_CAP)
@@ -749,16 +794,23 @@ impl Ctx {
                         u == joint.phases[t]
                     });
                 if fits {
-                    return Ok(parts);
+                    return Ok(parts
+                        .into_iter()
+                        .flat_map(|p| split_part(self, g, p))
+                        .collect());
                 }
             }
         }
         let (class, phases) = self.classify(&g.cells)?;
-        Ok(vec![Part {
-            class,
-            phases,
-            members: (0..g.cells.len()).collect(),
-        }])
+        Ok(split_part(
+            self,
+            g,
+            Part {
+                class,
+                phases,
+                members: (0..g.cells.len()).collect(),
+            },
+        ))
     }
 
     /// Minimum normalized form over phases and symmetries; returns (text, cell count, exact).
@@ -822,6 +874,344 @@ impl Ctx {
             .join(" ");
         (text, b.len(), false)
     }
+}
+
+impl Ctx {
+    /// The largest `|di|` and `|dj|` of a neighbour offset (lattices).
+    fn offset_reach(&self) -> (i32, i32) {
+        let g = self.lattice().unwrap();
+        let offs = g.offsets[self.nb as usize].iter().flatten();
+        let ri = offs.clone().map(|o| o.di.abs()).max().unwrap_or(1);
+        let rj = offs.map(|o| o.dj.abs()).max().unwrap_or(1);
+        (ri, rj)
+    }
+
+    fn explicit_neighbours(&self, x: usize, out: &mut Vec<usize>) {
+        self.topo.for_each_neighbor(x, self.nb, |y| out.push(y));
+    }
+}
+
+impl compound::Runner for Ctx {
+    fn run(&self, cells: &[LCell], gens: u64) -> Option<Vec<Phase>> {
+        if let Some(p) = &self.bits {
+            return crate::hunt::separate::BitRunner(p.clone()).run(cells, gens);
+        }
+        let cap = 4 * cells.len() + 256;
+        let ev = self.evolve_capped(cells, gens, false, cap).ok()?;
+        match ev.outcome {
+            Outcome::Escaped | Outcome::Grows => None,
+            _ => {
+                let mut v = ev.phases;
+                v.resize(gens as usize + 1, Vec::new());
+                Some(v)
+            }
+        }
+    }
+    fn touching(&self, c: &LCell, out: &mut Vec<(i32, i32, u32)>) {
+        match self.lattice() {
+            Some(g) => {
+                for o in &g.offsets[self.nb as usize][c.k as usize] {
+                    out.push((c.i + o.di, c.j + o.dj, o.k));
+                }
+            }
+            None => self
+                .topo
+                .for_each_neighbor(c.i as usize, self.nb, |y| out.push((y as i32, 0, 0))),
+        }
+    }
+    fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
+        match self.lattice() {
+            Some(_) => compound::lattice_close(a, b, self.offset_reach()),
+            None => compound::explicit_close(a, b, &|x, out| self.explicit_neighbours(x, out)),
+        }
+    }
+    fn distance(&self, a: &[LCell], b: &[LCell]) -> f64 {
+        match self.lattice() {
+            Some(_) => compound::lattice_distance(a, b),
+            None => compound::explicit_distance(a, b, &|x, out| self.explicit_neighbours(x, out)),
+        }
+    }
+}
+
+/// The class of a periodic object from its period and displacement per period.
+fn periodic_class(period: u64, d: [i32; 2]) -> ObjClass {
+    match (period, d) {
+        (1, [0, 0]) => ObjClass::StillLife,
+        (p, [0, 0]) => ObjClass::Oscillator { period: p },
+        (p, [dx, dy]) => ObjClass::Spaceship { period: p, dx, dy },
+    }
+}
+
+/// A periodic part of a group split into the independent objects it is made of
+/// ([`compound`]); anything else, or one that does not come apart, as it is.
+fn split_part(ctx: &Ctx, g: &Group, p: Part) -> Vec<Part> {
+    if !ctx.separate || p.phases.is_empty() {
+        return vec![p];
+    }
+    let d = match p.class {
+        ObjClass::StillLife | ObjClass::Oscillator { .. } => [0, 0],
+        ObjClass::Spaceship { dx, dy, .. } => [dx, dy],
+        _ => return vec![p],
+    };
+    let Some(parts) = compound::split(ctx, &p.phases, d) else {
+        return vec![p];
+    };
+    // Each cell now goes to the part whose phase 0 holds it.
+    let mut owner: HashMap<LCell, usize> = HashMap::new();
+    for (k, cp) in parts.iter().enumerate().rev() {
+        for c in &cp.phases[0] {
+            owner.insert(*c, k);
+        }
+    }
+    let mut members = vec![Vec::new(); parts.len()];
+    for &m in &p.members {
+        match owner.get(&g.cells[m]) {
+            Some(&k) => members[k].push(m),
+            None => return vec![p],
+        }
+    }
+    if members.iter().any(|m| m.is_empty()) {
+        return vec![p];
+    }
+    parts
+        .into_iter()
+        .zip(members)
+        .map(|(cp, members)| Part {
+            class: periodic_class(cp.period, cp.d),
+            phases: cp.phases,
+            members,
+        })
+        .collect()
+}
+
+/// A part as a group of its own cells (members `0..n`).
+fn own_group(g: &Group, p: Part) -> (Group, Part) {
+    let cells: Vec<LCell> = p.members.iter().map(|&m| g.cells[m]).collect();
+    let ids: Vec<u32> = p.members.iter().map(|&m| g.ids[m]).collect();
+    let n = cells.len();
+    (
+        Group {
+            cells,
+            ids,
+            subs: vec![(0..n).collect()],
+            unsplittable: g.unsplittable.clone(),
+        },
+        Part {
+            class: p.class,
+            phases: p.phases,
+            members: (0..n).collect(),
+        },
+    )
+}
+
+/// The displacement per period of a periodic object (`None` for anything else).
+fn periodic_d(c: &ObjClass) -> Option<[i32; 2]> {
+    match c {
+        ObjClass::StillLife | ObjClass::Oscillator { .. } => Some([0, 0]),
+        ObjClass::Spaceship { dx, dy, .. } => Some([*dx, *dy]),
+        _ => None,
+    }
+}
+
+/// Phase `g` of a periodic object: its phases repeated, moved on by its displacement.
+fn phase_at(p: &Part, d: [i32; 2], g: u64) -> Phase {
+    let n = p.phases.len() as u64;
+    compound::shift(&p.phases[(g % n) as usize], d, (g / n) as i32)
+}
+
+fn lcm(a: u64, b: u64) -> u64 {
+    a / gcd(a, b).max(1) * b
+}
+
+/// Objects that are periodic alone but interact with a neighbour are one object when together
+/// they are periodic: the two halves of a bound pair that lie apart in this phase (two gliders
+/// whose sparks hold each other), or two oscillators that touch only in other phases. Two
+/// objects interact when running them together differs, at some generation of two common
+/// periods and eight more, from the union of their runs; pairs whose runs never come within two
+/// neighbour steps of each other cannot interact and are not run. Interacting objects are
+/// joined (union-find), and each set is run as one: when it is periodic it is one object (split
+/// again into any parts that are independent of the rest), otherwise its objects stay as they
+/// were (two that are about to collide).
+fn join_interacting(ctx: &Ctx, items: Vec<(Group, Part)>) -> Result<Vec<(Group, Part)>, String> {
+    if !ctx.separate {
+        return Ok(items);
+    }
+    let n = items.len();
+    let ds: Vec<Option<[i32; 2]>> = items
+        .iter()
+        .map(|(g, p)| {
+            if g.unsplittable.is_some() || p.phases.is_empty() {
+                None
+            } else {
+                periodic_d(&p.class)
+            }
+        })
+        .collect();
+    let horizon_of = |a: usize, b: usize| -> Option<u64> {
+        let l = lcm(
+            items[a].1.phases.len() as u64,
+            items[b].1.phases.len() as u64,
+        );
+        (l <= ctx.max_period).then(|| compound::horizon(l))
+    };
+    // Candidate pairs: on lattices, envelopes that come within reach; on patches, envelopes
+    // (every phase) whose neighbourhoods meet.
+    let mut cand: Vec<(usize, usize)> = Vec::new();
+    let live: Vec<usize> = (0..n).filter(|&k| ds[k].is_some()).collect();
+    match ctx.lattice() {
+        Some(_) => {
+            let (ri, rj) = ctx.offset_reach();
+            let h = compound::horizon(ctx.max_period);
+            let env: Vec<[i32; 4]> = (0..n)
+                .map(|k| {
+                    let Some(d) = ds[k] else {
+                        return [0; 4];
+                    };
+                    let p = &items[k].1;
+                    let reps = h / p.phases.len() as u64 + 1;
+                    let mut b = [i32::MAX, i32::MIN, i32::MAX, i32::MIN];
+                    for ph in &p.phases {
+                        for c in ph {
+                            for r in [0, reps as i32] {
+                                let (i, j) = (c.i + d[0] * r, c.j + d[1] * r);
+                                b = [b[0].min(i), b[1].max(i), b[2].min(j), b[3].max(j)];
+                            }
+                        }
+                    }
+                    b
+                })
+                .collect();
+            let mut order = live.clone();
+            order.sort_by_key(|&k| (env[k][0], k));
+            for (x, &a) in order.iter().enumerate() {
+                for &b in &order[x + 1..] {
+                    if env[b][0] - env[a][1] > 2 * ri {
+                        break;
+                    }
+                    if env[a][2] - env[b][3] > 2 * rj || env[b][2] - env[a][3] > 2 * rj {
+                        continue;
+                    }
+                    cand.push((a.min(b), a.max(b)));
+                }
+            }
+        }
+        None => {
+            let mut near: HashMap<usize, Vec<usize>> = HashMap::new();
+            for &k in &live {
+                let mut set: HashSet<usize> = HashSet::new();
+                for ph in &items[k].1.phases {
+                    for c in ph {
+                        set.insert(c.i as usize);
+                        ctx.topo
+                            .for_each_neighbor(c.i as usize, ctx.nb, |y| _ = set.insert(y));
+                    }
+                }
+                for x in set {
+                    near.entry(x).or_default().push(k);
+                }
+            }
+            let mut seen = HashSet::new();
+            for ks in near.values() {
+                for (x, &a) in ks.iter().enumerate() {
+                    for &b in &ks[x + 1..] {
+                        if seen.insert((a.min(b), a.max(b))) {
+                            cand.push((a.min(b), a.max(b)));
+                        }
+                    }
+                }
+            }
+            cand.sort_unstable();
+        }
+    }
+    let interacting: Vec<(usize, usize)> = cand
+        .into_par_iter()
+        .filter(|&(a, b)| {
+            let Some(l) = horizon_of(a, b) else {
+                return false;
+            };
+            let (pa, pb) = (&items[a].1, &items[b].1);
+            let (da, db) = (ds[a].unwrap(), ds[b].unwrap());
+            let close = (0..=l)
+                .any(|g| compound::Runner::close(ctx, &phase_at(pa, da, g), &phase_at(pb, db, g)));
+            if !close {
+                return false;
+            }
+            let mut cells = pa.phases[0].clone();
+            cells.extend(pb.phases[0].iter().copied());
+            match compound::Runner::run(ctx, &cells, l) {
+                None => true,
+                Some(joint) => (0..=l).any(|g| {
+                    !compound::union_is(
+                        &phase_at(pa, da, g),
+                        &phase_at(pb, db, g),
+                        &joint[g as usize],
+                    )
+                }),
+            }
+        })
+        .collect();
+    if interacting.is_empty() {
+        return Ok(items);
+    }
+    let mut uf = Uf((0..n as u32).collect());
+    for &(a, b) in &interacting {
+        uf.union(a, b);
+    }
+    let mut sets: HashMap<usize, Vec<usize>> = HashMap::new();
+    for &(a, b) in &interacting {
+        for k in [a, b] {
+            let r = uf.find(k);
+            let s = sets.entry(r).or_default();
+            if !s.contains(&k) {
+                s.push(k);
+            }
+        }
+    }
+    // Each set run as one; periodic sets replace their members (at the first one's place).
+    let mut replace: HashMap<usize, Vec<(Group, Part)>> = HashMap::new();
+    let mut gone: HashSet<usize> = HashSet::new();
+    let mut keys: Vec<usize> = sets.keys().copied().collect();
+    keys.sort_unstable();
+    for r in keys {
+        let mut set = sets[&r].clone();
+        set.sort_unstable();
+        let mut g = Group {
+            cells: vec![],
+            ids: vec![],
+            subs: vec![],
+            unsplittable: None,
+        };
+        for &k in &set {
+            g.cells.extend(items[k].0.cells.iter().copied());
+            g.ids.extend(items[k].0.ids.iter().copied());
+        }
+        g.subs = vec![(0..g.cells.len()).collect()];
+        let (class, phases) = ctx.classify(&g.cells)?;
+        if periodic_d(&class).is_none() {
+            continue;
+        }
+        let whole = Part {
+            class,
+            phases,
+            members: (0..g.cells.len()).collect(),
+        };
+        let out: Vec<(Group, Part)> = split_part(ctx, &g, whole)
+            .into_iter()
+            .map(|p| own_group(&g, p))
+            .collect();
+        gone.extend(set.iter().copied());
+        replace.insert(set[0], out);
+    }
+    let mut out = Vec::with_capacity(n);
+    for (k, it) in items.into_iter().enumerate() {
+        if let Some(r) = replace.remove(&k) {
+            out.extend(r);
+        }
+        if !gone.contains(&k) {
+            out.push(it);
+        }
+    }
+    Ok(out)
 }
 
 /// `Some((di, dj))` if `b` is `a` shifted by a lattice vector (both sorted by row).
@@ -1045,28 +1435,33 @@ pub fn supported(rule: &Rule) -> Result<bool, String> {
     }
 }
 
-/// Find and classify the objects in a world's field.
-pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport, String> {
-    let ca = match opts.ca {
+/// A [`compound::Runner`] for objects of a world's CA (the first that qualifies when `ca_id` is
+/// `None`): its rule and neighbourhood on the world's tiling, run alone on dead-edged frames
+/// (lattices) or on the world's own patch (explicit patches, whose cells are ids).
+pub fn runner_for(
+    world: &World,
+    ca_id: Option<u32>,
+) -> Result<Box<dyn compound::Runner + Send + Sync>, String> {
+    let ca = match ca_id {
         Some(id) => world.ca(id).ok_or_else(|| format!("no CA with id {id}"))?,
         None => world
             .cas
             .iter()
-            .filter(|c| c.enabled)
-            .chain(world.cas.iter())
             .find(|c| supported(&c.rule).is_ok())
             .ok_or("no CA with a B/S, Generations, WireWorld, or table rule")?,
     };
+    Ok(Box::new(make_ctx(world, ca, 64, true)?))
+}
+
+fn make_ctx(
+    world: &World,
+    ca: &crate::world::CaInstance,
+    max_period: u64,
+    separate: bool,
+) -> Result<Ctx, String> {
     let isotropic = supported(&ca.rule)?;
     let topo = world.topo.clone();
     let nb = ca.nb;
-    let field = &world.fields[ca.field];
-    if field.state.is_empty() {
-        return Err("that CA has no state field".into());
-    }
-    let max_period = opts.max_period.clamp(1, 100_000);
-    let d = opts.merge_distance.clamp(1, 4);
-
     let mut spec = CaSpec::new(&ca.rule.notation()).seed(SeedSpec::Empty);
     spec.neighborhood = Some(nb);
     spec.steps_per_gen = ca.steps_per_gen;
@@ -1092,13 +1487,13 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
     };
     let mut frame_spec = topo.spec.clone();
     frame_spec.boundary = Boundary::Dead;
-    let ctx = Ctx {
+    Ok(Ctx {
         topo: topo.clone(),
         ca: spec,
         table: ca.table.as_ref().map(|t| t.table.clone()),
         nb,
         max_period,
-        separate: opts.separate,
+        separate,
         reach,
         syms,
         frames: Mutex::new(HashMap::new()),
@@ -1106,7 +1501,35 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
         sparse: topo
             .lattice()
             .and_then(|g| puffer::Sparse::new(&ca.rule, g, nb)),
+        bits: topo
+            .lattice()
+            .filter(|_| ca.steps_per_gen == 1 && ca.table.is_none())
+            .and_then(|g| crate::hunt::bits::Plan::new(&ca.rule, g, nb).ok())
+            .map(Arc::new),
+    })
+}
+
+/// Find and classify the objects in a world's field.
+pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport, String> {
+    let ca = match opts.ca {
+        Some(id) => world.ca(id).ok_or_else(|| format!("no CA with id {id}"))?,
+        None => world
+            .cas
+            .iter()
+            .filter(|c| c.enabled)
+            .chain(world.cas.iter())
+            .find(|c| supported(&c.rule).is_ok())
+            .ok_or("no CA with a B/S, Generations, WireWorld, or table rule")?,
     };
+    let topo = world.topo.clone();
+    let field = &world.fields[ca.field];
+    if field.state.is_empty() {
+        return Err("that CA has no state field".into());
+    }
+    let max_period = opts.max_period.clamp(1, 100_000);
+    let d = opts.merge_distance.clamp(1, 4);
+    let ctx = make_ctx(world, ca, max_period, opts.separate)?;
+    let nb = ctx.nb;
 
     let groups = build_groups(&ctx, &field.state, d);
     let parts: Result<Vec<Vec<Part>>, String> = groups.par_iter().map(|g| ctx.analyse(g)).collect();
@@ -1133,7 +1556,6 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
     } else {
         None
     };
-    let mut objects = Vec::new();
     let mut absorbed = vec![false; groups.len()];
     for (_, members, _, _) in &merged {
         for &m in members {
@@ -1144,22 +1566,25 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
         .into_iter()
         .map(|(head, _, g, p)| (head, (g, p)))
         .collect();
+    // Every object as a group of its own cells.
+    let mut items: Vec<(Group, Part)> = Vec::new();
     for (gi, ps) in parts.into_iter().enumerate() {
         if let Some((g, p)) = merged_at.remove(&gi) {
-            objects.push(make_object(&ctx, objects.len(), p, &g, names.as_deref()));
+            for q in split_part(&ctx, &g, p) {
+                items.push(own_group(&g, q));
+            }
         }
         if absorbed[gi] {
             continue;
         }
         for p in ps {
-            objects.push(make_object(
-                &ctx,
-                objects.len(),
-                p,
-                &groups[gi],
-                names.as_deref(),
-            ));
+            items.push(own_group(&groups[gi], p));
         }
+    }
+    let items = join_interacting(&ctx, items)?;
+    let mut objects = Vec::new();
+    for (g, p) in items {
+        objects.push(make_object(&ctx, objects.len(), p, &g, names.as_deref()));
     }
     let mut rows: Vec<CountRow> = Vec::new();
     let mut by_key: HashMap<String, usize> = HashMap::new();
@@ -1308,9 +1733,16 @@ fn make_object(
     }
 }
 
+/// Live cells in a loose cluster above which it is not tried with its periodic neighbours.
+const LOOSE_CELLS: usize = 256;
+
 /// Pieces that die or never repeat on their own may be parts of one object whose phases fall
-/// apart (some pentadecathlon phases do). Merge such pieces lying within a few steps of each
-/// other and keep the merged group if it is periodic. Returns (first group, groups, group, part).
+/// apart (some pentadecathlon phases do), or the far member of a bound pair whose two halves lie
+/// apart in this phase (a ship and the spark-supported partner it tows). Merge such pieces lying
+/// within a few steps of each other, and failing that each cluster of them with its nearest
+/// periodic neighbours (one at a time, then all), and keep the first merge that is periodic. A
+/// merge that is really several objects comes apart again in [`split_part`]. Returns (first
+/// group, groups, group, part).
 fn merge_pieces(
     ctx: &Ctx,
     groups: &[Group],
@@ -1325,28 +1757,49 @@ fn merge_pieces(
                 && matches!(parts[g][0].class, ObjClass::Other { .. })
         })
         .collect();
-    if loose.len() < 2 || reach == 0 {
+    if loose.is_empty() || reach == 0 {
         return Ok(vec![]);
     }
-    let mut owner: HashMap<usize, usize> = HashMap::new();
+    let periodic = |g: usize| {
+        groups[g].unsplittable.is_none()
+            && parts[g].iter().all(|p| {
+                matches!(
+                    p.class,
+                    ObjClass::StillLife | ObjClass::Oscillator { .. } | ObjClass::Spaceship { .. }
+                )
+            })
+    };
+    // Owners: loose groups by their index in `loose`, periodic ones by group.
+    let mut owner: HashMap<usize, Result<usize, usize>> = HashMap::new();
     for (k, &g) in loose.iter().enumerate() {
         for &c in &groups[g].ids {
-            owner.insert(c as usize, k);
+            owner.insert(c as usize, Ok(k));
+        }
+    }
+    for g in (0..groups.len()).filter(|&g| periodic(g)) {
+        for &c in &groups[g].ids {
+            owner.insert(c as usize, Err(g));
         }
     }
     let mut uf = Uf((0..loose.len() as u32).collect());
+    // Periodic groups met from each loose group: (steps, group).
+    let mut near: Vec<Vec<(u32, usize)>> = vec![Vec::new(); loose.len()];
     for (k, &g) in loose.iter().enumerate() {
         let mut seen: HashSet<usize> = groups[g].ids.iter().map(|&c| c as usize).collect();
         let mut frontier: Vec<usize> = seen.iter().copied().collect();
         frontier.sort_unstable();
-        for _ in 0..reach {
+        for step in 1..=reach {
             let mut next = Vec::new();
             for &x in &frontier {
                 ctx.topo.for_each_neighbor(x, ctx.nb, |y| {
                     if seen.insert(y) {
                         next.push(y);
-                        if let Some(&o) = owner.get(&y) {
-                            uf.union(k, o);
+                        match owner.get(&y) {
+                            Some(Ok(o)) => uf.union(k, *o),
+                            Some(Err(p)) if !near[k].iter().any(|n| n.1 == *p) => {
+                                near[k].push((step, *p))
+                            }
+                            _ => {}
                         }
                     }
                 });
@@ -1355,47 +1808,89 @@ fn merge_pieces(
         }
     }
     let mut clusters: Vec<Vec<usize>> = Vec::new();
+    let mut members: Vec<Vec<usize>> = Vec::new();
     let mut at: HashMap<usize, usize> = HashMap::new();
     for (k, &g) in loose.iter().enumerate() {
         let r = uf.find(k);
         let c = *at.entry(r).or_insert_with(|| {
             clusters.push(vec![]);
+            members.push(vec![]);
             clusters.len() - 1
         });
         clusters[c].push(g);
+        members[c].push(k);
     }
-    let tried: Vec<Result<Option<Merged>, String>> = clusters
-        .into_par_iter()
-        .filter(|c| c.len() > 1)
-        .map(|c| {
-            let mut ids: Vec<u32> = c
-                .iter()
-                .flat_map(|&g| groups[g].ids.iter().copied())
-                .collect();
-            ids.sort_unstable();
-            let (cells, bad) = embed(ctx, &ids, state, reach);
-            if bad.is_some() {
-                return Ok(None);
-            }
-            let g = Group {
-                subs: vec![(0..ids.len()).collect()],
-                cells,
-                ids,
-                unsplittable: None,
-            };
-            let (class, phases) = ctx.classify(&g.cells)?;
-            if matches!(class, ObjClass::Other { .. }) {
-                return Ok(None);
-            }
-            let p = Part {
-                class,
-                phases,
-                members: (0..g.cells.len()).collect(),
-            };
-            Ok(Some((c[0], c, g, p)))
+    let jobs: Vec<(Vec<usize>, Vec<usize>)> = clusters
+        .into_iter()
+        .zip(members)
+        .map(|(c, ks)| {
+            let mut cand: Vec<(u32, usize)> = ks.iter().flat_map(|&k| near[k].clone()).collect();
+            cand.sort_unstable();
+            let mut seen = HashSet::new();
+            cand.retain(|x| seen.insert(x.1));
+            (c, cand.into_iter().take(3).map(|x| x.1).collect())
         })
         .collect();
-    tried.into_iter().filter_map(|r| r.transpose()).collect()
+    let tried: Vec<Result<Option<Merged>, String>> = jobs
+        .into_par_iter()
+        .map(|(c, cand)| {
+            let size: usize = c.iter().map(|&g| groups[g].ids.len()).sum();
+            let mut tries: Vec<Vec<usize>> = Vec::new();
+            if c.len() > 1 {
+                tries.push(c.clone());
+            }
+            if size <= LOOSE_CELLS {
+                for &p in &cand {
+                    tries.push(c.iter().copied().chain([p]).collect());
+                }
+                if cand.len() > 1 {
+                    tries.push(c.iter().copied().chain(cand.iter().copied()).collect());
+                }
+            }
+            for mut set in tries {
+                set.sort_unstable();
+                let mut ids: Vec<u32> = set
+                    .iter()
+                    .flat_map(|&g| groups[g].ids.iter().copied())
+                    .collect();
+                ids.sort_unstable();
+                let (cells, bad) = embed(ctx, &ids, state, reach);
+                if bad.is_some() {
+                    continue;
+                }
+                let g = Group {
+                    subs: vec![(0..ids.len()).collect()],
+                    cells,
+                    ids,
+                    unsplittable: None,
+                };
+                let (class, phases) = ctx.classify(&g.cells)?;
+                if matches!(class, ObjClass::Other { .. } | ObjClass::Puffer { .. }) {
+                    continue;
+                }
+                let p = Part {
+                    class,
+                    phases,
+                    members: (0..g.cells.len()).collect(),
+                };
+                return Ok(Some((set[0], set, g, p)));
+            }
+            Ok(None)
+        })
+        .collect();
+    // A periodic group goes to the first merge that takes it.
+    let mut taken: HashSet<usize> = HashSet::new();
+    let mut out = Vec::new();
+    for m in tried {
+        if let Some(m) = m? {
+            if m.1.iter().any(|g| taken.contains(g)) {
+                continue;
+            }
+            taken.extend(m.1.iter().copied());
+            out.push(m);
+        }
+    }
+    Ok(out)
 }
 
 /// Group live cells: touching parts, merged when within `d` neighbour steps of each other.
