@@ -2063,6 +2063,15 @@ pub(crate) fn run_job(
         out.result = saved_result(lib, &row);
         return Ok(out);
     }
+    // A job whose row already says it stopped is letting go of its thread: give it a moment,
+    // so a resume right after a stop isn't refused.
+    let letting_go = Instant::now();
+    while row.status != JobStatus::Running
+        && cx.registry().is_running(lib, job)
+        && letting_go.elapsed() < std::time::Duration::from_secs(10)
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
     if cx.registry().is_running(lib, job) {
         return Err(ApiError::conflict(format!(
             "{} {job} is already running here",
