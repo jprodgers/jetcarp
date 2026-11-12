@@ -487,7 +487,7 @@ impl App {
         self.fit_screens();
         #[cfg(target_os = "macos")]
         if self.mode == Mode::Host {
-            crate::desktop_mac::set_dock_icon(self.outputs.iter().any(|o| !o.target.wallpaper));
+            crate::desktop_mac::stay_out_of_dock();
         }
         #[cfg(windows)]
         {
@@ -615,7 +615,7 @@ impl App {
             .map(|m| {
                 let (p, s) = (m.position(), m.size());
                 (
-                    m.name().unwrap_or_else(|| "unnamed".into()),
+                    monitor_name(&m),
                     (p.x, p.y),
                     (s.width, s.height),
                     m.scale_factor(),
@@ -928,12 +928,26 @@ impl ApplicationHandler for App {
     }
 }
 
+/// A monitor's name for `jetcarp host status`: on macOS the name the system shows for the screen
+/// (`NSScreen.localizedName`), since winit's there is "Monitor #" and a model number; winit's
+/// otherwise, and as the fallback.
+fn monitor_name(m: &winit::monitor::MonitorHandle) -> String {
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::MonitorHandleExtMacOS;
+        if let Some(n) = jetcarp_display::workarea::mac_screen_name(m.native_id()) {
+            return n;
+        }
+    }
+    m.name().unwrap_or_else(|| "unnamed".into())
+}
+
 /// Runs until the host quits, a window closes, or `seconds` pass, then ends the process: with 0,
 /// or with 1 after printing what went wrong.
 pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
     #[allow(unused_mut)]
     let mut builder = EventLoop::builder();
-    // No Dock icon until there is a plain window to switch to (see `sync_outputs`).
+    // Menu bar only, from the start: no Dock icon, windows or not (see `sync_outputs`).
     #[cfg(target_os = "macos")]
     {
         use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};

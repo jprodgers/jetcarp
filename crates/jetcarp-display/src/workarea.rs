@@ -155,6 +155,16 @@ mod imp {
     }
 }
 
+/// The name macOS shows for the screen whose display id is `id` (`CGDirectDisplayID`, winit's
+/// `MonitorHandleExtMacOS::native_id`): `NSScreen.localizedName`, such as "Built-in Retina
+/// Display" or "Q3277". `None` when no screen has that id. winit's own name for a monitor on macOS
+/// is "Monitor #" and the display's model number in decimal ("Monitor #41041"), which names
+/// nothing a person would recognise.
+#[cfg(target_os = "macos")]
+pub fn mac_screen_name(id: u32) -> Option<String> {
+    mac::screen_name(id)
+}
+
 /// AppKit's screens, matched to the monitors winit reports.
 #[cfg(target_os = "macos")]
 pub(crate) mod mac {
@@ -243,6 +253,51 @@ pub(crate) mod mac {
             (f.size.w * s.scale).round() as u32,
             (f.size.h * s.scale).round() as u32,
         )
+    }
+
+    /// [`super::mac_screen_name`]: the screen whose `deviceDescription["NSScreenNumber"]` is
+    /// `id`, by its `localizedName` (macOS 10.15 and later).
+    pub fn screen_name(id: u32) -> Option<String> {
+        use objc2::runtime::Bool;
+        use objc2::sel;
+        use std::ffi::{CStr, c_char};
+        let class = AnyClass::get(c"NSScreen")?;
+        let strings = AnyClass::get(c"NSString")?;
+        let key: Option<Retained<AnyObject>> =
+            unsafe { msg_send![strings, stringWithUTF8String: c"NSScreenNumber".as_ptr()] };
+        let key = key?;
+        let list: Option<Retained<AnyObject>> = unsafe { msg_send![class, screens] };
+        let list = list?;
+        let n: usize = unsafe { msg_send![&*list, count] };
+        for i in 0..n {
+            let s: Option<Retained<AnyObject>> = unsafe { msg_send![&*list, objectAtIndex: i] };
+            let Some(s) = s else { continue };
+            let desc: Option<Retained<AnyObject>> = unsafe { msg_send![&*s, deviceDescription] };
+            let Some(desc) = desc else { continue };
+            let number: Option<Retained<AnyObject>> =
+                unsafe { msg_send![&*desc, objectForKey: &*key] };
+            let Some(number) = number else { continue };
+            let this: u32 = unsafe { msg_send![&*number, unsignedIntValue] };
+            if this != id {
+                continue;
+            }
+            let named: Bool = unsafe { msg_send![&*s, respondsToSelector: sel!(localizedName)] };
+            if !named.as_bool() {
+                return None;
+            }
+            let name: Option<Retained<AnyObject>> = unsafe { msg_send![&*s, localizedName] };
+            let name = name?;
+            let p: *const c_char = unsafe { msg_send![&*name, UTF8String] };
+            if p.is_null() {
+                return None;
+            }
+            let text = unsafe { CStr::from_ptr(p) }
+                .to_string_lossy()
+                .trim()
+                .to_string();
+            return (!text.is_empty()).then_some(text);
+        }
+        None
     }
 
     /// The screen showing the monitor whose bounds are `m`: the one whose bounds match, else the

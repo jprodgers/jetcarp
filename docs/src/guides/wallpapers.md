@@ -197,7 +197,8 @@ for the password box). In screensaver mode the screen and the computer stay awak
 
 **Windows**: the host puts a window of its own under the desktop icons, one per monitor, with no
 extension needed. **macOS**: one borderless window per monitor at the desktop's level, behind the
-icons, on every Space and ignoring the mouse; the host has no Dock icon while it shows only wallpaper.
+icons, on every Space and ignoring the mouse. The host lives in the menu bar: it has no Dock icon, even
+while it shows a scene in a window.
 **Other Linux desktops** are not supported yet: the host shows a window instead.
 
 **A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host

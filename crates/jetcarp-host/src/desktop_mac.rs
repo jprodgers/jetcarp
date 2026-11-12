@@ -13,7 +13,8 @@ const STATIONARY: usize = 1 << 4;
 const IGNORES_CYCLE: usize = 1 << 6;
 /// `NSWindowOcclusionStateVisible`.
 const OCCLUSION_VISIBLE: usize = 1 << 1;
-const POLICY_REGULAR: isize = 0;
+/// `NSApplicationActivationPolicyAccessory`: no Dock icon and no place in the app switcher, as a
+/// menu-bar program.
 const POLICY_ACCESSORY: isize = 1;
 
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -88,21 +89,19 @@ pub fn locked() -> bool {
     }
 }
 
-/// Shows the host in the Dock (and the app switcher) only while it has a plain window to switch to.
-pub fn set_dock_icon(show: bool) {
+/// Keeps the host out of the Dock and the app switcher: it lives in the menu bar (its tray menu),
+/// with or without plain windows, which Mission Control still shows. A bare program would
+/// otherwise get a Dock icon, the generic one of a Unix program, named `jetcarp` (seen on the Mac
+/// in rc1 when the screens became windows).
+pub fn stay_out_of_dock() {
     unsafe {
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         if app.is_null() {
             return;
         }
-        let policy = if show {
-            POLICY_REGULAR
-        } else {
-            POLICY_ACCESSORY
-        };
         let current: isize = msg_send![app, activationPolicy];
-        if current != policy {
-            let _: Bool = msg_send![app, setActivationPolicy: policy];
+        if current != POLICY_ACCESSORY {
+            let _: Bool = msg_send![app, setActivationPolicy: POLICY_ACCESSORY];
         }
     }
 }

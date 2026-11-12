@@ -82,6 +82,20 @@ impl Monitors {
     }
 }
 
+/// A monitor's name: on macOS the one the system shows (`NSScreen.localizedName`), since winit's
+/// there is "Monitor #" and the display's model number in decimal; winit's otherwise, and as the
+/// fallback.
+fn monitor_name(m: &winit::monitor::MonitorHandle) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::MonitorHandleExtMacOS;
+        if let Some(n) = jetcarp_display::workarea::mac_screen_name(m.native_id()) {
+            return Some(n);
+        }
+    }
+    m.name()
+}
+
 fn read(w: &winit::window::Window) -> Vec<MonitorInfo> {
     let current = w.current_monitor();
     let mut list: Vec<MonitorInfo> = w
@@ -92,7 +106,7 @@ fn read(w: &winit::window::Window) -> Vec<MonitorInfo> {
             let pos = m.position();
             MonitorInfo {
                 index,
-                name: m.name(),
+                name: monitor_name(&m),
                 size_px: [size.width, size.height],
                 position_px: [pos.x, pos.y],
                 scale_factor: m.scale_factor(),
