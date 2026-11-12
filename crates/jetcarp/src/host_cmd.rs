@@ -219,6 +219,8 @@ fn status_lines(v: &Value) -> Vec<String> {
         };
         let shown = if s["place"] == "wallpaper" {
             "wallpaper"
+        } else if s["hidden"] == true {
+            "window, not shown (started at login)"
         } else {
             "window"
         };
@@ -480,7 +482,7 @@ pub fn run(a: HostArgs) -> Result<()> {
             Ok(())
         }
         HostCmd::Login { state } => {
-            let cmd = autostart::host_command().map_err(|e| anyhow!(e))?;
+            let cmd = autostart::login_command().map_err(|e| anyhow!(e))?;
             autostart::set(state.b(), &cmd).map_err(|e| anyhow!(e))?;
             println!(
                 "{}",

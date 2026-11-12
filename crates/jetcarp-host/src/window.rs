@@ -36,6 +36,12 @@ const NO_WALLPAPER: &str = if cfg!(all(unix, not(target_os = "macos"))) {
 } else {
     "wallpaper is not available on this system yet. Showing a window for now."
 };
+/// The same for a host started at login, which opens no windows.
+const NO_WALLPAPER_AT_LOGIN: &str = if cfg!(all(unix, not(target_os = "macos"))) {
+    "wallpaper needs JETCARP's GNOME extension; run `jetcarp host gnome install`, then log out and back in. Started at login, the host shows nothing until then."
+} else {
+    "wallpaper is not available on this system yet. Started at login, the host shows nothing."
+};
 /// How long to keep trying to get under the desktop icons (Explorer may be restarting).
 #[cfg(windows)]
 const DESKTOP_PATIENCE: f64 = 15.0;
@@ -211,7 +217,7 @@ impl App {
                 let screens: Vec<_> = (0..self.core.screens.len())
                     .map(|i| (self.core.screens[i].monitor, self.shown_as_wallpaper(i)))
                     .collect();
-                if cfg!(any(windows, target_os = "macos")) {
+                let mut all = if cfg!(any(windows, target_os = "macos")) {
                     let primary = el.primary_monitor();
                     let primary = el
                         .available_monitors()
@@ -220,7 +226,12 @@ impl App {
                     targets::per_monitor(&screens, count, primary)
                 } else {
                     targets::one_each(&screens)
+                };
+                // Started at login: the desktop only, not even a wallpaper's window stand-in.
+                if self.core.login {
+                    all.retain(|t| t.wallpaper);
                 }
+                all
             }
         }
     }
@@ -500,14 +511,19 @@ impl App {
             }
         }
         let showing = !self.core.wants_wallpaper() || self.core.shell() != Shell::Gone;
+        let note = if self.core.login {
+            NO_WALLPAPER_AT_LOGIN
+        } else {
+            NO_WALLPAPER
+        };
         if showing {
             if self.noted_fallback {
                 self.noted_fallback = false;
-                self.core.retract(NO_WALLPAPER);
+                self.core.retract(note);
             }
         } else if !self.noted_fallback {
             self.noted_fallback = true;
-            self.core.note(NO_WALLPAPER);
+            self.core.note(note);
         }
     }
 

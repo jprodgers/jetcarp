@@ -120,7 +120,7 @@ impl Platform for Machine {
         if autostart::enabled() {
             steps.push(step(
                 "stop the host starting at login",
-                Box::new(|| autostart::set(false, &autostart::host_command()?)),
+                Box::new(|| autostart::set(false, &autostart::login_command()?)),
             ));
         }
         // The files are looked for in their folder as well as asked of GNOME Shell, which

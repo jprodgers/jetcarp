@@ -117,6 +117,9 @@ pub struct Core {
     pub monitor_rects: Vec<jetcarp_display::workarea::Rect>,
     /// Set when the screens were rebuilt, so surfaces match them again.
     pub screens_changed: bool,
+    /// Started at login: only the screens placed on the desktop show and run; the others wait,
+    /// unseen, so a sign-in opens no windows.
+    pub login: bool,
     /// Asked to quit; the host ends once [`Core::finished`] says so.
     pub quit: bool,
     quit_at: Option<f64>,
@@ -273,6 +276,7 @@ impl Core {
             monitors: vec![],
             monitor_rects: vec![],
             screens_changed: false,
+            login: false,
             quit: false,
             quit_at: None,
         };
@@ -489,7 +493,12 @@ impl Core {
     }
 
     pub fn set_login(&self, on: bool) -> Result<(), String> {
-        autostart::set(on, &autostart::host_command()?)
+        autostart::set(on, &autostart::login_command()?)
+    }
+
+    /// Whether screen `s` is left unseen: a window screen of a host started at login.
+    pub fn hidden(&self, s: &Screen) -> bool {
+        self.login && s.place != Place::Wallpaper
     }
 
     /// Shows every screen as a wallpaper, or back in a window (saved).
@@ -564,7 +573,11 @@ impl Core {
         let count = self.screens.len().max(1) as f32;
         let budget = Duration::from_secs_f32(STEP_SHARE / self.settings.fps.max(1.0) / count);
         let mut notes = vec![];
+        let login = self.login;
         for s in &mut self.screens {
+            if login && s.place != Place::Wallpaper {
+                continue;
+            }
             s.stage.tick(now, &mut s.sim, budget);
             notes.extend(s.stage.take_notes());
         }
@@ -632,9 +645,11 @@ impl Core {
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
             "rotations": rotation_names(),
+            "login": self.login,
             "screens": self.screens.iter().map(|s| json!({
                 "monitor": s.monitor,
                 "place": s.place,
+                "hidden": self.hidden(s),
                 "stage": s.stage.status(),
             })).collect::<Vec<_>>(),
             "log": self.log,

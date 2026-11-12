@@ -243,9 +243,15 @@ you log in; `jetcarp host login off` stops that. It uses each system's own per-u
 | macOS | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` (it takes effect at the next login) |
 | Windows | The value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 
-The entry runs `jetcarp host serve` (on Windows through `jetcarpw.exe` when it is there, so no console
-window opens) at the path the program has now. If you move the program, turn the setting off and on
-again. A host already running is left alone.
+The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` when it is there, so no
+console window opens) at the path the program has now. If you move the program, turn the setting off
+and on again. A host already running is left alone.
+
+Started at login, the host shows only the screens placed on the desktop, and opens no windows: a
+screen in a window (after `jetcarp host wallpaper off`, say) waits unseen, and with no desktop screens
+the host just waits in the notification area or the menu bar (on GNOME, the top bar's menu). This
+holds for the whole run; `jetcarp host stop` and `jetcarp host start` start a host that opens windows
+as usual. `jetcarp host status` lists a waiting screen as *not shown (started at login)*.
 
 More: [Rotations](rotations.md), [Reseeding](reseeding.md), [Folders](../reference/folders.md) and
 [Uninstalling](uninstalling.md).

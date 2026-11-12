@@ -325,3 +325,64 @@ fn host_start_can_be_captured_and_returns() {
     let v = call_in(&dir, &json!({"action": "status"})).unwrap();
     assert_eq!(v["running"], true);
 }
+
+/// Started at login (`host serve --login`), the host shows and runs only the screens placed on the
+/// desktop; one in a window waits unseen.
+#[test]
+fn a_host_started_at_login_leaves_window_screens_unseen() {
+    let dir = home("login");
+    let settings = json!({"screens": [
+        {"rotation": "Wolfram series", "place": "window"},
+        {"rotation": "Wolfram series", "place": "wallpaper"},
+    ]});
+    std::fs::write(dir.join("config/jetcarp/host.json"), settings.to_string()).unwrap();
+    let child = spawn(&dir, &["--login"]);
+    let h = Host { child, home: dir };
+    let v = h.wait(
+        |v| v["screens"][1]["stage"]["generation"].as_u64() > Some(2),
+        "the desktop screen to run",
+    );
+    assert_eq!(v["login"], true);
+    assert_eq!(v["screens"][0]["hidden"], true);
+    assert_eq!(v["screens"][1]["hidden"], false);
+    assert_eq!(
+        v["screens"][0]["stage"]["cells"], 0,
+        "the window screen never ran"
+    );
+}
+
+/// The login entry runs `host serve --login`, and `host login off` removes it, an entry written
+/// before `--login` existed too. (Not on Windows, whose entry is in the user's real registry.)
+#[cfg(not(windows))]
+#[test]
+fn the_login_entry_starts_the_host_for_the_desktop_and_comes_off() {
+    let dir = home("login-entry");
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+        c.args(args);
+        with_env(&mut c, &dir);
+        let out = c.output().unwrap();
+        assert!(out.status.success(), "{out:?}");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    let entry = if cfg!(target_os = "macos") {
+        dir.join("Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist")
+    } else {
+        dir.join("config/autostart/jetcarp-host.desktop")
+    };
+    let said = run(&["host", "login", "on"]);
+    assert!(said.contains("host serve --login"), "{said}");
+    let text = std::fs::read_to_string(&entry).unwrap();
+    assert!(text.contains("--login"), "{text}");
+    run(&["host", "login", "off"]);
+    assert!(!entry.exists());
+    // One written by 0.4.0-rc.1, without --login.
+    let old = text
+        .replace(" \"--login\"", "")
+        .replace("<string>--login</string>", "");
+    assert!(!old.contains("--login"));
+    std::fs::write(&entry, old).unwrap();
+    run(&["host", "login", "off"]);
+    assert!(!entry.exists(), "the old entry is removed too");
+    let _ = std::fs::remove_dir_all(&dir);
+}

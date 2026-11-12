@@ -366,7 +366,7 @@ impl JetcarpApp {
         }
         let mut login = *h.login.get_or_insert_with(autostart::enabled);
         if ui.checkbox(&mut login, "Start at login").changed() {
-            let result = autostart::host_command().and_then(|cmd| autostart::set(login, &cmd));
+            let result = autostart::login_command().and_then(|cmd| autostart::set(login, &cmd));
             match result {
                 Ok(()) => h.login = Some(login),
                 Err(e) => h.note = Some(e),

@@ -47,6 +47,10 @@ pub struct HostArgs {
     /// Run as a screen saver: full screen on every monitor until there is input.
     #[arg(long)]
     saver: bool,
+    /// Started at login (what the login entry runs): show only the screens placed on the desktop,
+    /// and open no windows. With none, the host waits in the tray or menu bar.
+    #[arg(long)]
+    login: bool,
 }
 
 fn parse_canvas(s: &str) -> Result<[f64; 2], String> {
@@ -160,13 +164,14 @@ pub fn run(args: HostArgs) -> ! {
         // The GNOME menu and the screen saver start the host with this command.
         let _ = jetcarp_display::autostart::record_host_program(&cmd);
     }
-    let core = match core::Core::new(args.rotation, args.headless.then_some(args.canvas)) {
+    let mut core = match core::Core::new(args.rotation, args.headless.then_some(args.canvas)) {
         Ok(c) => c,
         Err(e) => {
             say!("jetcarp-host: {e}");
             std::process::exit(1);
         }
     };
+    core.login = args.login;
     if args.headless {
         run_headless(core, args.seconds)
     } else {

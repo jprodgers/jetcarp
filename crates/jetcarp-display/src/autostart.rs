@@ -109,6 +109,13 @@ pub fn host_command() -> Result<ProgramCommand, String> {
     self_command(&["host", "serve"])
 }
 
+/// The command the login entry runs: `jetcarp host serve --login`, which shows only the screens
+/// placed on the desktop. (An entry written before `--login` existed is removed all the same: the
+/// entry is found by its name or file, not by its command.)
+pub fn login_command() -> Result<ProgramCommand, String> {
+    self_command(&["host", "serve", "--login"])
+}
+
 /// The command that opens the app: `jetcarp` with no arguments.
 pub fn app_command() -> Result<ProgramCommand, String> {
     self_command(&[])
