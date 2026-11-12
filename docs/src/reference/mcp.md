@@ -545,7 +545,7 @@ Example:
 | `evolve.stop_on_glider` | boolean | Stop at the first genome that passes verification. |
 | `evolve.store` | boolean | Store the verified movers in the catalog (default true). |
 | `evolve.threads` | integer | The search's own worker threads (its results do not depend on them). |
-| `evolve.tiling` | string | Tiling: a family id (spectre (default), hat, penrose-kd, square, hex, ...) or catalog:<id>. |
+| `evolve.tiling` | string | Tiling: an id: spectre (default), hat, penrose-kd, square, hex, k2-017, ... |
 | `evolve.track_gens` | integer | Generations the mover tracker may run on aperiodic patches (default 20,000). |
 | `evolve.verify` | array or string | Verification radii as multiples of the radius: a list or "1,2,4" (default 1,2,4). |
 | `explore` | object | The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive. Settings: `jetcarp://schema/search_start/explore`. |
@@ -559,7 +559,7 @@ Example:
 | `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
-| `explore.tilings` | array or string | Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
+| `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
 | `gpu` | boolean | Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true. |
 | `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |
 | `hunt.density` | number | Soup density (default 0.5). |
@@ -616,7 +616,7 @@ Example:
 | `search.height` | integer | Grid height in unit cells. |
 | `search.max_period` | integer | Longest period looked for (default 64). |
 | `search.nb` | string | Neighbourhood for every rule: touch or edge (default: per rule; a V suffix means edge). |
-| `search.rules` | array or string | Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons. |
+| `search.rules` | array or string | Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
 | `search.rules_file` | string | A file of more rules, one per line (`#` comments). |
 | `search.seed` | integer or string | Soup s uses RNG state seed + s (default 1). |
 | `search.size` | array or integer or string | Grid size: "WxH" unit cells, about N cells ("4000"), "L<level>" on aperiodic tilings, or [w, h] (default 64x64). |
@@ -724,7 +724,7 @@ Example:
 | `sheet.png` | string | Also write the PNG here. |
 | `sheet.px` | integer | Pixels per thumbnail (default 200). |
 | `stage` | integer | 1 screened (default), 2 confirmation runs on bigger grids. |
-| `tiling` | string | Only this tiling key. |
+| `tiling` | string | Only this tiling: an id such as hex or k2-017. |
 | `try` | object | Try one configuration now (CPU), returning its measures and a picture. Settings: `jetcarp://schema/search_runs/try`. |
 | `try.cells` | integer | About this many cells (default 16,000). |
 | `try.gens` | integer | Generations (default 1024). |
@@ -734,7 +734,7 @@ Example:
 | `try.rng` | integer or string | The random seed (default 1). |
 | `try.rule` (required) | string | Rule notation. |
 | `try.seed` | any | The starting pattern: a seed shorthand ("random:0.3", "pattern:blobs:0.4:by_region", "pattern:symmetric:0.5") or object (default: the rule's own). |
-| `try.tiling` (required) | string | Tiling key: square, hex, trihex, spectre, catalog:k2-001, ih28, ... |
+| `try.tiling` (required) | string | Tiling id: square, hex, trihex, spectre, k2-001, ih28, ... |
 
 Example:
 
