@@ -1332,7 +1332,7 @@ mod tests {
         ] {
             assert!(std::env::var_os(v).is_some(), "set {v}");
         }
-        let Some(mut o) = Offscreen::new(760, 690) else {
+        let Some(mut o) = Offscreen::new(690, 640) else {
             eprintln!("no GPU adapter");
             return;
         };

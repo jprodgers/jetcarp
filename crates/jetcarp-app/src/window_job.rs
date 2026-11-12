@@ -30,6 +30,20 @@ use std::time::Duration;
 pub struct AppPlatform;
 
 impl Platform for AppPlatform {
+    /// The graphics adapters (the setup wizard says whether a Quick Start build has a GPU).
+    fn gpu_adapters(&self) -> Vec<jetcarp_api::ctx::GpuAdapter> {
+        jetcarp_gpu::adapter_reports()
+            .into_iter()
+            .map(|g| jetcarp_api::ctx::GpuAdapter {
+                name: g.name,
+                backend: g.backend,
+                kind: g.kind,
+                driver: g.driver,
+                chosen: g.chosen,
+                problem: g.problem,
+            })
+            .collect()
+    }
     fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
         jetcarp_gpu::batch::BatchSim::headless().map(|g| Box::new(g) as Box<dyn Backend>)
     }

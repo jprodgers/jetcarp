@@ -149,10 +149,10 @@ impl Profile {
                 "Moving pictures for your desktop: the built-in examples, and an offer to show them as your wallpaper and screen saver."
             }
             Profile::Explorer => {
-                "The built-in examples and the starter pack's patterns, and a short search that adds Quick Start entries of its own."
+                "The built-in examples and the starter pack's patterns, and a ten-minute search that adds Quick Start entries of its own."
             }
             Profile::Researcher => {
-                "For hunting and studying patterns: the starter pack and large packs you choose, in a data folder you choose, and a longer search."
+                "For hunting and studying patterns: the starter pack and large packs you choose, in a data folder you choose, and a half-hour search."
             }
             Profile::Everything => {
                 "Every pack that came with JETCARP and any you add, a data folder you choose, an hour's search, and the desktop offers."
@@ -1322,7 +1322,11 @@ fn plan_import(e: &PackEntry, verify: &Option<String>) -> Planned {
             "import {} ({}{})",
             e.name(),
             e.contents(),
-            if e.starter { ", the starter pack" } else { "" }
+            if e.starter && !e.name().to_ascii_lowercase().contains("starter") {
+                ", the starter pack"
+            } else {
+                ""
+            }
         ),
         spec: JobSpec {
             strategy: PACK_IMPORT.into(),
