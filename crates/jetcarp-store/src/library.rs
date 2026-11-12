@@ -765,6 +765,21 @@ impl Library {
         }
     }
 
+    /// Fold the write-ahead log into the library file (`PRAGMA wal_checkpoint(TRUNCATE)`, on a
+    /// connection of its own), so the file alone holds everything written. The app and the host
+    /// call it just before they end, as they end without closing their connections (which is
+    /// when SQLite would otherwise do this). Nothing to do when the file doesn't exist.
+    pub fn checkpoint(path: &Path) -> Result<(), String> {
+        if !path.exists() {
+            return Ok(());
+        }
+        let c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
+        c.busy_timeout(std::time::Duration::from_secs(2))
+            .map_err(e)?;
+        c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+            .map_err(e)
+    }
+
     /// The catalog file.
     pub fn path(&self) -> &Path {
         &self.path

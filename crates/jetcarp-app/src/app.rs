@@ -443,6 +443,9 @@ impl eframe::App for JetcarpApp {
         // Windows' software renderer (see `jetcarp_display::exit`).
         self.ai = Default::default();
         self.display.keep.set(false, "");
+        // The library's connections aren't closed either, so fold its write-ahead log into the
+        // file first: a copy of library.sqlite alone then holds everything.
+        let _ = jetcarp_store::Library::checkpoint(&jetcarp_store::Library::default_path());
         jetcarp_display::exit::end_process(0);
     }
 

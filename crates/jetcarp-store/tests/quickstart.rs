@@ -1065,3 +1065,33 @@ fn a_schema_2_library_keeps_its_quick_start_entries() {
     assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_checkpoint_folds_the_write_ahead_log_into_the_file() {
+    let (lib, dir) = temp_lib("checkpoint");
+    // Nothing to do before the file exists.
+    Library::checkpoint(lib.path()).unwrap();
+    publish(&lib, &sample());
+    let wal = PathBuf::from(format!("{}-wal", lib.path().display()));
+    assert!(
+        std::fs::metadata(&wal).unwrap().len() > 0,
+        "writes go to the log first"
+    );
+    // With the library's own connection still open, as at the app's exit.
+    Library::checkpoint(lib.path()).unwrap();
+    assert_eq!(std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0), 0);
+    // A copy of the file alone holds everything.
+    let copy = dir.join("copy.sqlite");
+    std::fs::copy(lib.path(), &copy).unwrap();
+    let n: i64 = Connection::open(&copy)
+        .unwrap()
+        .query_row(
+            "SELECT count(*) FROM quickstart WHERE source = 'atlas'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, sample().len() as i64);
+    drop(lib);
+    let _ = std::fs::remove_dir_all(&dir);
+}
