@@ -143,7 +143,11 @@ fn a_new_canvas_rebuilds_the_world_once_the_size_holds() {
 
 #[test]
 fn just_after_a_skip_the_status_is_the_new_items() {
-    let mut st = stage_of(vec![life_item(600.0), life_item(600.0)], no_lookup(), 1 << 30);
+    let mut st = stage_of(
+        vec![life_item(600.0), life_item(600.0)],
+        no_lookup(),
+        1 << 30,
+    );
     let mut s = sim();
     until(&mut st, &mut s, 0.0, |x| x.world().is_some());
     for k in 1..20 {
