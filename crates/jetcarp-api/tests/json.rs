@@ -69,7 +69,10 @@ fn json_of_paths_uninstall_and_calls_by_name() {
         json!(jetcarp_core::paths::data_dir().display().to_string())
     );
     let u = printed(&SystemUninstall::run(&cx, Default::default(), &Quiet).unwrap());
-    assert_eq!(keys(&u), ["done", "kept_data", "output", "steps"]);
+    assert_eq!(
+        keys(&u),
+        ["done", "kept_data", "kept_settings", "output", "steps"]
+    );
     assert_eq!(u["done"], false);
     // `jetcarp api call` prints the same JSON as `--json` does.
     let c = call(&cx, "system.paths", json!({}), &Quiet).unwrap();

@@ -359,7 +359,6 @@ pub struct UninstallReport {
     /// The data folder, when it was kept.
     pub kept_data: Option<KeptFolder>,
     /// The settings folder, when it was kept.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub kept_settings: Option<PathBuf>,
     /// The output folder (never deleted).
     pub output: PathBuf,
