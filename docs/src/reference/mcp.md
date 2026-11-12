@@ -97,14 +97,14 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 
 ### `help`
 
-**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"}; the same pages are the resources jetcarp://docs/{page}.
+**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: the first-run profile, the folders and free space, the packs that came with JETCARP, the GPU, the library's counts; read only, since setup is the user's choice, made in the app or with `jetcarp setup`), or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"}; the same pages are the resources jetcarp://docs/{page}.
 
 *reads only*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching", "reference/rule-notation", "tutorials/hunting-spaceships" (help {"topic": "pages"} lists them). |
-| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"pages"` | Which guide (default overview). |
+| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"pages"` | Which guide (default overview). |
 
 Example:
 

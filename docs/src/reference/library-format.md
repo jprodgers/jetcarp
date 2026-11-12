@@ -448,7 +448,7 @@ it, and it comes from one of four sources:
 | --- | --- | --- |
 | `builtin` | the examples built into JETCARP: hand-made scenes, a working example of every named rule, the JACA presets and the tiling showcases. A JETCARP writes its own into the library when it opens one whose `meta.builtin_version` is another's | its built-in id: `life`, `langtons-ant`, `rule:B3/S23`, `jaca:…` |
 | `pack` | importing a [pack](pack-format.md); `source_ref` is the pack's manifest hash | its pack id, `qs-<hex>` |
-| `atlas` | `jetcarp quickstart publish`, which picks an explore search's confirmed best runs (see [Search methods](../research/search-methods.md#explore)); `source_ref` is the search's uuid. Publishing a search again replaces its entries | `atlas:<8 hex>-<run id>`, the first 8 hexadecimal digits of the search's uuid and the run's id |
+| `atlas` | `jetcarp quickstart publish`, which picks an explore search's confirmed best runs (see [Search methods](../research/search-methods.md#explore)), or a Quick Start build (`jetcarp quickstart build` and the [first-run setup](../getting-started/first-run.md)), which does the same once its minutes are spent; `source_ref` is the search's uuid. Publishing a search again replaces its entries | `atlas:<8 hex>-<run id>`, the first 8 hexadecimal digits of the search's uuid and the run's id |
 | `promotion` | the entries you add (`jetcarp library promote`, `promote-run` and `ants promote`, the app's library and results windows, `lib.promote` in scripts): a pattern, an ant run, a run of a sweep or of an explore search, or a scene file | `find:<id>` |
 
 - The **handle** is what the app, rotations, profiles and commands open an entry by, and what

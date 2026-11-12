@@ -26,7 +26,7 @@ The first public release.
   and macOS), or as a still picture; see [Wallpapers](../guides/wallpapers.md).
 - **One program for every front end.** `jetcarp` opens the app, and its subcommands are the command
   line, the background host (`jetcarp host`) and an MCP server for AI assistants (`jetcarp mcp`).
-  Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 75 named
+  Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 79 named
   operations, each with JSON Schemas for its input and output (`jetcarp api list`).
 - **AI assistants.** `jetcarp mcp` gives an assistant such as Claude Code or Claude Desktop 18 tools
   over those operations (worlds, scripts, the library, searches, media and packs), the app's
@@ -49,6 +49,12 @@ The first public release.
   silicon and Intel), installers that check every download, Python wheels for pipx, uv and pip, a
   Homebrew tap, a Scoop bucket and crates.io, with a starter pack beside the program; see
   [Installing JETCARP](../getting-started/installing.md).
+- **First-run setup.** On its first launch the app asks what JETCARP is for, in five profiles
+  (Desktop art, Explorer, Researcher, Everything, Blank slate), and sets it up: a data folder of your
+  choosing for big libraries, the starter pack and packs of your own imported, a Quick Start build
+  that searches for so many minutes and adds its best runs to the Quick Start, and the live
+  wallpaper and screen saver offered, never turned on unasked. The work runs as background jobs;
+  `jetcarp setup` does the same in a terminal. See [First run and setup](../getting-started/first-run.md).
 - **No network, no telemetry.** JETCARP makes no network connections; see `SECURITY.md`.
 - **This book**, with a page on the history and credits of every automaton and tiling.
 

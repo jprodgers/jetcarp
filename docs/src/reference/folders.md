@@ -28,7 +28,7 @@ paste into a bug report.
 | Folder | Holds | Override | Linux | macOS | Windows |
 | --- | --- | --- | --- | --- | --- |
 | Settings | App and background-host settings, screensaver profiles, rotations | `JETCARP_CONFIG_DIR` | `~/.config/jetcarp` | `~/Library/Application Support/jetcarp` | `%APPDATA%\jetcarp` |
-| Data | The pattern catalog with its media and Quick Start entries, search databases | `JETCARP_DATA_DIR` | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
+| Data | The pattern catalog with its media and Quick Start entries, search databases | `JETCARP_DATA_DIR`, or a folder chosen in setup (`paths.json`) | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
 | Output | Pictures, script runs, sweeps, sandpiles, wallpapers | `JETCARP_OUT` | `~/Pictures/JETCARP` | `~/Pictures/JETCARP` | your Pictures folder, `\JETCARP` |
 
 The defaults are the operating system's own folders. On Linux they follow the XDG settings
@@ -42,6 +42,15 @@ backs up Pictures it moves that folder into OneDrive, so the output goes to
 `%USERPROFILE%\OneDrive\Pictures\JETCARP` and OneDrive syncs it (large sandpiles and long sweeps
 included). `jetcarp paths` shows where it is; set `JETCARP_OUT` to keep the output out of OneDrive.
 
+**A data folder of your own.** A large library can live on another disk: the
+[first-run setup](../getting-started/first-run.md) (its data folder page, or
+`jetcarp setup --data-dir DIR`) records the folder in `paths.json` in the settings folder, as
+`{"version": 1, "data_dir": "/media/ada/Big Disk/jetcarp"}`, and every part of JETCARP (the app,
+the command line, the background host, the MCP server) uses it from then on. `JETCARP_DATA_DIR`
+still wins over it while it is set, and `jetcarp setup --status` says where the data folder comes
+from. Setup only accepts a folder that is empty or already holds a JETCARP library, and never moves
+a library; deleting `paths.json` brings the usual folder back.
+
 If the system has no such folder, JETCARP falls back: without a settings folder, settings are simply
 not saved; without a data folder, it uses `jetcarp-data` in the current folder; without a Pictures
 folder, `~/Pictures/JETCARP`, and failing that `jetcarp-out` in the current folder. An override set
@@ -50,7 +59,9 @@ to an empty value counts as not set.
 ## What lives in each folder
 
 **Settings.** `app.json` holds the app's layout, panes, tool windows and display settings, and
-`host.json` the background host's. Screensaver profiles are in `screensavers/` and rotations in
+`host.json` the background host's. `setup.json` records the first-run setup (the profile chosen,
+when, and the jobs it started; its being there is what tells the app that setup has run), and
+`paths.json` a data folder chosen in setup. Screensaver profiles are in `screensavers/` and rotations in
 `rotations/`, one JSON file each. The host records the command that starts it in `host-program`, for
 GNOME's menu and the Windows screen saver; while it shows a still picture as your desktop background
 it keeps the stills in `desktop-pictures/` and remembers your own picture in `desktop-picture.json`,

@@ -69,10 +69,11 @@ GROUPS = [
      [("Named rule catalogue", "../automata/named-rules.md"), ("Rule notation", "rule-notation.md"),
       ("Tiling catalogue", "../tilings/catalogue.md"), ("Palettes", "palettes.md")],
      ["rules", "tilings", "isohedral", "palettes"]),
-    ("Setup and upkeep", "Where JETCARP keeps its files, what it sees on this machine, and how to "
-     "take it off again.",
-     [("Folders and environment variables", "folders.md"), ("Uninstalling", "../guides/uninstalling.md")],
-     ["paths", "doctor", "uninstall"]),
+    ("Setup and upkeep", "Set JETCARP up for what you want it for, where it keeps its files, what "
+     "it sees on this machine, and how to take it off again.",
+     [("First run and setup", "../getting-started/first-run.md"),
+      ("Folders and environment variables", "folders.md"), ("Uninstalling", "../guides/uninstalling.md")],
+     ["setup", "paths", "doctor", "uninstall"]),
 ]
 
 

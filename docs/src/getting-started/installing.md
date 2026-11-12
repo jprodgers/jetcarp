@@ -214,8 +214,12 @@ login entry and the screen saver use it.
 ## The starter pack
 
 Releases come with a starter pack: a folder of [packs](../guides/packs.md) (each a pack store, as
-[Pack format](../reference/pack-format.md#the-store) lays out) that the first-run setup offers to
-import into your library. JETCARP looks for this folder in one place, the first of:
+[Pack format](../reference/pack-format.md#the-store) lays out) that the
+[first-run setup](first-run.md) imports into your library if you choose the Explorer, Researcher or
+Everything profile. The starter pack itself is the pack whose feed or folder has `starter` in its
+name, such as the feed `jetcarp-starter`; when no pack in the folder is named so, setup counts every
+one of them as the starter pack. Everything imports every pack in the folder. JETCARP looks for this
+folder in one place, the first of:
 
 1. `JETCARP_BUNDLED_PACKS`, if it is set;
 2. `share/jetcarp/packs` beside the folder the program is in (`<program folder>/../share/jetcarp/packs`),

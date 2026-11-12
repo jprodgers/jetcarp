@@ -240,8 +240,9 @@ same for the command line, scripts, the app and MCP; `jetcarp api list` lists th
 
 ## P
 
-**Pack.** A planned format for sharing catalogues and search results, not yet in this release. See
-[Packs](../guides/packs.md).
+**Pack.** JETCARP's format for sharing data: patterns, ant runs, Quick Start entries, search runs,
+pictures and ratings, in signed, content-addressed files that any program can read. See
+[Packs](../guides/packs.md) and [Pack format](pack-format.md).
 
 **Palette.** A list of colour stops with a background and a stage colour. See [Palettes](palettes.md).
 
@@ -315,6 +316,14 @@ segment instead of rewriting it. See [Search runs](search-runs.md#score-sidecars
 grains and so on. Also the number that starts a random-number generator.
 
 **Settled.** A run that has stopped changing, or repeats.
+
+**Setup profile.** What the first-run setup sets JETCARP up for: Desktop art, Explorer, Researcher,
+Everything or Blank slate, each with its packs, Quick Start build and desktop offers. See
+[First run and setup](../getting-started/first-run.md). Not to be confused with a screensaver
+profile.
+
+**Starter pack.** The pack that comes with a release, beside the program, for setup to import. See
+[The starter pack](../getting-started/installing.md#the-starter-pack).
 
 **Short id.** The first 8 hexadecimal digits of a content id, accepted by commands wherever an id is,
 when no other record starts with them.

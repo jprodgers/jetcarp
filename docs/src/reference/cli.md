@@ -54,13 +54,14 @@ Commands:
   doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
   uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes
   paths       Print the settings, data, and output folders JETCARP uses (environment overrides included)
+  setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where things stand
   isohedral   List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet
   rules       List named rules and notation
   script      Run a Rhai script: worlds, runs, images, parallel rule sweeps (see the book's "Scripting (Rhai) API" reference). `--examples` lists the example scripts built in, `--example NAME` runs one
   app         Control the running JETCARP app (AI control on, or `jetcarp --control`): `status`, `screensaver on|off [--profile NAME]`, `profiles`, `display ...`, `play`, `pause`, `speed N`, `next`, `previous`, `call <tool> <json>`
   host        The background host, which keeps scenes running with no app window: `start`, `stop`, `status`, `next`, `previous`, `pause`, `resume`, `rotation`, `caption`, `fps`, `login`
   mcp         MCP server on stdin/stdout so AI assistants (Claude Code, Claude Desktop, LM Studio) can drive JETCARP. Its tools read and write files only in JETCARP's output and library folders (and folders given with --allow)
-  quickstart  Quick Start examples: list the built-in ones, check that each one works, or render a contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas
+  quickstart  Quick Start examples: list the built-in ones, check that each one works, or render a contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas, or `build` some: a search of so many minutes, then its atlas published
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -127,7 +128,7 @@ App options (with no subcommand):
 - **Scripts**: [`script`](#jetcarp-script). See [Scripting (Rhai) API](scripting.md), [Scripting a rule sweep](../tutorials/scripting-a-sweep.md).
 - **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 - **Lists**: [`rules`](#jetcarp-rules), [`tilings`](#jetcarp-tilings), [`isohedral`](#jetcarp-isohedral), [`palettes`](#jetcarp-palettes). See [Named rule catalogue](../automata/named-rules.md), [Rule notation](rule-notation.md), [Tiling catalogue](../tilings/catalogue.md), [Palettes](palettes.md).
-- **Setup and upkeep**: [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`uninstall`](#jetcarp-uninstall). See [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
+- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
 
 ## Worlds and scenes
 
@@ -1540,13 +1541,14 @@ Options:
 ### `jetcarp quickstart`
 
 ```text
-Quick Start examples: list the built-in ones, check that each one works, or render a contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas
+Quick Start examples: list the built-in ones, check that each one works, or render a contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas, or `build` some: a search of so many minutes, then its atlas published
 
 Usage: jetcarp quickstart [OPTIONS]
        jetcarp quickstart <COMMAND>
 
 Commands:
   publish  Publish an explore job's confirmed best runs into the library's Quick Start as its atlas (JOB default: the newest explore job); the job's earlier atlas entries are replaced
+  build    Build Quick Start entries of your own: an explore search of MINUTES in all (on the GPU when there is one), then its best runs published into the Quick Start, as one job. Ctrl-C stops it; `jetcarp jobs resume JOB` carries it on to its end
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -1579,6 +1581,26 @@ Options:
       --max-entries <MAX_ENTRIES>  [default: 12000]
       --library <LIBRARY>          Catalog: a .sqlite file, or a folder holding library.sqlite
   -h, --help                       Print help
+```
+
+#### `jetcarp quickstart build`
+
+```text
+Build Quick Start entries of your own: an explore search of MINUTES in all (on the GPU when there is one), then its best runs published into the Quick Start, as one job. Ctrl-C stops it; `jetcarp jobs resume JOB` carries it on to its end
+
+Usage: jetcarp quickstart build [OPTIONS]
+
+Options:
+      --json                 Print the result as JSON instead of text (commands that report a result)
+      --minutes <MINUTES>    Minutes to search before publishing [default: 10]
+      --tilings <TILINGS>    Only these tilings (keys, separated by commas or spaces; default: every one)
+      --families <FAMILIES>  Only these rule families (default: every one)
+      --no-gpu               Run on the CPU only
+      --threads <THREADS>    Worker threads (default: all cores)
+      --detach               Run in a process of its own and return at once
+      --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite
+      --quiet                No progress on standard error
+  -h, --help                 Print help
 ```
 
 ## Packs
@@ -2663,7 +2685,28 @@ Options:
 
 ## Setup and upkeep
 
-Where JETCARP keeps its files, what it sees on this machine, and how to take it off again. See [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
+Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
+
+### `jetcarp setup`
+
+```text
+First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where things stand
+
+Usage: jetcarp setup [OPTIONS]
+
+Options:
+      --json                    Print the result as JSON instead of text (commands that report a result)
+      --profile <PROFILE>       The profile: desktop-art, explorer, researcher, everything, or blank-slate. Asked for in a terminal when left out
+      --data-dir <DIR>          Keep JETCARP's data (the library, its media and search folders) in this folder from now on, for big libraries; recorded in paths.json in the settings folder. It must be empty, or hold a JETCARP data folder already: nothing is moved
+      --quickstart-minutes <N>  Minutes of the Quick Start build: a search whose best runs are added to the Quick Start (default: the profile's, 10, 30 or 60; 0: none)
+      --packs <DIR>             Import the packs in this folder too: a pack store, an export, or a folder holding them (repeatable)
+  -y, --yes                     Ask nothing: do what the profile does (the desktop offers are only printed)
+      --status                  Only show where things stand: whether setup has run, the folders, the packs that came with JETCARP, the GPU, and what each profile takes here
+      --no-gpu                  The Quick Start build runs on the CPU even when there is a GPU
+      --threads <THREADS>       Worker threads (default: all cores)
+      --quiet                   No progress on standard error
+  -h, --help                    Print help
+```
 
 ### `jetcarp paths`
 
