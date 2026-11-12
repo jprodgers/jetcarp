@@ -155,6 +155,9 @@ pub struct RunCx<'a> {
     pub stop: Arc<AtomicBool>,
     /// Units this session may run (the item budget).
     pub items: Option<u64>,
+    /// When the time budget ends (`stop` is set then): a strategy whose steps are long may fit
+    /// its last one to it.
+    pub deadline: Option<std::time::Instant>,
     /// Where a run publishes its progress for the handle.
     pub live: Live,
     pub(crate) owner: &'a str,

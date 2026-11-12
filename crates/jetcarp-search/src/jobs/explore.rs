@@ -23,7 +23,11 @@
 //! the run has a GPU ([`ExploreRun::with_backend`]; the job's `gpu` or the run's asks for one),
 //! CPU rounds on the run's threads. A GPU that fails three steps in a row is restarted; one that
 //! cannot be, or fails forty times, is dropped and the CPU takes its families. Past `max_rss_gb`
-//! of memory the run stops (paused). The item budget counts screened runs.
+//! of memory the run stops (paused). The item budget counts screened runs. A time budget, and a
+//! Quick Start build's minutes, end the run on time: the last step ends with it, runs still going
+//! on the processor are given up unrecorded, and the GPU's batches are sized to end before it
+//! (see [`Search::step`]); a run on the processor is capped at
+//! [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway.
 //!
 //! **A Quick Start build** (`quickstart.build`, and the first-run setup) is an explore job with
 //! an end: its spec's [`BuildSpec`] gives the minutes it searches, counted over every session
@@ -178,6 +182,10 @@ pub struct ExploreProgress {
     pub note: Option<String>,
     /// Candidates whose run panicked (skipped).
     pub panics: u64,
+    /// Runs on the processor this session cut short by their time cap (kept as runs of the
+    /// generations they reached), and runs given up at a stop or the run's end (not recorded).
+    pub capped: u64,
+    pub given_up: u64,
     pub error: Option<String>,
     /// A Quick Start build: its minutes in all, and what it published once they were spent.
     pub build_minutes: Option<f64>,
@@ -522,6 +530,11 @@ impl ExploreRun {
     }
 }
 
+/// `JETCARP_EXPLORE_TRACE` is set: steps and a build's publishing are timed on standard error.
+fn trace() -> bool {
+    std::env::var_os("JETCARP_EXPLORE_TRACE").is_some()
+}
+
 fn elapsed(r: &Running) -> f64 {
     r.elapsed_before + r.t0.elapsed().as_secs_f64()
 }
@@ -582,23 +595,45 @@ impl Strategy for ExploreRun {
             cx.stop.store(true, Ordering::SeqCst);
             return Ok(Step::More);
         }
-        // A Quick Start build ends once its minutes are spent, the last step cut to fit.
-        let mut until = Instant::now() + Duration::from_secs_f64(STEP_S);
+        // A Quick Start build ends once its minutes are spent, the last step cut to fit; so does
+        // a run with a time budget. Runs still going on the processor then are given up, and the
+        // GPU's batches are sized to end before it.
+        let mut end = cx.deadline;
         if let Some(b) = &r.spec.build {
             let left = b.minutes * 60.0 - elapsed(r);
             if left <= 0.0 {
                 return Ok(Step::Done);
             }
-            until = until.min(Instant::now() + Duration::from_secs_f64(left));
+            let at = Instant::now() + Duration::from_secs_f64(left);
+            end = Some(end.map_or(at, |e| e.min(at)));
+        }
+        let mut until = Instant::now() + Duration::from_secs_f64(STEP_S);
+        if let Some(e) = end {
+            until = until.min(e);
         }
         let before = r.search.screened();
         let lim = StepLimits {
             until,
+            end,
             stop: &cx.stop,
             max_screened: cx.items.map(|n| before + n.saturating_sub(r.items)),
         };
         let gpu = self.backend.as_mut().map(|b| &mut **b as &mut dyn Backend);
         let err = r.search.step(&r.pool, gpu, &lim);
+        if trace() {
+            let past = Instant::now()
+                .saturating_duration_since(until)
+                .as_secs_f64();
+            eprintln!(
+                "step at {:.1} s ended {past:.2} s past its deadline{}",
+                elapsed(r),
+                if end.is_some_and(|e| Instant::now() >= e) {
+                    " (the run's end)"
+                } else {
+                    ""
+                }
+            );
+        }
         r.items += r.search.screened() - before;
         match err {
             Some(e) => {
@@ -666,6 +701,8 @@ impl Strategy for ExploreRun {
             folder: r.folder.display().to_string(),
             note: r.note.clone(),
             panics: r.search.panics(),
+            capped: r.search.capped(),
+            given_up: r.search.given_up(),
             error: None,
             build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
             published: r.published.clone(),
@@ -693,8 +730,17 @@ impl Strategy for ExploreRun {
             min_score: b.min_score,
             max_entries: b.max_entries,
         };
+        let t0 = Instant::now();
         let rows = crate::explore::atlas::rows(&r.runs, &opts, &r.spec.uuid)?;
         let w = cx.lib.publish_atlas(cx.job, &r.spec.uuid, &rows)?;
+        if trace() {
+            eprintln!(
+                "build: searched {:.1} s, published {} atlas entries in {:.2} s",
+                elapsed(r),
+                rows.len(),
+                t0.elapsed().as_secs_f64()
+            );
+        }
         r.published = Some(Published {
             entries: rows.len(),
             added: w.added,
@@ -721,7 +767,7 @@ pub fn line(p: &ExploreProgress) -> String {
         (Some(m), None) => format!(
             "Quick Start build (explore {}): {} of {} min,",
             p.job,
-            // Runs under way when the minutes are spent finish first: past the end, the end.
+            // The last step may end a moment past the minutes (a GPU batch under way): the end.
             minutes(p.elapsed_s.min(m * 60.0)),
             minutes(m * 60.0)
         ),

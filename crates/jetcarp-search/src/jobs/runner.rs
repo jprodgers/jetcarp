@@ -362,6 +362,7 @@ fn execute(
             gpu: o.gpu.clone(),
             stop: stop.clone(),
             items: budget.items,
+            deadline,
             live: live.clone(),
             owner: lease.owner(),
         };

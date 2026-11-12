@@ -189,6 +189,14 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                 digits(p.seen),
                 format_args!("{:.2}", p.rss_gb)
             );
+            if p.capped > 0 || p.given_up > 0 {
+                let _ = writeln!(
+                    s,
+                    "  this session: {} runs on the processor stopped at their time cap (kept with the generations they reached), {} given up at the end (not kept)",
+                    digits(p.capped),
+                    digits(p.given_up)
+                );
+            }
             if let Some(l) = &p.loaded {
                 let _ = writeln!(
                     s,

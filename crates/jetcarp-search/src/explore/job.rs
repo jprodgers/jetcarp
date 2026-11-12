@@ -12,7 +12,9 @@
 
 use crate::explore::archive::{self, Archive, Eval};
 use crate::explore::store::{Delta, FamStat, RunOut, Saved};
-use jetcarp_core::explore::batch::{Backend, BatchJob, BatchWorld, WorldTrace, trace_world};
+use jetcarp_core::explore::batch::{
+    Backend, BatchJob, BatchWorld, WorldTrace, trace_world, trace_world_while,
+};
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features, frames_for, measure_run};
 use jetcarp_core::explore::seeds::seed_for;
@@ -202,6 +204,19 @@ impl Settings {
 }
 
 const WINDOW: usize = 17;
+/// Longest a screening run on the processor may take. A slower one (a sandpile, which takes tens
+/// of seconds at the default size; Lenia on a slow machine) stops there and is kept as a run of
+/// the generations it reached: its candidate's `gens`, below the usual run length, so it replays
+/// exactly. A step and a build then end on time, and no thread waits on one run for a minute.
+pub const CPU_RUN_S: f64 = 8.0;
+/// The same for a confirmation run on the processor (four times the cells, four times the
+/// generations).
+pub const CPU_CONFIRM_RUN_S: f64 = 4.0 * CPU_RUN_S;
+/// Worlds in a session's first GPU batch when the step has an end: small, to time the GPU before
+/// a batch is sized to the time left.
+const FIRST_GPU_WORLDS: usize = 64;
+/// Share of the time left a GPU batch is sized to fill, for the error in its estimate.
+const GPU_FILL: f64 = 0.7;
 /// Neighbour reads one Larger than Life batch may do (a few seconds of GPU time).
 const LTL_NEIGHBOUR_UPDATES: f64 = 1.5e12;
 /// Seen identities kept in a hash set before they are merged into the sorted list.
@@ -331,11 +346,78 @@ pub struct FamilyLine {
 
 /// When a step ends.
 pub struct StepLimits<'a> {
-    /// The step's deadline (a round under way runs to its end).
+    /// The step's deadline: no round starts after it (one under way runs to its end).
     pub until: Instant,
+    /// The run's end (its time budget, or a Quick Start build's minutes): runs on the processor
+    /// still going then are given up, unrecorded, and a GPU batch is sized to end before it.
+    pub end: Option<Instant>,
+    /// Set to stop: no round starts, and runs on the processor still going are given up,
+    /// unrecorded (a GPU batch under way runs to its end).
     pub stop: &'a AtomicBool,
     /// Stop once this many runs have been screened in all.
     pub max_screened: Option<u64>,
+}
+
+impl StepLimits<'_> {
+    /// Runs under way are to be given up: a stop, or the run's end reached.
+    fn cut(&self) -> bool {
+        self.stop.load(Ordering::SeqCst) || self.end.is_some_and(|e| Instant::now() >= e)
+    }
+}
+
+/// How a run on the processor went.
+enum Ran {
+    /// Measured: in full, or cut short by its time cap (then its `gens` are the generations it
+    /// reached).
+    Done(Box<RunOut>),
+    /// It could not be run or measured (counted as a panic when it panicked).
+    Failed,
+    /// Given up at a stop or the run's end; nothing is recorded.
+    GivenUp,
+}
+
+/// What a GPU batch costs: seconds per world-cell-generation (times the reach, for Larger than
+/// Life) of the last batches, plain rules and Larger than Life apart. Not kept between sessions.
+#[derive(Default)]
+struct GpuPace {
+    plain: Option<f64>,
+    ltl: Option<f64>,
+}
+
+impl GpuPace {
+    fn get(&self, ltl: bool) -> Option<f64> {
+        if ltl { self.ltl } else { self.plain }
+    }
+    fn note(&mut self, ltl: bool, work: f64, secs: f64) {
+        if work <= 0.0 || secs <= 0.0 {
+            return;
+        }
+        let x = secs / work;
+        let p = if ltl { &mut self.ltl } else { &mut self.plain };
+        // The newer batches count for more (the device warms up, grids differ).
+        *p = Some(p.map_or(x, |old| 0.5 * old + 0.5 * x));
+    }
+}
+
+/// Seconds until `end` (None: no end).
+fn secs_left(end: Option<Instant>) -> Option<f64> {
+    end.map(|e| e.saturating_duration_since(Instant::now()).as_secs_f64())
+}
+
+/// Worlds of `work` units each that fit in `left` seconds at `pace` (seconds a unit), at most
+/// `most`: 0 when not even one does. Without a pace yet, a small first batch when the time left
+/// is short, else `most`.
+fn fit_worlds(pace: Option<f64>, work: f64, left: Option<f64>, most: usize) -> usize {
+    let Some(left) = left else {
+        return most;
+    };
+    match pace {
+        Some(p) if p > 0.0 && work > 0.0 => {
+            ((GPU_FILL * left / (p * work)).floor().max(0.0) as usize).min(most)
+        }
+        _ if left < 120.0 => most.min(FIRST_GPU_WORLDS),
+        _ => most,
+    }
 }
 
 /// A live search.
@@ -358,6 +440,12 @@ pub struct Search {
     gpu_rounds: AtomicU64,
     cpu_rounds: AtomicU64,
     panics: AtomicU64,
+    gpu_pace: Mutex<GpuPace>,
+    /// Longest a run on the processor may take: screening, confirmation.
+    cpu_caps: (std::time::Duration, std::time::Duration),
+    /// Runs cut short by their time cap, and runs given up, in this session.
+    capped: AtomicU64,
+    given_up: AtomicU64,
 }
 
 impl Search {
@@ -419,6 +507,13 @@ impl Search {
             gpu_rounds: AtomicU64::new(0),
             cpu_rounds: AtomicU64::new(0),
             panics: AtomicU64::new(0),
+            gpu_pace: Mutex::new(GpuPace::default()),
+            cpu_caps: (
+                std::time::Duration::from_secs_f64(CPU_RUN_S),
+                std::time::Duration::from_secs_f64(CPU_CONFIRM_RUN_S),
+            ),
+            capped: AtomicU64::new(0),
+            given_up: AtomicU64::new(0),
         })
     }
 
@@ -472,6 +567,17 @@ impl Search {
     /// Candidates whose run panicked (skipped).
     pub fn panics(&self) -> u64 {
         self.panics.load(Ordering::Relaxed)
+    }
+
+    /// Runs on the processor cut short by their time cap ([`CPU_RUN_S`], [`CPU_CONFIRM_RUN_S`])
+    /// in this session, kept as runs of the generations they reached.
+    pub fn capped(&self) -> u64 {
+        self.capped.load(Ordering::Relaxed)
+    }
+
+    /// Runs on the processor given up at a stop or the run's end in this session (not recorded).
+    pub fn given_up(&self) -> u64 {
+        self.given_up.load(Ordering::Relaxed)
     }
     /// Per family: screened runs, mean and best score, elites; most runs first.
     pub fn families(&self) -> Vec<FamilyLine> {
@@ -676,10 +782,12 @@ impl Search {
 
     /// One step: GPU rounds (with `gpu`) on a thread of their own and CPU rounds on `pool`,
     /// until the deadline, a stop, or the screened total. The CPU stops handing out candidates
-    /// then (the ones running finish; an elite is confirmed with all its seeds or not at all),
-    /// and the GPU goes on with batches while the CPU finishes, so it is never idle waiting for a
-    /// slow CPU round; a batch under way runs to its end. Returns the GPU's error, when a GPU
-    /// round failed (the GPU stops for the rest of the step).
+    /// then (the ones running finish, each within its time cap; an elite is confirmed with all
+    /// its seeds or not at all), and the GPU goes on with batches while the CPU finishes, so it
+    /// is never idle waiting for a slow CPU round; a batch under way runs to its end. At a stop
+    /// or the run's end ([`StepLimits::end`]) the runs still going on the processor are given up,
+    /// and no GPU batch is started that would not end before it. Returns the GPU's error, when a
+    /// GPU round failed (the GPU stops for the rest of the step).
     pub fn step(
         &self,
         pool: &rayon::ThreadPool,
@@ -695,7 +803,7 @@ impl Search {
         let (gpu_fams, cpu_fams, ltl) = families(&self.set.families, has_gpu);
         let cpu_busy = AtomicBool::new(false);
         let gpu_go = || {
-            !lim.stop.load(Ordering::SeqCst)
+            !lim.cut()
                 && (Instant::now() < lim.until || cpu_busy.load(Ordering::SeqCst))
                 && lim.max_screened.is_none_or(|m| self.screened() < m)
         };
@@ -712,13 +820,15 @@ impl Search {
                         let round = self.gpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
                         let r = catch_unwind(AssertUnwindSafe(|| {
                             if round.is_multiple_of(8) {
-                                self.gpu_confirm(be, 96).map(|_| ())
+                                self.gpu_confirm(be, 96, lim.end)
                             } else {
-                                self.gpu_round(be, &mut rng, &gpu_fams, ltl)
+                                self.gpu_round(be, &mut rng, &gpu_fams, ltl, lim.end)
                             }
                         }));
                         match r {
-                            Ok(Ok(())) => {}
+                            Ok(Ok(true)) => {}
+                            // No batch ends before the run's end.
+                            Ok(Ok(false)) => break,
                             Ok(Err(e)) => {
                                 keep(rng);
                                 return Some(e);
@@ -739,7 +849,7 @@ impl Search {
                 let mut rng = *self.rng_cpu.lock().unwrap();
                 pool.install(|| {
                     while go() {
-                        self.cpu_round(&mut rng, &cpu_fams, &go);
+                        self.cpu_round(&mut rng, &cpu_fams, &go, lim);
                     }
                 });
                 *self.rng_cpu.lock().unwrap() = rng;
@@ -894,7 +1004,8 @@ impl Search {
         out
     }
 
-    /// Run one GPU batch of candidates on a grid.
+    /// Run one GPU batch of candidates on a grid. `reach` is a Larger than Life batch's reach
+    /// (cells read per cell), for the GPU's pace.
     fn gpu_batch(
         &self,
         be: &mut dyn Backend,
@@ -902,6 +1013,7 @@ impl Search {
         nb: Nb,
         cands: Vec<(Cand, String, Option<i64>)>,
         stage: u8,
+        reach: Option<usize>,
     ) -> Result<(), String> {
         if cands.is_empty() {
             return Ok(());
@@ -978,6 +1090,11 @@ impl Search {
             .collect();
         let t3 = Instant::now();
         let n = rows.len();
+        let work = n as f64 * grid.topo.len() as f64 * gens as f64 * reach.unwrap_or(1) as f64;
+        self.gpu_pace
+            .lock()
+            .unwrap()
+            .note(reach.is_some(), work, (t3 - t0).as_secs_f64());
         self.publish(rows, stage);
         if trace {
             eprintln!(
@@ -993,14 +1110,16 @@ impl Search {
         Ok(())
     }
 
-    /// One screening batch on the GPU.
+    /// One screening batch on the GPU, sized to end before `end`. False when not even a small
+    /// batch would.
     fn gpu_round(
         &self,
         be: &mut dyn Backend,
         rng: &mut Rng,
         fams: &[(Fam, f64)],
         ltl_ok: bool,
-    ) -> Result<(), String> {
+        end: Option<Instant>,
+    ) -> Result<bool, String> {
         let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
         // Some rounds go to the least-tried tiling, so every tiling is reached by the deadline.
         let ti = if ltl_round && rng.below(3) == 0 {
@@ -1042,10 +1161,19 @@ impl Search {
                 (grid.topo.len() * self.set.screen_gens as usize).max(1) as f64 * reach as f64;
             let cap = (LTL_NEIGHBOUR_UPDATES / work) as usize;
             max_worlds = max_worlds.min(cap.max(16));
-            Some((hood, r))
+            Some((hood, r, reach))
         } else {
             None
         };
+        let reach = ltl.map(|l| l.2);
+        let ltl = ltl.map(|l| (l.0, l.1));
+        let world_work =
+            grid.topo.len() as f64 * self.set.screen_gens as f64 * reach.unwrap_or(1) as f64;
+        let pace = self.gpu_pace.lock().unwrap().get(reach.is_some());
+        max_worlds = fit_worlds(pace, world_work, secs_left(end), max_worlds);
+        if max_worlds == 0 {
+            return Ok(false);
+        }
         let filter = |r: &Rule| be.supports(r);
         let cands = self.emit(
             &grid,
@@ -1058,11 +1186,18 @@ impl Search {
             Some(&filter),
         );
         let tagged = cands.into_iter().map(|(c, k)| (c, k, None)).collect();
-        self.gpu_batch(be, &grid, nb, tagged, 1)
+        self.gpu_batch(be, &grid, nb, tagged, 1, reach)?;
+        Ok(true)
     }
 
-    /// Confirm the best runs of one grid/neighbourhood group on the GPU.
-    fn gpu_confirm(&self, be: &mut dyn Backend, limit: usize) -> Result<usize, String> {
+    /// Confirm the best runs of one grid/neighbourhood group on the GPU, as many as end before
+    /// `end`. False when not even one would.
+    fn gpu_confirm(
+        &self,
+        be: &mut dyn Backend,
+        limit: usize,
+        end: Option<Instant>,
+    ) -> Result<bool, String> {
         let pending = self.archive.lock().unwrap().unconfirmed(4096);
         let mut first: Option<(String, Nb, Option<(Hood, u8)>)> = None;
         let mut picked: Vec<(i64, Eval)> = Vec::new();
@@ -1090,21 +1225,32 @@ impl Search {
                 break;
             }
         }
-        let Some((key, nb, _)) = first else {
-            return Ok(0);
+        let Some((key, nb, ltl)) = first else {
+            return Ok(true);
         };
         let grid = self.grid(&key, self.set.confirm_cells)?;
-        let n = picked.len();
+        let reach = ltl.map(|(hood, r)| grid.reach_size(hood, r).max(1));
+        let seeds = self.set.confirm_seeds.max(1) as usize;
+        let gens = picked.first().map_or(self.set.confirm_gens, |(_, e)| {
+            run_len(e.cand.fam, &grid, self.set.confirm_gens).0
+        });
+        let world_work = grid.topo.len() as f64 * gens as f64 * reach.unwrap_or(1) as f64;
+        let pace = self.gpu_pace.lock().unwrap().get(reach.is_some());
+        let worlds = fit_worlds(pace, world_work, secs_left(end), picked.len() * seeds);
+        picked.truncate(worlds / seeds);
+        if picked.is_empty() {
+            return Ok(false);
+        }
         let mut cands = Vec::new();
         for (id, e) in &picked {
             for c in self.confirmations(e, &grid) {
                 cands.push((c, "confirm".to_string(), Some(*id)));
             }
         }
-        self.gpu_batch(be, &grid, nb, cands, 2)?;
+        self.gpu_batch(be, &grid, nb, cands, 2, reach)?;
         let ids: Vec<i64> = picked.iter().map(|p| p.0).collect();
         self.mark_confirmed(&ids);
-        Ok(n)
+        Ok(true)
     }
 
     /// The confirmation runs of an elite on a bigger grid: its candidate with other seeds (each
@@ -1131,7 +1277,13 @@ impl Search {
 
     /// One CPU round: a tiling and families chosen, candidates made and run on the pool (the
     /// caller's) while `go` says so, and every fourth round a confirmation of elites.
-    fn cpu_round(&self, rng: &mut Rng, fams: &[(Fam, f64)], go: &(dyn Fn() -> bool + Sync)) {
+    fn cpu_round(
+        &self,
+        rng: &mut Rng,
+        fams: &[(Fam, f64)],
+        go: &(dyn Fn() -> bool + Sync),
+        lim: &StepLimits<'_>,
+    ) {
         let round = self.cpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
         let threads = rayon::current_num_threads().max(1);
         // Families that run on any tiling, and the ones tied to a native grid (when it is one
@@ -1185,50 +1337,90 @@ impl Search {
                 if !go() {
                     return None;
                 }
-                self.cpu_eval(&grid, c, kind, None, 1)
+                match self.cpu_eval(&grid, c, kind, None, 1, lim) {
+                    Ran::Done(r) => Some(*r),
+                    Ran::Failed | Ran::GivenUp => None,
+                }
             })
             .collect();
         self.publish(rows, 1);
         if round.is_multiple_of(4) && go() {
-            self.cpu_confirm(fams, threads, go);
+            self.cpu_confirm(fams, threads, go, lim);
         }
     }
 
+    /// Run one candidate on the processor and measure it. A run longer than its stage's cap
+    /// stops there and is measured as a run of the generations it reached (its candidate's
+    /// `gens` become those); one still going at a stop or the run's end is given up.
     fn cpu_eval(
         &self,
         grid: &Grid,
-        c: Cand,
+        mut c: Cand,
         kind: String,
         parent: Option<i64>,
         stage: u8,
-    ) -> Option<RunOut> {
+        lim: &StepLimits<'_>,
+    ) -> Ran {
         let t_eval = Instant::now();
+        let cap = if stage == 1 {
+            self.cpu_caps.0
+        } else {
+            self.cpu_caps.1
+        };
         let fam_name = c.fam.name();
+        let gens = c.gens;
+        // Why the run stopped early: its cap, or a stop or the run's end.
+        let mut cut: Option<&'static str> = None;
         let r = catch_unwind(AssertUnwindSafe(|| {
             let mut world = prepare(grid, &c).ok()?;
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
-            let t = trace_world(&mut world, c.gens, &frames_for(c.gens, window)).ok()?;
-            Some(evaluate(grid, &c, &t))
+            let (t, reached) = trace_world_while(&mut world, c.gens, window, &mut |_| {
+                if lim.cut() {
+                    cut = Some("given up");
+                    false
+                } else if t_eval.elapsed() >= cap {
+                    cut = Some("capped");
+                    false
+                } else {
+                    true
+                }
+            })
+            .ok()?;
+            if cut == Some("given up") {
+                return Some(None);
+            }
+            c.gens = reached;
+            Some(Some(evaluate(grid, &c, &t)))
         }));
-        if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some()
-            && t_eval.elapsed().as_secs_f64() > 2.0
-        {
+        let secs = t_eval.elapsed().as_secs_f64();
+        if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() && secs > 2.0 {
+            let how = match cut {
+                Some("capped") => format!(" (capped at generation {})", c.gens),
+                Some(w) => format!(" ({w})"),
+                None => String::new(),
+            };
             eprintln!(
-                "cpu run stage {stage} {} {fam_name} cells={} gens={}: {:.2}s",
+                "cpu run stage {stage} {} {fam_name} cells={} gens={gens}: {secs:.2}s{how}",
                 grid.key,
                 grid.topo.len(),
-                c.gens,
-                t_eval.elapsed().as_secs_f64()
             );
         }
         let (fate, feat, score, bin) = match r {
-            Ok(x) => x?,
+            Ok(Some(Some(x))) => x,
+            Ok(Some(None)) => {
+                self.given_up.fetch_add(1, Ordering::Relaxed);
+                return Ran::GivenUp;
+            }
+            Ok(None) => return Ran::Failed,
             Err(_) => {
                 self.panics.fetch_add(1, Ordering::Relaxed);
-                return None;
+                return Ran::Failed;
             }
         };
-        Some(RunOut {
+        if cut.is_some() {
+            self.capped.fetch_add(1, Ordering::Relaxed);
+        }
+        Ran::Done(Box::new(RunOut {
             id: self.next_id(),
             stage,
             parent,
@@ -1240,17 +1432,24 @@ impl Search {
                 bin,
             },
             seed_kind: kind,
-        })
+        }))
     }
 
-    fn cpu_confirm(&self, fams: &[(Fam, f64)], threads: usize, go: &(dyn Fn() -> bool + Sync)) {
+    fn cpu_confirm(
+        &self,
+        fams: &[(Fam, f64)],
+        threads: usize,
+        go: &(dyn Fn() -> bool + Sync),
+        lim: &StepLimits<'_>,
+    ) {
         let pending = self.archive.lock().unwrap().unconfirmed(4096);
         let picked: Vec<(i64, Eval)> = pending
             .into_iter()
             .filter(|(_, e)| fams.iter().any(|(f, _)| *f == e.cand.fam))
             .take(threads * 2)
             .collect();
-        // An elite is confirmed with all its seeds, or (once `go` says stop) not at all.
+        // An elite is confirmed with all its seeds, or (once `go` says stop, or a run of it is
+        // given up) not at all.
         let done: Vec<(i64, Vec<RunOut>)> = picked
             .par_iter()
             .filter_map(|(id, e)| {
@@ -1258,11 +1457,14 @@ impl Search {
                     return None;
                 }
                 let grid = self.grid(&e.cand.tiling, self.set.confirm_cells).ok()?;
-                let rows: Vec<RunOut> = self
-                    .confirmations(e, &grid)
-                    .into_iter()
-                    .filter_map(|c| self.cpu_eval(&grid, c, "confirm".into(), Some(*id), 2))
-                    .collect();
+                let mut rows = Vec::new();
+                for c in self.confirmations(e, &grid) {
+                    match self.cpu_eval(&grid, c, "confirm".into(), Some(*id), 2, lim) {
+                        Ran::Done(r) => rows.push(*r),
+                        Ran::Failed => {}
+                        Ran::GivenUp => return None,
+                    }
+                }
                 Some((*id, rows))
             })
             .collect();
@@ -1360,6 +1562,98 @@ pub fn tiling_groups() -> HashMap<String, u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_gpu_batch_is_sized_to_the_time_left() {
+        // No end: as many as the batch takes.
+        assert_eq!(fit_worlds(Some(1e-9), 1e6, None, 1024), 1024);
+        // A pace: the worlds that fill most of the time left; none when not one fits.
+        assert_eq!(fit_worlds(Some(1e-9), 1e6, Some(10.0), 1024), 1024);
+        assert_eq!(fit_worlds(Some(1e-9), 1e7, Some(1.0), 1024), 70);
+        assert_eq!(fit_worlds(Some(1e-6), 1e7, Some(1.0), 1024), 0);
+        // No pace yet: a small first batch, unless the end is far off.
+        assert_eq!(fit_worlds(None, 1e7, Some(30.0), 1024), FIRST_GPU_WORLDS);
+        assert_eq!(fit_worlds(None, 1e7, Some(600.0), 1024), 1024);
+        let mut p = GpuPace::default();
+        p.note(false, 1e9, 2.0);
+        p.note(false, 1e9, 4.0);
+        assert!((p.get(false).unwrap() - 3e-9).abs() < 1e-15 && p.get(true).is_none());
+    }
+
+    fn quick(gens: u32) -> Settings {
+        Settings {
+            tilings: vec!["square".into(), "hex".into()],
+            families: vec![Fam::LifeLike, Fam::Generations],
+            screen_cells: 900,
+            screen_gens: gens,
+            confirm_cells: 900,
+            confirm_gens: gens,
+            confirm_seeds: 2,
+            seed: 3,
+            ..Settings::default()
+        }
+    }
+
+    /// A run on the processor past its cap is kept as the run of the generations it reached,
+    /// and replays to the same measures from its candidate.
+    #[test]
+    fn a_capped_run_is_kept_as_the_run_it_was() {
+        let mut s = Search::new(quick(200_000), Saved::default()).unwrap();
+        s.cpu_caps = (Duration::from_millis(30), Duration::from_millis(30));
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let lim = StepLimits {
+            until: Instant::now() + Duration::from_millis(200),
+            end: None,
+            stop: &stop,
+            max_screened: None,
+        };
+        assert!(s.step(&pool, None, &lim).is_none());
+        let d = s.take_delta();
+        assert!(!d.rows.is_empty() && s.capped() > 0);
+        assert_eq!(s.given_up(), 0);
+        let capped: Vec<&RunOut> = d.rows.iter().filter(|r| r.ev.cand.gens < 200_000).collect();
+        assert!(!capped.is_empty());
+        for r in capped.iter().take(4) {
+            let ev = try_one(r.ev.cand.clone()).unwrap();
+            assert_eq!(
+                (ev.fate, ev.feat, ev.score, ev.bin),
+                (r.ev.fate, r.ev.feat, r.ev.score, r.ev.bin),
+                "run {} ({} generations)",
+                r.id,
+                r.ev.cand.gens
+            );
+        }
+    }
+
+    /// At the run's end the runs still going are given up, unrecorded, so a step ends with it.
+    #[test]
+    fn runs_still_going_at_the_end_are_given_up() {
+        let s = Search::new(quick(5_000_000), Saved::default()).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let t0 = Instant::now();
+        let end = t0 + Duration::from_millis(300);
+        let lim = StepLimits {
+            until: end,
+            end: Some(end),
+            stop: &stop,
+            max_screened: None,
+        };
+        assert!(s.step(&pool, None, &lim).is_none());
+        assert!(t0.elapsed() < Duration::from_secs(3), "{:?}", t0.elapsed());
+        let d = s.take_delta();
+        assert!(d.rows.is_empty(), "{} rows", d.rows.len());
+        assert_eq!((s.screened(), s.capped()), (0, 0));
+        assert!(s.given_up() > 0);
+    }
 
     #[test]
     fn the_grid_cache_lets_the_least_recently_used_go() {

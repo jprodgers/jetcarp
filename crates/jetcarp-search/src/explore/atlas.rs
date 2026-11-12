@@ -592,7 +592,9 @@ pub fn run_row(run: &RunRow, search_uuid: &str) -> Result<QuickStartRow, String>
 /// [`AtlasOpts`]), best first (by score, then run id), ranked in that order, for the search
 /// whose uuid is `search_uuid`.
 pub fn rows(db: &Runs, opts: &AtlasOpts, search_uuid: &str) -> Result<Vec<QuickStartRow>, String> {
+    let t0 = std::time::Instant::now();
     let picks = select(db, opts)?;
+    let t1 = std::time::Instant::now();
     let groups: HashMap<String, String> = jetcarp_core::explore::space::all_tilings()
         .into_iter()
         .map(|t| (t.key, t.group))
@@ -609,6 +611,14 @@ pub fn rows(db: &Runs, opts: &AtlasOpts, search_uuid: &str) -> Result<Vec<QuickS
                 .map(|q| (r.id, q))
         })
         .collect();
+    if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() {
+        eprintln!(
+            "atlas: {} picks in {:.2} s, their entries made in {:.2} s",
+            picks.len(),
+            (t1 - t0).as_secs_f64(),
+            t1.elapsed().as_secs_f64()
+        );
+    }
     made.sort_by(|a, b| {
         b.1.score
             .unwrap_or(0.0)

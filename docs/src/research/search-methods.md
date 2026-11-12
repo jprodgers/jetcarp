@@ -320,7 +320,11 @@ shape of what it left (dust, clusters, large structures, smooth regions), and wh
 Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
-supports in large batches while a CPU loop runs the rest. Like the other searches it runs as a job,
+supports in large batches while a CPU loop runs the rest. A run on the processor that would take
+longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
+run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
+exactly. When a search's time is up, runs still going on the processor are given up unrecorded, and
+the GPU's last batches are sized from its pace so far to end in time. Like the other searches it runs as a job,
 but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
 runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
 [Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the

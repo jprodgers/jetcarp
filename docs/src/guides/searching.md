@@ -89,7 +89,8 @@ $ jetcarp jobs list
 ```
 
 - **Budgets.** `--minutes M` or `--until UNIX-TIME` stops a search, still resumable, at its next
-  checkpoint after that time, and `--limit N` after N items.
+  checkpoint after that time (the exploratory search ends at that time; see below), and `--limit N`
+  after N items.
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an
@@ -139,8 +140,10 @@ the GPU:
 $ jetcarp search explore --gpu --minutes 60 --label first-look
 ```
 
-Its steps are large (a batch of up to a thousand worlds), so a budget is a lower bound, and a
-search of a few minutes sees only a handful of tilings. While it runs, or once it has stopped:
+A budget ends it on time: the GPU's last batch is sized to end before it, and runs still going on
+the processor then are given up, unrecorded. A run on the processor stops at 8 seconds (a
+confirmation run at 32) and is kept as a run of the generations it reached. A search of a few
+minutes sees only a handful of tilings. While it runs, or once it has stopped:
 
 ```text
 $ jetcarp jobs runs 7 --limit 5
