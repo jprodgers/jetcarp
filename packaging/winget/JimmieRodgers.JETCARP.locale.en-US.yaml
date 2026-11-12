@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+# A template: packaging/package.py manifests fills it in from a release.
+PackageIdentifier: JimmieRodgers.JETCARP
+PackageVersion: "@VERSION@"
+PackageLocale: en-US
+Publisher: Jimmie Rodgers
+PublisherUrl: https://jimmieprodgers.com
+PackageName: JETCARP
+PackageUrl: https://github.com/@REPO@
+License: Unlicense OR MIT
+LicenseUrl: https://github.com/@REPO@/blob/main/COPYING
+ShortDescription: Cellular automata on almost any tiling of the plane.
+Description: >-
+  JETCARP (Jimmie's Euclidean Tilings and Cellular Automata Research Program) runs cellular
+  automata on square, hexagonal, Archimedean, k-uniform, isohedral and aperiodic tilings, with an
+  app, a command line, scripting, an MCP server, and searches for spaceships and other patterns.
+Tags:
+  - cellular-automata
+  - tilings
+  - aperiodic
+  - game-of-life
+  - simulation
+ReleaseNotesUrl: https://github.com/@REPO@/releases/tag/v@VERSION@
+Documentations:
+  - DocumentLabel: Book
+    DocumentUrl: https://jprodgers.github.io/jetcarp/
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

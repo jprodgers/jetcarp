@@ -13,7 +13,7 @@
 # runs on systems older than the one that built it. On macOS, Xcode's command line tools.
 #
 # Environment: DIST (default dist), PYTHON (default python3), MATURIN (default maturin),
-# SOURCE_DATE_EPOCH (archive times; default the last commit's time).
+# SOURCE_DATE_EPOCH (archive times; default the last commit's time), CARGO_TARGET_DIR.
 set -euo pipefail
 
 target=${1:?usage: packaging/build.sh TARGET [PACKS_DIR]}
@@ -47,7 +47,8 @@ esac
 if [[ $target == *-apple-darwin ]]; then
     export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
 fi
-bins=target/$target/dist
+# Where cargo leaves the programs (CARGO_TARGET_DIR moves it).
+bins=${CARGO_TARGET_DIR:-target}/$target/dist
 
 wheel_data=(--out target/wheel-data)
 if [ -n "$packs" ]; then

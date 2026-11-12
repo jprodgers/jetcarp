@@ -1,0 +1,37 @@
+{
+    "##": "The source of truth for JETCARP's Scoop manifest. The release workflow fills in the version and the checksum (packaging/package.py manifests) and writes the result to the bucket, github.com/jprodgers/scoop-jetcarp, as bucket/jetcarp.json.",
+    "version": "@VERSION@",
+    "description": "Cellular automata on almost any tiling of the plane: an app, a command line, scripting and an MCP server.",
+    "homepage": "https://jprodgers.github.io/jetcarp/",
+    "license": "Unlicense|MIT",
+    "notes": [
+        "Start JETCARP from the Start menu, or with `jetcarp` in a terminal.",
+        "Before `scoop uninstall jetcarp`, run `jetcarp uninstall` to undo what JETCARP set up outside its folders (the background host, the login entry, the screen saver)."
+    ],
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-x86_64-pc-windows-msvc.zip",
+            "hash": "@SHA256_X86_64_PC_WINDOWS_MSVC@",
+            "extract_dir": "jetcarp-@VERSION@-x86_64-pc-windows-msvc"
+        }
+    },
+    "bin": "jetcarp.exe",
+    "shortcuts": [
+        [
+            "jetcarpw.exe",
+            "JETCARP"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/@REPO@/releases/download/v$version/jetcarp-$version-x86_64-pc-windows-msvc.zip",
+                "extract_dir": "jetcarp-$version-x86_64-pc-windows-msvc"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/SHA256SUMS"
+        }
+    }
+}

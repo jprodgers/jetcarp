@@ -3,17 +3,23 @@
 share. Python 3.8 or newer, standard library only.
 
     package.py version                         the version in Cargo.toml
+    package.py set-version VERSION             change it (Cargo.toml, Cargo.lock), for example to
+                                               0.4.0-rc.1 before tagging v0.4.0-rc.1
+    package.py verify --tag TAG [--out FILE]   the checks before a release: the tag is v<version>,
+                                               the changelog has the version (dated, unless a
+                                               pre-release); writes version= and prerelease= lines
     package.py wheel-data --out DIR [--packs DIR] [--saver FILE]
                                                the extra files a wheel installs (maturin's `data`)
     package.py archive --target T --bins DIR --out DIST [--packs DIR]
                                                the release archive for one target
     package.py check-elf FILE [--max-glibc 2.28]
                                                a Linux program needs only glibc's libraries
+    package.py smoke ARCHIVE                   unpack an archive and run its program
     package.py installers --out DIST           the shell and PowerShell installers
     package.py sums DIST                       SHA256SUMS for the files in DIST
-    package.py notes --out FILE [--require-dated]
-                                               release notes from the changelog
-    package.py formula --sums FILE --out FILE  the Homebrew formula
+    package.py notes --out FILE                release notes from the changelog
+    package.py manifests --sums FILE --out DIR the Homebrew formula, the Scoop manifest and the
+                                               winget manifests, filled in from SHA256SUMS
 
 Archives are reproducible: entries sorted, owners zeroed, times from SOURCE_DATE_EPOCH (else the
 last commit's time).
@@ -78,6 +84,66 @@ def version():
     if not m:
         die("no [workspace.package] version in Cargo.toml")
     return m.group(1)
+
+
+SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$")
+
+
+def base_version(ver):
+    """0.4.0 for 0.4.0-rc.1: the changelog's section for a release candidate is its release's."""
+    m = SEMVER.match(ver)
+    if not m:
+        die(f"{ver} is not a version like 0.4.0 or 0.4.0-rc.1")
+    return ".".join(m.groups()[:3])
+
+
+def is_prerelease(ver):
+    return base_version(ver) != ver
+
+
+def cmd_set_version(a):
+    new = a.version.lstrip("v")
+    base_version(new)
+    old = version()
+    cargo = ROOT / "Cargo.toml"
+    text = cargo.read_text(encoding="utf-8")
+    text, n = re.subn(
+        r'(^\[workspace\.package\][^\[]*?^version = ")[^"]+(")', rf"\g<1>{new}\2", text, count=1, flags=re.M | re.S
+    )
+    # The workspace's own crates, pinned exactly in [workspace.dependencies].
+    text, pins = re.subn(
+        r'^(jetcarp(?:-[a-z]+)? = \{ path = "crates/[a-z-]+", version = "=)[^"]+(" \})$', rf"\g<1>{new}\2", text, flags=re.M
+    )
+    cargo.write_text(text, encoding="utf-8")
+    lock = ROOT / "Cargo.lock"
+    ltext = lock.read_text(encoding="utf-8")
+    ltext, locked = re.subn(
+        rf'(\[\[package\]\]\nname = "jetcarp(?:-[a-z]+)?"\nversion = "){re.escape(old)}(")', rf"\g<1>{new}\2", ltext
+    )
+    lock.write_text(ltext, encoding="utf-8")
+    print(f"{old} -> {new}: Cargo.toml ({n} version, {pins} pins), Cargo.lock ({locked} crates)")
+
+
+def cmd_verify(a):
+    """What a release tag must satisfy before anything is built."""
+    ver = version()
+    tag = a.tag
+    if tag.startswith("refs/tags/"):
+        tag = tag[len("refs/tags/") :]
+    if tag != f"v{ver}":
+        die(f"the tag {tag} does not match Cargo.toml's version {ver} (tag v{ver}, or run set-version)")
+    pre = is_prerelease(ver)
+    heading, body = changelog_section(base_version(ver))
+    if not body:
+        die(f"the changelog's section for {base_version(ver)} is empty")
+    if not pre and not a.allow_undated and "unreleased" in heading.lower():
+        die(f"the changelog still calls {ver} unreleased: give it its date first ({heading!r})")
+    lines = [f"version={ver}", f"prerelease={'true' if pre else 'false'}"]
+    if a.out:
+        with open(a.out, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    print(f"ok: {tag} is JETCARP {ver}{' (a pre-release)' if pre else ''}, and the changelog has it")
 
 
 def source_date():
@@ -227,40 +293,101 @@ def cmd_archive(a):
 
 
 def cmd_check_elf(a):
-    """Fails unless FILE links only glibc's libraries, at symbol versions up to --max-glibc."""
+    """Fails unless FILE links only glibc's libraries, at symbol versions up to --max-glibc.
+    readelf reads any architecture's ELF, so a cross-built program is checked as well."""
     try:
-        dyn = subprocess.run(["objdump", "-p", a.file], capture_output=True, text=True, check=True)
-        syms = subprocess.run(["objdump", "-T", a.file], capture_output=True, text=True, check=True)
+        dyn = subprocess.run(["readelf", "-d", a.file], capture_output=True, text=True, check=True)
+        syms = subprocess.run(
+            ["readelf", "--dyn-syms", "-W", a.file], capture_output=True, text=True, check=True
+        )
     except (OSError, subprocess.CalledProcessError) as e:
-        die(f"objdump: {e}")
-    needed = re.findall(r"^\s*NEEDED\s+(\S+)", dyn.stdout, re.M)
+        die(f"readelf: {e}")
+    needed = re.findall(r"\(NEEDED\)\s+Shared library: \[([^\]]+)\]", dyn.stdout)
     bad = [n for n in needed if n not in GLIBC_LIBS]
-    rpath = re.findall(r"^\s*(RPATH|RUNPATH)\s+(\S+)", dyn.stdout, re.M)
-    versions = set(re.findall(r"GLIBC_(\d+(?:\.\d+)+)", syms.stdout))
+    rpath = re.findall(r"\((RPATH|RUNPATH)\)\s+\S+ \S+: \[([^\]]*)\]", dyn.stdout)
 
     def key(v):
         return tuple(int(x) for x in v.split("."))
 
+    uses = re.findall(r"\s(\S+)@GLIBC_(\d+(?:\.\d+)+)", syms.stdout)
+    versions = {v for _, v in uses}
     newest = max(versions, key=key) if versions else "none"
     print(f"{a.file}: needs {', '.join(needed)}; newest glibc symbol GLIBC_{newest}")
     problems = []
     if bad:
         problems.append(f"links libraries outside glibc: {', '.join(bad)}")
     if rpath:
-        problems.append(f"has a search path: {rpath}")
-    if versions and key(newest) > key(a.max_glibc):
-        late = sorted(
-            {
-                line.split()[-1]
-                for line in syms.stdout.splitlines()
-                if re.search(r"GLIBC_(\d+(?:\.\d+)+)", line)
-                and key(re.search(r"GLIBC_(\d+(?:\.\d+)+)", line).group(1)) > key(a.max_glibc)
-            }
-        )
+        problems.append(f"has a library search path: {rpath}")
+    late = sorted({f"{s}@GLIBC_{v}" for s, v in uses if key(v) > key(a.max_glibc)})
+    if late:
         problems.append(f"needs glibc newer than {a.max_glibc}: {', '.join(late)}")
     if problems:
         die("; ".join(problems))
     print(f"ok: glibc {a.max_glibc} or newer is enough")
+
+
+def cmd_smoke(a):
+    """Unpacks an archive into a scratch folder and runs its program there, with JETCARP's
+    folders in that scratch folder too: --version, paths (the bundled packs must be found
+    beside it when the archive has them) and doctor."""
+    import json
+    import tempfile
+
+    arc = Path(a.archive)
+    work = Path(tempfile.mkdtemp(prefix="jetcarp-smoke-"))
+    try:
+        if arc.name.endswith(".zip"):
+            with zipfile.ZipFile(arc) as z:
+                z.extractall(work / "x")
+        else:
+            with tarfile.open(arc) as t:
+                # Only plain files and folders, inside the target (Python 3.12 and patched older ones).
+                if hasattr(tarfile, "data_filter"):
+                    t.extractall(work / "x", filter="data")
+                else:
+                    t.extractall(work / "x")
+        tops = list((work / "x").iterdir())
+        if len(tops) != 1:
+            die(f"{arc.name} should hold one folder, not {[t.name for t in tops]}")
+        top = tops[0]
+        exe = top / ("jetcarp.exe" if arc.name.endswith(".zip") else "jetcarp")
+        if not arc.name.endswith(".zip"):
+            exe.chmod(0o755)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("JETCARP_")}
+        for k, d in [
+            ("JETCARP_CONFIG_DIR", "config"),
+            ("JETCARP_DATA_DIR", "data"),
+            ("JETCARP_OUT", "out"),
+            ("JETCARP_LIBRARY", "library"),
+            ("JETCARP_RUNTIME_DIR", "runtime"),
+        ]:
+            env[k] = str(work / d)
+
+        def run(*args):
+            r = subprocess.run([str(exe), *args], env=env, capture_output=True, text=True)
+            if r.returncode != 0:
+                die(f"{exe.name} {' '.join(args)} failed ({r.returncode}): {r.stderr.strip()}")
+            return r.stdout
+
+        print(run("--version").strip())
+        paths = json.loads(run("--json", "paths"))
+        want = top / "packs"
+        got = paths.get("bundled_packs")
+        if want.is_dir():
+            if not got or Path(got).resolve() != want.resolve():
+                die(f"the bundled packs are {got}, not {want}")
+            print(f"bundled packs found: {got}")
+        elif got:
+            die(f"no packs in the archive, but the program found {got}")
+        else:
+            print("no bundled packs (none in this archive)")
+        print(run("doctor").splitlines()[0])
+        for d in ["config", "data", "out"]:
+            if (work / d).exists() and d == "out":
+                die("the smoke test wrote to the output folder")
+        print(f"ok: {arc.name}")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def render(template, values):
@@ -338,33 +465,46 @@ def absolute_links(md, page_dir):
 
 def cmd_notes(a):
     ver = version()
-    heading, body = changelog_section(ver)
-    if a.require_dated and "unreleased" in heading.lower():
-        die(f"the changelog still calls {ver} unreleased: give it its date first ({heading!r})")
+    base = base_version(ver)
+    _, body = changelog_section(base)
     body = absolute_links(body, "about")
-    base = f"https://github.com/{a.repo}/releases/download/v{ver}"
+    url = f"https://github.com/{a.repo}/releases/download/v{ver}"
+    if is_prerelease(ver):
+        intro = (
+            f"**A release candidate of JETCARP {base}, for testing.** It is on GitHub only: not on "
+            "PyPI, crates.io, Homebrew or Scoop. Install it with the installers below, which install "
+            "this version, and report what you find. The notes are those of the coming release.\n\n"
+        )
+        others = ""
+    else:
+        intro = ""
+        others = (
+            "\nOr: `pipx install jetcarp`, `uv tool install jetcarp` or `pip install jetcarp`; "
+            "`brew tap jprodgers/jetcarp` and `brew install jetcarp`; "
+            "`scoop bucket add jetcarp https://github.com/jprodgers/scoop-jetcarp` and "
+            "`scoop install jetcarp`; or `cargo install jetcarp`.\n"
+        )
     install = f"""## Installing
 
 Linux and macOS:
 
 ```sh
-curl -LsSf {base}/jetcarp-installer.sh | sh
+curl -LsSf {url}/jetcarp-installer.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm {base}/jetcarp-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm {url}/jetcarp-installer.ps1 | iex"
 ```
-
-Or with Python's tools: `pipx install jetcarp`, `uv tool install jetcarp` or `pip install jetcarp`.
+{others}
 Every way to install, and what to know on each system, is in
 [Installing JETCARP]({DOCS_URL}getting-started/installing.html). Each file's SHA-256 is in
 `SHA256SUMS`.
 """
-    notes = f"{body}\n\n{install}"
+    notes = f"{intro}{body}\n\n{install}"
     Path(a.out).write_text(notes, encoding="utf-8")
-    print(f"{a.out}: {len(notes.splitlines())} lines from the changelog's {ver} section")
+    print(f"{a.out}: {len(notes.splitlines())} lines from the changelog's {base} section")
 
 
 def read_sums(path):
@@ -376,25 +516,56 @@ def read_sums(path):
     return sums
 
 
-def cmd_formula(a):
-    ver = version() if not a.version else a.version
+# Each template in this repository is the source of truth; the release fills in the version and
+# the archives' checksums, and the tap and bucket repositories only ever hold the result.
+WINGET_ID = "JimmieRodgers.JETCARP"
+MANIFESTS = [
+    ("homebrew/jetcarp.rb", "homebrew/Formula/jetcarp.rb"),
+    ("homebrew/tap-README.md", "homebrew/README.md"),
+    ("scoop/jetcarp.json", "scoop/bucket/jetcarp.json"),
+    ("scoop/bucket-README.md", "scoop/README.md"),
+    (f"winget/{WINGET_ID}.yaml", f"winget/manifests/j/JimmieRodgers/JETCARP/@VERSION@/{WINGET_ID}.yaml"),
+    (
+        f"winget/{WINGET_ID}.installer.yaml",
+        f"winget/manifests/j/JimmieRodgers/JETCARP/@VERSION@/{WINGET_ID}.installer.yaml",
+    ),
+    (
+        f"winget/{WINGET_ID}.locale.en-US.yaml",
+        f"winget/manifests/j/JimmieRodgers/JETCARP/@VERSION@/{WINGET_ID}.locale.en-US.yaml",
+    ),
+]
+
+
+def cmd_manifests(a):
+    ver = version()
     sums = read_sums(a.sums)
     values = {"VERSION": ver, "REPO": a.repo}
-    for t in ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]:
+    for t in TARGETS:
         name = archive_name(ver, t)
-        if name not in sums:
-            die(f"{a.sums} has no {name}")
-        values["SHA256_" + t.split("-")[0].upper() + "_" + ("MACOS" if is_apple(t) else "LINUX")] = sums[name]
-    text = render((ROOT / "packaging/homebrew/jetcarp.rb.in").read_text(encoding="utf-8"), values)
-    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(text, encoding="utf-8")
-    print(f"{a.out}: JETCARP {ver}")
+        if name in sums:
+            values["SHA256_" + t.upper().replace("-", "_")] = sums[name]
+    out = Path(a.out)
+    for src, dst in MANIFESTS:
+        text = render((ROOT / "packaging" / src).read_text(encoding="utf-8"), values)
+        path = out / render(dst, values)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(path)
+
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("version").set_defaults(fn=cmd_version)
+    p = sub.add_parser("set-version")
+    p.add_argument("version")
+    p.set_defaults(fn=cmd_set_version)
+    p = sub.add_parser("verify")
+    p.add_argument("--tag", required=True)
+    p.add_argument("--out", help="append the version= and prerelease= lines here ($GITHUB_OUTPUT)")
+    p.add_argument("--allow-undated", action="store_true", help="for pull requests: an undated section will do")
+    p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("wheel-data")
     p.add_argument("--out", required=True)
     p.add_argument("--packs")
@@ -410,6 +581,9 @@ def main():
     p.add_argument("file")
     p.add_argument("--max-glibc", default="2.28")
     p.set_defaults(fn=cmd_check_elf)
+    p = sub.add_parser("smoke")
+    p.add_argument("archive")
+    p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("installers")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=REPO)
@@ -420,14 +594,12 @@ def main():
     p = sub.add_parser("notes")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=REPO)
-    p.add_argument("--require-dated", action="store_true")
     p.set_defaults(fn=cmd_notes)
-    p = sub.add_parser("formula")
+    p = sub.add_parser("manifests")
     p.add_argument("--sums", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=REPO)
-    p.add_argument("--version")
-    p.set_defaults(fn=cmd_formula)
+    p.set_defaults(fn=cmd_manifests)
     a = ap.parse_args()
     a.fn(a)
 

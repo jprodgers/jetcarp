@@ -8,11 +8,16 @@
 # PATH. It changes nothing else: no shell startup files, no system folders, no sudo.
 #
 # Options, each also an environment variable (for `curl ... | sh -s -- OPTIONS` or `VAR=... sh`):
+#   --version V     install release V instead of @VERSION@, such as 0.4.0-rc.1 or v0.4.0-rc.1
+#                   (JETCARP_VERSION); pre-releases are never "latest", so name them
 #   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
 #   --bin-dir DIR   where the `jetcarp` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
 #   --no-packs      leave out the starter pack (JETCARP_NO_PACKS=1)
-#   --url URL       where to download the release files from (JETCARP_DOWNLOAD_URL; default
-#                   https://github.com/@REPO@/releases/download/v@VERSION@)
+#   --url URL       where to get the release files: a URL or a local folder holding them
+#                   (JETCARP_DOWNLOAD_URL; default
+#                   https://github.com/@REPO@/releases/download/v<version>)
+#   --gh            download with the GitHub CLI, `gh`, signed in: for a private repository
+#                   (JETCARP_USE_GH=1)
 #   --uninstall     remove the folder and the link this installer made
 #   -h, --help      this text
 set -eu
@@ -20,10 +25,12 @@ set -eu
 VERSION="@VERSION@"
 REPO="@REPO@"
 
+version="${JETCARP_VERSION:-$VERSION}"
 dir="${JETCARP_INSTALL_DIR:-}"
 bin_dir="${JETCARP_BIN_DIR:-}"
-url="${JETCARP_DOWNLOAD_URL:-https://github.com/$REPO/releases/download/v$VERSION}"
+url="${JETCARP_DOWNLOAD_URL:-}"
 no_packs="${JETCARP_NO_PACKS:-}"
+use_gh="${JETCARP_USE_GH:-}"
 uninstall=""
 
 say() { printf '%s\n' "jetcarp-installer: $*"; }
@@ -39,10 +46,12 @@ JETCARP $VERSION installer for Linux and macOS
   sh jetcarp-installer.sh [OPTIONS]
   curl -LsSf https://github.com/$REPO/releases/latest/download/jetcarp-installer.sh | sh -s -- [OPTIONS]
 
+  --version V     install release V, such as 0.4.0-rc.1 (JETCARP_VERSION; default $VERSION)
   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
   --bin-dir DIR   where the \`jetcarp\` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
   --no-packs      leave out the starter pack (JETCARP_NO_PACKS=1)
-  --url URL       where to download the release files from (JETCARP_DOWNLOAD_URL)
+  --url URL       a URL or local folder with the release files (JETCARP_DOWNLOAD_URL)
+  --gh            download with the GitHub CLI, signed in, for a private repository
   --uninstall     remove the folder and the link this installer made
   -h, --help      this text
 EOF
@@ -50,9 +59,11 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --version) version="${2:?--version needs a version}"; shift 2 ;;
         --dir) dir="${2:?--dir needs a folder}"; shift 2 ;;
         --bin-dir) bin_dir="${2:?--bin-dir needs a folder}"; shift 2 ;;
         --url) url="${2:?--url needs a URL}"; shift 2 ;;
+        --gh) use_gh=1; shift ;;
         --no-packs) no_packs=1; shift ;;
         --uninstall) uninstall=1; shift ;;
         -h | --help) usage; exit 0 ;;
@@ -60,9 +71,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+version="${version#v}"
+case "$version" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) die "$version is not a JETCARP version (such as $VERSION or 0.4.0-rc.1)" ;;
+esac
 [ -n "${HOME:-}" ] || die "HOME is not set"
 dir="${dir:-$HOME/.local/lib/jetcarp}"
 bin_dir="${bin_dir:-$HOME/.local/bin}"
+url="${url:-https://github.com/$REPO/releases/download/v$version}"
 url="${url%/}"
 marker="$dir/.jetcarp-installer"
 
@@ -136,13 +153,18 @@ case "$os" in
         ;;
     *) die "no JETCARP build for $os; on Windows use jetcarp-installer.ps1" ;;
 esac
-archive="jetcarp-$VERSION-$target.tar.gz"
+archive="jetcarp-$version-$target.tar.gz"
 
-download() { # URL FILE
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL --retry 3 -o "$2" "$1"
+fetch() { # NAME: a file of the release, into $tmp
+    if [ -n "$use_gh" ]; then
+        command -v gh >/dev/null 2>&1 || die "--gh needs the GitHub CLI (https://cli.github.com), signed in"
+        gh release download "v$version" --repo "$REPO" --pattern "$1" --dir "$tmp" --clobber
+    elif [ -d "$url" ]; then
+        cp "$url/$1" "$tmp/$1"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -fsSL --retry 3 -o "$tmp/$1" "$url/$1"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" "$1"
+        wget -q -O "$tmp/$1" "$url/$1"
     else
         die "neither curl nor wget is installed"
     fi
@@ -163,9 +185,18 @@ sha256() {
 tmp=$(mktemp -d 2>/dev/null || mktemp -d -t jetcarp)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-say "downloading JETCARP $VERSION for $target"
-download "$url/SHA256SUMS" "$tmp/SHA256SUMS" || die "could not download $url/SHA256SUMS"
-download "$url/$archive" "$tmp/$archive" || die "could not download $url/$archive"
+from="$url"
+[ -z "$use_gh" ] || from="$REPO's release v$version, with gh"
+say "getting JETCARP $version for $target from $from"
+fail() {
+    case "$version" in
+        *-*) hint=" (a pre-release: is v$version published? If the repository is private, try --gh)" ;;
+        *) hint="" ;;
+    esac
+    die "could not get $1 from $from$hint"
+}
+fetch SHA256SUMS || fail SHA256SUMS
+fetch "$archive" || fail "$archive"
 
 want=$(awk -v f="$archive" '$2 == f || $2 == "*" f {print $1}' "$tmp/SHA256SUMS")
 [ -n "$want" ] || die "SHA256SUMS does not list $archive"
@@ -175,12 +206,12 @@ say "checked $archive against SHA256SUMS"
 
 mkdir -p "$tmp/unpacked"
 tar -xzf "$tmp/$archive" -C "$tmp/unpacked"
-src="$tmp/unpacked/jetcarp-$VERSION-$target"
+src="$tmp/unpacked/jetcarp-$version-$target"
 [ -x "$src/jetcarp" ] || die "$archive has no jetcarp program"
 if [ -n "$no_packs" ]; then
     rm -rf "$src/packs"
 fi
-printf 'JETCARP %s %s\n' "$VERSION" "$target" >"$src/.jetcarp-installer"
+printf 'JETCARP %s %s\n' "$version" "$target" >"$src/.jetcarp-installer"
 
 # Swap the new folder in, keeping the old one until the new one is in place.
 parent=$(dirname "$dir")
@@ -198,7 +229,7 @@ rm -rf "$old"
 mkdir -p "$bin_dir"
 ln -sf "$dir/jetcarp" "$bin_dir/jetcarp"
 
-say "installed $("$dir/jetcarp" --version 2>/dev/null || echo "JETCARP $VERSION") in $dir"
+say "installed $("$dir/jetcarp" --version 2>/dev/null || echo "JETCARP $version") in $dir"
 say "linked $bin_dir/jetcarp"
 if [ -d "$dir/packs" ]; then
     say "the starter pack is in $dir/packs"

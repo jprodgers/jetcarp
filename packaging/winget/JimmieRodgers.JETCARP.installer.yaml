@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# A template: packaging/package.py manifests fills it in from a release. The release's zip is
+# installed as a portable program: winget unpacks the whole folder (with jetcarpw.exe and the
+# starter pack beside jetcarp.exe) and links `jetcarp` onto the PATH.
+PackageIdentifier: JimmieRodgers.JETCARP
+PackageVersion: "@VERSION@"
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: jetcarp-@VERSION@-x86_64-pc-windows-msvc\jetcarp.exe
+    PortableCommandAlias: jetcarp
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-x86_64-pc-windows-msvc.zip
+    InstallerSha256: "@SHA256_X86_64_PC_WINDOWS_MSVC@"
+ManifestType: installer
+ManifestVersion: 1.10.0

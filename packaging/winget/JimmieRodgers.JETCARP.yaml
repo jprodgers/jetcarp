@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+# A template: packaging/package.py manifests fills it in from a release. Submitting it to
+# microsoft/winget-pkgs is a separate, later step.
+PackageIdentifier: JimmieRodgers.JETCARP
+PackageVersion: "@VERSION@"
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.10.0

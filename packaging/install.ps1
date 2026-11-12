@@ -12,6 +12,10 @@ your user PATH. It changes nothing else, and needs no administrator rights.
 Run as a file, it takes the options below; through `irm | iex`, set the environment variables
 named with each instead (for example $env:JETCARP_NO_PACKS = "1" first).
 
+.PARAMETER Version
+Install release Version instead of @VERSION@, such as 0.4.0-rc.1 or v0.4.0-rc.1
+(JETCARP_VERSION). Pre-releases are never "latest", so name them.
+
 .PARAMETER InstallDir
 The program's folder (JETCARP_INSTALL_DIR). Default: %LOCALAPPDATA%\Programs\jetcarp.
 
@@ -22,24 +26,33 @@ Do not add the folder to the user PATH (JETCARP_NO_MODIFY_PATH=1).
 Leave out the starter pack (JETCARP_NO_PACKS=1).
 
 .PARAMETER DownloadUrl
-Where to download the release files from (JETCARP_DOWNLOAD_URL). Default:
-https://github.com/@REPO@/releases/download/v@VERSION@
+Where to get the release files: a URL, or a local folder holding them (JETCARP_DOWNLOAD_URL).
+Default: https://github.com/@REPO@/releases/download/v<version>
+
+.PARAMETER UseGh
+Download with the GitHub CLI, gh, signed in: for a private repository (JETCARP_USE_GH=1).
 
 .PARAMETER Uninstall
 Remove the folder this installer made, and take it off the user PATH.
 #>
 param(
+    [string]$Version = $env:JETCARP_VERSION,
     [string]$InstallDir = $env:JETCARP_INSTALL_DIR,
     [switch]$NoModifyPath = ($env:JETCARP_NO_MODIFY_PATH -eq "1"),
     [switch]$NoPacks = ($env:JETCARP_NO_PACKS -eq "1"),
     [string]$DownloadUrl = $env:JETCARP_DOWNLOAD_URL,
+    [switch]$UseGh = ($env:JETCARP_USE_GH -eq "1"),
     [switch]$Uninstall
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$Version = "@VERSION@"
 $Repo = "@REPO@"
+if (-not $Version) { $Version = "@VERSION@" }
+$Version = $Version.TrimStart("v")
+if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+    throw "jetcarp-installer: $Version is not a JETCARP version (such as @VERSION@ or 0.4.0-rc.1)"
+}
 $Target = "x86_64-pc-windows-msvc"
 $Archive = "jetcarp-$Version-$Target.zip"
 
@@ -48,7 +61,7 @@ function Fail([string]$Message) { throw "jetcarp-installer: $Message" }
 
 if (-not $InstallDir) { $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\jetcarp" }
 if (-not $DownloadUrl) { $DownloadUrl = "https://github.com/$Repo/releases/download/v$Version" }
-$DownloadUrl = $DownloadUrl.TrimEnd("/")
+$DownloadUrl = $DownloadUrl.TrimEnd("/").TrimEnd("\")
 $InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
 $Marker = Join-Path $InstallDir ".jetcarp-installer"
 
@@ -86,12 +99,33 @@ if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("jetcarp-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $Tmp | Out-Null
+function Get-ReleaseFile([string]$Name) {
+    $Out = Join-Path $Tmp $Name
+    try {
+        if ($UseGh) {
+            if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+                Fail "-UseGh needs the GitHub CLI (https://cli.github.com), signed in"
+            }
+            & gh release download "v$Version" --repo $Repo --pattern $Name --dir $Tmp --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh exited with $LASTEXITCODE" }
+        } elseif (Test-Path -PathType Container $DownloadUrl) {
+            Copy-Item -Path (Join-Path $DownloadUrl $Name) -Destination $Out
+        } else {
+            Invoke-WebRequest -UseBasicParsing -Uri "$DownloadUrl/$Name" -OutFile $Out
+        }
+    } catch {
+        $Hint = ""
+        if ($Version -like "*-*") { $Hint = " (a pre-release: is v$Version published? If the repository is private, try -UseGh)" }
+        Fail "could not get $Name from $From$Hint`: $($_.Exception.Message)"
+    }
+    return $Out
+}
+
 try {
-    Say "downloading JETCARP $Version for $Target"
-    $Sums = Join-Path $Tmp "SHA256SUMS"
-    $Zip = Join-Path $Tmp $Archive
-    Invoke-WebRequest -UseBasicParsing -Uri "$DownloadUrl/SHA256SUMS" -OutFile $Sums
-    Invoke-WebRequest -UseBasicParsing -Uri "$DownloadUrl/$Archive" -OutFile $Zip
+    $From = if ($UseGh) { "$Repo's release v$Version, with gh" } else { $DownloadUrl }
+    Say "getting JETCARP $Version for $Target from $From"
+    $Sums = Get-ReleaseFile "SHA256SUMS"
+    $Zip = Get-ReleaseFile $Archive
 
     $Want = $null
     foreach ($line in Get-Content $Sums) {

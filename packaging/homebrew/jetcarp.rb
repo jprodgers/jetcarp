@@ -1,6 +1,13 @@
-# JETCARP's Homebrew formula, written by packaging/package.py formula from the release's
-# SHA256SUMS (packaging/homebrew/update-tap.sh puts it in the tap). It installs the release
-# archives, built by the release workflow; nothing is compiled.
+# JETCARP's Homebrew formula. This file is the source of truth: the release workflow fills in the
+# version and the archives' checksums (packaging/package.py manifests) and writes the result to
+# the tap, github.com/jprodgers/homebrew-jetcarp, as Formula/jetcarp.rb.
+#
+#   brew tap jprodgers/jetcarp
+#   brew install jetcarp
+#
+# (or `brew install jprodgers/jetcarp/jetcarp` in one line).
+#
+# It installs the release archives the workflow built; nothing is compiled.
 class Jetcarp < Formula
   desc "Cellular automata on almost any tiling of the plane"
   homepage "https://jprodgers.github.io/jetcarp/"
@@ -10,22 +17,22 @@ class Jetcarp < Formula
   on_macos do
     on_arm do
       url "https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-aarch64-apple-darwin.tar.gz"
-      sha256 "@SHA256_AARCH64_MACOS@"
+      sha256 "@SHA256_AARCH64_APPLE_DARWIN@"
     end
     on_intel do
       url "https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-x86_64-apple-darwin.tar.gz"
-      sha256 "@SHA256_X86_64_MACOS@"
+      sha256 "@SHA256_X86_64_APPLE_DARWIN@"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "@SHA256_AARCH64_LINUX@"
+      sha256 "@SHA256_AARCH64_UNKNOWN_LINUX_GNU@"
     end
     on_intel do
       url "https://github.com/@REPO@/releases/download/v@VERSION@/jetcarp-@VERSION@-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "@SHA256_X86_64_LINUX@"
+      sha256 "@SHA256_X86_64_UNKNOWN_LINUX_GNU@"
     end
   end
 
