@@ -429,7 +429,10 @@ fn shots_new_tiling() {
     h.built();
     h.run(0.5, 0.05, |_| false);
     eprintln!("tiling: {}", h.app.world.topo.describe());
+    // Zoomed in, so the tiles show.
+    h.app.zoom_by(5.0);
     h.shot("life-tiling-catalog");
+    h.app.fit_pending = true;
     // CA → Add from catalog → Life-like → Life.
     h.hold_menu("CA");
     h.hover_on("Add from catalog");
@@ -443,7 +446,23 @@ fn shots_new_tiling() {
         life.min.y - first.min.y - 6.0 * life.height(),
     );
     h.hover_on("Life  B3/S23");
-    h.shot("life-add-from-catalog");
+    let life = h.find("Life  B3/S23");
+    let right =
+        h.o.widgets
+            .iter()
+            .filter(|w| (w.1.min.x - life.min.x).abs() < 1.0)
+            .map(|w| w.1.max.x)
+            .fold(life.max.x, f32::max);
+    let menu = Harness::around(
+        &[
+            h.find("CA"),
+            h.find("Add from catalog"),
+            h.find("Layered (2)"),
+        ],
+        10.0,
+    );
+    let part = egui::Rect::from_min_max(menu.min, egui::pos2(right + 40.0, menu.max.y));
+    h.shot_part("life-add-from-catalog", part);
     h.click("Life  B3/S23");
     h.app.shell.open_menu = None;
     h.frame_with(0.05, vec![]);
@@ -462,7 +481,7 @@ fn shots_new_tiling() {
     let gens: u64 = std::env::var("JETCARP_SHOTS_GENS")
         .ok()
         .and_then(|g| g.parse().ok())
-        .unwrap_or(600);
+        .unwrap_or(500);
     h.app.playing = false;
     h.app.exec(Command::Step { gens });
     eprintln!(
