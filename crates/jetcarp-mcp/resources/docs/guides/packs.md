@@ -85,7 +85,9 @@ What happens to each kind of record:
 - **Quick Start entries** appear in the Quick Start menu.
 - **Ratings** are kept under each rater's name, as the pack gives it.
 - **Retractions.** A publisher can withdraw a record in a later version. Importing that version flags
-  the record as retracted, with the reason, and never deletes your copy.
+  the record as retracted, with the reason, and never deletes your copy: `jetcarp library show`
+  says *retracted by PUBLISHER on DATE: REASON*, `jetcarp library list` marks it, and so does the
+  app's library window.
 
 `--strict` refuses a pack that has two different rows for one record id, instead of keeping the
 first. `--library FILE` imports into another library file than your usual one.
@@ -184,8 +186,9 @@ exported sha256:a968036b… into /home/ada/packs/penrose-finds-2026.11: 24 files
 
 Without `--from`, it publishes your library first, taking the same options as `pack publish`, and
 exports the result. It keeps the store it made next to the export, in a hidden folder named after
-it, for example `.penrose-finds-2026.11.store`. Use `--views` to add a `views.sql` for
-[DuckDB](https://duckdb.org/) (see [below](#read-a-pack-without-jetcarp)).
+it, for example `.penrose-finds-2026.11.store`, and says so: running the same export again publishes
+the feed's next version into it, as `jetcarp pack publish --to` that folder does. Use `--views` to
+add a `views.sql` for [DuckDB](https://duckdb.org/) (see [below](#read-a-pack-without-jetcarp)).
 
 The export's folder:
 

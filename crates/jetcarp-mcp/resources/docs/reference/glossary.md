@@ -71,8 +71,10 @@ oscillating, active or exploded. See [Search methods](../research/search-methods
 **Command.** One change to a world: add an automaton, paint cells, step, reseed and so on. A scene
 keeps the log of commands since its start. See [Scene file format](scene-format.md#commands).
 
-**Compound.** A "spaceship" that turns out to be two or more smaller ships travelling together. See
-[Findings](../research/findings.md).
+**Compound.** Several objects that never influence each other, taken for one: two ships travelling
+together, an oscillator beside a still life, two blocks a cell apart. Searches store and count the
+parts, and `jetcarp library compounds` splits those a library already holds. See
+[Compounds](../research/search-methods.md#compounds) and [Findings](../research/findings.md).
 
 **Congruence.** Two ships are congruent, and counted as one object, if one rotation, reflection and
 translation carries the live tiles of one onto the other's at every generation. See
@@ -343,7 +345,8 @@ states, in practice. See [Reproducibility](../research/reproducibility.md#the-st
 **Still life.** A pattern that does not change.
 
 **Strategy.** A kind of search run as a job (`hunt`, `bounded`, `census`, `ants`, `mover`, `pile`,
-`collide`, `evolve`, `explore`, and `reverify`, which checks library records again).
+`collide`, `evolve`, `explore`, `reverify`, which checks library records again, and `compounds`,
+which splits stored compounds into their parts).
 
 **Supertile.** A cluster of tiles that the substitution rules of an aperiodic tiling treat as one
 larger tile.

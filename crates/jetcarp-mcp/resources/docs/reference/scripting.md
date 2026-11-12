@@ -62,6 +62,12 @@ and the time taken go to standard error.
 | `--check` | Only check the script for syntax errors (`ok: FILE`, or the error with its line and column) |
 | `--json` | Print a summary as JSON on standard output at the end (the log then goes to standard error) |
 | `--functions` | Print the function reference (the same text as the reference below) and stop |
+| `--examples` | List the example scripts built into JETCARP, each with what it does, and stop |
+| `--example NAME` | Run a built-in example instead of a file (`hexw-all`, `wolfram-all`, `soup-hunt`, …; with `--check`, only check it) |
+
+The examples are the scripts of the app's *Examples* menu, built into the program, so they run
+anywhere JETCARP is installed: `jetcarp script --example wolfram-all` draws all 256 elementary rules
+into a new output folder.
 
 Pressing Ctrl-C once stops the script after the runs in flight; a sweep writes its manifest first, and
 JETCARP prints the command that carries it on. Pressing it again quits at once. A sweep folder can
@@ -80,7 +86,9 @@ default) and a limit on world size, and reads files only from the output folder 
 ## Parameters: `--set`
 
 Each `--set key=value` puts one entry in the map `params`. Numbers and `true`/`false` arrive as
-numbers and booleans; anything else arrives as text. A key that was not given reads as `()`, Rhai's
+numbers and booleans; anything else arrives as text, and so does a whole number too large for a
+script's integers (beyond 2^63 − 1, such as a random state), which seeds and `rng_seed` read
+exactly. A key that was not given reads as `()`, Rhai's
 "nothing", so `params.gens ?? 300` gives a default:
 
 ```text
@@ -168,7 +176,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | Function | What it does |
 | --- | --- |
 | `w.step()`, `w.step(n)` | Run 1 or `n` generations. |
-| `w.run(#{ until: "done", max_gens: 5000 })` | Run until a condition or the limit; returns `#{ generations, generation, stopped, done, done_reason }` (`stopped` is `"until"` or `"max_gens"`). `until`: `done`, `repeats` (with `max_period`, default 1000), `frozen`, `empty`, `generations` (with `n`), `population_below`/`population_above` (with `n`), `activity_below`/`activity_above` (with `fraction`, `for_gens`), `never`. Without `until`: runs `gens` generations. |
+| `w.run(#{ until: "done", max_gens: 5000 })` | Run until a condition or the limit; returns `#{ generations, generation, stopped, done, done_reason }` (`stopped` is `"until"` or `"max_gens"`). `until`: `done`, `repeats` (with `max_period`, default 1000), `frozen`, `empty`, `generations` (with `n`), `population_below`/`population_above` (with `n`), `activity_below`/`activity_above` (with `fraction`, `for_gens`), `never`. Without `until`: runs `gens` generations (and `stopped` is `"max_gens"`). |
 | `w.done()`, `w.done_reason()` | True when nothing can change any more: an elementary rule (`W`, `HexW`, `HexW3`, `HexT`, `HexT3`) wrote the bottom row (wrap edges: one full pass), a layered rule wrote its last layer, a sandpile is stable, all ants left, a field rule died out, or the world is frozen. |
 | `w.track_changes(true)` | Count changed cells every generation (frozen worlds are then seen at once). |
 | `w.jump(n)` | HashLife jump in place: `n` generations (a number, or text like `"2^40"`) on a wrap-edge lattice world whose sides are powers of two, with Life-like, Generations (B0 included), WireWorld, or Greenberg–Hastings CAs (one or several, on shared or separate fields). Same states as `w.step(n)`; live cells end with age 1. Logged as a `jump` command. `w.can_jump()` is `true` or the reason it cannot. |
@@ -186,7 +194,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | `w.set(x, y, state)`, `w.set(x, y, state, id)`, `w.set_cell(i, s)`, `w.set_cells([[x, y, s], ...])` | Draw cells. |
 | `w.pattern(".O.\n..O\nOOO", x, y)` | Draw a text picture (`O`/`*`/`#` live, digits for states). |
 | `w.row(y)` | One row's states as a list. |
-| `w.objects()`, `w.objects(#{ max_period: 64 })` | Still lifes, oscillators, spaceships: `#{ summary, live_cells, totals: #{still_life, oscillator, spaceship, other}, counts: [#{name, label, kind, count, period, speed}], objects: [#{name, kind, period, speed, dx, dy, size, x, y, cells}] }`. |
+| `w.objects()`, `w.objects(#{ max_period: 64 })` | Still lifes, oscillators, spaceships: `#{ summary, live_cells, totals: #{still_life, oscillator, spaceship, other}, counts: [#{name, label, kind, count, period, speed}], objects: [#{name, kind, period, speed, dx, dy, size, x, y, cells}] }`. Objects that never influence each other come apart (two gliders flying side by side are two gliders), and objects that do stay one. |
 | `w.classify()`, `w.classify(#{ max_gens: 2000, explode: 0.5 })` | Run on and classify as `died`, `frozen`, `oscillating` (with `period`), `exploded`, or `active` (with `activity`), like `jetcarp census`. |
 | `w.describe()` | The manifest descriptors: population, density, `frac_<state>`, period, distinct_rows, row_period, row_shift, periodic_from, row_class (`empty`, `uniform`, `periodic`, `shifting`, `aperiodic`), row_entropy, row_hint (`nested`, `regular`, `chaotic`). |
 
@@ -222,7 +230,7 @@ map (folder, runs, images, kept, errors, seconds, cancelled).
 **Reading a sweep back:** `manifest(folder)` returns the rows as a list of maps (one per run, sorted by index; also while a sweep is still running), e.g. `for r in manifest(s.folder) { if r.row_hint == "nested" { ... } }`. `manifest.json` itself is `#{ columns: [...], rows: [...] }`. Missing values (JSON null) are `()` in Rhai: test `r.period == ()`; Rhai has no `null`. Then `library().promote_run(s.folder, r.rule)` puts a run in the Quick Start.
 
 File names are zero-padded to the series width: `HexW3-08229.png`, `W030.png`, `HexT3-sum-0588.png`; rule lists use
-`<index>_<rule>.png`. Manifest columns: index, n, rule, file, kept, generations, stopped, done,
+`<index>_<rule>.png`. Manifest columns: index, n, rule, file, kept, generations, stopped (`until` when the trigger fired, `max_gens` when the limit came first or no `until` was given), done,
 done_reason, hash, population, density, frac_0.. (Lenia: mass, mean_value), period, row_period,
 row_shift, periodic_from, distinct_rows, row_class, row_entropy, row_hint, png_bytes, error (and
 `skipped`), then any columns from `keep`.
@@ -275,7 +283,7 @@ every rule it runs identically in).
 
 | Function | What it does |
 | --- | --- |
-| `sandpile_pile(#{ tiling, grains, neighborhood, centre, level, png, px, margin, palette, reverse, preview, folder, gpu, steps, label })` | Drop `grains` grains (a number, or text like `"1e7"` or `"2^30"`, up to 2^64 − 1; default 10000) on one spot of an unbounded grid and let them settle (`jetcarp pile`), as a catalog job (kind `pile`). Built by doubling from N's binary digits on a board that grows as needed (aperiodic tilings: the exact patch, `level` up to 8, chosen automatically; an error if the pile reaches its edge). `neighborhood`: `"edge"` (von Neumann, default) or `"touch"` (Moore). `centre`: `"cell"` (default), `"vertex"`, or `"edge"` (grains split evenly among the cells meeting at that point of the centre cell; the first `N mod m` cells by angle get one more). Writes `<out>/piles/<time>_<tiling>-<N>/`: `pile.png` (the pile's box plus `margin` cells, default 4, at `px` pixels per cell, default 2; `png: false` skips it; heights coloured along `palette`, default `"Ember"`, on its background and stage, `reverse: true` for the other way round; the choice is kept in `look.json` so a resumed folder keeps it), `preview.png` (`preview` pixels on the long side, default 1024), `pile.json` (N, tiling, neighbourhood, centre, topplings, sweeps, wall time, version, per-step records), `growth.csv`, and `steps/step-KK.pile` after every doubling step (the job's checkpoint; `steps` is accepted and ignored). `folder: path` uses that folder and resumes it (its job, or a new job from its last step file) if it holds step files. `gpu: true` topples on the GPU where the host has one (CLI, app; aperiodic patches stay on the CPU). Returns `#{ folder, png, preview, tiling, grains, steps, topplings, sweeps, seconds, width, height, image_width, image_height, backend, job }`. |
+| `sandpile_pile(#{ tiling, grains, neighborhood, centre, level, png, px, margin, palette, reverse, preview, folder, gpu, steps, label })` | Drop `grains` grains (a number, or text like `"1e7"` or `"2^30"`, up to 2^64 − 1; default 10000) on one spot of an unbounded grid and let them settle (`jetcarp pile`), as a catalog job (kind `pile`). Built by doubling from N's binary digits on a board that grows as needed (aperiodic tilings: the exact patch, `level` up to 8, chosen automatically; an error if the pile reaches its edge). `neighborhood`: `"edge"` (von Neumann, default) or `"touch"` (Moore). `centre`: `"cell"` (default), `"vertex"`, or `"edge"` (grains split evenly among the cells meeting at that point of the centre cell; the first `N mod m` cells by angle get one more). Writes `<out>/piles/<time>_<tiling>-<N>/`: `pile.png` (the pile's box plus `margin` cells, default 4, at `px` pixels per cell, default 2; `png: false` skips it; heights coloured along `palette`, default `"Ember"`, on its background and stage, `reverse: true` for the other way round; the choice is kept in `look.json` so a resumed folder keeps it), `preview.png` (`preview` pixels on the long side, default 1024), `pile.json` (N, tiling, neighbourhood, centre, topplings, sweeps, wall time, version, per-step records), `growth.csv`, and `steps/step-KK.pile` after every doubling step (the job's checkpoint; `steps` is accepted and ignored), with `steps/step-KK.partial.pile` for a step stopped part way, which a resumed pile carries on. `folder: path` uses that folder and resumes it (its job, or a new job from its last step file) if it holds step files; a finished pile given picture options (`palette`, `reverse`, `px`, `margin`, `preview`, `png`) is exported again in them. `gpu: true` topples on the GPU where the host has one (CLI, app; aperiodic patches stay on the CPU). Returns `#{ folder, png, preview, tiling, grains, steps, topplings, sweeps, seconds, width, height, image_width, image_height, backend, job }`. |
 | `sandpile_piles(#{ tilings, grains, thumb, cols, ... })` | The same pile on several tilings (default: square, hex, triangle, trihex, snubsq, oct, rhombitrihex, cairo), each in a subfolder of one `piles/<time>_sheet-N` folder, plus `sheet.png` (previews `thumb` pixels, default 320, in `cols` columns, default 4) and `piles.json`. Other keys go to each `sandpile_pile`. Returns `#{ folder, sheet, runs }`. |
 
 ### Media and website export

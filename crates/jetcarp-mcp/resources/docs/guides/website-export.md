@@ -20,7 +20,7 @@ wrote   media/pattern/21e9bac2df7b770a5ff0f34bd68a514a/thumb.png
 …
 wrote   manifest.json
 wrote   index.html
-site: 2 patterns, 0 Quick Start entries; 10 files written, 0 deleted, 0 items unchanged, 2 media rendered
+site: 2 patterns, 0 Quick Start entries, 0 ants; 10 files written, 0 deleted, 0 items unchanged, 2 media rendered
 ```
 
 Pictures and animations a pattern doesn't have yet are rendered first, in the house style. Use
@@ -32,7 +32,7 @@ Run the same command again and it compares each file's hash with the copy alread
 
 ```text
 $ jetcarp site export --to site
-site: 2 patterns, 0 Quick Start entries; 0 files written, 0 deleted, 2 items unchanged, 0 media rendered
+site: 2 patterns, 0 Quick Start entries, 0 ants; 0 files written, 0 deleted, 2 items unchanged, 0 media rendered
 ```
 
 ## What counts as public
@@ -42,10 +42,14 @@ Only what you've curated goes out. By default that is:
 - **patterns** you've marked `reviewed` or `promoted`
   (`jetcarp library update ID --state reviewed`, or in the app's library window);
 - **ant and turmite runs** in the same two states;
-- **Quick Start entries** you've added yourself.
+- **Quick Start entries** from two of the [Quick Start table's sources](../reference/library-format.md#quick-start-entries):
+  `promotion` (what you promoted yourself) and `pack` (what came in packs you imported), except the
+  entries you've hidden. The other sources, `atlas` (an explore search's best runs) and `builtin`
+  (the entries that come with JETCARP), go out only when `--quickstart` names them.
 
-A rejected pattern never goes out. Mark an exported pattern `rejected` (or back to `new`), export
-again, and its files are deleted from the folder.
+A rejected pattern never goes out, and neither does a hidden Quick Start entry. Mark an exported
+pattern `rejected` (or back to `new`), or hide an entry (from its card in the Quick Start menu, or
+`jetcarp library quickstart --hide ID`), export again, and its files are deleted from the folder.
 
 To narrow it further:
 
@@ -58,7 +62,7 @@ To narrow it further:
 | `--min-osc-period N` | Leave out oscillators with a shorter period |
 | `--ants LIST` | Ant curation states to export (`none` for no ants) |
 | `--ant-outcome LIST` | Only ants with these outcomes, such as `highway,symmetric` |
-| `--quickstart LIST` | Which Quick Start entries to export (`none` for none) |
+| `--quickstart LIST` | Quick Start sources to export, comma-separated: `promotion`, `pack`, `atlas`, `builtin` (default `promotion,pack`; `none` for none); hidden entries never go out |
 
 ## View it
 
@@ -70,7 +74,7 @@ $ python3 -m http.server -d site 8000
 ```
 
 Then open `http://localhost:8000/`. The page shows every item's animation in a grid, with filters by
-kind and class, a sort order (highest score first by default), a search box over names, rules and
+kind (patterns, ants, Quick Start) and class, a sort order (highest score first by default), a search box over names, rules and
 grids, and a detail view for each item.
 
 The page is plain HTML and JavaScript with no build step and nothing loaded from elsewhere, so it

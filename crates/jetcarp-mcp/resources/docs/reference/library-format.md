@@ -66,7 +66,9 @@ phases=<phase 0>;<phase 1>;...
   - Every member's value is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) canonical JSON:
     object keys sorted by their UTF-16 code units at every depth, no whitespace, strings escaped as
     RFC 8785 says, and numbers as ECMAScript writes them (`1`, not `1.0`; `0.000001` but `1e-7`;
-    `1e+21`; minus zero as `0`).
+    `1e+21`; minus zero as `0`). An integer outside ±(2^53 − 1), which a double cannot hold and
+    RFC 8785 cannot write, is a string of its decimal digits, as in all of JETCARP's JSON
+    ([Scene format](scene-format.md#large-numbers)); no tiling's parameters hold one.
   - Tilings at their default shapes have no numbers in their parameters, so the rule for numbers
     never changes their keys; a reshaped tiling's numbers get their one spelling, for example
     `{"family":"cairo","params":{"a":[1e-7,0.000001],"b":1},"boundary":"dead"}`.
@@ -178,8 +180,12 @@ the other). An id names an evolution on its tiles.
 jetcarp-ant-v1
 rule=<rule notation, such as "Ant RL" or "Turmite 1R1,1L0/1R1,0N0">
 tiling=<tiling key>
-start=<the start as JSON: "empty", or the start cells>
+start=<the start as RFC 8785 JSON: "empty", or the soup it started from>
 ```
+
+A soup start is `{"soup":{"density":0.5,"h":8,"state":3,"w":8}}`: its size in unit cells, its
+density and its random state, which is a string of decimal digits beyond 2^53 − 1
+(`"state":"17705299566207515059"`), as a soup's state from a search usually is.
 
 An ant and its mirror image (`RL` and `LR`) are two records, as the searches store them.
 
@@ -302,13 +308,52 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `pack_hash` | the pack it came in (for packs) |
 | `machine` | operating system and CPU architecture, such as `linux-x86_64` (never the host name) |
 | `engine_version`, `geometry_pin` | the JETCARP version and the pin it was verified with |
-| `source` | what found it: `search`, `collide A + B`, a scene path, `import <file>` |
+| `source` | what found it: `search`, `collide A + B`, a scene path; `import <file>` on a record imported from a JSON file before packs replaced that |
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
-rows 1, 2, ...: today `reverified`. The records brought in from CART's catalog and from two early development catalogs are the one
+rows 1, 2, ...: today `reverified`, which also records a split of a compound (its `source` begins
+`compound-split:`; see [Compounds](#compounds)). The records brought in from CART's catalog and from two early development catalogs are the one
 exception to how row 0 is written: theirs is their discovery, and their row 1 the import (see
 [Records from CART](#records-from-cart)).
+
+## Compounds
+
+A compound is a record that is several independent objects, such as two gliders flying side by side
+or a pulsar with blinkers beside it (the test is in
+[Search methods](../research/search-methods.md#compounds)). Searches no longer store them, but a
+library made by an earlier build may hold some. `jetcarp library compounds` (the operation
+`library.compounds`, a job of kind `compounds`) finds them, in id order, resumable with `--job`.
+
+- **The report.** Every compound found is written to `reports/compounds-<job>.jsonl` beside the
+  library (or the file `--report` names), one JSON object per line, whether or not the library is
+  changed: `id`, `label`, `class`, `tiling` (its key), `rule`, `period`, `cells`, `seen`, `action`
+  and `why`, `parts` (each part's `id`, `label`, `class`, `period`, `cells`, `copies` in the compound,
+  and `stored`, whether the library held it already), and the compound as it was: `record` (the whole
+  record, as `library export` writes it), `sightings` and `provenance`. A removed compound can be
+  brought back from it.
+- **Without `--apply`** (the default) nothing in the library changes; `action` is `would remove` or
+  `would keep`.
+- **With `--apply`**, for each compound:
+  - Each part is stored, or merged into the stored pattern with its id. A part new to the library
+    takes the compound's history as its own (its provenance rows, copied: it was found when and by
+    whom the compound was).
+  - A compound holding `n` copies of a part was `n` sightings of it. Each of the compound's sightings
+    (rule, job, copies, soups and dates) is credited to the part `n` times over, and so is the rest
+    of its seen count (a record imported with a seen count but no sightings), in every rule of the
+    compound the part runs in. The part also gains those rules.
+  - Every part's history gains a `reverified` row whose `source` is `compound-split: <n> copies in
+    compound <id> (<label>; seen <count>), which was removed` (or `which was kept, tagged compound`).
+  - The compound is **removed** (`action` `remove`), with its rules, sightings, media and history,
+    when nobody curated it and every part runs in every rule the compound runs in (each part's rule
+    range holds the compound's). Otherwise it is **kept** (`keep`): it gains the tag `compound`, a
+    note naming its parts, and a `reverified` row. A curated compound (a name, rating, notes, tags, a
+    curation state other than `new`, a Quick Start entry or a rating row) is left for a person to
+    decide. So is one with a rule where a part alone runs otherwise, since there it may be one object.
+- **Once only.** A record tagged `compound` is passed over, so running the pass again changes
+  nothing. A part the pass stores whose id comes after its place is examined too, so a part that
+  comes apart further is split as well; the examined count can then exceed the patterns there were
+  at the start.
 
 ## Aliases
 
@@ -342,10 +387,15 @@ commit `f3492e8` is the last that has it. What the import did:
   wrote in CART's format before the library had a schema: the Life census and the mining hunts. Their
   records were verified and merged in the same way, and their row 0 states the engine version the
   records give (`0.4.0`).
-- **Counts.** The library holds 723,736 records: 415,086 from CART's catalog (its 416,392 records,
+- **Counts.** The import made 723,736 records: 415,086 from CART's catalog (its 416,392 records,
   of which 2,498 merged into 1,192), 308,595 from the census (whose other 487 records were already
-  there and gained their rules), and 55 from the hunts (86 already there). 295 of them are
+  there and gained their rules), and 55 from the hunts (86 already there). 295 of them were
   spaceships.
+- **Compounds split.** CART's object finder stored many objects that were several independent ones
+  side by side. The [compound pass](#compounds) then examined every record: 218,175 were compounds
+  (156,903 still lifes, 61,125 oscillators and 147 spaceships). 211,579 were replaced by their
+  parts, and 6,596 kept, tagged `compound`, because a part does not run in every rule the compound
+  does. The library now holds 587,072 records, 148 of them spaceships.
 
 ## Tables
 

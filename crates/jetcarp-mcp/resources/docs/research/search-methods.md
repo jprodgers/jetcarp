@@ -60,6 +60,71 @@ the findings can say that a ship "runs in the 1,024 rules from `B3/S235` up".
 `jetcarp library verify` checks stored patterns again with the running build, for instance after a
 change of geometry.
 
+### Compounds
+
+Two gliders flying side by side, a pulsar with blinkers beside it, and two blocks a cell apart are
+each several objects that happen to lie close together, not new patterns. Every search stores their
+parts instead (the soup hunt, the bounded search, the evolutionary search, collisions, and a script's
+`lib.catalog`), and counts each part: a pair of gliders is two sightings of the glider. The object
+finder reports the parts too, in `jetcarp objects`, a script's `objects()`, the app and the MCP
+tools.
+
+**The test.** An object is one period of phases and its displacement per period (none for still
+lifes and oscillators). One of its phases is split into *atoms*, the groups of live cells that touch
+under the rule's neighbourhood. A set of atoms is a *part* when it runs alone as an object of the same
+period and velocity: its own period divides the object's, and it moves as far. Two sets of atoms that
+make up the object are *independent* when both are parts and, at every generation of a run of two
+periods and eight more generations, the object's own evolution is exactly the union of their two
+runs: the same tiles, tile types and states. Positions are compared as they are, which for a
+spaceship is its moving frame as well. Since both parts repeat with the object's period, equality over
+one period means equality for ever; the rest of the run is a margin. The parts are found in four
+steps, trying the phases with the most atoms first:
+
+1. **Single atoms.** An atom that is a part alone is split off when the rest, run alone, is a part
+   too and the two are independent: a blinker beside a pulsar, one glider of a pair.
+2. **Clusters.** Two of the remaining atoms interact when running them together differs, at some
+   generation of the run, from the union of their runs alone. Atoms whose runs never come within two
+   neighbour steps of each other cannot interact and are not run. Interacting atoms are joined: the
+   pulsar's four quadrants, which die alone, become one cluster.
+3. **Sparks.** A cluster that is not a part alone, such as a spark a ship has shed or a ship missing
+   that spark, belongs to the object it came from: it joins the nearest cluster with which it is a
+   part, or failing that the nearest cluster.
+4. **Splits.** A cluster that is a part, independent of the rest, is split off.
+
+Every split made is the independence test itself, so the steps can miss a split but cannot split one
+object in two. Each part is then split again in its own phases, so the result is as fine as the steps
+can make it. They can miss one where three or more parts interact only together (in rules where a
+cell is born from many neighbours, small still lifes that are each stable may be held apart only by a
+third object's cells), so a part can sometimes come apart further when it is examined again as a
+record of its own. On aperiodic patches the test runs on the patch, at the object's site.
+
+**What stays one object.**
+- A *tag-along*, a ship whose core runs inside it unperturbed while it tows a passenger that cannot
+  run alone: the passenger is never a part.
+- A ship that only *contains* a phase of a smaller ship: the smaller ship is perturbed, so the two are
+  not independent.
+- An object whose parts only hold each other up, such as the aircraft carrier, whose two atoms each
+  become a block when alone.
+- A *bound pair*, two objects that interact and stay together, such as the two snub-square gliders of
+  [Findings](findings.md). In some phases its halves lie too far apart to be grouped, and each is a
+  ship alone. So the object finder and the hunt also run neighbouring objects that are periodic alone
+  together: when running them together differs from the union of their runs and they are periodic
+  together (with any piece that dies alone within a few steps, which one of them shed), they are one
+  object. The hunt does not cut an escaping ship away from a neighbour it forms such an object with.
+- Cells that touch are one atom, so two still lifes that touch at a corner (the *ship-tie*) stay one
+  object.
+
+**Stored libraries.** `jetcarp library compounds` finds the compounds a library already holds,
+stored by a build before this test. It runs as a job, resumable with `--job`, and by default changes
+nothing: it lists each compound with its parts and writes a report, one JSON object per compound
+(`reports/compounds-<job>.jsonl` beside the library, or `--report FILE`), that holds the whole record
+with its sightings and history. With `--apply` it stores each compound's parts, credited with its seen
+count and its sightings (a compound of two gliders seen 3 times gives the glider 6 sightings), and
+removes the compound. A compound that someone curated (a name, rating, notes, tags, curation state,
+Quick Start entry or rating), or whose parts do not run in every rule of its rule range, is kept
+instead, tagged `compound` with a note naming its parts, for a person to decide. See
+[Compounds](../reference/library-format.md#compounds) in the library format.
+
 ## Soup hunt
 
 **What it does.** Runs small random soups, by default 16 by 16 unit cells at density 0.5, on an
@@ -71,8 +136,9 @@ clear of the soup are counted and cut out, so they cannot crash back into it.
 **How it classifies.** A soup ends when it dies, when it explodes (too many live cells, or spread too
 wide), when it settles (its state repeats with some period up to 64), or at 20,000 generations. What
 is left is split into groups of cells within two neighbour steps of each other, and every group never
-seen before is run alone and classed: still life, oscillator, spaceship, puffer, gun, a set of parts
-that do not interact, or other. Big still lifes and oscillators (by default more than 64 cells, or
+seen before is run alone and classed: still life, oscillator, spaceship, puffer, gun, or other. A
+periodic group is then split into the objects it is made of, and groups that interact are run as one
+(see [Compounds](#compounds)). Big still lifes and oscillators (by default more than 64 cells, or
 period times cells above 4,000) are kept only as counts until a hunt has seen one twice, to keep rare
 debris from filling the catalogue.
 

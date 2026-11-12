@@ -369,6 +369,28 @@ fn the_library_is_read_and_curated() {
         json!({"id": handle, "remove": true}),
     ));
     assert!(t.contains("removed"), "{t}");
+    // The compounds pass: a job of its own, its report beside the library.
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "library_curate",
+        json!({"compounds": {}}),
+    ));
+    assert!(t.contains("report:") && t.contains("compounds-"), "{t}");
+    let l = json_of(&call(
+        &mut s,
+        &mut h,
+        "job_status",
+        json!({"kind": "compounds"}),
+    ));
+    assert_eq!(l["jobs"][0]["kind"], "compounds", "{l}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "library_curate",
+        json!({"compounds": {"report": "/x.jsonl"}}),
+    ));
+    assert!(e.contains("not taken here"), "{e}");
     // Media, inline poster and all, into the library's media folder.
     let r = call(
         &mut s,
