@@ -334,6 +334,22 @@ fn render_export_import_and_paste() {
     assert!(p.text().starts_with("scene: "), "{}", p.text());
     let w = jetcarp_core::World::from_scene(&p.scene).unwrap();
     assert_eq!(w.fields[0].population(), 8);
+    // The grid in the placements' coordinates (one tile to a unit cell on squares), and `uX,Y`
+    // naming the same spots in unit cells.
+    let g = p.grid.unwrap();
+    assert_eq!((g.width, g.height, g.tiles_per_unit), (40, 30, 1));
+    assert!(p.text().contains("grid:  40 x 30 tiles"), "{}", p.text());
+    let u = LibraryPaste::run(
+        &cx,
+        serde_json::from_value(json!({
+            "placements": ["glider@u5,5,o1", "blinker@u20,20"],
+            "out": dir.join("two-u.json"), "size": "40x30"
+        }))
+        .unwrap(),
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(u.hash, p.hash.clone());
     for (placement, kind) in [
         ("glider@x,1", ErrorKind::Invalid),
         ("glider@5,5,q1", ErrorKind::Invalid),

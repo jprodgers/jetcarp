@@ -1004,12 +1004,15 @@ fn wrap_default() -> String {
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PasteSceneIn {
-    /// Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), `ID@#CELL`, or `ID` alone for the
-    /// centre (aperiodic patches: where it was found).
+    /// Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), `ID@uX,Y`, `ID@#CELL`, or `ID` alone
+    /// for the centre (aperiodic patches: where it was found). X is a tile column and Y a row, as
+    /// in scripts' `w.get(x, y)`: a unit cell of k tiles spans k columns, so on k2-017 (12 tiles a
+    /// unit cell) x = 60 is unit cell 5. `uX` gives X in unit cells instead. The result gives the
+    /// grid's width and height in tiles.
     pub placements: Vec<String>,
     /// The scene file to write.
     pub out: String,
-    /// Grid size in unit cells (default 120x80), or L<level> on aperiodic tilings.
+    /// Grid size in unit cells, not tiles (default 120x80), or L<level> on aperiodic tilings.
     #[serde(default = "paste_size_default")]
     pub size: String,
     /// wrap (default) or dead.
@@ -1038,8 +1041,22 @@ pub struct PastedScene {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
+    /// On a periodic tiling: the grid in the placements' coordinates, x from 0 to width - 1 (tile
+    /// columns) and y from 0 to height - 1 (rows), and the tiles in a unit cell.
+    pub grid: Option<PasteGrid>,
     #[schemars(with = "Value")]
     pub scene: Scene,
+}
+
+/// A periodic grid's size in the placements' coordinates.
+#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
+pub struct PasteGrid {
+    /// Tile columns (unit cells across times `tiles_per_unit`).
+    pub width: u32,
+    /// Rows (unit cells down).
+    pub height: u32,
+    /// Tiles in one unit cell, each a column of its own.
+    pub tiles_per_unit: u32,
 }
 
 impl Report for PastedScene {
@@ -1048,6 +1065,17 @@ impl Report for PastedScene {
             "scene: {} ({} patterns, {} CA(s), hash {})\n",
             self.out, self.patterns, self.cas, self.hash
         );
+        if let Some(g) = &self.grid {
+            let _ = writeln!(
+                s,
+                "grid:  {} x {} tiles: x 0 to {} (tile columns, {} to a unit cell), y 0 to {} (rows)",
+                g.width,
+                g.height,
+                g.width.saturating_sub(1),
+                g.tiles_per_unit,
+                g.height.saturating_sub(1)
+            );
+        }
         if let Some(p) = &self.png {
             let _ = writeln!(s, "png:   {p} (generation {})", self.generation);
         }
@@ -1075,6 +1103,8 @@ impl Op for LibraryPaste {
         struct Place {
             rec: PatternRecord,
             at: PasteAt,
+            /// `uX,Y`: x is in unit cells, to be turned into a tile column.
+            unit: bool,
             orientation: u32,
             phase: u32,
         }
@@ -1095,12 +1125,20 @@ impl Op for LibraryPaste {
                 PasteAt::Center
             };
             let (mut orientation, mut phase) = (0, 0);
+            let mut unit = false;
             if let Some(x) = parts.next() {
                 if let Some(cell) = x.strip_prefix('#') {
                     at = PasteAt::Index {
                         cell: cell.parse().map_err(|e| bad("cell index after #", e))?,
                     };
                 } else {
+                    let x = match x.strip_prefix('u') {
+                        Some(u) => {
+                            unit = true;
+                            u
+                        }
+                        None => x,
+                    };
                     let y = parts
                         .next()
                         .ok_or_else(|| ApiError::invalid("placement is ID@X,Y"))?;
@@ -1124,6 +1162,7 @@ impl Op for LibraryPaste {
             places.push(Place {
                 rec,
                 at,
+                unit,
                 orientation,
                 phase,
             });
@@ -1144,6 +1183,22 @@ impl Op for LibraryPaste {
         if first.site.is_none() {
             tiling.size = Some(args::size_spec(&a.size).map_err(ApiError::invalid)?);
             tiling.boundary = wrap_or_dead(&a.boundary)?;
+        }
+        // Unit-cell columns (`uX,Y`) become tile columns: the first tile of unit cell X.
+        let tiles_per_unit = if places.iter().any(|p| p.unit) {
+            let topo = jetcarp_core::Topology::build(&tiling).map_err(ApiError::engine)?;
+            let k = topo
+                .lattice()
+                .map(|g| g.ntypes as i32)
+                .ok_or_else(|| ApiError::invalid("`uX,Y` is for periodic tilings"))?;
+            Some(k)
+        } else {
+            None
+        };
+        for pl in places.iter_mut().filter(|p| p.unit) {
+            if let (PasteAt::Cell { x, .. }, Some(k)) = (&mut pl.at, tiles_per_unit) {
+                *x = x.saturating_mul(k);
+            }
         }
         let mut sc = Scene::new(tiling);
         sc.name = a
@@ -1199,6 +1254,11 @@ impl Op for LibraryPaste {
                 &jetcarp_core::render::png_metadata(&w),
             )?;
         }
+        let grid = w.topo.lattice().map(|g| PasteGrid {
+            width: g.w * g.ntypes,
+            height: g.h,
+            tiles_per_unit: g.ntypes,
+        });
         Ok(PastedScene {
             out: a.out,
             patterns: places.len(),
@@ -1206,6 +1266,7 @@ impl Op for LibraryPaste {
             hash,
             png: a.png,
             generation: w.generation,
+            grid,
             scene: sc,
         })
     }

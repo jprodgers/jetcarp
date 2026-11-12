@@ -268,13 +268,17 @@ struct ListArgs {
 
 #[derive(clap::Args)]
 struct PasteArgs {
-    /// Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), or `ID` alone for the centre.
+    /// Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), or `ID` alone for the centre. X is
+    /// a tile column and Y a row, as in scripts' `w.get(x, y)`, while --size counts unit cells: a
+    /// unit cell of k tiles spans k columns, so on k2-017 (12 tiles a unit cell) x = 60 is unit
+    /// cell 5, near the left edge. `ID@uX,Y` gives X in unit cells. The output prints the grid's
+    /// width and height in tiles.
     #[arg(required = true)]
     placements: Vec<String>,
     /// Scene file to write.
     #[arg(long)]
     out: PathBuf,
-    /// Grid size in unit cells, or L<level> on aperiodic tilings.
+    /// Grid size in unit cells (not tiles), or L<level> on aperiodic tilings.
     #[arg(long, default_value = "120x80")]
     size: String,
     #[arg(long, default_value = "wrap")]
