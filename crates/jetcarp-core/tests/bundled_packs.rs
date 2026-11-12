@@ -68,3 +68,47 @@ fn verbatim_windows_paths_read_as_plain_ones() {
         PathBuf::from("/usr/local/bin/jetcarp")
     );
 }
+
+#[test]
+fn a_chosen_data_folder_is_honoured_and_the_variable_wins() {
+    use jetcarp_core::paths::{
+        DataSource, chosen_data_dir, data_dir_source_from, default_data_dir, set_chosen_data_dir,
+    };
+    let d = scratch("chosen-data");
+    let settings = d.join("settings");
+    let big = d.join("big disk").join("jetcarp");
+    // No paths.json: the default.
+    assert_eq!(chosen_data_dir(&settings), None);
+    assert_eq!(
+        data_dir_source_from(None, Some(&settings)),
+        (default_data_dir(), DataSource::Default)
+    );
+    set_chosen_data_dir(&settings, Some(&big)).unwrap();
+    assert_eq!(chosen_data_dir(&settings), Some(big.clone()));
+    assert_eq!(
+        data_dir_source_from(None, Some(&settings)),
+        (big.clone(), DataSource::Chosen)
+    );
+    // The variable wins; empty counts as not set.
+    let env = d.join("env");
+    assert_eq!(
+        data_dir_source_from(Some(env.as_os_str()), Some(&settings)),
+        (env, DataSource::Env)
+    );
+    assert_eq!(
+        data_dir_source_from(Some(OsStr::new("")), Some(&settings)).1,
+        DataSource::Chosen
+    );
+    // Relative paths are refused; a file naming one counts as no choice.
+    assert!(set_chosen_data_dir(&settings, Some(Path::new("relative/data"))).is_err());
+    std::fs::write(settings.join("paths.json"), r#"{"data_dir": "relative"}"#).unwrap();
+    assert_eq!(chosen_data_dir(&settings), None);
+    std::fs::write(settings.join("paths.json"), "not json").unwrap();
+    assert_eq!(chosen_data_dir(&settings), None);
+    // Removing the choice brings the default back (and removing it twice is fine).
+    set_chosen_data_dir(&settings, Some(&big)).unwrap();
+    set_chosen_data_dir(&settings, None).unwrap();
+    set_chosen_data_dir(&settings, None).unwrap();
+    assert_eq!(chosen_data_dir(&settings), None);
+    assert!(!settings.join("paths.json").exists());
+}

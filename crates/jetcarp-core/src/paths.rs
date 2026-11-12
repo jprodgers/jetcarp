@@ -13,6 +13,11 @@
 //! databases can be large. On macOS both are the same folder, so data goes in a `data` subfolder
 //! there.
 //!
+//! The data folder can also be chosen once, for a large library on another disk: the first-run
+//! setup (`setup.set_data_dir`) writes it to `paths.json` in the settings folder
+//! ([`chosen_data_dir`]), and every lookup of the data folder honours it. `JETCARP_DATA_DIR`
+//! still wins over it.
+//!
 //! One more folder belongs to the program, not the user: the packs that came with it (the
 //! starter pack), which JETCARP reads but never writes; see [`bundled_packs_dir`].
 
@@ -40,12 +45,100 @@ pub fn config_dir() -> Option<PathBuf> {
     env_dir("JETCARP_CONFIG_DIR").or_else(|| Some(dirs::config_dir()?.join(APP_DIR)))
 }
 
-/// The data folder: `$JETCARP_DATA_DIR`, else `<local data>/jetcarp` (with a `data` subfolder
-/// when that is also the settings folder, as on macOS), else `./jetcarp-data`.
+/// The file in the settings folder that records a data folder chosen in place of the default.
+pub const PATHS_FILE: &str = "paths.json";
+
+/// The data folder: `$JETCARP_DATA_DIR`, else the folder chosen in the settings folder's
+/// `paths.json` ([`chosen_data_dir`]), else [`default_data_dir`].
 pub fn data_dir() -> PathBuf {
-    if let Some(d) = env_dir("JETCARP_DATA_DIR") {
-        return d;
+    data_dir_for(config_dir().as_deref())
+}
+
+/// [`data_dir`] with this settings folder's `paths.json` (none: the default).
+pub fn data_dir_for(settings: Option<&Path>) -> PathBuf {
+    data_dir_source(settings).0
+}
+
+/// Where the data folder comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DataSource {
+    /// `JETCARP_DATA_DIR`.
+    Env,
+    /// The settings folder's `paths.json`.
+    Chosen,
+    /// The operating system's folder.
+    Default,
+}
+
+impl DataSource {
+    /// `JETCARP_DATA_DIR`, `paths.json`, `default`.
+    pub fn name(self) -> &'static str {
+        match self {
+            DataSource::Env => "JETCARP_DATA_DIR",
+            DataSource::Chosen => PATHS_FILE,
+            DataSource::Default => "default",
+        }
     }
+}
+
+/// [`data_dir_for`], and where it came from.
+pub fn data_dir_source(settings: Option<&Path>) -> (PathBuf, DataSource) {
+    data_dir_source_from(std::env::var_os("JETCARP_DATA_DIR").as_deref(), settings)
+}
+
+/// [`data_dir_source`] with the variable's value given (for tests).
+pub fn data_dir_source_from(env: Option<&OsStr>, settings: Option<&Path>) -> (PathBuf, DataSource) {
+    if let Some(d) = env.filter(|v| !v.is_empty()) {
+        return (PathBuf::from(d), DataSource::Env);
+    }
+    if let Some(d) = settings.and_then(chosen_data_dir) {
+        return (d, DataSource::Chosen);
+    }
+    (default_data_dir(), DataSource::Default)
+}
+
+/// The data folder recorded in `<settings>/paths.json` (`{"data_dir": "/path"}`), if there is
+/// one: an absolute path. A file that is missing, cannot be read, or names no absolute folder
+/// counts as no choice.
+pub fn chosen_data_dir(settings: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(settings.join(PATHS_FILE)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let d = PathBuf::from(v.get("data_dir")?.as_str()?.trim());
+    (d.is_absolute()).then_some(d)
+}
+
+/// Record `dir` as the data folder in `<settings>/paths.json` (written whole, then renamed into
+/// place), or with `None` remove the choice (the default comes back).
+pub fn set_chosen_data_dir(settings: &Path, dir: Option<&Path>) -> Result<(), String> {
+    let file = settings.join(PATHS_FILE);
+    let Some(dir) = dir else {
+        return match std::fs::remove_file(&file) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("removing {}: {e}", file.display())),
+        };
+    };
+    if !dir.is_absolute() {
+        return Err(format!("{} is not an absolute path", dir.display()));
+    }
+    let text = dir
+        .to_str()
+        .ok_or_else(|| format!("{} is not valid Unicode", dir.display()))?;
+    std::fs::create_dir_all(settings)
+        .map_err(|e| format!("creating {}: {e}", settings.display()))?;
+    let body = serde_json::to_string_pretty(&serde_json::json!({"version": 1, "data_dir": text}))
+        .map_err(|e| e.to_string())?;
+    let tmp = settings.join(format!("{PATHS_FILE}.tmp-{}", std::process::id()));
+    std::fs::write(&tmp, body + "\n").map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &file).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("writing {}: {e}", file.display())
+    })
+}
+
+/// The operating system's data folder for JETCARP: `<local data>/jetcarp` (with a `data`
+/// subfolder when that is also the settings folder, as on macOS), else `./jetcarp-data`.
+pub fn default_data_dir() -> PathBuf {
     let Some(base) = dirs::data_local_dir() else {
         return PathBuf::from("jetcarp-data");
     };
