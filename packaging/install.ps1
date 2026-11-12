@@ -13,7 +13,7 @@ Run as a file, it takes the options below; through `irm | iex`, set the environm
 named with each instead (for example $env:JETCARP_NO_PACKS = "1" first).
 
 .PARAMETER Version
-Install release Version instead of @VERSION@, such as 0.4.0-rc.1 or v0.4.0-rc.1
+Install release Version instead of @VERSION@, such as 0.4.0, v0.4.0 or 0.4.0-rc.2
 (JETCARP_VERSION). Pre-releases are never "latest", so name them.
 
 .PARAMETER InstallDir
@@ -51,7 +51,7 @@ $Repo = "@REPO@"
 if (-not $Version) { $Version = "@VERSION@" }
 $Version = $Version.TrimStart("v")
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
-    throw "jetcarp-installer: $Version is not a JETCARP version (such as @VERSION@ or 0.4.0-rc.1)"
+    throw "jetcarp-installer: $Version is not a JETCARP version (such as 0.4.0 or 0.4.0-rc.2)"
 }
 $Target = "x86_64-pc-windows-msvc"
 $Archive = "jetcarp-$Version-$Target.zip"
@@ -72,11 +72,31 @@ if ((Test-Path $InstallDir) -and -not (Test-Path $Marker)) {
     }
 }
 
-function Get-UserPath { [Environment]::GetEnvironmentVariable("Path", "User") }
+# The user PATH as Windows stores it: unexpanded, so entries such as %PNPM_HOME%\bin stay as
+# they are. ([Environment]::GetEnvironmentVariable expands them, and SetEnvironmentVariable writes
+# a plain string, which would turn every %VAR% entry into a fixed path.)
+function Get-UserPath {
+    $key = Get-Item -Path "HKCU:\Environment" -ErrorAction SilentlyContinue
+    if (-not $key) { return "" }
+    $value = $key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    if ($null -eq $value) { return "" }
+    return [string]$value
+}
+
+# Store the user PATH back as an expandable string, as Windows itself does, and tell running
+# programs (Explorer, and the terminals it starts) that the environment changed.
+function Set-UserPath([string]$Value) {
+    if (-not (Test-Path "HKCU:\Environment")) { New-Item -Path "HKCU:\Environment" | Out-Null }
+    Set-ItemProperty -Path "HKCU:\Environment" -Name "Path" -Value $Value -Type ExpandString
+    # Setting a user variable through .NET broadcasts WM_SETTINGCHANGE; this one is set and
+    # removed at once, only for that broadcast.
+    [Environment]::SetEnvironmentVariable("JETCARP_INSTALLER_REFRESH", "1", "User")
+    [Environment]::SetEnvironmentVariable("JETCARP_INSTALLER_REFRESH", $null, "User")
+}
 
 function Remove-FromUserPath([string]$Dir) {
     $parts = @((Get-UserPath) -split ";" | Where-Object { $_ -and ($_.TrimEnd("\") -ne $Dir.TrimEnd("\")) })
-    [Environment]::SetEnvironmentVariable("Path", ($parts -join ";"), "User")
+    Set-UserPath ($parts -join ";")
 }
 
 if ($Uninstall) {
@@ -169,7 +189,7 @@ if (-not $NoModifyPath) {
     $Has = @($UserPath -split ";" | Where-Object { $_.TrimEnd("\") -eq $InstallDir.TrimEnd("\") }).Count -gt 0
     if (-not $Has) {
         $New = if ($UserPath) { "$UserPath;$InstallDir" } else { $InstallDir }
-        [Environment]::SetEnvironmentVariable("Path", $New, "User")
+        Set-UserPath $New
         Say "added $InstallDir to your user PATH; open a new terminal to use ``jetcarp``"
     }
     if (-not (($env:Path -split ";") -contains $InstallDir)) { $env:Path = "$env:Path;$InstallDir" }
