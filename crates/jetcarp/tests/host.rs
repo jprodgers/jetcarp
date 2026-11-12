@@ -357,6 +357,48 @@ fn host_start_can_be_captured_and_returns() {
     assert_eq!(v["running"], true);
 }
 
+/// `jetcarp host stop` returns once the host has gone: the next command finds it stopped (it
+/// used to answer one more command while closing), and `host start` starts a new one.
+#[test]
+fn host_stop_returns_once_the_host_has_gone() {
+    let dir = home("stop");
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+        c.args(args).stdin(Stdio::null());
+        with_env(&mut c, &dir);
+        c.output().unwrap()
+    };
+    /// Stops the host however the test ends.
+    struct Stop<F: Fn()>(F);
+    impl<F: Fn()> Drop for Stop<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+    let _stop = Stop(|| {
+        let _ = run(&["host", "stop"]);
+    });
+    for round in 0..2 {
+        let o = run(&["host", "start", "--headless"]);
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(o.status.success(), "start, round {round}: {err}");
+        let o = run(&["host", "stop"]);
+        let (out, err) = (
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr),
+        );
+        assert!(o.status.success(), "stop, round {round}: {out}{err}");
+        assert_eq!(out.trim(), "stopped");
+        let o = run(&["host", "status"]);
+        assert!(!o.status.success(), "status right after stop answered");
+        assert!(
+            String::from_utf8_lossy(&o.stderr).contains("not running"),
+            "{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
+}
+
 /// Started at login (`host serve --login`), the host shows and runs only the screens placed on the
 /// desktop; one in a window waits unseen.
 #[test]

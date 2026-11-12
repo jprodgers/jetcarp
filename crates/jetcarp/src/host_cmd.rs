@@ -382,6 +382,10 @@ pub fn run(a: HostArgs) -> Result<()> {
                 if e.contains("not running") || !gone_soon() {
                     return Err(anyhow!(e));
                 }
+            } else if !gone_soon() {
+                // It answers before it goes: a command right after this one would still reach
+                // it (and `host start` would find it running).
+                bail!("the host was asked to quit, but is still running");
             }
             println!("stopped");
             Ok(())
