@@ -306,9 +306,10 @@ fn handle_titled(m: &start::Menu, title: &str) -> String {
         .clone()
 }
 
-/// The book's tour of the app (`getting-started/tour.md`), over a library holding the starter
-/// pack: the Quick Start screen, a card's menu, a world with its panes, the Tools menu, and the
-/// pattern library.
+/// The book's tour of the app (`getting-started/tour.md`): the Quick Start screen, a card's
+/// menu, a world with its panes, and the Tools and Window menus. The book's pictures are of a
+/// library set up by `jetcarp setup --profile explorer --yes --quickstart-minutes 1` (the starter
+/// pack and a one-minute build), with `JETCARP_QS_SEED=7`.
 #[test]
 #[ignore]
 fn shots_tour() {
@@ -353,7 +354,8 @@ fn shots_tour() {
 
 /// Tutorial 1 (`tutorials/first-wallpaper.md`): a Quick Start entry opened, its palette list
 /// open in the CAs pane; then the Screensaver pane, with the world saved as a profile and the
-/// Background host section open.
+/// Background host section open (its rotation is the host settings', *My wallpaper* in the book's
+/// picture).
 #[test]
 #[ignore]
 fn shots_wallpaper() {
@@ -526,7 +528,8 @@ fn shots_new_tiling() {
 }
 
 /// Tutorial 4 (`tutorials/building-quick-start.md`): the Quick Start screen showing only the
-/// atlas a build published into this library.
+/// atlas a build published into this library (`jetcarp quickstart build --minutes 3`, in the
+/// book's picture).
 #[test]
 #[ignore]
 fn shots_quick_start_atlas() {
