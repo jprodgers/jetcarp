@@ -1,0 +1,77 @@
+# Publish the book.
+#
+# docs/src is the source of truth, reviewed in pull requests like any other change. This workflow
+# builds it with mdBook and publishes it at https://jprodgers.github.io/jetcarp on every push to
+# main that touches it. A pull request that touches it is built and link-checked, not published.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The version the book is written and checked with locally.
+  MDBOOK_VERSION: "0.5.4"
+
+jobs:
+  build:
+    name: Build and check the book
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: mdBook
+        run: |
+          url="https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL --retry 3 "$url" | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Every internal link and anchor resolves
+        run: python3 docs/tools/check-links.py
+
+      - name: The scripting reference matches the program's function list
+        run: python3 docs/tools/gen-scripting.py --check
+
+      - name: Build
+        run: mdbook build docs
+
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
+        with:
+          path: docs/book
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v6
+        # `enablement` switches the repository's Pages source to GitHub Actions on the first run;
+        # without it a freshly created repository fails with "Get Pages site failed".
+        with:
+          enablement: true
+      - id: deploy
+        uses: actions/deploy-pages@v5

@@ -161,11 +161,7 @@ curl -LsSf https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/je
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/jetcarp-installer.ps1 | iex"
 ```
 
-or any installer with `--version 0.4.0-rc.1` (`-Version 0.4.0-rc.1` in PowerShell). While the
-repository is private, an installer cannot download from it by itself: either add `--gh`
-(`-UseGh`), with the [GitHub CLI](https://cli.github.com) installed and signed in, or download the
-release's files into a folder (`gh release download v0.4.0-rc.1 --repo jprodgers/jetcarp --dir
-jetcarp-rc`) and run its installer with `--url jetcarp-rc` (`-DownloadUrl jetcarp-rc`). Installing
+or any installer with `--version 0.4.0-rc.1` (`-Version 0.4.0-rc.1` in PowerShell). Installing
 the release itself later replaces the candidate.
 
 ## On each system
