@@ -1,4 +1,5 @@
-//! Pile files (`.pile`): one finished doubling step, enough to resume the run.
+//! Pile files (`.pile`): one finished doubling step, or a step stopped part way (a checkpoint,
+//! its header's `in_step` giving the step and its counts so far), enough to resume the run.
 //!
 //! Layout: the 8 bytes `JETCPILE`, a little-endian `u32` format version (1), a `u32` header
 //! length, the header as JSON, then the heights, deflate-compressed. The header holds the
@@ -8,12 +9,12 @@
 //!   cells in lattice coordinates; heights are `nt` planes of `h` rows of `w` cells;
 //! - patch: `{"kind": "patch", "level", "cells"}`; heights for every tile in patch order.
 //!
-//! Heights are packed two per byte (low nibble first) when every degree is at most 16, else one
-//! per byte (`"bits": 4` or `8`).
+//! Heights are packed two per byte (low nibble first) when every degree is at most 16 and every
+//! height below 16 (a checkpoint's may be higher), else one per byte (`"bits": 4` or `8`).
 
 use super::lattice::{Lattice, LatticeBoard, TILE};
 use super::patch::PatchBoard;
-use super::{Board, Pile, PileSpec, Source, StepRecord};
+use super::{Board, InStep, Pile, PileSpec, Source, StepRecord};
 use crate::topology::{SizeSpec, Topology};
 use flate2::Compression;
 use serde_json::{Value, json};
@@ -80,19 +81,26 @@ pub fn save(pile: &Pile, path: &Path) -> Result<(), String> {
             b.deg.iter().copied().max().unwrap_or(1),
         ),
     };
-    let bits = if maxd <= 16 { 4 } else { 8 };
-    let header = json!({
+    let bits = if maxd <= 16 && heights.iter().all(|&h| h < 16) {
+        4
+    } else {
+        8
+    };
+    let mut header = json!({
         "jetcarp_version": crate::VERSION,
         "spec": pile.spec,
         "sources": pile.sources,
         "steps": pile.steps,
         "done": pile.done,
-        "grains": pile.grains_after(pile.done),
+        "grains": pile.grains_after(pile.in_step.map_or(pile.done, |x| x.step)),
         "records": pile.records,
         "region": region,
         "bits": bits,
     });
-    let hb = serde_json::to_vec(&header).unwrap();
+    if let Some(x) = &pile.in_step {
+        header["in_step"] = json!(x);
+    }
+    let hb = serde_json::to_vec(&crate::json_int::safe(header)).unwrap();
     let tmp = path.with_extension("pile.tmp");
     let f = std::fs::File::create(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
     let mut w = std::io::BufWriter::new(f);
@@ -135,7 +143,8 @@ fn read_header_from(f: &mut impl Read, path: &Path) -> Result<Value, String> {
     serde_json::from_slice(&hb).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Load a pile saved by [`save`]; the run continues with the next step.
+/// Load a pile saved by [`save`]; the run continues with the next step, or carries on the step
+/// a checkpoint stopped in.
 pub fn load(path: &Path) -> Result<Pile, String> {
     let f = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut f = std::io::BufReader::new(f);
@@ -149,6 +158,13 @@ pub fn load(path: &Path) -> Result<Pile, String> {
         serde_json::from_value(h["records"].clone()).map_err(|e| bad(&e.to_string()))?;
     let steps = h["steps"].as_u64().ok_or_else(|| bad("steps"))? as u32;
     let done = h["done"].as_u64().ok_or_else(|| bad("done"))? as u32;
+    let in_step: Option<InStep> = match h.get("in_step") {
+        None | Some(Value::Null) => None,
+        Some(x) => Some(serde_json::from_value(x.clone()).map_err(|e| bad(&e.to_string()))?),
+    };
+    if in_step.is_some_and(|x| x.step != done + 1 || done >= steps) {
+        return Err(bad("in_step"));
+    }
     let bits = h["bits"].as_u64().ok_or_else(|| bad("bits"))? as u32;
     let r = &h["region"];
     let mut packed = Vec::new();
@@ -217,8 +233,9 @@ pub fn load(path: &Path) -> Result<Pile, String> {
         steps,
         done,
         records,
+        in_step,
     };
-    let want = pile.grains_after(done);
+    let want = pile.grains_after(in_step.map_or(done, |x| x.step));
     let have = pile.board.grains();
     if want != have {
         return Err(format!(

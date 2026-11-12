@@ -525,12 +525,8 @@ pub fn finish(pile: &Pile, dir: &Path, opts: &RunOptions) -> Result<RunSummary, 
         "reverse": opts.export.reverse,
         "preview": prev.as_ref().map(|_| "preview.png"),
     });
-    let meta = metadata(pile, opts, Some(image));
-    std::fs::write(
-        dir.join("pile.json"),
-        serde_json::to_string_pretty(&meta).unwrap(),
-    )
-    .map_err(|e| format!("{}: {e}", dir.display()))?;
+    let meta = crate::json_int::safe(metadata(pile, opts, Some(image)));
+    super::write_json(&dir.join("pile.json"), &meta)?;
     Ok(RunSummary {
         dir: dir.to_path_buf(),
         png,

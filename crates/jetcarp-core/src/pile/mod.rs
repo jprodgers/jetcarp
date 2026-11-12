@@ -8,6 +8,14 @@
 //! fits in one byte, for any N up to `2^64 − 1`. Each step's pile is saved (see [`file`]), which
 //! makes runs resumable and gives the pile at every power of two along the way.
 //!
+//! **Stopping in a step.** A step stopped part way (a cancel, or a job's time budget) keeps what
+//! it has done: the board as its sweeps so far left it, with the grains already added, and the
+//! step's counts so far ([`InStep`]). Saved, that is a checkpoint (`steps/step-KK.partial.pile`,
+//! [`checkpoint_path`]), and the next [`Pile::next_step`] carries on toppling that board to
+//! stability without adding grains again. By the abelian property the stable pile and the
+//! toppling count are those of an uninterrupted step, and the synchronous sweeps carry on from
+//! the same board, so the sweep count is the same too.
+//!
 //! **Boards.** Periodic tilings use [`lattice::LatticeBoard`], a box of lattice unit cells that
 //! grows by a margin whenever an unstable cell nears its edge; nothing is ever lost. Aperiodic
 //! patches use [`patch::PatchBoard`] on the exact patch up to level 8, with an error if a grain
@@ -124,6 +132,21 @@ pub struct StabStats {
     pub topplings: u64,
     pub sweeps: u64,
     pub grows: u64,
+    /// Stopped (cancelled) before the board was stable: the board is as the sweeps counted here
+    /// left it, a valid start for carrying on.
+    pub cancelled: bool,
+}
+
+/// A doubling step stopped part way: which step, and its counts so far. The board holds that
+/// step's grains, part-toppled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct InStep {
+    /// The step (1-based), `done + 1`.
+    pub step: u32,
+    #[serde(with = "crate::json_int::uint")]
+    pub topplings: u64,
+    pub sweeps: u64,
+    pub seconds: f64,
 }
 
 /// Progress inside a step, passed to [`Ctl::on_tick`].
@@ -142,6 +165,9 @@ pub struct StepInfo {
     pub step: u32,
     pub steps: u32,
     pub grains: u64,
+    /// What the step had done before this run of it (carried on from a checkpoint): the ticks
+    /// count from there.
+    pub carried: InStep,
 }
 
 /// A board borrowed for drawing.
@@ -202,14 +228,20 @@ impl<'a> Ctl<'a> {
     }
     pub fn tick(&mut self, t: &Tick, b: BoardRef) {
         let info = self.info;
+        let t = Tick {
+            sweeps: t.sweeps + info.carried.sweeps,
+            topplings: t.topplings + info.carried.topplings,
+            seconds: t.seconds + info.carried.seconds,
+        };
         if let Some(f) = self.on_tick.as_mut() {
-            f(&info, t, b);
+            f(&info, &t, b);
         }
     }
 }
 
 /// Another way to topple a lattice board (the GPU). It must give the same pile, toppling count,
-/// and sweep count as [`LatticeBoard::stabilize`].
+/// and sweep count as [`LatticeBoard::stabilize`], and on a cancel return as it does: the counts
+/// so far with `cancelled` set, and the board (on the CPU) as those sweeps left it.
 pub trait Toppler {
     fn name(&self) -> String;
     fn stabilize(&mut self, board: &mut LatticeBoard, ctl: &mut Ctl) -> Result<StabStats, String>;
@@ -281,6 +313,8 @@ pub struct Pile {
     /// Steps finished.
     pub done: u32,
     pub records: Vec<StepRecord>,
+    /// The step stopped part way, if one was: the board holds its grains, part-toppled.
+    pub in_step: Option<InStep>,
 }
 
 /// A short name for a tiling: the family id, or the catalog id of a catalog tiling.
@@ -365,6 +399,7 @@ impl Pile {
             steps,
             done: 0,
             records: Vec::new(),
+            in_step: None,
         })
     }
 
@@ -386,8 +421,10 @@ impl Pile {
         })
     }
 
-    /// Run the next doubling step. A cancelled step leaves the board part-toppled (still a valid
-    /// start for the same step's stabilisation, but `done` is unchanged).
+    /// Run the next doubling step, or carry on the one stopped part way ([`Pile::in_step`]). A
+    /// cancelled step returns the error `cancelled` and leaves the board part-toppled, with
+    /// `in_step` holding its counts so far (`done` unchanged): saved ([`file::save`]), that is a
+    /// checkpoint, and the next call carries on from it.
     pub fn next_step(
         &mut self,
         toppler: Option<&mut dyn Toppler>,
@@ -397,21 +434,38 @@ impl Pile {
             return Err("the pile is finished".into());
         }
         let t0 = Instant::now();
-        let shift = self.steps - self.done - 1;
-        match &mut self.board {
-            Board::Lattice(b) => b.double(),
-            Board::Patch(b) => b.double(),
-        }
-        for s in self.sources.clone() {
-            if (s.grains >> shift) & 1 == 1 {
-                self.board.add(s.site, 1);
+        let carried = match self.in_step.take() {
+            // The board holds this step's grains already.
+            Some(x) if x.step == self.done + 1 => x,
+            Some(x) => {
+                return Err(format!(
+                    "the pile stopped in step {}, but {} steps are done",
+                    x.step, self.done
+                ));
             }
-        }
+            None => {
+                let shift = self.steps - self.done - 1;
+                match &mut self.board {
+                    Board::Lattice(b) => b.double(),
+                    Board::Patch(b) => b.double(),
+                }
+                for s in self.sources.clone() {
+                    if (s.grains >> shift) & 1 == 1 {
+                        self.board.add(s.site, 1);
+                    }
+                }
+                InStep {
+                    step: self.done + 1,
+                    ..Default::default()
+                }
+            }
+        };
         let grains = self.grains_after(self.done + 1);
         ctl.info = StepInfo {
             step: self.done + 1,
             steps: self.steps,
             grains,
+            carried,
         };
         let (st, backend) = match &mut self.board {
             Board::Lattice(b) => {
@@ -433,13 +487,27 @@ impl Pile {
                 self.done + 1
             ));
         }
+        let (topplings, sweeps, seconds) = (
+            carried.topplings + st.topplings,
+            carried.sweeps + st.sweeps,
+            carried.seconds + t0.elapsed().as_secs_f64(),
+        );
+        if st.cancelled {
+            self.in_step = Some(InStep {
+                step: self.done + 1,
+                topplings,
+                sweeps,
+                seconds,
+            });
+            return Err("cancelled".into());
+        }
         let (width, height) = self.extent();
         let rec = StepRecord {
             step: self.done + 1,
             grains,
-            topplings: st.topplings,
-            sweeps: st.sweeps,
-            seconds: t0.elapsed().as_secs_f64(),
+            topplings,
+            sweeps,
+            seconds,
             width,
             height,
             board_cells: self.board.cells(),
@@ -572,7 +640,39 @@ pub struct RunSummary {
     pub metadata: serde_json::Value,
 }
 
-/// The latest step file in `dir/steps`, if any.
+/// A finished step's file: `dir/steps/step-KK.pile`.
+pub fn step_path(dir: &Path, step: u32) -> PathBuf {
+    dir.join(format!("steps/step-{step:02}.pile"))
+}
+
+/// The checkpoint of a step stopped part way: `dir/steps/step-KK.partial.pile`. It sorts before
+/// the step's finished file and after the step before's, so [`latest_step_file`] finds whichever
+/// is newer.
+pub fn checkpoint_path(dir: &Path, step: u32) -> PathBuf {
+    dir.join(format!("steps/step-{step:02}.partial.pile"))
+}
+
+/// Save the pile into its folder: a finished step's file (the step's checkpoint, if any, then
+/// removed), or the checkpoint of the step stopped part way. Returns the file written.
+pub fn save_to_dir(pile: &Pile, dir: &Path) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir.join("steps"))
+        .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    match pile.in_step {
+        Some(x) => {
+            let p = checkpoint_path(dir, x.step);
+            file::save(pile, &p)?;
+            Ok(p)
+        }
+        None => {
+            let p = step_path(dir, pile.done);
+            file::save(pile, &p)?;
+            let _ = std::fs::remove_file(checkpoint_path(dir, pile.done));
+            Ok(p)
+        }
+    }
+}
+
+/// The latest step file in `dir/steps` (a step's checkpoint among them), if any.
 pub fn latest_step_file(dir: &Path) -> Option<PathBuf> {
     let mut v: Vec<PathBuf> = std::fs::read_dir(dir.join("steps"))
         .ok()?
@@ -595,28 +695,36 @@ pub fn run_to_dir(
     std::fs::create_dir_all(dir.join("steps"))
         .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     while !pile.finished() {
-        match toppler.as_mut() {
-            Some(t) => pile.next_step(Some(&mut **t), ctl)?,
-            None => pile.next_step(None, ctl)?,
+        let r = match toppler.as_mut() {
+            Some(t) => pile.next_step(Some(&mut **t), ctl),
+            None => pile.next_step(None, ctl),
         };
+        if let Err(e) = r {
+            // A step stopped part way keeps its work in a checkpoint.
+            if pile.in_step.is_some() {
+                save_to_dir(pile, dir)?;
+            }
+            return Err(e);
+        }
         if opts.save_steps {
-            let p = dir.join(format!("steps/step-{:02}.pile", pile.done));
-            file::save(pile, &p)?;
+            save_to_dir(pile, dir)?;
         }
         write_growth(pile, dir)?;
         let meta = export::metadata(pile, opts, None);
         write_json(&dir.join("pile.json"), &meta)?;
     }
-    let last = dir.join(format!("steps/step-{:02}.pile", pile.done));
+    let last = step_path(dir, pile.done);
     if !opts.save_steps && pile.done > 0 && !last.exists() {
-        file::save(pile, &last)?;
+        save_to_dir(pile, dir)?;
     }
     write_growth(pile, dir)?;
     export::finish(pile, dir, opts)
 }
 
-fn write_json(p: &Path, v: &serde_json::Value) -> Result<(), String> {
-    std::fs::write(p, serde_json::to_string_pretty(v).unwrap())
+/// Write JSON, an integer beyond 2^53 − 1 in it (a pile's topplings) as a decimal string.
+pub(crate) fn write_json(p: &Path, v: &serde_json::Value) -> Result<(), String> {
+    let v = crate::json_int::safe(v.clone());
+    std::fs::write(p, serde_json::to_string_pretty(&v).unwrap())
         .map_err(|e| format!("{}: {e}", p.display()))
 }
 

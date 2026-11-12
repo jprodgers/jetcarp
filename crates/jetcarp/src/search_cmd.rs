@@ -408,12 +408,13 @@ pub struct PileArgs {
     /// Parent folder for the run folder (default `<Pictures>/JETCARP/piles`).
     #[arg(long)]
     out: Option<PathBuf>,
-    /// Pixels across a cell in pile.png (below 1.5, each pixel averages the cells centred in it).
-    #[arg(long, default_value_t = 2.0)]
-    px: f64,
-    /// Empty cells around the pile in the image.
-    #[arg(long, default_value_t = 4.0)]
-    margin: f64,
+    /// Pixels across a cell in pile.png (default 2; below 1.5, each pixel averages the cells
+    /// centred in it). With --resume on a finished pile, the picture options export it again.
+    #[arg(long)]
+    px: Option<f64>,
+    /// Empty cells around the pile in the image (default 4).
+    #[arg(long)]
+    margin: Option<f64>,
     /// Palette for the heights, with its background and stage (`jetcarp palettes` lists them).
     /// Default: Ember, or the folder's own when resuming one.
     #[arg(long)]
@@ -421,9 +422,9 @@ pub struct PileArgs {
     /// Run the palette the other way (height 1 at its last stop).
     #[arg(long)]
     reverse: bool,
-    /// Longest side of preview.png (0 = none).
-    #[arg(long, default_value_t = 1024)]
-    preview: u32,
+    /// Longest side of preview.png (default 1024; 0 = none).
+    #[arg(long)]
+    preview: Option<u32>,
     /// Skip the full-size pile.png.
     #[arg(long)]
     no_png: bool,
@@ -998,12 +999,12 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         .cloned();
     let mut s = PileIn {
         out: a.out.as_deref().map(path),
-        px: Some(a.px),
-        margin: Some(a.margin),
+        px: a.px,
+        margin: a.margin,
         palette: a.palette,
         reverse: a.reverse.then_some(true),
-        preview: Some(a.preview),
-        png: Some(!a.no_png),
+        preview: a.preview,
+        png: a.no_png.then_some(false),
         gpu: Some(a.gpu),
         ..Default::default()
     };

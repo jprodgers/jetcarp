@@ -385,11 +385,13 @@ impl LatticeBoard {
         let start = Instant::now();
         let mut last_tick = Instant::now();
         loop {
-            if ctl.cancelled() {
-                return Err("cancelled".into());
-            }
             if !self.is_unstable() {
                 break;
+            }
+            if ctl.cancelled() {
+                // The board is as the sweeps so far left it: a step can carry on from it.
+                st.cancelled = true;
+                return Ok(st);
             }
             if self.grow_if_needed() {
                 st.grows += 1;

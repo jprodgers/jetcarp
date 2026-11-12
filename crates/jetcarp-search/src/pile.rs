@@ -5,9 +5,11 @@
 //! `steps/step-KK.pile`. The job row holds the spec and folder, and its progress (the steps
 //! done, grains, topplings, the step in flight) is written after every step and every second
 //! inside one, with the time left once two steps have run; a resumed job loads the folder's
-//! latest step file. A stop request (the job marked `paused`, or the stop flag) cancels the step
-//! in flight, which the next run repeats. The job runner (`crate::jobs::pile`) runs a job a
-//! doubling step at a time ([`PileJob`]).
+//! latest step file. A stop request (the job marked `paused`, or the stop flag, which a time
+//! budget sets too) stops the step in flight and saves it as a checkpoint
+//! (`steps/step-KK.partial.pile`: the board part-toppled, its grains added, the step's counts so
+//! far), so the next run carries on toppling it rather than starting the step again. The job
+//! runner (`crate::jobs::pile`) runs a job a doubling step at a time ([`PileJob`]).
 //!
 //! **Watching.** While someone watches the run's live state (`crate::jobs::Viewer`: the app's
 //! Sandpile window), the job shows its board every second and after each step, as a
@@ -21,7 +23,8 @@
 use jetcarp_core::pattern::now_utc;
 use jetcarp_core::pile::export::ExportOptions;
 use jetcarp_core::pile::{
-    Ctl, Pile, PileSpec, RunOptions, StepRecord, Toppler, file, latest_step_file, write_growth,
+    Ctl, Pile, PileSpec, RunOptions, StepRecord, Toppler, file, latest_step_file, save_to_dir,
+    write_growth,
 };
 use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
@@ -58,12 +61,14 @@ pub struct PileJobSpec {
 pub struct PileProgress {
     pub job: i64,
     pub status: String,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub grains: u64,
     pub tiling: String,
     /// Doubling steps done and in all.
     pub step: u32,
     pub steps: u32,
     /// Grains in the pile after the steps done.
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub grains_done: u64,
     /// Beyond 2^53 on a pile of a billion grains or so: a decimal string in JSON then.
     #[serde(with = "jetcarp_core::json_int::uint")]
@@ -71,9 +76,10 @@ pub struct PileProgress {
     pub sweeps: u64,
     /// Seconds of toppling (finished steps).
     pub seconds: f64,
-    /// The step in flight: sweeps, topplings, seconds.
+    /// The step in flight, or stopped part way (its checkpoint): sweeps, topplings, seconds so
+    /// far.
     #[serde(default)]
-    pub in_step: [f64; 3],
+    pub in_step: InFlight,
     pub folder: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub png: Option<String>,
@@ -94,6 +100,15 @@ pub struct PileProgress {
     pub updated: String,
 }
 
+/// What the step in flight has done so far.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct InFlight {
+    pub sweeps: u64,
+    #[serde(with = "jetcarp_core::json_int::uint")]
+    pub topplings: u64,
+    pub seconds: f64,
+}
+
 impl PileProgress {
     pub fn line(&self) -> String {
         format!(
@@ -106,11 +121,16 @@ impl PileProgress {
             self.grains_done,
             self.topplings as f64,
             jetcarp_core::pile::fmt_seconds(self.seconds),
-            if self.in_step[2] > 0.0 {
+            if self.in_step.seconds > 0.0 {
                 format!(
-                    "; step {} running {}",
+                    "; step {} {} {}",
                     self.step + 1,
-                    jetcarp_core::pile::fmt_seconds(self.in_step[2])
+                    if self.status == "running" {
+                        "running"
+                    } else {
+                        "stopped part way after"
+                    },
+                    jetcarp_core::pile::fmt_seconds(self.in_step.seconds)
                 )
             } else {
                 String::new()
@@ -141,7 +161,14 @@ fn progress_of(job: i64, pile: &Pile, spec: &PileJobSpec, status: &str) -> PileP
         topplings: top,
         sweeps,
         seconds: secs,
-        in_step: [0.0; 3],
+        in_step: pile
+            .in_step
+            .map(|x| InFlight {
+                sweeps: x.sweeps,
+                topplings: x.topplings,
+                seconds: x.seconds,
+            })
+            .unwrap_or_default(),
         folder: spec.folder.display().to_string(),
         backend: pile.records.last().map(|r| r.backend.clone()),
         last_step: pile.records.last().cloned(),
@@ -182,7 +209,7 @@ pub fn status(lib: &Library, job: i64) -> Result<(PileJobSpec, PileProgress), St
     Ok((spec, p))
 }
 
-/// Ask a running pile job (in any process) to stop; the step in flight is cancelled.
+/// Ask a running pile job (in any process) to stop; the step in flight is saved as a checkpoint.
 pub fn request_stop(lib: &Library, job: i64) -> Result<(), String> {
     let (st, ..) = spec_of(lib, job)?;
     if st == JobStatus::Running {
@@ -192,16 +219,17 @@ pub fn request_stop(lib: &Library, job: i64) -> Result<(), String> {
 }
 
 /// A pile job run in steps by the job runner (`crate::jobs::pile`): one doubling step each,
-/// saved to the folder (`steps/step-KK.pile`, `growth.csv`) when it finishes. A doubling step
-/// cannot be cut smaller, so while it runs it publishes its progress every second and is
-/// cancelled within about a second of a stop (the run's stop flag, or the job marked `paused`,
-/// checked every two seconds); the cancelled step is run again from the last step file. At the
-/// end the pile is exported (`pile.png`, `preview.png`, `pile.json`).
+/// saved to the folder (`steps/step-KK.pile`, `growth.csv`) when it finishes. While a step runs
+/// it publishes its progress every second and stops within about a second of a stop (the run's
+/// stop flag, which a time budget sets too, or the job marked `paused`, checked every two
+/// seconds); the stopped step is saved as a checkpoint (`steps/step-KK.partial.pile`) that the
+/// next step carries on. At the end the pile is exported (`pile.png`, `preview.png`,
+/// `pile.json`).
 pub struct PileJob {
     job: i64,
     spec: PileJobSpec,
     pile: Pile,
-    /// A step was cancelled part way: the pile is reloaded from its folder before the next.
+    /// A step failed to save its checkpoint: the pile is reloaded from its folder before the next.
     stale: bool,
     /// What topples it in this run (set at its first step).
     backend: Option<String>,
@@ -261,7 +289,11 @@ impl PileJob {
                 needs_board: cx.viewing(),
                 on_tick: Some(Box::new(|_, t, b| {
                     let mut p = base.clone();
-                    p.in_step = [t.sweeps as f64, t.topplings as f64, t.seconds];
+                    p.in_step = InFlight {
+                        sweeps: t.sweeps,
+                        topplings: t.topplings,
+                        seconds: t.seconds,
+                    };
                     p.eta_s = jetcarp_core::pile::eta_seconds(&records, p.steps, t.seconds);
                     p.updated = now_utc();
                     cx.publish(serde_json::to_value(&p).unwrap_or_default());
@@ -283,16 +315,19 @@ impl PileJob {
         };
         match r {
             Ok(_) => {
-                let f = self
-                    .spec
-                    .folder
-                    .join(format!("steps/step-{:02}.pile", self.pile.done));
-                file::save(&self.pile, &f)?;
+                save_to_dir(&self.pile, &self.spec.folder)?;
                 write_growth(&self.pile, &self.spec.folder)?;
                 if cx.viewing() {
                     cx.show(self.pile.board.as_ref().as_any());
                 }
                 Ok(self.pile.finished())
+            }
+            Err(_) if cancel.load(Ordering::SeqCst) && self.pile.in_step.is_some() => {
+                // Stopped part way: the work so far is kept, and the next step carries it on.
+                if save_to_dir(&self.pile, &self.spec.folder).is_err() {
+                    self.stale = true;
+                }
+                Ok(false)
             }
             Err(_) if cancel.load(Ordering::SeqCst) => {
                 self.stale = true;

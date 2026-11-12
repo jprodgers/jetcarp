@@ -156,7 +156,9 @@ impl PatchBoard {
         let mut last_tick = Instant::now();
         while self.is_unstable() {
             if ctl.cancelled() {
-                return Err("cancelled".into());
+                // The board is as the sweeps so far left it: a step can carry on from it.
+                st.cancelled = true;
+                return Ok(st);
             }
             let mut active = vec![false; nc];
             for c in 0..nc {

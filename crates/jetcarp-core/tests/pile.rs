@@ -268,6 +268,127 @@ fn save_load_resume() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A pile file's stored region and heights (its header without the run's times and box).
+fn stored(path: &std::path::Path) -> (serde_json::Value, Vec<u8>) {
+    use std::io::Read;
+    let b = std::fs::read(path).unwrap();
+    let n = u32::from_le_bytes(b[12..16].try_into().unwrap()) as usize;
+    let h: serde_json::Value = serde_json::from_slice(&b[16..16 + n]).unwrap();
+    let mut heights = Vec::new();
+    flate2::read::DeflateDecoder::new(&b[16 + n..])
+        .read_to_end(&mut heights)
+        .unwrap();
+    (h["region"].clone(), heights)
+}
+
+/// Run a pile in `dir`, stopping every step after `stops` ticks (then again after more), each
+/// stop saved as a checkpoint and the run carried on from the folder's latest file, as a resumed
+/// job does. Returns the finished pile and how many times it stopped part way.
+fn run_with_stops(spec: &PileSpec, dir: &std::path::Path, stops: &[u32]) -> (Pile, u32) {
+    std::fs::create_dir_all(dir).unwrap();
+    let mut p = Pile::new(spec.clone()).unwrap();
+    let mut stopped = 0;
+    let mut k = 0;
+    while !p.finished() {
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let ticks = std::cell::Cell::new(0u32);
+        let at = stops.get(k).copied();
+        let mut ctl = Ctl {
+            cancel: Some(&cancel),
+            tick_every: 0.0,
+            on_tick: Some(Box::new(|_, _, _| {
+                ticks.set(ticks.get() + 1);
+                if at.is_some_and(|a| ticks.get() >= a) {
+                    cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            })),
+            ..Default::default()
+        };
+        match p.next_step(None, &mut ctl) {
+            Ok(_) => {
+                pile::save_to_dir(&p, dir).unwrap();
+                k = 0;
+            }
+            Err(e) => {
+                assert_eq!(e, "cancelled");
+                let x = p.in_step.expect("a stopped step keeps its counts");
+                assert_eq!(x.step, p.done + 1);
+                assert!(x.sweeps > 0 && x.topplings > 0, "{x:?}");
+                let f = pile::save_to_dir(&p, dir).unwrap();
+                assert!(
+                    f.ends_with(format!("step-{:02}.partial.pile", x.step)),
+                    "{f:?}"
+                );
+                // Carried on from the folder, as a resumed run is.
+                let last = pile::latest_step_file(dir).unwrap();
+                assert_eq!(last, f);
+                p = pile::file::load(&last).unwrap();
+                assert_eq!(p.in_step, Some(x));
+                stopped += 1;
+                k += 1;
+            }
+        }
+        drop(ctl);
+    }
+    // The checkpoints go once their steps finish.
+    for e in std::fs::read_dir(dir.join("steps")).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().to_string();
+        assert!(!name.contains("partial"), "{name} left behind");
+    }
+    (p, stopped)
+}
+
+/// A step stopped part way (a stop, or a job's time budget) keeps its work as a checkpoint, and
+/// the run carried on from it gives the uninterrupted pile byte for byte: the same heights, the
+/// same pictures, and every step's grain, toppling and sweep counts, on a periodic tiling and on
+/// an aperiodic patch.
+#[test]
+fn a_step_stopped_part_way_carries_on() {
+    let root = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-pile-stops-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (id, grains) in [("hex", 30_000u64), ("spectre", 5_000)] {
+        let mut t = spec_of(id);
+        if id == "spectre" {
+            t.size = Some(SizeSpec::Level(5));
+        }
+        let spec = PileSpec {
+            tiling: t,
+            nb: Nb::Edge,
+            grains,
+            centre: Centre::Cell,
+        };
+        let (full, none) = run_with_stops(&spec, &root.join(format!("{id}-full")), &[]);
+        assert_eq!(none, 0);
+        let (part, stopped) = run_with_stops(&spec, &root.join(format!("{id}-part")), &[2, 3, 1]);
+        assert!(stopped >= 3, "{id}: stopped {stopped} times");
+        let key = |p: &Pile| {
+            p.records
+                .iter()
+                .map(|r| (r.step, r.grains, r.topplings, r.sweeps))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(key(&part), key(&full), "{id}: counts");
+        let last =
+            |p: &Pile, which: &str| pile::step_path(&root.join(format!("{id}-{which}")), p.done);
+        assert_eq!(
+            stored(&last(&part, "part")),
+            stored(&last(&full, "full")),
+            "{id}: heights"
+        );
+        let opts = pile::RunOptions::default();
+        for (p, which) in [(&full, "full"), (&part, "part")] {
+            pile::export::finish(p, &root.join(format!("{id}-{which}")), &opts).unwrap();
+        }
+        for f in ["pile.png", "preview.png"] {
+            let a = std::fs::read(root.join(format!("{id}-full/{f}"))).unwrap();
+            let b = std::fs::read(root.join(format!("{id}-part/{f}"))).unwrap();
+            assert!(a == b, "{id}: {f} differs");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn run_to_dir_writes_everything() {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))

@@ -86,7 +86,7 @@ pub fn definitions() -> Vec<Value> {
             "pile_start",
             "Start a large sandpile",
             false,
-            "Starts a large sandpile in the background and returns its job id at once (poll job_status, stop with job_stop): N grains dropped on one cell of an unbounded grid, built by doubling (N's binary digits), every finished step saved so a stopped pile resumes ({\"resume\": job}), then a cropped pile.png, a preview.png, growth.csv, and pile.json in its folder under <Pictures>/JETCARP/piles (files_list shows them). A million grains takes seconds; 10^8 hours. Example: {\"tiling\": \"hex\", \"grains\": \"1e6\"}.",
+            "Starts a large sandpile in the background and returns its job id at once (poll job_status, stop with job_stop): N grains dropped on one cell of an unbounded grid, built by doubling (N's binary digits), every finished step saved, and a step stopped part way kept as a checkpoint, so a stopped pile resumes where it stopped ({\"resume\": job}), then a cropped pile.png, a preview.png, growth.csv, and pile.json in its folder under <Pictures>/JETCARP/piles (files_list shows them). A million grains takes seconds; 10^8 hours. Example: {\"tiling\": \"hex\", \"grains\": \"1e6\"}.",
             json!({"type": "object", "properties": {
                 "tiling": {"type": "string", "description": "Tiling id (default \"square\"); aperiodic patches up to level 8."},
                 "grains": {"type": ["integer", "string"], "description": "Grains: 1000000, \"1e7\", \"2^30\"."},
@@ -156,7 +156,7 @@ pub fn definitions() -> Vec<Value> {
             "job_stop",
             "Stop a job",
             false,
-            "Stops a running job at its next checkpoint (a few seconds; a pile cancels the step in flight): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, census, or explore search. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, mover_start, or explore_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
+            "Stops a running job at its next checkpoint (a few seconds; a pile saves the step in flight as it stands, and carries it on when resumed): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, census, or explore search. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, mover_start, or explore_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
             json!({"type": "object", "properties": {
                 "job": {"type": "integer", "minimum": 1, "description": "The job id."},
             }, "required": ["job"], "additionalProperties": false}),

@@ -55,6 +55,7 @@ and its grains (`--out DIR` puts it elsewhere):
 | `growth.csv` | One row per step: grains so far, topplings, sweeps, seconds, the pile's width and height, the board's cells, and what toppled it |
 | `look.json` | The palette and its direction |
 | `steps/step-NN.pile` | The pile after each step, for resuming |
+| `steps/step-NN.partial.pile` | A step stopped part way: the pile as it stood, part-toppled, until the step finishes (see [Stop and carry on](#stop-and-carry-on)) |
 
 The step files are small, because a settled pile holds at most a few grains per tile: the folder of
 the million-grain pile above is 592 KB in all. `--no-png` skips the full-size picture of a pile too
@@ -67,8 +68,18 @@ tiles in its background colour. The default is Ember. `--palette NAME` picks ano
 palettes` lists them, or give hex colours), and `--reverse` runs it the other way. See
 [Palettes and colouring](palettes.md).
 
-To recolour a pile after it is built, open it in the app's sandpile window (below), choose the
-colours, and use *Write pile.png, preview.png, and pile.json in these colours*.
+To recolour a pile after it is built, resume it with the picture options you want:
+
+```sh
+jetcarp pile --resume ~/Pictures/JETCARP/piles/2026-11-12_02-20-55_square-1000000 --palette Tide --reverse
+```
+
+A finished pile given `--palette`, `--reverse`, `--px`, `--margin`, `--preview` or `--no-png` is
+exported again in them (`pile.png`, `preview.png` and `pile.json`), and the options it wasn't given
+stay as they were. Without any, it is exported again only when its `look.json` has other colours
+than its pictures: the app's sandpile window writes them there. In the app, open the pile in the
+sandpile window (below), choose the colours, and use *Write pile.png, preview.png, and pile.json in
+these colours*.
 
 ## Stop and carry on
 
@@ -88,22 +99,26 @@ $ jetcarp jobs list
 - `--minutes M` or `--until UNIX-TIME` stops it after a while, and `jetcarp jobs stop JOB` or *Stop*
   in the app stops it at once.
 - `jetcarp jobs resume JOB` carries it on. So does `jetcarp pile --resume JOB-OR-FOLDER`, which keeps
-  the pile's settings and ignores the other options. Add `--gpu` to resume on the GPU again: it is
-  chosen for each run, not stored with the pile.
+  the pile's settings (its picture options too, until it is finished: see [Colours](#colours)).
+  Add `--gpu` to resume on the GPU again: it is chosen for each run, not stored with the pile.
 - `--detach` runs the pile in a process of its own and returns at once, so `jetcarp jobs status JOB`
   can follow it.
 
-A pile resumes from its last *finished* step. A step stopped part way is run again from the start,
-and steps get long: the last few steps of a billion-grain pile each take minutes. So give a run
-long enough to finish its step. Once two steps have run, `jetcarp jobs status` and the app show an
-estimate of the time left.
+A step stopped part way keeps its work. The last few steps of a billion-grain pile each take
+minutes, so a stop, or the end of a run's `--minutes`, usually comes in the middle of one. The pile
+is then saved as it stands, with that step's grains added and its tiles part-toppled, in
+`steps/step-NN.partial.pile`, and the next run carries on toppling it from there; it doesn't add the
+grains again or start the step over. The finished pile doesn't depend on the order its tiles
+topple in (the sandpile is abelian), so it is the same pile, with the same toppling and sweep
+counts, as a run that was never stopped. So a run of any length makes progress, on the CPU or the
+GPU. Once two steps have run, `jetcarp jobs status` and the app show an estimate of the time left.
 
 ## In the app
 
 *Tools → Large sandpile…* builds the same piles. It has the options above, draws the pile as it
 grows, and shows each step's progress and the time left. *Stop (resumable)* stops the pile, and
-*Resume* carries it on from its last finished step; a pile stopped elsewhere (from the command line,
-or the *Hunts…* window) can be resumed there too.
+*Resume* carries it on from where it stopped, in the middle of a step too; a pile stopped elsewhere
+(from the command line, or the *Hunts…* window) can be resumed there too.
 
 ## From scripts and other tools
 

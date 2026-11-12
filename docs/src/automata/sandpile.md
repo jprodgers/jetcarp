@@ -106,8 +106,8 @@ grains at once, while heights stay small at every step. The board grows as the p
 is ever lost, and on aperiodic tilings the pile is built on an exact patch of up to about 17 million
 tiles. Piles can be toppled on the GPU on periodic tilings, and are saved after every doubling step so
 a long run can be resumed. The app's *Sandpile…* window builds one too, as a catalog job: it draws
-the pile as it grows, and a stopped pile carries on from its last finished step, from the window, the
-*Hunts…* window, or `jetcarp jobs resume`. See the guide [Large sandpiles](../guides/large-sandpiles.md).
+the pile as it grows, and a stopped pile carries on from where it stopped (in the middle of a step
+too), from the window, the *Hunts…* window, or `jetcarp jobs resume`. See the guide [Large sandpiles](../guides/large-sandpiles.md).
 
 ## What is new here
 

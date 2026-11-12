@@ -486,8 +486,8 @@ impl PileWindow {
                         if ui
                             .button("Stop (resumable)")
                             .on_hover_text(
-                                "Stop now: the step in flight is dropped, and Resume carries the \
-                                 pile on from its last finished step",
+                                "Stop now: the step in flight is saved as it stands (its grains \
+                                 added, part-toppled), and Resume carries it on from there",
                             )
                             .clicked()
                             && let Some(r) = &self.run
@@ -501,7 +501,10 @@ impl PileWindow {
                         if let Some(job) = self.resumable()
                             && ui
                                 .button("Resume")
-                                .on_hover_text("Carry the pile on from its last finished step")
+                                .on_hover_text(
+                                    "Carry the pile on from where it stopped: its last finished \
+                                     step, or the step it stopped in",
+                                )
                                 .clicked()
                         {
                             resume = Some(job);
@@ -565,8 +568,8 @@ impl PileWindow {
                         .unwrap_or_default();
                     ui.label(format!(
                         "{} sweeps, {:.3e} topplings this step; {} elapsed{eta} ({})",
-                        p.in_step[0] as u64,
-                        p.in_step[1],
+                        p.in_step.sweeps,
+                        p.in_step.topplings as f64,
                         pile::fmt_seconds(el),
                         p.backend.as_deref().unwrap_or("starting")
                     ));

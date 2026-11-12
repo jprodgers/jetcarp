@@ -28,7 +28,7 @@ pub fn summary(base: JobSummary, spec: Option<&PileJobSpec>, p: &PileProgress) -
     s.unit = "doubling steps".into();
     s.done = p.step as u64;
     s.total = Some(p.steps as u64);
-    s.elapsed_s = p.seconds + p.in_step[2];
+    s.elapsed_s = p.seconds + p.in_step.seconds;
     s.per_s = if p.seconds > 0.0 {
         p.step as f64 / p.seconds
     } else {
@@ -40,10 +40,18 @@ pub fn summary(base: JobSummary, spec: Option<&PileJobSpec>, p: &PileProgress) -
     s.counters
         .push(("topplings".into(), format!("{:.3e}", p.topplings as f64)));
     s.counters.push(("sweeps".into(), digits(p.sweeps)));
-    if p.in_step[2] > 0.0 {
+    if p.in_step.seconds > 0.0 {
         s.counters.push((
-            "step in flight".into(),
-            format!("{:.3e} topplings, {:.0} s", p.in_step[1], p.in_step[2]),
+            if s.status == "running" {
+                "step in flight"
+            } else {
+                "step stopped part way"
+            }
+            .into(),
+            format!(
+                "{:.3e} topplings, {:.0} s",
+                p.in_step.topplings as f64, p.in_step.seconds
+            ),
         ));
     }
     if let Some(b) = &p.backend {

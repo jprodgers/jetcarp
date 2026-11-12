@@ -461,9 +461,11 @@ impl Toppler for PileGpu {
         let mut last_tick = Instant::now();
         loop {
             if ctl.cancelled() {
+                // The board as the batches so far left it, on the CPU: a step carries on from it.
                 self.download(board)?;
                 board.sync();
-                return Err("cancelled".into());
+                st.cancelled = true;
+                return Ok(st);
             }
             let k = self.batch;
             let region = PileGpu::widen(board, nz, k * board.lat.reach + 1);

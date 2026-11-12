@@ -157,6 +157,7 @@ fn run_piles(ctx: &Arc<Ctx>, m: &Map) -> R<Map> {
         .map(|r| crate::api::to_json(r).unwrap_or(Value::Null))
         .collect();
     let jp = dir.join("piles.json");
+    let summary = jetcarp_core::json_int::safe(Value::Array(summary));
     std::fs::write(&jp, serde_json::to_string_pretty(&summary).unwrap())
         .map_err(|e| format!("{}: {e}", jp.display()))?;
     out.insert("folder".into(), dir.display().to_string().into());

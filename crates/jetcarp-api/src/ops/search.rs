@@ -893,7 +893,8 @@ impl MoverIn {
 // Piles
 
 /// A large sandpile (strategy `pile`, also `sandpile`): N grains on one spot of an unbounded
-/// grid, built by doubling, each finished step saved in the pile's folder; then a cropped
+/// grid, built by doubling, each finished step saved in the pile's folder (and a step stopped part
+/// way as a checkpoint, carried on when resumed); then a cropped
 /// `pile.png`, a `preview.png`, `growth.csv`, and `pile.json`.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -914,7 +915,7 @@ pub struct PileIn {
     /// Aperiodic tilings: patch level (default: the smallest that should hold the pile).
     #[serde(default)]
     pub level: Option<u32>,
-    /// The pile's own folder: carried on from its last saved step when it holds one (the job whose folder it is, or a new job for it), else the new pile is built there.
+    /// The pile's own folder: carried on from where it stopped when it holds a step file (the job whose folder it is, or a new job for it), else the new pile is built there. A finished pile given picture options (palette, reverse, px, margin, preview, png) is exported again in them.
     #[serde(default)]
     pub folder: Option<String>,
     /// The folder a new pile's run folder goes in (default `<output>/piles`).
@@ -977,6 +978,58 @@ impl PileIn {
             || self.nb.is_some()
             || self.centre.is_some()
             || self.level.is_some()
+    }
+
+    /// Any of the picture options given (palette, reverse, px, margin, preview, png).
+    fn picture_given(&self) -> bool {
+        self.palette.is_some()
+            || self.reverse.is_some()
+            || self.px.is_some()
+            || self.margin.is_some()
+            || self.preview.is_some()
+            || self.png.is_some()
+    }
+
+    /// A finished pile's job made to export again: its picture options replaced by the ones
+    /// given, or, with none given, kept but taken again when the folder's `look.json` has other
+    /// colours than its `pile.json` (the Sandpile window changed them). Returns whether it will.
+    fn reexport(&self, lib: &Library, job: i64, dir: &std::path::Path) -> Result<bool, ApiError> {
+        let row = lib.job(job).map_err(catalog_err)?;
+        let mut s: PileJobSpec = serde_json::from_value(row.spec.clone())
+            .map_err(|e| ApiError::engine(format!("job {job}: {e}")))?;
+        let look = pile::export::read_look_file(dir);
+        let exported = std::fs::read(dir.join("pile.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .map(|m| {
+                (
+                    m["image"]["palette"].as_str().unwrap_or("").to_string(),
+                    m["image"]["reverse"].as_bool().unwrap_or(false),
+                )
+            });
+        if !self.picture_given() && (look.is_none() || look == exported) {
+            return Ok(false);
+        }
+        if let Some(p) = &self.palette {
+            render::builtin_palette(p).map_err(invalid)?;
+            s.palette = p.clone();
+        } else if let Some((p, _)) = &look {
+            s.palette = p.clone();
+        }
+        s.reverse = match (self.reverse, &look) {
+            (Some(r), _) => r,
+            (None, Some((_, r))) if self.palette.is_none() => *r,
+            _ => false,
+        };
+        s.px_per_cell = self.px.unwrap_or(s.px_per_cell);
+        s.margin = self.margin.unwrap_or(s.margin);
+        s.preview_side = self.preview.unwrap_or(s.preview_side);
+        s.png = self.png.unwrap_or(s.png);
+        pile::export::write_look_file(dir, &s.palette, s.reverse).map_err(ApiError::io)?;
+        lib.set_job_spec(job, &to_json(&s)?).map_err(catalog_err)?;
+        lib.update_job(job, Some(JobStatus::Paused), None, None)
+            .map_err(catalog_err)?;
+        Ok(true)
     }
 
     fn pile(&self) -> Result<(String, PileSpec), ApiError> {
@@ -1043,6 +1096,14 @@ impl PileIn {
                     if let Ok(s) = serde_json::from_value::<PileJobSpec>(j.spec.clone())
                         && std::fs::canonicalize(&s.folder).unwrap_or(s.folder.clone()) == want
                     {
+                        // A finished pile with new picture options (or new colours in its
+                        // look.json) is exported again in them.
+                        if saved.finished() && self.reexport(lib, j.id, &dir)? {
+                            p.log(&format!(
+                                "exporting {} again in the new picture options",
+                                dir.display()
+                            ));
+                        }
                         return Ok(Built::Existing(j.id));
                     }
                 }
