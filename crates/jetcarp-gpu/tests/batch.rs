@@ -291,6 +291,30 @@ fn generations_split_over_submissions() {
     sim.set_target_secs(0.075);
 }
 
+/// A batch is given up between submissions once its cut says so, and the next batch runs as
+/// usual.
+#[test]
+fn a_batch_is_given_up_when_cut() {
+    let Some(mut sim) = gpu() else { return };
+    sim.set_target_secs(1e-6);
+    let topo =
+        Arc::new(Topology::build(&TilingSpec::rect("square", 37, 29, Boundary::Wrap)).unwrap());
+    let j = job(&topo, Nb::Touch, RULES, 40, &[0, 3, 40]);
+    let asked = std::cell::Cell::new(0);
+    let r = sim.run_until(&j, &|| {
+        asked.set(asked.get() + 1);
+        asked.get() > 5
+    });
+    assert_eq!(
+        r.err().as_deref(),
+        Some(jetcarp_core::explore::batch::GIVEN_UP)
+    );
+    let n = sim.last_stats().submissions;
+    assert!((1..=10).contains(&n), "{n} submissions before the cut");
+    compare(&mut sim, &j, "after a cut");
+    sim.set_target_secs(0.075);
+}
+
 #[test]
 fn padding_and_multi_type_worlds() {
     let Some(mut sim) = gpu() else { return };

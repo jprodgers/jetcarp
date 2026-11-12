@@ -12,7 +12,7 @@
 //! [`BatchSim`] is an explore search's GPU backend (`jetcarp_core::explore::batch::Backend`).
 
 use jetcarp_core::Topology;
-use jetcarp_core::explore::batch::{Backend, BatchJob, WorldTrace, mix, neighbor_csr};
+use jetcarp_core::explore::batch::{Backend, BatchJob, GIVEN_UP, WorldTrace, mix, neighbor_csr};
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, LtlRule, Reach};
 use jetcarp_core::rules::Rule;
@@ -642,6 +642,17 @@ impl BatchSim {
 
     /// Step every world of the job and measure it.
     pub fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
+        self.run_until(job, &|| false)
+    }
+
+    /// [`run`](Self::run), giving the batch up between two submissions once `cut` says so (the
+    /// error [`GIVEN_UP`]), so a stop or a search's end waits for one submission at most (about
+    /// [`set_target_secs`](Self::set_target_secs)), not for the whole batch.
+    pub fn run_until(
+        &mut self,
+        job: &BatchJob,
+        cut: &dyn Fn() -> bool,
+    ) -> Result<Vec<WorldTrace>, String> {
         let n = job.topo.len();
         let nw = job.worlds.len();
         if job.worlds.iter().any(|w| w.init.len() != n) {
@@ -841,6 +852,9 @@ impl BatchSim {
         let mut hint = ((target / per_gen.max(1e-7)) as u32).clamp(1, 16);
         let mut slot_bytes: Vec<u8> = Vec::new();
         while done < job.gens {
+            if cut() {
+                return Err(GIVEN_UP.into());
+            }
             let mut gens = (job.gens - done).min(hint).min(cap_gens);
             if let Some(&f) = job.frames_at.get(next_frame)
                 && f > done
@@ -932,6 +946,10 @@ impl BatchSim {
             } else {
                 // One submission per range, with a wait in between.
                 for s in 0..slices {
+                    // The ranges before were waited for, so nothing is left on the device.
+                    if s > 0 && cut() {
+                        return Err(GIVEN_UP.into());
+                    }
                     let mut enc = self.device.create_command_encoder(&Default::default());
                     if s == 0 {
                         clear(&mut enc);
@@ -1062,6 +1080,13 @@ impl Backend for BatchSim {
     }
     fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
         BatchSim::run(self, job)
+    }
+    fn run_until(
+        &mut self,
+        job: &BatchJob,
+        cut: &dyn Fn() -> bool,
+    ) -> Result<Vec<WorldTrace>, String> {
+        BatchSim::run_until(self, job, cut)
     }
     fn reset(&mut self) -> bool {
         match BatchSim::headless() {

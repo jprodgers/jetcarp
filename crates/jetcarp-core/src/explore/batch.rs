@@ -25,11 +25,25 @@ pub trait Backend: Send {
     fn max_cells(&self) -> usize;
     /// Run the batch: one trace per world, in order.
     fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String>;
+    /// [`run`](Backend::run), giving the batch up part way once `cut` says so (a stop, or the
+    /// search's end): then the error is [`GIVEN_UP`]. A backend that runs a batch in parts (the
+    /// GPU's submissions) asks between them; by default the batch runs to its end.
+    fn run_until(
+        &mut self,
+        job: &BatchJob,
+        cut: &dyn Fn() -> bool,
+    ) -> Result<Vec<WorldTrace>, String> {
+        let _ = cut;
+        self.run(job)
+    }
     /// Start over after errors (a lost device). Returns false if that is impossible.
     fn reset(&mut self) -> bool {
         false
     }
 }
+
+/// What [`Backend::run_until`] returns for a batch it gave up part way.
+pub const GIVEN_UP: &str = "the batch was given up part way (a stop, or the search's end)";
 
 /// [`run_cpu`] as a [`Backend`]: every rule whose cells hold plain states (not sandpile heights
 /// or continuous values), up to a million cells a batch.
