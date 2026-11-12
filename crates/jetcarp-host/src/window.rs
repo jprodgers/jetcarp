@@ -236,8 +236,13 @@ impl App {
         }
     }
 
-    /// Where a surface goes full screen, if it does.
+    /// Where a surface goes full screen, if it does: a wallpaper or the screen saver fills its
+    /// monitor, and a host's window screen is an ordinary window (on its monitor, see
+    /// `make_window`), so turning the wallpaper off doesn't cover the desktop.
     fn fullscreen(&self, el: &ActiveEventLoop, t: Target) -> Option<Fullscreen> {
+        if !t.wallpaper && self.mode == Mode::Host {
+            return None;
+        }
         // A macOS full screen window gets a Space of its own; a wallpaper is placed by hand.
         if cfg!(target_os = "macos") && t.wallpaper && self.mode == Mode::Host {
             return None;
@@ -263,6 +268,14 @@ impl App {
             .with_fullscreen(self.fullscreen(el, t));
         if self.mode == Mode::Saver {
             attrs = attrs.with_window_level(WindowLevel::AlwaysOnTop);
+        }
+        // A window screen opens near the top left of its monitor (Wayland places it itself).
+        if !t.wallpaper
+            && self.mode == Mode::Host
+            && let Some(m) = t.monitor.and_then(|m| el.available_monitors().nth(m))
+        {
+            let p = m.position();
+            attrs = attrs.with_position(PhysicalPosition::new(p.x + 64, p.y + 64));
         }
         #[cfg(all(unix, not(target_os = "macos")))]
         {

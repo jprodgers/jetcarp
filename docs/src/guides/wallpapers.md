@@ -172,7 +172,8 @@ jetcarp host wallpaper on --screen 1 --monitor 1 --rotation "Classics, hourly"
 ```
 
 `jetcarp host status` lists the monitors by number. A screen given no monitor fills every monitor no
-other screen claims, and `jetcarp host wallpaper off` turns the screens back into windows.
+other screen claims, and `jetcarp host wallpaper off` turns the screens back into ordinary windows
+(1280 by 720, each on its monitor) that you can move, resize or minimise.
 
 **GNOME** needs JETCARP's GNOME Shell extension, *JETCARP live desktop*, which shows the host's
 windows as the background of the desktop, the overview and the lock screen, and adds the top-bar menu.
