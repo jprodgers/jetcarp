@@ -4,7 +4,7 @@
 use anyhow::{Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use jetcarp_display::autostart;
-use jetcarp_display::caption::Corner;
+use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome;
 use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings,
@@ -189,37 +189,69 @@ fn show(v: &Value, json: bool) {
         println!("{v}");
         return;
     }
-    println!(
+    for line in status_lines(v) {
+        println!("{line}");
+    }
+}
+
+/// The host's status, for people: what each screen shows and where, the monitors, the wallpaper,
+/// the caption, why it is paused, and the host's notes.
+fn status_lines(v: &Value) -> Vec<String> {
+    let mut out = vec![format!(
         "running, pid {}, up {}s, {} MB, GPU {}",
         v["pid"],
         v["uptime_s"],
         v["memory_mb"],
         v["gpu"].as_str().unwrap_or("none")
-    );
+    )];
+    let monitors: Vec<&str> = v["monitors"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|n| n.as_str().unwrap_or("?"))
+        .collect();
     for (i, s) in v["screens"].as_array().into_iter().flatten().enumerate() {
         let st = &s["stage"];
-        println!(
-            "screen {i}: {} · {} ({} of {}) · generation {} · {} cells{}",
+        let numbers = if st["building"] == true && st["cells"] == 0 {
+            "starting".to_string()
+        } else {
+            format!("generation {} · {} cells", st["generation"], st["cells"])
+        };
+        let shown = if s["place"] == "wallpaper" {
+            "wallpaper"
+        } else {
+            "window"
+        };
+        let place = match s["monitor"].as_u64().map(|m| m as usize) {
+            Some(m) => match monitors.get(m) {
+                Some(name) => format!("{shown} on monitor {m} ({name})"),
+                None => format!("{shown} on monitor {m} (not connected)"),
+            },
+            None if shown == "wallpaper" && monitors.len() > 1 => {
+                "wallpaper on every monitor".into()
+            }
+            None => shown.into(),
+        };
+        out.push(format!(
+            "screen {i}: {} · {} ({} of {}) · {numbers} · {place}{}",
             st["rotation"].as_str().unwrap_or("?"),
             st["label"].as_str().unwrap_or("?"),
             st["number"],
             st["count"],
-            st["generation"],
-            st["cells"],
             if st["paused"] == true {
                 " · paused"
             } else {
                 ""
             }
-        );
+        ));
     }
-    if let Some(m) = v["monitors"].as_array().filter(|m| !m.is_empty()) {
-        let names: Vec<String> = m
+    if !monitors.is_empty() {
+        let names: Vec<String> = monitors
             .iter()
             .enumerate()
-            .map(|(i, n)| format!("{i}: {}", n.as_str().unwrap_or("?")))
+            .map(|(i, n)| format!("{i}: {n}"))
             .collect();
-        println!("monitors: {}", names.join(", "));
+        out.push(format!("monitors: {}", names.join(", ")));
     }
     if v["wallpaper"] == true {
         let shown = if v["extension"] == true {
@@ -229,14 +261,42 @@ fn show(v: &Value, json: bool) {
         };
         if cfg!(target_os = "linux") {
             let lock = v["lock_screen"].as_str().unwrap_or("?");
-            println!("wallpaper: {shown} · lock screen: {lock}");
+            out.push(format!("wallpaper: {shown} · lock screen: {lock}"));
         } else {
-            println!("wallpaper: {shown}");
+            out.push(format!("wallpaper: {shown}"));
         }
     }
-    for line in v["log"].as_array().into_iter().flatten() {
-        println!("note: {}", line.as_str().unwrap_or(""));
+    if let Ok(c) = serde_json::from_value::<CaptionSettings>(v["caption"].clone()) {
+        let mut line = if c.show {
+            format!(
+                "caption: on, {}, {} pt",
+                c.corner.label().to_lowercase(),
+                c.size
+            )
+        } else {
+            "caption: off".to_string()
+        };
+        if c.show && c.generation {
+            line.push_str(", with the generation");
+        }
+        if c.show && c.seconds > 0.0 {
+            line.push_str(&format!(", for {} s after each new item", c.seconds));
+        }
+        out.push(line);
     }
+    let why: Vec<&str> = v["paused_why"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    if !why.is_empty() {
+        out.push(format!("paused: {}", why.join("; ")));
+    }
+    for line in v["log"].as_array().into_iter().flatten() {
+        out.push(format!("note: {}", line.as_str().unwrap_or("")));
+    }
+    out
 }
 
 fn start(rotation: Option<&str>, headless: bool, json: bool) -> Result<()> {
@@ -561,5 +621,54 @@ pub fn run(a: HostArgs) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::status_lines;
+    use serde_json::json;
+
+    #[test]
+    fn status_says_where_each_screen_is_the_caption_and_why_it_is_paused() {
+        let stage = |label: &str, building: bool, cells: u64| {
+            json!({"rotation": "A classic a day", "label": label, "number": 2, "count": 7,
+                "generation": 0, "cells": cells, "paused": true, "building": building})
+        };
+        let v = json!({
+            "pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "RTX",
+            "screens": [
+                {"monitor": 0, "place": "wallpaper", "stage": stage("Life", false, 1000)},
+                {"monitor": 1, "place": "wallpaper", "stage": stage("langtons-ant", true, 0)},
+                {"monitor": null, "place": "window", "stage": stage("Life", false, 10)},
+            ],
+            "monitors": ["DISPLAY1", "DISPLAY5"],
+            "wallpaper": true, "extension": true, "lock_screen": "off",
+            "caption": {"show": true, "corner": "BottomLeft", "size": 20.0,
+                "generation": false, "seconds": 0.0},
+            "paused_why": ["on battery"],
+            "log": [],
+        });
+        let lines = status_lines(&v);
+        assert!(
+            lines[1].ends_with(
+                "generation 0 · 1000 cells · wallpaper on monitor 0 (DISPLAY1) · paused"
+            ),
+            "{lines:?}"
+        );
+        assert!(
+            lines[2].contains("· starting · wallpaper on monitor 1 (DISPLAY5)"),
+            "{lines:?}"
+        );
+        assert!(lines[3].ends_with("· window · paused"), "{lines:?}");
+        let has = |l: &str| lines.iter().any(|x| x == l);
+        assert!(has("caption: on, bottom left, 20 pt"), "{lines:?}");
+        assert!(has("paused: on battery"), "{lines:?}");
+        let mut off = v.clone();
+        off["caption"]["show"] = json!(false);
+        off["paused_why"] = json!([]);
+        let lines = status_lines(&off);
+        assert!(lines.iter().any(|l| l == "caption: off"));
+        assert!(!lines.iter().any(|l| l.starts_with("paused:")));
     }
 }

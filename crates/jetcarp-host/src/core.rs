@@ -142,6 +142,38 @@ fn still_screen<'a>(
         .copied()
 }
 
+/// Why the screens are paused, in words, for `status` (empty while they run): by hand, then each
+/// hold, and when neither, that nothing in the rotation can be shown.
+pub fn pause_reasons<'a>(
+    by_hand: bool,
+    holds: impl Iterator<Item = &'a str>,
+    all_paused: bool,
+) -> Vec<String> {
+    if !by_hand && !all_paused {
+        return vec![];
+    }
+    let mut why: Vec<String> = vec![];
+    if by_hand {
+        why.push("by hand".into());
+    }
+    for h in holds {
+        let words = match h {
+            "battery" => "on battery".to_string(),
+            "busy" => "the processor is busy".into(),
+            "covered" => "held by the desktop: windows cover it".into(),
+            "dark" => "held by the desktop: the screen is locked or off".into(),
+            other => format!("held by the desktop ({other})"),
+        };
+        if !why.contains(&words) {
+            why.push(words);
+        }
+    }
+    if why.is_empty() {
+        why.push("nothing in the rotation can be shown".into());
+    }
+    why
+}
+
 /// The start of a wallpaper window's title; GNOME's extension looks for it.
 const WALLPAPER_TAG: &str = "@jetcarp-wallpaper";
 
@@ -585,6 +617,11 @@ impl Core {
             // can show has to be resumed.
             "paused": self.user_paused || (!self.held() && self.all_paused()),
             "held": self.holds.iter().map(String::as_str).chain(self.local_holds.iter().copied()).collect::<Vec<_>>(),
+            "paused_why": pause_reasons(
+                self.user_paused,
+                self.holds.iter().map(String::as_str).chain(self.local_holds.iter().copied()),
+                self.all_paused(),
+            ),
             "desktop_layout": self.desktop_layout,
             "wallpaper": self.wants_wallpaper(),
             "extension": self.shell() == Shell::Alive,
@@ -808,5 +845,38 @@ impl Core {
         if let Some(s) = self.screens.get_mut(i) {
             s.stage.resize(canvas, scale, now);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pause_reasons;
+
+    #[test]
+    fn status_says_why_it_is_paused() {
+        let none = std::iter::empty();
+        assert!(pause_reasons(false, none, false).is_empty(), "running");
+        assert_eq!(pause_reasons(true, std::iter::empty(), true), ["by hand"]);
+        assert_eq!(
+            pause_reasons(false, ["battery", "busy"].into_iter(), true),
+            ["on battery", "the processor is busy"]
+        );
+        assert_eq!(
+            pause_reasons(true, ["covered", "dark"].into_iter(), true),
+            [
+                "by hand",
+                "held by the desktop: windows cover it",
+                "held by the desktop: the screen is locked or off"
+            ]
+        );
+        // The host's own "covered" and GNOME's say the same once.
+        assert_eq!(
+            pause_reasons(false, ["covered", "covered"].into_iter(), true).len(),
+            1
+        );
+        assert_eq!(
+            pause_reasons(false, std::iter::empty(), true),
+            ["nothing in the rotation can be shown"]
+        );
     }
 }

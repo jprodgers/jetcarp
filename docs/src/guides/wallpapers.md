@@ -121,13 +121,21 @@ as the desktop background, on a chosen monitor or across all of them.
 ```text
 $ jetcarp host start --rotation "Wolfram series"
 running, pid 676359, up 0.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells
+screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells · window
+caption: off
 $ jetcarp host next
 running, pid 676359, up 3.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W1 (2 of 256) · generation 198 · 57600 cells
+screen 0: Wolfram series · W1 (2 of 256) · starting · window
+caption: off
 $ jetcarp host stop
 stopped
 ```
+
+`status` (and every command that changes something) says what each screen shows and where (a window,
+or the desktop background on a monitor or on every monitor), the monitors, whether the caption is
+on, and, while it is paused, why: by hand, on battery, the processor is busy, or held by the desktop
+(windows cover it, or the screen is locked or off). Just after `next` the new item is *starting*
+until its world is built.
 
 | Command | Effect |
 | --- | --- |

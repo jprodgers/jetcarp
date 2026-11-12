@@ -59,9 +59,11 @@ fn state(path: &str, installed: bool, selected: Option<String>) -> String {
         (true, false, Some(other)) => format!(
             "JETCARP's screen saver is installed at {path}, but another one is selected ({other})."
         ),
-        (false, true, _) => "JETCARP's screen saver is not installed, but Windows still names it as \
+        (false, true, _) => {
+            "JETCARP's screen saver is not installed, but Windows still names it as \
              the screen saver, so none runs; `jetcarp host saver remove` clears that."
-            .into(),
+                .into()
+        }
         (false, false, _) => "JETCARP's screen saver is not installed.".into(),
     }
 }
@@ -141,14 +143,20 @@ mod tests {
     fn the_status_says_what_is_selected() {
         let p = r"C:\Users\a\AppData\Local\JETCARP\JETCARP.scr";
         let ours = Some(p.to_lowercase());
-        assert_eq!(state(p, true, ours.clone()), "JETCARP is the selected screen saver.");
+        assert_eq!(
+            state(p, true, ours.clone()),
+            "JETCARP is the selected screen saver."
+        );
         // After a remove that failed with rc1: the setting cleared, the file left.
         assert!(state(p, true, Some(String::new())).ends_with("but no screen saver is selected."));
         assert!(state(p, true, None).ends_with("but no screen saver is selected."));
         let other = state(p, true, Some(r"C:\Windows\system32\Mystify.scr".into()));
         assert!(other.ends_with(r"another one is selected (C:\Windows\system32\Mystify.scr)."));
         assert!(state(p, false, ours).contains("still names it"));
-        assert_eq!(state(p, false, None), "JETCARP's screen saver is not installed.");
+        assert_eq!(
+            state(p, false, None),
+            "JETCARP's screen saver is not installed."
+        );
     }
 
     #[test]
