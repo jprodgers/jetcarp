@@ -8,7 +8,7 @@
 # PATH. It changes nothing else: no shell startup files, no system folders, no sudo.
 #
 # Options, each also an environment variable (for `curl ... | sh -s -- OPTIONS` or `VAR=... sh`):
-#   --version V     install release V instead of @VERSION@, such as 0.4.0-rc.1 or v0.4.0-rc.1
+#   --version V     install release V instead of @VERSION@, such as 0.4.0, v0.4.0 or 0.4.0-rc.2
 #                   (JETCARP_VERSION); pre-releases are never "latest", so name them
 #   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
 #   --bin-dir DIR   where the `jetcarp` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
@@ -46,7 +46,7 @@ JETCARP $VERSION installer for Linux and macOS
   sh jetcarp-installer.sh [OPTIONS]
   curl -LsSf https://github.com/$REPO/releases/latest/download/jetcarp-installer.sh | sh -s -- [OPTIONS]
 
-  --version V     install release V, such as 0.4.0-rc.1 (JETCARP_VERSION; default $VERSION)
+  --version V     install release V, such as 0.4.0 or 0.4.0-rc.2 (JETCARP_VERSION; default $VERSION)
   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
   --bin-dir DIR   where the \`jetcarp\` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
   --no-packs      leave out the starter pack (JETCARP_NO_PACKS=1)
@@ -74,7 +74,7 @@ done
 version="${version#v}"
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) die "$version is not a JETCARP version (such as $VERSION or 0.4.0-rc.1)" ;;
+    *) die "$version is not a JETCARP version (such as 0.4.0 or 0.4.0-rc.2)" ;;
 esac
 [ -n "${HOME:-}" ] || die "HOME is not set"
 dir="${dir:-$HOME/.local/lib/jetcarp}"
