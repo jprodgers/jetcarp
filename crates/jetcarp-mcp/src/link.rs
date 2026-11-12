@@ -62,7 +62,7 @@ impl EndpointInfo {
     pub fn read() -> Result<EndpointInfo, String> {
         EndpointInfo::read_from(
             APP_ENDPOINT,
-            "the JETCARP app is not accepting AI control. Open the JETCARP app and switch on 'AI control' (top bar), then try again.",
+            "the JETCARP app is not accepting AI control. Open the JETCARP app, switch on AI control (Tools, AI control..., Allow AI control), then try again.",
         )
     }
 

@@ -17,7 +17,7 @@ fn use_app_definition() -> Value {
     json!({
         "name": "use_app",
         "title": "Attach to the JETCARP app",
-        "description": "Chooses which world the other tools act on. attach=true: the world in the JETCARP desktop app the user is watching, so they see every change as it happens (the user must first switch on 'AI control' in the app's top bar; the app then also offers app_display, its displays and screensaver). attach=false: this server's own private world (the default unless the server was started with --app). Returns the attached world's status.",
+        "description": "Chooses which world the other tools act on. attach=true: the world in the JETCARP desktop app the user is watching, so they see every change as it happens (the user must first switch it on in the app: Tools, AI control..., Allow AI control; or start the app with `jetcarp --control`. The app then also offers app_display, its displays and screensaver). attach=false: this server's own private world (the default unless the server was started with --app). Returns the attached world's status.",
         "inputSchema": {"type": "object", "properties": {
             "attach": {"type": "boolean", "description": "true = act on the app's world, false = the private world. Default true."},
             "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "App port, if not the one the app recorded."},

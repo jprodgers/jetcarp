@@ -279,8 +279,19 @@ impl Server {
                 ) {
                     (Some(n), Some(tok)) if tok.is_string() || tok.is_number() => {
                         let (n, tok) = (n.clone(), tok.clone());
+                        // At most one a second (and the last one), however often the call
+                        // reports: a wait for a job reports five times a second.
+                        let last = std::sync::Mutex::new(None::<std::time::Instant>);
                         let f: tools::ProgressFn = std::sync::Arc::new(
                             move |done, total, message| {
+                                let end = total.is_some_and(|t| done >= t);
+                                {
+                                    let mut l = last.lock().unwrap_or_else(|e| e.into_inner());
+                                    if !end && l.is_some_and(|t| t.elapsed().as_secs_f64() < 1.0) {
+                                        return;
+                                    }
+                                    *l = Some(std::time::Instant::now());
+                                }
                                 let mut p = json!({"progressToken": tok, "progress": done, "message": message});
                                 if let Some(t) = total {
                                     p["total"] = json!(t);

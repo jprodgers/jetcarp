@@ -1,9 +1,8 @@
 //! Sweep folders (what a Rhai `sweep(#{...})` writes): the manifest's rows, favourites
 //! (`favourites.json`), promotion of a run to the Quick Start ("My finds"), contact sheets of
 //! chosen runs, and the start of any run rebuilt from `run.json` ([`run_world`]). Shared by the
-//! app's results browser, `quickstart.add`, `sheet.sweep`, the scripts' sweeps, and the LLM
-//! curation tool (`tools/curate_sweep.py`); moved here from `jetcarp_script::results`, which
-//! re-exports it.
+//! app's results browser, `quickstart.add`, `sheet.sweep`, and the scripts' sweeps; moved here
+//! from `jetcarp_script::results`, which re-exports it.
 
 use crate::args::{self, Screen, get, get_str, get_u64};
 use jetcarp_core::render::{Image, STAGE};

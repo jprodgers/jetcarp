@@ -19,7 +19,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: true,
             destructive: false,
             description: || {
-                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"}; the same pages are the resources jetcarp://docs/{page}.".into()
+                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"}; the same pages are the resources jetcarp://docs/{page}.".into()
             },
             schema: || {
                 object(
@@ -312,10 +312,11 @@ Example 1: draw a glider in Life and find it 8 generations later
 4. world_read {}   -> the glider has moved 2 cells right and 2 down (bounding box x 7..9, y 7..9). A glider moves 1 cell diagonally every 4 generations.
 5. world_read {"format": "objects"}   -> glider (c/4) x 1, with where it is.
 
-Example 2: Brian's Brain on hexagons, then a picture
-1. world_new {"tiling": "hex", "width": 80, "height": 80, "boundary": "wrap", "cas": ["Brian's Brain"]}   (random start)
+Example 2: Brian's Brain, then a picture; and a rule that lives on hexagons
+1. world_new {"tiling": "square", "width": 120, "height": 80, "boundary": "wrap", "cas": ["Brian's Brain"]}   (random start)
 2. world_step {"generations": 200}
 3. world_render {}
+4. world_new {"tiling": "hex", "width": 60, "height": 60, "cas": ["B24/S35"]}, world_step {"generations": 300}, world_render {}   (Brian's Brain dies out on hexagons, where each cell has only 6 neighbours: rules behave differently on each tiling)
 
 Example 3: a sandpile
 1. world_new {"tiling": "square", "width": 41, "height": 41, "boundary": "dead", "cas": [{"rule": "Sandpile", "seed": "pile:20000"}]}
@@ -343,7 +344,7 @@ Tips
 pub const HELP_WORLD: &str = r#"One world: building, looking, changing, running.
 
 Build or open (world_new replaces the current world)
-- {"tiling": "hex", "width": 60, "height": 60, "cas": ["Brian's Brain"]}; size by `cells` ({"cells": 4000}) on any periodic tiling, `level` on aperiodic ones ({"tiling": "spectre", "level": 4}).
+- {"tiling": "hex", "width": 60, "height": 60, "cas": ["B24/S35"]}; size by `cells` ({"cells": 4000}) on any periodic tiling, `level` on aperiodic ones ({"tiling": "spectre", "level": 4}).
 - A CA is a rule string, or an object {"rule": "Life", "seed": "random:0.2", "neighborhood": "edge", "palette": "Tide", "steps_per_gen": 10}. reference {"what": "seeds"} lists the seeds; {"seed": "empty"} starts blank.
 - {"quickstart": "<handle>"}, {"pattern": "<id or name>"}, {"scene": {...}}, {"path": "scene.json"} open one.
 
