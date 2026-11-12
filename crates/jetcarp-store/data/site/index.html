@@ -43,7 +43,7 @@
 <body>
 <header>
   <h1>JETCARP catalog</h1>
-  <select id="kind"><option value="">Everything</option><option value="pattern">Patterns</option><option value="quickstart">Quick Start</option></select>
+  <select id="kind"><option value="">Everything</option><option value="pattern">Patterns</option><option value="ant">Ants</option><option value="quickstart">Quick Start</option></select>
   <select id="class"><option value="">Any class</option></select>
   <select id="sort"><option value="score">Highest score</option><option value="rating">Highest rating</option><option value="title">Name</option></select>
   <input id="text" type="search" placeholder="Search names, rules, grids">
@@ -86,6 +86,7 @@ async function show(it) {
   const rows = [];
   const add = (k, v) => { if (v !== undefined && v !== null && v !== "") rows.push(`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`); };
   add("Class", d.class ?? d.behaviour);
+  add("Outcome", d.outcome);
   add("Period", d.period);
   add("Speed", d.speed);
   add("Grid", d.tiling_name ?? d.grid);
@@ -93,6 +94,7 @@ async function show(it) {
   if (d.range) add("Works in", `${d.range.min_rule} to ${d.range.max_rule}`);
   if (d.rules) add("Verified in", d.rules.join(", "));
   add("Cells", d.cells);
+  add("Steps", d.steps);
   add("Seen", d.seen);
   if (d.seen_by_rule) add("Seen per rule", Object.entries(d.seen_by_rule).map(([k, v]) => `${k}: ${v}`).join(", "));
   add("Score", d.score);
@@ -137,7 +139,7 @@ async function main() {
   const sel = document.getElementById("class");
   for (const c of classes) sel.add(new Option(c, c));
   document.getElementById("meta").textContent =
-    `${m.counts.patterns} patterns, ${m.counts.quickstart} Quick Start entries · exported ${m.exported} · ${m.generator}`;
+    `${m.counts.patterns} patterns, ${m.counts.ants ?? 0} ants, ${m.counts.quickstart} Quick Start entries · exported ${m.exported} · ${m.generator}`;
   for (const id of ["kind", "class", "sort", "text"]) document.getElementById(id).oninput = render;
   render();
 }
