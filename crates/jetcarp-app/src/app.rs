@@ -45,6 +45,7 @@ mod tiling_ui;
 mod tools;
 mod view;
 mod wallpaper_ui;
+mod window_place;
 
 use ca_ui::rule_menu;
 use jetcarp_display::profiles;
@@ -446,6 +447,7 @@ impl eframe::App for JetcarpApp {
             f.frame(self.world.generation);
         }
         self.shell.monitors.update(frame);
+        self.window_place(frame);
         self.poll_build(&ctx);
         self.saver_zoom();
         self.autoshot_tick(&ctx);

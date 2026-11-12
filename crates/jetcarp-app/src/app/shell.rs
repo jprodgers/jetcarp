@@ -34,6 +34,11 @@ pub(super) struct ShellState {
     /// A message, and when it appeared (the grid shows it a while when the status bar is off).
     seen_message: Option<String>,
     message_at: f64,
+    /// The main window's place (saved), whether the first frame has put it there, and whether
+    /// this run places it at all (`window_place.rs`).
+    pub window: Option<window_place::WindowPlace>,
+    pub window_placed: bool,
+    pub window_placing: bool,
 }
 
 impl ShellState {
@@ -58,6 +63,9 @@ impl ShellState {
             reveal_at: 0.0,
             bar_h: 24.0,
             seen_message: None,
+            window: None,
+            window_placed: false,
+            window_placing: false,
             message_at: 0.0,
         }
     }

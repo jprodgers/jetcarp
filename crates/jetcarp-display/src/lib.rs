@@ -25,3 +25,4 @@ pub mod simgpu;
 pub mod stage;
 pub mod view;
 pub mod winsaver;
+pub mod workarea;

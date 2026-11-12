@@ -41,6 +41,9 @@ pub(super) struct AppSettings {
     /// Each tool window's palette (sandpile, ants, HashLife view, library, hunts).
     #[serde(deserialize_with = "lenient")]
     pub tool_palettes: crate::palette_pick::ToolPalettes,
+    /// The main window's size, position and maximised state.
+    #[serde(deserialize_with = "lenient")]
+    pub window: Option<super::window_place::WindowPlace>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Debug)]
@@ -78,6 +81,7 @@ impl Default for AppSettings {
             reseed: Default::default(),
             wallpaper: Default::default(),
             tool_palettes: Default::default(),
+            window: None,
         }
     }
 }
@@ -211,6 +215,7 @@ impl JetcarpApp {
             reseed: self.reseed.snapshot(),
             wallpaper: self.wallpaper.settings.clone(),
             tool_palettes: self.tool_palettes(),
+            window: self.shell.window,
         }
     }
 
@@ -226,6 +231,7 @@ impl JetcarpApp {
         self.reseed.restore(s.reseed);
         self.wallpaper.settings = s.wallpaper;
         self.set_tool_palettes(s.tool_palettes);
+        self.shell.window = s.window;
         let mut reg = crate::popout::Registry::default();
         for (k, t) in s.tool_windows {
             let Some(tool) = menu::ToolWin::from_key(&k) else {
@@ -419,6 +425,36 @@ mod tests {
         std::fs::write(&p, "{ broken").unwrap();
         assert!(!Store::at(&p).load().menu_autohide);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_window_place_round_trips_and_a_broken_one_is_dropped() {
+        use super::super::window_place::WindowPlace;
+        let mut s = AppSettings {
+            menu_autohide: true,
+            ..Default::default()
+        };
+        assert_eq!(s.window, None, "the first start has no place");
+        s.window = Some(WindowPlace {
+            pos: Some([-2400, 120]),
+            size: [1400, 900],
+            maximized: true,
+        });
+        let back = AppSettings::from_json(&s.to_json());
+        assert_eq!(back.window, s.window);
+        // Wayland gives no position.
+        s.window = Some(WindowPlace {
+            pos: None,
+            size: [1200, 800],
+            maximized: false,
+        });
+        assert_eq!(AppSettings::from_json(&s.to_json()).window, s.window);
+        // A broken section loses only the place.
+        let mut v = value(&s.to_json());
+        v["window"] = serde_json::json!({"pos": "left"});
+        let bad = AppSettings::from_json(&v.to_string());
+        assert_eq!(bad.window, None);
+        assert!(bad.menu_autohide);
     }
 
     #[test]
