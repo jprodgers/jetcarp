@@ -106,6 +106,11 @@ jobs:
           esac
           python3 packaging/package.py verify --tag "$tag" --out "$GITHUB_OUTPUT" $extra
 
+      - name: The MCP server's copies of the book are current (a published crate embeds them)
+        # In the repository the server embeds docs/src itself; the copies under
+        # crates/jetcarp-mcp/resources are what a crates.io build embeds instead.
+        run: python3 docs/tools/copy-mcp-resources.py --check
+
       - name: Notes for this version
         # The changelog's section for this version, so the release page and the changelog cannot
         # disagree.

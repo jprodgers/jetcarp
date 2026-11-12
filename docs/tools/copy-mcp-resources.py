@@ -9,9 +9,11 @@ only what is inside a crate, so the crate keeps copies:
   docs/src/**/*.md                    ->  crates/jetcarp-mcp/resources/docs/**/*.md
   docs/src/reference/NAME.schema.json ->  crates/jetcarp-mcp/resources/schema/NAME.json
 
-This script makes the copies match (writing changed files and deleting copies of pages that are
-gone). With --check it only reports differences (exit status 1), as the crate's test
-`resources_match_the_book` does. Run it after editing any page of the book.
+A build inside the repository embeds docs/src itself, so editing the book never needs this
+script day to day; only a packaged crate (crates.io) embeds the copies. This script makes the
+copies match (writing changed files and deleting copies of pages that are gone). With --check it
+only reports differences (exit status 1); the release workflow runs that before publishing. Run it
+before a release.
 
 Standard library only. Usage: python3 docs/tools/copy-mcp-resources.py [--check]
 """
