@@ -201,6 +201,57 @@ pub fn trace_world(world: &mut World, gens: u32, frames_at: &[u32]) -> Result<Wo
     Ok(tr)
 }
 
+/// Step one prepared world for up to `gens` generations while `go(t)` (asked after generation
+/// `t`) says so, keeping full frames of the last `window` generations reached. Returns the trace
+/// and the generations reached: a run cut at generation `t` has exactly the trace that
+/// [`trace_world`] gives for a run of `t` generations with frames at
+/// [`frames_for(t, window)`](crate::explore::features::frames_for), so it replays from its
+/// candidate with `t` as its generations.
+pub fn trace_world_while(
+    world: &mut World,
+    gens: u32,
+    window: usize,
+    go: &mut dyn FnMut(u32) -> bool,
+) -> Result<(WorldTrace, u32), String> {
+    if world.fields.is_empty() {
+        return Err("the world has no field".into());
+    }
+    let window = window.max(1);
+    let mut tr = WorldTrace::with_capacity(gens);
+    let mut prev = field_bytes(&world.fields[0]);
+    let (p, h) = measure(&prev);
+    tr.pop.push(p);
+    tr.changed.push(0);
+    tr.hash.push(h);
+    // The last `window` states, oldest first once `ring` is full (`head` is the oldest).
+    let mut ring: Vec<Vec<u8>> = vec![prev.clone()];
+    let mut head = 0;
+    let mut reached = 0;
+    for t in 1..=gens {
+        world.step();
+        let s = field_bytes(&world.fields[0]);
+        let (p, h) = measure(&s);
+        tr.pop.push(p);
+        tr.hash.push(h);
+        tr.changed
+            .push(s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32);
+        prev.copy_from_slice(&s);
+        if ring.len() < window {
+            ring.push(s);
+        } else {
+            ring[head] = s;
+            head = (head + 1) % window;
+        }
+        reached = t;
+        if t < gens && !go(t) {
+            break;
+        }
+    }
+    ring.rotate_left(head);
+    tr.frames = ring;
+    Ok((tr, reached))
+}
+
 /// The reference implementation: every world on the CPU.
 pub fn run_cpu(job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
     job.worlds

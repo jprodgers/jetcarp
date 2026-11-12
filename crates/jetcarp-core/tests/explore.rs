@@ -222,6 +222,33 @@ fn a_saved_scene_replays_the_run_the_search_measured() {
     }
 }
 
+/// A run cut short (as the search cuts a slow run on the processor) has the trace of a run of the
+/// generations it reached, frames included, and a full one the trace `trace_world` gives.
+#[test]
+fn a_run_cut_short_is_the_run_of_the_generations_it_reached() {
+    use jetcarp_core::explore::batch::{trace_world, trace_world_while};
+    let grid = Grid::build("hex", 2000).unwrap();
+    let world = || {
+        let mut w = World::on_topology(grid.topo.clone(), 5);
+        w.add_ca(CaSpec::new("B2/S34").seed(SeedSpec::Random { density: 0.35 }))
+            .unwrap();
+        w
+    };
+    for window in [1usize, 17] {
+        let (full, reached) = trace_world_while(&mut world(), 120, window, &mut |_| true).unwrap();
+        assert_eq!(reached, 120);
+        let reference = trace_world(&mut world(), 120, &frames_for(120, window)).unwrap();
+        assert_eq!(full, reference, "window {window}");
+        for cut in [1u32, 9, 16, 17, 60] {
+            let (t, reached) =
+                trace_world_while(&mut world(), 120, window, &mut |g| g < cut).unwrap();
+            assert_eq!(reached, cut);
+            let short = trace_world(&mut world(), cut, &frames_for(cut, window)).unwrap();
+            assert_eq!(t, short, "window {window}, cut at {cut}");
+        }
+    }
+}
+
 #[test]
 fn circuit_seeds_lay_thin_wires_with_signals_on_any_tiling() {
     use jetcarp_core::world::{CaSpec, SeedSpec, World};
