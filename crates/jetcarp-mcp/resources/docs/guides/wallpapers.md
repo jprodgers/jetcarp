@@ -197,7 +197,8 @@ for the password box). In screensaver mode the screen and the computer stay awak
 
 **Windows**: the host puts a window of its own under the desktop icons, one per monitor, with no
 extension needed. **macOS**: one borderless window per monitor at the desktop's level, behind the
-icons, on every Space and ignoring the mouse; the host has no Dock icon while it shows only wallpaper.
+icons, on every Space and ignoring the mouse. The host lives in the menu bar: it has no Dock icon, even
+while it shows a scene in a window.
 **Other Linux desktops** are not supported yet: the host shows a window instead.
 
 **A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host
@@ -228,7 +229,13 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
   inside it, signs it for this machine, and opens System Settings where screen savers are chosen
   (*System Settings, Wallpaper, Screen Saver…* on macOS 27). Install it again after changing the
   rotation. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
-  it with `cargo build --release -p jetcarp-saver`.
+  it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
+  of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
+  starts moving only once the screen saver has really started. The preview in System Settings always
+  moves. `remove` deletes the bundle and puts back the screen saver macOS had chosen before JETCARP
+  was installed, on every display and Space that still chooses JETCARP; with nothing recorded (an
+  install by 0.4.0-rc.1), they show your desktop picture as the screen saver instead. If System
+  Settings is open, it may keep listing JETCARP until you quit and reopen it.
 - **GNOME** has no list of screen savers. Use the lock screen's screensaver mode instead:
   `jetcarp host lock screensaver --awake 30`.
 

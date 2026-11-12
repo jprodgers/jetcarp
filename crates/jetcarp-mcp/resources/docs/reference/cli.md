@@ -313,7 +313,7 @@ Options:
       --rules-file <RULES_FILE>
           More rules, one per line
       --tilings <TILINGS>
-          Tilings: family ids, catalog:<id>, or the sets all-periodic, archimedean, kuniform:<k>, isohedral [default: square]
+          Tilings: ids such as hex or k2-017 (`catalog:k2-017` works too), or the sets all-periodic, archimedean, kuniform:<k>, isohedral [default: square]
       --nb <NB>
           Neighbourhood for every rule: touch or edge (default: the notation decides)
       --soups <SOUPS>
@@ -368,9 +368,9 @@ Options:
       --threads <THREADS>          Worker threads (default: all cores). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
-      --rules <RULES>              Rules separated by spaces or semicolons ("B3/S23 B36/S23")
-      --rules-file <RULES_FILE>    File with one rule per line (# comments)
-      --tilings <TILINGS>          Tilings: family ids, catalog:<id>, or the sets all-periodic, archimedean, kuniform:<k>, isohedral; comma separated [default: square]
+      --rules <RULES>              Rules separated by spaces or semicolons ("B3/S23 B36/S23") [default: B3/S23]
+      --rules-file <RULES_FILE>    More rules, one per line (# comments)
+      --tilings <TILINGS>          Tilings: ids such as hex or k2-017 (`catalog:k2-017` works too), or the sets all-periodic, archimedean, kuniform:<k>, isohedral; comma separated [default: square]
       --size <SIZE>                WxH unit cells (64x64), about N cells (4000), or L<level> for aperiodic patches [default: 64x64]
       --boundary <BOUNDARY>        wrap or dead [default: wrap]
       --nb <NB>                    Neighbourhood for every rule: touch or edge (default: per rule; V suffix = edge)
@@ -439,10 +439,9 @@ Options:
       --threads <THREADS>          Worker threads (default: all cores). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
-      --family <FAMILY>            Tiling family (see `jetcarp tilings`) [default: square]
+      --tilings <TILINGS>          The tiling: an id such as k2-017 (see `jetcarp tilings`), or a scene or tile JSON file, whose tiling replaces --size and --boundary. A census runs on one tiling [default: square]
       --size <SIZE>                WxH unit cells (64x64), about N cells (4000), or L<level> for aperiodic tilings (L4) [default: 64x64]
       --boundary <BOUNDARY>        wrap, dead, or live [default: wrap]
-      --tiling <TILING>            Take the tiling from a scene or tile JSON file instead of --family/--size/--boundary
       --nb <NB>                    Neighbourhood for every rule: touch or edge (default: per rule; a V suffix means edge)
       --rules <RULES>              Rules separated by spaces or semicolons, e.g. "B3/S23 B36/S23 B2/S/C3"
       --rules-file <RULES_FILE>    File with one rule per line (# comments)
@@ -593,7 +592,7 @@ Options:
       --threads <THREADS>        Worker threads (default: all cores). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                    No progress on stderr
-      --tiling <TILING>          Tiling: a family id (spectre, hat, penrose-kd, penrose-rhomb, square, hex, trihex, ...) or catalog:<id> (k-uniform and Archimedean tilings) [default: spectre]
+      --tiling <TILING>          Tiling: an id such as spectre, hat, penrose-kd, penrose-rhomb, square, hex, trihex or k2-017 (k-uniform and Archimedean tilings; `catalog:k2-017` works too) [default: spectre]
       --nb <NB>                  Neighbourhood: touch (the paper's vertex adjacency) or edge [default: touch]
       --states <STATES>          States per cell (2-8) [default: 4]
       --pop <POP>                Population size [default: 256]
@@ -630,7 +629,7 @@ Options:
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                          No progress on stderr
       --hours <HOURS>                  Hours to run (the same as --minutes 60 x HOURS)
-      --tilings <TILINGS>              Only these tilings: keys, comma separated (square,hex,trihex,ih28,catalog:k2-001; default: every tiling the search knows, 1,359 today; the progress line counts them)
+      --tilings <TILINGS>              Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default: every tiling the search knows, 1,359 today; the progress line counts them)
       --families <FAMILIES>            Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider; default: all)
       --screen-cells <SCREEN_CELLS>    About this many cells in a screening run's grid [default: 16000]
       --screen-gens <SCREEN_GENS>      [default: 1024]
@@ -653,7 +652,7 @@ Usage: jetcarp search try [OPTIONS] --rule <RULE>
 
 Options:
       --json             Print the result as JSON instead of text (commands that report a result)
-      --tiling <TILING>  Tiling key (square, hex, trihex, spectre, catalog:k2-001, ih28, ...) [default: square]
+      --tiling <TILING>  Tiling id (square, hex, trihex, spectre, k2-001, ih28, ...) [default: square]
       --rule <RULE>      Rule notation
       --seed <SEED>      Starting pattern: a seed shorthand ("random:0.3", "pattern:blobs:0.4:by_region") or JSON (default: the rule's own)
       --nb <NB>          touch or edge (default: touch, or what the notation says)
@@ -1079,13 +1078,13 @@ Make a scene from several library patterns placed on one grid
 Usage: jetcarp library paste [OPTIONS] --out <OUT> <PLACEMENTS>...
 
 Arguments:
-  <PLACEMENTS>...  Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), or `ID` alone for the centre
+  <PLACEMENTS>...  Placements `ID@X,Y[,oK][,pK]` (orientation K, phase K), or `ID` alone for the centre. X is a tile column and Y a row, as in scripts' `w.get(x, y)`, while --size counts unit cells: a unit cell of k tiles spans k columns, so on k2-017 (12 tiles a unit cell) x = 60 is unit cell 5, near the left edge. `ID@uX,Y` gives X in unit cells. The output prints the grid's width and height in tiles
 
 Options:
       --json                 Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --out <OUT>            Scene file to write
-      --size <SIZE>          Grid size in unit cells, or L<level> on aperiodic tilings [default: 120x80]
+      --size <SIZE>          Grid size in unit cells (not tiles), or L<level> on aperiodic tilings [default: 120x80]
       --boundary <BOUNDARY>  [default: wrap]
       --name <NAME>          
       --png <PNG>            Also write a PNG of the scene after this many generations
@@ -1593,7 +1592,7 @@ Usage: jetcarp quickstart build [OPTIONS]
 Options:
       --json                 Print the result as JSON instead of text (commands that report a result)
       --minutes <MINUTES>    Minutes to search before publishing [default: 10]
-      --tilings <TILINGS>    Only these tilings (keys, separated by commas or spaces; default: every one)
+      --tilings <TILINGS>    Only these tilings (ids such as hex or k2-017, separated by commas or spaces; default: every one)
       --families <FAMILIES>  Only these rule families (default: every one)
       --no-gpu               Run on the CPU only
       --threads <THREADS>    Worker threads (default: all cores)

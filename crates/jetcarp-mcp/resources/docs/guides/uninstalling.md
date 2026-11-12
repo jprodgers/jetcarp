@@ -33,9 +33,16 @@ steps it may list are:
   back in once to finish;
 - **remove the Windows screen saver** (`JETCARP.scr`), clearing the choice in Windows' screen saver
   settings if JETCARP was the one chosen;
-- **remove the macOS screen saver** (`JETCARP.saver`);
+- **remove the macOS screen saver** (`JETCARP.saver`), putting back the screen saver macOS had chosen
+  before JETCARP was installed wherever JETCARP is still the chosen one (your desktop picture, shown
+  as the screen saver, if nothing was recorded). If System Settings is open, it may keep listing
+  JETCARP until you quit and reopen it;
 - **forget the recorded host command**, a small file in the settings folder that GNOME's menu and the
-  Windows screen saver use to start the host.
+  Windows screen saver use to start the host;
+- **remove the host's lock file**, the empty `host.lock` in the runtime folder that keeps a second
+  host from starting, once no host holds it;
+- **remove the empty folder of job locks**, `library.sqlite-jobs` beside the pattern library. A
+  paused job's lock in it keeps it, since the job will need it when it resumes.
 
 Run it from your desktop session where you can, since putting your picture back and switching the
 GNOME extension off both go through the desktop. From another desktop, a text console or over SSH
@@ -72,8 +79,10 @@ writes outside the program's own folder. `~` is your home folder.
 | Screen saver | | `~/Library/Screen Savers/JETCARP.saver` | `%LOCALAPPDATA%\JETCARP\JETCARP.scr`, and the `SCRNSAVE.EXE` value under `HKEY_CURRENT_USER\Control Panel\Desktop` when it is the chosen one |
 | Screen saver log | | `jetcarp-saver.log` in the screen saver's sandbox (`~/Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/tmp/` on macOS 27) | |
 
-The Linux paths are the usual ones; they follow your XDG settings. `jetcarp uninstall` does not remove
-the runtime files or the macOS screen saver's log, which are small; delete them by hand if you like.
+The Linux paths are the usual ones; they follow your XDG settings. `jetcarp uninstall` removes the
+host's lock file (and the runtime folder, if that leaves it empty); the port number and access token
+are removed as the app or host that wrote them quits. It does not remove the macOS screen saver's
+log, which is small; delete it by hand if you like.
 To remove the GNOME extension by hand, switch it off in GNOME's *Extensions* app before deleting its
 folder, or run `jetcarp host gnome remove`, which does both.
 
@@ -84,8 +93,8 @@ Remove the program last: `jetcarp uninstall` needs it to undo the rest. Then use
 
 | Installed with | Remove with |
 | --- | --- |
-| The shell installer | `curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.sh \| sh -s -- --uninstall`, or `sh jetcarp-installer.sh --uninstall`: it deletes `~/.local/lib/jetcarp` and the link `~/.local/bin/jetcarp` |
-| The PowerShell installer | the installer again with `-Uninstall`: it deletes `%LOCALAPPDATA%\Programs\jetcarp` and takes it off your user `PATH` |
+| The shell installer | `curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.sh \| sh -s -- --uninstall`, or `sh jetcarp-installer.sh --uninstall`: it deletes `~/.local/lib/jetcarp` and the link `~/.local/bin/jetcarp`, and the folders it made for them (such as `~/.local/lib`) if they are empty |
+| The PowerShell installer | the installer again with `-Uninstall`: it deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off your user `PATH`, and deletes `%LOCALAPPDATA%\Programs` if it made it and it is empty |
 | pipx, uv, pip | `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall jetcarp` |
 | Homebrew | `brew uninstall jetcarp` (and `brew untap jprodgers/jetcarp`) |
 | Scoop | `scoop uninstall jetcarp` (and `scoop bucket rm jetcarp`) |

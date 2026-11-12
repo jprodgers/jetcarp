@@ -65,8 +65,10 @@ when, and the jobs it started; its being there is what tells the app that setup 
 `rotations/`, one JSON file each. The host records the command that starts it in `host-program`, for
 GNOME's menu and the Windows screen saver; while it shows a still picture as your desktop background
 it keeps the stills in `desktop-pictures/` and remembers your own picture in `desktop-picture.json`,
-so that it can put it back. Files written by another settings version, or that cannot be read, give
-the defaults.
+so that it can put it back. On macOS, installing the screen saver records the screen saver macOS had
+chosen in `screen-saver-before.plist`, for removing it to put back (the file goes then), and removing
+it keeps a copy of macOS's wallpaper store as it was in `wallpaper-store-before-saver-remove.plist`.
+Files written by another settings version, or that cannot be read, give the defaults.
 
 **Data.**
 
@@ -121,7 +123,7 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_LIBRARY` | The pattern catalog: a `.sqlite` file, or a folder that holds (or will hold) `library.sqlite`. Default `<data>/library.sqlite`. Commands that use the catalog also take `--library` |
 | `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
-| `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
+| `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder (when that folder is a `bin` folder, as in Homebrew and Python installs) or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
 | `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |
 | `JETCARP_AI_CONTROL` | `1` or `on`: the app switches AI control on at launch, as its setting of the same name does |
 | `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default 1,536) |

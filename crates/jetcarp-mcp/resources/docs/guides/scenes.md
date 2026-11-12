@@ -121,7 +121,8 @@ A few limits apply:
 
 ## Get the scene back from a picture
 
-Every PNG made by `jetcarp run --png`, *File → Export PNG…*, *File → Export wallpaper…*,
+Every PNG made by `jetcarp run --png`, *File → Export the world as PNG…*, *File → Export the view
+as PNG…*, *File → Export wallpaper…*,
 `jetcarp wallpaper`, `jetcarp hashlife --png` and a script's `save_png` carries its scene inside it,
 as PNG text chunks: `jetcarp:scene` (the whole scene), `jetcarp:version`, `jetcarp:generation`,
 `jetcarp:hash` and `jetcarp:dead_boundary`. A picture can therefore always be traced back to the run

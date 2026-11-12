@@ -51,7 +51,10 @@ patch's open boundary.
 Each pattern also gets a rule-free identity: a hash of the tiling, the neighbourhood, the class,
 period and displacement, and its whole evolution over one period in a canonical orientation (the
 smallest over every phase and every symmetry of the tiling). The same object found in another phase,
-orientation or rule is therefore recognised as one pattern. For Life-like and Generations rules the
+orientation or rule is therefore recognised as one pattern. The object finder (`jetcarp objects`, a
+script's `objects()`, the app) uses the same symmetries and, on periodic tilings, labels each object
+by the first digits of this id, so a ship and its mirror image are one line of its census, under the
+id `jetcarp library show` takes. For Life-like and Generations rules the
 catalogue also stores the pattern's *rule range*: every transition the pattern asks of the rule over
 one period fixes some birth and survival counts and forbids others, and every rule between the
 smallest and the largest consistent rule runs the pattern through exactly the same phases. That is how
@@ -183,7 +186,7 @@ is the report, kept with the job in the catalogue and written as text, CSV, JSON
 every rule's first soup. A JSON report
 holds the whole specification, so `--rerun` repeats it exactly.
 
-**Command.** `jetcarp search census --family hex --all --birth 1-6 --survive 0-6 --csv hex.csv`.
+**Command.** `jetcarp search census --tilings hex --all --birth 1-6 --survive 0-6 --csv hex.csv`.
 
 ## Ants and turmites
 
@@ -262,10 +265,14 @@ starting pattern, not a collision.
 
 **How it classifies.** A run has settled when everything left is a still life, oscillator or
 spaceship and no spaceship is heading for anything. The outcome is *both survive*, *both die*, *A
-survives*, *B survives*, or *new objects*; runs can also explode or fail to settle.
+survives*, *B survives*, or *new objects*; runs can also explode or fail to settle. B/S and
+Generations rules run on the soup hunter's bit-parallel stepper until a pattern comes next to the
+grid's edge, and on the grid from then on: the same outcomes, without stepping the grid's empty
+cells, so a run takes milliseconds.
 
 **How results are checked.** The products are verified and catalogued like any other find (unless
-`--no-store`), and every run's final state can be drawn on a contact sheet.
+`--no-store`), and every run's final state can be drawn on a contact sheet, each picture cropped to
+where the patterns are.
 
 **Command.** `jetcarp search collide A B --offsets -6..6`, with A and B pattern ids from
 `jetcarp library list`.
@@ -313,7 +320,11 @@ shape of what it left (dust, clusters, large structures, smooth regions), and wh
 Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
-supports in large batches while a CPU loop runs the rest. Like the other searches it runs as a job,
+supports in large batches while a CPU loop runs the rest. A run on the processor that would take
+longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
+run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
+exactly. When a search's time is up, runs still going on the processor are given up unrecorded, and
+the GPU's last batches are sized from its pace so far to end in time. Like the other searches it runs as a job,
 but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
 runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
 [Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the

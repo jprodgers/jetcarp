@@ -242,7 +242,8 @@ JETCARP looks for the starter pack's folder in one place, the first of:
 
 1. `JETCARP_BUNDLED_PACKS`, if it is set;
 2. `share/jetcarp/packs` beside the folder the program is in (`<program folder>/../share/jetcarp/packs`),
-   where Homebrew and the Python package put it;
+   when the program sits in a `bin` or `Scripts` folder, as Homebrew and the Python package put
+   it;
 3. `packs` in the program's folder, as in the release archives and the installers' folders.
 
 The program's folder is the one the program really is in: a link to it on your `PATH`, as pipx, uv,

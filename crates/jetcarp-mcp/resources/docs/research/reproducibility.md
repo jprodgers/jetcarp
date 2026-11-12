@@ -151,8 +151,9 @@ described with the method.
 - **The exploratory search as a whole.** `jetcarp search explore` runs a CPU loop and a GPU loop side
   by side and shares its archive between them, so two searches with the same settings do not try the
   same candidates in the same order, and a stopped search continues from its saved archive rather than
-  resuming exactly as the other jobs do. Each run it stores can be replayed exactly from its tiling,
-  rule, seed and random state.
+  resuming exactly as the other jobs do. A run on the processor past its time cap is kept with the
+  generations it reached, which depend on the machine. Each run it stores can be replayed exactly
+  from its tiling, rule, seed, random state and generations.
 - **Before 1.0.** The scene format, and the behaviour of a rule or a tiling, may still change between
   releases. Such changes are deliberate, show up in the pins and are listed in the changelog, but an
   old scene may then reach a different state. The Penrose rhombs already lay out their tiles

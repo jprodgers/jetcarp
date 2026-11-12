@@ -102,15 +102,19 @@ tiling by tiling.
 ## 5. Crash two ships together
 
 `jetcarp library paste` places library patterns on one grid. Each placement is
-`ID@X,Y`, with an orientation `oK` if you want one. X and Y count tiles, not unit cells: the
-120 × 40 unit-cell grid here is 1,440 tiles wide, because each row of a unit cell holds twelve
-tiles. Put one ship a third of the way across, facing right (`o1`), and another two thirds across,
-facing left:
+`ID@X,Y`, with an orientation `oK` if you want one. X is a tile column and Y a row, as in a
+script's `w.get(x, y)`, while `--size` counts unit cells: the 120 × 40 unit-cell grid here is
+1,440 tiles wide, because each unit cell holds twelve tiles, and the command prints the grid's size
+in tiles. Put one ship a third of the way across, facing right (`o1`), and another two thirds
+across, facing left:
 
 ```text
 $ jetcarp library paste 16bc37@480,20,o1 16bc37@960,20 --size 120x40 --boundary dead --out meet.json
 scene: meet.json (2 patterns, 1 CA(s), hash 65c7546103b51c38)
+grid:  1440 x 40 tiles: x 0 to 1439 (tile columns, 12 to a unit cell), y 0 to 39 (rows)
 ```
+
+`16bc37@u40,20,o1 16bc37@u80,20` places them in the same spots, with X in unit cells.
 
 Run it and look at the population as they close in:
 
@@ -129,8 +133,8 @@ row or two (`16bc37@960,22`) and they pass each other unharmed instead. Open `me
 app (`jetcarp --scene meet.json`) to watch it.
 
 JETCARP can also try the collisions for you. This runs one ship into another at every offset from
-−2 to 2 in each direction, and draws every outcome on one contact sheet; it takes a couple of
-minutes:
+−2 to 2 in each direction, and draws every outcome on one contact sheet; it takes under a
+second:
 
 ```text
 $ jetcarp search collide 16bc37 16bc37 --offsets -2..2 --phases 0 --gens 256 --sheet hits.png

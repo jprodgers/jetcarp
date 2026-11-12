@@ -8,18 +8,23 @@ it (see [Scenes](scenes.md#get-the-scene-back-from-a-picture)).
 
 | To make | In the app | On the command line | In a script |
 | --- | --- | --- | --- |
-| A picture of the world | *File → Export PNG…* | `jetcarp run --png` | `w.save_png(path)` |
+| A picture of the world | *File → Export the world as PNG…*, *File → Export the view as PNG…* | `jetcarp run --png` | `w.save_png(path)` |
 | Desktop wallpapers | *File → Export wallpaper…* | `jetcarp wallpaper` | `jetcarp("wallpaper.export", #{…})` |
 | An animation | | `jetcarp media render` | `w.media(#{…})`, `media(#{…})` |
 | A contact sheet | *File → Export contact sheet…* | `jetcarp sheet`, `jetcarp quickstart --sheet`, `jetcarp isohedral --png` | `sweep(#{…})` writes one picture per run |
 
 ## A picture of the world
 
-**In the app**, *File → Export PNG…* (Ctrl+E) saves the whole tiling as a PNG; the menu shows the size
-it will be, such as *Export PNG (2400 × 1600)…*. *Export size*, just below it, sets the scale: *fit*
-gives 2400 pixels on the longer side, and a number gives that many pixels per tile (up to 64). Large
-images are written in strips, so they need little memory. Tile outlines are drawn where tiles are at
-least 7 pixels across.
+**In the app**, *File → Export the world as PNG…* (Ctrl+E) saves the whole tiling as a PNG, framed
+to fit whatever the view shows, so a world you have zoomed into is still exported whole; the menu
+shows the size it will be, such as *Export the world as PNG (2400 × 1600)…*. *Export size*, just
+below it, sets the scale: *fit* gives 2400 pixels on the longer side, and a number gives that many
+pixels per tile (up to 64). Large images are written in strips, so they need little memory. Tile
+outlines are drawn where tiles are at least 7 pixels across.
+
+*File → Export the view as PNG…* saves what the grid shows now instead: the same centre and zoom, at
+the screen's resolution (the grid's size in pixels, or the outputs' span when the grid is shown on
+outputs), with tile outlines as *View → Cell outlines* has them.
 
 **On the command line**, `jetcarp run` writes a picture of the state it ends in:
 
