@@ -427,7 +427,7 @@ impl Stage {
             play,
             clock,
             due,
-            due || self.player.watches_done(),
+            due || self.player.wants_done(play),
         );
         let action = self.player.tick(&obs);
         if let Some(w) = self.player.take_warning() {

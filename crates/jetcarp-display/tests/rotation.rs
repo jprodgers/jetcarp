@@ -219,6 +219,74 @@ fn one_a_day_changes_at_midnight_and_restarts_within_the_day() {
 }
 
 #[test]
+fn one_a_day_starts_a_finished_item_again_instead_of_moving_on() {
+    // "A classic a day" has no endings: an ant that leaves the grid, or a world that dies, is
+    // done, and starts again once it has run a minute; it never gives way to the next item.
+    let mut r = rotation(vec![scene_item("a"), scene_item("b"), scene_item("c")]);
+    r.order = Order::Daily;
+    let mut p = player(&r, 1);
+    let today = begin(&mut p, 0.0);
+    assert_eq!(today, 20_000 % 3, "chosen by the date");
+    assert!(!p.wants_done(30.0), "not before it has run a minute");
+    let mut o = obs(30.0, 10);
+    o.done = true;
+    assert_eq!(p.tick(&o), Action::Stay);
+    assert!(p.wants_done(61.0));
+    o.now = 61.0;
+    assert_eq!(p.tick(&o), Action::Load(today), "the same item again");
+    p.on_loaded(61.0, 0, MONDAY_NOON);
+    o.now = 62.0;
+    o.done = false;
+    assert_eq!(p.tick(&o), Action::Stay);
+    // A restarted program lands on the same item.
+    assert_eq!(player(&r, 99).start(MONDAY_NOON), Some(today));
+}
+
+#[test]
+fn one_an_hour_follows_the_clock_and_starts_a_finished_item_again() {
+    let n = 7;
+    // Each pass of n hours shows every item once, in a new order, and never repeats an item
+    // across the boundary between passes.
+    let base = 20_000 * 24 / n as i64 * n as i64;
+    let slots: Vec<usize> = (base..base + 10 * n as i64)
+        .map(|h| hourly_slot(h, n))
+        .collect();
+    for pass in slots.chunks(n) {
+        assert_eq!(pass.iter().collect::<HashSet<_>>().len(), n, "{pass:?}");
+    }
+    assert!(slots.windows(2).all(|w| w[0] != w[1]), "{slots:?}");
+    assert_ne!(slots[..n], slots[n..2 * n], "a new order each pass");
+    assert_eq!(
+        hourly_slot(base + 3, n),
+        slots[3],
+        "the clock alone decides"
+    );
+    assert_eq!(hourly_slot(5, 2), 1);
+    assert_eq!(hourly_slot(-1, 1), 0);
+
+    let mut r = rotation((0..n).map(|k| scene_item(&format!("i{k}"))).collect());
+    r.order = Order::Hourly;
+    let mut p = player(&r, 1);
+    let noon = MONDAY_NOON.hour();
+    let first = begin(&mut p, 0.0);
+    assert_eq!(first, hourly_slot(noon, n));
+    assert_eq!(
+        player(&r, 42).start(MONDAY_NOON),
+        Some(first),
+        "after a restart"
+    );
+    // Finished within the hour: the same item again.
+    let mut o = obs(90.0, 10);
+    o.done = true;
+    assert_eq!(p.tick(&o), Action::Load(first));
+    p.on_loaded(90.0, 0, MONDAY_NOON);
+    // The next hour: that hour's item.
+    let mut o = obs(100.0, 10);
+    o.clock.minute = 13 * 60 + 1;
+    assert_eq!(p.tick(&o), Action::Load(hourly_slot(noon + 1, n)));
+}
+
+#[test]
 fn scripts_move_on_jump_reseed_and_remember() {
     let mut r = rotation(vec![scene_item("a"), scene_item("b"), scene_item("c")]);
     r.script = r#"

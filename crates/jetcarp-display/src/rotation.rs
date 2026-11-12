@@ -25,6 +25,10 @@ use std::path::{Path, PathBuf};
 pub const MAX_SERIES: usize = 100_000;
 /// Seconds between runs of a rotation's script.
 const SCRIPT_EVERY: f64 = 1.0;
+/// Seconds between looks at whether a one-a-day or one-an-hour item has finished.
+const DONE_EVERY: f64 = 1.0;
+/// A one-a-day or one-an-hour item that has finished starts again once it has run this long.
+const RESTART_AFTER: f64 = 60.0;
 /// Rhai operations one run of a rotation's script may use.
 const SCRIPT_OPS: u64 = 200_000;
 
@@ -37,6 +41,13 @@ pub struct Clock {
     pub minute: u32,
     /// Days since 1970-01-01, local.
     pub day: i64,
+}
+
+impl Clock {
+    /// Hours since 1970-01-01, local.
+    pub fn hour(&self) -> i64 {
+        self.day * 24 + (self.minute / 60) as i64
+    }
 }
 
 impl Clock {
@@ -356,19 +367,52 @@ pub enum Order {
     InOrder,
     /// A new random order each time through.
     Shuffle,
-    /// One item per calendar day, the next one tomorrow; it restarts if it ends during the day.
+    /// One item per calendar day, chosen by the date: item `d mod n` on day `d` (days since
+    /// 1970-01-01), the next one tomorrow. It starts again if it finishes during the day.
     Daily,
+    /// One item per hour of the clock, chosen by the hour ([`hourly_slot`]): every item once in
+    /// a random order, then another order. It starts again if it finishes within the hour.
+    Hourly,
 }
 
 impl Order {
-    pub const ALL: [Order; 3] = [Order::InOrder, Order::Shuffle, Order::Daily];
+    pub const ALL: [Order; 4] = [Order::InOrder, Order::Shuffle, Order::Daily, Order::Hourly];
     pub fn label(self) -> &'static str {
         match self {
             Order::InOrder => "In order",
             Order::Shuffle => "Shuffled",
             Order::Daily => "One a day",
+            Order::Hourly => "One an hour",
         }
     }
+
+    /// Whether the clock chooses the item, so a finished one starts again rather than giving way.
+    pub fn by_clock(self) -> bool {
+        matches!(self, Order::Daily | Order::Hourly)
+    }
+}
+
+/// The item of `n` that hour `hour` (hours since 1970-01-01, local) shows in a one-an-hour
+/// rotation. Hours are taken `n` at a time; each such pass shows every item once, in an order
+/// shuffled from the pass's number, and never starts with the item the pass before ended on. It
+/// depends on the clock alone, so a restarted host shows the same item.
+pub fn hourly_slot(hour: i64, n: usize) -> usize {
+    if n <= 2 {
+        return hour.rem_euclid(n.max(1) as i64) as usize;
+    }
+    let pass = hour.div_euclid(n as i64);
+    let order_of = |pass: i64| {
+        let mut o: Vec<usize> = (0..n).collect();
+        shuffle(&mut o, (pass as u64) ^ 0x686f_7572_6c79_2121);
+        o
+    };
+    let mut order = order_of(pass);
+    // Swapping the first two leaves the last in place, so the pass before ended on its own
+    // shuffle's last item.
+    if order[0] == order_of(pass - 1)[n - 1] {
+        order.swap(0, 1);
+    }
+    order[hour.rem_euclid(n as i64) as usize]
 }
 
 /// A named rotation.
@@ -728,6 +772,9 @@ pub struct Player {
     last_script: f64,
     last_minute: u32,
     day: i64,
+    hour: i64,
+    /// When a one-a-day or one-an-hour item was last looked at for having finished.
+    done_checked: f64,
     warning: Option<String>,
 }
 
@@ -770,6 +817,8 @@ impl Player {
             last_script: f64::NEG_INFINITY,
             last_minute: 0,
             day: 0,
+            hour: 0,
+            done_checked: f64::NEG_INFINITY,
             warning: None,
         })
     }
@@ -780,8 +829,10 @@ impl Player {
             return None;
         }
         self.day = clock.day;
+        self.hour = clock.hour();
         self.pos = match self.mode {
             Order::Daily => clock.day.rem_euclid(self.order.len() as i64) as usize,
+            Order::Hourly => hourly_slot(self.hour, self.order.len()),
             _ => (0..self.order.len())
                 .find(|&p| self.eligible(p, clock))
                 .unwrap_or(0),
@@ -821,6 +872,19 @@ impl Player {
     pub fn watches_done(&self) -> bool {
         self.current()
             .is_some_and(|s| s.end.iter().any(|e| matches!(e, End::Done)))
+    }
+
+    /// Whether [`Observation::done`] is wanted at `now`: for an item that ends when finished, and
+    /// about once a second for a one-a-day or one-an-hour item that may start again.
+    pub fn wants_done(&self, now: f64) -> bool {
+        self.watches_done() || self.restart_due(now)
+    }
+
+    fn restart_due(&self, now: f64) -> bool {
+        self.mode.by_clock()
+            && self.loaded
+            && now - self.item_started >= RESTART_AFTER
+            && now - self.done_checked >= DONE_EVERY
     }
 
     /// A script's or a run's problem, once.
@@ -990,6 +1054,17 @@ impl Player {
             self.day = o.clock.day;
             return self.go(o.clock.day.rem_euclid(self.order.len() as i64) as usize);
         }
+        if self.mode == Order::Hourly && o.clock.hour() != self.hour {
+            self.hour = o.clock.hour();
+            return self.go(hourly_slot(self.hour, self.order.len()));
+        }
+        // A one-a-day or one-an-hour item that has finished (an ant gone off the edge, a world
+        // that died) starts again rather than staying still all day.
+        let restart = self.restart_due(o.now);
+        if restart {
+            self.done_checked = o.now;
+        }
+        let finished = restart && o.done;
         if !self.eligible(self.pos, o.clock) {
             let a = self.advance(1, o.clock);
             if a != Action::Stay {
@@ -1021,7 +1096,7 @@ impl Player {
             }
         }
         let slot = &self.slots[self.order[self.pos]];
-        let fired = slot.end.iter().any(|e| self.end_fired(e, o));
+        let fired = finished || slot.end.iter().any(|e| self.end_fired(e, o));
         let hold = slot.hold_s as f64;
         self.last_minute = o.clock.minute;
         if !fired {
@@ -1034,9 +1109,9 @@ impl Player {
         self.finish(o.clock)
     }
 
-    /// The current item is over.
+    /// The current item is over: the next, or, where the clock chooses the item, the same again.
     fn finish(&mut self, clock: Clock) -> Action {
-        if self.mode == Order::Daily {
+        if self.mode.by_clock() {
             return self.go(self.pos);
         }
         self.advance(1, clock)
@@ -1100,7 +1175,8 @@ pub fn builtins() -> Vec<Rotation> {
         },
         Rotation {
             name: "A classic a day".into(),
-            description: "A different classic each day, restarting if it ends.".into(),
+            description: "A different classic each day, the same all day, restarting if it ends."
+                .into(),
             order: Order::Daily,
             default_minutes: None,
             items: classics(),
@@ -1112,13 +1188,10 @@ pub fn builtins() -> Vec<Rotation> {
         },
         Rotation {
             name: "Classics, hourly".into(),
-            description: "The classics in a new random order, an hour each.".into(),
-            order: Order::Shuffle,
-            default_minutes: Some(60.0),
-            items: classics()
-                .into_iter()
-                .map(|i| i.end(End::Minutes { minutes: 60.0 }))
-                .collect(),
+            description: "The classics in a new random order, one each hour of the clock, restarting if it ends.".into(),
+            order: Order::Hourly,
+            default_minutes: None,
+            items: classics(),
             look: Look {
                 refill: Some(true),
                 ..Default::default()
