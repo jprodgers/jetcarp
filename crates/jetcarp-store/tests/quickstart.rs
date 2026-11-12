@@ -599,6 +599,61 @@ fn featured_shuffle_mixes_the_best_of_every_category() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn the_featured_order_survives_a_reload() {
+    let (lib, dir) = temp_lib("keep-order");
+    let mut runs = Vec::new();
+    for c in ["Gliders & ships", "Turbulence"] {
+        for k in 0..50 {
+            let rule: &'static str = Box::leak(format!("B3{k}/S23").into_boxed_str());
+            let id = runs.len() as i64 + 1;
+            runs.push(Run {
+                id,
+                category: c,
+                family: "life_like",
+                tiling: "square",
+                group: "square",
+                rule,
+                seed: "{}",
+                score: 100.0 - id as f64,
+            });
+        }
+    }
+    publish(&lib, &runs);
+    let featured = |items: &[menu::Item]| -> Vec<String> {
+        menu::select(items, &Filter::default(), Sort::Featured)
+            .into_iter()
+            .map(|i| items[i].handle.clone())
+            .collect()
+    };
+    let load = || {
+        let mut items = menu::load(&lib);
+        menu::shuffle(&mut items, 11);
+        items
+    };
+    let before = load();
+    let order = featured(&before);
+    // Hiding an entry reloads the menu: the same seed alone moves the cards after it.
+    let hidden = order[3].clone();
+    lib.set_quickstart_hidden(&hidden, true).unwrap();
+    let mut after = load();
+    let unkept: Vec<String> = featured(&after);
+    let expected: Vec<String> = order.iter().filter(|h| **h != hidden).cloned().collect();
+    assert_ne!(unkept, expected, "a reload reshuffles without keep_order");
+    menu::keep_order(&mut after, &before);
+    assert_eq!(featured(&after), expected, "every other card keeps its place");
+    // An entry that comes back takes a place of its own, and the rest still keep theirs.
+    lib.set_quickstart_hidden(&hidden, false).unwrap();
+    let mut again = load();
+    menu::keep_order(&mut again, &after);
+    let now: Vec<String> = featured(&again)
+        .into_iter()
+        .filter(|h| *h != hidden)
+        .collect();
+    assert_eq!(now, expected);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn scene_row(id: &str, title: &str) -> QuickStartRow {
     let e = jetcarp_core::quickstart::entries()
         .into_iter()

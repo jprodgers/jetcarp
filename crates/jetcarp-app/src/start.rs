@@ -218,8 +218,11 @@ impl Menu {
 
     fn poll(&mut self) {
         let Some(rx) = &self.loading else { return };
-        if let Ok(items) = rx.try_recv() {
+        if let Ok(mut items) = rx.try_recv() {
             self.loading = None;
+            // One Featured order per session: a reload (an entry hidden, a pack imported) keeps
+            // the cards where they were; only Shuffle draws a new order.
+            menu::keep_order(&mut items, &self.items);
             self.items = items;
             self.rev += 1;
             self.order_key = None;

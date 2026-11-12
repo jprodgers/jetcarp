@@ -13,7 +13,8 @@
 //! family ([`super::family_label`]: Life-like, Generations, ...), and the source ([`QsSource`]).
 //!
 //! **Order**: [`Sort::Featured`] is a seeded [`shuffle`] of the best entries of every category
-//! (the app draws a new seed at each start and on "Shuffle"); Score, Rule, and Tiling are
+//! (the app draws a new seed at each start and on "Shuffle", and keeps the order through reloads
+//! in between with [`keep_order`]); Score, Rule, and Tiling are
 //! plain sorts. Filtering is [`select`] and the sidebar's counts are [`facets_for`]: each
 //! dimension is counted with the filters of the others applied.
 //!
@@ -340,6 +341,30 @@ pub fn shuffle(items: &mut [Item], seed: u64) {
     keys.sort_unstable_by_key(|k| (k.0, k.1));
     for (rank, (_, _, i)) in keys.into_iter().enumerate() {
         items[i].shuffle_rank = rank as u32;
+    }
+}
+
+/// Keeps the [`Sort::Featured`] order of a menu loaded again (`items`, already [`shuffle`]d) as it
+/// was (`before`), so it stays the same for the whole session: the entries both have keep their
+/// order among themselves, in the places they take in the new shuffle, and new entries keep their
+/// new places. The menu reloads whenever the library's Quick Start rows change (an entry hidden or
+/// added), and each shuffle draws its numbers in turn, so one entry more or less moved every
+/// card after it.
+pub fn keep_order(items: &mut [Item], before: &[Item]) {
+    let old: HashMap<&str, u32> = before
+        .iter()
+        .map(|i| (i.handle.as_str(), i.shuffle_rank))
+        .collect();
+    let mut kept: Vec<(u32, usize)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(k, i)| old.get(i.handle.as_str()).map(|&r| (r, k)))
+        .collect();
+    let mut places: Vec<u32> = kept.iter().map(|&(_, k)| items[k].shuffle_rank).collect();
+    places.sort_unstable();
+    kept.sort_unstable();
+    for ((_, k), place) in kept.into_iter().zip(places) {
+        items[k].shuffle_rank = place;
     }
 }
 
