@@ -1164,6 +1164,20 @@ pub fn render_view(
     opts: &ViewOptions,
 ) -> Image {
     let c = Colorer::new(world);
+    render_view_with(world, &|i| c.color(i), width, height, center, scale, opts)
+}
+
+/// [`render_view`] with each cell's colour from `color` (a cell index map, for instance, as the
+/// Quick Start cards' framed previews use).
+pub fn render_view_with(
+    world: &World,
+    color: &(dyn Fn(usize) -> Rgba + Sync),
+    width: u32,
+    height: u32,
+    center: P,
+    scale: f64,
+    opts: &ViewOptions,
+) -> Image {
     let mut img = Image {
         width,
         height,
@@ -1177,7 +1191,7 @@ pub fn render_view(
             let y0 = k * strip;
             view_rows(
                 world,
-                &|i| c.color(i),
+                color,
                 (width, y0, (y0 + strip).min(height)),
                 (height, center, scale),
                 opts,
