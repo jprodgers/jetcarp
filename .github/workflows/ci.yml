@@ -28,7 +28,7 @@ jobs:
           - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher" }
           - { name: macOS arm64, os: macos-latest, features: "" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
@@ -64,12 +64,48 @@ jobs:
     name: Formatting
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - name: rustfmt
         run: cargo fmt --all -- --check
+
+  notices:
+    # THIRD_PARTY_LICENSES.html, which ships in every release, must match Cargo.lock.
+    name: Third-party notices are current
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-about (the version packaging/notices.sh names)
+        run: cargo install --locked cargo-about --version 0.9.3 --features cli
+      - run: packaging/notices.sh --check
+
+  lint:
+    # The workflows (actionlint, with shellcheck on their scripts) and the packaging scripts.
+    name: Workflows and packaging scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: actionlint 1.7.12, checked against its release's checksum
+        run: |
+          v=1.7.12
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v$v/actionlint_${v}_linux_amd64.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_${v}_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf "actionlint_${v}_linux_amd64.tar.gz" actionlint
+      - name: actionlint
+        run: ./actionlint -color
+      - name: shellcheck (the installers as POSIX sh, as they run under `curl | sh`)
+        run: |
+          shellcheck packaging/build.sh packaging/notices.sh packaging/update-manifest-repo.sh
+          shellcheck -s sh packaging/install.sh
+          shellcheck -s dash packaging/install.sh
+      - name: The packaging script's own checks
+        run: |
+          python3 packaging/package.py verify --tag "v$(python3 packaging/package.py version)" --allow-undated
+          python3 packaging/package.py notes --out /tmp/notes.md
+          python3 packaging/package.py installers --out /tmp/installers
 
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.
@@ -82,7 +118,7 @@ jobs:
           - { name: macOS x86_64, os: macos-latest, target: x86_64-apple-darwin }
           - { name: Linux aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

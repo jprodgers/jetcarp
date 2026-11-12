@@ -1,0 +1,460 @@
+# Build and publish a JETCARP release.
+#
+#   python3 packaging/package.py set-version 0.4.0-rc.1      # or 0.4.0; also updates Cargo.lock
+#   git commit -am "Release 0.4.0-rc.1" && git tag v0.4.0-rc.1 && git push origin main v0.4.0-rc.1
+#
+# Everything below is derived from the tag, which must be v<the version in Cargo.toml>.
+#
+# - A release candidate (a tag with a pre-release part, such as v0.4.0-rc.1) becomes a GitHub
+#   pre-release, published at once so that testers can install it with the installers attached
+#   to it. Nothing goes to PyPI, crates.io, Homebrew or Scoop; it goes to TestPyPI only when the
+#   repository variable PUBLISH_TESTPYPI is 'true'.
+# - A release (v0.4.0) becomes a draft GitHub release, created last, after every target has built
+#   and the tests have passed. Publishing the draft by hand, once it has been checked, runs this
+#   workflow again (`release: published`), and that run publishes to PyPI, crates.io, the
+#   Homebrew tap and the Scoop bucket: each only when its repository variable is 'true'
+#   (PUBLISH_PYPI, PUBLISH_CRATES, UPDATE_HOMEBREW, UPDATE_SCOOP), so all are off until switched
+#   on. The tap's and the bucket's manifests point at the release's files, so they are written
+#   only once those files are public.
+# - workflow_dispatch is a dry run: give it the version in Cargo.toml. It runs every check, builds
+#   every target and leaves the files as the run's artifacts; it publishes nothing.
+# - A pull request that touches the packaging runs the same dry run, without the tests (CI runs
+#   those) and without requiring the changelog's date.
+#
+# One-time set-up, on the day publishing is switched on:
+# - PyPI uses trusted publishing (OpenID Connect), so there is no API token in this repository's
+#   secrets. Configure it once at https://pypi.org/manage/account/publishing/ (a "pending
+#   publisher" creates the project on first upload): project `jetcarp`, owner `jprodgers`,
+#   repository `jetcarp`, workflow `release.yml`, environment `pypi`. TestPyPI the same way at
+#   https://test.pypi.org/manage/account/publishing/, environment `testpypi`.
+# - crates.io: the secret CARGO_REGISTRY_TOKEN in the environment `crates-io` (a token that may
+#   publish new crates; once the crates exist, crates.io's trusted publishing can replace it).
+# - Homebrew and Scoop: the repositories jprodgers/homebrew-jetcarp and jprodgers/scoop-jetcarp,
+#   and a fine-grained token with read and write access to their contents, as the secret
+#   PACKAGE_REPOS_TOKEN in the environments `homebrew` and `scoop`.
+# - Windows signing (SignPath Foundation): see the build job; off until SIGNPATH_ORGANIZATION_ID
+#   is set.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (a dry run; nothing is published)"
+        required: true
+      starter_pack_url:
+        description: "Optional: URL of a .tar.gz whose top level is the starter pack's stores"
+        required: false
+        default: ""
+      starter_pack_sha256:
+        description: "SHA-256 of that file (needed with a URL)"
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/release.yml"
+      - "pyproject.toml"
+      - "Cargo.toml"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  MATURIN_VERSION: "1.16.0"
+  ZIGLANG_VERSION: "0.16.0"
+  # Anything a step runs keeps away from the runner's own settings, data and Pictures folders.
+  JETCARP_CONFIG_DIR: ${{ github.workspace }}/.ci/config
+  JETCARP_DATA_DIR: ${{ github.workspace }}/.ci/data
+  JETCARP_OUT: ${{ github.workspace }}/.ci/out
+  JETCARP_LIBRARY: ${{ github.workspace }}/.ci/library
+
+jobs:
+  # ------------------------------------------------------------------------------------ checks
+  verify:
+    name: The tag, the version and the changelog agree
+    if: github.event_name != 'release'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      packs: ${{ steps.packs.outputs.packs }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The tag matches the version in Cargo.toml, and the changelog has it
+        # A tag that disagrees with Cargo.toml gives a release whose files all report another
+        # version than the one people downloaded. A release (not a candidate) also needs its
+        # changelog section dated, not "unreleased".
+        id: check
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            push) tag="$GITHUB_REF_NAME"; extra="" ;;
+            workflow_dispatch) tag="v${INPUT_VERSION#v}"; extra="" ;;
+            *) tag="v$(python3 packaging/package.py version)"; extra="--allow-undated" ;;
+          esac
+          python3 packaging/package.py verify --tag "$tag" --out "$GITHUB_OUTPUT" $extra
+
+      - name: Notes for this version
+        # The changelog's section for this version, so the release page and the changelog cannot
+        # disagree.
+        run: python3 packaging/package.py notes --out notes.md
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: notes.md
+
+      - name: The starter pack, if there is one
+        # A .tar.gz whose top level is pack stores (docs/src/reference/pack-format.md), from the
+        # dispatch inputs or the repository variables STARTER_PACK_URL and STARTER_PACK_SHA256,
+        # else packaging/starter-pack/ if it is in the repository. With none, the release is
+        # built without one.
+        id: packs
+        env:
+          URL: ${{ inputs.starter_pack_url || vars.STARTER_PACK_URL }}
+          SHA: ${{ inputs.starter_pack_sha256 || vars.STARTER_PACK_SHA256 }}
+        run: |
+          mkdir -p starter-pack
+          if [ -n "$URL" ]; then
+            if [ -z "$SHA" ]; then
+              echo "::error::a starter pack URL needs its SHA-256"
+              exit 1
+            fi
+            curl -fsSL --retry 3 -o starter-pack.tar.gz "$URL"
+            echo "$SHA  starter-pack.tar.gz" | sha256sum -c -
+            tar -xzf starter-pack.tar.gz -C starter-pack
+          elif [ -d packaging/starter-pack ]; then
+            cp -R packaging/starter-pack/. starter-pack/
+          fi
+          if [ -n "$(ls -A starter-pack)" ]; then
+            echo "packs=true" >> "$GITHUB_OUTPUT"
+            du -sh starter-pack/*
+          else
+            echo "packs=false" >> "$GITHUB_OUTPUT"
+            echo "No starter pack: the release is built without one."
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: steps.packs.outputs.packs == 'true'
+        with:
+          name: starter-pack
+          path: starter-pack/
+
+  test:
+    name: Tests must pass
+    # Pull requests are tested by CI already.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - run: cargo test --workspace --release --locked --no-fail-fast
+
+  # ------------------------------------------------------------------------------------ build
+  build:
+    name: Build (${{ matrix.target }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, smoke: true }
+          # Built on x86_64 with zig, like x86_64: no Arm runner needed, and build-only anyway.
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04, smoke: false }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, smoke: true }
+          - { target: aarch64-apple-darwin, os: macos-latest, smoke: true }
+          # Cross-built on Apple silicon; build-only.
+          - { target: x86_64-apple-darwin, os: macos-latest, smoke: false }
+    defaults:
+      run:
+        shell: bash
+    env:
+      DIST: dist
+      PYTHON: python
+      TARGET: ${{ matrix.target }}
+      # The starter pack's folder, or nothing.
+      PACKS: ${{ needs.verify.outputs.packs == 'true' && 'starter-pack' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: maturin (and zig, which links Linux builds against glibc 2.28)
+        run: |
+          python -m pip install "maturin==$MATURIN_VERSION"
+          if [[ $TARGET == *-linux-gnu ]]; then
+            python -m pip install "ziglang==$ZIGLANG_VERSION"
+          fi
+
+      - uses: actions/download-artifact@v8
+        if: needs.verify.outputs.packs == 'true'
+        with:
+          name: starter-pack
+          path: starter-pack
+
+      - name: Build the wheel and the archive
+        run: packaging/build.sh "$TARGET" ${PACKS:+"$PACKS"}
+
+      # Windows code signing, off until JETCARP is accepted by SignPath Foundation (which needs the
+      # repository public). To switch it on, set the repository variables SIGNPATH_ORGANIZATION_ID
+      # and SIGNPATH_PROJECT_SLUG and the secret SIGNPATH_API_TOKEN. Not yet run: check the first
+      # signed build (Get-AuthenticodeSignature below) before relying on it.
+      - name: Hand the Windows programs to SignPath
+        id: unsigned
+        if: matrix.target == 'x86_64-pc-windows-msvc' && vars.SIGNPATH_ORGANIZATION_ID != '' && github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-windows
+          path: |
+            target/x86_64-pc-windows-msvc/dist/jetcarp.exe
+            target/x86_64-pc-windows-msvc/dist/jetcarpw.exe
+      - name: Sign them (SignPath)
+        if: steps.unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+      - name: Package again with the signed programs
+        # The second build finds the program up to date, so the wheel and the archive are made
+        # again around the signed files; the check fails if it relinked instead.
+        if: steps.unsigned.outcome == 'success'
+        run: |
+          cp signed/jetcarp.exe signed/jetcarpw.exe target/x86_64-pc-windows-msvc/dist/
+          rm -f dist/*.whl dist/*.zip
+          packaging/build.sh "$TARGET" ${PACKS:+"$PACKS"}
+      - name: The packaged program is the signed one
+        if: steps.unsigned.outcome == 'success'
+        shell: pwsh
+        run: |
+          foreach ($f in "jetcarp.exe", "jetcarpw.exe") {
+            $s = Get-AuthenticodeSignature "target/x86_64-pc-windows-msvc/dist/$f"
+            $s | Format-List Path, Status, SignerCertificate
+            if ($s.Status -ne "Valid") { exit 1 }
+          }
+
+      - name: The archive's program runs, and finds the packs beside it
+        if: matrix.smoke
+        run: |
+          for a in dist/jetcarp-*.tar.gz dist/jetcarp-*.zip; do
+            [ -e "$a" ] && python packaging/package.py smoke "$a"
+          done
+
+      - name: The starter pack checks with the program built here
+        if: matrix.target == 'x86_64-unknown-linux-gnu' && needs.verify.outputs.packs == 'true'
+        run: |
+          for d in starter-pack/*/; do
+            target/x86_64-unknown-linux-gnu/dist/jetcarp pack check "$d"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+
+  # ------------------------------------------------------------------------------------ release
+  release:
+    name: The release (created last)
+    needs: [verify, test, build]
+    # Dry runs come here too (the test job is skipped for pull requests), to put the release's
+    # files together; only a tag creates a release.
+    if: always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.test.result != 'failure' && needs.test.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: notes
+
+      - name: Installers and checksums
+        run: |
+          python3 packaging/package.py installers --out release
+          python3 packaging/package.py sums release
+          ls -la release
+
+      - name: The Homebrew, Scoop and winget manifests, filled in (for checking; written at publishing)
+        run: python3 packaging/package.py manifests --sums release/SHA256SUMS --out manifests
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-files
+          path: |
+            release/
+            manifests/
+            notes.md
+
+      - name: Provenance attestations
+        # Lets anyone check a download with `gh attestation verify FILE --repo jprodgers/jetcarp`.
+        # GitHub offers this for public repositories.
+        if: github.event_name == 'push' && !github.event.repository.private
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: release/*
+
+      - name: The GitHub release (a pre-release for a candidate, else a draft)
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v3
+        with:
+          name: JETCARP ${{ needs.verify.outputs.version }}
+          files: release/*
+          body_path: notes.md
+          fail_on_unmatched_files: true
+          draft: ${{ needs.verify.outputs.prerelease != 'true' }}
+          prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
+
+  testpypi:
+    name: TestPyPI (release candidates, when switched on)
+    needs: [verify, release]
+    if: github.event_name == 'push' && needs.verify.outputs.prerelease == 'true' && vars.PUBLISH_TESTPYPI == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/jetcarp
+    permissions:
+      id-token: write # trusted publishing; no token in secrets
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          path: wheels
+          merge-multiple: true
+      - run: find wheels -type f ! -name '*.whl' -delete
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheels/
+          repository-url: https://test.pypi.org/legacy/
+
+  # ------------------------------------------------------------------------------------ publish
+  # These run when a draft release is published by hand, never for a pre-release, and each only
+  # when its repository variable is 'true'.
+  pypi:
+    name: PyPI
+    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.PUBLISH_PYPI == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/jetcarp
+    permissions:
+      contents: read
+      id-token: write # trusted publishing; no token in secrets
+    steps:
+      - name: The wheels, from the release, checked against its SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.whl' --pattern SHA256SUMS --dir wheels
+          cd wheels
+          grep '\.whl$' SHA256SUMS | sha256sum -c -
+          rm SHA256SUMS
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheels/
+
+  crates-io:
+    name: crates.io
+    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.PUBLISH_CRATES == 'true'
+    runs-on: ubuntu-24.04
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish every crate but jetcarp-saver, in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --workspace --locked
+
+  homebrew:
+    name: Homebrew tap
+    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.UPDATE_HOMEBREW == 'true'
+    runs-on: ubuntu-24.04
+    environment: homebrew
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jprodgers/homebrew-jetcarp
+          token: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+          path: tap
+      - name: The formula, from packaging/homebrew/jetcarp.rb and the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          packaging/update-manifest-repo.sh homebrew manifests tap
+          git -C tap push
+
+  scoop:
+    name: Scoop bucket
+    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.UPDATE_SCOOP == 'true'
+    runs-on: ubuntu-24.04
+    environment: scoop
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jprodgers/scoop-jetcarp
+          token: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+          path: bucket
+      - name: The manifest, from packaging/scoop/jetcarp.json and the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
+          git -C bucket config user.name "github-actions[bot]"
+          git -C bucket config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          packaging/update-manifest-repo.sh scoop manifests bucket
+          git -C bucket push
