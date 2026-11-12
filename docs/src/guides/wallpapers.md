@@ -212,7 +212,9 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
   button opens the JETCARP app. It needs `jetcarpw.exe`, the windowless launcher, beside
   `jetcarp.exe`; a build from source makes it with
   `cargo build --release -p jetcarp --features windows-launcher`. Removing it also clears the
-  selection if JETCARP was the chosen screen saver.
+  selection if JETCARP was the chosen screen saver. Close *Screen Saver Settings* first (`install`
+  opens it): while the dialog's preview runs the `.scr`, Windows won't let it be deleted, and
+  `remove` says so and changes nothing.
 - **macOS.** macOS runs screen savers in a sandbox that cannot read JETCARP's settings, so installing
   builds `~/Library/Screen Savers/JETCARP.saver` with the rotation and every item's scene copied
   inside it, signs it for this machine, and opens System Settings where screen savers are chosen

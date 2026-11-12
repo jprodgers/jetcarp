@@ -41,18 +41,42 @@ pub fn describe() -> String {
     let Ok(path) = scr_path() else {
         return "No local data folder on this system.".into();
     };
-    if !path.exists() {
-        return "JETCARP's screen saver is not installed.".into();
+    state(&path.display().to_string(), path.exists(), current_saver())
+}
+
+/// What [`describe`] says: whether the file is there (`installed`), and the screen saver Windows
+/// runs (`selected`, the `SCRNSAVE.EXE` setting; none when it is empty or missing).
+fn state(path: &str, installed: bool, selected: Option<String>) -> String {
+    let selected = selected.filter(|s| !s.trim().is_empty());
+    let ours = selected
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case(path));
+    match (installed, ours, selected) {
+        (true, true, _) => "JETCARP is the selected screen saver.".into(),
+        (true, false, None) => format!(
+            "JETCARP's screen saver is installed at {path}, but no screen saver is selected."
+        ),
+        (true, false, Some(other)) => format!(
+            "JETCARP's screen saver is installed at {path}, but another one is selected ({other})."
+        ),
+        (false, true, _) => "JETCARP's screen saver is not installed, but Windows still names it as \
+             the screen saver, so none runs; `jetcarp host saver remove` clears that."
+            .into(),
+        (false, false, _) => "JETCARP's screen saver is not installed.".into(),
     }
-    let chosen =
-        current_saver().is_some_and(|v| v.eq_ignore_ascii_case(&path.display().to_string()));
-    if chosen {
-        "JETCARP is the selected screen saver.".into()
-    } else {
+}
+
+/// What to say when the `.scr` could not be deleted. A screen saver that is running (the Screen
+/// Saver Settings dialog's preview runs it) cannot be deleted.
+fn not_removed(path: &str, e: &std::io::Error) -> String {
+    // 5: access denied; 32: in use by another process.
+    if matches!(e.raw_os_error(), Some(5 | 32)) {
         format!(
-            "JETCARP's screen saver is at {}, but another one is selected.",
-            path.display()
+            "{path} is in use, most likely by the preview in Screen Saver Settings. Close that \
+             dialog, then run `jetcarp host saver remove` again. Nothing was changed."
         )
+    } else {
+        format!("{path}: {e}. Nothing was changed.")
     }
 }
 
@@ -73,13 +97,21 @@ pub fn install(host: &std::path::Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Deletes the file and stops Windows from running it.
+/// Deletes the file, then stops Windows from running it. The setting is cleared only once the
+/// file is gone, so a failure leaves everything as it was (it left the setting cleared and the file
+/// there, and the status then said another screen saver was selected).
 pub fn remove() -> Result<(), String> {
     if !cfg!(windows) {
         return Err("`.scr` screen savers exist only on Windows".into());
     }
     let path = scr_path()?;
-    if current_saver().is_some_and(|v| v.eq_ignore_ascii_case(&path.display().to_string())) {
+    let shown = path.display().to_string();
+    match std::fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(not_removed(&shown, &e)),
+    }
+    if current_saver().is_some_and(|v| v.eq_ignore_ascii_case(&shown)) {
         let out = Command::new("reg")
             .args(["delete", KEY, "/v", VALUE, "/f"])
             .output()
@@ -87,9 +119,6 @@ pub fn remove() -> Result<(), String> {
         if !out.status.success() {
             return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
         }
-    }
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     }
     Ok(())
 }
@@ -106,5 +135,30 @@ mod tests {
             Some("C:\\Users\\A B\\AppData\\Local\\JETCARP\\JETCARP.scr")
         );
         assert_eq!(value_in("nothing here"), None);
+    }
+
+    #[test]
+    fn the_status_says_what_is_selected() {
+        let p = r"C:\Users\a\AppData\Local\JETCARP\JETCARP.scr";
+        let ours = Some(p.to_lowercase());
+        assert_eq!(state(p, true, ours.clone()), "JETCARP is the selected screen saver.");
+        // After a remove that failed with rc1: the setting cleared, the file left.
+        assert!(state(p, true, Some(String::new())).ends_with("but no screen saver is selected."));
+        assert!(state(p, true, None).ends_with("but no screen saver is selected."));
+        let other = state(p, true, Some(r"C:\Windows\system32\Mystify.scr".into()));
+        assert!(other.ends_with(r"another one is selected (C:\Windows\system32\Mystify.scr)."));
+        assert!(state(p, false, ours).contains("still names it"));
+        assert_eq!(state(p, false, None), "JETCARP's screen saver is not installed.");
+    }
+
+    #[test]
+    fn a_scr_in_use_says_to_close_the_dialog() {
+        let p = r"C:\x\JETCARP.scr";
+        let denied = std::io::Error::from_raw_os_error(5);
+        let m = not_removed(p, &denied);
+        assert!(m.contains("Close that dialog"), "{m}");
+        assert!(m.ends_with("Nothing was changed."));
+        let in_use = std::io::Error::from_raw_os_error(32);
+        assert!(not_removed(p, &in_use).contains("Screen Saver Settings"));
     }
 }
