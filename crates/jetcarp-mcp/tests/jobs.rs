@@ -188,7 +188,13 @@ fn stop_resume_finds_report_and_cancelled_waits() {
         "job_status",
         json!({"job": job, "finds": 5}),
     ));
-    assert!(t.contains("newest") && t.contains("glider"), "{t}");
+    assert!(t.contains("newest") && t.contains("rarest"), "{t}");
+    // Each find is named by its pattern id (32 hex digits), for library_query.
+    assert!(
+        t.split_whitespace()
+            .any(|w| w.len() == 32 && w.chars().all(|c| c.is_ascii_hexdigit())),
+        "{t}"
+    );
     let t = ok(&call(
         &mut s,
         &mut h,
