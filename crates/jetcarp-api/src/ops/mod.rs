@@ -7,7 +7,7 @@
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
-//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.export`, `library.import`, `library.paste`, `library.verify`, `library.prune` |
+//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune` |
 //! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
@@ -68,8 +68,6 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<library::LibraryUpdate>::NEW,
     &Plain::<library::LibraryRemove>::NEW,
     &Plain::<library::LibraryRender>::NEW,
-    &Plain::<library::LibraryExport>::NEW,
-    &Plain::<library::LibraryImport>::NEW,
     &Plain::<library::LibraryPaste>::NEW,
     &Plain::<library::LibraryVerify>::NEW,
     &Plain::<library::LibraryReverify>::NEW,

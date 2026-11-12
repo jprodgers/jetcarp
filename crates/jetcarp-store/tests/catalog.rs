@@ -445,47 +445,6 @@ fn catalog_store_search_jobs_and_sightings() {
 }
 
 #[test]
-fn phase3_json_library_imports_with_its_quick_start() {
-    // A Phase 3 library folder: patterns/<old id>.json (rule-dependent ids, no rules or range)
-    // and quickstart/<old id>.json.
-    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("jetcarp-catalog-test-p3-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("patterns")).unwrap();
-    std::fs::create_dir_all(dir.join("quickstart")).unwrap();
-    let g = one("B3/S23", GLIDER);
-    let mut v: serde_json::Value = serde_json::from_str(&g.to_json()).unwrap();
-    v["format"] = 1.into();
-    v["id"] = "0123456789abcdef".into();
-    v.as_object_mut().unwrap().remove("range");
-    std::fs::write(dir.join("patterns/0123456789abcdef.json"), v.to_string()).unwrap();
-    let sc = pattern::promote::showcase_scene(&g, Some("Old glider"), None).unwrap();
-    std::fs::write(dir.join("quickstart/0123456789abcdef.json"), sc.to_json()).unwrap();
-    std::fs::write(
-        dir.join("quickstart/sweep-00000000000000aa.json"),
-        sc.to_json(),
-    )
-    .unwrap();
-    let lib = temp_lib("p3-catalog");
-    let done = lib.import(&dir).unwrap();
-    assert_eq!(done, vec![(g.id.clone(), AddOutcome::Added)]);
-    let back = lib.get(&g.id).unwrap();
-    assert_eq!(back.range, g.range);
-    let qs = lib
-        .quickstart(&[jetcarp_store::QsSource::Promotion])
-        .unwrap();
-    assert_eq!(qs.len(), 2);
-    let p = qs.iter().find(|q| q.target_kind == "pattern").unwrap();
-    assert_eq!(
-        (p.id.as_str(), p.title.as_str()),
-        (g.id.as_str(), "Old glider")
-    );
-    assert!(qs.iter().any(|q| q.target_kind == "sweep_run"));
-}
-
-/// Insert and query speed for about 100,000 sightings (run with `--nocapture` to see the
-/// numbers).
-#[test]
 fn catalog_speed_100k_sightings() {
     let lib = temp_lib("speed");
     let base = one("B3/S23", "oo/oo");

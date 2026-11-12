@@ -119,11 +119,7 @@ fn life_objects_round_trip_with_dedup_across_orientations() {
     let back = lib.get(&g.id).unwrap();
     assert_eq!(&back, g);
     assert_eq!(back.rules, vec!["B3/S23".to_string()]);
-    let exported = lib
-        .export(std::slice::from_ref(&g.id), &temp_dir("roundtrip-one"))
-        .unwrap();
-    let text = std::fs::read_to_string(&exported[0]).unwrap();
-    assert_eq!(&PatternRecord::from_json(&text).unwrap(), g);
+    assert_eq!(&PatternRecord::from_json(&back.to_json()).unwrap(), g);
     assert_eq!(lib.get(&g.id[..6]).unwrap().id, g.id);
     assert_eq!(lib.get("Glider").unwrap().id, g.id);
     // Adding again merges: seen counts add up, the earliest provenance stays.
@@ -185,19 +181,6 @@ fn life_objects_round_trip_with_dedup_across_orientations() {
         .unwrap()
         .len(),
         1
-    );
-    // Export writes one JSON file per pattern; import re-verifies them into another catalog,
-    // and a whole catalog file imports too.
-    let dir = temp_dir("roundtrip-export");
-    assert_eq!(lib.export(&[], &dir).unwrap().len(), 5);
-    let third = temp_lib("roundtrip-import");
-    let done = third.import(&dir).unwrap();
-    assert_eq!(done.len(), 5);
-    let fourth = temp_lib("roundtrip-import-db");
-    assert_eq!(fourth.import(lib.path()).unwrap().len(), 5);
-    assert_eq!(
-        third.get("glider").unwrap().notes,
-        "The smallest spaceship."
     );
     lib.remove("block").unwrap();
     assert!(lib.get("block").is_err());

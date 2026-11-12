@@ -59,7 +59,6 @@ use jetcarp_core::pattern::{
 use jetcarp_core::rules::Rule;
 use jetcarp_core::semantics;
 use jetcarp_core::topology::{Nb, TilingSpec};
-use jetcarp_core::world::Scene;
 use rayon::prelude::*;
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -1292,131 +1291,7 @@ impl Library {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Export, import, info
-
-    /// Write records as JSON files, one per pattern (`<dir>/<id>.json`, with its rules and rule
-    /// range), all patterns when `keys` is empty. Returns the files written.
-    pub fn export(&self, keys: &[String], dir: &Path) -> Result<Vec<PathBuf>, String> {
-        let recs = if keys.is_empty() {
-            self.list()?
-        } else {
-            keys.iter()
-                .map(|k| self.get(k))
-                .collect::<Result<Vec<_>, _>>()?
-        };
-        std::fs::create_dir_all(dir).map_err(|x| format!("creating {}: {x}", dir.display()))?;
-        recs.iter()
-            .map(|r| {
-                let p = dir.join(format!("{}.json", r.id));
-                std::fs::write(&p, r.to_json() + "\n")
-                    .map_err(|x| format!("writing {}: {x}", p.display()))?;
-                Ok(p)
-            })
-            .collect()
-    }
-
-    /// Merge patterns from JSON record files (a file, or a folder of them; a Phase 3 library
-    /// folder with `patterns/` and `quickstart/` works too) or from another library file. Every
-    /// record is put in canonical form (so a record stored from another phase or orientation
-    /// merges with the one already here), given this engine's pin and its content id, and
-    /// verified again in each of its rules; its first provenance row says `imported`. Phase 3
-    /// Quick Start scenes come along as `quickstart` rows.
-    pub fn import(&self, src: &Path) -> Result<Vec<(String, AddOutcome)>, String> {
-        let recs: Vec<PatternRecord> = if src.is_file()
-            && src
-                .extension()
-                .is_some_and(|x| x == "sqlite" || x == "sqlite3" || x == "db")
-        {
-            Library::open(src).list()?
-        } else {
-            let files: Vec<PathBuf> = if src.is_file() {
-                vec![src.to_path_buf()]
-            } else {
-                let dir = if src.join("patterns").is_dir() {
-                    src.join("patterns")
-                } else {
-                    src.to_path_buf()
-                };
-                json_files(&dir)?
-            };
-            files
-                .iter()
-                .map(|f| {
-                    let text = std::fs::read_to_string(f)
-                        .map_err(|x| format!("reading {}: {x}", f.display()))?;
-                    PatternRecord::from_json(&text).map_err(|x| format!("{}: {x}", f.display()))
-                })
-                .collect::<Result<_, _>>()?
-        };
-        // One record per rule it claims, each verified in that rule.
-        let mut items = Vec::new();
-        let mut old_ids = Vec::new();
-        for r in recs {
-            let mut rules = vec![r.rule.clone()];
-            for x in &r.rules {
-                if !rules.contains(x) {
-                    rules.push(x.clone());
-                }
-            }
-            for (k, rule) in rules.into_iter().enumerate() {
-                let mut x = r.clone();
-                x.rule = rule;
-                x.rules = vec![];
-                x.range = None;
-                x.seen = if k == 0 { r.seen } else { 0 };
-                x.canonicalize()?;
-                old_ids.push((r.id.clone(), x.id.clone()));
-                items.push(x);
-            }
-        }
-        let checked: Vec<Result<PatternRecord, String>> = items
-            .into_par_iter()
-            .map(|mut r| {
-                r.verified = verify(
-                    &r,
-                    default_periods(r.period).max(r.verified.periods.min(64)),
-                )
-                .map_err(|x| format!("{} in {}: {x}", r.label(), r.rule))?;
-                Ok(r)
-            })
-            .collect();
-        let checked: Vec<PatternRecord> = checked.into_iter().collect::<Result<_, _>>()?;
-        let ids: Vec<String> = checked.iter().map(|r| r.id.clone()).collect();
-        let origin = Origin::imported(&format!("import {}", src.display()));
-        let res = self.add_batch(checked.into_iter().map(|r| (r, 0)).collect(), 0, &origin)?;
-        let mut out = Vec::new();
-        for (id, r) in ids.into_iter().zip(res) {
-            out.push((id, r?));
-        }
-        // Phase 3 promoted scenes.
-        let qs = src.join("quickstart");
-        if src.is_dir() && qs.is_dir() {
-            let map: HashMap<String, String> = old_ids.into_iter().collect();
-            for f in json_files(&qs)? {
-                let Ok(sc) = Scene::from_json(&std::fs::read_to_string(&f).unwrap_or_default())
-                else {
-                    continue;
-                };
-                let stem = f
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let row = match map.get(&stem) {
-                    Some(new) => {
-                        let mut q = QuickStartRow::for_scene(new, "pattern", sc);
-                        q.target_id = Some(new.clone());
-                        q
-                    }
-                    None if stem.starts_with("sweep-") => {
-                        QuickStartRow::for_scene(&stem, "sweep_run", sc)
-                    }
-                    None => QuickStartRow::for_scene(&stem, "scene", sc),
-                };
-                self.put_quickstart(&row)?;
-            }
-        }
-        Ok(out)
-    }
+    // Info
 
     /// Row counts and the schema version.
     pub fn info(&self) -> Result<CatalogInfo, String> {
@@ -1461,17 +1336,6 @@ impl Library {
             })
         })
     }
-}
-
-fn json_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map_err(|x| format!("reading {}: {x}", dir.display()))?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    v.sort();
-    Ok(v)
 }
 
 fn order_by(o: Option<&str>) -> Result<&'static str, String> {

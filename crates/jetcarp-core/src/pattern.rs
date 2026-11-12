@@ -3,8 +3,8 @@
 //!
 //! **Records.** A [`PatternRecord`] is one pattern: its tiling, rule, phases, and provenance.
 //! The pattern library that stores them is the SQLite catalog (`jetcarp_store::Library`);
-//! JSON records ([`PatternRecord::to_json`], one file per pattern) remain the exchange format
-//! for its export and import.
+//! records travel between libraries in packs (`jetcarp_pack`), and [`PatternRecord::to_json`]
+//! writes one as JSON (what `jetcarp library show --json` prints).
 //!
 //! **Identity and dedup.** A pattern's `id` is a content id: 32 hex digits of SHA-256 over its
 //! rule-free identity text ([`range::identity`]) and the geometry pin of its tiling

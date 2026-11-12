@@ -1,5 +1,5 @@
-//! `jetcarp library`: the pattern library (list, show, paste, promote, render, update, export,
-//! import, remove, quickstart, info, verify, reverify, compounds, prune) and its ant runs (`library ants`)
+//! `jetcarp library`: the pattern library (list, show, paste, promote, render, update, remove,
+//! quickstart, info, verify, reverify, compounds, prune) and its ant runs (`library ants`)
 //! and movers (`library movers`). Searches that add to it are jobs: `jetcarp search`,
 //! `jetcarp jobs`.
 
@@ -8,8 +8,8 @@ use anyhow::Result;
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{self, NoInput, Op, Quiet};
 use jetcarp_api::ops::library::{
-    CompoundsIn, ExportIn, GetIn, ImportIn, LibraryCompounds, LibraryExport, LibraryGet,
-    LibraryImport, LibraryInfoOp, LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove,
+    CompoundsIn, GetIn, LibraryCompounds, LibraryGet, LibraryInfoOp, LibraryPaste, LibraryPrune,
+    LibraryQuery, LibraryRemove,
     LibraryRender, LibraryReverify, LibraryUpdate, LibraryVerify, PasteSceneIn, PruneIn, QueryIn,
     RemoveIn, RenderIn, ReverifyIn, UpdateIn, VerifyIn,
 };
@@ -96,17 +96,6 @@ enum LibCmd {
     },
     /// Change a pattern's name, tags, notes, rating, or curation state.
     Update(UpdateArgs),
-    /// Write patterns as JSON records, one file each with its rules and rule range (all when
-    /// no ids are given).
-    Export {
-        ids: Vec<String>,
-        /// Folder for the files.
-        #[arg(long)]
-        to: PathBuf,
-    },
-    /// Merge patterns from JSON records (a file or folder; a Phase 3 library folder brings its
-    /// Quick Start scenes too) or another catalog file. Each is verified again in every rule.
-    Import { path: PathBuf },
     /// Delete a pattern (with its rules, sightings, and Quick Start entry).
     Remove { id: String },
     /// List the Quick Start entries (promotions, packs' and the atlas's; --source for one source,
@@ -428,14 +417,6 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
             show(&LibraryRender::run(&cx, a, &Quiet)?, json)
         }
         LibCmd::Update(u) => update_cmd(&cx, u, json),
-        LibCmd::Export { ids, to } => {
-            let a = ExportIn { ids, to: path(&to) };
-            show(&LibraryExport::run(&cx, a, &Quiet)?, json)
-        }
-        LibCmd::Import { path: p } => {
-            let a = ImportIn { path: path(&p) };
-            show(&LibraryImport::run(&cx, a, &Quiet)?, json)
-        }
         LibCmd::Remove { id } => {
             let a = RemoveIn {
                 id,

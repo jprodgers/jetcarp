@@ -1,10 +1,10 @@
 //! `library.*`: the pattern library: what it holds (`library.info`), its records (`library.query`,
 //! `library.get`), curation (`library.update`, `library.remove`), pictures and text drawings of a
-//! pattern's phases (`library.render`), JSON records out and in (`library.export`,
-//! `library.import`), scenes made of patterns (`library.paste`), checking records again
-//! (`library.verify`; `library.reverify`, the job that clears the flags a geometry change or a
-//! change in a rule's meaning leaves), splitting stored compounds into their parts
-//! (`library.compounds`, a job), and making the file smaller (`library.prune`).
+//! pattern's phases (`library.render`), scenes made of patterns (`library.paste`), checking
+//! records again (`library.verify`; `library.reverify`, the job that clears the flags a geometry
+//! change or a change in a rule's meaning leaves), splitting stored compounds into their parts
+//! (`library.compounds`, a job), and making the file smaller (`library.prune`). Records travel
+//! between libraries in packs (`pack.*`).
 //!
 //! Records are patterns (verified still lifes, oscillators, spaceships, guns, movers) and ant
 //! runs (ids `ant-...`). The catalog is the context's ([`Ctx::library`]). Searches that add to it
@@ -19,15 +19,12 @@ use jetcarp_core::pattern::{
 };
 use jetcarp_core::{Boundary, CaSpec, Command, Nb, Scene, SeedSpec, VERSION, World};
 use jetcarp_store::library::CatalogInfo;
-use jetcarp_store::{
-    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, Query, SightingRow, Update,
-};
+use jetcarp_store::{AntCensus, AntQuery, AntRow, AntUpdate, Query, SightingRow, Update};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::PathBuf;
 
 /// A catalog error with a kind: missing records are `not_found`, unknown words `invalid`, the
 /// rest (SQLite, files) `io`.
@@ -942,153 +939,6 @@ impl Op for LibraryRender {
             phases,
             png: a.png,
             png_size,
-        })
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// library.export / library.import
-
-/// Which patterns to write, and where.
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ExportIn {
-    /// Pattern ids, prefixes, or names (default: every pattern).
-    #[serde(default)]
-    pub ids: Vec<String>,
-    /// The folder for the files (created).
-    pub to: String,
-}
-
-/// The record files written.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-pub struct Exported {
-    /// The folder, as given.
-    pub to: String,
-    pub files: Vec<PathBuf>,
-}
-
-impl Report for Exported {
-    fn text(&self) -> String {
-        format!("{} pattern(s) exported to {}\n", self.files.len(), self.to)
-    }
-}
-
-/// `library.export`.
-pub struct LibraryExport;
-impl Op for LibraryExport {
-    const NAME: &'static str = "library.export";
-    const SUMMARY: &'static str =
-        "Write patterns as JSON records, one file each with its rules and rule range.";
-    const READ_ONLY: bool = false;
-    type In = ExportIn;
-    type Out = Exported;
-    fn run(cx: &Ctx, a: ExportIn, _: &dyn Progress) -> Result<Exported, ApiError> {
-        let dir = cx.fs.writable_dir(&a.to)?;
-        let files = cx.library().export(&a.ids, &dir).map_err(catalog_err)?;
-        Ok(Exported { to: a.to, files })
-    }
-}
-
-/// What to merge into the catalog.
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ImportIn {
-    /// A JSON record file, a folder of them (a Phase 3 library folder brings its Quick Start
-    /// scenes too), or another catalog (.sqlite).
-    pub path: String,
-}
-
-/// One pattern and rule pair merged.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-pub struct ImportedPattern {
-    pub id: String,
-    /// `added` (new), or `merged` (known: its seen count grew).
-    pub outcome: String,
-    /// Merged: the seen count now.
-    pub seen: Option<u64>,
-    /// Merged: verified in a rule it was not before.
-    pub new_rule: bool,
-}
-
-/// What an import did.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-pub struct Imported {
-    pub catalog: String,
-    /// Distinct patterns.
-    pub patterns: usize,
-    pub pairs: Vec<ImportedPattern>,
-}
-
-impl Report for Imported {
-    fn text(&self) -> String {
-        let mut s = String::new();
-        for p in &self.pairs {
-            match p.seen {
-                None => {
-                    let _ = writeln!(s, "  added  {}", p.id);
-                }
-                Some(seen) => {
-                    let _ = writeln!(
-                        s,
-                        "  merged {} (seen {seen}{})",
-                        p.id,
-                        if p.new_rule { ", new rule" } else { "" }
-                    );
-                }
-            }
-        }
-        let _ = writeln!(
-            s,
-            "{} pattern(s) ({} pattern and rule pairs) imported into {}",
-            self.patterns,
-            self.pairs.len(),
-            self.catalog
-        );
-        s
-    }
-}
-
-/// `library.import`.
-pub struct LibraryImport;
-impl Op for LibraryImport {
-    const NAME: &'static str = "library.import";
-    const SUMMARY: &'static str =
-        "Merge patterns from JSON records or another catalog, verifying each again in every rule.";
-    const READ_ONLY: bool = false;
-    type In = ImportIn;
-    type Out = Imported;
-    fn run(cx: &Ctx, a: ImportIn, _: &dyn Progress) -> Result<Imported, ApiError> {
-        let src = cx.fs.readable(&a.path)?;
-        let lib = cx.library();
-        let done = lib.import(&src).map_err(|e| {
-            if src.exists() {
-                catalog_err(e)
-            } else {
-                ApiError::not_found(e)
-            }
-        })?;
-        let distinct: std::collections::HashSet<&String> = done.iter().map(|d| &d.0).collect();
-        Ok(Imported {
-            catalog: lib.path().display().to_string(),
-            patterns: distinct.len(),
-            pairs: done
-                .iter()
-                .map(|(id, o)| match o {
-                    AddOutcome::Added => ImportedPattern {
-                        id: id.clone(),
-                        outcome: "added".into(),
-                        seen: None,
-                        new_rule: false,
-                    },
-                    AddOutcome::Merged { seen, new_rule } => ImportedPattern {
-                        id: id.clone(),
-                        outcome: "merged".into(),
-                        seen: Some(*seen),
-                        new_rule: *new_rule,
-                    },
-                })
-                .collect(),
         })
     }
 }

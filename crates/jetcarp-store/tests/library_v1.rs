@@ -702,14 +702,14 @@ fn a_record_found_elsewhere_keeps_its_finder_and_find_date() {
     assert_eq!(lib.get(&g.id).unwrap().seen, 5);
 }
 
-// The identity bug: one record written from each generation of its period imports as one
-// pattern (it used to give one ship as many ids as it has phases).
+// The identity bug: one record written from each generation of its period is one pattern once
+// put in canonical form, as a pack's import puts a record (it used to give one ship as many ids
+// as it has phases).
 #[test]
-fn import_merges_a_record_stored_from_any_phase() {
-    let lib = temp_lib("import");
+fn a_record_stored_from_any_phase_is_one_pattern() {
+    let lib = temp_lib("phases");
     let g = one("B3/S23", GLIDER);
-    let dir = lib.folder().join("records");
-    std::fs::create_dir_all(&dir).unwrap();
+    let mut ids = vec![];
     for k in 0..4u64 {
         let mut x = g.clone();
         x.phases = (0..4)
@@ -728,21 +728,20 @@ fn import_merges_a_record_stored_from_any_phase() {
             .collect();
         x.id = format!("{k:016x}");
         x.canonical = "stored as found".into();
-        std::fs::write(dir.join(format!("{k}.json")), x.to_json()).unwrap();
+        // Read back from its JSON, as a record from elsewhere arrives.
+        let mut x = PatternRecord::from_json(&x.to_json()).unwrap();
+        x.canonicalize().unwrap();
+        ids.push(x.id.clone());
+        let o = lib.add(x).unwrap();
+        assert_eq!(o == AddOutcome::Added, k == 0, "{o:?}");
     }
-    let done = lib.import(&dir).unwrap();
-    assert_eq!(done.len(), 4);
-    assert!(done.iter().all(|(id, _)| *id == g.id), "{done:?}");
-    assert_eq!(done[0].1, AddOutcome::Added);
+    assert!(ids.iter().all(|id| *id == g.id), "{ids:?}");
     assert_eq!(lib.list().unwrap().len(), 1);
     let r = lib.get(&g.id).unwrap();
     assert_eq!(
         (r.phases.clone(), r.canonical.clone()),
         (g.phases.clone(), g.canonical.clone())
     );
-    let h = lib.provenance("pattern", &g.id).unwrap();
-    assert_eq!(h[0].kind, "imported");
-    assert!(h[0].source.starts_with("import "), "{}", h[0].source);
 }
 
 #[test]

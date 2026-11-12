@@ -317,62 +317,6 @@ fn render_export_import_and_paste() {
         ),
         ErrorKind::Invalid,
     );
-    // Export every record, import them into another catalog.
-    let to = dir.join("records");
-    let ex = LibraryExport::run(
-        &cx,
-        ExportIn {
-            ids: vec![],
-            to: to.display().to_string(),
-        },
-        &Quiet,
-    )
-    .unwrap();
-    assert_eq!(ex.files.len(), 2);
-    assert!(ex.text().starts_with("2 pattern(s) exported to "));
-    let other = jetcarp_api::Ctx::new().with_library(Some(dir.join("other")));
-    let im = LibraryImport::run(
-        &other,
-        ImportIn {
-            path: to.display().to_string(),
-        },
-        &Quiet,
-    )
-    .unwrap();
-    assert_eq!((im.patterns, im.pairs.len()), (2, 2));
-    assert!(im.pairs.iter().all(|p| p.outcome == "added"));
-    assert!(im.text().contains("  added  "), "{}", im.text());
-    // Importing again merges.
-    let again = LibraryImport::run(
-        &other,
-        ImportIn {
-            path: to.display().to_string(),
-        },
-        &Quiet,
-    )
-    .unwrap();
-    assert!(again.pairs.iter().all(|p| p.seen.is_some()));
-    fails(
-        LibraryImport::run(
-            &other,
-            ImportIn {
-                path: dir.join("nonesuch").display().to_string(),
-            },
-            &Quiet,
-        ),
-        ErrorKind::NotFound,
-    );
-    fails(
-        LibraryExport::run(
-            &cx,
-            ExportIn {
-                ids: vec!["nonesuch".into()],
-                to: to.display().to_string(),
-            },
-            &Quiet,
-        ),
-        ErrorKind::NotFound,
-    );
     // A scene of two patterns, and a PNG of it after a few generations.
     let scene = dir.join("two.json");
     let p = LibraryPaste::run(

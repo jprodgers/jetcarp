@@ -1,6 +1,6 @@
 //! The *Catalog tools…* window: the catalog actions that were CLI- or script-only before
-//! (Phase 3 reachability gaps). Collide two patterns, export and import JSON records, remove a
-//! record, and run the evolutionary glider search.
+//! (Phase 3 reachability gaps). Collide two patterns, remove a record, and run the evolutionary
+//! glider search. Records travel between libraries in packs (`jetcarp pack`).
 //!
 //! Collisions and evolve searches are catalog jobs: *Collide* and *Evolve* call the operation
 //! `search.start` (strategies `collide` and `evolve`, in the background), the evolve search's
@@ -16,7 +16,7 @@ use jetcarp_api::ops::jobs::ResumeIn;
 use jetcarp_api::ops::search::SearchStartIn;
 use jetcarp_core::pattern;
 use jetcarp_core::world::Scene;
-use jetcarp_store::{AddOutcome, Library};
+use jetcarp_store::Library;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -26,7 +26,6 @@ pub const KEY: &str = "catalog-tools";
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tab {
     Collide,
-    Transfer,
     Remove,
     Evolve,
 }
@@ -34,7 +33,6 @@ pub enum Tab {
 impl Tab {
     pub fn parse(s: &str) -> Tab {
         match s {
-            "export" | "import" | "transfer" => Tab::Transfer,
             "remove" => Tab::Remove,
             "evolve" => Tab::Evolve,
             _ => Tab::Collide,
@@ -156,11 +154,6 @@ pub struct CatalogTools {
     store: bool,
     collide_job: Option<WindowJob>,
     collide_last: Option<Result<CollideDone, String>>,
-    // Export and import
-    export_dir: String,
-    export_ids: String,
-    import_path: String,
-    transfer_msg: Option<(String, bool)>,
     // Remove
     pub remove_id: String,
     confirm: bool,
@@ -179,7 +172,6 @@ pub struct CatalogTools {
 
 impl Default for CatalogTools {
     fn default() -> Self {
-        let out = jetcarp_api::out::out_root(None);
         CatalogTools {
             open: false,
             tab: Tab::Collide,
@@ -192,10 +184,6 @@ impl Default for CatalogTools {
             store: true,
             collide_job: None,
             collide_last: None,
-            export_dir: out.join("export").display().to_string(),
-            export_ids: String::new(),
-            import_path: String::new(),
-            transfer_msg: None,
             remove_id: String::new(),
             confirm: false,
             ev_tiling: "spectre".into(),
@@ -344,14 +332,12 @@ impl CatalogTools {
             |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.tab, Tab::Collide, "Collide");
-                    ui.selectable_value(&mut self.tab, Tab::Transfer, "Export / import");
                     ui.selectable_value(&mut self.tab, Tab::Remove, "Remove");
                     ui.selectable_value(&mut self.tab, Tab::Evolve, "Evolve");
                 });
                 ui.separator();
                 match self.tab {
                     Tab::Collide => self.collide_ui(ui, &selected, &mut out),
-                    Tab::Transfer => self.transfer_ui(ui, &mut out),
                     Tab::Remove => self.remove_ui(ui, &selected, &mut out),
                     Tab::Evolve => self.evolve_ui(ui),
                 }
@@ -465,95 +451,6 @@ impl CatalogTools {
                 ui.colored_label(Color32::LIGHT_RED, e);
             }
             None => {}
-        }
-    }
-
-    fn transfer_ui(&mut self, ui: &mut egui::Ui, out: &mut Vec<Action>) {
-        ui.label(
-            RichText::new(
-                "JSON stays the exchange format: export writes one <id>.json per record; import \
-                 reads record files, a folder of them, another catalog file, or a Phase 3 library \
-                 folder, and verifies every record again (as `jetcarp library export` / `import`).",
-            )
-            .small()
-            .weak(),
-        );
-        egui::Grid::new("transfer-form")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("Export to");
-                ui.add(egui::TextEdit::singleline(&mut self.export_dir).desired_width(320.0));
-                ui.end_row();
-                ui.label("Records");
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.export_ids)
-                        .hint_text("ids or names, comma-separated (empty: all)")
-                        .desired_width(320.0),
-                );
-                ui.end_row();
-            });
-        if ui.button("Export").clicked() {
-            let keys: Vec<String> = self
-                .export_ids
-                .split([',', ' '])
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .map(String::from)
-                .collect();
-            self.transfer_msg = Some(
-                match self
-                    .lib
-                    .export(&keys, std::path::Path::new(self.export_dir.trim()))
-                {
-                    Ok(f) => (
-                        format!("Wrote {} record file(s) to {}", f.len(), self.export_dir),
-                        false,
-                    ),
-                    Err(e) => (e, true),
-                },
-            );
-        }
-        ui.separator();
-        ui.horizontal(|ui| {
-            ui.label("Import from");
-            ui.add(egui::TextEdit::singleline(&mut self.import_path).desired_width(260.0));
-            if ui.button("Choose…").clicked()
-                && let Some(p) = rfd::FileDialog::new().pick_folder()
-            {
-                self.import_path = p.display().to_string();
-            }
-        });
-        if ui.button("Import").clicked() {
-            self.transfer_msg = Some(
-                match self
-                    .lib
-                    .import(std::path::Path::new(self.import_path.trim()))
-                {
-                    Ok(v) => {
-                        let added = v.iter().filter(|(_, o)| *o == AddOutcome::Added).count();
-                        out.push(Action::LibraryChanged);
-                        (
-                            format!(
-                                "Imported {} record(s): {added} new, {} merged",
-                                v.len(),
-                                v.len() - added
-                            ),
-                            false,
-                        )
-                    }
-                    Err(e) => (e, true),
-                },
-            );
-        }
-        if let Some((m, err)) = &self.transfer_msg {
-            ui.colored_label(
-                if *err {
-                    Color32::LIGHT_RED
-                } else {
-                    Color32::LIGHT_GREEN
-                },
-                m,
-            );
         }
     }
 

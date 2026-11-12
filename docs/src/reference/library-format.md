@@ -308,7 +308,7 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `pack_hash` | the pack it came in (for packs) |
 | `machine` | operating system and CPU architecture, such as `linux-x86_64` (never the host name) |
 | `engine_version`, `geometry_pin` | the JETCARP version and the pin it was verified with |
-| `source` | what found it: `search`, `collide A + B`, a scene path, `import <file>` |
+| `source` | what found it: `search`, `collide A + B`, a scene path; `import <file>` on a record imported from a JSON file before packs replaced that |
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append

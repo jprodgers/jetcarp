@@ -156,7 +156,7 @@ impl JetcarpApp {
         {
             self.menu.view.card_w = w;
         }
-        // `JETCARP_CATALOG_TOOLS=collide|export|remove|evolve[:run]` opens the Catalog tools window;
+        // `JETCARP_CATALOG_TOOLS=collide|remove|evolve[:run]` opens the Catalog tools window;
         // `JETCARP_TOOLS_A` / `JETCARP_TOOLS_B` set the patterns to collide.
         if let Ok(t) = std::env::var("JETCARP_CATALOG_TOOLS") {
             self.screen = Screen::Sim;
