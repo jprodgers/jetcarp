@@ -1,0 +1,42 @@
+{
+  "title": "JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program",
+  "upload_type": "software",
+  "description": "<p>JETCARP runs cellular automata on almost any tiling of the plane: squares and hexagons, the eleven Archimedean tilings, the 1,248 k-uniform tilings up to k = 6, the 81 isohedral tile types, tiles drawn by hand, and the aperiodic Penrose, hat and spectre tilings. Several automata can run at once, on shared or separate cell fields. It is one program with a graphical app, a command line, a scripting language (Rhai) and a Model Context Protocol server, plus searches for spaceships, oscillators and other patterns, a verified pattern library with content ids, a signed and checkable pack format for sharing data, and scenes that replay bit for bit to a recorded state hash.</p><p>Documentation: <a href=\"https://jprodgers.github.io/jetcarp/\">https://jprodgers.github.io/jetcarp/</a></p>",
+  "creators": [
+    {
+      "name": "Rodgers, Jimmie",
+      "affiliation": "Independent",
+      "orcid": "0009-0003-8775-6483"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Teich, Emily",
+      "type": "DataCurator"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "cellular automata",
+    "tilings",
+    "aperiodic tilings",
+    "k-uniform tilings",
+    "Game of Life",
+    "spaceships",
+    "sandpiles",
+    "research software"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/jprodgers/jetcarp",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://jprodgers.github.io/jetcarp/",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-softwaredocumentation"
+    }
+  ],
+  "notes": "Licence: JETCARP's own code and data may be used under either the Unlicense or the MIT licence, at your choice (SPDX: Unlicense OR MIT); a few files derived from other people's work keep their own licences, listed in THIRD_PARTY_NOTICES.md. Emily Teich rated clips from JETCARP's exploratory search, and her ratings trained the score that chooses which runs it shows. Jimmie Rodgers designed JETCARP and tested it; all of its code was written by Claude Code, Anthropic's AI coding tool, as the documentation's page 'How JETCARP was made' describes."
+}
