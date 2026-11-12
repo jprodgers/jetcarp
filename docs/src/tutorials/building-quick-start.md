@@ -51,8 +51,8 @@ build's entries:
 Your atlas will differ: every build searches from a starting point of its own.
 
 **Stopping and carrying on.** Ctrl-C stops a build. `jetcarp jobs resume 22` carries it on to the
-end of its minutes and then publishes. `--detach` runs it in the background, and `--no-gpu` keeps it off
-the graphics card.
+end of its minutes and then publishes. `--detach` runs it in the background, and `--no-gpu` keeps
+it off the graphics card.
 
 ## 2. What the categories mean
 
@@ -229,8 +229,8 @@ but its hidden entries: every pattern, ant run and Quick Start entry, the starte
 ## 7. Longer searches
 
 A build is an exploratory search and its publishing in one job. For a longer search that you look
-through before publishing anything, run the two apart. Give the search an hour rather than the
-minute here:
+through before publishing anything, run the two apart. The search here has a minute; give yours an
+hour (`--minutes 60`):
 
 ```text
 $ jetcarp search explore --gpu --minutes 1 --label longer
@@ -253,8 +253,8 @@ The setup window's *Quick Start build* is `jetcarp quickstart build` with the pr
 for *Explorer* (which you can switch off), 30 for *Researcher* and 60 for *Everything*, changeable
 from 1 to 600 on its summary page. It runs in the background while you use the app, its entries
 appear in the Quick Start as soon as it publishes, and *Tools → Hunts…* lists it as *Quick Start
-build*. A build cut off by closing the app or restarting the computer is carried on by *Resume* there,
-by running setup again, or by `jetcarp jobs resume JOB`. See [First run and
+build*. A build cut off by closing the app or restarting the computer is carried on by *Resume*
+there, by running setup again, or by `jetcarp jobs resume JOB`. See [First run and
 setup](../getting-started/first-run.md).
 
 ## Where to go from here
