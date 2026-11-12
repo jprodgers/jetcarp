@@ -2304,6 +2304,7 @@ Options:
       --rotation <ROTATION>  Run this rotation on the first screen, for this run only
       --seconds <SECONDS>    Quit after this many seconds
       --saver                Run as a screen saver: full screen on every monitor until there is input
+      --login                Started at login (what the login entry runs): show only the screens placed on the desktop, and open no windows. With none, the host waits in the tray or menu bar
       --json                 Print the host's reply as JSON
   -h, --help                 Print help
 ```
@@ -2573,7 +2574,7 @@ Arguments:
   <ACTION>
           Possible values:
           - install: Windows: copy JETCARP to a `.scr` file and open Screen Saver Settings with it selected. macOS: build `JETCARP.saver` with the rotation inside it and open System Settings
-          - remove:  Delete it (Windows: and stop it from running)
+          - remove:  Delete it (Windows: and stop Windows from running it; close Screen Saver Settings first)
           - status:  Say whether it is installed (Windows: and selected)
 
 Options:
