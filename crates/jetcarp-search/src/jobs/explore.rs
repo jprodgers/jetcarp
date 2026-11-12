@@ -24,6 +24,13 @@
 //! CPU rounds on the run's threads. A GPU that fails three steps in a row is restarted; one that
 //! cannot be, or fails forty times, is dropped and the CPU takes its families. Past `max_rss_gb`
 //! of memory the run stops (paused). The item budget counts screened runs.
+//!
+//! **A Quick Start build** (`quickstart.build`, and the first-run setup) is an explore job with
+//! an end: its spec's [`BuildSpec`] gives the minutes it searches, counted over every session
+//! (so a stopped build resumes where it was), and how its atlas is picked. Once its minutes are
+//! spent the job is done: its atlas is published into the library's Quick Start
+//! (`Library::publish_atlas`, as `quickstart.publish` does) and its progress says what was
+//! published. Any other explore job runs until it is stopped or out of budget.
 
 use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
 use crate::dashboard::JobSummary;
@@ -69,6 +76,70 @@ pub struct ExploreSpec {
     /// Runs per sealed segment (default a million; smaller only for tests).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seal_rows: Option<u64>,
+    /// A Quick Start build: search this long in all, then publish the atlas and end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildSpec>,
+}
+
+/// How long a Quick Start build searches, and how its atlas is picked (`quickstart.publish`'s
+/// options).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BuildSpec {
+    /// Minutes of searching over every session; then the atlas is published and the job ends.
+    pub minutes: f64,
+    /// Entries per category, family, and tiling.
+    #[serde(default = "d_per_niche")]
+    pub per_niche: usize,
+    /// Lowest confirmed score (contrast picks are exempt).
+    #[serde(default = "d_min_score")]
+    pub min_score: f64,
+    /// Most entries.
+    #[serde(default = "d_max_entries")]
+    pub max_entries: usize,
+}
+
+fn d_per_niche() -> usize {
+    crate::explore::atlas::AtlasOpts::default().per_niche
+}
+fn d_min_score() -> f64 {
+    crate::explore::atlas::AtlasOpts::default().min_score
+}
+fn d_max_entries() -> usize {
+    crate::explore::atlas::AtlasOpts::default().max_entries
+}
+
+impl BuildSpec {
+    /// A build of `minutes` with the atlas's usual picks.
+    pub fn minutes(minutes: f64) -> BuildSpec {
+        BuildSpec {
+            minutes,
+            per_niche: d_per_niche(),
+            min_score: d_min_score(),
+            max_entries: d_max_entries(),
+        }
+    }
+    fn check(&self) -> Result<(), String> {
+        if !(self.minutes > 0.0 && self.minutes.is_finite()) {
+            return Err(format!(
+                "a Quick Start build's minutes must be above 0, not {}",
+                self.minutes
+            ));
+        }
+        if self.per_niche == 0 || self.max_entries == 0 {
+            return Err("per_niche and max_entries must be at least 1".into());
+        }
+        Ok(())
+    }
+}
+
+/// What a Quick Start build published (`Library::publish_atlas`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Published {
+    /// The atlas's entries now.
+    pub entries: usize,
+    pub added: usize,
+    pub updated: usize,
+    pub removed: usize,
 }
 
 /// An explore job's progress (`jobs.progress`).
@@ -108,6 +179,9 @@ pub struct ExploreProgress {
     /// Candidates whose run panicked (skipped).
     pub panics: u64,
     pub error: Option<String>,
+    /// A Quick Start build: its minutes in all, and what it published once they were spent.
+    pub build_minutes: Option<f64>,
+    pub published: Option<Published>,
     pub line: String,
 }
 
@@ -265,6 +339,9 @@ pub fn start(lib: &Library, spec: &ExploreSpec) -> Result<i64, String> {
     if spec.seal_rows == Some(0) {
         return Err("seal_rows must be at least 1".into());
     }
+    if let Some(b) = &spec.build {
+        b.check()?;
+    }
     let mut spec = spec.clone();
     if spec.uuid.is_empty() {
         spec.uuid = new_uuid();
@@ -312,6 +389,26 @@ impl StrategyKind for ExploreKind {
         s.per_s = p.per_s;
         s.elapsed_s = p.elapsed_s;
         let d = crate::dashboard::digits;
+        if let Some(b) = spec.as_ref().and_then(|sp| sp.build.as_ref()) {
+            s.kind_label = "Quick Start build".into();
+            s.counters.push((
+                "searched".into(),
+                format!(
+                    "{} of {} min",
+                    minutes(p.elapsed_s.min(b.minutes * 60.0)),
+                    minutes(b.minutes * 60.0)
+                ),
+            ));
+            if row.status == JobStatus::Running {
+                s.eta_s = Some((b.minutes * 60.0 - p.elapsed_s).max(0.0));
+            }
+            if let Some(pb) = &p.published {
+                s.counters.push((
+                    "published".into(),
+                    format!("{} entries", d(pb.entries as u64)),
+                ));
+            }
+        }
         for (k, v) in [
             ("elites", p.elites),
             ("niches", p.niches),
@@ -337,6 +434,16 @@ impl StrategyKind for ExploreKind {
         s.bars_title = "Runs by family".into();
         s.error = p.error.clone();
         s
+    }
+}
+
+/// Seconds as minutes, to a tenth (`3.5`).
+fn minutes(s: f64) -> String {
+    let m = (s / 6.0).round() / 10.0;
+    if m.fract() == 0.0 {
+        format!("{m:.0}")
+    } else {
+        format!("{m:.1}")
     }
 }
 
@@ -393,6 +500,8 @@ struct Running {
     rss: f64,
     rate: (Instant, u64),
     per_s: f64,
+    /// A Quick Start build's atlas, once published.
+    published: Option<Published>,
 }
 
 impl ExploreRun {
@@ -455,6 +564,7 @@ impl Strategy for ExploreRun {
             rss: rss_gb(),
             rate: (Instant::now(), screened),
             per_s: 0.0,
+            published: None,
         });
         Ok(())
     }
@@ -472,9 +582,18 @@ impl Strategy for ExploreRun {
             cx.stop.store(true, Ordering::SeqCst);
             return Ok(Step::More);
         }
+        // A Quick Start build ends once its minutes are spent, the last step cut to fit.
+        let mut until = Instant::now() + Duration::from_secs_f64(STEP_S);
+        if let Some(b) = &r.spec.build {
+            let left = b.minutes * 60.0 - elapsed(r);
+            if left <= 0.0 {
+                return Ok(Step::Done);
+            }
+            until = until.min(Instant::now() + Duration::from_secs_f64(left));
+        }
         let before = r.search.screened();
         let lim = StepLimits {
-            until: Instant::now() + Duration::from_secs_f64(STEP_S),
+            until,
             stop: &cx.stop,
             max_screened: cx.items.map(|n| before + n.saturating_sub(r.items)),
         };
@@ -548,6 +667,8 @@ impl Strategy for ExploreRun {
             note: r.note.clone(),
             panics: r.search.panics(),
             error: None,
+            build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
+            published: r.published.clone(),
             line: String::new(),
         };
         p.line = line(&p);
@@ -557,14 +678,57 @@ impl Strategy for ExploreRun {
     fn items(&self) -> u64 {
         self.st.as_ref().map_or(0, |r| r.items)
     }
+
+    /// A Quick Start build publishes its atlas into the library's Quick Start.
+    fn finish(&mut self, cx: &RunCx<'_>, _sink: &mut Sink) -> Result<(), String> {
+        let Some(b) = self.st.as_ref().and_then(|r| r.spec.build.clone()) else {
+            return Ok(());
+        };
+        let mut p: ExploreProgress = super::typed(&self.progress(JobStatus::Running));
+        p.line = format!("{}; publishing its atlas into the Quick Start", p.line);
+        cx.publish(serde_json::to_value(&p).unwrap_or_default());
+        let r = self.st.as_mut().ok_or("the search was not restored")?;
+        let opts = crate::explore::atlas::AtlasOpts {
+            per_niche: b.per_niche,
+            min_score: b.min_score,
+            max_entries: b.max_entries,
+        };
+        let rows = crate::explore::atlas::rows(&r.runs, &opts, &r.spec.uuid)?;
+        let w = cx.lib.publish_atlas(cx.job, &r.spec.uuid, &rows)?;
+        r.published = Some(Published {
+            entries: rows.len(),
+            added: w.added,
+            updated: w.updated,
+            removed: w.removed,
+        });
+        Ok(())
+    }
 }
 
-/// The progress as one line: `explore 7: 12,345 runs (230/s), 1,204 elites in 980 niches, ...`.
+/// The progress as one line: `explore 7: 12,345 runs (230/s), 1,204 elites in 980 niches, ...`;
+/// a Quick Start build's with its minutes, and once done what it published.
 pub fn line(p: &ExploreProgress) -> String {
     let d = crate::dashboard::digits;
+    let head = match (p.build_minutes, &p.published) {
+        (Some(_), Some(pb)) => format!(
+            "Quick Start build (explore {}): {} atlas entries published ({} new, {} updated, {} removed);",
+            p.job,
+            d(pb.entries as u64),
+            pb.added,
+            pb.updated,
+            pb.removed
+        ),
+        (Some(m), None) => format!(
+            "Quick Start build (explore {}): {} of {} min,",
+            p.job,
+            // Runs under way when the minutes are spent finish first: past the end, the end.
+            minutes(p.elapsed_s.min(m * 60.0)),
+            minutes(m * 60.0)
+        ),
+        _ => format!("explore {}:", p.job),
+    };
     format!(
-        "explore {}: {} runs ({:.0}/s), {} elites in {} niches, {} confirmed, {} of {} tilings; {}",
-        p.job,
+        "{head} {} runs ({:.0}/s), {} elites in {} niches, {} confirmed, {} of {} tilings; {}",
         d(p.screened),
         p.per_s,
         d(p.elites),

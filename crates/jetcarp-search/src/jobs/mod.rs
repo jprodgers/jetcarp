@@ -54,6 +54,9 @@
 //! mover runs two seconds and on to the next window it builds, where it checkpoints. A pile's
 //! doubling step is cancelled within a second of a stop and run again on resume.
 //!
+//! Crates above this one add kinds of their own with [`register`]: `pack_import` (a pack
+//! imported into the library, in `jetcarp-pack`), which the first-run setup starts.
+//!
 //! Any other kind (and the `collide` jobs stored before collisions were strategies) is listed
 //! and can be stopped, but not run. Every kind here but `explore` is deterministic: a job
 //! stopped and resumed, in any process, ends exactly as an uninterrupted one
@@ -204,23 +207,41 @@ static KINDS: [&dyn StrategyKind; 11] = [
     &compounds::KIND,
 ];
 
-/// Every kind with a strategy, in the module table's order.
-pub fn kinds() -> &'static [&'static dyn StrategyKind] {
-    &KINDS
+/// Kinds that crates above this one added ([`register`]).
+static EXTRA: std::sync::RwLock<Vec<&'static dyn StrategyKind>> =
+    std::sync::RwLock::new(Vec::new());
+
+/// Add a kind defined above this crate (`pack_import`, in `jetcarp-pack`), so its jobs are
+/// made, listed, run and resumed like the others. A kind already known by its name is kept as
+/// it is.
+pub fn register(k: &'static dyn StrategyKind) {
+    let mut v = EXTRA.write().unwrap_or_else(|e| e.into_inner());
+    if KINDS.iter().chain(v.iter()).all(|x| x.kind() != k.kind()) {
+        v.push(k);
+    }
+}
+
+/// Every kind with a strategy, in the module table's order, then the kinds registered.
+pub fn kinds() -> Vec<&'static dyn StrategyKind> {
+    let extra = EXTRA.read().unwrap_or_else(|e| e.into_inner());
+    KINDS.iter().copied().chain(extra.iter().copied()).collect()
 }
 
 /// The kind of a `jobs.kind` value (a generic one for kinds without their own).
 pub fn kind(name: &str) -> &'static dyn StrategyKind {
-    KINDS
-        .iter()
-        .copied()
-        .find(|k| k.kind() == name)
-        .unwrap_or(&other::KIND)
+    strategy(name).unwrap_or(&other::KIND)
 }
 
 /// The kind a strategy name makes, if there is one.
 pub fn strategy(name: &str) -> Option<&'static dyn StrategyKind> {
-    KINDS.iter().copied().find(|k| k.kind() == name)
+    KINDS
+        .iter()
+        .copied()
+        .find(|k| k.kind() == name)
+        .or_else(|| {
+            let extra = EXTRA.read().unwrap_or_else(|e| e.into_inner());
+            extra.iter().copied().find(|k| k.kind() == name)
+        })
 }
 
 /// Make a job (status `paused` until a runner starts it): the strategy checks and stores its
@@ -230,7 +251,7 @@ pub fn create(lib: &Library, js: &JobSpec) -> Result<i64, String> {
         format!(
             "no strategy '{}' (there are {})",
             js.strategy,
-            KINDS
+            kinds()
                 .iter()
                 .map(|k| k.kind())
                 .collect::<Vec<_>>()
