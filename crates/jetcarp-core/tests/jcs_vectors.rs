@@ -120,8 +120,10 @@ fn documented_tiling_key(t: &serde_json::Value) -> String {
 #[test]
 fn the_documented_tiling_key_function_matches_every_vector() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let page =
-        std::fs::read_to_string(dir.join("../../docs/src/reference/library-format.md")).unwrap();
+    // A checkout with CRLF line endings (Git for Windows' default) reads as the page.
+    let page = std::fs::read_to_string(dir.join("../../docs/src/reference/library-format.md"))
+        .unwrap()
+        .replace("\r\n", "\n");
     let code: String = page
         .split("```python\n")
         .find(|b| b.contains("def tiling_key(t):"))

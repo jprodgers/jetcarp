@@ -53,7 +53,7 @@ fn json_before_or_after_the_subcommand() {
     let before = json_of(&["--json", "paths"]);
     assert_eq!(after, before);
     let keys: Vec<&String> = after.as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["data", "output", "settings"]);
+    assert_eq!(keys, ["bundled_packs", "data", "output", "settings"]);
     // Without --json: the text, as before.
     let text = String::from_utf8(jetcarp(&["paths"]).stdout).unwrap();
     assert!(text.starts_with("settings: "), "{text}");

@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# The golden packs are checked byte for byte (their hashes and signatures cover their bytes), so
+# a Windows checkout must not give their text files CRLF line endings.
+/crates/jetcarp-pack/tests/golden/** -text
