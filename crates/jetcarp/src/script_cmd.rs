@@ -10,9 +10,19 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(Args)]
+#[command(
+    after_help = "Example scripts are built in, as in the app's Examples menu: --examples lists them and --example NAME runs one (with --check, checks it; it writes into the output folder like any script)."
+)]
 pub struct ScriptArgs {
-    /// The script (.rhai). Omit with --functions.
+    /// The script (.rhai). Omit with --functions, --examples or --example.
     file: Option<PathBuf>,
+    /// Run a built-in example script instead of a file (`hexw-all`, `wolfram-all`, ...; the
+    /// `.rhai` may be left off).
+    #[arg(long, value_name = "NAME", conflicts_with = "file")]
+    example: Option<String>,
+    /// List the built-in example scripts and exit.
+    #[arg(long)]
+    examples: bool,
     /// Script parameter, seen as `params.key` (repeatable): --set from=0 --set label=test
     #[arg(long = "set", value_name = "KEY=VALUE")]
     set: Vec<String>,
@@ -42,16 +52,69 @@ pub struct ScriptArgs {
     functions: bool,
 }
 
+/// The first paragraph of an example's opening comment, on one line.
+fn example_summary(src: &str) -> String {
+    src.lines()
+        .map(str::trim)
+        .take_while(|l| l.starts_with("//") && l.trim_start_matches('/').trim() != "")
+        .map(|l| l.trim_start_matches('/').trim())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A built-in example by name, with or without `.rhai`.
+fn example(name: &str) -> Result<(&'static str, &'static str)> {
+    let want = name.trim().trim_end_matches(".rhai");
+    jetcarp_script::EXAMPLES
+        .iter()
+        .find(|(n, _)| n.trim_end_matches(".rhai") == want)
+        .copied()
+        .with_context(|| {
+            let names: Vec<&str> = jetcarp_script::EXAMPLES
+                .iter()
+                .map(|(n, _)| n.trim_end_matches(".rhai"))
+                .collect();
+            format!(
+                "no example script '{name}'; the examples are {}",
+                names.join(", ")
+            )
+        })
+}
+
 pub fn script(a: ScriptArgs) -> Result<()> {
     if a.functions {
         print!("{}", jetcarp_script::help_text());
         return Ok(());
     }
-    let Some(file) = a.file else {
-        bail!("give a script file (or --functions for the function reference)");
+    if a.examples {
+        for (n, src) in jetcarp_script::EXAMPLES {
+            println!(
+                "{}
+    {}",
+                n.trim_end_matches(".rhai"),
+                example_summary(src)
+            );
+        }
+        println!(
+            "
+Run one with: jetcarp script --example NAME"
+        );
+        return Ok(());
+    }
+    let (file, source) = match (&a.file, &a.example) {
+        (Some(f), _) => (
+            f.clone(),
+            std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?,
+        ),
+        (None, Some(name)) => {
+            let (n, src) = example(name)?;
+            (PathBuf::from(n), src.to_string())
+        }
+        (None, None) => bail!(
+            "give a script file, or --example NAME (--examples lists them), or --functions for the function reference"
+        ),
     };
-    let source =
-        std::fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+    let is_example = a.file.is_none();
     if a.check {
         return match jetcarp_script::check(&source) {
             Ok(()) => {
@@ -70,7 +133,8 @@ pub fn script(a: ScriptArgs) -> Result<()> {
         },
         threads: a.threads,
         out_root: a.out.clone(),
-        script_path: Some(std::fs::canonicalize(&file).unwrap_or(file.clone())),
+        // A built-in example has no file: run.json keeps its source.
+        script_path: (!is_example).then(|| std::fs::canonicalize(&file).unwrap_or(file.clone())),
         ..Default::default()
     };
     opts.limits.max_seconds = a.max_seconds;
@@ -162,9 +226,16 @@ pub fn script(a: ScriptArgs) -> Result<()> {
             .collect();
         for d in &resumable {
             if source.contains("params.folder") {
+                let run_as = if is_example {
+                    format!(
+                        "--example {}",
+                        file.display().to_string().trim_end_matches(".rhai")
+                    )
+                } else {
+                    file.display().to_string()
+                };
                 eprintln!(
-                    "resume: jetcarp script {} --set folder={}",
-                    file.display(),
+                    "resume: jetcarp script {run_as} --set folder={}",
                     d.display()
                 );
             } else {

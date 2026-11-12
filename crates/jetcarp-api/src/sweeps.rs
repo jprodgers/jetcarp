@@ -533,18 +533,43 @@ pub fn contact_sheet(
             .collect(),
     };
     let mut imgs = Vec::with_capacity(items.len());
+    // A run without a picture is a blank tile that says why.
+    let mut why: Vec<Option<&str>> = Vec::with_capacity(items.len());
     for (row, _) in items {
         let r = m.rows.get(*row).ok_or("no such run in the manifest")?;
-        imgs.push(match m.image(r) {
-            Some(p) if p.exists() => shrink(&load_png(&p)?, thumb),
-            _ => blank.clone(),
-        });
+        match m.image(r) {
+            Some(p) if p.exists() => {
+                imgs.push(shrink(&load_png(&p)?, thumb));
+                why.push(None);
+            }
+            _ => {
+                imgs.push(blank.clone());
+                why.push(Some(if r.get("skipped").is_some_and(|s| !s.is_null()) {
+                    "(skipped)"
+                } else if r.get("error").is_some_and(|e| !e.is_null()) {
+                    "(failed)"
+                } else if r.get("kept") == Some(&Value::Bool(false)) {
+                    "(not kept)"
+                } else {
+                    "(no picture)"
+                }));
+            }
+        }
     }
     let white = [235, 235, 235, 255];
+    let grey = [150, 150, 150, 255];
     let labelled: Vec<(jetcarp_core::sheet::Label, &Image)> = items
         .iter()
         .zip(&imgs)
-        .map(|((_, lines), img)| (lines.iter().map(|l| (l.clone(), white)).collect(), img))
+        .zip(&why)
+        .map(|(((_, lines), img), why)| {
+            let mut l: jetcarp_core::sheet::Label =
+                lines.iter().map(|l| (l.clone(), white)).collect();
+            if let Some(w) = why {
+                l.push((w.to_string(), grey));
+            }
+            (l, img)
+        })
         .collect();
     Ok(jetcarp_core::sheet::labelled_sheet_scaled(
         &labelled,

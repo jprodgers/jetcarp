@@ -125,6 +125,35 @@ fn small_sweep_writes_files() {
     assert_eq!(run["screen"]["width"], 320);
 }
 
+/// The manifest's `stopped`: `max_gens` when a run reached its limit with no `until` given (or
+/// before the `until` fired), `until` when the trigger fired.
+#[test]
+fn sweeps_say_why_each_run_stopped() {
+    let root = temp_root("stopped");
+    for (until, want) in [
+        ("", "max_gens"),
+        (r#"until: "generations", n: 12,"#, "until"),
+        (r#"until: "empty","#, "max_gens"),
+    ] {
+        let s = ok(
+            &format!(
+                r#"sweep(#{{ rules: "B3/S23", tiling: "square", size: [24, 24], seed: "random:0.4",
+                            {until} max_gens: 12, png: false, out: "stops" }});"#
+            ),
+            opts(&root),
+        );
+        let r = rows(&folder(&s));
+        assert_eq!(r[0]["stopped"], want, "{until}: {:?}", r[0]);
+        assert_eq!(r[0]["generations"], 12);
+    }
+    let s = ok(
+        r#"let w = world(#{ tiling: "square", size: [16, 16] }); w.add_ca("B3/S23");
+           let r = w.run(#{ gens: 7 }); log(r.stopped);"#,
+        opts(&root),
+    );
+    assert!(s.log.iter().any(|l| l == "max_gens"), "{:?}", s.log);
+}
+
 #[test]
 fn sweeps_do_not_depend_on_thread_count() {
     let src = r#"sweep(#{ rules: "W", from: 20, to: 59, tiling: "square", boundary: "wrap",

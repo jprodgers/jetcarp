@@ -173,9 +173,9 @@ replays the run exactly as the sweep ran it. The run is also starred in the fold
   manifest first and prints the command that carries it on. Rerunning it with `folder:` set to its
   folder skips the runs already done. The named families `"W"`, `"HexW"`, `"HexW3"`, `"HexT"` and
   `"HexT3 sum"` are numbered, so `rules: "HexW3", from: 0, to: 19682` sweeps all 19,683 ternary
-  hexagon rules. The example scripts that ship with JETCARP (*Examples* in the app's script editor,
-  and the `crates/jetcarp-script/scripts` folder of the source repository) include sweeps of every
-  elementary rule.
+  hexagon rules. The example scripts built into JETCARP include sweeps of every elementary rule:
+  `jetcarp script --examples` lists them, `jetcarp script --example wolfram-all` runs one, and the
+  app's script editor has them under *Examples*.
 - **Without writing code.** The app's *Sweep builder* tab, under *Tools → Scripts and sweeps…*,
   builds the same sweeps from a form, and *Sweep this world* sweeps a rule over whatever world is
   open.

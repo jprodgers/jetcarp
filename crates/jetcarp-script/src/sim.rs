@@ -35,7 +35,8 @@ impl Shared {
 pub struct RunOutcome {
     /// Generations run by this call.
     pub generations: u64,
-    /// `until` (the trigger fired), `max_gens` (the limit was reached first), or `cancelled`.
+    /// `until` (the trigger fired), `max_gens` (the limit was reached first, or no `until` was
+    /// given), or `cancelled`.
     pub stopped: &'static str,
     pub done: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,6 +116,7 @@ pub fn run_until(w: &mut World, u: &Until, stop: &dyn Fn() -> bool) -> RunOutcom
             left -= k;
         }
         if stopped != "cancelled"
+            && u.given
             && matches!(u.trigger, Trigger::Generations { n } if n <= u.max_gens)
         {
             stopped = "until";

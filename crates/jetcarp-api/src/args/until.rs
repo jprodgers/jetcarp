@@ -9,6 +9,10 @@ use serde_json::Value;
 pub struct Until {
     pub trigger: Trigger,
     pub max_gens: u64,
+    /// The trigger was given (`until`). Without one a run counts `max_gens` generations, and
+    /// says it stopped at `max_gens`.
+    #[serde(skip)]
+    pub given: bool,
 }
 
 /// Keys accepted by [`parse_until`].
@@ -84,7 +88,11 @@ pub fn parse_until(v: &Value, default_max: u64) -> Result<Until, String> {
         (Trigger::Generations { n }, None) => *n,
         _ => default_max,
     };
-    Ok(Until { trigger, max_gens })
+    Ok(Until {
+        trigger,
+        max_gens,
+        given: get(v, "until").is_some(),
+    })
 }
 
 #[cfg(test)]
@@ -99,12 +107,14 @@ mod tests {
             u,
             Until {
                 trigger: Trigger::Done,
-                max_gens: 5000
+                max_gens: 5000,
+                given: true,
             }
         );
         let u = parse_until(&json!({"gens": 50}), 1000).unwrap();
         assert_eq!(u.trigger, Trigger::Generations { n: 50 });
         assert_eq!(u.max_gens, 50);
+        assert!(!u.given);
         let u = parse_until(&json!({"until": "Population below", "n": 3}), 1000).unwrap();
         assert_eq!(u.trigger, Trigger::PopulationBelow { n: 3 });
         assert_eq!(u.max_gens, 1000);

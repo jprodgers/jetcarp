@@ -192,7 +192,7 @@ enum Cmd {
     },
     /// List named rules and notation.
     Rules,
-    /// Run a Rhai script: worlds, runs, images, parallel rule sweeps (see the book's "Scripting (Rhai) API" reference).
+    /// Run a Rhai script: worlds, runs, images, parallel rule sweeps (see the book's "Scripting (Rhai) API" reference). `--examples` lists the example scripts built in, `--example NAME` runs one.
     Script(script_cmd::ScriptArgs),
     /// Control the running JETCARP app (AI control on, or `jetcarp --control`): `status`,
     /// `screensaver on|off [--profile NAME]`, `profiles`, `display ...`, `play`, `pause`,

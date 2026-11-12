@@ -955,6 +955,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
         let u = args::Until {
             trigger: jetcarp_core::script::Trigger::Generations { n: n.max(0) as u64 },
             max_gens: n.max(0) as u64,
+            given: true,
         };
         let o = sim::run_until(&mut s.lock().world, &u, &|| c.stopped());
         if o.stopped == "cancelled" {

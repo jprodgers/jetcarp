@@ -62,6 +62,12 @@ and the time taken go to standard error.
 | `--check` | Only check the script for syntax errors (`ok: FILE`, or the error with its line and column) |
 | `--json` | Print a summary as JSON on standard output at the end (the log then goes to standard error) |
 | `--functions` | Print the function reference (the same text as the reference below) and stop |
+| `--examples` | List the example scripts built into JETCARP, each with what it does, and stop |
+| `--example NAME` | Run a built-in example instead of a file (`hexw-all`, `wolfram-all`, `soup-hunt`, …; with `--check`, only check it) |
+
+The examples are the scripts of the app's *Examples* menu, built into the program, so they run
+anywhere JETCARP is installed: `jetcarp script --example wolfram-all` draws all 256 elementary rules
+into a new output folder.
 
 Pressing Ctrl-C once stops the script after the runs in flight; a sweep writes its manifest first, and
 JETCARP prints the command that carries it on. Pressing it again quits at once. A sweep folder can
@@ -80,7 +86,9 @@ default) and a limit on world size, and reads files only from the output folder 
 ## Parameters: `--set`
 
 Each `--set key=value` puts one entry in the map `params`. Numbers and `true`/`false` arrive as
-numbers and booleans; anything else arrives as text. A key that was not given reads as `()`, Rhai's
+numbers and booleans; anything else arrives as text, and so does a whole number too large for a
+script's integers (beyond 2^63 − 1, such as a random state), which seeds and `rng_seed` read
+exactly. A key that was not given reads as `()`, Rhai's
 "nothing", so `params.gens ?? 300` gives a default:
 
 ```text
@@ -168,7 +176,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | Function | What it does |
 | --- | --- |
 | `w.step()`, `w.step(n)` | Run 1 or `n` generations. |
-| `w.run(#{ until: "done", max_gens: 5000 })` | Run until a condition or the limit; returns `#{ generations, generation, stopped, done, done_reason }` (`stopped` is `"until"` or `"max_gens"`). `until`: `done`, `repeats` (with `max_period`, default 1000), `frozen`, `empty`, `generations` (with `n`), `population_below`/`population_above` (with `n`), `activity_below`/`activity_above` (with `fraction`, `for_gens`), `never`. Without `until`: runs `gens` generations. |
+| `w.run(#{ until: "done", max_gens: 5000 })` | Run until a condition or the limit; returns `#{ generations, generation, stopped, done, done_reason }` (`stopped` is `"until"` or `"max_gens"`). `until`: `done`, `repeats` (with `max_period`, default 1000), `frozen`, `empty`, `generations` (with `n`), `population_below`/`population_above` (with `n`), `activity_below`/`activity_above` (with `fraction`, `for_gens`), `never`. Without `until`: runs `gens` generations (and `stopped` is `"max_gens"`). |
 | `w.done()`, `w.done_reason()` | True when nothing can change any more: an elementary rule (`W`, `HexW`, `HexW3`, `HexT`, `HexT3`) wrote the bottom row (wrap edges: one full pass), a layered rule wrote its last layer, a sandpile is stable, all ants left, a field rule died out, or the world is frozen. |
 | `w.track_changes(true)` | Count changed cells every generation (frozen worlds are then seen at once). |
 | `w.jump(n)` | HashLife jump in place: `n` generations (a number, or text like `"2^40"`) on a wrap-edge lattice world whose sides are powers of two, with Life-like, Generations (B0 included), WireWorld, or Greenberg–Hastings CAs (one or several, on shared or separate fields). Same states as `w.step(n)`; live cells end with age 1. Logged as a `jump` command. `w.can_jump()` is `true` or the reason it cannot. |
@@ -222,7 +230,7 @@ map (folder, runs, images, kept, errors, seconds, cancelled).
 **Reading a sweep back:** `manifest(folder)` returns the rows as a list of maps (one per run, sorted by index; also while a sweep is still running), e.g. `for r in manifest(s.folder) { if r.row_hint == "nested" { ... } }`. `manifest.json` itself is `#{ columns: [...], rows: [...] }`. Missing values (JSON null) are `()` in Rhai: test `r.period == ()`; Rhai has no `null`. Then `library().promote_run(s.folder, r.rule)` puts a run in the Quick Start.
 
 File names are zero-padded to the series width: `HexW3-08229.png`, `W030.png`, `HexT3-sum-0588.png`; rule lists use
-`<index>_<rule>.png`. Manifest columns: index, n, rule, file, kept, generations, stopped, done,
+`<index>_<rule>.png`. Manifest columns: index, n, rule, file, kept, generations, stopped (`until` when the trigger fired, `max_gens` when the limit came first or no `until` was given), done,
 done_reason, hash, population, density, frac_0.. (Lenia: mass, mean_value), period, row_period,
 row_shift, periodic_from, distinct_rows, row_class, row_entropy, row_hint, png_bytes, error (and
 `skipped`), then any columns from `keep`.
