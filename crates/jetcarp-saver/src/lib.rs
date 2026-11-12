@@ -10,6 +10,15 @@
 //! a new set of views on top each time. So the saver quits its process when macOS says the screen
 //! saver is stopping, as other third-party savers do.
 //!
+//! macOS also makes full-screen views ahead of time (when the saver is chosen in System Settings,
+//! and after each run) and asks them to animate at once, though nothing shows them: on the Mac in
+//! rc1 one drew about 3,700 frames at 4112 x 2658 in the two minutes before the saver started.
+//! Their windows look the same as the shown ones (macOS reports neither as on screen, since both
+//! are shown from another process), so a full-screen view animates only once a screen saver is
+//! known to be running: macOS has said so (`com.apple.screensaver.didstart`), or its screen saver
+//! app (`com.apple.ScreenSaver.Engine`) is running. Until then it draws its first frame and waits,
+//! and the simulation does not step. The preview in System Settings always animates.
+//!
 //! A log goes to `jetcarp-saver.log` in the process's temporary folder, inside the sandbox's
 //! container (`~/Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/tmp/` on
 //! macOS 27), and to the system log, each line starting `jetcarp-saver:`.
@@ -34,9 +43,13 @@ use std::time::{Duration, Instant};
 const STEP_SHARE: f32 = 0.6;
 const WILL_STOP: &str = "com.apple.screensaver.willstop";
 const DID_START: &str = "com.apple.screensaver.didstart";
-/// A view told to start animating this long after it was made is one macOS made ahead of time.
-/// Those have been seen animating with nothing on screen, after the display woke, for hours. The
-/// views macOS shows are made as the saver starts.
+/// macOS's screen saver app, which runs while a screen saver shows (launching it starts one).
+const ENGINE_ID: &str = "com.apple.ScreenSaver.Engine";
+/// How often a view waiting for the saver to start asks whether the screen saver app runs.
+const ENGINE_EVERY: Duration = Duration::from_secs(1);
+/// A view told to start animating this long after it was made is one macOS made ahead of time
+/// (logged as such). Not every such view is told late: the one made when the saver is chosen is
+/// told 0.5 s after, as the shown ones are, which is why drawing waits for a saver to start.
 const STARTED_LATE: Duration = Duration::from_secs(5);
 
 unsafe extern "C" {
@@ -126,6 +139,36 @@ thread_local! {
     static SHARED: RefCell<Option<Shared>> = const { RefCell::new(None) };
     /// macOS has said a screen saver started (`com.apple.screensaver.didstart`).
     static SHOWING: Cell<bool> = const { Cell::new(false) };
+    /// When the screen saver app was last looked for, and whether it was running.
+    static ENGINE: Cell<(Option<Instant>, bool)> = const { Cell::new((None, false)) };
+}
+
+/// Whether macOS's screen saver app is running, asked at most every [`ENGINE_EVERY`].
+fn engine_running() -> bool {
+    let (at, was) = ENGINE.get();
+    if at.is_some_and(|t| t.elapsed() < ENGINE_EVERY) {
+        return was;
+    }
+    let now = unsafe {
+        objc2::runtime::AnyClass::get(c"NSRunningApplication").is_some_and(|cls| {
+            let list: Option<Retained<AnyObject>> = msg_send![cls,
+                runningApplicationsWithBundleIdentifier: &*NSString::from_str(ENGINE_ID)];
+            list.is_some_and(|l| {
+                let n: usize = msg_send![&*l, count];
+                n > 0
+            })
+        })
+    };
+    if now && !was {
+        log("macOS's screen saver app is running: a screen saver is showing");
+    }
+    ENGINE.set((Some(Instant::now()), now));
+    now
+}
+
+/// Whether a screen saver is known to be running, so a full-screen view may be on screen.
+fn saver_running() -> bool {
+    SHOWING.get() || engine_running()
 }
 
 #[repr(C)]
@@ -365,8 +408,6 @@ pub struct Ivars {
     /// Why the last frame wasn't drawn, so each reason is logged once.
     waiting: RefCell<String>,
     made: Instant,
-    /// Told to start animating [`STARTED_LATE`] or more after it was made.
-    started_late: Cell<bool>,
 }
 
 impl Drop for Ivars {
@@ -400,7 +441,6 @@ define_class!(
                 broken: Cell::new(false),
                 waiting: RefCell::new("not started".into()),
                 made: Instant::now(),
-                started_late: Cell::new(false),
             });
             let this: Option<Retained<Self>> =
                 unsafe { msg_send![super(this), initWithFrame: frame, isPreview: is_preview] };
@@ -431,7 +471,6 @@ define_class!(
         fn start_animation(&self) {
             let age = self.ivars().made.elapsed();
             let late = age >= STARTED_LATE;
-            self.ivars().started_late.set(late);
             log(&format!(
                 "startAnimation {:.1} s after the view was made{}, preview {}",
                 age.as_secs_f64(),
@@ -679,21 +718,27 @@ impl JetcarpSaverView {
                 self.place_layer(&s.layer, scale);
                 Self::configure(s, &gpu.device);
             }
+            // A full-screen view macOS made ahead of time is shown by nothing until a screen
+            // saver starts: it keeps its first frame, and neither draws nor steps until then.
+            if !self.ivars().preview && s.shown > 0 && !saver_running() {
+                self.skipped(
+                    s,
+                    "no screen saver is running, so nothing shows this view (made ahead of time); waiting for one to start",
+                );
+                return Ok(());
+            }
             sh.fit(self.key(), (w, h), scale as f64)?;
-            sh.tick();
-            let slow = if sh.replaced(self.key(), (w, h)) {
-                Some("a newer view of this size is drawing, so this one draws once a second")
-            } else if self.ivars().started_late.get() && !SHOWING.get() {
-                Some("made ahead of time and no saver has started, so this one draws once a second")
-            } else {
-                None
-            };
-            if let Some(why) = slow {
+            if sh.replaced(self.key(), (w, h)) {
                 if s.drew.is_some_and(|t| t.elapsed() < REPLACED_EVERY) {
                     return Ok(());
                 }
-                self.skipped(s, why);
+                self.skipped(
+                    s,
+                    "a newer view of this size is drawing, so this one draws once a second",
+                );
             }
+            // Stepped only for a frame that is drawn.
+            sh.tick();
             let gpu = sh.gpu.as_ref().ok_or("no GPU")?;
             let asked = Instant::now();
             let got = s.surface.get_current_texture();

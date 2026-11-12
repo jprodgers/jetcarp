@@ -229,7 +229,10 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
   inside it, signs it for this machine, and opens System Settings where screen savers are chosen
   (*System Settings, Wallpaper, Screen Saver…* on macOS 27). Install it again after changing the
   rotation. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
-  it with `cargo build --release -p jetcarp-saver`.
+  it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
+  of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
+  starts moving only once the screen saver has really started. The preview in System Settings always
+  moves.
 - **GNOME** has no list of screen savers. Use the lock screen's screensaver mode instead:
   `jetcarp host lock screensaver --awake 30`.
 
