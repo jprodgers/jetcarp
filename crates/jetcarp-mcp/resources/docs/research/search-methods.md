@@ -323,9 +323,13 @@ for the starting patterns and tilings tried least. A GPU loop runs the rules the
 supports in large batches while a CPU loop runs the rest. A run on the processor that would take
 longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
 run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
-exactly. When a search's time is up, runs still going on the processor are given up unrecorded, and
-the GPU's last batches are sized from its pace so far to end in time. Like the other searches it runs as a job,
-but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
+exactly. An elite's confirmation does not start on a thread that is waiting inside another run,
+which would hold that run past its cap. When a search's time is up, runs still going on the
+processor are given up unrecorded, and the GPU's last batches are sized from its pace so far to
+end in time (Larger than Life on aperiodic patches paced apart, since it runs far slower there); a
+batch that runs on past the end, or past a stop, is given up between two of its submissions. The
+job's progress is written every two seconds while a step runs. Like the other searches it runs as
+a job, but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
 runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
 [Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the
 newest runs, the archive, the runs the search has confirmed, how often it has tried each tiling,

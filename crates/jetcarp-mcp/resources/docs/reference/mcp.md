@@ -625,7 +625,7 @@ Example:
 | `search.store` | boolean | Store what is found in the catalog (default true; false only reports it). |
 | `search.tilings` | array or string | Tilings: ids, catalog ids, vertex configurations, or sets, as a list or text (default square). |
 | `search.width` | integer | Grid width in unit cells (with `height`, instead of `size`). |
-| `threads` | integer | Worker threads (default 0: all cores; results do not depend on them). |
+| `threads` | integer | Worker threads (default 0: all cores, and all but two for an explore search; results do not depend on them). |
 | `wait_s` | number | Wait up to this many seconds for the job to end, then answer with its status (default 0: answer at once). |
 
 Example:

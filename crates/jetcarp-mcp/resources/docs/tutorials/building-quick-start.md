@@ -22,6 +22,7 @@ explore search job 22 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches, 310 confirmed, 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
   status done, 3 min 17 s run over every session, 1,041 confirmation runs, 29,454 candidates tried, 1.22 GB of memory
+  threads: 20 for runs on the processor and 10 for the GPU's batches, of 32 cores (2 left free)
   …
   family                     runs   mean   best  elites
   life_like                 8,427   0.27   1.35   1,761
@@ -38,10 +39,13 @@ per category, rule family and tiling. The table says how each rule family did; t
 the *status* line is the memory it used.
 
 **Timings.** The minutes are the search's, and it ends on time: runs still going on the processor
-when they are spent are given up, and the graphics card's last batches are sized to end with them.
-Publishing then takes a few seconds more, since each entry's run is replayed to where it is most
-interesting. This three-minute build took 3 minutes 18 seconds from start to finish. Three minutes
-see only a couple of dozen of JETCARP's 1,359 tilings; a longer build sees more and finds more.
+when they are spent are given up, and the graphics card's last batches are sized to end with them
+(one that would run on is given up too). Publishing then takes a few seconds more, since each
+entry's run is replayed to where it is most interesting. This three-minute build took 3 minutes 18
+seconds from start to finish. Its progress (`jetcarp jobs status`) moves every couple of seconds,
+and it leaves two of the computer's cores free; the *threads* line says how it shared the rest.
+Three minutes see only a couple of dozen of JETCARP's 1,359 tilings; a longer build sees more and
+finds more.
 
 Open the app (or go back to its Quick Start screen) and set *Source* to *Atlas* to see only your
 build's entries:

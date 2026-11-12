@@ -140,9 +140,12 @@ the GPU:
 $ jetcarp search explore --gpu --minutes 60 --label first-look
 ```
 
-A budget ends it on time: the GPU's last batch is sized to end before it, and runs still going on
-the processor then are given up, unrecorded. A run on the processor stops at 8 seconds (a
-confirmation run at 32) and is kept as a run of the generations it reached. A search of a few
+A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
+on), and runs still going on the processor then are given up, unrecorded. A run on the processor
+stops at 8 seconds (a confirmation run at 32) and is kept as a run of the generations it reached.
+Its progress (time and runs) is written every two seconds, and `jetcarp jobs stop` stops it within
+seconds. Unless given `--threads`, it leaves two of the computer's cores free for other work, and a
+third of the rest prepare the GPU's batches; `jetcarp jobs status` says how many. A search of a few
 minutes sees only a handful of tilings. While it runs, or once it has stopped:
 
 ```text
