@@ -52,6 +52,33 @@ fn share_beside_bin_comes_before_packs_beside_the_program() {
     assert_eq!(bundled_packs_from(None, None), None);
 }
 
+/// The shell installer's `~/.local/lib/jetcarp` and the PowerShell installer's
+/// `%LOCALAPPDATA%\Programs\jetcarp` have no `share` beside them: only `packs` in the folder is
+/// looked at, and only it is listed.
+#[test]
+fn share_is_looked_at_only_beside_a_bin_folder() {
+    use jetcarp_core::paths::bundled_packs_candidates_for;
+    let d = scratch("not-bin");
+    let lib = d.join("lib").join("jetcarp");
+    std::fs::create_dir_all(d.join("lib/share/jetcarp/packs")).unwrap();
+    std::fs::create_dir_all(&lib).unwrap();
+    let exe = lib.join("jetcarp");
+    assert_eq!(bundled_packs_from(None, Some(&exe)), None);
+    assert_eq!(
+        bundled_packs_candidates_for(None, Some(&exe)),
+        vec![lib.join("packs")]
+    );
+    // A Python environment's Scripts folder on Windows counts as bin.
+    let scripts = d.join("venv").join("Scripts").join("jetcarp.exe");
+    assert_eq!(
+        bundled_packs_candidates_for(None, Some(&scripts)),
+        vec![
+            d.join("venv/share/jetcarp/packs"),
+            d.join("venv/Scripts/packs")
+        ]
+    );
+}
+
 #[test]
 fn verbatim_windows_paths_read_as_plain_ones() {
     let p = |s: &str| plain_path(PathBuf::from(s));

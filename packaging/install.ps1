@@ -99,12 +99,37 @@ function Remove-FromUserPath([string]$Dir) {
     Set-UserPath ($parts -join ";")
 }
 
+# The folders `New-Item -Force` would make for $Dir, deepest first.
+function Get-MissingDirs([string]$Dir) {
+    $out = @()
+    $d = $Dir
+    while ($d -and -not (Test-Path -LiteralPath $d)) {
+        $out += $d
+        $d = Split-Path -Parent $d
+    }
+    return $out
+}
+
+# The folders an earlier install recorded as its own (`made` lines in the marker).
+function Get-MadeBefore {
+    if (-not (Test-Path -LiteralPath $Marker)) { return @() }
+    return @(Get-Content -LiteralPath $Marker | Where-Object { $_ -like "made *" } | ForEach-Object { $_.Substring(5) })
+}
+
 if ($Uninstall) {
     if (-not (Test-Path $Marker)) { Fail "no JETCARP installed by this installer in $InstallDir" }
     Say "run ``jetcarp uninstall`` first if JETCARP set anything up (host, login, screen saver)"
+    $Made = @(Get-MadeBefore)
     Remove-Item -Recurse -Force $InstallDir
     Remove-FromUserPath $InstallDir
     Say "removed $InstallDir and took it off your PATH (your settings, data and pictures are kept)"
+    # The folders the install made around it (such as %LOCALAPPDATA%\Programs), deepest first, if empty.
+    foreach ($m in @($Made | Sort-Object -Unique -Descending)) {
+        if ((Test-Path -LiteralPath $m -PathType Container) -and @(Get-ChildItem -Force -LiteralPath $m).Count -eq 0) {
+            Remove-Item -LiteralPath $m -Force
+            Say "removed $m (empty, made by the install)"
+        }
+    }
     return
 }
 
@@ -162,11 +187,14 @@ try {
     $Src = Join-Path $Unpacked "jetcarp-$Version-$Target"
     if (-not (Test-Path (Join-Path $Src "jetcarp.exe"))) { Fail "$Archive has no jetcarp.exe" }
     if ($NoPacks -and (Test-Path (Join-Path $Src "packs"))) { Remove-Item -Recurse -Force (Join-Path $Src "packs") }
-    Set-Content -Path (Join-Path $Src ".jetcarp-installer") -Value "JETCARP $Version $Target"
-
     # Swap the new folder in, keeping the old one until the new one is in place. A running
     # jetcarp.exe holds its folder: stop it first (`jetcarp host stop`, and close the app).
     $Parent = Split-Path -Parent $InstallDir
+    # The marker names the version, and every folder an install made, for -Uninstall to remove
+    # when empty (an update keeps the ones the first install made).
+    $Made = @(@(Get-MissingDirs $Parent) + @(Get-MadeBefore) | Sort-Object -Unique -Descending)
+    $Lines = @("JETCARP $Version $Target") + @($Made | ForEach-Object { "made $_" })
+    Set-Content -Path (Join-Path $Src ".jetcarp-installer") -Value $Lines
     New-Item -ItemType Directory -Force -Path $Parent | Out-Null
     $Old = "$InstallDir.old.$PID"
     if (Test-Path $InstallDir) {

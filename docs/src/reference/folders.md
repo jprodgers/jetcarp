@@ -121,7 +121,7 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_LIBRARY` | The pattern catalog: a `.sqlite` file, or a folder that holds (or will hold) `library.sqlite`. Default `<data>/library.sqlite`. Commands that use the catalog also take `--library` |
 | `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
-| `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
+| `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder (when that folder is a `bin` folder, as in Homebrew and Python installs) or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
 | `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |
 | `JETCARP_AI_CONTROL` | `1` or `on`: the app switches AI control on at launch, as its setting of the same name does |
 | `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default 1,536) |

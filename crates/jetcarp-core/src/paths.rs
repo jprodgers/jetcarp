@@ -164,12 +164,14 @@ pub fn output_dir() -> PathBuf {
 
 /// The folder of packs that came with the program (each a pack store, as `pack-format.md` lays
 /// one out), for the first-run setup to offer: `$JETCARP_BUNDLED_PACKS` when set, else the first
-/// of `<program folder>/../share/jetcarp/packs` and `<program folder>/packs` that is a folder.
-/// `None` when there is none, as after `cargo install` or with a release built without the
-/// starter pack.
+/// of `<program folder>/../share/jetcarp/packs` (only when the program's folder is a `bin` or
+/// `Scripts` folder) and `<program folder>/packs` that is a folder. `None` when there is none, as
+/// after `cargo install` or with a release built without the starter pack.
 ///
 /// The second place is where prefix installs put it (Homebrew's `pkgshare`, a Python
-/// environment's `share` folder from the wheel); the third is the release archives' own layout.
+/// environment's `share` folder from the wheel, whose programs are in `bin`, or `Scripts` on
+/// Windows); the third is the release archives' and the installers' own layout, whose folder
+/// (`~/.local/lib/jetcarp`, `%LOCALAPPDATA%\Programs\jetcarp`) has no `share` beside it.
 /// `<program folder>` is the running program's folder with symbolic links resolved, so a link on
 /// the `PATH` (pipx, uv, Homebrew, winget, the shell installer) leads back to the folder the
 /// program really lives in.
@@ -179,7 +181,8 @@ pub fn bundled_packs_dir() -> Option<PathBuf> {
 }
 
 /// The places [`bundled_packs_dir`] looks, in order: `$JETCARP_BUNDLED_PACKS` alone when set,
-/// else the two folders beside the program. For `jetcarp doctor` when none is found.
+/// else the folders beside the program that apply to how it was installed. For `jetcarp doctor`
+/// when none is found.
 pub fn bundled_packs_candidates() -> Vec<PathBuf> {
     let env = std::env::var_os(BUNDLED_PACKS_ENV);
     bundled_packs_places(env.as_deref(), program_path().as_deref())
@@ -195,6 +198,12 @@ pub fn bundled_packs_from(env: Option<&OsStr>, exe: Option<&Path>) -> Option<Pat
     places.into_iter().find(|p| p.is_dir())
 }
 
+/// [`bundled_packs_candidates`] with the variable's value and the program's path given (for
+/// tests).
+pub fn bundled_packs_candidates_for(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf> {
+    bundled_packs_places(env, exe)
+}
+
 fn bundled_packs_places(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf> {
     if let Some(v) = env.filter(|v| !v.is_empty()) {
         return vec![PathBuf::from(v)];
@@ -203,7 +212,13 @@ fn bundled_packs_places(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf>
         return Vec::new();
     };
     let mut places = Vec::new();
-    if let Some(prefix) = dir.parent() {
+    // `<prefix>/share` holds packs only for a program in `<prefix>/bin` (`Scripts` in a Python
+    // environment on Windows).
+    let in_bin = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("bin") || n.eq_ignore_ascii_case("scripts"));
+    if in_bin && let Some(prefix) = dir.parent() {
         places.push(prefix.join("share").join(APP_DIR).join("packs"));
     }
     places.push(dir.join("packs"));
@@ -232,6 +247,24 @@ pub fn plain_path(p: PathBuf) -> PathBuf {
         }
     }
     p
+}
+
+/// A control file in the runtime folder: `$JETCARP_RUNTIME_DIR/<name>`, else
+/// `%LOCALAPPDATA%\jetcarp\<name>` on Windows, `$XDG_RUNTIME_DIR/jetcarp/<name>` or
+/// `~/.cache/jetcarp/<name>` elsewhere. The host's single-instance lock (`host.lock`) and the
+/// app's and host's endpoint files live here.
+pub fn runtime_file(name: &str) -> Option<PathBuf> {
+    if let Some(d) = env_dir("JETCARP_RUNTIME_DIR") {
+        return Some(d.join(name));
+    }
+    let base = if cfg!(windows) {
+        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+    } else {
+        std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+    }?;
+    Some(base.join(APP_DIR).join(name))
 }
 
 /// The search databases' folder: `<data>/explore`.

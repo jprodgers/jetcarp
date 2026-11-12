@@ -318,7 +318,8 @@ pub struct Paths {
     /// Output: pictures, sweeps, media (`$JETCARP_OUT`, else `<Pictures>/JETCARP`).
     pub output: PathBuf,
     /// The packs that came with the program, read and never written: `$JETCARP_BUNDLED_PACKS`,
-    /// else `<program folder>/../share/jetcarp/packs`, else `<program folder>/packs`; none when
+    /// else `<program folder>/../share/jetcarp/packs` (a program in a `bin` folder), else
+    /// `<program folder>/packs`; none when
     /// the install has none ([`jetcarp_core::paths::bundled_packs_dir`]).
     pub bundled_packs: Option<PathBuf>,
 }

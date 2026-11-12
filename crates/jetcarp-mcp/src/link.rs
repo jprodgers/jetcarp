@@ -39,17 +39,7 @@ pub fn endpoint_file() -> Option<PathBuf> {
 /// A file in JETCARP's per-user runtime folder (`JETCARP_RUNTIME_DIR` when set, which tests use since
 /// Windows has no `XDG_RUNTIME_DIR`).
 pub fn runtime_file(name: &str) -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os("JETCARP_RUNTIME_DIR").filter(|d| !d.is_empty()) {
-        return Some(PathBuf::from(d).join(name));
-    }
-    let base = if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-    } else {
-        std::env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
-    }?;
-    Some(base.join("jetcarp").join(name))
+    jetcarp_core::paths::runtime_file(name)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

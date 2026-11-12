@@ -422,6 +422,56 @@ impl Report for UninstallReport {
     }
 }
 
+/// The folder of job locks beside a catalog file: `<catalog file>-jobs`
+/// (`jetcarp_search::jobs::lease::lock_path`).
+fn jobs_folder(catalog: &Path) -> PathBuf {
+    let name = catalog
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "catalog".into());
+    catalog.with_file_name(format!("{name}-jobs"))
+}
+
+fn dir_is_empty(d: &Path) -> bool {
+    std::fs::read_dir(d).is_ok_and(|mut e| e.next().is_none())
+}
+
+/// Deletes the host's lock file once no host holds it (waiting a little for a host that is
+/// stopping), then its folder if that is left empty and is JETCARP's own runtime folder (not the
+/// settings or data folder, as on Windows, where they are one).
+fn remove_unheld_lock(lock: &Path, keep: &[PathBuf]) -> Result<Option<String>, String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let f = match std::fs::OpenOptions::new().write(true).open(lock) {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.to_string()),
+        };
+        match f.try_lock() {
+            Ok(()) => break,
+            Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(std::fs::TryLockError::WouldBlock) => {
+                return Ok(Some("kept: a host is running and holds it".into()));
+            }
+            Err(std::fs::TryLockError::Error(e)) => return Err(e.to_string()),
+        }
+    }
+    // Closed (and so unlocked) before it is deleted, which Windows needs.
+    std::fs::remove_file(lock).map_err(|e| e.to_string())?;
+    if let Some(dir) = lock.parent()
+        && dir
+            .file_name()
+            .is_some_and(|n| n == jetcarp_core::paths::APP_DIR)
+        && !keep.iter().any(|k| k == dir)
+        && dir_is_empty(dir)
+    {
+        let _ = std::fs::remove_dir(dir);
+    }
+    Ok(None)
+}
+
 /// `system.uninstall`.
 pub struct SystemUninstall;
 impl Op for SystemUninstall {
@@ -443,6 +493,36 @@ impl Op for SystemUninstall {
             })
             .collect();
         let paths = cx.paths();
+        // What the host and the job runners leave behind once nothing holds them: the host's
+        // single-instance lock, and the empty folder of job locks beside the catalog.
+        if let Some(lock) = jetcarp_core::paths::runtime_file("host.lock").filter(|p| p.is_file()) {
+            let keep: Vec<PathBuf> = paths
+                .settings
+                .iter()
+                .cloned()
+                .chain([paths.data.clone()])
+                .collect();
+            steps.push((
+                format!("remove the host's lock file {}", lock.display()),
+                Box::new(move || remove_unheld_lock(&lock, &keep)),
+            ));
+        }
+        let jobs = jobs_folder(&cx.library_path_now());
+        if jobs.is_dir() && dir_is_empty(&jobs) {
+            steps.push((
+                format!("remove the empty folder of job locks {}", jobs.display()),
+                Box::new(move || {
+                    // Skipped, not failed, if a job started since (its lock is in it).
+                    match std::fs::remove_dir(&jobs) {
+                        Ok(()) => Ok(None),
+                        Err(_) if jobs.is_dir() && !dir_is_empty(&jobs) => {
+                            Ok(Some("kept: a job has started since".into()))
+                        }
+                        Err(e) => Err(e.to_string()),
+                    }
+                }),
+            ));
+        }
         if let Some(c) = paths.settings.clone().filter(|c| c.exists()) {
             if a.settings {
                 // Asked when the step runs, after the steps before it have put the user's own

@@ -99,6 +99,23 @@ link_ours() {
     [ -L "$bin_dir/jetcarp" ] && [ "$(readlink "$bin_dir/jetcarp")" = "$dir/jetcarp" ]
 }
 
+# The folders `mkdir -p "$1"` would make, one per line, deepest first.
+missing_dirs() {
+    d=$1
+    while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "." ] && [ ! -e "$d" ]; do
+        printf '%s
+' "$d"
+        d=$(dirname "$d")
+    done
+}
+
+# The folders an earlier install recorded as its own (`made` lines in the marker).
+made_before() {
+    if [ -f "$marker" ]; then
+        sed -n 's/^made //p' "$marker"
+    fi
+}
+
 if [ -n "$uninstall" ]; then
     [ -f "$marker" ] || die "no JETCARP installed by this installer in $dir"
     if [ -x "$dir/jetcarp" ]; then
@@ -108,8 +125,15 @@ if [ -n "$uninstall" ]; then
         rm -f "$bin_dir/jetcarp"
         say "removed $bin_dir/jetcarp"
     fi
+    made=$(made_before)
     rm -rf "$dir"
     say "removed $dir (your settings, data and pictures are kept; see \`jetcarp paths\`)"
+    # The folders the install made around it (such as ~/.local/lib), deepest first, if empty.
+    printf '%s\n' "$made" | sort -ru | while IFS= read -r m; do
+        if [ -n "$m" ] && [ -d "$m" ] && rmdir "$m" 2>/dev/null; then
+            say "removed $m (empty, made by the install)"
+        fi
+    done
     exit 0
 fi
 
@@ -211,10 +235,14 @@ src="$tmp/unpacked/jetcarp-$version-$target"
 if [ -n "$no_packs" ]; then
     rm -rf "$src/packs"
 fi
-printf 'JETCARP %s %s\n' "$version" "$target" >"$src/.jetcarp-installer"
-
 # Swap the new folder in, keeping the old one until the new one is in place.
 parent=$(dirname "$dir")
+# The marker names the version, and every folder an install made, for --uninstall to remove
+# when empty (an update keeps the ones the first install made).
+{
+    printf 'JETCARP %s %s\n' "$version" "$target"
+    { missing_dirs "$parent"; missing_dirs "$bin_dir"; made_before; } | sort -ru | sed '/^$/d; s/^/made /'
+} >"$src/.jetcarp-installer"
 mkdir -p "$parent"
 new="$dir.new.$$"
 old="$dir.old.$$"
