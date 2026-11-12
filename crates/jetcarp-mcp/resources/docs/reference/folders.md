@@ -81,11 +81,14 @@ sandpiles, `wallpapers/`, `media/<name>` for a scene (or a built-in Quick Start 
 evolutionary searches get folders named with the time they were made and a label, such as
 `2026-11-05_14-30-02_my-sweep` or `piles/2026-11-05_14-30-02_hex-10000`. Scripts can write only
 inside the output folder and folders they are explicitly allowed. Commands that write a single file,
-such as `jetcarp run --png`, write where you tell them.
+such as `jetcarp run --png`, write where you tell them. The [MCP tools](mcp.md) read and write only
+in the output folder, the library's folder and folders given with `jetcarp mcp --allow`, and
+relative paths they are given start in the output folder.
 
 **Runtime.** One more, small folder holds the files through which the running app and the background
 host accept local control (their port and access token): `$XDG_RUNTIME_DIR/jetcarp`, else
-`~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows.
+`~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
+the folder is kept readable by you only (mode 0700) and the files too (0600).
 
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).
