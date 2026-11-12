@@ -82,6 +82,51 @@ impl CaptionSettings {
     }
 }
 
+/// Pixels along each edge of a surface that something else covers, which the caption keeps clear
+/// of: on a wallpaper, the Windows taskbar, or the macOS menu bar and Dock (the monitor less its
+/// work area, [`crate::workarea`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Insets {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl Insets {
+    /// From left, top, right and bottom, in pixels.
+    pub fn from_pixels([left, top, right, bottom]: [u32; 4]) -> Insets {
+        Insets {
+            left: left as f32,
+            top: top as f32,
+            right: right as f32,
+            bottom: bottom as f32,
+        }
+    }
+}
+
+/// Where a caption of `size` pixels goes on a target of `target` pixels: `margin` in from its
+/// corner of the part `insets` leave uncovered.
+pub fn caption_origin(
+    corner: Corner,
+    target: [f32; 2],
+    size: [f32; 2],
+    margin: f32,
+    insets: Insets,
+) -> [f32; 2] {
+    let x = if corner.right() {
+        target[0] - insets.right - margin - size[0]
+    } else {
+        insets.left + margin
+    };
+    let y = if corner.bottom() {
+        target[1] - insets.bottom - margin - size[1]
+    } else {
+        insets.top + margin
+    };
+    [x, y]
+}
+
 /// Where the shown item sits in its rotation.
 #[derive(Clone, Copy, Debug)]
 pub struct Place<'a> {
@@ -434,15 +479,36 @@ impl CaptionPainter {
         scale: f32,
         opacity: f32,
     ) {
+        let none = Insets::default();
+        self.prepare_within(
+            device, queue, lines, settings, target, scale, opacity, none,
+        );
+    }
+
+    /// [`Self::prepare`], keeping clear of `insets` (a taskbar, the menu bar, the Dock).
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_within(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        lines: &[String],
+        settings: &CaptionSettings,
+        target: [u32; 2],
+        scale: f32,
+        opacity: f32,
+        insets: Insets,
+    ) {
         self.visible = false;
-        if opacity <= 0.0 || lines.is_empty() || target[0] < 16 || target[1] < 16 {
+        let free_w = target[0] as f32 - insets.left - insets.right;
+        let free_h = target[1] as f32 - insets.top - insets.bottom;
+        if opacity <= 0.0 || lines.is_empty() || free_w < 16.0 || free_h < 16.0 {
             return;
         }
         let px = (settings.size * scale).clamp(6.0, 200.0);
-        let key = (lines.to_vec(), px.to_bits(), target[0]);
+        let key = (lines.to_vec(), px.to_bits(), free_w as u32);
         if self.drawn.as_ref() != Some(&key) {
             let margin = (px * MARGIN).ceil();
-            let (img, w, h) = self.rasterize(lines, px, target[0] as f32 - 2.0 * margin);
+            let (img, w, h) = self.rasterize(lines, px, free_w - 2.0 * margin);
             let size = wgpu::Extent3d {
                 width: w,
                 height: h,
@@ -494,16 +560,7 @@ impl CaptionPainter {
         let margin = (px * MARGIN).ceil();
         let (tw, th) = (target[0] as f32, target[1] as f32);
         let (w, h) = (p.size[0] as f32, p.size[1] as f32);
-        let x = if settings.corner.right() {
-            tw - margin - w
-        } else {
-            margin
-        };
-        let y = if settings.corner.bottom() {
-            th - margin - h
-        } else {
-            margin
-        };
+        let [x, y] = caption_origin(settings.corner, [tw, th], [w, h], margin, insets);
         let u: [f32; 8] = [x / tw, y / th, w / tw, h / th, opacity, 0.0, 0.0, 0.0];
         queue.write_buffer(&self.uniform, 0, bytemuck::cast_slice(&u));
         self.visible = true;
@@ -522,6 +579,33 @@ impl CaptionPainter {
 mod tests {
     use super::*;
     use jetcarp_core::{Scene, SizeSpec, TilingSpec, topology};
+
+    #[test]
+    fn a_caption_keeps_clear_of_the_taskbar_and_the_menu_bar() {
+        let t = [1920.0, 1080.0];
+        let size = [400.0, 60.0];
+        let none = Insets::default();
+        assert_eq!(
+            caption_origin(Corner::BottomLeft, t, size, 24.0, none),
+            [24.0, 996.0]
+        );
+        // The Acer: a 48-pixel taskbar along the bottom.
+        let taskbar = Insets::from_pixels([0, 0, 0, 48]);
+        assert_eq!(
+            caption_origin(Corner::BottomLeft, t, size, 24.0, taskbar),
+            [24.0, 948.0]
+        );
+        assert_eq!(
+            caption_origin(Corner::TopRight, t, size, 24.0, taskbar),
+            [1496.0, 24.0]
+        );
+        // macOS: the menu bar above, the Dock on the left.
+        let mac = Insets::from_pixels([140, 50, 0, 0]);
+        assert_eq!(
+            caption_origin(Corner::TopLeft, t, size, 24.0, mac),
+            [164.0, 74.0]
+        );
+    }
 
     fn world(rule: &str, spec: TilingSpec) -> World {
         let mut sc = Scene::new(spec);

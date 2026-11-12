@@ -7,7 +7,9 @@
 
 use crate::core::{Core, SharedGpu, Shell, device_descriptor};
 use crate::targets::{self, Target};
+use jetcarp_display::caption::Insets;
 use jetcarp_display::host_settings::Place;
+use jetcarp_display::workarea::{self, Rect};
 use jetcarp_display::painter::{self, Painter};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -370,6 +372,25 @@ impl App {
         Ok(g)
     }
 
+    /// What a surface's caption keeps clear of: on a wallpaper, the part of its monitor outside
+    /// the work area (the Windows taskbar; the macOS menu bar and Dock, which stand over a
+    /// desktop-level window). Nothing on a window or a screen saver, which cover them.
+    fn caption_insets(&self, el: &ActiveEventLoop, t: Target) -> Insets {
+        if self.mode != Mode::Host || !t.wallpaper {
+            return Insets::default();
+        }
+        let Some(m) = t
+            .monitor
+            .and_then(|m| el.available_monitors().nth(m))
+            .or_else(|| el.primary_monitor())
+        else {
+            return Insets::default();
+        };
+        let (p, s) = (m.position(), m.size());
+        let monitor = Rect::new(p.x, p.y, s.width, s.height);
+        Insets::from_pixels(monitor.insets_of(&workarea::work_area(monitor)))
+    }
+
     fn make_output(&mut self, el: &ActiveEventLoop, target: Target) -> Result<Output, String> {
         let title = self.title(target);
         let (body, surface) = self.make_body(el, target)?;
@@ -377,8 +398,10 @@ impl App {
         let caps = surface.get_capabilities(&gpu.adapter);
         let config = painter::surface_config(&caps, body.size())?;
         surface.configure(&gpu.device, &config);
+        let mut painter = Painter::new(&gpu.device, config.format);
+        painter.insets = self.caption_insets(el, target);
         Ok(Output {
-            painter: Painter::new(&gpu.device, config.format),
+            painter,
             starved_since: None,
             body,
             surface,
@@ -530,6 +553,11 @@ impl App {
             return;
         }
         self.monitors_at = now;
+        // The taskbar or the Dock may have moved, or started hiding itself.
+        for i in 0..self.outputs.len() {
+            let insets = self.caption_insets(el, self.outputs[i].target);
+            self.outputs[i].painter.insets = insets;
+        }
         #[cfg(windows)]
         {
             use crate::desktop_win as d;

@@ -1,7 +1,7 @@
 //! Draws a stage, with its caption, onto a surface: what every place JETCARP shows a scene shares
 //! (the host's windows and wallpapers, and the macOS screen saver bundle).
 
-use crate::caption::{CaptionPainter, CaptionSettings};
+use crate::caption::{CaptionPainter, CaptionSettings, Insets};
 use crate::gpu::{TileRenderer, slot_capacity};
 use crate::stage::Stage;
 use crate::view::Views;
@@ -64,6 +64,8 @@ pub struct Painter {
     caption: CaptionPainter,
     words: Vec<String>,
     words_at: f64,
+    /// What the caption keeps clear of (a wallpaper's taskbar, menu bar or Dock).
+    pub insets: Insets,
 }
 
 impl Painter {
@@ -74,6 +76,7 @@ impl Painter {
             caption: CaptionPainter::new(device, format),
             words: vec![],
             words_at: f64::NEG_INFINITY,
+            insets: Insets::default(),
         }
     }
 
@@ -99,7 +102,7 @@ impl Painter {
             self.words = stage.caption(cap.generation);
             self.words_at = now;
         }
-        self.caption.prepare(
+        self.caption.prepare_within(
             device,
             queue,
             &self.words,
@@ -107,6 +110,7 @@ impl Painter {
             size,
             scale,
             cap.opacity(stage.item_age(now)),
+            self.insets,
         );
         let [r, g, b] = stage.backdrop();
         let mut enc = device.create_command_encoder(&Default::default());
