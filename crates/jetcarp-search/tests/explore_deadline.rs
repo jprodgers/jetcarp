@@ -149,6 +149,31 @@ fn a_build_ends_on_time_with_slow_runs_under_way() {
     assert!(p.published.is_some());
 }
 
+/// An explore search's threads: those it is given, else every core but two (at least one), a
+/// third of them for the GPU's batches when there is a GPU.
+#[test]
+fn an_explore_search_leaves_two_cores_free() {
+    use jetcarp_search::jobs::explore::{FREE_CORES, cores, worker_threads};
+    assert_eq!(FREE_CORES, 2);
+    // Given: all of them, a third for the GPU (a 12-thread laptop's default is 10: 6 and 4).
+    assert_eq!(worker_threads(12, false), (12, 0));
+    assert_eq!(worker_threads(12, true), (8, 4));
+    assert_eq!(worker_threads(10, true), (6, 4));
+    assert_eq!(worker_threads(3, true), (2, 1));
+    // One thread: the two pools take turns with it.
+    assert_eq!(worker_threads(1, true), (1, 1));
+    assert_eq!(worker_threads(1, false), (1, 0));
+    // Not given: every core but two.
+    let n = cores();
+    assert_eq!(worker_threads(0, false), (n.saturating_sub(2).max(1), 0));
+    let (c, g) = worker_threads(0, true);
+    if n >= 4 {
+        assert_eq!((c + g, g), (n - 2, (n - 2).div_ceil(3)));
+    } else {
+        assert_eq!((c, g), (1, 1));
+    }
+}
+
 /// A build on a GPU whose batch would run a minute ends on time all the same: the batch under
 /// way at the end is given up between two of its parts, its runs not recorded.
 #[test]
