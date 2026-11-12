@@ -384,12 +384,20 @@ fn shots_wallpaper() {
         h.scroll_to("Save current world as profile", pane, bottom);
         h.click("Save current world as profile");
         h.scroll(pane, -4000.0);
+        h.run(0.5, 0.05, |_| false);
     }
-    h.click_right_of("Profile");
-    // The list scrolls; the new profile is at its end.
-    let item = h.find("HighLife").center();
-    h.scroll(item, 2000.0);
-    h.click(&name);
+    // Show → Profile; its list scrolls, and the new profile is at the end. (A second try if the
+    // first click missed while the list was still moving.)
+    for _ in 0..2 {
+        h.click_right_of("Profile");
+        let item = h.find("HighLife").center();
+        h.scroll(item, 2000.0);
+        h.click(&name);
+        if h.app.shell.display.screensaver.profile == name {
+            break;
+        }
+        h.escape();
+    }
     assert_eq!(h.app.shell.display.screensaver.profile, name);
     h.app
         .display
