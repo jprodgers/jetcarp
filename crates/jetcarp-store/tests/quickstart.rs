@@ -735,6 +735,14 @@ fn menu_has_every_source_categories_and_search() {
         sources,
         [QsSource::Promotion, QsSource::Pack, QsSource::Builtin]
     );
+    // The built-in source is not called after the "Classics" category.
+    assert_eq!(QsSource::Builtin.label(), "Built-in");
+    assert!(
+        items
+            .iter()
+            .filter(|i| i.source == QsSource::Builtin)
+            .any(|i| i.matches("built-in"))
+    );
     // Sorts: rules ascend; a shuffle is reproducible and keeps every entry.
     let all = Filter::default();
     let rules: Vec<String> = menu::select(&items, &all, Sort::Rule)

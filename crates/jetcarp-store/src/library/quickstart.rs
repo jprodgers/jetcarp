@@ -65,13 +65,22 @@ impl QsSource {
             .find(|x| x.name() == s)
             .ok_or_else(|| format!("unknown source '{s}' (builtin, pack, atlas, promotion)"))
     }
-    /// What the menu calls it.
+    /// What the menu calls it: the badge on a card and the sidebar's Source list. Built-in entries
+    /// are "Built-in", not "Classics", which is also a category (a sandpile card said "Classics").
     pub fn label(self) -> &'static str {
         match self {
-            QsSource::Builtin => "Classics",
+            QsSource::Builtin => "Built-in",
             QsSource::Pack => "Packs",
             QsSource::Atlas => "Atlas",
             QsSource::Promotion => "My finds",
+        }
+    }
+
+    /// The rule family an entry whose rule has none is listed under (as it always has been).
+    fn family_fallback(self) -> &'static str {
+        match self {
+            QsSource::Builtin => "Classics",
+            other => other.label(),
         }
     }
 }
@@ -191,7 +200,7 @@ impl QuickStartRow {
             self.grid_group = crate::quickstart::grid_group(&self.scene.tiling).to_string();
         }
         if self.family.is_empty() {
-            self.family = crate::quickstart::family_of_rule(&self.rule, self.source.label());
+            self.family = crate::quickstart::family_of_rule(&self.rule, self.source.family_fallback());
         }
         if self.category.is_empty() {
             self.category = crate::quickstart::category_of(self.source, &self.behaviour);
