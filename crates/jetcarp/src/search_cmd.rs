@@ -114,8 +114,8 @@ pub struct HuntArgs {
     /// More rules, one per line.
     #[arg(long)]
     rules_file: Option<PathBuf>,
-    /// Tilings: family ids, catalog:<id>, or the sets all-periodic, archimedean, kuniform:<k>,
-    /// isohedral.
+    /// Tilings: ids such as hex or k2-017 (`catalog:k2-017` works too), or the sets
+    /// all-periodic, archimedean, kuniform:<k>, isohedral.
     #[arg(long, default_value = "square")]
     tilings: String,
     /// Neighbourhood for every rule: touch or edge (default: the notation decides).
@@ -172,13 +172,13 @@ pub struct BoundedArgs {
     #[command(flatten)]
     job: JobFlags,
     /// Rules separated by spaces or semicolons ("B3/S23 B36/S23").
-    #[arg(long, alias = "rule")]
-    rules: Option<String>,
-    /// File with one rule per line (# comments).
+    #[arg(long, alias = "rule", default_value = "B3/S23")]
+    rules: String,
+    /// More rules, one per line (# comments).
     #[arg(long)]
     rules_file: Option<PathBuf>,
-    /// Tilings: family ids, catalog:<id>, or the sets all-periodic, archimedean, kuniform:<k>,
-    /// isohedral; comma separated.
+    /// Tilings: ids such as hex or k2-017 (`catalog:k2-017` works too), or the sets
+    /// all-periodic, archimedean, kuniform:<k>, isohedral; comma separated.
     #[arg(long, alias = "tiling", default_value = "square")]
     tilings: String,
     /// WxH unit cells (64x64), about N cells (4000), or L<level> for aperiodic patches.
@@ -267,18 +267,16 @@ pub struct AntsArgs {
 pub struct CensusArgs {
     #[command(flatten)]
     job: JobFlags,
-    /// Tiling family (see `jetcarp tilings`).
-    #[arg(long, default_value = "square")]
-    family: String,
+    /// The tiling: an id such as k2-017 (see `jetcarp tilings`), or a scene or tile JSON file,
+    /// whose tiling replaces --size and --boundary. A census runs on one tiling.
+    #[arg(long, alias = "family", alias = "tiling", default_value = "square")]
+    tilings: String,
     /// WxH unit cells (64x64), about N cells (4000), or L<level> for aperiodic tilings (L4).
     #[arg(long, default_value = "64x64")]
     size: String,
     /// wrap, dead, or live.
     #[arg(long, default_value = "wrap")]
     boundary: String,
-    /// Take the tiling from a scene or tile JSON file instead of --family/--size/--boundary.
-    #[arg(long)]
-    tiling: Option<PathBuf>,
     /// Neighbourhood for every rule: touch or edge (default: per rule; a V suffix means edge).
     #[arg(long)]
     nb: Option<String>,
@@ -485,8 +483,8 @@ pub struct CollideArgs {
 pub struct EvolveArgs {
     #[command(flatten)]
     job: JobFlags,
-    /// Tiling: a family id (spectre, hat, penrose-kd, penrose-rhomb, square, hex, trihex, ...) or
-    /// catalog:<id> (k-uniform and Archimedean tilings).
+    /// Tiling: an id such as spectre, hat, penrose-kd, penrose-rhomb, square, hex, trihex or
+    /// k2-017 (k-uniform and Archimedean tilings; `catalog:k2-017` works too).
     #[arg(long, default_value = "spectre")]
     tiling: String,
     /// Neighbourhood: touch (the paper's vertex adjacency) or edge.
@@ -540,7 +538,7 @@ pub struct ExploreArgs {
     /// Hours to run (the same as --minutes 60 x HOURS).
     #[arg(long)]
     hours: Option<f64>,
-    /// Only these tilings: keys, comma separated (square,hex,trihex,ih28,catalog:k2-001; default:
+    /// Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default:
     /// every tiling the search knows, 1,359 today; the progress line counts them).
     #[arg(long)]
     tilings: Option<String>,
@@ -579,7 +577,7 @@ pub struct ExploreArgs {
 
 #[derive(clap::Args)]
 pub struct TryArgs {
-    /// Tiling key (square, hex, trihex, spectre, catalog:k2-001, ih28, ...).
+    /// Tiling id (square, hex, trihex, spectre, k2-001, ih28, ...).
     #[arg(long, default_value = "square")]
     tiling: String,
     /// Rule notation.
@@ -846,11 +844,8 @@ fn hunt(a: HuntArgs, json: bool) -> Result<()> {
 }
 
 fn bounded(a: BoundedArgs, json: bool) -> Result<()> {
-    if a.rules.is_none() && a.rules_file.is_none() && a.job.resume.is_none() {
-        bail!("no rules: use --rules or --rules-file");
-    }
     let s = BoundedIn {
-        rules: a.rules.map(Value::String),
+        rules: Some(Value::String(a.rules)),
         rules_file: a.rules_file.as_deref().map(path),
         tilings: Some(json!(a.tilings)),
         size: Some(json!(a.size)),
@@ -921,15 +916,7 @@ fn census(a: CensusArgs, json: bool) -> Result<()> {
         }
         None => None,
     };
-    let tiling = match &a.tiling {
-        Some(p) => {
-            let text =
-                std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
-            let v: Value = serde_json::from_str(&text)?;
-            Some(v.get("tiling").cloned().unwrap_or(v))
-        }
-        None => None,
-    };
+    let tiling = census_tiling(&a.tilings)?;
     if census.is_none()
         && a.rules.is_none()
         && a.rules_file.is_none()
@@ -941,7 +928,7 @@ fn census(a: CensusArgs, json: bool) -> Result<()> {
     }
     let from_family = tiling.is_none();
     let s = CensusIn {
-        tiling: Some(tiling.unwrap_or_else(|| json!(a.family))),
+        tiling: Some(tiling.unwrap_or_else(|| json!(a.tilings))),
         size: from_family.then_some(a.size),
         boundary: from_family.then_some(a.boundary),
         nb: a.nb,
@@ -971,6 +958,29 @@ fn census(a: CensusArgs, json: bool) -> Result<()> {
         cols: Some(a.sheet_cols),
     };
     start(&a.job, i, json).map(|_| ())
+}
+
+/// The census's `--tilings`: a scene or tile JSON file's tiling, or None for a tiling id (one;
+/// a list or a set is refused, since a census runs on one tiling).
+fn census_tiling(t: &str) -> Result<Option<Value>> {
+    let p = Path::new(t);
+    if p.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("json"))
+        || p.is_file()
+    {
+        let text =
+            std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
+        let v: Value = serde_json::from_str(&text)?;
+        return Ok(Some(v.get("tiling").cloned().unwrap_or(v)));
+    }
+    let low = t.trim().to_ascii_lowercase();
+    let set = ["all-periodic", "periodic-all", "archimedean", "isohedral"].contains(&low.as_str())
+        || low.starts_with("kuniform:")
+        || low.starts_with("k-uniform:");
+    if t.trim().contains([',', ' ', ';']) || set {
+        bail!("a census runs on one tiling: give one id, such as --tilings k2-017 (not {t:?})");
+    }
+    Ok(None)
 }
 
 fn mover(a: MoverArgs, json: bool) -> Result<()> {

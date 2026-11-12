@@ -394,7 +394,7 @@ fn search_and_jobs_commands_as_json() {
         "census",
         "--library",
         l,
-        "--family",
+        "--tilings",
         "hex",
         "--size",
         "16x16",

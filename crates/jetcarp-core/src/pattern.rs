@@ -712,7 +712,7 @@ pub fn tiling_from_key(key: &str) -> Result<TilingSpec, String> {
         return Ok(TilingSpec::new(id));
     }
     Err(format!(
-        "unknown tiling '{key}' (a family id from `jetcarp tilings`, or catalog:<id> such as catalog:k2-001)"
+        "unknown tiling '{key}' (a family id from `jetcarp tilings`, or a catalog id such as k2-001)"
     ))
 }
 

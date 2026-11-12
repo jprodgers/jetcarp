@@ -95,8 +95,8 @@ pub fn objects(a: ObjectsArgs) -> Result<()> {
     println!("tiling:     {}", r.tiling);
     println!("generation: {}  hash {}", r.generation, r.hash);
     println!(
-        "rule:       {} (CA {}, field {}), {} live cells, dead boundary {}",
-        r.rule, r.ca_id, r.field, r.live_cells, r.dead_boundary
+        "rule:       {} (CA {}, field {}), {} live cells",
+        r.rule, r.ca_id, r.field, r.live_cells
     );
     println!(
         "objects:    {} (still lifes {}, oscillators {}, spaceships {}, other {}), {} symmetries, periods up to {}",

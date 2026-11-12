@@ -8,9 +8,11 @@ use jetcarp_core::{Boundary, SizeSpec, TilingSpec, aperiodic, catalog, pattern};
 use serde_json::{Value, json};
 
 /// Tiling id → spec: a family id (`square`, `hex`, `cairo`, `spectre`, `ih41`, ...), a catalog id
-/// (`k3-012`, `snubsq`), or a common alias (`hexagon`, `triangles`). Any case.
+/// (`k3-012`, `snubsq`, also written `catalog:k3-012`), or a common alias (`hexagon`,
+/// `triangles`). Any case.
 pub fn tiling_by_id(id: &str) -> Result<TilingSpec, String> {
     let low = id.trim().to_ascii_lowercase();
+    let low = low.strip_prefix("catalog:").unwrap_or(&low).to_string();
     if families::family(&low).is_some() {
         return Ok(TilingSpec::new(&low));
     }
@@ -226,6 +228,8 @@ mod tests {
         assert_eq!(tiling_by_id(" HEX ").unwrap().family, "hex");
         let k = tiling_by_id("K2-005").unwrap();
         assert_eq!(k.params, Some(json!({"catalog": "k2-005"})));
+        // The catalog's own prefix, as the searches take it, names the same tiling.
+        assert_eq!(tiling_by_id("catalog:k2-005").unwrap(), k);
         assert!(
             tiling_by_id("nope")
                 .unwrap_err()

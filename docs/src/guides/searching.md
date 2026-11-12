@@ -52,8 +52,8 @@ text drawing of its phases, and `jetcarp library render ID` draws it. The
 ## Other rules and tilings
 
 `--rules` takes one rule or several, in [rule notation](../reference/rule-notation.md), and
-`--tilings` takes tiling ids, catalog ids (`catalog:k2-001`) or whole sets: `archimedean`,
-`kuniform:2`, `isohedral`, `all-periodic`. A short hunt of Life on the kagome tiling:
+`--tilings` takes tiling ids such as `trihex` or `k2-001` (`catalog:k2-001` works too) or whole
+sets: `archimedean`, `kuniform:2`, `isohedral`, `all-periodic`. A short hunt of Life on the kagome tiling:
 
 ```text
 $ jetcarp search hunt --tilings trihex --soups 5000 --label kagome
@@ -109,7 +109,7 @@ $ jetcarp jobs list
 | Strategy | Looks for | A first command |
 | --- | --- | --- |
 | `bounded` | Still lifes, oscillators and spaceships on a finite grid of any tiling, aperiodic patches included | `jetcarp search bounded --rules B3/S23 --tilings hat --size L4 --soups 32` |
-| `census` | How whole rules behave: died, frozen, oscillating, active or exploded | `jetcarp search census --family hex --sample 50 --birth 2-3 --survive 1-4` |
+| `census` | How whole rules behave: died, frozen, oscillating, active or exploded | `jetcarp search census --tilings hex --sample 50 --birth 2-3 --survive 1-4` |
 | `ants` | Highways and other outcomes of ants and turmites | `jetcarp search ants --tilings hex --strings 2-3` |
 | `mover` | How far a glider on an aperiodic tiling really travels | see [Aperiodic patches and following movers](aperiodic-patches.md) |
 | `pile` | A large sandpile | see [Large sandpiles](large-sandpiles.md) |

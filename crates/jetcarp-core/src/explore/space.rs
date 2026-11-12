@@ -206,6 +206,18 @@ const NAMED: &[(&str, &str, f64)] = &[
     ("hat", "aperiodic", 2.0),
 ];
 
+/// The search's key for a tiling as people write it: a family id as it is (`square`, `ih28`,
+/// `snubsq`), a catalog id with or without `catalog:` (`k2-017`, `catalog:k2-017`) as
+/// `catalog:k2-017`.
+pub fn tiling_key(input: &str) -> String {
+    let t = input.trim();
+    let bare = t.strip_prefix("catalog:").unwrap_or(t);
+    if crate::families::family(bare).is_none() && crate::catalog::get(bare).is_some() {
+        return format!("catalog:{bare}");
+    }
+    bare.to_string()
+}
+
 fn base_spec(key: &str) -> TilingSpec {
     if let Some(id) = key.strip_prefix("catalog:") {
         let mut spec = TilingSpec::new("periodic");
@@ -222,6 +234,7 @@ pub fn is_aperiodic(key: &str) -> bool {
 /// The spec of `key` at about `cells` cells. Periodic tilings wrap; aperiodic patches have a
 /// dead edge.
 pub fn sized_spec(key: &str, cells: u32) -> Result<(TilingSpec, Arc<Topology>), String> {
+    let key = &tiling_key(key);
     let base = base_spec(key);
     if is_aperiodic(key) {
         let mut level = aperiodic::default_level(key);
@@ -933,5 +946,23 @@ fn bump(rng: &mut Rng, s: i64, t: i64, smin: i64, tmin: i64, tmax: i64) -> (i64,
             s,
             (t + if rng.below(2) == 0 { 1 } else { -1 }).clamp(tmin, tmax.max(tmin)),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tiling_keys_take_bare_and_catalog_ids() {
+        assert_eq!(tiling_key("k2-017"), "catalog:k2-017");
+        assert_eq!(tiling_key("catalog:k2-017"), "catalog:k2-017");
+        assert_eq!(tiling_key(" hex "), "hex");
+        // A catalog id that is also a family id is the family, as the search lists it.
+        assert_eq!(tiling_key("catalog:snubsq"), "snubsq");
+        assert_eq!(
+            sized_spec("k2-017", 500).unwrap().0,
+            sized_spec("catalog:k2-017", 500).unwrap().0
+        );
     }
 }

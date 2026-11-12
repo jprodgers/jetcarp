@@ -151,7 +151,7 @@ pub struct RunsIn {
     /// Only this rule family (life_like, generations, ltl, jaca, cyclic, ...).
     #[serde(default)]
     pub family: Option<String>,
-    /// Only this tiling key.
+    /// Only this tiling: an id such as hex or k2-017.
     #[serde(default)]
     pub tiling: Option<String>,
     /// Only runs that ended this way: died, froze, cycle, running.
@@ -215,7 +215,10 @@ impl RunsIn {
         Ok(RunFilter {
             ids: self.ids.clone(),
             family,
-            tiling: self.tiling.clone(),
+            tiling: self
+                .tiling
+                .as_deref()
+                .map(jetcarp_core::explore::space::tiling_key),
             fate: self.fate.clone(),
             min_score: self.min_score,
             stage: self.stage,
@@ -487,7 +490,7 @@ impl Op for SearchRunScene {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TryIn {
-    /// Tiling key: square, hex, trihex, spectre, catalog:k2-001, ih28, ...
+    /// Tiling id: square, hex, trihex, spectre, k2-001, ih28, ...
     pub tiling: String,
     /// Rule notation.
     pub rule: String,
@@ -602,13 +605,14 @@ impl Op for SearchTry {
         if cells as u64 * gens as u64 > l.max_work {
             return Err(ApiError::limit("that run is too long for one call"));
         }
-        let (spec, topo) = sized_spec(&a.tiling, cells).map_err(invalid)?;
+        let key = jetcarp_core::explore::space::tiling_key(&a.tiling);
+        let (spec, topo) = sized_spec(&key, cells).map_err(invalid)?;
         let seed = match &a.seed {
             Some(v) if !v.is_null() => args::parse_seed(v).map_err(invalid)?,
             _ => jetcarp_core::world::default_seed(&rule, topo.len()),
         };
         let cand = Cand {
-            tiling: a.tiling.clone(),
+            tiling: key,
             nb,
             fam,
             rule: rule.notation(),

@@ -338,7 +338,7 @@ fn store_policy(v: Option<&Value>) -> Result<StorePolicy, ApiError> {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BoundedIn {
-    /// Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons.
+    /// Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons (default B3/S23).
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub rules: Option<Value>,
@@ -399,7 +399,7 @@ impl BoundedIn {
         let mut rules = texts(self.rules.as_ref(), "rules", RULE_SEPS)?;
         rules.extend(rules_file(cx, self.rules_file.as_deref())?);
         if rules.is_empty() {
-            return Err(invalid("give the rules, e.g. [\"B3/S23\"]"));
+            rules = d.rules.clone();
         }
         let size = match (&self.size, self.width, self.height) {
             (_, Some(w), Some(h)) => SizeSpec::Rect { w, h },
@@ -692,7 +692,9 @@ impl CensusIn {
         let d = CensusSpec::default();
         let mut tiling = match &self.tiling {
             None | Some(Value::Null) => TilingSpec::new("square"),
-            Some(Value::String(s)) if !s.contains(',') && self.size.is_some() => TilingSpec::new(s),
+            Some(Value::String(s)) if !s.contains(',') && self.size.is_some() => {
+                jetcarp_core::pattern::tiling_from_key(s).map_err(invalid)?
+            }
             Some(v) => one_tiling(v)?,
         };
         if let Some(l) = self.level {
@@ -1268,7 +1270,7 @@ impl CollideIn {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EvolveIn {
-    /// Tiling: a family id (spectre (default), hat, penrose-kd, square, hex, ...) or catalog:<id>.
+    /// Tiling: an id: spectre (default), hat, penrose-kd, square, hex, k2-017, ...
     #[serde(default)]
     pub tiling: Option<String>,
     /// touch (default; the paper's vertex adjacency) or edge.
@@ -1386,7 +1388,7 @@ impl EvolveIn {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExploreIn {
-    /// Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them).
+    /// Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them).
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub tilings: Option<Value>,
@@ -1438,7 +1440,10 @@ impl ExploreIn {
         use jetcarp_search::explore::store::fam_named;
         let d = Settings::default();
         let seps = &[',', ' ', ';', '\t', '\n'];
-        let tilings = texts(self.tilings.as_ref(), "tilings", seps)?;
+        let tilings = texts(self.tilings.as_ref(), "tilings", seps)?
+            .iter()
+            .map(|t| jetcarp_core::explore::space::tiling_key(t))
+            .collect();
         let families = texts(self.families.as_ref(), "families", seps)?
             .iter()
             .map(|f| {
@@ -2764,14 +2769,13 @@ pub(crate) fn census_text(s: &mut String, r: &CensusReport) {
     let _ = writeln!(s, "tiling:   {}", r.tiling);
     let _ = writeln!(
         s,
-        "runs:     {} rules x {} soups, density {}, up to {} generations, seeds {}..{}, dead boundary {}",
+        "runs:     {} rules x {} soups, density {}, up to {} generations, seeds {}..{}",
         r.rules.len(),
         sp.soups,
         sp.density,
         sp.gens,
         sp.seed,
         sp.seed + sp.soups as u64 - 1,
-        r.dead_boundary
     );
     let mut totals = [0usize; 6];
     for x in &r.rules {

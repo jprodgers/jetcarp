@@ -191,7 +191,7 @@ impl Settings {
         for t in &self.tilings {
             if !all.iter().any(|x| &x.key == t) {
                 return Err(format!(
-                    "no tiling '{t}' in the search's list (keys: square, hex, trihex, spectre, ih28, catalog:k2-001, ...)"
+                    "no tiling '{t}' in the search's list (ids: square, hex, trihex, spectre, ih28, k2-001, ...)"
                 ));
             }
         }

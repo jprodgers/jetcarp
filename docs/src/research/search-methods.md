@@ -186,7 +186,7 @@ is the report, kept with the job in the catalogue and written as text, CSV, JSON
 every rule's first soup. A JSON report
 holds the whole specification, so `--rerun` repeats it exactly.
 
-**Command.** `jetcarp search census --family hex --all --birth 1-6 --survive 0-6 --csv hex.csv`.
+**Command.** `jetcarp search census --tilings hex --all --birth 1-6 --survive 0-6 --csv hex.csv`.
 
 ## Ants and turmites
 

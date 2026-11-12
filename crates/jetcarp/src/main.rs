@@ -333,7 +333,8 @@ enum QuickstartSub {
         /// Minutes to search before publishing.
         #[arg(long, default_value_t = 10.0)]
         minutes: f64,
-        /// Only these tilings (keys, separated by commas or spaces; default: every one).
+        /// Only these tilings (ids such as hex or k2-017, separated by commas or spaces; default:
+        /// every one).
         #[arg(long)]
         tilings: Option<String>,
         /// Only these rule families (default: every one).
