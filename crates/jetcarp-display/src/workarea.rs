@@ -65,7 +65,10 @@ pub fn fit_window(
     outer: (u32, u32),
     inner: (u32, u32),
 ) -> ((i32, i32), (u32, u32)) {
-    let frame = (outer.0.saturating_sub(inner.0), outer.1.saturating_sub(inner.1));
+    let frame = (
+        outer.0.saturating_sub(inner.0),
+        outer.1.saturating_sub(inner.1),
+    );
     let ow = outer.0.min(area.w);
     let oh = outer.1.min(area.h);
     let inner = (
@@ -77,7 +80,10 @@ pub fn fit_window(
         (p as i64).clamp(start as i64, max.max(start as i64)) as i32
     };
     (
-        (clamp(pos.0, ow, area.x, area.w), clamp(pos.1, oh, area.y, area.h)),
+        (
+            clamp(pos.0, ow, area.x, area.w),
+            clamp(pos.1, oh, area.y, area.h),
+        ),
         inner,
     )
 }
@@ -154,9 +160,9 @@ mod imp {
 pub(crate) mod mac {
     use super::Rect;
     use objc2::encode::{Encode, Encoding};
+    use objc2::msg_send;
     use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject};
-    use objc2::msg_send;
 
     // Makes sure AppKit is loaded, whatever program this is.
     #[link(name = "AppKit", kind = "framework")]

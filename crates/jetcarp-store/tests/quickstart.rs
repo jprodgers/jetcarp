@@ -641,7 +641,11 @@ fn the_featured_order_survives_a_reload() {
     let expected: Vec<String> = order.iter().filter(|h| **h != hidden).cloned().collect();
     assert_ne!(unkept, expected, "a reload reshuffles without keep_order");
     menu::keep_order(&mut after, &before);
-    assert_eq!(featured(&after), expected, "every other card keeps its place");
+    assert_eq!(
+        featured(&after),
+        expected,
+        "every other card keeps its place"
+    );
     // An entry that comes back takes a place of its own, and the rest still keep theirs.
     lib.set_quickstart_hidden(&hidden, false).unwrap();
     let mut again = load();

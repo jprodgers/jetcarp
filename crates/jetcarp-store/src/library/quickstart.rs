@@ -200,7 +200,8 @@ impl QuickStartRow {
             self.grid_group = crate::quickstart::grid_group(&self.scene.tiling).to_string();
         }
         if self.family.is_empty() {
-            self.family = crate::quickstart::family_of_rule(&self.rule, self.source.family_fallback());
+            self.family =
+                crate::quickstart::family_of_rule(&self.rule, self.source.family_fallback());
         }
         if self.category.is_empty() {
             self.category = crate::quickstart::category_of(self.source, &self.behaviour);

@@ -189,7 +189,13 @@ pub fn spawn_detached(path: &Path, args: &[&str]) -> Result<(), String> {
         PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
         STARTUPINFOEXW, UpdateProcThreadAttribute,
     };
-    let err = |what: &str| format!("{}: {what}: {}", path.display(), std::io::Error::last_os_error());
+    let err = |what: &str| {
+        format!(
+            "{}: {what}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        )
+    };
     let wide = |s: &std::ffi::OsStr| -> Vec<u16> { s.encode_wide().chain(Some(0)).collect() };
     let cmd = ProgramCommand {
         program: path.to_path_buf(),

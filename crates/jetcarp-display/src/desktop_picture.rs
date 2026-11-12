@@ -402,15 +402,15 @@ mod gnome {
 mod windows {
     use super::{Desktop, Files, still_for};
     use crate::workarea::Rect;
-    use serde_json::Value;
-    use std::os::windows::ffi::OsStrExt;
-    use std::path::Path;
     use ::windows::Win32::System::Com::{
         CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
         CoUninitialize,
     };
     use ::windows::Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper};
     use ::windows::core::{HSTRING, PWSTR};
+    use serde_json::Value;
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SystemParametersInfoW,
     };

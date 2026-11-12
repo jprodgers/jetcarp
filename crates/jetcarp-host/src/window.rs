@@ -9,8 +9,8 @@ use crate::core::{Core, SharedGpu, Shell, device_descriptor};
 use crate::targets::{self, Target};
 use jetcarp_display::caption::Insets;
 use jetcarp_display::host_settings::Place;
-use jetcarp_display::workarea::{self, Rect};
 use jetcarp_display::painter::{self, Painter};
+use jetcarp_display::workarea::{self, Rect};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -974,7 +974,10 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
         match app.core.leave_still() {
             Ok(p) => {
                 let names: Vec<String> = p.iter().map(|p| p.display().to_string()).collect();
-                say!("jetcarp-host: left {} as the desktop picture", names.join(", "));
+                say!(
+                    "jetcarp-host: left {} as the desktop picture",
+                    names.join(", ")
+                );
             }
             Err(e) => say!("jetcarp-host: no still picture: {e}"),
         }

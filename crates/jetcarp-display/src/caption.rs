@@ -480,9 +480,7 @@ impl CaptionPainter {
         opacity: f32,
     ) {
         let none = Insets::default();
-        self.prepare_within(
-            device, queue, lines, settings, target, scale, opacity, none,
-        );
+        self.prepare_within(device, queue, lines, settings, target, scale, opacity, none);
     }
 
     /// [`Self::prepare`], keeping clear of `insets` (a taskbar, the menu bar, the Dock).
