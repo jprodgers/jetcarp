@@ -13,7 +13,7 @@
 use crate::explore::archive::{self, Archive, Eval};
 use crate::explore::store::{Delta, FamStat, RunOut, Saved};
 use jetcarp_core::explore::batch::{
-    Backend, BatchJob, BatchWorld, WorldTrace, trace_world, trace_world_while,
+    Backend, BatchJob, BatchWorld, GIVEN_UP, WorldTrace, trace_world, trace_world_while,
 };
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features, frames_for, measure_run};
@@ -353,10 +353,11 @@ pub struct StepLimits<'a> {
     /// The step's deadline: no round starts after it (one under way runs to its end).
     pub until: Instant,
     /// The run's end (its time budget, or a Quick Start build's minutes): runs on the processor
-    /// still going then are given up, unrecorded, and a GPU batch is sized to end before it.
+    /// still going then are given up, unrecorded, and a GPU batch is sized to end before it (one
+    /// still going is given up too, between two of its submissions).
     pub end: Option<Instant>,
-    /// Set to stop: no round starts, and runs on the processor still going are given up,
-    /// unrecorded (a GPU batch under way runs to its end).
+    /// Set to stop: no round starts, and runs on the processor and a GPU batch still going are
+    /// given up, unrecorded.
     pub stop: &'a AtomicBool,
     /// Stop once this many runs have been screened in all.
     pub max_screened: Option<u64>,
@@ -411,23 +412,34 @@ impl Drop for InRun {
 }
 
 /// What a GPU batch costs: seconds per world-cell-generation (times the reach, for Larger than
-/// Life) of the last batches, plain rules and Larger than Life apart. Not kept between sessions.
+/// Life) of the last batches, plain rules and Larger than Life apart, and Larger than Life on
+/// lattices and on aperiodic patches apart (whose reaches are read from lists, about forty
+/// times slower a cell: a batch sized from the lattices' pace ran 105 s, not 10). Not kept
+/// between sessions.
 #[derive(Default)]
 struct GpuPace {
     plain: Option<f64>,
     ltl: Option<f64>,
+    ltl_aperiodic: Option<f64>,
 }
 
 impl GpuPace {
-    fn get(&self, ltl: bool) -> Option<f64> {
-        if ltl { self.ltl } else { self.plain }
+    fn slot(&mut self, ltl: bool, lattice: bool) -> &mut Option<f64> {
+        match (ltl, lattice) {
+            (false, _) => &mut self.plain,
+            (true, true) => &mut self.ltl,
+            (true, false) => &mut self.ltl_aperiodic,
+        }
     }
-    fn note(&mut self, ltl: bool, work: f64, secs: f64) {
+    fn get(&mut self, ltl: bool, lattice: bool) -> Option<f64> {
+        *self.slot(ltl, lattice)
+    }
+    fn note(&mut self, ltl: bool, lattice: bool, work: f64, secs: f64) {
         if work <= 0.0 || secs <= 0.0 {
             return;
         }
         let x = secs / work;
-        let p = if ltl { &mut self.ltl } else { &mut self.plain };
+        let p = self.slot(ltl, lattice);
         // The newer batches count for more (the device warms up, grids differ).
         *p = Some(p.map_or(x, |old| 0.5 * old + 0.5 * x));
     }
@@ -814,18 +826,23 @@ impl Search {
         }
     }
 
-    /// One step: GPU rounds (with `gpu`) on a thread of their own and CPU rounds on `pool`,
-    /// until the deadline, a stop, or the screened total. The CPU stops handing out candidates
-    /// then (the ones running finish, each within its time cap; an elite is confirmed with all
-    /// its seeds or not at all), and the GPU goes on with batches while the CPU finishes, so it
-    /// is never idle waiting for a slow CPU round; a batch under way runs to its end. At a stop
-    /// or the run's end ([`StepLimits::end`]) the runs still going on the processor are given up,
-    /// and no GPU batch is started that would not end before it. Returns the GPU's error, when a
-    /// GPU round failed (the GPU stops for the rest of the step).
+    /// One step: GPU rounds (with `gpu`: the backend, and the pool that seeds its worlds and
+    /// measures their runs) on a thread of their own and CPU rounds on `pool`, until the
+    /// deadline, a stop, or the screened total. The CPU stops handing out candidates then (the
+    /// ones running finish, each within its time cap; an elite is confirmed with all its seeds or
+    /// not at all), and the GPU goes on with batches while the CPU finishes, so it is never idle
+    /// waiting for a slow CPU round; a batch under way runs to its end. At a stop or the run's
+    /// end ([`StepLimits::end`]) the runs still going on the processor are given up, no GPU
+    /// batch is started that would not end before it, and one under way is given up at its next
+    /// submission (its pace misjudged). Returns the GPU's error, when a GPU round failed (the GPU
+    /// stops for the rest of the step).
+    ///
+    /// The two pools are the step's only threads at work (with the GPU thread, which waits on
+    /// them and on the device), so their sizes bound the processor time the search takes.
     pub fn step(
         &self,
         pool: &rayon::ThreadPool,
-        gpu: Option<&mut dyn Backend>,
+        gpu: Option<(&mut dyn Backend, &rayon::ThreadPool)>,
         lim: &StepLimits<'_>,
     ) -> Option<String> {
         let go = || {
@@ -842,40 +859,44 @@ impl Search {
                 && lim.max_screened.is_none_or(|m| self.screened() < m)
         };
         std::thread::scope(|sc| {
-            let gpu_thread = gpu.map(|be| {
+            let gpu_thread = gpu.map(|(be, gpu_pool)| {
                 let gpu_fams = gpu_fams.clone();
+                // The GPU's rounds run on its own pool, so preparing its worlds and measuring
+                // their runs (the processor's share of a batch) stays on that pool's threads.
                 sc.spawn(move || {
-                    if gpu_fams.is_empty() && !ltl {
-                        return None;
-                    }
-                    let mut rng = *self.rng_gpu.lock().unwrap();
-                    let keep = |rng: Rng| *self.rng_gpu.lock().unwrap() = rng;
-                    while gpu_go() {
-                        let round = self.gpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
-                        let r = catch_unwind(AssertUnwindSafe(|| {
-                            if round.is_multiple_of(8) {
-                                self.gpu_confirm(be, 96, lim.end)
-                            } else {
-                                self.gpu_round(be, &mut rng, &gpu_fams, ltl, lim.end)
-                            }
-                        }));
-                        match r {
-                            Ok(Ok(true)) => {}
-                            // No batch ends before the run's end.
-                            Ok(Ok(false)) => break,
-                            Ok(Err(e)) => {
-                                keep(rng);
-                                return Some(e);
-                            }
-                            Err(_) => {
-                                keep(rng);
-                                self.panics.fetch_add(1, Ordering::Relaxed);
-                                return Some("a GPU round panicked".into());
+                    gpu_pool.install(move || {
+                        if gpu_fams.is_empty() && !ltl {
+                            return None;
+                        }
+                        let mut rng = *self.rng_gpu.lock().unwrap();
+                        let keep = |rng: Rng| *self.rng_gpu.lock().unwrap() = rng;
+                        while gpu_go() {
+                            let round = self.gpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
+                            let r = catch_unwind(AssertUnwindSafe(|| {
+                                if round.is_multiple_of(8) {
+                                    self.gpu_confirm(be, 96, lim)
+                                } else {
+                                    self.gpu_round(be, &mut rng, &gpu_fams, ltl, lim)
+                                }
+                            }));
+                            match r {
+                                Ok(Ok(true)) => {}
+                                // No batch ends before the run's end, or one was given up.
+                                Ok(Ok(false)) => break,
+                                Ok(Err(e)) => {
+                                    keep(rng);
+                                    return Some(e);
+                                }
+                                Err(_) => {
+                                    keep(rng);
+                                    self.panics.fetch_add(1, Ordering::Relaxed);
+                                    return Some("a GPU round panicked".into());
+                                }
                             }
                         }
-                    }
-                    keep(rng);
-                    None
+                        keep(rng);
+                        None
+                    })
                 })
             });
             if !cpu_fams.is_empty() {
@@ -1039,7 +1060,9 @@ impl Search {
     }
 
     /// Run one GPU batch of candidates on a grid. `reach` is a Larger than Life batch's reach
-    /// (cells read per cell), for the GPU's pace.
+    /// (cells read per cell), for the GPU's pace. At a stop or the run's end the batch is given
+    /// up between two of its submissions, its runs not recorded: then false.
+    #[allow(clippy::too_many_arguments)]
     fn gpu_batch(
         &self,
         be: &mut dyn Backend,
@@ -1048,9 +1071,10 @@ impl Search {
         cands: Vec<(Cand, String, Option<i64>)>,
         stage: u8,
         reach: Option<usize>,
-    ) -> Result<(), String> {
+        lim: &StepLimits<'_>,
+    ) -> Result<bool, String> {
         if cands.is_empty() {
-            return Ok(());
+            return Ok(true);
         }
         let gens = cands[0].0.gens;
         let trace = std::env::var_os("JETCARP_EXPLORE_TRACE").is_some();
@@ -1080,7 +1104,7 @@ impl Search {
             }
         }
         if worlds.is_empty() {
-            return Ok(());
+            return Ok(true);
         }
         let job = BatchJob {
             topo: grid.topo.clone(),
@@ -1090,7 +1114,23 @@ impl Search {
             frames_at: frames_for(gens, WINDOW),
         };
         let t1 = Instant::now();
-        let traces = be.run(&job)?;
+        let traces = match be.run_until(&job, &|| lim.cut()) {
+            Err(e) if e == GIVEN_UP => {
+                self.given_up
+                    .fetch_add(good.len() as u64, Ordering::Relaxed);
+                if trace {
+                    eprintln!(
+                        "batch stage {stage} {} worlds={} cells={} gens={gens}: given up after {:.2}s on the GPU",
+                        grid.key,
+                        good.len(),
+                        grid.topo.len(),
+                        t1.elapsed().as_secs_f64()
+                    );
+                }
+                return Ok(false);
+            }
+            r => r?,
+        };
         if traces.len() != good.len() {
             return Err(format!(
                 "the GPU returned {} traces for {} worlds",
@@ -1125,10 +1165,12 @@ impl Search {
         let t3 = Instant::now();
         let n = rows.len();
         let work = n as f64 * grid.topo.len() as f64 * gens as f64 * reach.unwrap_or(1) as f64;
-        self.gpu_pace
-            .lock()
-            .unwrap()
-            .note(reach.is_some(), work, (t3 - t0).as_secs_f64());
+        self.gpu_pace.lock().unwrap().note(
+            reach.is_some(),
+            grid.topo.lattice().is_some(),
+            work,
+            (t3 - t0).as_secs_f64(),
+        );
         self.publish(rows, stage);
         if trace {
             eprintln!(
@@ -1141,18 +1183,18 @@ impl Search {
                 t3.elapsed().as_secs_f64(),
             );
         }
-        Ok(())
+        Ok(true)
     }
 
-    /// One screening batch on the GPU, sized to end before `end`. False when not even a small
-    /// batch would.
+    /// One screening batch on the GPU, sized to end before the run's end. False when not even a
+    /// small batch would, or the batch was given up (a stop, or the end reached).
     fn gpu_round(
         &self,
         be: &mut dyn Backend,
         rng: &mut Rng,
         fams: &[(Fam, f64)],
         ltl_ok: bool,
-        end: Option<Instant>,
+        lim: &StepLimits<'_>,
     ) -> Result<bool, String> {
         let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
         // Some rounds go to the least-tried tiling, so every tiling is reached by the deadline.
@@ -1203,8 +1245,12 @@ impl Search {
         let ltl = ltl.map(|l| (l.0, l.1));
         let world_work =
             grid.topo.len() as f64 * self.set.screen_gens as f64 * reach.unwrap_or(1) as f64;
-        let pace = self.gpu_pace.lock().unwrap().get(reach.is_some());
-        max_worlds = fit_worlds(pace, world_work, secs_left(end), max_worlds);
+        let pace = self
+            .gpu_pace
+            .lock()
+            .unwrap()
+            .get(reach.is_some(), grid.topo.lattice().is_some());
+        max_worlds = fit_worlds(pace, world_work, secs_left(lim.end), max_worlds);
         if max_worlds == 0 {
             return Ok(false);
         }
@@ -1220,17 +1266,17 @@ impl Search {
             Some(&filter),
         );
         let tagged = cands.into_iter().map(|(c, k)| (c, k, None)).collect();
-        self.gpu_batch(be, &grid, nb, tagged, 1, reach)?;
-        Ok(true)
+        self.gpu_batch(be, &grid, nb, tagged, 1, reach, lim)
     }
 
     /// Confirm the best runs of one grid/neighbourhood group on the GPU, as many as end before
-    /// `end`. False when not even one would.
+    /// the run's end. False when not even one would, or the batch was given up (its elites stay
+    /// unconfirmed).
     fn gpu_confirm(
         &self,
         be: &mut dyn Backend,
         limit: usize,
-        end: Option<Instant>,
+        lim: &StepLimits<'_>,
     ) -> Result<bool, String> {
         let pending = self.archive.lock().unwrap().unconfirmed(4096);
         let mut first: Option<(String, Nb, Option<(Hood, u8)>)> = None;
@@ -1269,8 +1315,12 @@ impl Search {
             run_len(e.cand.fam, &grid, self.set.confirm_gens).0
         });
         let world_work = grid.topo.len() as f64 * gens as f64 * reach.unwrap_or(1) as f64;
-        let pace = self.gpu_pace.lock().unwrap().get(reach.is_some());
-        let worlds = fit_worlds(pace, world_work, secs_left(end), picked.len() * seeds);
+        let pace = self
+            .gpu_pace
+            .lock()
+            .unwrap()
+            .get(reach.is_some(), grid.topo.lattice().is_some());
+        let worlds = fit_worlds(pace, world_work, secs_left(lim.end), picked.len() * seeds);
         picked.truncate(worlds / seeds);
         if picked.is_empty() {
             return Ok(false);
@@ -1281,7 +1331,9 @@ impl Search {
                 cands.push((c, "confirm".to_string(), Some(*id)));
             }
         }
-        self.gpu_batch(be, &grid, nb, cands, 2, reach)?;
+        if !self.gpu_batch(be, &grid, nb, cands, 2, reach, lim)? {
+            return Ok(false);
+        }
         let ids: Vec<i64> = picked.iter().map(|p| p.0).collect();
         self.mark_confirmed(&ids);
         Ok(true)
@@ -1626,9 +1678,17 @@ mod tests {
         assert_eq!(fit_worlds(None, 1e7, Some(30.0), 1024), FIRST_GPU_WORLDS);
         assert_eq!(fit_worlds(None, 1e7, Some(600.0), 1024), 1024);
         let mut p = GpuPace::default();
-        p.note(false, 1e9, 2.0);
-        p.note(false, 1e9, 4.0);
-        assert!((p.get(false).unwrap() - 3e-9).abs() < 1e-15 && p.get(true).is_none());
+        p.note(false, true, 1e9, 2.0);
+        p.note(false, false, 1e9, 4.0);
+        assert!((p.get(false, true).unwrap() - 3e-9).abs() < 1e-15);
+        assert!(p.get(true, true).is_none() && p.get(true, false).is_none());
+        // Larger than Life on a lattice and on an aperiodic patch are paced apart.
+        p.note(true, true, 1e9, 1.0);
+        p.note(true, false, 1e9, 40.0);
+        assert_eq!(
+            (p.get(true, true), p.get(true, false)),
+            (Some(1e-9), Some(4e-8))
+        );
     }
 
     fn quick(gens: u32) -> Settings {

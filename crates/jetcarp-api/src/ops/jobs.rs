@@ -189,10 +189,25 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                 digits(p.seen),
                 format_args!("{:.2}", p.rss_gb)
             );
+            if p.threads > 0 {
+                let used = p.threads + p.gpu_threads;
+                let _ = writeln!(
+                    s,
+                    "  threads: {} for runs on the processor{}, of {} cores ({} left free)",
+                    p.threads,
+                    if p.gpu_threads > 0 {
+                        format!(" and {} for the GPU's batches", p.gpu_threads)
+                    } else {
+                        String::new()
+                    },
+                    p.cores,
+                    p.cores.saturating_sub(used)
+                );
+            }
             if p.capped > 0 || p.given_up > 0 {
                 let _ = writeln!(
                     s,
-                    "  this session: {} runs on the processor stopped at their time cap (kept with the generations they reached), {} given up at the end (not kept)",
+                    "  this session: {} runs on the processor stopped at their time cap (kept with the generations they reached), {} runs given up at a stop or the end (not kept)",
                     digits(p.capped),
                     digits(p.given_up)
                 );
@@ -825,7 +840,7 @@ pub struct ResumeIn {
     /// This run's budget; the job stays resumable past it.
     #[serde(default)]
     pub budget: Option<super::search::BudgetIn>,
-    /// Worker threads (default 0: all cores).
+    /// Worker threads (default 0: all cores, and all but two for an explore search).
     #[serde(default)]
     pub threads: Option<usize>,
     /// Hunts: the GPU soup batches; piles: GPU toppling; explore: the GPU batch stepper, when there is one.

@@ -592,6 +592,17 @@ pub fn run_row(run: &RunRow, search_uuid: &str) -> Result<QuickStartRow, String>
 /// [`AtlasOpts`]), best first (by score, then run id), ranked in that order, for the search
 /// whose uuid is `search_uuid`.
 pub fn rows(db: &Runs, opts: &AtlasOpts, search_uuid: &str) -> Result<Vec<QuickStartRow>, String> {
+    rows_on(db, opts, search_uuid, None)
+}
+
+/// [`rows`], replaying the entries' runs on `pool` (a Quick Start build's own threads, which
+/// leave the computer cores of its own) when one is given, else on every core.
+pub fn rows_on(
+    db: &Runs,
+    opts: &AtlasOpts,
+    search_uuid: &str,
+    pool: Option<&rayon::ThreadPool>,
+) -> Result<Vec<QuickStartRow>, String> {
     let t0 = std::time::Instant::now();
     let picks = select(db, opts)?;
     let t1 = std::time::Instant::now();
@@ -599,18 +610,24 @@ pub fn rows(db: &Runs, opts: &AtlasOpts, search_uuid: &str) -> Result<Vec<QuickS
         .into_iter()
         .map(|t| (t.key, t.group))
         .collect();
-    let mut made: Vec<(i64, QuickStartRow)> = picks
-        .par_iter()
-        .filter_map(|(r, s, c)| {
-            let group = groups
-                .get(&r.cand.tiling)
-                .cloned()
-                .unwrap_or_else(|| "other".into());
-            make_row(r, *s, c, &group, search_uuid)
-                .ok()
-                .map(|q| (r.id, q))
-        })
-        .collect();
+    let make = || -> Vec<(i64, QuickStartRow)> {
+        picks
+            .par_iter()
+            .filter_map(|(r, s, c)| {
+                let group = groups
+                    .get(&r.cand.tiling)
+                    .cloned()
+                    .unwrap_or_else(|| "other".into());
+                make_row(r, *s, c, &group, search_uuid)
+                    .ok()
+                    .map(|q| (r.id, q))
+            })
+            .collect()
+    };
+    let mut made = match pool {
+        Some(p) => p.install(make),
+        None => make(),
+    };
     if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() {
         eprintln!(
             "atlas: {} picks in {:.2} s, their entries made in {:.2} s",

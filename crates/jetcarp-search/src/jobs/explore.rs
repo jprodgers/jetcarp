@@ -26,8 +26,14 @@
 //! of memory the run stops (paused). The item budget counts screened runs. A time budget, and a
 //! Quick Start build's minutes, end the run on time: the last step ends with it, runs still going
 //! on the processor are given up unrecorded, and the GPU's batches are sized to end before it
-//! (see [`Search::step`]); a run on the processor is capped at
-//! [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway.
+//! (one that would not is given up part way; see [`Search::step`]); a run on the processor is
+//! capped at [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway. A step under way
+//! writes the job's progress every [`PUBLISH_S`] seconds, and stops when another process pauses
+//! the job.
+//!
+//! **Its threads** ([`worker_threads`]): every core but [`FREE_CORES`] unless the run is given a
+//! thread count, a third of them for the GPU's batches when there is a GPU, so the computer
+//! stays usable while it searches. `jobs.status` says how many.
 //!
 //! **A Quick Start build** (`quickstart.build`, and the first-run setup) is an explore job with
 //! an end: its spec's [`BuildSpec`] gives the minutes it searches, counted over every session
@@ -36,7 +42,7 @@
 //! (`Library::publish_atlas`, as `quickstart.publish` does) and its progress says what was
 //! published. Any other explore job runs until it is stopped or out of budget.
 
-use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list, thread_count};
+use super::{RunCx, Sink, Step, Strategy, StrategyKind, base_summary, short_list};
 use crate::dashboard::JobSummary;
 use crate::explore::job::{FamilyLine, Search, Settings, StepLimits};
 use crate::explore::runs::{Runs, SEAL_ROWS};
@@ -47,7 +53,7 @@ use jetcarp_store::{JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 pub struct ExploreKind;
@@ -57,6 +63,49 @@ pub const KIND_NAME: &str = "explore";
 
 /// Seconds of rounds a step runs (a round under way runs to its end).
 pub const STEP_S: f64 = 2.0;
+
+/// Seconds between the progress a step writes while it runs. A step can last minutes (a round
+/// of confirmations under way runs to its end), so the job's progress (its time, its runs) is
+/// written this often meanwhile, and a pause asked by another process is seen as soon.
+pub const PUBLISH_S: f64 = 2.0;
+
+/// Cores an explore search leaves for the computer's other work when it is given no thread
+/// count.
+pub const FREE_CORES: usize = 2;
+
+/// The computer's cores (logical processors this process may use).
+pub fn cores() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
+}
+
+/// An explore search's worker threads: the runs on the processor's, and the GPU's (preparing
+/// its batches' worlds and measuring their runs; 0 without a GPU). They are `threads` in all
+/// when it is given, else every core less [`FREE_CORES`] (at least one), so the computer stays
+/// usable while it searches. A third of them (at least one) are the GPU's.
+pub fn worker_threads(threads: usize, gpu: bool) -> (usize, usize) {
+    let all = if threads == 0 {
+        cores().saturating_sub(FREE_CORES).max(1)
+    } else {
+        threads
+    };
+    match (gpu, all) {
+        (false, n) => (n, 0),
+        // One thread: the two pools take turns with it.
+        (true, n) if n < 2 => (1, 1),
+        (true, n) => {
+            let g = n.div_ceil(3);
+            (n - g, g)
+        }
+    }
+}
+
+fn worker_pool(threads: usize, name: &'static str) -> Result<rayon::ThreadPool, String> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads.max(1))
+        .thread_name(move |i| format!("{name}-{i}"))
+        .build()
+        .map_err(|e| e.to_string())
+}
 
 /// An explore job: the search's settings, and how to run it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -186,6 +235,11 @@ pub struct ExploreProgress {
     /// generations they reached), and runs given up at a stop or the run's end (not recorded).
     pub capped: u64,
     pub given_up: u64,
+    /// This session's worker threads: for runs on the processor, and for the GPU's batches; and
+    /// the computer's cores.
+    pub threads: u64,
+    pub gpu_threads: u64,
+    pub cores: u64,
     pub error: Option<String>,
     /// A Quick Start build: its minutes in all, and what it published once they were spent.
     pub build_minutes: Option<f64>,
@@ -494,7 +548,11 @@ struct Running {
     spec: ExploreSpec,
     search: Search,
     runs: Runs,
+    /// The threads of the runs on the processor, and of the GPU's batches (with a GPU); all the
+    /// threads the run was given ([`worker_threads`]).
     pool: rayon::ThreadPool,
+    gpu_pool: Option<rayon::ThreadPool>,
+    threads: usize,
     folder: PathBuf,
     job: i64,
     elapsed_before: f64,
@@ -522,11 +580,16 @@ impl ExploreRun {
     }
 
     fn backend_name(&self) -> String {
-        match (&self.backend, &self.no_gpu) {
-            (Some(b), _) => b.name(),
-            (None, Some(why)) => format!("cpu only ({why})"),
-            (None, None) => "cpu only".into(),
-        }
+        backend_name(self.backend.as_deref(), self.no_gpu.as_deref())
+    }
+}
+
+/// `cpu only`, with why when a GPU was asked for, or the GPU's name.
+fn backend_name(backend: Option<&dyn Backend>, no_gpu: Option<&str>) -> String {
+    match (backend, no_gpu) {
+        (Some(b), _) => b.name(),
+        (None, Some(why)) => format!("cpu only ({why})"),
+        (None, None) => "cpu only".into(),
     }
 }
 
@@ -537,6 +600,96 @@ fn trace() -> bool {
 
 fn elapsed(r: &Running) -> f64 {
     r.elapsed_before + r.t0.elapsed().as_secs_f64()
+}
+
+/// Run one search step on a thread of its own, writing the job's progress every
+/// [`PUBLISH_S`] seconds while it runs, and setting `halt` (the step's stop) as soon as the
+/// run's stop flag is set or another process pauses the job. Returns the step's GPU error.
+fn step_publishing(
+    cx: &RunCx<'_>,
+    r: &Running,
+    backend: &str,
+    gpu: Option<(&mut dyn Backend, &rayon::ThreadPool)>,
+    lim: &StepLimits<'_>,
+    halt: &AtomicBool,
+) -> Option<String> {
+    use std::sync::mpsc::{RecvTimeoutError, channel};
+    let (tx, rx) = channel::<()>();
+    let (search, pool) = (&r.search, &r.pool);
+    std::thread::scope(|sc| {
+        let worker = sc.spawn(move || {
+            let e = search.step(pool, gpu, lim);
+            let _ = tx.send(());
+            e
+        });
+        let mut last = Instant::now();
+        // Until the step is done (or has panicked, which the join passes on).
+        while let Err(RecvTimeoutError::Timeout) = rx.recv_timeout(Duration::from_millis(100)) {
+            if cx.stopped() {
+                halt.store(true, Ordering::SeqCst);
+            }
+            if last.elapsed().as_secs_f64() >= PUBLISH_S {
+                if cx.paused_elsewhere() {
+                    halt.store(true, Ordering::SeqCst);
+                }
+                cx.publish(progress_of(r, backend, JobStatus::Running, true));
+                last = Instant::now();
+            }
+        }
+        match worker.join() {
+            Ok(e) => e,
+            Err(p) => std::panic::resume_unwind(p),
+        }
+    })
+}
+
+/// The progress of a live run with this backend (its name) and status; `mid_step`: written
+/// part way through a step, its rate measured since the last one.
+fn progress_of(r: &Running, backend: &str, status: JobStatus, mid_step: bool) -> Value {
+    let (elites, niches) = r.search.elites();
+    // Part way through a long step, the rate since the last one that measured it.
+    let (t, n) = r.rate;
+    let dt = t.elapsed().as_secs_f64();
+    let per_s = if mid_step && dt >= 5.0 {
+        r.search.screened().saturating_sub(n) as f64 / dt
+    } else {
+        r.per_s
+    };
+    let gpu_threads = r.gpu_pool.as_ref().map_or(0, |p| p.current_num_threads());
+    let mut p = ExploreProgress {
+        job: r.job,
+        status: super::status_name(status).into(),
+        screened: r.search.screened(),
+        confirmed: r.search.confirmed(),
+        elites,
+        niches,
+        confirmed_elites: r.search.confirmed_elites(),
+        seen: r.search.seen(),
+        tilings_tried: r.search.tilings_tried(),
+        tilings: r.search.tiling_count() as u64,
+        per_s,
+        elapsed_s: elapsed(r),
+        session_s: r.t0.elapsed().as_secs_f64(),
+        backend: backend.to_string(),
+        gpu_error: r.gpu_error.clone(),
+        rss_gb: r.rss,
+        families: r.search.families(),
+        loaded: Some(r.loaded.clone()),
+        folder: r.folder.display().to_string(),
+        note: r.note.clone(),
+        panics: r.search.panics(),
+        capped: r.search.capped(),
+        given_up: r.search.given_up(),
+        threads: r.pool.current_num_threads() as u64,
+        gpu_threads: gpu_threads as u64,
+        cores: cores() as u64,
+        error: None,
+        build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
+        published: r.published.clone(),
+        line: String::new(),
+    };
+    p.line = line(&p);
+    serde_json::to_value(p).unwrap_or_default()
 }
 
 impl Strategy for ExploreRun {
@@ -554,17 +707,21 @@ impl Strategy for ExploreRun {
         let elapsed_before = saved.meta_f64("elapsed_s");
         let search = Search::new(spec.search.clone(), saved)?;
         search.can_run(self.backend.is_some())?;
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(thread_count(cx.threads))
-            .thread_name(move |i| format!("explore-{i}"))
-            .build()
-            .map_err(|e| e.to_string())?;
+        let (cpu, gpu) = worker_threads(cx.threads, self.backend.is_some());
+        let pool = worker_pool(cpu, "explore")?;
+        let gpu_pool = if gpu > 0 {
+            Some(worker_pool(gpu, "explore-gpu")?)
+        } else {
+            None
+        };
         let screened = search.screened();
         self.st = Some(Running {
             spec,
             search,
             runs,
             pool,
+            gpu_pool,
+            threads: cx.threads,
             folder,
             job: cx.job,
             elapsed_before,
@@ -612,14 +769,21 @@ impl Strategy for ExploreRun {
             until = until.min(e);
         }
         let before = r.search.screened();
+        // The step's own stop: the run's stop flag, or a pause asked by another process, seen
+        // while the step runs.
+        let halt = AtomicBool::new(cx.stopped());
         let lim = StepLimits {
             until,
             end,
-            stop: &cx.stop,
+            stop: &halt,
             max_screened: cx.items.map(|n| before + n.saturating_sub(r.items)),
         };
-        let gpu = self.backend.as_mut().map(|b| &mut **b as &mut dyn Backend);
-        let err = r.search.step(&r.pool, gpu, &lim);
+        let backend = backend_name(self.backend.as_deref(), self.no_gpu.as_deref());
+        let gpu = match (self.backend.as_mut(), r.gpu_pool.as_ref()) {
+            (Some(b), Some(p)) => Some((&mut **b as &mut dyn Backend, p)),
+            _ => None,
+        };
+        let err = step_publishing(cx, r, &backend, gpu, &lim, &halt);
         if trace() {
             let past = Instant::now()
                 .saturating_duration_since(until)
@@ -653,6 +817,10 @@ impl Strategy for ExploreRun {
                         r.gpu_error.clone().unwrap_or_default()
                     ));
                     r.search.can_run(false)?;
+                    // The processor takes the GPU's families, and its threads.
+                    let (cpu, _) = worker_threads(r.threads, false);
+                    r.pool = worker_pool(cpu, "explore")?;
+                    r.gpu_pool = None;
                 }
             }
             None if self.backend.is_some() => r.gpu_fails = 0,
@@ -678,38 +846,7 @@ impl Strategy for ExploreRun {
         let Some(r) = &self.st else {
             return serde_json::json!({"status": super::status_name(status)});
         };
-        let (elites, niches) = r.search.elites();
-        let mut p = ExploreProgress {
-            job: r.job,
-            status: super::status_name(status).into(),
-            screened: r.search.screened(),
-            confirmed: r.search.confirmed(),
-            elites,
-            niches,
-            confirmed_elites: r.search.confirmed_elites(),
-            seen: r.search.seen(),
-            tilings_tried: r.search.tilings_tried(),
-            tilings: r.search.tiling_count() as u64,
-            per_s: r.per_s,
-            elapsed_s: elapsed(r),
-            session_s: r.t0.elapsed().as_secs_f64(),
-            backend: self.backend_name(),
-            gpu_error: r.gpu_error.clone(),
-            rss_gb: r.rss,
-            families: r.search.families(),
-            loaded: Some(r.loaded.clone()),
-            folder: r.folder.display().to_string(),
-            note: r.note.clone(),
-            panics: r.search.panics(),
-            capped: r.search.capped(),
-            given_up: r.search.given_up(),
-            error: None,
-            build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
-            published: r.published.clone(),
-            line: String::new(),
-        };
-        p.line = line(&p);
-        serde_json::to_value(p).unwrap_or_default()
+        progress_of(r, &self.backend_name(), status, false)
     }
 
     fn items(&self) -> u64 {
@@ -731,7 +868,11 @@ impl Strategy for ExploreRun {
             max_entries: b.max_entries,
         };
         let (searched, t0) = (elapsed(r), Instant::now());
-        let rows = crate::explore::atlas::rows(&r.runs, &opts, &r.spec.uuid)?;
+        // On the search's threads, all of them (the GPU's are idle now).
+        let all = r.pool.current_num_threads()
+            + r.gpu_pool.as_ref().map_or(0, |p| p.current_num_threads());
+        let pool = worker_pool(all, "explore-publish")?;
+        let rows = crate::explore::atlas::rows_on(&r.runs, &opts, &r.spec.uuid, Some(&pool))?;
         let w = cx.lib.publish_atlas(cx.job, &r.spec.uuid, &rows)?;
         if trace() {
             eprintln!(
