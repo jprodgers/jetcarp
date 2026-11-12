@@ -80,10 +80,14 @@ if [[ $target == *-apple-darwin ]]; then
         ls "$dist" >&2
         exit 1
     fi
-    check=$(mktemp -d)
-    "$py" -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$wheel" "$check"
-    codesign --verify --verbose "$check/jetcarp-$wheel_version.data/scripts/jetcarp"
-    rm -rf "$check"
+    # Apple silicon refuses to run unsigned code, so there the wheel's copy must carry the
+    # linker's ad hoc signature; Intel Macs run unsigned programs, and the linker signs none.
+    if [[ $target == aarch64-apple-darwin ]]; then
+        check=$(mktemp -d)
+        "$py" -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$wheel" "$check"
+        codesign --verify --verbose "$check/jetcarp-$wheel_version.data/scripts/jetcarp"
+        rm -rf "$check"
+    fi
 fi
 if [[ $target == *-unknown-linux-gnu ]]; then
     "$py" packaging/package.py check-elf "$bins/jetcarp" --max-glibc 2.28
