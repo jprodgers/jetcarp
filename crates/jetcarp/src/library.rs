@@ -44,9 +44,20 @@ enum LibCmd {
     },
     /// Make a scene from several library patterns placed on one grid.
     Paste(PasteArgs),
-    /// Add a Quick Start entry for a pattern ("My finds") and mark it promoted.
+    /// Add a Quick Start entry ("My finds"): a library pattern (ID, which is marked promoted),
+    /// a run of an explore search (--search-run), or a scene file (--scene).
     Promote {
-        id: String,
+        id: Option<String>,
+        /// A run of an explore search, by its id: on the grid it was confirmed on, its card on
+        /// the grid it was found on, as the atlas shows its entries.
+        #[arg(long, conflicts_with_all = ["id", "scene"])]
+        search_run: Option<i64>,
+        /// With --search-run: the explore job (default: the newest).
+        #[arg(long, requires = "search_run")]
+        job: Option<i64>,
+        /// A scene file.
+        #[arg(long, conflicts_with = "id")]
+        scene: Option<PathBuf>,
         #[arg(long)]
         title: Option<String>,
         #[arg(long)]
@@ -340,11 +351,17 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
         }
         LibCmd::Promote {
             id,
+            search_run,
+            job,
+            scene,
             title,
             description,
         } => {
             let a = AddIn {
-                pattern: Some(id),
+                pattern: id,
+                search_run,
+                job,
+                scene: scene.as_deref().map(path),
                 title,
                 description,
                 ..Default::default()
