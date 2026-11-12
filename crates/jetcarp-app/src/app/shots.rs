@@ -538,8 +538,4 @@ fn shots_quick_start_atlas() {
     h.run(8.0, 0.05, |_| false);
     h.steady();
     h.shot("quickstart-atlas");
-    h.action(menu::Action::Tool(menu::ToolWin::Hunts));
-    h.run(3.0, 0.05, |_| false);
-    h.steady();
-    h.shot("quickstart-hunts");
 }
