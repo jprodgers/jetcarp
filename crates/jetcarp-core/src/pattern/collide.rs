@@ -7,6 +7,13 @@
 //! different starting pattern, not a collision. Each run uses a dead-edged frame with `margin`
 //! empty cells around the pair.
 //!
+//! Running: B/S and Generations rules at one step per generation run on the bit-parallel
+//! stepper's unbounded plane ([`crate::hunt::bits`]) while no live cell is next to the frame's
+//! edge, and on the frame itself from then on. Until a live cell has a neighbour outside the frame
+//! the two are the same run (nothing can be born outside it), so outcomes are those of the frame
+//! run; the plane only skips the frame's empty cells, most of a run's work. Other rules run on the
+//! frame throughout.
+//!
 //! Settling: every `check_every` generations the objects are found (`objects::find_objects`).
 //! The run has settled when every object is a still life, oscillator, or spaceship and no
 //! spaceship's path (from where it is, for the generations left) comes within reach of another
@@ -26,12 +33,14 @@ use super::verify::{Frame, lattice_info, rule_world};
 use super::{
     DiscoveredBy, PatternRecord, Provenance, default_periods, now_utc, paste::oriented, verify,
 };
+use crate::hunt::bits::{Plan, Universe};
 use crate::objects::{LCell, ObjClass, ObjectOptions, Phase, find_objects};
-use crate::render::{Image, RenderOptions, render_with_colors};
+use crate::render::{Image, RenderOptions, ViewColors, render_rect};
 use crate::world::Command;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CollideSpec {
@@ -199,6 +208,8 @@ pub struct Collision {
     phases: Vec<u32>,
     b_phases: Vec<Phase>,
     jobs: Vec<(i32, i32, u32)>,
+    /// The bit-parallel stepper for the rule, when it runs it (see the module notes).
+    plan: Option<Arc<Plan>>,
 }
 
 impl Collision {
@@ -259,6 +270,11 @@ impl Collision {
         let probe = Frame::around(&a.tiling, &info, &a.phase(0)?, 2)?;
         let topo = probe.topo.clone();
         let g = topo.lattice().unwrap().clone();
+        let plan = (a.steps_per_gen == 1)
+            .then(|| crate::rules::Rule::parse(&a.rule).ok())
+            .flatten()
+            .and_then(|(r, _)| Plan::new(&r, &g, a.neighborhood).ok())
+            .map(Arc::new);
         let cells_a = oriented(&topo, a.neighborhood, &a.phase(0)?, spec.orientation_a)?;
         let mut near: HashSet<(i32, i32, u32)> = cells_a.iter().map(|c| (c.i, c.j, c.k)).collect();
         for _ in 0..2 {
@@ -299,6 +315,7 @@ impl Collision {
             phases,
             b_phases,
             jobs,
+            plan,
         })
     }
 
@@ -377,6 +394,7 @@ impl Collision {
             b,
             spec,
             &self.info,
+            self.plan.as_ref(),
             &self.cells_a,
             &cells_b,
             (dx, dy, ph),
@@ -527,12 +545,98 @@ impl Collected {
     }
 }
 
+/// A `px` x `px` picture of where the patterns are at the end of a run: the live cells' bounding
+/// box (the starting cells' when nothing is left), at least as large as the pair was at the start
+/// and a cell and a half larger all round, so a contact sheet's thumbnails show the patterns, not
+/// the empty frame around them, at much the same scale.
+fn thumbnail(
+    w: &crate::world::World,
+    field: usize,
+    colors: &[crate::render::Rgba],
+    start: &[usize],
+    px: u32,
+) -> Image {
+    let topo = &w.topo;
+    let bounds = |ids: &mut dyn Iterator<Item = usize>| {
+        let mut b = [
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        for x in ids {
+            for p in topo.polygon(x) {
+                b = [
+                    b[0].min(p[0]),
+                    b[1].min(p[1]),
+                    b[2].max(p[0]),
+                    b[3].max(p[1]),
+                ];
+            }
+        }
+        b
+    };
+    let live = &w.fields[field].state;
+    let mut b = bounds(&mut live.iter().enumerate().filter(|c| *c.1 != 0).map(|c| c.0));
+    let s = bounds(&mut start.iter().copied());
+    if b[0] > b[2] {
+        b = s;
+    }
+    let pad = 1.5 * crate::world::cell_size(topo);
+    let side = (b[2] - b[0])
+        .max(b[3] - b[1])
+        .max(s[2] - s[0])
+        .max(s[3] - s[1])
+        + 2.0 * pad;
+    let scale = px as f64 / side.max(1e-9);
+    let corner = [(b[0] + b[2] - side) / 2.0, (b[1] + b[3] - side) / 2.0];
+    render_rect(
+        w,
+        &|i| colors.get(i).copied().unwrap_or(crate::render::BACKGROUND),
+        corner,
+        scale,
+        px,
+        px,
+        &RenderOptions {
+            outline_min_px: 0.0,
+            ..Default::default()
+        },
+        &ViewColors::for_world(w),
+    )
+}
+
+/// Does a live cell of `u` have a neighbour outside the frame (or lie outside it)? Then the frame's
+/// next generation may differ from the plane's. A box test first: the live cells' bounding box,
+/// grown by the neighbour offsets' reach, inside the frame means no.
+fn at_edge(frame: &Frame, u: &Universe, nb: crate::topology::Nb) -> bool {
+    let Some(bb) = u.bbox() else {
+        return false;
+    };
+    let g = frame.topo.lattice().expect("collision frames are lattices");
+    let (ri, rj) = (u.plan().reach_i, u.plan().reach_j);
+    let (jlo, jhi) = (bb[2] - rj + frame.dj, bb[3] + rj + frame.dj);
+    if jlo >= 0 && jhi < g.h as i32 {
+        // Row starts are monotone in the row, so the end rows bound every row between.
+        let (s0, s1) = (g.row_start[jlo as usize], g.row_start[jhi as usize]);
+        let ulo = bb[0] - ri + frame.di - s0.max(s1);
+        let uhi = bb[1] + ri + frame.di - s0.min(s1);
+        if ulo >= 0 && uhi < g.w as i32 {
+            return false;
+        }
+    }
+    u.cells().iter().any(|c| match frame.index(c) {
+        Some(x) => frame.topo.missing(x, nb) > 0,
+        None => true,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_one(
     a: &PatternRecord,
     b: &PatternRecord,
     spec: &CollideSpec,
     info: &super::verify::LatticeInfo,
+    plan: Option<&Arc<Plan>>,
     cells_a: &[LCell],
     cells_b: &[LCell],
     (dx, dy, ph): (i32, i32, u32),
@@ -546,18 +650,44 @@ fn run_one(
     let mut w = rule_world(a, frame.topo.clone())?;
     let id = w.cas[0].id;
     let fi = w.cas[0].field;
-    w.apply(Command::SetCells {
-        id,
-        cells: frame.cells(&both)?,
-    })?;
+    let start = frame.cells(&both)?;
+    let start_ids: Vec<usize> = start.iter().map(|c| c[0] as usize).collect();
+    w.apply(Command::SetCells { id, cells: start })?;
     let opts = ObjectOptions::default();
     let every = spec.check_every.max(1);
     let mut outcome = Outcome::Unsettled;
     let mut last_rep = None;
     let reach = info.reach;
+    // On the plane until a live cell nears the frame's edge (see the module notes).
+    let mut plane = plan.map(|p| Universe::with_cells(p.clone(), &both));
     while w.generation < spec.gens {
         let n = every.min(spec.gens - w.generation);
-        w.apply(Command::Step { gens: n })?;
+        let mut left = n;
+        let mut leave = false;
+        if let Some(u) = &mut plane {
+            while left > 0 {
+                u.step();
+                left -= 1;
+                leave = at_edge(&frame, u, a.neighborhood);
+                if left == 0 || leave {
+                    // The frame gets the plane's cells (for the objects, or to run on from here).
+                    let at = w.generation + n - left;
+                    w.apply(Command::Clear { id })?;
+                    w.apply(Command::SetCells {
+                        id,
+                        cells: frame.cells(&u.cells())?,
+                    })?;
+                    w.generation = at;
+                    break;
+                }
+            }
+        }
+        if leave {
+            plane = None;
+        }
+        if left > 0 {
+            w.apply(Command::Step { gens: left })?;
+        }
         let (live, edge) = frame.live(&w.fields[fi].state, a.neighborhood);
         if live.is_empty() {
             outcome = Outcome::BothDie;
@@ -677,15 +807,7 @@ fn run_one(
             Some(r) => r.colors(w.topo.len()),
             None => vec![crate::render::BACKGROUND; w.topo.len()],
         };
-        render_with_colors(
-            &w,
-            &colors,
-            &RenderOptions {
-                max_side: thumb_px,
-                outline_min_px: 0.0,
-                ..Default::default()
-            },
-        )
+        thumbnail(&w, fi, &colors, &start_ids, thumb_px)
     });
     Ok((
         CollideRun {
@@ -700,4 +822,93 @@ fn run_one(
         products,
         img,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::objects::place_rows;
+    use crate::pattern::record_from_object;
+    use crate::topology::{Boundary, TilingSpec};
+    use crate::world::{CaSpec, SeedSpec, World};
+
+    /// A block and a glider from a Life world.
+    fn block_and_glider() -> (PatternRecord, PatternRecord) {
+        let mut w = World::new(TilingSpec::rect("square", 64, 64, Boundary::Wrap), 1).unwrap();
+        let g = w.topo.lattice().unwrap().clone();
+        let mut cells = place_rows(&g, ".o./..o/ooo", 10, 10);
+        cells.extend(place_rows(&g, "oo/oo", 40, 40));
+        w.apply(Command::AddCa {
+            ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells }),
+        })
+        .unwrap();
+        let rep = find_objects(&w, &ObjectOptions::default()).unwrap();
+        let rec = |name: &str| {
+            let o = rep.objects.iter().find(|o| o.name == name).unwrap();
+            let prov = Provenance::default();
+            record_from_object(&w, w.cas[0].id, o, prov, DiscoveredBy::User).unwrap()
+        };
+        (rec("block"), rec("glider"))
+    }
+
+    /// Runs on the bit-parallel plane, handed to the frame near its edge, end exactly as runs on
+    /// the frame throughout: every placement's outcome, generations, objects, products and
+    /// thumbnail. Small margins put many runs at the frame's edge.
+    #[test]
+    fn the_plane_gives_the_frames_outcomes() {
+        let (block, glider) = block_and_glider();
+        for margin in [3, 6, 40] {
+            let spec = CollideSpec {
+                dx: [-3, 4],
+                dy: [-3, 4],
+                orientation_b: 2,
+                gens: 300,
+                margin,
+                ..Default::default()
+            };
+            let on_plane = Collision::new(&block, &glider, &spec, "today".into()).unwrap();
+            assert!(on_plane.plan.is_some());
+            let mut on_frame = Collision::new(&block, &glider, &spec, "today".into()).unwrap();
+            on_frame.plan = None;
+            let mut outcomes = HashSet::new();
+            for k in 0..on_plane.placements() {
+                let (ra, pa, ia) = on_plane.run_one(k, 48).unwrap();
+                let (rb, pb, ib) = on_frame.run_one(k, 48).unwrap();
+                assert_eq!(ra, rb, "margin {margin}, placement {k}");
+                let ids = |v: &[PatternRecord]| v.iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+                assert_eq!(ids(&pa), ids(&pb));
+                assert_eq!(ia.map(|i| i.rgba), ib.map(|i| i.rgba));
+                outcomes.insert(ra.outcome);
+            }
+            // The cases met: overlaps, misses, debris, and (small margins) runs cut off at the edge.
+            assert!(outcomes.contains(&Outcome::BothSurvive), "{outcomes:?}");
+            assert!(outcomes.len() >= 4, "margin {margin}: {outcomes:?}");
+        }
+    }
+
+    /// A thumbnail shows where the patterns are: the objects fill a fair part of it.
+    #[test]
+    fn thumbnails_are_cropped_to_the_patterns() {
+        let (block, glider) = block_and_glider();
+        let spec = CollideSpec {
+            dx: [12, 12],
+            dy: [-12, -12],
+            phases: vec![0],
+            gens: 64,
+            ..Default::default()
+        };
+        let c = Collision::new(&block, &glider, &spec, "today".into()).unwrap();
+        let (run, _, img) = c.run_one(0, 64).unwrap();
+        assert_eq!(run.outcome, Outcome::BothSurvive);
+        let img = img.unwrap();
+        assert_eq!((img.width, img.height), (64, 64));
+        let lit = img
+            .rgba
+            .chunks(4)
+            .filter(|p| [p[0], p[1], p[2], p[3]] != crate::render::BACKGROUND)
+            .filter(|p| [p[0], p[1], p[2], p[3]] != ViewColors::default().stage)
+            .count();
+        // Nine live cells of a 64 x 64 thumbnail: at least one pixel in a hundred.
+        assert!(lit * 100 >= 64 * 64, "{lit} lit pixels");
+    }
 }

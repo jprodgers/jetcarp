@@ -129,8 +129,8 @@ row or two (`16bc37@960,22`) and they pass each other unharmed instead. Open `me
 app (`jetcarp --scene meet.json`) to watch it.
 
 JETCARP can also try the collisions for you. This runs one ship into another at every offset from
-−2 to 2 in each direction, and draws every outcome on one contact sheet; it takes a couple of
-minutes:
+−2 to 2 in each direction, and draws every outcome on one contact sheet; it takes under a
+second:
 
 ```text
 $ jetcarp search collide 16bc37 16bc37 --offsets -2..2 --phases 0 --gens 256 --sheet hits.png

@@ -262,10 +262,14 @@ starting pattern, not a collision.
 
 **How it classifies.** A run has settled when everything left is a still life, oscillator or
 spaceship and no spaceship is heading for anything. The outcome is *both survive*, *both die*, *A
-survives*, *B survives*, or *new objects*; runs can also explode or fail to settle.
+survives*, *B survives*, or *new objects*; runs can also explode or fail to settle. B/S and
+Generations rules run on the soup hunter's bit-parallel stepper until a pattern comes next to the
+grid's edge, and on the grid from then on: the same outcomes, without stepping the grid's empty
+cells, so a run takes milliseconds.
 
 **How results are checked.** The products are verified and catalogued like any other find (unless
-`--no-store`), and every run's final state can be drawn on a contact sheet.
+`--no-store`), and every run's final state can be drawn on a contact sheet, each picture cropped to
+where the patterns are.
 
 **Command.** `jetcarp search collide A B --offsets -6..6`, with A and B pattern ids from
 `jetcarp library list`.

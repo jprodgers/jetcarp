@@ -5,7 +5,9 @@
 //! 2. Each group is copied onto an empty field with an empty margin and run alone with the same
 //!    rule. On lattice tilings the copy goes into a small dead-edged grid; if any live cell comes
 //!    near its edge the run restarts with a margin the pattern cannot cross in the time allowed
-//!    (one neighbour offset per generation), so the result equals the infinite plane. On explicit
+//!    (one neighbour offset per generation), so the result equals the infinite plane. B/S and
+//!    Generations rules at one step per generation run on the bit-parallel stepper's unbounded
+//!    plane instead ([`crate::hunt::bits`]): the same run, without the grid. On explicit
 //!    (aperiodic) patches the group runs alone on the same patch.
 //! 3. The run is compared with the starting cells by exact comparison every generation: equal
 //!    means a still life (period 1) or an oscillator; equal after a lattice translation means a
@@ -552,6 +554,9 @@ impl Ctx {
         stop: bool,
         cap: usize,
     ) -> Result<Evolution, String> {
+        if let Some(plan) = &self.bits {
+            return Ok(evolve_bits(plan, start, gens, stop, cap));
+        }
         let e = self.reach;
         let big = (gens as i64 + 1) * e as i64 + 1;
         let mut margin = 2 * e as i64 + 2;
@@ -934,6 +939,49 @@ impl compound::Runner for Ctx {
             Some(_) => compound::lattice_distance(a, b),
             None => compound::explicit_distance(a, b, &|x, out| self.explicit_neighbours(x, out)),
         }
+    }
+}
+
+/// [`Ctx::evolve_lattice`] on the bit-parallel stepper's unbounded plane: the same run, since a
+/// frame run restarts with a margin the pattern cannot cross and so equals the infinite plane,
+/// but without building a frame or stepping its empty cells. A fragment that drifts towards the
+/// frame's edge made that run restart on a frame hundreds of unit cells across (seconds for one
+/// 4-cell piece of a ship on `k2-017`); here it costs what its live cells cost. Never `Escaped`.
+fn evolve_bits(
+    plan: &Arc<crate::hunt::bits::Plan>,
+    start: Phase,
+    gens: u64,
+    stop: bool,
+    cap: usize,
+) -> Evolution {
+    let mut u = crate::hunt::bits::Universe::with_cells(plan.clone(), &start);
+    let mut phases = vec![start];
+    for t in 1..=gens {
+        u.step();
+        if u.is_empty() {
+            return Evolution {
+                phases,
+                outcome: Outcome::Died,
+            };
+        }
+        if u.population() as usize > cap {
+            return Evolution {
+                phases,
+                outcome: Outcome::Grows,
+            };
+        }
+        let live = u.cells();
+        if stop && let Some((di, dj)) = translated(&phases[0], &live) {
+            return Evolution {
+                phases,
+                outcome: Outcome::Repeat { period: t, di, dj },
+            };
+        }
+        phases.push(live);
+    }
+    Evolution {
+        phases,
+        outcome: Outcome::Unsettled,
     }
 }
 
