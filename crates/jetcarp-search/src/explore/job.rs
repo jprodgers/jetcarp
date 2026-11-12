@@ -380,6 +380,36 @@ enum Ran {
     GivenUp,
 }
 
+/// For tests: every generation of a run on the processor waits this long more (0: none), so a
+/// test can hold slow runs under way at a step's or a build's end.
+#[doc(hidden)]
+pub static SLOW_GENERATION_MS: AtomicU64 = AtomicU64::new(0);
+
+/// Marks the thread as inside a run on the processor while it lives. A thread waiting inside a
+/// run's parallel step may take up other work of the pool meanwhile; [`InRun::now`] tells it so.
+struct InRun;
+
+thread_local! {
+    static IN_RUN: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+impl InRun {
+    fn enter() -> InRun {
+        IN_RUN.with(|d| d.set(d.get() + 1));
+        InRun
+    }
+    /// This thread is inside a run on the processor.
+    fn now() -> bool {
+        IN_RUN.with(|d| d.get() > 0)
+    }
+}
+
+impl Drop for InRun {
+    fn drop(&mut self) {
+        IN_RUN.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
 /// What a GPU batch costs: seconds per world-cell-generation (times the reach, for Larger than
 /// Life) of the last batches, plain rules and Larger than Life apart. Not kept between sessions.
 #[derive(Default)]
@@ -1375,10 +1405,15 @@ impl Search {
         let gens = c.gens;
         // Why the run stopped early: its cap, or a stop or the run's end.
         let mut cut: Option<&'static str> = None;
+        let _in_run = InRun::enter();
+        let slow = SLOW_GENERATION_MS.load(Ordering::Relaxed);
         let r = catch_unwind(AssertUnwindSafe(|| {
             let mut world = prepare(grid, &c).ok()?;
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
             let (t, reached) = trace_world_while(&mut world, c.gens, window, &mut |_| {
+                if slow > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(slow));
+                }
                 if lim.cut() {
                     cut = Some("given up");
                     false
@@ -1462,11 +1497,13 @@ impl Search {
             .take(threads * 2)
             .collect();
         // An elite is confirmed with all its seeds, or (once `go` says stop, or a run of it is
-        // given up) not at all.
+        // given up) not at all. One is not started on a thread waiting inside another run (it
+        // stays for a later round): its seeds would hold that run past its cap, by up to three
+        // runs of their own.
         let done: Vec<(i64, Vec<RunOut>)> = picked
             .par_iter()
             .filter_map(|(id, e)| {
-                if !go() {
+                if !go() || InRun::now() {
                     return None;
                 }
                 let grid = self.grid(&e.cand.tiling, self.set.confirm_cells).ok()?;
@@ -1666,6 +1703,147 @@ mod tests {
         assert!(d.rows.is_empty(), "{} rows", d.rows.len());
         assert_eq!((s.screened(), s.capped()), (0, 0));
         assert!(s.given_up() > 0);
+    }
+
+    /// What a run on the processor costs, by family, on one thread (as each runs in a CPU
+    /// round): screening runs and confirmation runs of candidates made as the search makes them,
+    /// capped at two minutes rather than at [`CPU_RUN_S`] and [`CPU_CONFIRM_RUN_S`]; the families
+    /// run side by side, one thread each. Ignored; `N` candidates per family (default 12), `FAMS`
+    /// a comma list (default every family, as on a computer without a GPU), `SEED`:
+    /// `cargo test --release -p jetcarp-search cpu_cost_by_family -- --ignored --nocapture`.
+    /// On a 16-core desktop (median and worst of 6, seconds; caps 8 and 32): sandpile screening
+    /// 21 and 37, confirmation 76 and over 120; Lenia 7.4 and 14, 21 and 37; the GPU's families
+    /// (on the processor without a GPU) screening at most 3.7, confirmation 6 to 23; the rest at
+    /// most 0.6 and 6.5.
+    #[test]
+    #[ignore]
+    fn cpu_cost_by_family() {
+        let n: usize = std::env::var("N")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(12);
+        let seed: u64 = std::env::var("SEED")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1);
+        let fams: Vec<Fam> = match std::env::var("FAMS") {
+            Ok(s) => s
+                .split(',')
+                .map(|f| serde_json::from_value(serde_json::json!(f.trim())).unwrap())
+                .collect(),
+            Err(_) => CPU_FAMS.iter().chain(GPU_FAMS).map(|f| f.0).collect(),
+        };
+        let lines = Mutex::new(Vec::new());
+        std::thread::scope(|sc| {
+            for (k, fam) in fams.iter().enumerate() {
+                let lines = &lines;
+                sc.spawn(move || {
+                    let mut s = Search::new(
+                        Settings {
+                            families: vec![*fam],
+                            seed: seed + k as u64,
+                            ..Settings::default()
+                        },
+                        Saved::default(),
+                    )
+                    .unwrap();
+                    s.cpu_caps = (Duration::from_secs(120), Duration::from_secs(120));
+                    let pool = rayon::ThreadPoolBuilder::new()
+                        .num_threads(1)
+                        .build()
+                        .unwrap();
+                    let stop = AtomicBool::new(false);
+                    let lim = StepLimits {
+                        until: Instant::now() + Duration::from_secs(1 << 20),
+                        end: None,
+                        stop: &stop,
+                        max_screened: None,
+                    };
+                    let mut rng = Rng::new(seed * 7919 + k as u64);
+                    let (mut sc_t, mut cf_t) = (Vec::new(), Vec::new());
+                    let mut worst = (0.0f64, String::new());
+                    let native = native_tiling(*fam);
+                    let mut tries = 0;
+                    while sc_t.len() < n && tries < n * 20 {
+                        tries += 1;
+                        let ti = match native {
+                            Some(key) => s.tiling_index(key).unwrap(),
+                            None => s.pick_tiling(&mut rng),
+                        };
+                        let key = s.tilings[ti].key.clone();
+                        let Ok(grid) = s.grid(&key, s.set.screen_cells) else {
+                            continue;
+                        };
+                        let nb = if grid.has_edge && rng.below(4) == 0 {
+                            Nb::Edge
+                        } else {
+                            Nb::Touch
+                        };
+                        let c = s.emit(
+                            &grid,
+                            nb,
+                            &[(*fam, 1.0)],
+                            None,
+                            1,
+                            s.set.screen_gens,
+                            &mut rng,
+                            None,
+                        );
+                        let Some((c, kind)) = c.into_iter().next() else {
+                            continue;
+                        };
+                        let what = format!("{} {} {:?}", c.tiling, c.rule, c.seed);
+                        let t = Instant::now();
+                        let r = pool.install(|| s.cpu_eval(&grid, c, kind, None, 1, &lim));
+                        let ts = t.elapsed().as_secs_f64();
+                        let Ran::Done(r) = r else { continue };
+                        sc_t.push(ts);
+                        if ts > worst.0 {
+                            worst = (ts, format!("screen {what}"));
+                        }
+                        let Ok(big) = s.grid(&key, s.set.confirm_cells) else {
+                            continue;
+                        };
+                        let Some(c2) = s.confirmations(&r.ev, &big).into_iter().next() else {
+                            continue;
+                        };
+                        let t = Instant::now();
+                        let r2 = pool.install(|| {
+                            s.cpu_eval(&big, c2, "confirm".into(), Some(r.id), 2, &lim)
+                        });
+                        let tc = t.elapsed().as_secs_f64();
+                        if matches!(r2, Ran::Done(_)) {
+                            cf_t.push(tc);
+                            if tc > worst.0 {
+                                worst = (tc, format!("confirm {what}"));
+                            }
+                        }
+                    }
+                    let stat = |v: &mut Vec<f64>| -> String {
+                        if v.is_empty() {
+                            return "-".into();
+                        }
+                        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        let q = |p: f64| v[((v.len() - 1) as f64 * p).round() as usize];
+                        format!("{:7.2} {:7.2} {:7.2}", q(0.5), q(0.9), q(1.0))
+                    };
+                    let line = format!(
+                        "{:20} {:3} screen(med p90 max) {}  confirm {}  worst {:.1}s {}",
+                        fam.name(),
+                        sc_t.len(),
+                        stat(&mut sc_t),
+                        stat(&mut cf_t),
+                        worst.0,
+                        worst.1.chars().take(160).collect::<String>()
+                    );
+                    eprintln!("{line}");
+                    lines.lock().unwrap().push(line);
+                });
+            }
+        });
+        let mut v = lines.into_inner().unwrap();
+        v.sort();
+        println!("{}", v.join("\n"));
     }
 
     #[test]
