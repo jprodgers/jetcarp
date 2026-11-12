@@ -218,8 +218,8 @@ enum Cmd {
     /// `call OP [JSON]` (the result as JSON).
     #[command(hide = true)]
     Api(api_cmd::ApiArgs),
-    /// Quick Start examples: list them, check that each one works, or render a contact sheet;
-    /// `publish` an explore job's best runs as the atlas the menu offers.
+    /// Quick Start examples: list the built-in ones, check that each one works, or render a
+    /// contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas.
     #[command(args_conflicts_with_subcommands = true)]
     Quickstart {
         #[command(subcommand)]
@@ -298,14 +298,10 @@ impl Progress for ProgressLine {
 /// Commands that print no result of their own, so `--json` means nothing to them.
 #[derive(Subcommand)]
 enum QuickstartSub {
-    /// Publish an explore job's confirmed best runs as the atlas the Quick Start menu offers
-    /// (JOB default: the newest explore job).
+    /// Publish an explore job's confirmed best runs into the library's Quick Start as its atlas
+    /// (JOB default: the newest explore job); the job's earlier atlas entries are replaced.
     Publish {
         job: Option<i64>,
-        /// The atlas file (default: where the menu reads it, $JETCARP_ATLAS when set, else
-        /// <data>/explore/atlas.sqlite); it is replaced.
-        #[arg(long)]
-        out: Option<PathBuf>,
         /// Entries per category, family, and tiling.
         #[arg(long, default_value_t = 12)]
         per_niche: usize,
@@ -502,7 +498,6 @@ fn run() -> Result<()> {
             sub:
                 Some(QuickstartSub::Publish {
                     job,
-                    out,
                     per_niche,
                     min_score,
                     max_entries,
@@ -513,7 +508,6 @@ fn run() -> Result<()> {
             let cx = platform::ctx().with_library(library.map(jetcarp_store::Library::file_for));
             let a = quickstart::PublishIn {
                 job,
-                out: out.map(|p| p.display().to_string()),
                 per_niche,
                 min_score,
                 max_entries,

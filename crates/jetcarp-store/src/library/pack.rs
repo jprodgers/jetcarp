@@ -337,18 +337,27 @@ impl Library {
         })
     }
 
-    /// Quick Start entries shown in the menu (`auto`, `approved`), with their pins and history.
+    /// The Quick Start entries a pack publishes, with their pins and history: every one not
+    /// hidden, promotions, pack and atlas rows, but not the built-ins (every JETCARP has them).
     pub fn pack_quickstart(&self) -> Result<Vec<PackQuickstart>, String> {
-        self.pack_quickstart_with(&[QsStatus::Auto, QsStatus::Approved])
+        let rows = self
+            .quickstart(&[QsSource::Promotion, QsSource::Pack, QsSource::Atlas])?
+            .into_iter()
+            .filter(|q| !q.hidden)
+            .collect();
+        self.pack_quickstart_of(rows)
     }
 
-    /// Quick Start entries with one of these statuses (every one when empty), with their pins
-    /// and history.
+    /// Quick Start entries of these sources (every one when empty, hidden ones too), with their
+    /// pins and history.
     pub fn pack_quickstart_with(
         &self,
-        statuses: &[QsStatus],
+        sources: &[QsSource],
     ) -> Result<Vec<PackQuickstart>, String> {
-        let rows = self.quickstart(statuses)?;
+        self.pack_quickstart_of(self.quickstart(sources)?)
+    }
+
+    fn pack_quickstart_of(&self, rows: Vec<QuickStartRow>) -> Result<Vec<PackQuickstart>, String> {
         self.read(vec![], |c| {
             let mut out = vec![];
             for row in rows {

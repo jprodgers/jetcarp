@@ -213,8 +213,8 @@ impl Library {
                     "SELECT p.id FROM patterns p WHERE p.state = 'new'
                      AND EXISTS (SELECT 1 FROM sightings s WHERE s.pattern_id = p.id AND s.job_id = ?1)
                      AND NOT EXISTS (SELECT 1 FROM sightings s WHERE s.pattern_id = p.id AND s.job_id != ?1)
-                     AND NOT EXISTS (SELECT 1 FROM quickstart q WHERE q.source_kind = 'pattern'
-                                     AND q.source_id = p.id)
+                     AND NOT EXISTS (SELECT 1 FROM quickstart q WHERE q.target_kind = 'pattern'
+                                     AND q.target_id = p.id)
                      ORDER BY p.id",
                 )?;
                 for (kind, table, list) in [

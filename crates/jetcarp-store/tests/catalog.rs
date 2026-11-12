@@ -471,14 +471,16 @@ fn phase3_json_library_imports_with_its_quick_start() {
     assert_eq!(done, vec![(g.id.clone(), AddOutcome::Added)]);
     let back = lib.get(&g.id).unwrap();
     assert_eq!(back.range, g.range);
-    let qs = lib.quickstart(&[]).unwrap();
+    let qs = lib
+        .quickstart(&[jetcarp_store::QsSource::Promotion])
+        .unwrap();
     assert_eq!(qs.len(), 2);
-    let p = qs.iter().find(|q| q.source_kind == "pattern").unwrap();
+    let p = qs.iter().find(|q| q.target_kind == "pattern").unwrap();
     assert_eq!(
         (p.id.as_str(), p.title.as_str()),
         (g.id.as_str(), "Old glider")
     );
-    assert!(qs.iter().any(|q| q.source_kind == "sweep"));
+    assert!(qs.iter().any(|q| q.target_kind == "sweep_run"));
 }
 
 /// Insert and query speed for about 100,000 sightings (run with `--nocapture` to see the

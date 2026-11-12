@@ -1302,11 +1302,13 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
                 .collect())
         },
     );
-    // Quick Start entries ("My finds"): all, or with one status.
+    // Quick Start entries: the library's own (promotions, packs' and the atlas's), or those of
+    // one source (builtin, pack, atlas, promotion, or all).
     let c = ctx.clone();
-    let qs = move |l: &LibHandle, status: Option<&str>| -> R<Array> {
+    let qs = move |l: &LibHandle, source: Option<&str>| -> R<Array> {
         let a = ListIn {
-            status: status.map(String::from),
+            source: source.map(String::from),
+            hidden: None,
         };
         let out = QuickstartList::run(&c.api(Some(l.0.clone())), a, &Quiet).or_err()?;
         Ok(out
@@ -1317,8 +1319,8 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     };
     let f = qs.clone();
     e.register_fn("quickstart", move |l: &mut LibHandle| f(l, None));
-    e.register_fn("quickstart", move |l: &mut LibHandle, status: &str| {
-        qs(l, Some(status))
+    e.register_fn("quickstart", move |l: &mut LibHandle, source: &str| {
+        qs(l, Some(source))
     });
     let parse_query = |m: &Map| -> R<QueryIn> {
         let q: Query =

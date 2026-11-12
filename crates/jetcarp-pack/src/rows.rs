@@ -768,7 +768,7 @@ pub fn quickstart_row(
         id,
         title: q.row.title.clone(),
         description: q.row.description.clone(),
-        source: match (q.row.source_kind.as_str(), &q.row.source_id) {
+        source: match (q.row.target_kind.as_str(), &q.row.target_id) {
             ("pattern", Some(id)) => Some(format!("pattern:{id}")),
             ("ant", Some(id)) => Some(format!("ant:{id}")),
             _ => None,
@@ -805,23 +805,29 @@ pub fn quickstart_pack_id(
     Ok((quickstart_id(&scene_text, &q.pin), scene_text))
 }
 
-/// A pack's Quick Start entry as a library row (approved: a pack is chosen by its reader).
+/// A pack's Quick Start entry as a library row of source `pack`, shown (a pack is chosen by its
+/// reader), under its pack id as id and handle; the importer sets `source_ref` to the pack's
+/// manifest hash. Its category is its `behaviour` when that is one the menu knows (an atlas
+/// entry's), else the nearest for a pattern's class, else "Packs". A pack holds an entry's scene
+/// only, so its card runs that scene made smaller, from the start.
 pub fn quickstart_of(r: &QuickstartPackRow) -> Result<jetcarp_store::QuickStartRow, String> {
     let scene = Scene::from_json(&r.scene).map_err(|e| format!("Quick Start {}: {e}", r.id))?;
     let mut q = jetcarp_store::QuickStartRow::for_scene(&r.id, "scene", scene);
+    q.source = jetcarp_store::QsSource::Pack;
+    q.handle = r.id.clone();
     if let Some(src) = &r.source
         && let Some((k, id)) = src.split_once(':')
+        && matches!(k, "pattern" | "ant")
     {
-        q.source_kind = if k == "pattern" {
-            "pattern".into()
-        } else {
-            "scene".into()
-        };
-        q.source_id = Some(id.to_string());
+        q.target_kind = k.into();
+        q.target_id = Some(id.to_string());
     }
     q.title = r.title.clone();
     q.description = r.description.clone();
     q.rule = r.rule.clone();
     q.behaviour = r.behaviour.clone().unwrap_or_default();
+    q.category.clear();
+    q.family.clear();
+    q.complete();
     Ok(q)
 }

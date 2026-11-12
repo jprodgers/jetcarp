@@ -31,11 +31,12 @@
 //!
 //! **What is public** ([`ExportFilter`]): patterns whose curation state is `promoted` or
 //! `reviewed` (never `rejected` or `new`), optionally above a score or rating and of some
-//! classes; Quick Start entries with status `auto` or `approved`; ant and turmite runs whose
+//! classes; Quick Start entries that are promotions or came from packs (other sources on
+//! request; never hidden ones); ant and turmite runs whose
 //! state is `promoted` or `reviewed` (optionally only some outcomes, such as highways).
 
 use crate::media::{self, MediaRow, MediaTarget};
-use crate::{Library, QsStatus};
+use crate::{Library, QsSource};
 use jetcarp_core::media::{MediaMode, MediaOptions, content_hash};
 use jetcarp_core::pattern::{CurationState, PatternClass, PatternRecord, RuleRange};
 use serde::{Deserialize, Serialize};
@@ -78,9 +79,9 @@ pub struct ExportFilter {
     /// Only these pattern ids (empty: no limit), e.g. a showcase that has media.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
-    /// Export Quick Start entries with these statuses (default `auto` and `approved`; empty:
-    /// none).
-    pub quickstart: Vec<QsStatus>,
+    /// Export the Quick Start entries of these sources that are not hidden (default
+    /// `promotion` and `pack`; empty: none).
+    pub quickstart: Vec<QsSource>,
     /// Export ant and turmite runs in these curation states (default `promoted` and
     /// `reviewed`; empty: none).
     #[serde(default = "public_ant_states")]
@@ -103,7 +104,7 @@ impl Default for ExportFilter {
             classes: Vec::new(),
             min_osc_period: None,
             ids: Vec::new(),
-            quickstart: vec![QsStatus::Auto, QsStatus::Approved],
+            quickstart: vec![QsSource::Promotion, QsSource::Pack],
             ant_states: public_ant_states(),
             ant_outcomes: Vec::new(),
         }
@@ -478,14 +479,16 @@ fn quickstart_json(q: &crate::QuickStartRow, media: &MediaLinks) -> Result<Vec<u
         "id": q.id,
         "title": q.title,
         "description": q.description,
-        "source_kind": q.source_kind,
-        "source_id": q.source_id,
-        "grid": q.grid,
+        "handle": q.handle,
+        "source": q.source,
+        "target_kind": q.target_kind,
+        "target_id": q.target_id,
+        "grid": q.tiling_name,
+        "category": q.category,
         "rule": q.rule,
         "rule_family": q.rule_family,
         "behaviour": q.behaviour,
         "score": q.score.map(|s| (s * 1000.0).round() / 1000.0),
-        "status": q.status,
         "scene": scene,
         "media": media,
     });
@@ -517,7 +520,7 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
     } else {
         lib.quickstart(&f.quickstart)?
     };
-    qs.retain(|q| q.status != QsStatus::Rejected);
+    qs.retain(|q| !q.hidden);
     qs.sort_by(|a, b| a.id.cmp(&b.id));
     let mut ants = if f.ant_states.is_empty() {
         Vec::new()
@@ -585,7 +588,7 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
                 hash: content_hash(&json),
                 title: q.title.clone(),
                 class: q.behaviour.clone(),
-                grid: q.grid.clone(),
+                grid: q.tiling_name.clone(),
                 rule: q.rule.clone(),
                 score: q.score.map(|s| (s * 1000.0).round() / 1000.0),
                 rating: None,

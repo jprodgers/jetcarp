@@ -9,7 +9,7 @@ use jetcarp_core::pattern::{
 };
 use jetcarp_core::*;
 use jetcarp_search::bounded::{SearchSpec, search};
-use jetcarp_store::{AddOutcome, Library, Query};
+use jetcarp_store::{AddOutcome, Library, QsSource, Query};
 
 /// A fresh folder under the system temp folder.
 fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -613,25 +613,37 @@ fn promoted_patterns_appear_in_quick_start() {
     let glider = lib.get("glider").unwrap();
     assert_eq!(entry, glider.id);
     assert_eq!(glider.state, CurationState::Promoted);
-    let finds = jetcarp_store::quickstart::user_finds(&lib);
+    let finds = lib.quickstart(&[QsSource::Promotion]).unwrap();
     assert_eq!(finds.len(), 1);
     let q = &finds[0];
-    assert_eq!(q.id, format!("find:{}", glider.id));
-    let row = lib.get_quickstart(&q.id).unwrap();
+    assert_eq!(q.handle, format!("find:{}", glider.id));
+    let row = lib.get_quickstart(&q.handle).unwrap();
     assert_eq!(
-        (row.source_kind.as_str(), row.behaviour.as_str()),
-        ("pattern", "spaceship")
+        (
+            row.target_kind.as_str(),
+            row.target_id.as_deref(),
+            row.behaviour.as_str(),
+            row.category.as_str()
+        ),
+        (
+            "pattern",
+            Some(glider.id.as_str()),
+            "spaceship",
+            "Gliders & ships"
+        )
     );
-    // A candidate waits in the queue and is not shown; removing the pattern removes its entry.
-    lib.set_quickstart_status(&q.id, jetcarp_store::QsStatus::Candidate)
-        .unwrap();
-    assert!(jetcarp_store::quickstart::user_finds(&lib).is_empty());
-    lib.set_quickstart_status(&q.id, jetcarp_store::QsStatus::Approved)
-        .unwrap();
-    assert_eq!(
-        (q.family.as_str(), q.scene.name.as_str()),
-        (quickstart::MY_FINDS, "My glider")
-    );
+    // A hidden entry is not shown; removing the pattern removes its entry.
+    lib.set_quickstart_hidden(&q.handle, true).unwrap();
+    let shown = |lib: &Library| {
+        jetcarp_store::quickstart::menu::load(lib)
+            .into_iter()
+            .filter(|i| i.source == QsSource::Promotion)
+            .count()
+    };
+    assert_eq!(shown(&lib), 0);
+    lib.set_quickstart_hidden(&q.handle, false).unwrap();
+    assert_eq!(shown(&lib), 1);
+    assert_eq!(q.scene.name, "My glider");
     assert_eq!(q.scene, sc);
     // It works as a Quick Start example: alive after 300 generations at preview size, the glider
     // still a glider (wrapped edges).
@@ -644,7 +656,7 @@ fn promoted_patterns_appear_in_quick_start() {
             .all(|e| e.family != quickstart::MY_FINDS)
     );
     lib.remove("glider").unwrap();
-    assert!(jetcarp_store::quickstart::user_finds(&lib).is_empty());
+    assert!(lib.quickstart(&[QsSource::Promotion]).unwrap().is_empty());
 }
 
 #[test]

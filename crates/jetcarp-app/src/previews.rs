@@ -11,11 +11,11 @@
 //! tiling and shared by every card on that tiling. Topologies are shared the same way.
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
-use jetcarp_core::quickstart;
 use jetcarp_core::render::{Colorer, RenderOptions, ViewColors, render_with_colors};
 use jetcarp_core::topology::Topology;
 use jetcarp_core::{Scene, Status, World};
-use jetcarp_store::atlas;
+use jetcarp_store::Library;
+use jetcarp_store::quickstart as qs;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
@@ -40,9 +40,14 @@ const FIRST_DELAY: Duration = Duration::from_millis(60);
 
 /// How to start a card.
 pub enum Source {
-    /// An atlas entry, read from its file by id.
-    Atlas { path: Arc<PathBuf>, id: i64 },
-    /// A built-in or catalog entry; shown at preview size.
+    /// A Quick Start entry, read from the library (this file) by handle: its own preview and
+    /// mature state (an atlas entry's), or its scene made smaller.
+    Entry {
+        library: Arc<PathBuf>,
+        handle: String,
+    },
+    /// A scene, shown at preview size (the tests' cards).
+    #[cfg(test)]
     Scene(Box<Scene>),
 }
 
@@ -301,7 +306,7 @@ fn fail() -> Done {
 
 /// Everything a worker keeps between jobs.
 struct Worker {
-    conn: Option<(Arc<PathBuf>, atlas::AtlasConn)>,
+    lib: Option<(Arc<PathBuf>, Library)>,
     topo: Arc<Mutex<TopoCache>>,
 }
 
@@ -310,17 +315,21 @@ impl Worker {
     #[allow(clippy::type_complexity)]
     fn fetch(&mut self, source: &Source) -> Result<(Scene, Option<Vec<u8>>, u32), String> {
         match source {
-            Source::Atlas { path, id } => {
-                if self.conn.as_ref().is_none_or(|c| !Arc::ptr_eq(&c.0, path)) {
-                    self.conn = Some((path.clone(), atlas::open(path)?));
+            Source::Entry { library, handle } => {
+                if self
+                    .lib
+                    .as_ref()
+                    .is_none_or(|c| !Arc::ptr_eq(&c.0, library))
+                {
+                    self.lib = Some((library.clone(), Library::open(library.as_ref())));
                 }
-                let card = atlas::load_card(&self.conn.as_ref().unwrap().1, *id)?;
-                let mature = card.mature.as_deref().and_then(atlas::inflate_state);
-                Ok((card.preview, mature, card.mature_gen))
+                let card = qs::card(&self.lib.as_ref().unwrap().1, handle)?;
+                Ok((card.preview, card.mature, card.mature_gen))
             }
+            #[cfg(test)]
             Source::Scene(s) => {
-                let cells = quickstart::preview_cells(s, 6000).unwrap_or(6000);
-                Ok((quickstart::preview_scene(s, cells), None, 0))
+                let cells = jetcarp_core::quickstart::preview_cells(s, 6000).unwrap_or(6000);
+                Ok((jetcarp_core::quickstart::preview_scene(s, cells), None, 0))
             }
         }
     }
@@ -355,7 +364,7 @@ impl Worker {
         let (key, topo) = self.topology(&scene)?;
         let mut world = World::from_scene_on(&scene, topo)?;
         if let Some(state) = &mature {
-            atlas::apply_mature(&mut world, state, mature_gen);
+            qs::apply_mature(&mut world, state, mature_gen);
         }
         let map = self.pixel_map(&key, side, &world);
         Ok(Box::new(Running {
@@ -374,7 +383,7 @@ impl Worker {
     fn restart(&mut self, run: &mut Running) -> Result<(), String> {
         let mut world = World::from_scene_on(&run.scene, run.world.topo.clone())?;
         if let Some(state) = &run.mature {
-            atlas::apply_mature(&mut world, state, run.mature_gen);
+            qs::apply_mature(&mut world, state, run.mature_gen);
         }
         run.start_gen = world.generation;
         run.world = world;
@@ -464,7 +473,7 @@ impl Worker {
 }
 
 fn worker_loop(state: Arc<(Mutex<Shared>, Condvar)>, topo: Arc<Mutex<TopoCache>>) {
-    let mut worker = Worker { conn: None, topo };
+    let mut worker = Worker { lib: None, topo };
     let (lock, cvar) = &*state;
     loop {
         let job = {
@@ -648,7 +657,7 @@ impl Pool {
         self.state.1.notify_all();
     }
 
-    /// Forget every card (the entries were reloaded from a new atlas file).
+    /// Forget every card (the entries changed under their handles).
     pub fn clear(&mut self) {
         let mut g = self.state.0.lock().unwrap();
         g.cards.clear();
@@ -676,7 +685,7 @@ mod tests {
 
     fn worker() -> Worker {
         Worker {
-            conn: None,
+            lib: None,
             topo: Default::default(),
         }
     }

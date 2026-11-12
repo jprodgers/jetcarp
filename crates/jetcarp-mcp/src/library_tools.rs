@@ -15,7 +15,7 @@ use jetcarp_api::ops::library::{
     GetIn, LibraryGet, LibraryQuery, LibraryUpdate, QueryIn, UpdateIn,
 };
 use jetcarp_api::ops::quickstart::{
-    AddIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartUpdate, StatusIn,
+    AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartUpdate,
 };
 use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
 use jetcarp_api::ops::world::{PasteIn, WorldPaste};
@@ -51,7 +51,7 @@ pub fn definitions() -> Vec<Value> {
             "library_list",
             "List catalog records",
             true,
-            "Lists records of the catalog, best first. `kind` picks what: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns; rule-free, with every rule verified in and the rule range), \"ant\" (ant and turmite runs: outcome highway, periodic, symmetric, bounded, or chaotic, with period, displacement, onset, and the outcome census per tiling), or \"quickstart\" (Quick Start entries, \"My finds\"). Ids work with library_get, library_update, library_promote, media_render. Filters are optional and per kind; at most 100 per call. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"tiling\": \"hex\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\"}.",
+            "Lists records of the catalog, best first. `kind` picks what: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns; rule-free, with every rule verified in and the rule range), \"ant\" (ant and turmite runs: outcome highway, periodic, symmetric, bounded, or chaotic, with period, displacement, onset, and the outcome census per tiling), or \"quickstart\" (Quick Start entries: promotions under \"My finds\", entries from packs, and the atlas an explore search published; `source` picks one source, the built-in examples too). Ids work with library_get, library_update, library_promote, media_render. Filters are optional and per kind; at most 100 per call. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"tiling\": \"hex\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\"}.",
             json!({"type": "object", "properties": {
                 "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What to list (default pattern)."},
                 "rule": {"type": "string", "description": "pattern: verified in a rule whose notation contains this; ant: this turn string or table (\"RL\", \"LLRR\")."},
@@ -63,7 +63,8 @@ pub fn definitions() -> Vec<Value> {
                 "class": {"type": "string", "enum": ["still_life", "oscillator", "spaceship", "puffer", "gun", "mover"], "description": "pattern: only this class."},
                 "outcome": {"type": "string", "enum": ["highway", "periodic", "symmetric", "bounded", "chaotic"], "description": "ant: only this outcome."},
                 "state": {"type": "string", "enum": ["new", "reviewed", "promoted", "rejected"], "description": "pattern: only this curation state."},
-                "status": {"type": ["array", "string"], "items": {"type": "string"}, "description": "quickstart: auto, candidate, approved, or rejected (default: all)."},
+                "status": {"type": "string", "enum": ["shown", "hidden"], "description": "quickstart: only entries shown in the menu, or only hidden ones (default: both)."},
+                "source": {"type": "string", "enum": ["builtin", "pack", "atlas", "promotion", "all"], "description": "quickstart: only entries of this source (default: every source but builtin)."},
                 "job": {"type": "integer", "description": "ant: only records of this job."},
                 "min_period": {"type": "integer", "minimum": 1, "description": "pattern: periods of at least this."},
                 "min_score": {"type": "number", "description": "pattern: scores of at least this (0-100)."},
@@ -127,9 +128,9 @@ pub fn definitions() -> Vec<Value> {
             "library_update",
             "Curate a catalog record",
             false,
-            "Curates a record. Patterns (default): name, tags (replace with `tags`, or add_tags / remove_tags), notes or append_notes, rating 1-5 (0 clears), state (new, reviewed, promoted, rejected), discovered_by. Ants (ids ant-...): name, notes, rating 1-5, state. Quick Start entries (find:<id>): `decision` approve (shown in the menu) or reject (hidden). Mark LLM-written text as such in the notes. Examples: {\"id\": \"glider\", \"rating\": 4}, {\"id\": \"find:sweep-1a2b\", \"decision\": \"reject\"}.",
+            "Curates a record. Patterns (default): name, tags (replace with `tags`, or add_tags / remove_tags), notes or append_notes, rating 1-5 (0 clears), state (new, reviewed, promoted, rejected), discovered_by. Ants (ids ant-...): name, notes, rating 1-5, state. Quick Start entries (by handle: find:<id>, atlas:<...>, qs-<hex>, or a built-in id with `kind` quickstart): `decision` approve (shown in the menu) or reject (hidden from the menu, packs and the website). Mark LLM-written text as such in the notes. Examples: {\"id\": \"glider\", \"rating\": 4}, {\"id\": \"find:sweep-1a2b\", \"decision\": \"reject\"}.",
             json!({"type": "object", "properties": {
-                "id": {"type": ["string", "integer"], "description": "Pattern id, prefix, or name; ant-...; find:<id>."},
+                "id": {"type": ["string", "integer"], "description": "Pattern id, prefix, or name; ant-...; a Quick Start handle (find:<id>, atlas:<...>, qs-<hex>)."},
                 "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What the id names (default: from the id's form)."},
                 "name": {"type": "string", "description": "New name (empty clears it)."},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: replace all tags."},
@@ -237,7 +238,9 @@ fn kind_of<'a>(args: &'a Value, id: &str) -> Result<&'a str, String> {
     Ok(match string(args, "kind")? {
         Some(k) => k,
         None if id.starts_with("ant-") => "ant",
-        None if id.starts_with("find:") => "quickstart",
+        None if id.starts_with("find:") || id.starts_with("atlas:") || id.starts_with("qs-") => {
+            "quickstart"
+        }
         None => "pattern",
     })
 }
@@ -651,17 +654,13 @@ fn update(args: &Value) -> Res {
         }
         "quickstart" => {
             check_unknown(&rest, &["id", "decision"])?;
-            let status = match string(&rest, "decision")? {
-                Some("approve") => "approved",
-                Some("reject") => "rejected",
+            let hidden = match string(&rest, "decision")? {
+                Some("approve") => false,
+                Some("reject") => true,
                 _ => return Err("give `decision`: approve or reject".into()),
             };
-            let a = StatusIn {
-                id,
-                status: status.into(),
-            };
-            let r = QuickstartUpdate::run(ctx(), a, &Quiet).map_err(err)?;
-            Ok(ToolOutput::json(&json!({"id": r.id, "status": r.status})))
+            let r = QuickstartUpdate::run(ctx(), HideIn { id, hidden }, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(&json!({"id": r.id, "hidden": r.hidden})))
         }
         k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
     }
@@ -760,10 +759,16 @@ fn promote(args: &Value) -> Res {
 }
 
 fn quickstart_list(args: &Value) -> Res {
-    check_unknown(args, &["status", "limit"])?;
-    let status = text(args, "status")?;
+    check_unknown(args, &["status", "source", "limit"])?;
+    let hidden = match text(args, "status")?.as_deref() {
+        None => None,
+        Some("shown") => Some(false),
+        Some("hidden") => Some(true),
+        Some(s) => return Err(format!("`status` is shown or hidden, not {s}")),
+    };
+    let source = text(args, "source")?;
     let limit = int(args, "limit")?.unwrap_or(50).clamp(1, 200) as usize;
-    let out = QuickstartList::run(ctx(), ListIn { status }, &Quiet).map_err(err)?;
+    let out = QuickstartList::run(ctx(), ListIn { source, hidden }, &Quiet).map_err(err)?;
     let shown: Vec<Value> = out
         .entries
         .iter()

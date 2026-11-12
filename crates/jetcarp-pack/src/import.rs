@@ -649,6 +649,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         }
         let mut row = rows::quickstart_of(&q)?;
         row.id = local_qs(&q.id);
+        row.source_ref = h.clone();
         let tg = format!("quickstart:{}", q.id);
         let (origin, _) = origin_of(prov.get(&tg), &m.publisher, &h)?;
         qs.push((row, origin, q.pin.clone()));

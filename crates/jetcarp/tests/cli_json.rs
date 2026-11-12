@@ -186,27 +186,43 @@ fn library_media_and_picture_commands_as_json() {
     assert!(text.starts_with("{\n  \"path\": "), "{text}");
     let list = json_of(&["--json", "library", "--library", l, "list"]);
     assert_eq!(list[0]["name"], "glider");
-    // New: promotion, a status change, a drawing.
+    // New: promotion, hiding an entry, a drawing.
     let add = json_of(&["library", "--library", l, "promote", "glider", "--json"]);
     assert_eq!(add["source"], "pattern");
     let entry = add["entry"].as_str().unwrap().to_string();
     assert_eq!(entry, format!("find:{}", list[0]["id"].as_str().unwrap()));
     let entries = json_of(&["library", "--library", l, "quickstart", "--json"]);
     assert_eq!(entries[0]["id"], entry.as_str());
-    let set = format!("{entry}=rejected");
     let st = json_of(&[
         "--json",
         "library",
         "--library",
         l,
         "quickstart",
-        "--set",
-        &set,
+        "--hide",
+        &entry,
     ]);
-    assert_eq!(
-        (&st["status"], &st["shown"]),
-        (&json!("rejected"), &json!(false))
-    );
+    assert_eq!((&st["id"], &st["hidden"]), (&json!(entry), &json!(true)));
+    let hidden = json_of(&[
+        "library",
+        "--library",
+        l,
+        "quickstart",
+        "--hidden",
+        "--json",
+    ]);
+    assert_eq!(hidden.as_array().unwrap().len(), 1);
+    // The built-in examples are entries too.
+    let b = json_of(&[
+        "library",
+        "--library",
+        l,
+        "quickstart",
+        "--source",
+        "builtin",
+        "--json",
+    ]);
+    assert!(b.as_array().unwrap().iter().any(|e| e["id"] == "life"));
     let r = json_of(&["library", "--library", l, "render", "glider", "--json"]);
     assert_eq!(r["phases"].as_array().unwrap().len(), 4);
     // Media: the catalog's report as before; the text with its counts on stderr.

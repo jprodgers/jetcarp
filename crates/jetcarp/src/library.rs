@@ -4,7 +4,7 @@
 //! `jetcarp jobs`.
 
 use crate::show;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{self, NoInput, Op, Quiet};
 use jetcarp_api::ops::library::{
@@ -14,8 +14,7 @@ use jetcarp_api::ops::library::{
     UpdateIn, VerifyIn,
 };
 use jetcarp_api::ops::quickstart::{
-    AddIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
-    StatusIn,
+    AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
 };
 use std::path::PathBuf;
 
@@ -99,7 +98,8 @@ enum LibCmd {
     Import { path: PathBuf },
     /// Delete a pattern (with its rules, sightings, and Quick Start entry).
     Remove { id: String },
-    /// List the Quick Start entries ("My finds"), or change or remove one.
+    /// List the Quick Start entries (promotions, packs' and the atlas's; --source for one source,
+    /// the built-ins too), or hide, show or remove one.
     Quickstart(QuickstartArgs),
     /// The catalog's ant and turmite runs: `list`, `show`, `census`, `update`, `remove`,
     /// `scene`, `promote`, and `run` (one rule by itself).
@@ -173,12 +173,22 @@ enum LibCmd {
 
 #[derive(clap::Args)]
 struct QuickstartArgs {
-    /// Only entries with this status: auto, candidate, approved, rejected.
+    /// Only entries of this source: builtin, pack, atlas, promotion, or all (default: all but
+    /// builtin).
     #[arg(long)]
-    status: Option<String>,
-    /// Set an entry's status: ID=STATUS (ID with or without `find:`).
+    source: Option<String>,
+    /// Only hidden entries.
+    #[arg(long, conflicts_with = "shown")]
+    hidden: bool,
+    /// Only entries shown in the menu.
     #[arg(long)]
-    set: Option<String>,
+    shown: bool,
+    /// Hide an entry (by handle or id) from the menu, packs and the website.
+    #[arg(long, value_name = "ID")]
+    hide: Option<String>,
+    /// Show a hidden entry again.
+    #[arg(long, value_name = "ID", conflicts_with = "hide")]
+    unhide: Option<String>,
     /// Delete an entry.
     #[arg(long)]
     remove: Option<String>,
@@ -463,17 +473,29 @@ fn quickstart_cmd(cx: &Ctx, q: QuickstartArgs, json: bool) -> Result<()> {
     if let Some(id) = q.remove {
         return show(&QuickstartRemove::run(cx, IdIn { id }, &Quiet)?, json);
     }
-    if let Some(s) = &q.set {
-        let (id, st) = s
-            .rsplit_once('=')
-            .context("--set wants ID=STATUS, e.g. find:1a2b...=approved")?;
-        let a = StatusIn {
-            id: id.to_string(),
-            status: st.to_string(),
-        };
-        return show(&QuickstartUpdate::run(cx, a, &Quiet)?, json);
+    if let Some((id, hidden)) = q
+        .hide
+        .map(|id| (id, true))
+        .or(q.unhide.map(|id| (id, false)))
+    {
+        return show(
+            &QuickstartUpdate::run(cx, HideIn { id, hidden }, &Quiet)?,
+            json,
+        );
     }
-    let v = QuickstartList::run(cx, ListIn { status: q.status }, &Quiet)?;
+    let hidden = match (q.hidden, q.shown) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    };
+    let v = QuickstartList::run(
+        cx,
+        ListIn {
+            source: q.source,
+            hidden,
+        },
+        &Quiet,
+    )?;
     if json {
         // The entries, as they have always printed.
         println!("{}", op::to_pretty(&v.entries));

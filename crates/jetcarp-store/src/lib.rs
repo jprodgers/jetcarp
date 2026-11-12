@@ -5,9 +5,9 @@
 //!   Quick Start rows, ant runs, ratings, and media rows. Its main types are re-exported here
 //!   ([`Library`], [`Query`], [`Update`], ...). What a pattern is (its record, identity, and
 //!   verification) is the engine's (`jetcarp_core::pattern`).
-//! - [`quickstart`]: promotion to Quick Start and the catalog's own entries ("My finds"); the
-//!   built-in entries are the engine's (`jetcarp_core::quickstart`). [`qsmenu`]: the menu, which
-//!   merges those with the [`atlas`] a search publishes.
+//! - [`quickstart`]: the Quick Start, one table of entries from every source (built-in, packs,
+//!   the atlas a search publishes, promotions): the built-in rows, promotion, reading an entry
+//!   by handle, and [`quickstart::menu`], the menu.
 //! - [`media`]: the media index (files rendered for catalog targets and recorded in the
 //!   catalog); the rendering and encoding are the engine's (`jetcarp_core::media`).
 //! - [`website`]: the static site export, with its page template.
@@ -15,15 +15,13 @@
 //! [`install`] connects the engine to the store: a `PastePattern` command that names a library
 //! pattern then finds it in the default library.
 
-pub mod atlas;
 pub mod library;
 pub mod media;
-pub mod qsmenu;
 pub mod quickstart;
 pub mod website;
 
 pub use library::{
-    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsStatus,
+    AddOutcome, AntCensus, AntQuery, AntRow, AntUpdate, JobStatus, Library, QsSource,
     QuickStartRow, RatingRow, Sighting, SightingRow, ant_id, ant_score, prepare,
 };
 pub use library::{FindRow, HeatQuery, HeatRow, PruneReport, UnstoredFlush, UnstoredRow, UsageRow};

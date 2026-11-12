@@ -4,7 +4,7 @@
 //! | Folder | Holds | Override | Default |
 //! | --- | --- | --- | --- |
 //! | settings | app and host settings, screensaver profiles, rotations | `JETCARP_CONFIG_DIR` | `<config>/jetcarp` |
-//! | data | the pattern catalog, search databases, the Quick Start atlas, packs | `JETCARP_DATA_DIR` | `<local data>/jetcarp` |
+//! | data | the pattern catalog (with every Quick Start entry), search databases, packs | `JETCARP_DATA_DIR` | `<local data>/jetcarp` |
 //! | output | pictures, sweeps, media, sandpiles, wallpapers | `JETCARP_OUT` | `<Pictures>/JETCARP` |
 //!
 //! `<config>` and `<local data>` are the operating system's folders: `~/.config` and

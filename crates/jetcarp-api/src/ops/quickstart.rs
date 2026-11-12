@@ -1,7 +1,9 @@
-//! `quickstart.*`: the Quick Start. The catalog's own entries ("My finds", with today's
-//! statuses: auto, candidate, approved, rejected) are listed, read, added (from a pattern, an ant
-//! run, or one run of a sweep folder), shown or hidden, and removed here; `quickstart.check`
-//! lists the built-in examples and checks that each one works.
+//! `quickstart.*`: the Quick Start, one table of entries from every source: the built-in
+//! examples, entries from packs, the atlas an explore search publishes, and promotions. Entries
+//! are listed, read, added (promoted from a pattern, an ant run, one run of a sweep folder, a
+//! search run, or a scene file), hidden or shown, and removed here; `quickstart.publish` writes
+//! an explore search's atlas into the table; `quickstart.check` lists the built-in examples and
+//! checks that each one works.
 
 use super::library::catalog_err;
 use crate::ctx::Ctx;
@@ -10,16 +12,17 @@ use crate::op::{Op, Progress, Report};
 use crate::sweeps::{self, Manifest};
 use jetcarp_core::quickstart;
 use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, SizeSpec, TilingSpec};
-use jetcarp_store::{AntUpdate, QsStatus, QuickStartRow};
+use jetcarp_store::{AntUpdate, QsSource, QuickStartRow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::Write as _;
 
-/// A Quick Start entry of the catalog, as every front end lists it.
+/// A Quick Start entry, as every front end lists it.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Entry {
-    /// `find:<id>`.
+    /// Its handle: what the app, rotations, profiles and every command open it by (`find:<id>`,
+    /// `atlas:<...>`, `qs-<hex>`, a built-in id such as `life`).
     pub id: String,
     pub title: String,
     pub description: String,
@@ -27,39 +30,43 @@ pub struct Entry {
     pub grid: String,
     pub rule: String,
     pub rule_family: String,
-    /// `still life`, `spaceship`, a row class, an ant outcome, ...
+    /// `still life`, `spaceship`, a row class, an ant outcome, an atlas category, ...
     pub behaviour: String,
-    /// `pattern`, `sweep`, or `scene`.
-    pub source_kind: String,
-    pub source_id: Option<String>,
+    /// The menu's category.
+    pub category: String,
+    /// `builtin`, `pack`, `atlas`, or `promotion`.
+    pub source: String,
+    /// A pack's manifest hash, a search's uuid, or a built-in rule's reference.
+    pub source_ref: String,
+    /// What it was made from: `pattern`, `ant`, `sweep_run`, `search_run`, or `scene`.
+    pub target_kind: String,
+    pub target_id: Option<String>,
     pub score: Option<f64>,
-    /// auto, candidate, approved, or rejected.
-    #[schemars(with = "String")]
-    pub status: QsStatus,
+    /// Left out of the menu, packs and the website.
+    pub hidden: bool,
     pub created: String,
 }
 
 impl Entry {
     pub fn of(q: &QuickStartRow) -> Entry {
         Entry {
-            id: format!("find:{}", q.id),
+            id: q.handle.clone(),
             title: q.title.clone(),
             description: q.description.clone(),
-            grid: q.grid.clone(),
+            grid: q.tiling_name.clone(),
             rule: q.rule.clone(),
             rule_family: q.rule_family.clone(),
             behaviour: q.behaviour.clone(),
-            source_kind: q.source_kind.clone(),
-            source_id: q.source_id.clone(),
+            category: q.category.clone(),
+            source: q.source.name().into(),
+            source_ref: q.source_ref.clone(),
+            target_kind: q.target_kind.clone(),
+            target_id: q.target_id.clone(),
             score: q.score,
-            status: q.status,
+            hidden: q.hidden,
             created: q.created.clone(),
         }
     }
-}
-
-fn status(s: &str) -> Result<QsStatus, ApiError> {
-    QsStatus::parse(s).map_err(ApiError::invalid)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -69,9 +76,22 @@ fn status(s: &str) -> Result<QsStatus, ApiError> {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ListIn {
-    /// Only entries with this status: auto, candidate, approved, rejected (default all).
+    /// Only entries from this source: builtin, pack, atlas, promotion, or all (default: every
+    /// source but the built-in examples, which `quickstart.check` lists).
     #[serde(default)]
-    pub status: Option<String>,
+    pub source: Option<String>,
+    /// Only hidden entries (true) or only shown ones (false); default both.
+    #[serde(default)]
+    pub hidden: Option<bool>,
+}
+
+/// The sources a `source` argument names: one, `all`, or (none given) every one but `builtin`.
+pub fn sources(source: Option<&str>) -> Result<Vec<QsSource>, ApiError> {
+    match source.map(str::trim) {
+        None | Some("") => Ok(vec![QsSource::Promotion, QsSource::Pack, QsSource::Atlas]),
+        Some("all") => Ok(vec![]),
+        Some(s) => Ok(vec![QsSource::parse(s).map_err(ApiError::invalid)?]),
+    }
 }
 
 /// The catalog's Quick Start entries, oldest first.
@@ -91,13 +111,14 @@ impl Report for Listed {
         for r in &self.entries {
             let _ = writeln!(
                 s,
-                "{:<29} {:<9} {:<8} {:<28} {:<14} {}",
+                "{:<29} {:<9} {:<10} {:<28} {:<14} {}{}",
                 r.id,
-                r.status.name(),
-                r.source_kind,
+                r.source,
+                r.target_kind,
                 r.title.chars().take(28).collect::<String>(),
                 r.rule.chars().take(14).collect::<String>(),
-                r.grid
+                r.grid,
+                if r.hidden { "  (hidden)" } else { "" }
             );
         }
         s
@@ -108,18 +129,17 @@ impl Report for Listed {
 pub struct QuickstartList;
 impl Op for QuickstartList {
     const NAME: &'static str = "quickstart.list";
-    const SUMMARY: &'static str =
-        "The catalog's Quick Start entries (\"My finds\"), oldest first, optionally of one status.";
+    const SUMMARY: &'static str = "The library's Quick Start entries, oldest first: promotions, pack entries and the atlas (or one source, the built-ins too), shown or hidden.";
     const READ_ONLY: bool = true;
     type In = ListIn;
     type Out = Listed;
     fn run(cx: &Ctx, a: ListIn, _: &dyn Progress) -> Result<Listed, ApiError> {
-        let st = match &a.status {
-            Some(s) => vec![status(s)?],
-            None => vec![],
-        };
+        let src = sources(a.source.as_deref())?;
         let lib = cx.library();
-        let v = lib.quickstart(&st).map_err(catalog_err)?;
+        let mut v = lib.quickstart(&src).map_err(catalog_err)?;
+        if let Some(h) = a.hidden {
+            v.retain(|q| q.hidden == h);
+        }
         Ok(Listed {
             catalog: lib.path().display().to_string(),
             entries: v.iter().map(Entry::of).collect(),
@@ -130,11 +150,11 @@ impl Op for QuickstartList {
 // ---------------------------------------------------------------------------------------------
 // quickstart.get
 
-/// An entry, by id.
+/// An entry, by handle or id.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IdIn {
-    /// The entry's id, with or without `find:`.
+    /// The entry's handle (`find:<id>`, `atlas:<...>`, `life`, ...) or id.
     pub id: String,
 }
 
@@ -146,12 +166,13 @@ pub struct EntryRow(#[schemars(with = "Value")] pub QuickStartRow);
 impl Report for EntryRow {
     fn text(&self) -> String {
         format!(
-            "find:{}  {}  {} on {} ({})\n",
-            self.0.id,
+            "{}  {}  {} on {} ({}{})\n",
+            self.0.handle,
             self.0.title,
             self.0.rule,
-            self.0.grid,
-            self.0.status.name()
+            self.0.tiling_name,
+            self.0.source.name(),
+            if self.0.hidden { ", hidden" } else { "" }
         )
     }
 }
@@ -160,7 +181,7 @@ impl Report for EntryRow {
 pub struct QuickstartGet;
 impl Op for QuickstartGet {
     const NAME: &'static str = "quickstart.get";
-    const SUMMARY: &'static str = "One Quick Start entry of the catalog, with its scene.";
+    const SUMMARY: &'static str = "One Quick Start entry, by handle or id, with its scene.";
     const READ_ONLY: bool = true;
     type In = IdIn;
     type Out = EntryRow;
@@ -179,7 +200,8 @@ fn yes() -> bool {
     true
 }
 
-/// What to add to the Quick Start: one of `pattern`, `ant`, or `folder` with `run`.
+/// What to add to the Quick Start: one of `pattern`, `ant`, `folder` with `run`, `search_run`
+/// (with `job`), or `scene`.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AddIn {
@@ -198,10 +220,22 @@ pub struct AddIn {
     /// number (`n=588`).
     #[serde(default)]
     pub run: Option<String>,
-    /// The entry's title (default: the pattern's name or label, the ant's rule, the run's rule).
+    /// A stored run of an explore search, by its id: on the large grid it was confirmed on, its
+    /// card on the small grid it was found on, as the atlas shows its entries.
+    #[serde(default)]
+    pub search_run: Option<i64>,
+    /// With `search_run`: the explore job (default: the newest).
+    #[serde(default)]
+    pub job: Option<i64>,
+    /// A scene file.
+    #[serde(default)]
+    pub scene: Option<String>,
+    /// The entry's title (default: the pattern's name or label, the ant's rule, the run's rule,
+    /// the scene's name).
     #[serde(default)]
     pub title: Option<String>,
-    /// Patterns and ants: the description (default: generated).
+    /// Patterns, ants, search runs and scenes: the description (default: generated, or the
+    /// scene's).
     #[serde(default)]
     pub description: Option<String>,
     /// Sweep runs: a note put before the generated description (why it is interesting).
@@ -223,6 +257,9 @@ impl Default for AddIn {
             ant: None,
             folder: None,
             run: None,
+            search_run: None,
+            job: None,
+            scene: None,
             title: None,
             description: None,
             note: None,
@@ -235,11 +272,12 @@ impl Default for AddIn {
 /// The entry added (or replaced: adding the same thing again replaces its entry).
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Added {
-    /// `find:<id>`.
+    /// Its handle, `find:<id>`.
     pub entry: String,
-    /// The entry's id: the pattern's or ant's id, or `sweep-<hash>`.
+    /// The entry's id: the pattern's or ant's id, `sweep-<hash>`, `run-<search>-<run>`,
+    /// `scene-<hash>`.
     pub id: String,
-    /// `pattern`, `ant`, or `sweep`.
+    /// `pattern`, `ant`, `sweep`, `search_run`, or `scene`.
     pub source: String,
     pub title: String,
     pub description: String,
@@ -273,20 +311,26 @@ impl Report for Added {
 pub struct QuickstartAdd;
 impl Op for QuickstartAdd {
     const NAME: &'static str = "quickstart.add";
-    const SUMMARY: &'static str = "Add an entry to the app's Quick Start under \"My finds\": a library pattern, an ant run from step 0, or one run of a sweep folder.";
+    const SUMMARY: &'static str = "Add an entry to the app's Quick Start under \"My finds\": a library pattern, an ant run from step 0, one run of a sweep folder, a run of an explore search, or a scene file.";
     const READ_ONLY: bool = false;
     type In = AddIn;
     type Out = Added;
     fn run(cx: &Ctx, a: AddIn, _: &dyn Progress) -> Result<Added, ApiError> {
         let lib = cx.library();
         let catalog = lib.path().display().to_string();
-        let given = [a.pattern.is_some(), a.ant.is_some(), a.folder.is_some()]
-            .iter()
-            .filter(|x| **x)
-            .count();
+        let given = [
+            a.pattern.is_some(),
+            a.ant.is_some(),
+            a.folder.is_some(),
+            a.search_run.is_some(),
+            a.scene.is_some(),
+        ]
+        .iter()
+        .filter(|x| **x)
+        .count();
         if given != 1 {
             return Err(ApiError::invalid(
-                "give one of `pattern`, `ant`, or `folder` (with `run`)",
+                "give one of `pattern`, `ant`, `folder` (with `run`), `search_run`, or `scene`",
             ));
         }
         if let Some(folder) = &a.folder {
@@ -312,13 +356,85 @@ impl Op for QuickstartAdd {
             })?;
             let q = lib.get_quickstart(&p.id).map_err(catalog_err)?;
             return Ok(Added {
-                entry: format!("find:{}", p.id),
+                entry: q.handle,
                 id: p.id,
                 source: "sweep".into(),
                 title: p.title,
                 description: q.description,
                 rule: Some(p.rule),
                 run: Some(p.index),
+                catalog,
+            });
+        }
+        if let Some(run) = a.search_run {
+            let (_, job, path) = super::explore::explore_job(cx, a.job)?;
+            let db = jetcarp_search::explore::open_read(&path)
+                .map_err(|e| ApiError::not_found(e).hint("the job has not run yet"))?;
+            let r = db
+                .rows(&[run])
+                .map_err(ApiError::engine)?
+                .pop()
+                .ok_or_else(|| {
+                    ApiError::not_found(format!("no run {run} in explore job {}", job.id))
+                })?;
+            let mut q =
+                jetcarp_search::explore::atlas::run_row(&r, &job.uuid).map_err(ApiError::engine)?;
+            let short: String = job.uuid.chars().filter(|c| *c != '-').take(8).collect();
+            q.id = format!("run-{short}-{run}");
+            q.handle = format!("find:{}", q.id);
+            q.source = QsSource::Promotion;
+            q.source_ref.clear();
+            if let Some(t) = &a.title {
+                q.title = t.clone();
+                q.scene.name = t.clone();
+            }
+            if let Some(d) = &a.description {
+                q.description = d.clone();
+                q.scene.description = d.clone();
+            }
+            lib.put_quickstart(&q).map_err(catalog_err)?;
+            return Ok(Added {
+                entry: q.handle,
+                id: q.id,
+                source: "search_run".into(),
+                title: q.title,
+                description: q.description,
+                rule: Some(q.rule),
+                run: Some(run as u64),
+                catalog,
+            });
+        }
+        if let Some(file) = &a.scene {
+            let path = cx.fs.readable(file)?;
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| ApiError::io(format!("reading {}: {e}", path.display())))?;
+            let mut sc = Scene::from_json(&text).kind(ErrorKind::Invalid)?;
+            if let Some(t) = &a.title {
+                sc.name = t.clone();
+            }
+            if let Some(d) = &a.description {
+                sc.description = d.clone();
+            }
+            if sc.name.trim().is_empty() {
+                sc.name = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+            }
+            let id = format!(
+                "scene-{}",
+                &jetcarp_core::sha256::sha256_hex(sc.to_json().as_bytes())[..16]
+            );
+            let q = QuickStartRow::for_scene(&id, "scene", sc);
+            lib.put_quickstart(&q).map_err(catalog_err)?;
+            return Ok(Added {
+                entry: q.handle,
+                id: q.id,
+                source: "scene".into(),
+                title: q.title,
+                description: q.description,
+                rule: Some(q.rule),
+                run: None,
                 catalog,
             });
         }
@@ -332,7 +448,8 @@ impl Op for QuickstartAdd {
             if let Some(d) = &a.description {
                 sc.description = d.clone();
             }
-            let mut q = QuickStartRow::for_scene(&r.id, "scene", sc);
+            let mut q = QuickStartRow::for_scene(&r.id, "ant", sc);
+            q.target_id = Some(r.id.clone());
             q.behaviour = r.outcome.name().into();
             q.score = Some(r.score);
             lib.put_quickstart(&q).map_err(catalog_err)?;
@@ -345,7 +462,7 @@ impl Op for QuickstartAdd {
             )
             .map_err(catalog_err)?;
             return Ok(Added {
-                entry: format!("find:{}", q.id),
+                entry: q.handle,
                 id: q.id,
                 source: "ant".into(),
                 title: q.title,
@@ -405,33 +522,31 @@ fn promote_run_only(
 // ---------------------------------------------------------------------------------------------
 // quickstart.update / quickstart.remove
 
-/// A new status for an entry.
+/// Hide an entry or show it again.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct StatusIn {
-    /// The entry's id, with or without `find:`.
+pub struct HideIn {
+    /// The entry's handle or id.
     pub id: String,
-    /// auto or approved (shown in the menu), candidate or rejected (hidden).
-    pub status: String,
+    /// Left out of the menu, packs and the website (true), or shown again (false).
+    pub hidden: bool,
 }
 
-/// An entry's new status.
+/// An entry hidden or shown.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
-pub struct StatusSet {
-    /// `find:<id>`.
+pub struct HiddenSet {
+    /// Its handle.
     pub id: String,
-    #[schemars(with = "String")]
-    pub status: QsStatus,
-    /// Shown in the Quick Start menu.
-    pub shown: bool,
-    /// The id and status as given (the command line echoes them).
-    #[serde(skip)]
-    pub given: (String, String),
+    pub hidden: bool,
 }
 
-impl Report for StatusSet {
+impl Report for HiddenSet {
     fn text(&self) -> String {
-        format!("{}: {}\n", self.given.0, self.given.1)
+        format!(
+            "{}: {}\n",
+            self.id,
+            if self.hidden { "hidden" } else { "shown" }
+        )
     }
 }
 
@@ -440,21 +555,18 @@ pub struct QuickstartUpdate;
 impl Op for QuickstartUpdate {
     const NAME: &'static str = "quickstart.update";
     const SUMMARY: &'static str =
-        "Show or hide a Quick Start entry: set its status (auto, candidate, approved, rejected).";
+        "Hide a Quick Start entry (from the menu, packs and the website), or show it again.";
     const READ_ONLY: bool = false;
-    type In = StatusIn;
-    type Out = StatusSet;
-    fn run(cx: &Ctx, a: StatusIn, _: &dyn Progress) -> Result<StatusSet, ApiError> {
-        let st = status(&a.status)?;
-        let qid = a.id.trim().trim_start_matches("find:").to_string();
-        cx.library()
-            .set_quickstart_status(&qid, st)
+    type In = HideIn;
+    type Out = HiddenSet;
+    fn run(cx: &Ctx, a: HideIn, _: &dyn Progress) -> Result<HiddenSet, ApiError> {
+        let q = cx
+            .library()
+            .set_quickstart_hidden(&a.id, a.hidden)
             .map_err(catalog_err)?;
-        Ok(StatusSet {
-            id: format!("find:{qid}"),
-            status: st,
-            shown: st.shown(),
-            given: (a.id, a.status),
+        Ok(HiddenSet {
+            id: q.handle,
+            hidden: q.hidden,
         })
     }
 }
@@ -476,8 +588,7 @@ impl Report for EntryRemoved {
 pub struct QuickstartRemove;
 impl Op for QuickstartRemove {
     const NAME: &'static str = "quickstart.remove";
-    const SUMMARY: &'static str =
-        "Delete a Quick Start entry of the catalog (the pattern or run it came from stays).";
+    const SUMMARY: &'static str = "Delete a Quick Start entry (the pattern or run it came from stays; a built-in comes back with the next build, so hide it instead).";
     const READ_ONLY: bool = false;
     type In = IdIn;
     type Out = EntryRemoved;
@@ -885,8 +996,8 @@ fn survey_tilings(gens: u64) -> Vec<TilingSurvey> {
         .collect()
 }
 
-/// A scene from a file path, a built-in Quick Start id (or its number in `jetcarp quickstart`),
-/// or a catalog entry (`find:...`).
+/// A scene from a file path, a Quick Start entry's handle (a built-in id such as `life`,
+/// `find:<id>`, `atlas:<...>`), or a built-in entry's number in `jetcarp quickstart`.
 pub fn scene_source(cx: &Ctx, source: &str) -> Result<Scene, ApiError> {
     if std::path::Path::new(source).exists() {
         let file = cx.fs.readable(source)?;
@@ -894,23 +1005,19 @@ pub fn scene_source(cx: &Ctx, source: &str) -> Result<Scene, ApiError> {
             .map_err(|e| ApiError::io(format!("reading {}: {e}", file.display())))?;
         return Scene::from_json(&text).kind(ErrorKind::Invalid);
     }
-    let all = quickstart::entries();
-    if let Some(e) = all.iter().find(|e| e.id == source) {
-        return Ok(e.scene.clone());
+    let lib = cx.library();
+    if let Ok(sc) = jetcarp_store::quickstart::scene(&lib, source) {
+        return Ok(sc);
     }
-    // The number `jetcarp quickstart` lists it under.
+    // The number `jetcarp quickstart` lists a built-in under.
     if let Ok(k) = source.parse::<usize>()
-        && let Some(e) = all.get(k)
+        && let Some(q) = jetcarp_store::quickstart::builtin_rows().get(k)
     {
-        return Ok(e.scene.clone());
-    }
-    if source.starts_with("find:") {
-        let lib = cx.library();
-        let row = lib.get_quickstart(source).map_err(catalog_err)?;
-        return Ok(jetcarp_store::quickstart::find_entry(&lib, row).scene);
+        return jetcarp_store::quickstart::scene(&lib, &q.handle).map_err(catalog_err);
     }
     Err(ApiError::not_found(format!(
-        "'{source}' is neither a scene file nor a Quick Start id (see `jetcarp quickstart`)"
+        "'{source}' is neither a scene file nor a Quick Start entry (see `jetcarp quickstart` \
+         and `jetcarp library quickstart`)"
     )))
 }
 
@@ -927,16 +1034,13 @@ fn max_entries_default() -> usize {
     12_000
 }
 
-/// What to publish from an explore job, and where.
+/// Which explore job to publish, and how its entries are picked.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PublishIn {
     /// The explore job (default: the newest).
     #[serde(default)]
     pub job: Option<i64>,
-    /// The atlas file to write (default: where the Quick Start menu reads it, `$JETCARP_ATLAS` when set, else `<data>/explore/atlas.sqlite`); it is replaced.
-    #[serde(default)]
-    pub out: Option<String>,
     /// Entries per category, family, and tiling (default 12).
     #[serde(default = "per_niche_default")]
     pub per_niche: usize,
@@ -948,29 +1052,34 @@ pub struct PublishIn {
     pub max_entries: usize,
 }
 
-/// An atlas published.
+/// An atlas published into the Quick Start.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Published {
     pub job: i64,
+    /// The search's uuid (the rows' `source_ref`).
+    pub search: String,
+    /// The atlas's entries now.
     pub entries: usize,
-    /// The atlas file.
-    pub file: String,
-    /// The Quick Start menu reads this file now.
-    pub in_quick_start: bool,
+    /// New entries, entries written again, and the search's earlier entries no longer chosen
+    /// and deleted (hidden ones are kept).
+    pub added: usize,
+    pub updated: usize,
+    pub removed: usize,
+    pub catalog: String,
 }
 
 impl Report for Published {
     fn text(&self) -> String {
         format!(
-            "{} entries from explore job {} in {}{}\n",
+            "{} atlas entries from explore job {} (search {}) in the Quick Start of {}: {} new, \
+             {} updated, {} removed\n",
             self.entries,
             self.job,
-            self.file,
-            if self.in_quick_start {
-                " (the Quick Start menu reads it)"
-            } else {
-                ""
-            }
+            self.search,
+            self.catalog,
+            self.added,
+            self.updated,
+            self.removed
         )
     }
 }
@@ -979,47 +1088,36 @@ impl Report for Published {
 pub struct QuickstartPublish;
 impl Op for QuickstartPublish {
     const NAME: &'static str = "quickstart.publish";
-    const SUMMARY: &'static str = "Publish an explore job's confirmed best runs as the atlas the Quick Start menu offers: chosen per category, family, and tiling, each with its palette and a mature state.";
+    const SUMMARY: &'static str = "Publish an explore job's confirmed best runs as the atlas in the Quick Start: chosen per category, family, and tiling, each with its palette and a mature state, written into the library's Quick Start table (replacing the job's earlier atlas entries).";
     const READ_ONLY: bool = false;
     type In = PublishIn;
     type Out = Published;
     fn run(cx: &Ctx, a: PublishIn, _: &dyn Progress) -> Result<Published, ApiError> {
-        use jetcarp_store::atlas;
-        let (_, row, path) = super::explore::explore_job(cx, a.job)?;
-        let conn = jetcarp_search::explore::open_read(&path).map_err(ApiError::not_found)?;
         if a.per_niche == 0 || a.max_entries == 0 {
             return Err(ApiError::invalid(
                 "per_niche and max_entries must be at least 1",
             ));
         }
-        let out = match &a.out {
-            Some(o) => cx.fs.writable(o)?,
-            None => {
-                let env = std::env::var_os("JETCARP_ATLAS").filter(|v| !v.is_empty());
-                let p = match env {
-                    Some(v) => std::path::PathBuf::from(v),
-                    None => cx.paths().data.join("explore").join("atlas.sqlite"),
-                };
-                cx.fs.writable(&p.display().to_string())?
-            }
-        };
+        let (lib, row, path) = super::explore::explore_job(cx, a.job)?;
+        let conn = jetcarp_search::explore::open_read(&path).map_err(ApiError::not_found)?;
         let opts = jetcarp_search::explore::atlas::AtlasOpts {
             per_niche: a.per_niche,
             min_score: a.min_score,
             max_entries: a.max_entries,
         };
-        // Built beside it and moved over it, so a reader never sees half an atlas.
-        let tmp = out.with_extension("sqlite.part");
-        let n =
-            jetcarp_search::explore::atlas::build(&conn, &tmp, &opts).map_err(ApiError::engine)?;
-        std::fs::rename(&tmp, &out).map_err(|e| ApiError::io(format!("{}: {e}", out.display())))?;
-        let in_qs = atlas::locate()
-            .is_some_and(|p| std::fs::canonicalize(&p).ok() == std::fs::canonicalize(&out).ok());
+        let rows = jetcarp_search::explore::atlas::rows(&conn, &opts, &row.uuid)
+            .map_err(ApiError::engine)?;
+        let w = lib
+            .publish_atlas(row.id, &row.uuid, &rows)
+            .map_err(catalog_err)?;
         Ok(Published {
             job: row.id,
-            entries: n,
-            file: out.display().to_string(),
-            in_quick_start: in_qs,
+            search: row.uuid,
+            entries: rows.len(),
+            added: w.added,
+            updated: w.updated,
+            removed: w.removed,
+            catalog: lib.path().display().to_string(),
         })
     }
 }

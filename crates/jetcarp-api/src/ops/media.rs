@@ -15,7 +15,7 @@ use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
 use jetcarp_core::media::{MediaFormat, MediaMode, MediaOptions, MediaStyle};
 use jetcarp_core::pattern::{CurationState, PatternClass};
-use jetcarp_store::QsStatus;
+use jetcarp_store::QsSource;
 use jetcarp_store::media::{self, BatchReport, MediaRow, MediaTarget, MissingFilter};
 use jetcarp_store::website::{self, ExportFilter, ExportOptions, ExportReport};
 use schemars::JsonSchema;
@@ -395,7 +395,7 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
             };
             Some((sc, name))
         }
-        (None, Some(q)) => builtin_entry(&lib, q)?.map(|e| (e.scene, e.id)),
+        (None, Some(q)) => builtin_entry(&lib, q)?,
         (None, None) => None,
     };
     if let Some((sc, name)) = scene {
@@ -439,24 +439,30 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
     Ok(MediaReport::of(r))
 }
 
-/// The built-in Quick Start entry `q` names (its id, or its number in `jetcarp quickstart`), if
-/// it is not one of the catalog's own (`find:...`, or an id the catalog has), which come first.
-/// None for a catalog entry; an error if it is neither.
+/// The built-in Quick Start entry `q` names (its handle, or its number in `jetcarp quickstart`)
+/// as its scene and handle, or none for one of the library's own entries (a promotion, a pack's,
+/// the atlas's), whose media the library keeps; an error if it is neither.
 fn builtin_entry(
     lib: &jetcarp_store::Library,
     q: &str,
-) -> Result<Option<jetcarp_core::quickstart::QuickStart>, ApiError> {
+) -> Result<Option<(jetcarp_core::Scene, String)>, ApiError> {
     let q = q.trim();
-    if q.starts_with("find:") || lib.get_quickstart(q).is_ok() {
-        return Ok(None);
-    }
-    let all = jetcarp_core::quickstart::entries();
-    let by_number = q.parse::<usize>().ok().and_then(|k| all.get(k));
-    match all.iter().find(|e| e.id == q).or(by_number) {
-        Some(e) => Ok(Some(e.clone())),
+    let builtins = jetcarp_store::quickstart::builtin_rows();
+    let row = match lib.get_quickstart(q) {
+        Ok(r) if r.source != QsSource::Builtin => return Ok(None),
+        Ok(r) => Some(r),
+        Err(_) => None,
+    };
+    let by_number = q.parse::<usize>().ok().and_then(|k| builtins.get(k));
+    match row
+        .as_ref()
+        .or_else(|| builtins.iter().find(|b| b.handle == q))
+        .or(by_number)
+    {
+        Some(e) => Ok(Some((e.scene.clone(), e.handle.clone()))),
         None => Err(ApiError::not_found(format!(
             "no Quick Start entry '{q}': neither a built-in one (`jetcarp quickstart` lists their \
-             ids and numbers) nor one of the catalog's (`jetcarp library quickstart`)"
+             ids and numbers) nor one of the library's (`jetcarp library quickstart`)"
         ))),
     }
 }
@@ -676,7 +682,8 @@ pub struct SiteIn {
     /// Only patterns of these classes.
     #[serde(default)]
     pub class: Vec<String>,
-    /// Quick Start statuses exported (default auto and approved; empty: none).
+    /// Quick Start sources exported, their entries that are not hidden: promotion, pack, atlas,
+    /// builtin (default promotion and pack; empty: none).
     #[serde(default)]
     pub quickstart: Option<Vec<String>>,
     /// Ant and turmite curation states exported (default promoted and reviewed; empty: none).
@@ -799,7 +806,7 @@ impl Op for SiteExport {
         if let Some(q) = &a.quickstart {
             f.quickstart = q
                 .iter()
-                .map(|x| QsStatus::parse(x).map_err(ApiError::invalid))
+                .map(|x| QsSource::parse(x).map_err(ApiError::invalid))
                 .collect::<Result<_, _>>()?;
         }
         f.min_score = a.min_score;

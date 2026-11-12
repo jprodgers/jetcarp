@@ -21,7 +21,7 @@ use jetcarp_core::census;
 use jetcarp_core::pattern::{CurationState, tiling_key};
 use jetcarp_core::topology::{Nb, SizeSpec, TilingSpec, Topology};
 use jetcarp_store::library::JobRow;
-use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, Update};
+use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library, Update};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -250,7 +250,7 @@ pub fn reject(lib: &Library, t: &Target) -> Result<(), String> {
                 },
             )?;
             if lib.get_quickstart(&r.id).is_ok() {
-                lib.set_quickstart_status(&r.id, QsStatus::Rejected)?;
+                lib.set_quickstart_hidden(&r.id, true)?;
             }
             Ok(())
         }

@@ -943,7 +943,7 @@ pub const HELP_CATALOG: &str = r#"The catalog: one database of what JETCARP has 
 Kinds of record (library_list "kind"):
 - pattern: verified still lifes, oscillators, spaceships, guns. Rule-free: `rules` lists every rule it was verified in and `range` the rules it runs identically in.
 - ant: one ant or turmite run (a turn string such as RL or LLRR, or a table) on a tiling: outcome highway (proved exactly: period, displacement d per period, onset step), periodic, symmetric (grows mirror-symmetrically), bounded, or chaotic.
-- quickstart: entries of the app's Quick Start ("My finds").
+- quickstart: entries of the app's Quick Start: promotions ("My finds"), entries from packs, and the atlas an explore search published (`source` builtin lists the built-in examples). An entry is named by its handle: find:<id>, atlas:<...>, qs-<hex>, or a built-in id such as life.
 
 Example 1: the best spaceships on hexagons, then one of them in a world
 1. library_list {"class": "spaceship", "tiling": "hex", "limit": 5}

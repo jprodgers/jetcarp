@@ -21,7 +21,7 @@
 
 pub mod ants;
 
-use crate::{Library, QsStatus};
+use crate::{Library, QsSource};
 use jetcarp_core::media::{
     Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, pattern_animation,
     scene_animation,
@@ -251,7 +251,7 @@ fn resolve(lib: &Library, t: &MediaTarget, mode: MediaMode) -> Result<Job, Strin
         }
         MediaTarget::QuickStart(id) => {
             let q = lib.get_quickstart(id)?;
-            let src = match (mode, q.source_kind.as_str(), &q.source_id) {
+            let src = match (mode, q.target_kind.as_str(), &q.target_id) {
                 (MediaMode::Alone, "pattern", Some(pid)) => {
                     Source::Pattern(Box::new(lib.get(pid)?))
                 }
@@ -823,7 +823,8 @@ pub fn render_missing(
         }
     }
     if filter.quickstart {
-        let mut q = lib.quickstart(&[QsStatus::Auto, QsStatus::Approved])?;
+        let mut q = lib.quickstart(&[QsSource::Promotion, QsSource::Pack])?;
+        q.retain(|q| !q.hidden);
         q.sort_by(|a, b| a.id.cmp(&b.id));
         targets.extend(q.into_iter().map(|q| MediaTarget::QuickStart(q.id)));
     }

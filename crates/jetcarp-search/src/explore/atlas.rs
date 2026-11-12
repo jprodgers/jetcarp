@@ -1,26 +1,21 @@
-//! The atlas: the published result of a search, the file Quick Start browses. Entries are
-//! selected from a search's runs ([`Runs`]: its sealed segments and working database), given a
-//! category and palette, and stored with a mature state so a preview can start where the action
-//! is. This is the writing half (choosing,
-//! scoring, and writing entries); finding and reading the file is `jetcarp_store::atlas`.
+//! The atlas: the published result of a search, the Quick Start rows of source `atlas`
+//! (`jetcarp_store::library::quickstart`). Entries are selected from a search's runs ([`Runs`]:
+//! its sealed segments and working database), given a category, a title and a palette, and made
+//! with a mature state so a card can start where the action is ([`rows`]). The library writes
+//! them (`Library::publish_atlas`); the menu reads them like every other entry.
 
 use crate::explore::job::feat_from_blob;
 use crate::explore::runs::{RunFilter, Runs, top_n};
 use crate::explore::segments::{col, cols};
 use crate::explore::sheet::RunRow;
-use flate2::Compression;
-use flate2::write::DeflateEncoder;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::Features;
 use jetcarp_core::explore::space::{ALL_FAMS, Fam, sized_spec};
 use jetcarp_core::world::{Scene, SeedSpec, World};
-use jetcarp_store::atlas::AtlasEntry;
+use jetcarp_store::quickstart::{self as qs, QsSource, QuickStartRow};
 use rayon::prelude::*;
-use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::path::Path;
 
 /// How the entries are picked.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -189,29 +184,6 @@ pub fn pick_palette(
     (v, None)
 }
 
-fn deflate(data: &[u8]) -> Vec<u8> {
-    let mut e = DeflateEncoder::new(Vec::with_capacity(data.len() / 4), Compression::best());
-    let _ = e.write_all(data);
-    e.finish().unwrap_or_default()
-}
-
-/// The file's schema.
-pub fn create(path: &Path) -> Result<Connection, String> {
-    let e = |x: rusqlite::Error| x.to_string();
-    let _ = std::fs::remove_file(path);
-    let c = Connection::open(path).map_err(e)?;
-    c.execute_batch(
-        "PRAGMA journal_mode=DELETE;
-         CREATE TABLE entries(
-           id INTEGER PRIMARY KEY, title TEXT, category TEXT, family TEXT, tiling TEXT,
-           tiling_group TEXT, rule TEXT, seed TEXT, score REAL, preview TEXT, full TEXT,
-           mature_gen INT, mature BLOB);
-         CREATE INDEX entries_cat ON entries(category);",
-    )
-    .map_err(e)?;
-    Ok(c)
-}
-
 /// Worst-seed confirmed score of each parent run.
 fn confirmed_scores(runs: &Runs) -> Result<HashMap<i64, f64>, String> {
     let rows: Vec<(i64, f64)> = runs.scan(
@@ -244,14 +216,6 @@ fn confirmed_scores(runs: &Runs) -> Result<HashMap<i64, f64>, String> {
 fn screened(s: &crate::explore::segments::Segment, rg: usize) -> bool {
     s.int_range(rg, col::STAGE)
         .is_none_or(|(lo, hi)| lo <= 1 && 1 <= hi)
-}
-
-fn tiling_group(key: &str) -> String {
-    jetcarp_core::explore::space::all_tilings()
-        .into_iter()
-        .find(|t| t.key == key)
-        .map(|t| t.group)
-        .unwrap_or_else(|| "other".into())
 }
 
 /// Select runs for the atlas: a list of `(parent run, confirmed score, category)`.
@@ -522,7 +486,25 @@ fn contrast_picks(
     Ok(out)
 }
 
-fn make_entry(run: &RunRow, score: f64, cat: &str, group: &str) -> Result<AtlasEntry, String> {
+/// The ids an atlas row of a search has: (`atlas-<8 hex>-<run>`, `atlas:<8 hex>-<run>`).
+pub fn row_ids(search_uuid: &str, run: i64) -> (String, String) {
+    let short: String = search_uuid.chars().filter(|c| *c != '-').take(8).collect();
+    (
+        format!("atlas-{short}-{run}"),
+        format!("atlas:{short}-{run}"),
+    )
+}
+
+/// One run as an atlas row: the full scene (the rule and start on the larger grid it was
+/// confirmed on) is what opening loads; the preview runs on the small grid it was found on,
+/// from its mature state.
+fn make_row(
+    run: &RunRow,
+    score: f64,
+    cat: &str,
+    group: &str,
+    search_uuid: &str,
+) -> Result<QuickStartRow, String> {
     let c: &Cand = &run.cand;
     let f = feat_from_blob(&run.feats);
     let states = c.rule().map_or(2, |r| match r.field_kind() {
@@ -561,75 +543,86 @@ fn make_entry(run: &RunRow, score: f64, cat: &str, group: &str) -> Result<AtlasE
                 for _ in 0..at {
                     w.step();
                 }
-                (at, w.fields.first().map(|x| deflate(&x.state)))
+                (at, w.fields.first().map(|x| qs::deflate_state(&x.state)))
             }
         };
-    Ok(AtlasEntry {
-        id: run.id,
-        title: format!("{} on {}", c.rule, c.tiling),
-        category: cat.to_string(),
-        family: c.fam.name().to_string(),
-        tiling: c.tiling.clone(),
-        tiling_group: group.to_string(),
-        rule: c.rule.clone(),
-        seed: serde_json::to_string(&c.seed).unwrap_or_default(),
-        score,
-        preview,
-        full,
-        mature_gen,
-        mature,
-    })
+    let family = qs::family_label(c.fam).to_string();
+    let seed = qs::describe_seed(&serde_json::to_string(&c.seed).unwrap_or_default());
+    let (id, handle) = row_ids(search_uuid, run.id);
+    let mut q = QuickStartRow::for_scene(&id, "search_run", full);
+    q.handle = handle;
+    q.source = QsSource::Atlas;
+    q.source_ref = search_uuid.to_string();
+    q.target_id = Some(format!("{search_uuid}:{}", run.id));
+    q.title = qs::atlas_title(&c.rule, cat, &family);
+    q.description = format!("{} on {}\nSeed: {seed}\nScore {score:.2}", c.rule, c.tiling);
+    q.category = cat.to_string();
+    q.behaviour = cat.to_string();
+    q.grid_group = qs::group_label(group).to_string();
+    q.family = family;
+    q.tiling_key = c.tiling.clone();
+    q.tiling_name = qs::tiling_label(&c.tiling);
+    q.rule = c.rule.clone();
+    q.preview = Some(preview);
+    q.mature_gen = mature_gen;
+    q.mature = mature;
+    q.score = Some(score);
+    Ok(q)
 }
 
-/// Build an atlas file from a search's runs.
-pub fn build(db: &Runs, out: &Path, opts: &AtlasOpts) -> Result<usize, String> {
+/// One stored run as an atlas row (its category, title, palette, preview and mature state, as
+/// the atlas makes them), scored by its own screening score: what promoting a search run to the
+/// Quick Start starts from.
+pub fn run_row(run: &RunRow, search_uuid: &str) -> Result<QuickStartRow, String> {
+    let cat = categorize(
+        &run.fate,
+        &feat_from_blob(&run.feats),
+        run.cand.fam,
+        run.cand.gens,
+    );
+    let group = jetcarp_core::explore::space::all_tilings()
+        .into_iter()
+        .find(|t| t.key == run.cand.tiling)
+        .map(|t| t.group)
+        .unwrap_or_else(|| "other".into());
+    make_row(run, run.score, cat, &group, search_uuid)
+}
+
+/// An atlas from a search's runs: the rows of source `atlas` that [`select`] picks (see
+/// [`AtlasOpts`]), best first (by score, then run id), ranked in that order, for the search
+/// whose uuid is `search_uuid`.
+pub fn rows(db: &Runs, opts: &AtlasOpts, search_uuid: &str) -> Result<Vec<QuickStartRow>, String> {
     let picks = select(db, opts)?;
     let groups: HashMap<String, String> = jetcarp_core::explore::space::all_tilings()
         .into_iter()
         .map(|t| (t.key, t.group))
         .collect();
-    let entries: Vec<AtlasEntry> = picks
+    let mut made: Vec<(i64, QuickStartRow)> = picks
         .par_iter()
         .filter_map(|(r, s, c)| {
             let group = groups
                 .get(&r.cand.tiling)
                 .cloned()
                 .unwrap_or_else(|| "other".into());
-            make_entry(r, *s, c, &group).ok()
+            make_row(r, *s, c, &group, search_uuid)
+                .ok()
+                .map(|q| (r.id, q))
         })
         .collect();
-    let mut db = create(out)?;
-    let e = |x: rusqlite::Error| x.to_string();
-    let tx = db.transaction().map_err(e)?;
-    {
-        let mut st = tx
-            .prepare(
-                "INSERT INTO entries(id,title,category,family,tiling,tiling_group,rule,seed,score,
-                 preview,full,mature_gen,mature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            )
-            .map_err(e)?;
-        for a in &entries {
-            st.execute(params![
-                a.id,
-                a.title,
-                a.category,
-                a.family,
-                a.tiling,
-                a.tiling_group,
-                a.rule,
-                a.seed,
-                a.score,
-                serde_json::to_string(&a.preview).unwrap_or_default(),
-                serde_json::to_string(&a.full).unwrap_or_default(),
-                a.mature_gen,
-                a.mature,
-            ])
-            .map_err(e)?;
-        }
-    }
-    tx.commit().map_err(e)?;
-    let _ = tiling_group;
-    Ok(entries.len())
+    made.sort_by(|a, b| {
+        b.1.score
+            .unwrap_or(0.0)
+            .total_cmp(&a.1.score.unwrap_or(0.0))
+            .then(a.0.cmp(&b.0))
+    });
+    Ok(made
+        .into_iter()
+        .enumerate()
+        .map(|(k, (_, mut q))| {
+            q.rank = k as i64;
+            q
+        })
+        .collect())
 }
 
 /// A stratified sample of screened runs for a person to rate: spread over categories and

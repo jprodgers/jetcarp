@@ -542,7 +542,12 @@ fn scripts_catalog_and_promote_library_patterns() {
     // B3678/S0235678), though neither was seen there.
     assert_eq!(s.log[4], "2 1 2 B3/S23 B3/S23 true");
     let lib = jetcarp_store::Library::open(root.join("lib"));
-    assert_eq!(jetcarp_store::quickstart::user_finds(&lib).len(), 1);
+    assert_eq!(
+        lib.quickstart(&[jetcarp_store::QsSource::Promotion])
+            .unwrap()
+            .len(),
+        1
+    );
     // The example script runs (small) against the same scratch library.
     o.params.insert("soups".into(), "1".into());
     o.params.insert("size".into(), "48".into());
@@ -694,7 +699,9 @@ fn scripts_promote_sweep_runs() {
         s.log
     );
     let lib = jetcarp_store::Library::open(root.join("lib"));
-    let finds = jetcarp_store::quickstart::user_finds(&lib);
+    let finds = lib
+        .quickstart(&[jetcarp_store::QsSource::Promotion])
+        .unwrap();
     assert_eq!(finds.len(), 2);
     let favs = jetcarp_script::results::Favourites::load(&folder(&s));
     assert_eq!(favs.items.len(), 2);

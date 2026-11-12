@@ -1,17 +1,17 @@
-//! The library's schema (version 2), opening a library file, and what is checked on opening.
+//! The library's schema (version 3), opening a library file, and what is checked on opening.
 //!
 //! **Schema.** One script, [`SCHEMA`], makes a new library. `PRAGMA user_version` is the schema
-//! version ([`SCHEMA_VERSION`], 2) and `PRAGMA application_id` marks the file as a JETCARP
+//! version ([`SCHEMA_VERSION`], 3) and `PRAGMA application_id` marks the file as a JETCARP
 //! library ([`APPLICATION_ID`], `JETC`), so a library from a newer JETCARP is refused with a
 //! clear message, and so is a catalog from before schema 1 (made by a build before 0.4: no
 //! application id, user versions 1 to 7), which is not migrated: JETCARP 0.4 starts a fresh
 //! library.
 //!
 //! **Migrations.** A library of an older schema is brought up to date when it is opened, in one
-//! transaction: schema 1 to 2 ([`migrate_1_2`]), and a library made before rule-semantics
-//! versions gains them ([`add_semantics`]; schema 2 gained them before the 0.4.0 release, so its
-//! number stays 2). A schema change adds a migration here; never edit [`SCHEMA`] once it has
-//! shipped.
+//! transaction: schema 1 to 2 ([`migrate_1_2`]), 2 to 3 ([`migrate_2_3`]: one Quick Start
+//! table for every source), and a library made before rule-semantics versions gains them
+//! ([`add_semantics`]; schema 2 gained them before the 0.4.0 release, so its number stayed 2).
+//! A schema change adds a migration here; never edit [`SCHEMA`] once it has shipped.
 //!
 //! **Geometry pins on opening.** Every pattern, ant run and Quick Start row stores the geometry
 //! pin of the tiling it was verified on (`geometry_pin`) and the key of that pin (`pin_key`;
@@ -25,6 +25,11 @@
 //! (`family`) and the version of that family's meaning it was verified under (`semantics`;
 //! [`jetcarp_core::semantics`]). Opening a library flags, in the same way, every pattern whose
 //! version is not the running engine's for its family, or whose family the engine does not have.
+//!
+//! **Built-in Quick Start entries on opening.** Then, when `meta.builtin_version` is not this
+//! build's ([`crate::quickstart::builtin_version`]: its engine and a hash of its built-in
+//! entries), the built-in rows of the `quickstart` table are written again from the build's
+//! entries ([`super::quickstart`]).
 
 use super::{Library, e};
 use jetcarp_core::pattern::now_utc;
@@ -35,10 +40,58 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use std::collections::HashMap;
 
 /// The schema version a library made by this build has (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// `PRAGMA application_id` of a JETCARP library: `JETC` in ASCII.
 pub const APPLICATION_ID: i64 = 0x4A45_5443;
+
+/// Schema 3's `quickstart` table: one row per Quick Start entry, from every source
+/// ([`super::quickstart`]). A macro, so [`SCHEMA`] and [`migrate_2_3`] use one text.
+macro_rules! quickstart_3 {
+    () => {
+        r#"
+CREATE TABLE quickstart (
+    id TEXT PRIMARY KEY,
+    handle TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL CHECK (source IN ('builtin', 'pack', 'atlas', 'promotion')),
+    source_ref TEXT NOT NULL DEFAULT '',
+    target_kind TEXT NOT NULL
+        CHECK (target_kind IN ('pattern', 'ant', 'sweep_run', 'search_run', 'scene')),
+    target_id TEXT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    grid_group TEXT NOT NULL DEFAULT '',
+    family TEXT NOT NULL DEFAULT '',
+    tiling_key TEXT NOT NULL,
+    tiling_name TEXT NOT NULL,
+    rule TEXT NOT NULL,
+    rule_family TEXT NOT NULL,
+    behaviour TEXT NOT NULL DEFAULT '',
+    scene TEXT NOT NULL,
+    preview TEXT,
+    mature_gen INTEGER NOT NULL DEFAULT 0,
+    mature BLOB,
+    score REAL,
+    rank INTEGER NOT NULL DEFAULT 0,
+    featured INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    pin_key TEXT NOT NULL,
+    geometry_pin TEXT NOT NULL,
+    needs_reverify INTEGER NOT NULL DEFAULT 0,
+    engine_version TEXT NOT NULL,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL
+);
+CREATE INDEX quickstart_source ON quickstart (source, source_ref);
+CREATE INDEX quickstart_target ON quickstart (target_kind, target_id);
+CREATE INDEX quickstart_pin ON quickstart (pin_key, geometry_pin);
+"#
+    };
+}
+
+/// Schema 3's `quickstart` table.
+pub const QUICKSTART_3: &str = quickstart_3!();
 
 /// Schema 2's `media` table (content-addressed files: a hash and an extension, not a path).
 const MEDIA_2: &str = r#"
@@ -90,6 +143,27 @@ pub fn migrate_1_2(tx: &Transaction) -> Result<(), String> {
         .map_err(e)
 }
 
+/// Schema 2 (before the 0.4 release) to 3: one `quickstart` table for every source, built-in,
+/// pack, atlas and promotion, with handles and `hidden` instead of the statuses
+/// ([`super::quickstart::migrate_rows_in`] keeps the rows it had, as promotions or pack rows),
+/// and `quickstart_usage` counting entries by `handle`. The built-ins are written afterwards,
+/// as on every opening. Each change is made only where it is missing.
+pub fn migrate_2_3(tx: &Transaction) -> Result<(), String> {
+    if has_column(tx, "quickstart", "status")? {
+        super::quickstart::migrate_rows_in(tx)?;
+    }
+    if has_column(tx, "quickstart_usage", "entry_id")? {
+        tx.execute_batch("ALTER TABLE quickstart_usage RENAME COLUMN entry_id TO handle;")
+            .map_err(e)?;
+    }
+    tx.execute_batch(
+        "UPDATE meta SET value = '3' WHERE key = 'schema';
+         UPDATE meta SET value = '' WHERE key = 'builtin_version';
+         PRAGMA user_version = 3;",
+    )
+    .map_err(e)
+}
+
 /// Does `table` have the column `col`?
 fn has_column(c: &Connection, table: &str, col: &str) -> Result<bool, String> {
     c.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
@@ -137,8 +211,9 @@ pub fn add_semantics(tx: &Transaction) -> Result<(), String> {
     .map_err(e)
 }
 
-/// The tables of schema 2.
-pub const SCHEMA: &str = r#"
+/// The tables of schema 3.
+pub const SCHEMA: &str = concat!(
+    r#"
 CREATE TABLE meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -367,34 +442,11 @@ CREATE INDEX ants_rule ON ants (rule);
 CREATE INDEX ants_job ON ants (job_id);
 CREATE INDEX ants_pin ON ants (pin_key, geometry_pin);
 
-CREATE TABLE quickstart (
-    id TEXT PRIMARY KEY,
-    source_kind TEXT NOT NULL CHECK (source_kind IN ('pattern', 'sweep', 'scene')),
-    source_id TEXT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    grid TEXT NOT NULL,
-    tiling TEXT,
-    rule TEXT NOT NULL,
-    rule_family TEXT NOT NULL,
-    behaviour TEXT NOT NULL DEFAULT '',
-    scene TEXT NOT NULL,
-    score REAL,
-    status TEXT NOT NULL DEFAULT 'approved'
-        CHECK (status IN ('auto', 'candidate', 'approved', 'rejected')),
-    pin_key TEXT NOT NULL,
-    geometry_pin TEXT NOT NULL,
-    needs_reverify INTEGER NOT NULL DEFAULT 0,
-    engine_version TEXT NOT NULL,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL
-);
-CREATE INDEX quickstart_status ON quickstart (status, score DESC);
-CREATE INDEX quickstart_source ON quickstart (source_kind, source_id);
-CREATE INDEX quickstart_pin ON quickstart (pin_key, geometry_pin);
-
+"#,
+    quickstart_3!(),
+    r#"
 CREATE TABLE quickstart_usage (
-    entry_id TEXT PRIMARY KEY,
+    handle TEXT PRIMARY KEY,
     opens INTEGER NOT NULL DEFAULT 0,
     first_opened TEXT,
     last_opened TEXT
@@ -432,7 +484,8 @@ CREATE TABLE media (
     UNIQUE (target_kind, target_id, kind, from_seed)
 );
 CREATE INDEX media_hash ON media (hash);
-"#;
+"#
+);
 
 /// Is this a library of this schema (`Ok(true)`), a new empty file (`Ok(false)`), or neither
 /// (an error saying why it is refused)?
@@ -499,6 +552,9 @@ fn migrate(c: &mut Connection) -> Result<(), String> {
     }
     if !has_column(&tx, "patterns", "semantics")? {
         add_semantics(&tx)?;
+    }
+    if version(&tx)? == 2 {
+        migrate_2_3(&tx)?;
     }
     tx.commit().map_err(e)
 }
@@ -567,7 +623,38 @@ pub(super) fn open_db(path: &std::path::Path) -> Result<Connection, String> {
             return Err(format!("{}: {x}", path.display()));
         }
     }
+    if let Err(x) = sync_builtins(&mut c) {
+        // A read-only library keeps the built-ins it has; a failure to write them leaves the
+        // library usable, with the reason said.
+        if !c.is_readonly(rusqlite::MAIN_DB).unwrap_or(false) {
+            eprintln!(
+                "{}: writing the built-in Quick Start entries: {x}",
+                path.display()
+            );
+        }
+    }
     Ok(c)
+}
+
+/// Write the build's built-in Quick Start entries if the library has another build's (read
+/// first, so an up-to-date library is not written to).
+fn sync_builtins(c: &mut Connection) -> Result<(), String> {
+    let have: Option<String> = c
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'builtin_version'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(e)?;
+    if have.as_deref() == Some(crate::quickstart::builtin_version()) {
+        return Ok(());
+    }
+    let tx = c
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(e)?;
+    super::quickstart::sync_builtins_in(&tx)?;
+    tx.commit().map_err(e)
 }
 
 /// The engine pin of a tiling this engine cannot build.

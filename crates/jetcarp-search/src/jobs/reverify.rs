@@ -127,11 +127,7 @@ pub(super) static KIND: ReverifyKind = ReverifyKind;
 
 /// Records a job will check: flagged ones, or all with `all`.
 fn total(lib: &Library, all: bool) -> Result<u64, String> {
-    if all {
-        let i = lib.info()?;
-        return Ok((i.patterns + i.ants + i.quickstart) as u64);
-    }
-    Ok(lib.flagged()?.iter().map(|x| x.1).sum())
+    lib.reverify_count(all)
 }
 
 impl StrategyKind for ReverifyKind {

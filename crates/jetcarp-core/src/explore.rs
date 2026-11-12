@@ -8,8 +8,8 @@
 //! - [`features`], [`space`], [`cand`], [`seeds`]: what a run measures, the search space, one
 //!   candidate, and its starting pattern.
 //!
-//! The atlas Quick Start browses is written by the search and read by the store
-//! (`jetcarp_store::atlas`).
+//! The atlas Quick Start browses is picked from the search's runs (`jetcarp_search::explore::atlas`)
+//! and kept in the library's Quick Start table (`jetcarp_store::quickstart`).
 
 pub mod batch;
 pub mod cand;

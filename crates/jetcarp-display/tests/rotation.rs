@@ -4,7 +4,6 @@
 use jetcarp_core::{Command, World};
 use jetcarp_display::profiles::{self, Profile, Show};
 use jetcarp_display::rotation::*;
-use jetcarp_store::quickstart::all_entries;
 use std::collections::HashSet;
 
 const MONDAY_NOON: Clock = Clock {
@@ -304,7 +303,13 @@ fn bad_rotations_are_refused() {
 
 #[test]
 fn built_ins_are_valid_and_refer_to_things_that_exist() {
-    let known: HashSet<String> = all_entries().into_iter().map(|q| q.id).collect();
+    // Quick Start entries by handle, in a library of the tests' own: the built-in rows every
+    // library has.
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-rotation-handles-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let lib = jetcarp_store::Library::open(&dir);
+    let known = |handle: &str| jetcarp_store::quickstart::scene(&lib, handle).is_ok();
     let names: HashSet<String> = profiles::builtins().into_iter().map(|p| p.name).collect();
     let all = builtins();
     assert!(all.len() >= 4);
@@ -314,11 +319,12 @@ fn built_ins_are_valid_and_refer_to_things_that_exist() {
         for it in &r.items {
             match &it.source {
                 Source::Profile { name } => assert!(names.contains(name), "{name}"),
-                Source::QuickStart { id } => assert!(known.contains(id), "{id}"),
+                Source::QuickStart { id } => assert!(known(id), "{id}"),
                 _ => {}
             }
         }
     }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

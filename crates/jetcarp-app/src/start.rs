@@ -1,24 +1,26 @@
-//! Quick Start: the browser for everything the app can open (`jetcarp_store::qsmenu`: the atlas of
-//! search results, "My finds", and the classics).
+//! Quick Start: the browser for everything the app can open (`jetcarp_store::quickstart::menu`:
+//! the library's one Quick Start table, with the built-in classics, entries from packs, the atlas
+//! of search results, and "My finds").
 //!
 //! A sidebar filters by category, tiling group, rule family, and source (with counts); the main
 //! area is a search box, the sort, and a virtual grid (only rows on screen are laid out). The
 //! default view is a seeded shuffle of the best entries across all categories. Everything per
 //! frame is proportional to the cards on screen: the filter, the sort, and the counts are
 //! cached and recomputed only when they change. Live previews run on background threads for
-//! the cards on screen only (see [`crate::previews`]), starting from each entry's mature state.
+//! the cards on screen only (see [`crate::previews`]), each read from the library by handle and
+//! starting from its mature state.
 //!
-//! The menu loads on a background thread and reloads when the catalog's Quick Start rows or the
-//! atlas file change.
+//! The menu loads on a background thread and reloads when the library's Quick Start rows change.
 
 use crate::previews::{MAX_LIVE, Pool, Source};
 use crate::thumbs;
 use eframe::egui::{self, Color32, Rect, RichText, Sense};
 use jetcarp_core::Scene;
-use jetcarp_store::Library;
-use jetcarp_store::atlas;
-use jetcarp_store::qsmenu::{self, Facets, Filter, Item, Origin, Sort};
+use jetcarp_store::quickstart::menu::{Facets, Filter, Item, Sort};
+use jetcarp_store::quickstart::{self as qs, menu};
+use jetcarp_store::{Library, QsSource};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Instant;
 
@@ -56,9 +58,8 @@ pub struct Menu {
     pub items: Vec<Item>,
     pub view: View,
     loading: Option<Receiver<Vec<Item>>>,
-    /// The catalog's Quick Start stamp the entries were loaded at, and the atlas file's.
+    /// The library's Quick Start stamp the entries were loaded at.
     stamp: String,
-    atlas_stamp: Option<(PathBuf, u64, Option<std::time::SystemTime>)>,
     seed: u64,
     order: Vec<usize>,
     order_key: Option<(Filter, Sort, u64)>,
@@ -73,6 +74,8 @@ pub struct Menu {
     clock: Instant,
     last_check: f64,
     lib: Library,
+    /// The library's file, which every card reads its entry from.
+    lib_path: Arc<PathBuf>,
     facets: Option<(u64, Filter, std::sync::Arc<Facets>)>,
 }
 
@@ -80,19 +83,20 @@ fn stamp(lib: &Library) -> String {
     lib.quickstart_stamp()
 }
 
-fn atlas_stamp() -> Option<(PathBuf, u64, Option<std::time::SystemTime>)> {
-    let p = atlas::locate()?;
-    let m = std::fs::metadata(&p).ok()?;
-    Some((p, m.len(), m.modified().ok()))
+fn source_of(it: &Item, library: &Arc<PathBuf>) -> Source {
+    Source::Entry {
+        library: library.clone(),
+        handle: it.handle.clone(),
+    }
 }
 
-fn source_of(it: &Item) -> Source {
-    match &it.atlas {
-        Some(a) => Source::Atlas {
-            path: a.path.clone(),
-            id: a.id,
-        },
-        None => Source::Scene(Box::new(it.q.scene.clone())),
+/// The tag a card of a source wears (none for the atlas), and its colour.
+fn source_tag(s: QsSource) -> Option<Color32> {
+    match s {
+        QsSource::Atlas => None,
+        QsSource::Promotion => Some(Color32::from_rgb(0xff, 0xc8, 0x3c)),
+        QsSource::Pack => Some(Color32::from_rgb(0x8c, 0xc8, 0xff)),
+        QsSource::Builtin => Some(Color32::from_gray(190)),
     }
 }
 
@@ -116,8 +120,8 @@ fn category_color(cat: &str) -> Color32 {
 }
 
 impl Menu {
-    /// The built-in entries now, the catalog's and the atlas's on a background thread. The
-    /// Featured shuffle's seed is `JETCARP_QS_SEED`, else drawn from the clock.
+    /// The menu, loaded from the library on a background thread. The Featured shuffle's seed is
+    /// `JETCARP_QS_SEED`, else drawn from the clock.
     pub fn new() -> Menu {
         let seed = std::env::var("JETCARP_QS_SEED")
             .ok()
@@ -129,14 +133,12 @@ impl Menu {
                     .unwrap_or(1)
             });
         let lib = Library::open_default();
-        let mut items = qsmenu::built_in_items();
-        qsmenu::shuffle(&mut items, seed);
+        let lib_path = Arc::new(lib.path().to_path_buf());
         let mut m = Menu {
-            items,
+            items: vec![],
             view: View::default(),
             loading: None,
             stamp: String::new(),
-            atlas_stamp: None,
             seed,
             order: vec![],
             order_key: None,
@@ -150,6 +152,7 @@ impl Menu {
             clock: Instant::now(),
             last_check: 0.0,
             lib,
+            lib_path,
             facets: None,
         };
         m.rows();
@@ -161,7 +164,7 @@ impl Menu {
         self.clock.elapsed().as_secs_f64()
     }
 
-    /// Load the catalog and the atlas again in the background.
+    /// Load the menu from the library again in the background.
     pub fn reload(&mut self) {
         let (tx, rx) = channel();
         let path = self.lib.path().to_path_buf();
@@ -170,18 +173,17 @@ impl Menu {
             .name("jetcarp-qs-load".into())
             .spawn(move || {
                 let lib = Library::open(path);
-                let mut items = qsmenu::load(&lib);
-                qsmenu::shuffle(&mut items, seed);
+                let mut items = menu::load(&lib);
+                menu::shuffle(&mut items, seed);
                 let _ = tx.send(items);
             })
             .ok();
         self.loading = Some(rx);
         self.stamp = stamp(&self.lib);
-        self.atlas_stamp = atlas_stamp();
     }
 
-    /// Reload when the catalog's Quick Start rows or the atlas file changed; forget previews
-    /// off screen for a while. Called every frame on every screen; checks about once a second.
+    /// Reload when the library's Quick Start rows changed; forget previews off screen for a
+    /// while. Called every frame on every screen; checks about once a second.
     pub fn refresh_if_changed(&mut self) {
         let now = self.now();
         self.pool.forget(now);
@@ -189,11 +191,9 @@ impl Menu {
             return;
         }
         self.last_check = now;
-        let a = atlas_stamp();
-        if a != self.atlas_stamp {
+        if self.loading.is_none() && stamp(&self.lib) != self.stamp {
+            // An entry may have changed under its handle (an atlas published again).
             self.pool.clear();
-            self.reload();
-        } else if stamp(&self.lib) != self.stamp {
             self.reload();
         }
     }
@@ -210,58 +210,43 @@ impl Menu {
     }
 
     fn rows(&mut self) {
-        self.popular = qsmenu::popular(&self.items, ROW_LEN);
-        self.recent = qsmenu::recent(&self.items, ROW_LEN);
-        self.random = qsmenu::random(&self.items, self.seed, ROW_LEN);
-    }
-
-    /// Entry index by id.
-    pub fn find(&self, id: &str) -> Option<usize> {
-        self.items.iter().position(|e| e.q.id == id)
+        self.popular = menu::popular(&self.items, ROW_LEN);
+        self.recent = menu::recent(&self.items, ROW_LEN);
+        self.random = menu::random(&self.items, self.seed, ROW_LEN);
     }
 
     /// The full scene of an entry: what opening it loads.
     pub fn full_scene(&self, i: usize) -> Result<Scene, String> {
-        let it = &self.items[i];
-        match &it.atlas {
-            Some(a) => atlas::load_full(&a.path, a.id),
-            None => Ok(it.q.scene.clone()),
-        }
+        qs::scene(&self.lib, &self.items[i].handle)
     }
 
     /// The small scene an entry's card runs, for "open at preview size": `None` when the card
-    /// runs the full scene.
+    /// runs its scene made smaller.
     pub fn preview_scene(&self, i: usize) -> Option<Scene> {
-        let a = self.items[i].atlas.as_ref()?;
-        let conn = atlas::open(&a.path).ok()?;
-        atlas::load_card(&conn, a.id).ok().map(|c| c.preview)
+        let it = &self.items[i];
+        if !it.has_preview {
+            return None;
+        }
+        qs::card(&self.lib, &it.handle).ok().map(|c| c.preview)
     }
 
-    /// A scene by entry id; catalog entries not loaded yet are read directly.
-    pub fn scene_of(&self, id: &str) -> Option<Scene> {
-        if let Some(i) = self.find(id) {
-            return self.full_scene(i).ok();
-        }
-        if let Some(n) = id.strip_prefix("atlas:") {
-            let path = atlas::locate()?;
-            return atlas::load_full(&path, n.parse().ok()?).ok();
-        }
-        let bare = id.strip_prefix("find:")?;
-        self.lib.get_quickstart(bare).ok().map(|q| q.scene)
+    /// A scene by an entry's handle (rotations and profiles name entries so), loaded or not.
+    pub fn scene_of(&self, handle: &str) -> Option<Scene> {
+        qs::scene(&self.lib, handle).ok()
     }
 
-    /// Count an opening: in memory now (Popular and Recently run follow), in the catalog on a
+    /// Count an opening: in memory now (Popular and Recently run follow), in the library on a
     /// background thread.
     pub fn note_open(&mut self, i: usize) {
-        let id = self.items[i].q.id.clone();
-        qsmenu::note_open(&mut self.items, &id, &jetcarp_core::pattern::now_utc());
+        let handle = self.items[i].handle.clone();
+        menu::note_open(&mut self.items, &handle, &jetcarp_core::pattern::now_utc());
         self.rev += 1;
         self.order_key = None;
-        self.popular = qsmenu::popular(&self.items, ROW_LEN);
-        self.recent = qsmenu::recent(&self.items, ROW_LEN);
+        self.popular = menu::popular(&self.items, ROW_LEN);
+        self.recent = menu::recent(&self.items, ROW_LEN);
         let path = self.lib.path().to_path_buf();
         std::thread::spawn(move || {
-            if let Err(e) = Library::open(path).note_quickstart_open(&id) {
+            if let Err(e) = Library::open(path).note_quickstart_open(&handle) {
                 eprintln!("Quick Start usage: {e}");
             }
         });
@@ -272,7 +257,7 @@ impl Menu {
     fn update_order(&mut self) {
         let key = (self.view.filter.clone(), self.view.sort, self.rev);
         if self.order_key.as_ref() != Some(&key) {
-            self.order = qsmenu::select(&self.items, &self.view.filter, self.view.sort);
+            self.order = menu::select(&self.items, &self.view.filter, self.view.sort);
             self.order_key = Some(key);
         }
         let k = (self.view.filter.clone(), self.view.sort);
@@ -291,7 +276,7 @@ impl Menu {
             self.facets = Some((
                 self.rev,
                 self.view.filter.clone(),
-                std::sync::Arc::new(qsmenu::facets_for(&self.items, &self.view.filter)),
+                std::sync::Arc::new(menu::facets_for(&self.items, &self.view.filter)),
             ));
         }
     }
@@ -299,8 +284,8 @@ impl Menu {
     /// A new Featured shuffle.
     fn shuffle(&mut self) {
         self.seed = self.seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-        qsmenu::shuffle(&mut self.items, self.seed);
-        self.random = qsmenu::random(&self.items, self.seed, ROW_LEN);
+        menu::shuffle(&mut self.items, self.seed);
+        self.random = menu::random(&self.items, self.seed, ROW_LEN);
         self.rev += 1;
         self.order_key = None;
         self.scroll_top = true;
@@ -365,12 +350,12 @@ impl Menu {
                         filter.behaviour = if sel { String::new() } else { name.clone() };
                     }
                 }
-                if f.origins.len() > 1 || filter.origin.is_some() {
+                if f.sources.len() > 1 || filter.source.is_some() {
                     header(ui, "Source");
-                    for (o, n) in &f.origins {
-                        let sel = filter.origin == Some(*o);
+                    for (o, n) in &f.sources {
+                        let sel = filter.source == Some(*o);
                         if facet_row(ui, o.label(), *n, sel, None) {
-                            filter.origin = if sel { None } else { Some(*o) };
+                            filter.source = if sel { None } else { Some(*o) };
                         }
                     }
                 }
@@ -543,7 +528,8 @@ impl Menu {
             return None;
         }
         let it = &self.items[i];
-        self.pool.see(it.id(), now, || source_of(it));
+        let library = &self.lib_path;
+        self.pool.see(it.id(), now, || source_of(it, library));
         let p = ui.painter_at(rect);
         let hovered = resp.hovered();
         let cat = category_color(&it.behaviour);
@@ -594,22 +580,14 @@ impl Menu {
                 egui::StrokeKind::Outside,
             );
         }
-        if it.origin != Origin::Atlas {
-            let tag = it.origin.label();
+        if let Some(colour) = source_tag(it.source) {
+            let tag = it.source.label();
             let g = p.layout_no_wrap(tag.into(), egui::FontId::proportional(10.0), Color32::BLACK);
             let r = Rect::from_min_size(
                 img_rect.min + egui::vec2(4.0, 4.0),
                 g.size() + egui::vec2(8.0, 2.0),
             );
-            p.rect_filled(
-                r,
-                3.0,
-                if it.origin == Origin::MyFinds {
-                    Color32::from_rgb(0xff, 0xc8, 0x3c)
-                } else {
-                    Color32::from_gray(190)
-                },
-            );
+            p.rect_filled(r, 3.0, colour);
             p.galley(r.min + egui::vec2(4.0, 1.0), g, Color32::BLACK);
         }
         let ty = img_rect.bottom() + 5.0;
@@ -628,7 +606,7 @@ impl Menu {
         clip.text(
             egui::pos2(text_x, ty + 18.0),
             egui::Align2::LEFT_TOP,
-            &it.q.rule,
+            &it.rule,
             egui::FontId::monospace(10.5),
             Color32::from_gray(150),
         );
@@ -639,7 +617,7 @@ impl Menu {
         clip.text(
             egui::pos2(text_x + wide, ty + 33.0),
             egui::Align2::LEFT_TOP,
-            format!(" · {}", it.q.tiling),
+            format!(" · {}", it.tiling),
             egui::FontId::proportional(11.0),
             Color32::from_gray(135),
         );
@@ -662,7 +640,7 @@ impl Menu {
         let shift = ui.input(|i| i.modifiers.shift);
         let mut action = None;
         if clicked {
-            action = Some(if shift && it.atlas.is_some() {
+            action = Some(if shift && it.has_preview {
                 MenuAction::OpenPreview(i)
             } else {
                 MenuAction::Open(i)
@@ -672,10 +650,10 @@ impl Menu {
         if it.opens > 0 {
             tip.push_str(&format!("\n\nOpened {} times", it.opens));
         }
-        if let Some(src) = &it.q.source {
+        if let Some(src) = it.credit() {
             tip.push_str(&format!("\n\nSource: {src}"));
         }
-        if it.atlas.is_some() {
+        if it.has_preview {
             tip.push_str("\n\nClick to open at full size; Shift-click at preview size.");
         }
         resp.on_hover_text(tip);

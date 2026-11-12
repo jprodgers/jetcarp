@@ -1,16 +1,13 @@
-//! The hunt dashboard's and the Quick Start menu's logic (Phase 4, deliverables 7 and 8): job
-//! summaries, stop and resume across catalog handles (through the job runner's kinds and
-//! handles), the heat map's binning, finds, ratings, the opening rows, search and filters, and an
-//! entry's ratings and opens.
+//! The hunt dashboard's logic (Phase 4, deliverable 7): job summaries, stop and resume across
+//! catalog handles (through the job runner's kinds and handles), the heat map's binning, finds and
+//! ratings. The Quick Start menu's are the store's (`jetcarp-store/tests/quickstart.rs`).
 
 use jetcarp_core::pattern::CurationState;
 use jetcarp_core::topology::{Nb, TilingSpec};
 use jetcarp_search::dashboard::{self, HeatColour, Target};
 use jetcarp_search::hunt::{self, HuntSpec};
 use jetcarp_search::jobs::{self, RunOptions, Runner};
-use jetcarp_store::qsmenu::{self, Filter, Origin, Sort};
-use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library, QsStatus, QuickStartRow, UsageRow};
-use std::collections::HashMap;
+use jetcarp_store::{HeatQuery, HeatRow, JobStatus, Library};
 
 fn temp_lib(name: &str) -> Library {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
@@ -221,175 +218,6 @@ fn hunt_jobs_summarise_stop_resume_and_feed_the_heat_map() {
     assert_eq!(j.status, JobStatus::Paused);
     let s = dashboard::summaries(&[j], dashboard::now_seconds());
     assert!(s[0].can_resume() && s[0].total.is_none() && s[0].eta_s.is_none());
-}
-
-fn scene_row(id: &str, title: &str, status: QsStatus) -> QuickStartRow {
-    let e = jetcarp_core::quickstart::entries()
-        .into_iter()
-        .find(|e| e.id == "rule:B3/S23")
-        .unwrap();
-    let mut q = QuickStartRow::for_scene(id, "scene", e.scene);
-    q.title = title.into();
-    q.status = status;
-    q.behaviour = "soup".into();
-    q
-}
-
-#[test]
-fn menu_has_every_source_categories_and_search() {
-    let lib = temp_lib("menu");
-    lib.put_quickstart(&scene_row("my-life", "My Life soup", QsStatus::Approved))
-        .unwrap();
-    lib.put_quickstart(&scene_row("waiting", "Waiting", QsStatus::Candidate))
-        .unwrap();
-    let mut items = qsmenu::load_with(&lib, None);
-    let n_built = jetcarp_core::quickstart::entries().len();
-    // One approved scene and the built-ins; the candidate is hidden.
-    assert_eq!(items.len(), n_built + 1);
-    assert!(items.iter().all(|i| i.q.id != "find:waiting"));
-    assert!(
-        items
-            .iter()
-            .all(|i| i.q.id.strip_prefix("find:").is_none_or(|x| x == "my-life"))
-    );
-    let mine = items.iter().find(|i| i.q.id == "find:my-life").unwrap();
-    assert_eq!(
-        (mine.origin, mine.family.as_str(), mine.grid_group.as_str()),
-        (Origin::MyFinds, "Life-like", "Squares")
-    );
-    // Built-ins get a category and a grid group.
-    let ant = items.iter().find(|i| i.q.id == "langtons-ant").unwrap();
-    assert_eq!(ant.behaviour, "Ants & turmites");
-    let r30 = items.iter().find(|i| i.q.id == "rule:W30").unwrap();
-    assert_eq!(r30.behaviour, "Fractals & rows");
-    assert!(items.iter().any(|i| i.grid_group == "Aperiodic"));
-    assert!(items.iter().any(|i| i.grid_group == "Archimedean"));
-    assert!(items.iter().all(|i| i.origin != Origin::Atlas));
-
-    // Search: every word must match, in any field.
-    let f = |text: &str| Filter {
-        text: text.into(),
-        ..Default::default()
-    };
-    let hits = qsmenu::select(&items, &f("my life"), Sort::Featured);
-    assert_eq!(hits.len(), 1);
-    assert_eq!(items[hits[0]].q.id, "find:my-life");
-    assert!(qsmenu::select(&items, &f("zzz-nothing"), Sort::Featured).is_empty());
-    // Categories.
-    let fam = Filter {
-        family: "Life-like".into(),
-        grid: "Squares".into(),
-        origin: Some(Origin::MyFinds),
-        ..Default::default()
-    };
-    let v = qsmenu::select(&items, &fam, Sort::Rule);
-    assert_eq!(v.len(), 1);
-    assert_eq!(items[v[0]].q.id, "find:my-life");
-    let beh = qsmenu::facets(&items, |i| &i.behaviour);
-    assert!(beh.iter().any(|(b, _)| b == "Classics"));
-    // Sorts: rules ascend; a shuffle is reproducible and keeps every entry.
-    let all = Filter::default();
-    let rules: Vec<String> = qsmenu::select(&items, &all, Sort::Rule)
-        .iter()
-        .map(|&i| items[i].q.rule.clone())
-        .collect();
-    assert!(rules.windows(2).all(|w| w[0] <= w[1]));
-    qsmenu::shuffle(&mut items, 7);
-    let feat = qsmenu::select(&items, &all, Sort::Featured);
-    assert_eq!(feat.len(), items.len());
-    qsmenu::shuffle(&mut items, 7);
-    assert_eq!(feat, qsmenu::select(&items, &all, Sort::Featured));
-
-    // A user rating of an entry and its opens show in the next load.
-    let row = lib.get_quickstart("my-life").unwrap();
-    qsmenu::rate_entry(&lib, &row, 5).unwrap();
-    assert!(qsmenu::rate_entry(&lib, &row, 6).is_err());
-    let r = lib.ratings(Some("quickstart")).unwrap();
-    assert_eq!(
-        (
-            r.len(),
-            r[0].target_id.as_str(),
-            r[0].rating,
-            r[0].rater.as_str()
-        ),
-        (1, "my-life", 5.0, "user")
-    );
-    lib.note_quickstart_open("find:my-life").unwrap();
-    lib.note_quickstart_open("find:my-life").unwrap();
-    let items = qsmenu::load_with(&lib, None);
-    let top = &items[qsmenu::popular(&items, 1)[0]];
-    assert_eq!(
-        (top.q.id.as_str(), top.opens, top.rating),
-        ("find:my-life", 2, Some(5.0))
-    );
-}
-
-fn usage(id: &str, opens: u64, last: &str) -> UsageRow {
-    UsageRow {
-        entry_id: id.into(),
-        opens,
-        first_opened: Some("2026-01-01T00:00:00Z".into()),
-        last_opened: Some(last.into()),
-    }
-}
-
-#[test]
-fn popular_recent_and_random_rows() {
-    let mut items = qsmenu::built_in_items();
-    let usage = vec![
-        usage("life", 3, "2026-11-01T10:00:00Z"),
-        usage("rule:B3/S23", 3, "2026-11-02T10:00:00Z"),
-        usage("wireworld", 5, "2026-10-01T10:00:00Z"),
-        usage("brians-brain", 1, "2026-11-05T10:00:00Z"),
-    ];
-    // A rating breaks the tie between the two entries opened three times.
-    let mut ratings = HashMap::new();
-    ratings.insert(("quickstart".to_string(), "life".to_string()), 5.0);
-    qsmenu::apply_usage(&mut items, &usage, &ratings);
-    fn ids_of(items: &[qsmenu::Item], v: Vec<usize>) -> Vec<String> {
-        v.into_iter().map(|i| items[i].q.id.clone()).collect()
-    }
-    let ids = |v: Vec<usize>| ids_of(&items, v);
-    assert_eq!(
-        ids(qsmenu::popular(&items, 10)),
-        ["wireworld", "life", "rule:B3/S23", "brians-brain"]
-    );
-    assert_eq!(
-        ids(qsmenu::recent(&items, 2)),
-        ["brians-brain", "rule:B3/S23"]
-    );
-    // Without the rating, the later open wins the tie.
-    let mut plain = qsmenu::built_in_items();
-    qsmenu::apply_usage(&mut plain, &usage, &HashMap::new());
-    let p: Vec<String> = qsmenu::popular(&plain, 3)
-        .into_iter()
-        .map(|i| plain[i].q.id.clone())
-        .collect();
-    assert_eq!(p, ["wireworld", "rule:B3/S23", "life"]);
-    // Opening counts at once.
-    qsmenu::note_open(&mut items, "hex-wolfram", "2026-11-06T00:00:00Z");
-    assert_eq!(items[qsmenu::recent(&items, 1)[0]].q.id, "hex-wolfram");
-    let ids = |v: Vec<usize>| ids_of(&items, v);
-
-    // Random: the same seed gives the same draw, another seed another; no repeats; the order
-    // of the menu does not matter.
-    let a = ids(qsmenu::random(&items, 42, 12));
-    let b = ids(qsmenu::random(&items, 42, 12));
-    let c = ids(qsmenu::random(&items, 43, 12));
-    assert_eq!(a, b);
-    assert_ne!(a, c);
-    let mut d = a.clone();
-    d.sort();
-    d.dedup();
-    assert_eq!(d.len(), 12);
-    let mut rev = items.clone();
-    rev.reverse();
-    let r: Vec<String> = qsmenu::random(&rev, 42, 12)
-        .into_iter()
-        .map(|i| rev[i].q.id.clone())
-        .collect();
-    assert_eq!(r, a);
-    assert_eq!(qsmenu::random(&items, 1, 100_000).len(), items.len());
 }
 
 #[test]

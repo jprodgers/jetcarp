@@ -9,8 +9,8 @@
 //!   its working database ([`store`], `searches/<uuid>/search.sqlite` beside the library, with
 //!   the search's state, so a stopped search carries on without reading its runs again).
 //! - [`reviews`]: verdicts on runs, kept as ratings in the library.
-//! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and publishing the atlas Quick
-//!   Start reads.
+//! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and the atlas: the Quick Start rows
+//!   picked from a search's runs.
 
 pub mod archive;
 pub mod atlas;

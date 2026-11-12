@@ -894,7 +894,9 @@ mod tests {
         assert_eq!((r.state, r.rating), (CurationState::Reviewed, Some(4)));
         // Promote: the scene appears in the Quick Start's finds.
         assert_eq!(promote(&lib, ship).unwrap(), format!("find:{}", ship.id));
-        let finds = jetcarp_store::quickstart::user_finds(&lib);
+        let finds = lib
+            .quickstart(&[jetcarp_store::QsSource::Promotion])
+            .unwrap();
         assert_eq!(finds.len(), 1);
         assert_eq!(lib.get(&ship.id).unwrap().state, CurationState::Promoted);
         // Thumbnails render.

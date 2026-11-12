@@ -322,8 +322,8 @@ pub fn promote_run_with(
         "sweep-{}",
         &jetcarp_core::sha256::sha256_hex(key.as_bytes())[..32]
     );
-    let mut q = jetcarp_store::QuickStartRow::for_scene(&id, "sweep", sc);
-    q.source_id = Some(key);
+    let mut q = jetcarp_store::QuickStartRow::for_scene(&id, "sweep_run", sc);
+    q.target_id = Some(key);
     q.behaviour = r
         .get("row_class")
         .and_then(|c| c.as_str())

@@ -19,11 +19,11 @@ use std::time::{Duration, Instant};
 /// Finds a Quick Start entry's scene.
 pub type Lookup = Arc<dyn Fn(&str) -> Option<Scene> + Send + Sync>;
 
-/// Finds Quick Start entries in the user's library, as the app does.
+/// Finds Quick Start entries in the user's library by handle, as the app does.
 #[cfg(feature = "library")]
 pub fn library_lookup() -> Lookup {
     let library = jetcarp_store::Library::open_default();
-    Arc::new(move |id: &str| jetcarp_store::qsmenu::scene_by_id(&library, id))
+    Arc::new(move |handle: &str| jetcarp_store::quickstart::scene(&library, handle).ok())
 }
 
 /// For a stage whose scenes are all inline (the macOS screen saver's): finds nothing.

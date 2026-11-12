@@ -308,8 +308,9 @@ struct ExportArgs {
     /// Only these classes (comma-separated).
     #[arg(long)]
     class: Option<String>,
-    /// Quick Start statuses exported (comma-separated; default auto,approved; "none" for none).
-    #[arg(long, default_value = "auto,approved")]
+    /// Quick Start sources exported, their entries that are not hidden (comma-separated:
+    /// promotion, pack, atlas, builtin; default promotion,pack; "none" for none).
+    #[arg(long, default_value = "promotion,pack")]
     quickstart: String,
     /// Ant and turmite curation states exported (comma-separated; default promoted,reviewed;
     /// "none" for none).

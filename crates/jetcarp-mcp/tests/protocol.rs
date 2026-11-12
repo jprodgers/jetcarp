@@ -578,7 +578,19 @@ fn quickstart_list_checks_its_status() {
         json!({"kind": "quickstart", "status": "maybe"}),
     );
     assert_eq!(r["isError"], true);
-    assert!(text(&r).contains("candidate"), "{}", text(&r));
+    assert!(text(&r).contains("shown or hidden"), "{}", text(&r));
+    let r = call(
+        &mut s,
+        &mut h,
+        "library_list",
+        json!({"kind": "quickstart", "source": "nonesuch"}),
+    );
+    assert_eq!(r["isError"], true);
+    assert!(
+        text(&r).contains("builtin, pack, atlas, promotion"),
+        "{}",
+        text(&r)
+    );
 }
 
 #[test]

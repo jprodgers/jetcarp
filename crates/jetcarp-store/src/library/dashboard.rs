@@ -1,5 +1,5 @@
 //! Catalog reads for the hunt dashboard and the Quick Start menu (`jetcarp_search::dashboard`,
-//! `crate::qsmenu`): Quick Start usage, the latest user rating of every target, the rule-space
+//! `crate::quickstart::menu`): Quick Start usage, the latest user rating of every target, the rule-space
 //! heat map's rows, and a job's finds. All of them are plain reads (WAL lets them run while a
 //! hunt writes).
 
@@ -8,8 +8,8 @@ use super::*;
 /// One row of `quickstart_usage`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct UsageRow {
-    /// The entry id as the app knows it (`find:<id>`, `rule:<notation>`, a bundled name).
-    pub entry_id: String,
+    /// The entry's handle (`find:<id>`, `atlas:<...>`, `rule:<notation>`, a bundled name).
+    pub handle: String,
     pub opens: u64,
     pub first_opened: Option<String>,
     pub last_opened: Option<String>,
@@ -61,13 +61,13 @@ impl Library {
         self.read(vec![], |c| {
             let mut st = c
                 .prepare(
-                    "SELECT entry_id, opens, first_opened, last_opened FROM quickstart_usage
-                     ORDER BY last_opened DESC, entry_id",
+                    "SELECT handle, opens, first_opened, last_opened FROM quickstart_usage
+                     ORDER BY last_opened DESC, handle",
                 )
                 .map_err(e)?;
             st.query_map([], |r| {
                 Ok(UsageRow {
-                    entry_id: r.get(0)?,
+                    handle: r.get(0)?,
                     opens: r.get::<_, i64>(1)? as u64,
                     first_opened: r.get(2)?,
                     last_opened: r.get(3)?,

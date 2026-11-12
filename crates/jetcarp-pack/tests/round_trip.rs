@@ -499,3 +499,139 @@ fn an_export_copies_when_it_cannot_link() {
         }
     }
 }
+
+/// Atlas entries (an explore search's runs, published into the Quick Start table) go into a pack
+/// like any other entry, under their pack ids, and a selection of a few makes a pack of them alone.
+/// Imported, they are a pack's entries with their scenes, titles, descriptions and categories
+/// (their previews and mature states stay behind), shown in the menu where they were; the
+/// publisher's own library maps them back to its atlas entries.
+#[test]
+fn atlas_entries_travel_in_a_pack() {
+    use jetcarp_core::{Boundary, CaSpec, Scene, TilingSpec};
+    use jetcarp_store::quickstart::{self as qs, menu};
+    use jetcarp_store::{QsSource, QuickStartRow};
+    let dir = temp("qs-atlas");
+    let lib = small_library(&dir);
+    let job = lib.create_job("explore", &serde_json::json!({})).unwrap();
+    let uuid = lib.job(job).unwrap().uuid;
+    // Rows as the atlas makes them: the run on its large grid, a preview and a mature state.
+    let row = |run: i64, rule: &str, cat: &str| -> QuickStartRow {
+        let grid = |w, h| TilingSpec::rect("square", w, h, Boundary::Wrap);
+        let mut scene = Scene::new(grid(240, 240));
+        scene.name = format!("{rule} — square");
+        let mut ca = CaSpec::new(rule);
+        ca.palette = Some("Ember".into());
+        scene.cas.push(ca);
+        let (id, handle) = jetcarp_search::explore::atlas::row_ids(&uuid, run);
+        let mut q = QuickStartRow::for_scene(&id, "search_run", scene.clone());
+        q.handle = handle;
+        q.source = QsSource::Atlas;
+        q.source_ref = uuid.clone();
+        q.target_id = Some(format!("{uuid}:{run}"));
+        q.title = format!("Atlas run {run}");
+        q.description = format!("{rule} on square\nSeed: random, density 0.3\nScore 2.00");
+        q.category = cat.into();
+        q.behaviour = cat.into();
+        let mut preview = scene;
+        preview.tiling = grid(32, 24);
+        q.preview = Some(preview);
+        q.mature_gen = 100;
+        q.mature = Some(qs::deflate_state(&vec![1u8; 32 * 24]));
+        q.score = Some(2.0);
+        q
+    };
+    let rows = vec![
+        row(7, "B36/S23", "Gliders & ships"),
+        row(8, "B2/S/C3", "Turbulence"),
+        row(9, "B3/S12345", "Labyrinths"),
+    ];
+    lib.publish_atlas(job, &uuid, &rows).unwrap();
+    // A pack of two of them.
+    let p = publisher(6, "Test Publisher");
+    let mut b = book(&[]);
+    let store = dir.join("store");
+    let mut o = options("atlas", &store);
+    o.selection.ids = Some(rows[..2].iter().map(|q| q.id.clone()).collect());
+    o.selection.searches = Some(vec![]);
+    let out = run(&lib, &p, &mut b, &o);
+    assert!(out.notes.is_empty(), "{:?}", out.notes);
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&out.manifest).unwrap();
+    let table = |name: &str| -> Vec<serde_json::Value> {
+        let mut out = vec![];
+        src.table_rows(&v, name, |_, r| {
+            out.extend(r);
+            Ok(())
+        })
+        .unwrap();
+        out
+    };
+    let packed = table("quickstart");
+    assert_eq!(packed.len(), 2);
+    assert!(table("patterns").is_empty());
+    for q in &packed {
+        assert!(q["id"].as_str().unwrap().starts_with("qs-"), "{q}");
+        assert!(
+            q["source"].is_null(),
+            "a search run is no pattern or ant: {q}"
+        );
+        let orig = rows.iter().find(|r| r.title == q["title"]).unwrap();
+        assert_eq!(q["behaviour"], orig.category.as_str());
+        assert_eq!(q["description"], orig.description.as_str());
+    }
+    let prov: Vec<_> = table("provenance")
+        .into_iter()
+        .filter(|r| r["target"].as_str().unwrap().starts_with("quickstart:"))
+        .collect();
+    assert_eq!(prov.len(), 2);
+    assert!(
+        prov.iter()
+            .all(|r| r["search"] == uuid.as_str() && r["kind"] == "found")
+    );
+
+    // Into a fresh library: a pack's entries, by their pack ids, shown in their categories.
+    let lib2 = Library::open(dir.join("lib2"));
+    let opts = import::Options {
+        path: store.clone(),
+        verify: VerifyMode::None,
+        ..Default::default()
+    };
+    let r = import::import(&lib2, &opts, &|_| {}).unwrap();
+    assert_eq!(r.quickstart, 2);
+    let got = lib2.quickstart(&[QsSource::Pack]).unwrap();
+    assert_eq!(got.len(), 2);
+    for g in &got {
+        let orig = rows.iter().find(|r| r.title == g.title).unwrap();
+        assert_eq!(
+            serde_json::to_value(&g.scene).unwrap(),
+            serde_json::to_value(&orig.scene).unwrap()
+        );
+        assert_eq!(
+            (g.handle.as_str(), g.category.as_str()),
+            (g.id.as_str(), orig.category.as_str())
+        );
+        assert_eq!(g.source_ref, out.manifest);
+        assert!(g.preview.is_none() && g.mature.is_none() && !g.hidden);
+        let h = lib2.provenance("quickstart", &g.id).unwrap();
+        assert_eq!(
+            (h[0].kind.as_str(), h[0].job_uuid.as_str()),
+            ("found", uuid.as_str())
+        );
+    }
+    let items = menu::load(&lib2);
+    for g in &got {
+        let it = items.iter().find(|i| i.handle == g.handle).unwrap();
+        assert_eq!(
+            (it.source, it.behaviour.as_str()),
+            (QsSource::Pack, g.category.as_str())
+        );
+    }
+    // A card of an imported entry runs its scene made smaller, from the start.
+    let card = qs::card(&lib2, &got[0].handle).unwrap();
+    assert!(!card.own_preview && card.mature.is_none());
+    // The publisher's library has them already, as its atlas entries.
+    let r = import::import(&lib, &opts, &|_| {}).unwrap();
+    assert_eq!(r.quickstart, 0);
+    assert!(lib.quickstart(&[QsSource::Pack]).unwrap().is_empty());
+    assert_eq!(lib.quickstart(&[QsSource::Atlas]).unwrap().len(), 3);
+}

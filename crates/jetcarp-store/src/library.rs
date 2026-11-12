@@ -8,8 +8,8 @@
 //! read while a long hunt writes. Writes go through `BEGIN IMMEDIATE` transactions; batch them
 //! ([`Library::add_many`], [`Library::add_sightings`]) for speed.
 //!
-//! **Schema.** Version 2 ([`schema`]): `PRAGMA user_version` = 2 and the application id `JETC`.
-//! A library of schema 1 (before the 0.4 release) is brought up to 2 when it is opened. A library
+//! **Schema.** Version 3 ([`schema`]): `PRAGMA user_version` = 3 and the application id `JETC`.
+//! A library of schema 1 or 2 (before the 0.4 release) is brought up to 3 when it is opened. A library
 //! from a newer JETCARP is refused, and so is a catalog from before schema 1 (`catalog.sqlite`,
 //! made by a build before 0.4): there is no migration from those.
 //!
@@ -20,7 +20,7 @@
 //!
 //! | Table | One row per | Key columns |
 //! | --- | --- | --- |
-//! | `meta` | library fact | `key`, `value`: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
+//! | `meta` | library fact | `key`, `value`: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` (the build whose built-in Quick Start entries the library has) |
 //! | `engine_pins` | pin key in use | `pin_key` (the tiling's identity key: its identity JSON, without an aperiodic family's level), the running engine's `pin`, `polygon_hash`, `neighbour_hash`, `engine_version` (the engine that computed it), `checked` |
 //! | `rules` | rule as run (notation, neighbourhood, steps per generation) | `id`, `notation`, `neighborhood`, `steps_per_gen`, `family` (`lifelike`, `generations`, `wireworld`, `table`, `priority`, ...), `states`, `birth`/`survive` bitmasks (B/S and Generations) |
 //! | `patterns` | rule-free pattern | `id` (content id), `model`, `tiling` (identity JSON), `tiling_key` (family or catalog id), `tiling_name`, `pin_key`, `geometry_pin`, `neighborhood`, `class`, `period`, `dx`/`dy`, `cells`, `canonical`, `rule` (first rule verified in, used to run it), the rule range (`range_bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`; NULL without a range), `seen` (sum of sightings), `score`, curation (`name`, `label`, `tags` JSON, `notes`, `rating`, `state`, `discovered_by`), `emits` (a gun's ship), `needs_reverify`, `engine_version`, `body` (JSON: phases, bbox, site, verification, mover, first-find provenance), `family` (its rule's family, as rule-semantics versions name them: `lifelike`, `generations`, `cyclic`, ...) and `semantics` (the version of that family's meaning it was verified under; [`jetcarp_core::semantics`]) |
@@ -31,8 +31,8 @@
 //! | `census_rows` | rule of a census job | `job_id`, `idx`, `rule`, `summary` (JSON); read by the census results, the job report, and Rhai's `lib.census_rows` |
 //! | `provenance` | event in a record's history | (`target_kind`, `target_id`, `seq`); `kind` (`found`, `imported`, `reverified`), `finder` and `orcid` (`JETCARP_FINDER`, `JETCARP_ORCID`), `search_kind` and `job_uuid`, `pack_hash`, `machine` (OS and CPU architecture), `engine_version`, `geometry_pin`, `source`, `date`. Row 0 is written once and never rewritten (a trigger refuses it); later rows append ([`provenance`]) |
 //! | `id_aliases` | old id of a record | `alias`, `target_kind`, `id`, `reason` (`geometry-change`) |
-//! | `quickstart` | Quick Start entry from any source | `id` (pattern id, `sweep-<hash>`), `source_kind` (`pattern`, `sweep`, `scene`), `source_id`, `title`, `description`, `grid`, `tiling`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `score`, `status` (`auto`, `candidate`, `approved`, `rejected`), `pin_key`, `geometry_pin`, `needs_reverify`, `engine_version` |
-//! | `quickstart_usage` | Quick Start entry id as the app knows it | `opens`, `first_opened`, `last_opened` (local; not exported) |
+//! | `quickstart` | Quick Start entry from any source ([`quickstart`]) | `id`, `handle` (what it is opened by), `source` (`builtin`, `pack`, `atlas`, `promotion`), `source_ref`, `target_kind` (`pattern`, `ant`, `sweep_run`, `search_run`, `scene`), `target_id`, `title`, `description`, the menu's `category`, `grid_group` and `family`, `tiling_key`, `tiling_name`, `rule`, `rule_family`, `behaviour`, `scene` (JSON), `preview` (JSON), `mature_gen`, `mature`, `score`, `rank`, `featured`, `hidden`, `pin_key`, `geometry_pin`, `needs_reverify`, `engine_version` |
+//! | `quickstart_usage` | Quick Start entry the app opened, by its handle | `opens`, `first_opened`, `last_opened` (local; not exported) |
 //! | `ratings` | rating of a pattern, an ant run, a Quick Start entry, or a search run | `target_kind`, `target_id` (a search run: `<search uuid>:<run id>`), `rater` (`user` or `model:<name>`; a search run's reviewer may be any name), `rating` (1-5), `verdict` (a search run's keep, maybe or drop; rating 5, 3, 1), `note`, `source` |
 //! | `ants` | ant or turmite run: rule, tiling, start ([`ants`]) | `id` (`ant-` and a content id), `rule`, `kind` (`string`, `table`), `states`, `colors`, `tiling`, `tiling_key`, `pin_key`, `geometry_pin`, `start`, `outcome` (`highway`, `periodic`, `symmetric`, `bounded`, `chaotic`), `period`, `dx`/`dy`, `speed`, `onset`, `steps`, `cells`, `body` (JSON: the run with its proof, and the limits), `score`, curation, `job_id`, `needs_reverify`, `engine_version` |
 //! | `media` | picture or animation ([`crate::media`]) | `target_kind`, `target_id`, `kind` (`frames`, `gif`, `webp`, `poster`, `thumb`), `from_seed`, `hash` (SHA-256 of the file; for `frames` of its frame list) and `ext` (the file is `media/<first two hex digits>/<hash>.<ext>` beside the library), `render` (JSON), `width`, `height`, `frames`, `bytes`, `key` (render key; another key means stale) |
@@ -76,6 +76,7 @@ mod jobs;
 pub mod pack;
 pub mod provenance;
 mod query;
+pub mod quickstart;
 pub mod schema;
 pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_identity, ant_score};
 mod ratings;
@@ -85,6 +86,7 @@ pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
 pub use provenance::{AliasRow, History, Origin, ProvenanceRow};
 pub use query::{Query, Update, sort_records};
+pub use quickstart::{AtlasWrite, BuiltinSync, MenuRow, QsSource, QuickStartRow, TARGET_KINDS};
 pub use ratings::{Dedupe, RatingRow, RunReview, VERDICTS, search_run_target, verdict_rating};
 pub use reverify::{Reverified, ReverifyCounts, ReverifyTarget};
 pub use schema::{PinCheck, SCHEMA_VERSION, new_uuid};
@@ -122,93 +124,6 @@ pub enum AddOutcome {
     /// The pattern was already stored; its seen count is now `seen`. `new_rule`: it had not been
     /// verified in this rule before.
     Merged { seen: u64, new_rule: bool },
-}
-
-/// Status of a Quick Start entry: `auto` and `approved` are shown in the menu, `candidate` and
-/// `rejected` hidden.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QsStatus {
-    /// Shown, picked by a search.
-    Auto,
-    /// Hidden until approved.
-    Candidate,
-    /// Shown (approved by the user, or added by hand).
-    #[default]
-    Approved,
-    /// Hidden by the user.
-    Rejected,
-}
-
-impl QsStatus {
-    pub fn name(self) -> String {
-        name_of(&self)
-    }
-    pub fn parse(s: &str) -> Result<QsStatus, String> {
-        parse_name(&s.trim().to_ascii_lowercase())
-            .map_err(|_| format!("unknown status '{s}' (auto, candidate, approved, rejected)"))
-    }
-    /// Shown in the Quick Start menu.
-    pub fn shown(self) -> bool {
-        matches!(self, QsStatus::Auto | QsStatus::Approved)
-    }
-}
-
-/// One Quick Start entry (table `quickstart`).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct QuickStartRow {
-    /// Pattern id, `sweep-<hash>`, or a scene's id. The app shows it as `find:<id>`.
-    pub id: String,
-    /// `pattern`, `sweep`, or `scene`.
-    pub source_kind: String,
-    pub source_id: Option<String>,
-    pub title: String,
-    pub description: String,
-    /// Tiling display name.
-    pub grid: String,
-    /// Main rule notation and its family (`lifelike`, `generations`, ...).
-    pub rule: String,
-    pub rule_family: String,
-    /// `still life`, `oscillator`, `spaceship`, a row class, ... (free text for now).
-    pub behaviour: String,
-    pub scene: Scene,
-    pub score: Option<f64>,
-    pub status: QsStatus,
-    pub created: String,
-    pub updated: String,
-}
-
-impl QuickStartRow {
-    /// A row for a scene, with the grid and rule read from it.
-    pub fn for_scene(id: &str, source_kind: &str, scene: Scene) -> QuickStartRow {
-        let (rule, family) = scene
-            .cas
-            .first()
-            .map(|c| {
-                let fam = Rule::parse(&c.rule)
-                    .map(|(r, _)| rule_family(&r).to_string())
-                    .unwrap_or_default();
-                (c.rule.clone(), fam)
-            })
-            .unwrap_or_default();
-        let now = now_utc();
-        QuickStartRow {
-            id: id.to_string(),
-            source_kind: source_kind.to_string(),
-            source_id: None,
-            title: scene.name.clone(),
-            description: scene.description.clone(),
-            grid: jetcarp_core::pattern::tiling_display_name(&scene.tiling),
-            rule,
-            rule_family: family,
-            behaviour: String::new(),
-            scene,
-            score: None,
-            status: QsStatus::Approved,
-            created: now.clone(),
-            updated: now,
-        }
-    }
 }
 
 /// Job status.
@@ -412,7 +327,7 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
 
 /// The short key of a tiling (its family, or its catalog id: `square`, `k3-019`), the
 /// `tiling_key` columns.
-fn short_tiling_key(t: &TilingSpec) -> String {
+pub(super) fn short_tiling_key(t: &TilingSpec) -> String {
     t.params
         .as_ref()
         .and_then(|p| p.get("catalog"))
@@ -1107,7 +1022,7 @@ impl Library {
             tx.execute("DELETE FROM patterns WHERE id = ?1", [&r.id])
                 .map_err(e)?;
             tx.execute(
-                "DELETE FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1",
+                "DELETE FROM quickstart WHERE target_kind = 'pattern' AND target_id = ?1",
                 [&r.id],
             )
             .map_err(e)?;
@@ -1373,172 +1288,6 @@ impl Library {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Quick Start
-
-    /// Insert or replace a Quick Start entry (keeping its creation date).
-    pub fn put_quickstart(&self, q: &QuickStartRow) -> Result<(), String> {
-        self.write(|tx| quickstart_in(tx, q))
-    }
-
-    /// Quick Start entries with one of these statuses (all when empty), oldest first.
-    pub fn quickstart(&self, statuses: &[QsStatus]) -> Result<Vec<QuickStartRow>, String> {
-        self.quickstart_where(statuses, None)
-    }
-    /// Quick Start entries with one of these statuses (all when empty), and one id when given.
-    fn quickstart_where(
-        &self,
-        statuses: &[QsStatus],
-        id: Option<&str>,
-    ) -> Result<Vec<QuickStartRow>, String> {
-        let mut filter = if statuses.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "WHERE status IN ({})",
-                statuses
-                    .iter()
-                    .map(|s| format!("'{}'", s.name()))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        if id.is_some() {
-            filter.push_str(if filter.is_empty() {
-                "WHERE id = ?1"
-            } else {
-                " AND id = ?1"
-            });
-        }
-        self.read(vec![], |c| {
-            let mut st = c
-                .prepare(&format!(
-                    "SELECT id, source_kind, source_id, title, description, grid, rule,
-                        rule_family, behaviour, scene, score, status, created, updated
-                     FROM quickstart {filter} ORDER BY created, id"
-                ))
-                .map_err(e)?;
-            let rows = st
-                .query_map(rusqlite::params_from_iter(id.iter()), |r| {
-                    Ok((
-                        (
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, Option<String>>(2)?,
-                            r.get::<_, String>(3)?,
-                            r.get::<_, String>(4)?,
-                            r.get::<_, String>(5)?,
-                            r.get::<_, String>(6)?,
-                        ),
-                        (
-                            r.get::<_, String>(7)?,
-                            r.get::<_, String>(8)?,
-                            r.get::<_, String>(9)?,
-                            r.get::<_, Option<f64>>(10)?,
-                            r.get::<_, String>(11)?,
-                            r.get::<_, String>(12)?,
-                            r.get::<_, String>(13)?,
-                        ),
-                    ))
-                })
-                .map_err(e)?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(e)?;
-            // Skip rows whose scene no longer loads rather than failing the whole list.
-            Ok(rows
-                .into_iter()
-                .filter_map(|(a, b)| {
-                    Some(QuickStartRow {
-                        id: a.0,
-                        source_kind: a.1,
-                        source_id: a.2,
-                        title: a.3,
-                        description: a.4,
-                        grid: a.5,
-                        rule: a.6,
-                        rule_family: b.0,
-                        behaviour: b.1,
-                        scene: Scene::from_json(&b.2).ok()?,
-                        score: b.3,
-                        status: parse_name(&b.4).ok()?,
-                        created: b.5,
-                        updated: b.6,
-                    })
-                })
-                .collect())
-        })
-    }
-
-    /// One Quick Start entry by id (with or without the `find:` prefix).
-    pub fn get_quickstart(&self, id: &str) -> Result<QuickStartRow, String> {
-        let id = id.trim().trim_start_matches("find:");
-        self.quickstart_where(&[], Some(id))?
-            .pop()
-            .ok_or_else(|| format!("no Quick Start entry '{id}'"))
-    }
-
-    /// Set a Quick Start entry's status.
-    pub fn set_quickstart_status(&self, id: &str, status: QsStatus) -> Result<(), String> {
-        let id = id.trim().trim_start_matches("find:");
-        self.write(|tx| {
-            let n = tx
-                .execute(
-                    "UPDATE quickstart SET status = ?2, updated = ?3 WHERE id = ?1",
-                    params![id, status.name(), now_utc()],
-                )
-                .map_err(e)?;
-            if n == 0 {
-                return Err(format!("no Quick Start entry '{id}'"));
-            }
-            Ok(())
-        })
-    }
-
-    /// Delete a Quick Start entry and its media rows (the files stay until `jetcarp media gc`).
-    pub fn remove_quickstart(&self, id: &str) -> Result<(), String> {
-        let id = id.trim().trim_start_matches("find:");
-        self.write(|tx| {
-            tx.execute("DELETE FROM quickstart WHERE id = ?1", [id])
-                .map_err(e)?;
-            tx.execute(
-                "DELETE FROM media WHERE target_kind = 'quickstart' AND target_id = ?1",
-                [id],
-            )
-            .map_err(e)?;
-            provenance::forget_in(tx, "quickstart", id)?;
-            Ok(())
-        })
-    }
-
-    /// Changes whenever a Quick Start entry is added, changed, or removed (for the app's
-    /// refresh check).
-    pub fn quickstart_stamp(&self) -> String {
-        self.read(String::new(), |c| {
-            c.query_row(
-                "SELECT count(*) || '|' || coalesce(max(updated), '') FROM quickstart",
-                [],
-                |r| r.get::<_, String>(0),
-            )
-            .map_err(e)
-        })
-        .unwrap_or_default()
-    }
-
-    /// Count an opening of a Quick Start entry (`find:<id>`, `rule:<notation>`, a bundled name).
-    pub fn note_quickstart_open(&self, entry_id: &str) -> Result<(), String> {
-        let now = now_utc();
-        self.write(|tx| {
-            tx.execute(
-                "INSERT INTO quickstart_usage (entry_id, opens, first_opened, last_opened)
-                 VALUES (?1, 1, ?2, ?2)
-                 ON CONFLICT (entry_id) DO UPDATE SET opens = opens + 1, last_opened = ?2",
-                params![entry_id, now],
-            )
-            .map_err(e)?;
-            Ok(())
-        })
-    }
-
-    // -----------------------------------------------------------------------------------------
     // Export, import, info
 
     /// Write records as JSON files, one per pattern (`<dir>/<id>.json`, with its rules and rule
@@ -1651,11 +1400,11 @@ impl Library {
                 let row = match map.get(&stem) {
                     Some(new) => {
                         let mut q = QuickStartRow::for_scene(new, "pattern", sc);
-                        q.source_id = Some(new.clone());
+                        q.target_id = Some(new.clone());
                         q
                     }
                     None if stem.starts_with("sweep-") => {
-                        QuickStartRow::for_scene(&stem, "sweep", sc)
+                        QuickStartRow::for_scene(&stem, "sweep_run", sc)
                     }
                     None => QuickStartRow::for_scene(&stem, "scene", sc),
                 };
@@ -1708,67 +1457,6 @@ impl Library {
             })
         })
     }
-}
-
-/// Insert or replace a Quick Start entry (keeping its creation date), inside a transaction.
-pub(super) fn quickstart_in(tx: &Transaction, q: &QuickStartRow) -> Result<(), String> {
-    let (pin_key, pin) = schema::pin_for(tx, &q.scene.tiling)?;
-    let new = !tx
-        .prepare_cached("SELECT 1 FROM quickstart WHERE id = ?1")
-        .map_err(e)?
-        .exists([&q.id])
-        .map_err(e)?;
-    tx.execute(
-        "INSERT INTO quickstart (id, source_kind, source_id, title, description, grid,
-                tiling, rule, rule_family, behaviour, scene, score, status, created, updated,
-                pin_key, geometry_pin, needs_reverify, engine_version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                0, ?18)
-             ON CONFLICT (id) DO UPDATE SET source_kind = excluded.source_kind,
-                source_id = excluded.source_id, title = excluded.title,
-                description = excluded.description, grid = excluded.grid,
-                tiling = excluded.tiling, rule = excluded.rule,
-                rule_family = excluded.rule_family, behaviour = excluded.behaviour,
-                scene = excluded.scene, score = excluded.score, status = excluded.status,
-                updated = excluded.updated, pin_key = excluded.pin_key,
-                geometry_pin = excluded.geometry_pin, needs_reverify = 0,
-                engine_version = excluded.engine_version",
-        params![
-            q.id,
-            q.source_kind,
-            q.source_id,
-            q.title,
-            q.description,
-            q.grid,
-            tiling_key(&q.scene.tiling),
-            q.rule,
-            q.rule_family,
-            q.behaviour,
-            q.scene.to_json(),
-            q.score,
-            q.status.name(),
-            q.created,
-            now_utc(),
-            pin_key,
-            pin,
-            jetcarp_core::VERSION,
-        ],
-    )
-    .map_err(e)?;
-    if new {
-        provenance::first_in(
-            tx,
-            "quickstart",
-            &q.id,
-            &Origin::found(),
-            0,
-            &pin,
-            &q.source_kind,
-            &q.created,
-            "",
-        )?;
-    }
-    Ok(())
 }
 
 fn json_files(dir: &Path) -> Result<Vec<PathBuf>, String> {

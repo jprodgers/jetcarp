@@ -198,7 +198,7 @@ fn pattern_passed(tx: &Transaction, old: &str, rec: &PatternRecord) -> Result<()
             for sql in [
                 "DELETE FROM unstored WHERE pattern_id = ?1",
                 // A Quick Start entry the stored record already has wins.
-                "DELETE FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1
+                "DELETE FROM quickstart WHERE target_kind = 'pattern' AND target_id = ?1
                  AND EXISTS (SELECT 1 FROM quickstart WHERE id = ?2)",
             ] {
                 tx.execute(sql, params![old, new]).map_err(e)?;
@@ -207,8 +207,9 @@ fn pattern_passed(tx: &Transaction, old: &str, rec: &PatternRecord) -> Result<()
     }
     put_pattern_rule(tx, new, rid, &rec.verified, &now)?;
     for sql in [
-        "UPDATE quickstart SET id = ?2, source_id = ?2 WHERE id = ?1 AND source_kind = 'pattern'",
-        "UPDATE quickstart SET source_id = ?2 WHERE source_kind = 'pattern' AND source_id = ?1",
+        "UPDATE quickstart SET id = ?2, handle = 'find:' || ?2, target_id = ?2
+         WHERE id = ?1 AND target_kind = 'pattern' AND source = 'promotion'",
+        "UPDATE quickstart SET target_id = ?2 WHERE target_kind = 'pattern' AND target_id = ?1",
         "UPDATE media SET target_id = ?2 WHERE target_kind = 'pattern' AND target_id = ?1",
         "UPDATE ratings SET target_id = ?2 WHERE target_kind = 'pattern' AND target_id = ?1",
         "UPDATE patterns SET emits = ?2 WHERE emits = ?1",
@@ -260,7 +261,7 @@ fn ant_passed(tx: &Transaction, job: i64, old: &str, a: &AntRow) -> Result<(), S
     for sql in [
         "UPDATE media SET target_id = ?2 WHERE target_kind = 'ant' AND target_id = ?1",
         "UPDATE ratings SET target_id = ?2 WHERE target_kind = 'ant' AND target_id = ?1",
-        "UPDATE quickstart SET source_id = ?2 WHERE source_id = ?1",
+        "UPDATE quickstart SET target_id = ?2 WHERE target_kind = 'ant' AND target_id = ?1",
     ] {
         tx.execute(sql, params![old, a.id]).map_err(e)?;
     }
@@ -288,7 +289,7 @@ fn delete_in(tx: &Transaction, kind: &str, id: &str) -> Result<(), String> {
             tx.execute("DELETE FROM patterns WHERE id = ?1", [id])
                 .map_err(e)?;
             tx.execute(
-                "DELETE FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1",
+                "DELETE FROM quickstart WHERE target_kind = 'pattern' AND target_id = ?1",
                 [id],
             )
             .map_err(e)?;
@@ -316,7 +317,8 @@ fn delete_in(tx: &Transaction, kind: &str, id: &str) -> Result<(), String> {
 
 impl Library {
     /// The next records to check again, after `after` by id (ordered by id): flagged ones, or
-    /// every one with `all`. `kind` is `pattern`, `ant`, or `quickstart`.
+    /// every one with `all`. `kind` is `pattern`, `ant`, or `quickstart` (never a built-in
+    /// entry: those are the build's own, written again with each build).
     pub fn reverify_page(
         &self,
         kind: &str,
@@ -366,7 +368,8 @@ impl Library {
                 let ids: Vec<String> = self.read(vec![], |c| {
                     let mut st = c
                         .prepare(&format!(
-                            "SELECT id FROM quickstart WHERE id > ?1 {flag} ORDER BY id LIMIT ?2"
+                            "SELECT id FROM quickstart WHERE id > ?1 {flag}
+                             AND source != 'builtin' ORDER BY id LIMIT ?2"
                         ))
                         .map_err(e)?;
                     st.query_map(params![after, limit as i64], |r| r.get(0))
@@ -402,6 +405,24 @@ impl Library {
                 out.push((k.to_string(), n as u64));
             }
             Ok(out)
+        })
+    }
+
+    /// How many records a re-verification checks: the flagged ones, or with `all` every
+    /// pattern, ant run and Quick Start entry but the built-ins.
+    pub fn reverify_count(&self, all: bool) -> Result<u64, String> {
+        if !all {
+            return Ok(self.flagged()?.iter().map(|x| x.1).sum());
+        }
+        self.read(0, |c| {
+            c.query_row(
+                "SELECT (SELECT count(*) FROM patterns) + (SELECT count(*) FROM ants)
+                    + (SELECT count(*) FROM quickstart WHERE source != 'builtin')",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n as u64)
+            .map_err(e)
         })
     }
 

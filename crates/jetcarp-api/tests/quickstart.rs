@@ -9,7 +9,6 @@ use jetcarp_api::ops::quickstart::*;
 use jetcarp_api::sweeps::{Favourites, Manifest};
 use jetcarp_api::{ErrorKind, call_json};
 use jetcarp_core::pattern::CurationState;
-use jetcarp_store::QsStatus;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -199,16 +198,19 @@ fn list_get_hide_and_remove() {
         keys(&to_value(&l.entries[0])),
         [
             "behaviour",
+            "category",
             "created",
             "description",
             "grid",
+            "hidden",
             "id",
             "rule",
             "rule_family",
             "score",
-            "source_id",
-            "source_kind",
-            "status",
+            "source",
+            "source_ref",
+            "target_id",
+            "target_kind",
             "title"
         ]
     );
@@ -216,7 +218,10 @@ fn list_get_hide_and_remove() {
     assert!(l.text().contains(&format!("\n{gid} ")), "{}", l.text());
     // Read one, with its scene.
     let e = QuickstartGet::run(&cx, IdIn { id: gid.clone() }, &Quiet).unwrap();
-    assert_eq!(e.0.source_kind, "pattern");
+    assert_eq!(
+        (e.0.target_kind.as_str(), e.0.handle.as_str()),
+        ("pattern", gid.as_str())
+    );
     assert!(!e.0.scene.cas.is_empty());
     fails(
         QuickstartGet::run(
@@ -228,52 +233,43 @@ fn list_get_hide_and_remove() {
         ),
         ErrorKind::NotFound,
     );
-    // Hide it (rejected); the text echoes what was given.
+    // Hide it; the text says so, by handle.
     let s = QuickstartUpdate::run(
         &cx,
-        StatusIn {
+        HideIn {
             id: gid.clone(),
-            status: "rejected".into(),
+            hidden: true,
         },
         &Quiet,
     )
     .unwrap();
-    assert_eq!((s.status, s.shown), (QsStatus::Rejected, false));
-    assert_eq!(s.text(), format!("{gid}: rejected\n"));
+    assert!(s.hidden);
+    assert_eq!(s.text(), format!("{gid}: hidden\n"));
     let hidden = QuickstartList::run(
         &cx,
         ListIn {
-            status: Some("rejected".into()),
+            hidden: Some(true),
+            ..Default::default()
         },
         &Quiet,
     )
     .unwrap();
     assert_eq!(hidden.entries.len(), 1);
-    // By name, with JSON.
+    assert!(hidden.entries[0].hidden);
+    // By the row's id, with JSON: shown again.
     let v = call_json(
         &cx,
         "quickstart.update",
-        json!({"id": gid.trim_start_matches("find:"), "status": "approved"}),
+        json!({"id": gid.trim_start_matches("find:"), "hidden": false}),
     )
     .unwrap();
-    assert_eq!(v, json!({"id": gid, "status": "approved", "shown": true}));
+    assert_eq!(v, json!({"id": gid, "hidden": false}));
     fails(
         QuickstartUpdate::run(
             &cx,
-            StatusIn {
-                id: gid.clone(),
-                status: "bogus".into(),
-            },
-            &Quiet,
-        ),
-        ErrorKind::Invalid,
-    );
-    fails(
-        QuickstartUpdate::run(
-            &cx,
-            StatusIn {
+            HideIn {
                 id: "find:nonesuch".into(),
-                status: "approved".into(),
+                hidden: true,
             },
             &Quiet,
         ),
@@ -283,12 +279,28 @@ fn list_get_hide_and_remove() {
         QuickstartList::run(
             &cx,
             ListIn {
-                status: Some("bogus".into()),
+                source: Some("bogus".into()),
+                ..Default::default()
             },
             &Quiet,
         ),
         ErrorKind::Invalid,
     );
+    // The built-in examples are entries too, listed by source.
+    let b = QuickstartList::run(
+        &cx,
+        ListIn {
+            source: Some("builtin".into()),
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(
+        b.entries.len(),
+        jetcarp_store::quickstart::builtin_rows().len()
+    );
+    assert!(b.entries.iter().any(|e| e.id == "langtons-ant"));
     // Remove it: the pattern stays.
     let r = QuickstartRemove::run(&cx, IdIn { id: gid.clone() }, &Quiet).unwrap();
     assert_eq!(r.text(), format!("removed {gid}\n"));

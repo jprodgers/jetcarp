@@ -327,7 +327,7 @@ fn wallpapers_of_the_world_or_a_scene() {
     );
     assert!(
         e.message
-            .contains("neither a scene file nor a Quick Start id")
+            .contains("neither a scene file nor a Quick Start entry")
     );
     let e = fails(
         wp(&mut h, json!({"source": scene, "palette": "Bogus"})),

@@ -1083,7 +1083,9 @@ mod tests {
         // Promote the run: a Quick Start entry the finds list reads, which runs to the same state.
         let lib = jetcarp_store::Library::open(root.join("lib"));
         let id = jetcarp_api::sweeps::promote_run(&m, 2, &lib).unwrap();
-        let finds = jetcarp_store::quickstart::user_finds(&lib);
+        let finds = lib
+            .quickstart(&[jetcarp_store::QsSource::Promotion])
+            .unwrap();
         assert_eq!(finds.len(), 1);
         assert_eq!(finds[0].rule, "W30");
         let mut again = World::from_scene(&finds[0].scene).unwrap();
@@ -1093,7 +1095,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(text(r, "hash"), again.hash_hex());
-        assert_eq!(finds[0].id, format!("find:{id}"));
+        assert_eq!(finds[0].handle, format!("find:{id}"));
         let _ = std::fs::remove_dir_all(&root);
     }
 

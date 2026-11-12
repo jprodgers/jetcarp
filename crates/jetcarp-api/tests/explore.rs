@@ -351,18 +351,42 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
     assert!(rs["runs"].as_u64().unwrap() >= screened(&before));
     let v2 = call_json(&cx, "search.runs", json!({"job": job, "limit": 10})).unwrap();
     assert_eq!(v2["runs"][0]["id"], best);
-    // Published as an atlas.
-    let atlas = dir.join("atlas.sqlite");
+    // Published as an atlas: rows of the Quick Start table, under the search's uuid.
     let p = call_json(
         &cx,
         "quickstart.publish",
-        json!({"job": job, "out": atlas.display().to_string(), "min_score": 0.0,
-               "per_niche": 3}),
+        json!({"job": job, "min_score": 0.0, "per_niche": 3}),
     )
     .unwrap();
-    assert!(p["entries"].as_u64().unwrap() > 0, "{p}");
-    let entries = jetcarp_store::atlas::load(&atlas).unwrap();
-    assert_eq!(entries.len() as u64, p["entries"].as_u64().unwrap());
+    let n = p["entries"].as_u64().unwrap();
+    assert!(n > 0, "{p}");
+    assert_eq!(p["added"].as_u64(), Some(n), "{p}");
+    let rows = cx
+        .library()
+        .quickstart(&[jetcarp_store::QsSource::Atlas])
+        .unwrap();
+    assert_eq!(rows.len() as u64, n);
+    assert!(
+        rows.iter()
+            .all(|q| q.source_ref == p["search"].as_str().unwrap() && q.preview.is_some()),
+        "{p}"
+    );
+    // Published again: the same entries, written again.
+    let again = call_json(
+        &cx,
+        "quickstart.publish",
+        json!({"job": job, "min_score": 0.0, "per_niche": 3}),
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            again["added"].as_u64(),
+            again["updated"].as_u64(),
+            again["removed"].as_u64()
+        ),
+        (Some(0), Some(n), Some(0)),
+        "{again}"
+    );
     // Sealed on request: every run in Parquet, the same runs listed.
     let sealed = call_json(&cx, "search.seal", json!({"job": job})).unwrap();
     assert_eq!(
