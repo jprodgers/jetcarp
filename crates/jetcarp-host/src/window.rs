@@ -880,8 +880,9 @@ impl ApplicationHandler for App {
     }
 }
 
-/// Runs until the host quits, a window closes, or `seconds` pass.
-pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> Result<(), String> {
+/// Runs until the host quits, a window closes, or `seconds` pass, then ends the process: with 0,
+/// or with 1 after printing what went wrong.
+pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
     #[allow(unused_mut)]
     let mut builder = EventLoop::builder();
     // No Dock icon until there is a plain window to switch to (see `sync_outputs`).
@@ -890,9 +891,13 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> Result<(), String> {
         use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
         builder.with_activation_policy(ActivationPolicy::Accessory);
     }
-    let el = builder
-        .build()
-        .map_err(|e| format!("cannot reach the display: {e}"))?;
+    let el = match builder.build() {
+        Ok(el) => el,
+        Err(e) => {
+            say!("jetcarp-host: cannot reach the display: {e}");
+            std::process::exit(1);
+        }
+    };
     let mut app = App {
         core,
         mode,
@@ -926,13 +931,12 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> Result<(), String> {
         tray_refreshed: f64::NEG_INFINITY,
     };
     let ran = el.run_app(&mut app).map_err(|e| e.to_string());
+    // The surfaces go first, while the device lives (and on Windows before Explorer's desktop is
+    // put back over where the wallpapers were).
+    app.outputs.clear();
     #[cfg(windows)]
-    {
-        let had = app.had_desktop && mode == Mode::Host;
-        app.outputs.clear();
-        if had {
-            crate::desktop_win::restore_desktop();
-        }
+    if app.had_desktop && mode == Mode::Host {
+        crate::desktop_win::restore_desktop();
     }
     if mode == Mode::Host && app.core.wants_still() {
         match app.core.leave_still() {
@@ -940,6 +944,20 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> Result<(), String> {
             Err(e) => say!("jetcarp-host: no still picture: {e}"),
         }
     }
-    ran?;
-    app.error.map_or(Ok(()), Err)
+    // Windows keeps a dead icon in the tray until the pointer passes over it, unless it is
+    // taken away.
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        app.tray = None;
+    }
+    app.core.shutdown();
+    let code = match ran.and(app.error.take().map_or(Ok(()), Err)) {
+        Ok(()) => 0,
+        Err(e) => {
+            say!("jetcarp-host: {e}");
+            1
+        }
+    };
+    // `app` keeps the device and the instance: they end with the process.
+    jetcarp_display::exit::end_process(code)
 }

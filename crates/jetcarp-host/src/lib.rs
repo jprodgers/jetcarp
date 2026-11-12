@@ -82,7 +82,7 @@ fn single_instance() -> Result<std::fs::File, String> {
     }
 }
 
-fn run_headless(mut core: core::Core, seconds: Option<f64>) {
+fn run_headless(mut core: core::Core, seconds: Option<f64>) -> ! {
     let gpu = core::SharedGpu::headless();
     core.attach_gpu(gpu);
     let started = Instant::now();
@@ -94,6 +94,9 @@ fn run_headless(mut core: core::Core, seconds: Option<f64>) {
             std::thread::sleep(rest.min(Duration::from_millis(250)));
         }
     }
+    core.shutdown();
+    // `core` keeps the device: it ends with the process (see `jetcarp_display::exit`).
+    jetcarp_display::exit::end_process(0)
 }
 
 fn gpu_setup() {
@@ -104,12 +107,14 @@ fn gpu_setup() {
 }
 
 /// A screen saver or its preview, which nothing else controls and which may run beside a host.
-fn run_saver(mode: window::Mode, seconds: Option<f64>) {
+fn run_saver(mode: window::Mode, seconds: Option<f64>) -> ! {
     gpu_setup();
-    let result = core::Core::for_saver().and_then(|c| window::run(c, mode, seconds));
-    if let Err(e) = result {
-        say!("jetcarp-host: {e}");
-        std::process::exit(1);
+    match core::Core::for_saver() {
+        Ok(c) => window::run(c, mode, seconds),
+        Err(e) => {
+            say!("jetcarp-host: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -138,11 +143,10 @@ pub fn run_scr(args: &[String]) {
     }
 }
 
-/// Runs the host until it is told to quit (or `--seconds` pass).
-pub fn run(args: HostArgs) {
+/// Runs the host until it is told to quit (or `--seconds` pass), then ends the process.
+pub fn run(args: HostArgs) -> ! {
     if args.saver {
         run_saver(window::Mode::Saver, args.seconds);
-        return;
     }
     gpu_setup();
     let _lock = match single_instance() {
@@ -164,9 +168,8 @@ pub fn run(args: HostArgs) {
         }
     };
     if args.headless {
-        run_headless(core, args.seconds);
-    } else if let Err(e) = window::run(core, window::Mode::Host, args.seconds) {
-        say!("jetcarp-host: {e}");
-        std::process::exit(1);
+        run_headless(core, args.seconds)
+    } else {
+        window::run(core, window::Mode::Host, args.seconds)
     }
 }

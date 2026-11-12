@@ -466,6 +466,17 @@ impl Core {
         settled || now - since >= QUIT_GRACE
     }
 
+    /// Puts the host's own things in order before the process ends ([`jetcarp_display::exit`]):
+    /// the link closes (its endpoint file goes), the screens' worlds and GPU buffers are dropped,
+    /// and the GPU is waited on until it is idle. The device itself is left for the process's end.
+    pub fn shutdown(&mut self) {
+        self.listener = None;
+        self.screens.clear();
+        if let Some(g) = &self.gpu {
+            jetcarp_display::exit::wait_idle(&g.device);
+        }
+    }
+
     pub fn frame_time(&self) -> Duration {
         let fps = if self.all_paused() {
             PAUSED_FPS

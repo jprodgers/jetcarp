@@ -11,6 +11,7 @@
 pub mod autostart;
 pub mod caption;
 pub mod desktop_picture;
+pub mod exit;
 pub mod gnome;
 pub mod gpu;
 pub mod host_settings;

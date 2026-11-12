@@ -102,6 +102,8 @@ pub struct JetcarpApp {
     /// What each view (grid tile, outputs, mirror) has coloured.
     views: jetcarp_display::view::Views,
     gpu: bool,
+    /// eframe's device, waited on at exit.
+    wgpu_device: Option<eframe::wgpu::Device>,
     sim: crate::simgpu::SimBackend,
     // Running
     playing: bool,
@@ -241,6 +243,7 @@ impl JetcarpApp {
             color_epoch: 1,
             views: jetcarp_display::view::Views::new(slot_cap),
             gpu,
+            wgpu_device: cc.wgpu_render_state.as_ref().map(|rs| rs.device.clone()),
             sim: crate::simgpu::backend(cc),
             playing: false,
             speed: 15.0,
@@ -420,6 +423,19 @@ impl eframe::App for JetcarpApp {
             &jetcarp_store::Library::default_path(),
             std::time::Duration::from_secs(20),
         );
+        // The rest of the app's own, while the device lives: the AI control link closes (its
+        // endpoint file goes), keep-awake is let go, the GPU simulation's buffers are dropped,
+        // and the GPU is waited on until it is idle. Then the process ends at once, leaving
+        // eframe's device and instance to the system: destroying the last instance unloads the
+        // graphics driver, and a driver thread still running then crashes the process (see
+        // `jetcarp_display::exit`).
+        self.ai = Default::default();
+        self.display.keep.set(false, "");
+        self.sim = crate::simgpu::SimBackend::unavailable("closing".into());
+        if let Some(device) = &self.wgpu_device {
+            jetcarp_display::exit::wait_idle(device);
+        }
+        jetcarp_display::exit::end_process(0);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {

@@ -297,10 +297,7 @@ fn gone_soon() -> bool {
 pub fn run(a: HostArgs) -> Result<()> {
     let j = a.json;
     match a.cmd {
-        HostCmd::Serve(args) => {
-            jetcarp_host::run(args);
-            Ok(())
-        }
+        HostCmd::Serve(args) => jetcarp_host::run(args),
         HostCmd::Scr { args } => {
             #[cfg(windows)]
             {
