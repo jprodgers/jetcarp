@@ -191,6 +191,49 @@ impl JetcarpApp {
         }
     }
 
+    /// *Export the view as PNG…*: what the grid shows now (the camera's centre and zoom), at the
+    /// canvas's size in physical pixels, with the scene in its metadata as the world export has.
+    pub(super) fn export_view(&mut self) {
+        let [cw, ch] = self.canvas_px();
+        let (w, h) = (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32);
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG image", &["png"])
+            .set_file_name("jetcarp-view.png")
+            .save_file()
+        else {
+            return;
+        };
+        let outline = if self.shell.cell_outlines {
+            RenderOptions::default().outline_min_px
+        } else {
+            0.0
+        };
+        let mut meta = render::png_metadata(&self.world);
+        if let Some(m) = meta.iter_mut().find(|m| m.0 == "jetcarp:scene") {
+            m.1 = self.current_scene().to_json();
+        }
+        // As the grid draws it: a wrap-edge world is not repeated past its edges.
+        let opts = render::ViewOptions {
+            outline_min_px: outline,
+            repeat: false,
+            colors: None,
+        };
+        let img = render::render_view(&self.world, w, h, self.cam, self.zoom, &opts);
+        let res = render::write_png(&path, &img, &meta);
+        self.message = Some(match res {
+            Ok(_) => (
+                format!(
+                    "Exported the view: {} ({w}x{h}), generation {}, hash {}",
+                    path.display(),
+                    self.world.generation,
+                    self.world.hash_hex()
+                ),
+                false,
+            ),
+            Err(e) => (format!("Could not export: {e}"), true),
+        });
+    }
+
     /// PNG export size: 2400 px on the long side, or a fixed number of pixels per tile.
     pub(super) fn export_options(&self) -> RenderOptions {
         let tile = geom::area(&self.world.topo.shapes[0]).sqrt().max(1e-9);
