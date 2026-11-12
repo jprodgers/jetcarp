@@ -227,14 +227,15 @@ fn explore_jobs_stop_and_continue_from_their_archive() {
     assert!(p2.elapsed_s > p1.elapsed_s);
     consistent(&db(&lib, job), &p2);
     // And once more, by a time budget. The budget counts from the run's start, loading the
-    // archive included, so it must leave a slow machine (a CI runner) time for a step or more.
+    // archive included, and runs still going at its end are given up, so it must leave a slow
+    // machine (a CI runner) time for a few steps: 15 s recorded no run on CI's Windows runner.
     let out = Runner::new(lib.clone())
         .run(
             job,
             &opts(
                 2,
                 Budget {
-                    minutes: Some(0.25),
+                    minutes: Some(0.5),
                     ..Default::default()
                 },
             ),
