@@ -616,8 +616,11 @@ pub fn run(a: HostArgs) -> Result<()> {
                     }
                 }
                 SaverAction::Remove => {
-                    saver::remove().map_err(|e| anyhow!(e))?;
+                    let note = saver::remove().map_err(|e| anyhow!(e))?;
                     println!("removed");
+                    if let Some(n) = note {
+                        println!("{n}");
+                    }
                 }
                 SaverAction::Status => println!("{}", saver::describe()),
             }

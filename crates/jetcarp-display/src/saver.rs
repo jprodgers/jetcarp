@@ -38,11 +38,13 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     crate::winsaver::install(&launcher).map(|p| (p, vec![]))
 }
 
-pub fn remove() -> Result<(), String> {
+/// Takes JETCARP out of the list (and on macOS puts back the screen saver chosen before it). A
+/// note for people, if there is something to say.
+pub fn remove() -> Result<Option<String>, String> {
     if cfg!(target_os = "macos") {
         crate::macsaver::remove()
     } else {
-        crate::winsaver::remove()
+        crate::winsaver::remove().map(|()| None)
     }
 }
 

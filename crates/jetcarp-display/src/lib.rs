@@ -24,5 +24,6 @@ pub mod saver;
 pub mod simgpu;
 pub mod stage;
 pub mod view;
+pub mod wallpaper_store;
 pub mod winsaver;
 pub mod workarea;

@@ -33,7 +33,10 @@ steps it may list are:
   back in once to finish;
 - **remove the Windows screen saver** (`JETCARP.scr`), clearing the choice in Windows' screen saver
   settings if JETCARP was the one chosen;
-- **remove the macOS screen saver** (`JETCARP.saver`);
+- **remove the macOS screen saver** (`JETCARP.saver`), putting back the screen saver macOS had chosen
+  before JETCARP was installed wherever JETCARP is still the chosen one (your desktop picture, shown
+  as the screen saver, if nothing was recorded). If System Settings is open, it may keep listing
+  JETCARP until you quit and reopen it;
 - **forget the recorded host command**, a small file in the settings folder that GNOME's menu and the
   Windows screen saver use to start the host;
 - **remove the host's lock file**, the empty `host.lock` in the runtime folder that keeps a second

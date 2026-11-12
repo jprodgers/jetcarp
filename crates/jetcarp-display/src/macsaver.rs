@@ -261,6 +261,9 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     let lookup = crate::stage::library_lookup();
     let (baked, warnings) = bake(&name, &settings, &*lookup)?;
     let dest = bundle_path()?;
+    // What the saver will replace once chosen, to put back when it is removed. Without a record,
+    // removing shows the desktop picture as the screen saver instead.
+    let _ = record_choices();
     write_bundle(&dest, &dylib, &baked)?;
     sign(&dest)?;
     let _ = Command::new("open")
@@ -305,13 +308,159 @@ pub fn settings_place() -> &'static str {
     }
 }
 
-/// Deletes the bundle. macOS then goes back to one of its own savers.
-pub fn remove() -> Result<(), String> {
+/// Deletes the bundle, and puts back the screen saver macOS had chosen before JETCARP was
+/// installed wherever the choice still names JETCARP's (see [`crate::wallpaper_store`]). Returns
+/// a note for people on what became of the choice.
+pub fn remove() -> Result<Option<String>, String> {
     let dest = bundle_path()?;
-    if dest.exists() {
+    let had = dest.exists();
+    if had {
         std::fs::remove_dir_all(&dest).map_err(|e| format!("{}: {e}", dest.display()))?;
     }
+    if !cfg!(target_os = "macos") {
+        return Ok(None);
+    }
+    let mut notes = Vec::new();
+    match restore_choices() {
+        Ok(Some(n)) => notes.push(n),
+        Ok(None) => {}
+        Err(e) => notes.push(format!(
+            "the screen saver choice could not be put back ({e}); choose another in {}",
+            settings_place()
+        )),
+    }
+    if had {
+        notes.push(
+            "System Settings, if it is open, may keep listing JETCARP until you quit and reopen it"
+                .into(),
+        );
+    }
+    Ok((!notes.is_empty()).then(|| notes.join("; ")))
+}
+
+/// Where installing records the screen saver choices it replaces: in JETCARP's settings folder.
+pub const CHOICES_RECORD: &str = "screen-saver-before.plist";
+/// A copy of the wallpaper store as it was before removing changed it, in the settings folder.
+const STORE_COPY: &str = "wallpaper-store-before-saver-remove.plist";
+
+/// macOS's wallpaper store, which holds the screen saver chosen for every display and Space.
+fn store_path() -> Result<PathBuf, String> {
+    Ok(dirs::home_dir()
+        .ok_or("no home folder")?
+        .join("Library/Application Support/com.apple.wallpaper/Store/Index.plist"))
+}
+
+fn record_path() -> Result<PathBuf, String> {
+    Ok(crate::host_settings::config_dir()
+        .ok_or("no settings folder")?
+        .join(CHOICES_RECORD))
+}
+
+/// The store (a binary property list) as a tree, through `plutil`.
+fn read_store(path: &Path) -> Result<crate::wallpaper_store::Value, String> {
+    let out = std::process::Command::new("/usr/bin/plutil")
+        .args(["-convert", "xml1", "-o", "-"])
+        .arg(path)
+        .output()
+        .map_err(|e| format!("plutil: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "plutil could not read {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    crate::wallpaper_store::parse(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Writes the store back as a binary property list, in place of the old one at once, and
+/// restarts macOS's wallpaper agent (launchd starts it again), which reads the store as it starts.
+fn write_store(path: &Path, v: &crate::wallpaper_store::Value) -> Result<(), String> {
+    let tmp = path.with_extension("plist.jetcarp");
+    std::fs::write(&tmp, crate::wallpaper_store::write(v))
+        .map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let ok = std::process::Command::new("/usr/bin/plutil")
+        .args(["-convert", "binary1"])
+        .arg(&tmp)
+        .status()
+        .is_ok_and(|s| s.success());
+    if !ok {
+        let _ = std::fs::remove_file(&tmp);
+        return Err("plutil could not write the store".into());
+    }
+    std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let _ = std::process::Command::new("/usr/bin/killall")
+        .arg("WallpaperAgent")
+        .status();
     Ok(())
+}
+
+/// Records the screen saver choices that choosing JETCARP's saver would replace (keeping an
+/// earlier record for places that choose it already).
+#[cfg_attr(not(feature = "library"), allow(dead_code))]
+fn record_choices() -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Ok(());
+    }
+    let store = read_store(&store_path()?)?;
+    let file = record_path()?;
+    let old = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| crate::wallpaper_store::parse(&t).ok());
+    let rec = crate::wallpaper_store::record(&store, old.as_ref(), BUNDLE);
+    if rec == crate::wallpaper_store::Value::Array(vec![]) {
+        return Ok(());
+    }
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    std::fs::write(&file, crate::wallpaper_store::write(&rec))
+        .map_err(|e| format!("{}: {e}", file.display()))
+}
+
+/// Puts back the choices that name JETCARP's saver, from the record (then deleted), else the
+/// desktop picture. A note on what it did, if anything.
+fn restore_choices() -> Result<Option<String>, String> {
+    let store_file = store_path()?;
+    let record_file = record_path().ok();
+    let record = record_file
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| crate::wallpaper_store::parse(&t).ok());
+    if !store_file.exists() {
+        return Ok(None);
+    }
+    let mut store = read_store(&store_file)?;
+    let r = crate::wallpaper_store::restore(&mut store, record.as_ref(), BUNDLE);
+    if r.changed() {
+        if let Some(dir) = crate::host_settings::config_dir()
+            && std::fs::create_dir_all(&dir).is_ok()
+        {
+            let _ = std::fs::copy(&store_file, dir.join(STORE_COPY));
+        }
+        write_store(&store_file, &store)?;
+    }
+    if let Some(p) = record_file {
+        let _ = std::fs::remove_file(p);
+    }
+    let mut said = Vec::new();
+    if r.recorded > 0 {
+        said.push("put back the screen saver macOS had chosen before JETCARP was installed".into());
+    }
+    if r.desktop > 0 {
+        said.push(
+            "with no earlier choice recorded, macOS now shows your desktop picture as the screen saver"
+                .to_string(),
+        );
+    }
+    if r.left > 0 {
+        said.push(format!(
+            "choose another screen saver in {}: macOS still chooses JETCARP's in {} place(s)",
+            settings_place(),
+            r.left
+        ));
+    }
+    Ok((!said.is_empty()).then(|| said.join("; ")))
 }
 
 /// The rotation in the installed bundle, if there is one that can be read.

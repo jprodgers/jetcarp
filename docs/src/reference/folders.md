@@ -65,8 +65,10 @@ when, and the jobs it started; its being there is what tells the app that setup 
 `rotations/`, one JSON file each. The host records the command that starts it in `host-program`, for
 GNOME's menu and the Windows screen saver; while it shows a still picture as your desktop background
 it keeps the stills in `desktop-pictures/` and remembers your own picture in `desktop-picture.json`,
-so that it can put it back. Files written by another settings version, or that cannot be read, give
-the defaults.
+so that it can put it back. On macOS, installing the screen saver records the screen saver macOS had
+chosen in `screen-saver-before.plist`, for removing it to put back (the file goes then), and removing
+it keeps a copy of macOS's wallpaper store as it was in `wallpaper-store-before-saver-remove.plist`.
+Files written by another settings version, or that cannot be read, give the defaults.
 
 **Data.**
 

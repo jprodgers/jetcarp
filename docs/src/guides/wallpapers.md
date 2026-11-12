@@ -232,7 +232,10 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
   it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
   of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
   starts moving only once the screen saver has really started. The preview in System Settings always
-  moves.
+  moves. `remove` deletes the bundle and puts back the screen saver macOS had chosen before JETCARP
+  was installed, on every display and Space that still chooses JETCARP; with nothing recorded (an
+  install by 0.4.0-rc.1), they show your desktop picture as the screen saver instead. If System
+  Settings is open, it may keep listing JETCARP until you quit and reopen it.
 - **GNOME** has no list of screen savers. Use the lock screen's screensaver mode instead:
   `jetcarp host lock screensaver --awake 30`.
 

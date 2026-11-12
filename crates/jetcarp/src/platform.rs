@@ -140,7 +140,7 @@ impl Platform for Machine {
         if cfg!(windows) && jetcarp_display::winsaver::scr_path().is_ok_and(|p| p.exists()) {
             steps.push(step(
                 "remove the Windows screen saver",
-                Box::new(saver::remove),
+                Box::new(|| saver::remove().map(|_| ())),
             ));
         }
         if cfg!(target_os = "macos")
@@ -148,7 +148,7 @@ impl Platform for Machine {
         {
             steps.push(step(
                 "remove the macOS screen saver",
-                Box::new(saver::remove),
+                Box::new(|| saver::remove().map(|_| ())),
             ));
         }
         steps
