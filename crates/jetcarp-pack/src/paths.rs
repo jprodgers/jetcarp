@@ -151,7 +151,7 @@ mod tests {
             strip_json(serde_json::json!({"import": "/data/x/search.sqlite", "n": 3})),
             serde_json::json!({"import": "search.sqlite", "n": 3})
         );
-        assert!(find_absolute(b"source /home/jimmie/x").is_some());
+        assert!(find_absolute(b"source /home/someone/x").is_some());
         assert!(find_absolute(b"B3/S23 c/4").is_none());
     }
 }
