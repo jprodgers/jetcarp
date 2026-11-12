@@ -675,7 +675,8 @@ pub struct ReviewIn {
     /// What was seen, in a sentence.
     #[serde(default)]
     pub note: Option<String>,
-    /// Who judged: a name, `user` (default), or `model:<name>`.
+    /// Who judged: a name, `user`, or `model:<name>` (default: the publisher's name when one is
+    /// set, as `pack.key` sets it, else `user`).
     #[serde(default)]
     pub rater: Option<String>,
     /// Instead of one run: a folder of rating files as the clip-rating page saves them (`<run id>.json` holding {"verdict": "keep", "ts": ...}); ratings already recorded from it are skipped.
@@ -734,7 +735,11 @@ impl Op for SearchReview {
             )));
         }
         let c = read_db(&path)?;
-        let rater = a.rater.clone().unwrap_or_else(|| "user".into());
+        let rater = a
+            .rater
+            .clone()
+            .or_else(crate::ops::pack::publisher_name)
+            .unwrap_or_else(|| "user".into());
         let mut out = Reviewed {
             job: row.id,
             recorded: 0,

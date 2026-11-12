@@ -51,15 +51,19 @@ struct PublishFlags {
     /// Only these explore searches (uuids; repeat).
     #[arg(long = "search")]
     searches: Vec<String>,
+    /// Leave out explore searches (their runs, scores and settings).
     #[arg(long)]
     no_searches: bool,
+    /// Leave out media (posters, thumbnails, animations).
     #[arg(long)]
     no_media: bool,
     /// Leave out ratings (otherwise only consented raters' go in).
     #[arg(long)]
     no_ratings: bool,
+    /// Leave out ant and turmite runs.
     #[arg(long)]
     no_ants: bool,
+    /// Leave out Quick Start entries.
     #[arg(long)]
     no_quickstart: bool,
     /// Withdraw a record: pattern:<id>=reason (repeat).
@@ -131,10 +135,14 @@ enum PackCmd {
     /// Make or show the publisher's Ed25519 key (kept in the settings folder), and who the
     /// publisher is (named only if given).
     Key {
+        /// The publisher's name, as packs show it (and the default rater of `jobs review`);
+        /// "" for none.
         #[arg(long)]
         name: Option<String>,
+        /// The publisher's ORCID iD (0000-0002-1825-0097); "" for none.
         #[arg(long)]
         orcid: Option<String>,
+        /// The publisher's GitHub account name; "" for none.
         #[arg(long)]
         github: Option<String>,
         /// Use this OpenSSH Ed25519 private key file instead.
@@ -199,6 +207,8 @@ enum PackCmd {
         /// How many new patterns the sample verifies again.
         #[arg(long, default_value_t = 3000)]
         sample: u64,
+        /// The sample's seed (default: from the manifest hash, so the same pack samples the
+        /// same patterns).
         #[arg(long)]
         seed: Option<u64>,
         /// Most seconds verification may take.

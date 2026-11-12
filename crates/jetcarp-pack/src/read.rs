@@ -654,19 +654,31 @@ impl Source {
         Ok(out)
     }
 
-    /// A part's bytes, checked against its hash and size.
+    /// A file of the store or export as a path within it (`tables/rules/part-000001.parquet`),
+    /// for messages.
+    pub fn within(&self, path: &Path) -> String {
+        path.strip_prefix(self.root())
+            .unwrap_or(path)
+            .display()
+            .to_string()
+            .replace('\\', "/")
+    }
+
+    /// A part's bytes, checked against its hash and size. An error names the part's hash and its
+    /// file within the store or export (`tables/rules/part-000001.parquet`).
     pub fn part_bytes(&self, part: &Part, path: &Path) -> Result<Bytes, String> {
+        let file = self.within(path);
         let b = store::read_limited(path, MAX_OBJECT.min(part.bytes.max(1)))?;
         if b.len() as u64 != part.bytes {
             return Err(format!(
-                "part {} is {} bytes, its index says {}",
+                "part {} ({file}) is {} bytes, its index says {}",
                 part.object,
                 b.len(),
                 part.bytes
             ));
         }
         if hash::of(&b) != part.object {
-            return Err(format!("part {} is altered", part.object));
+            return Err(format!("part {} ({file}) is altered", part.object));
         }
         Ok(Bytes::from(b))
     }

@@ -135,14 +135,21 @@ enum JobsCmd {
     /// Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings
     /// in a folder of rating files (`<run id>.json`, as the clip-rating page saves them).
     Review {
+        /// The explore job.
         job: i64,
+        /// The run reviewed (its id in the job; `jetcarp jobs runs` lists them).
         run: Option<i64>,
+        /// keep, maybe, or drop.
         verdict: Option<String>,
+        /// What was seen, in a sentence.
         #[arg(long)]
         note: Option<String>,
-        /// Who judged (default: user).
+        /// Who judged (default: the publisher's name when `jetcarp pack key --name` set one,
+        /// else user).
         #[arg(long)]
         rater: Option<String>,
+        /// Instead of one run: a folder of rating files (`<run id>.json`), as the clip-rating
+        /// page saves them; ratings already recorded from it are skipped.
         #[arg(long)]
         from: Option<PathBuf>,
     },

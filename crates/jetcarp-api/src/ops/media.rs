@@ -772,16 +772,18 @@ impl Report for SiteReport {
         for (k, id, x) in &r.media_failed {
             let _ = writeln!(s, "no media for {k} {id}: {x}");
         }
+        let n = |x: usize| x as u64;
         let _ = writeln!(
             s,
-            "{}: {} patterns, {} Quick Start entries; {} files written, {} deleted, {} items unchanged, {} media rendered",
+            "{}: {}, {}, {}; {} written, {} deleted, {} unchanged, {} media rendered",
             r.dir.display(),
-            r.patterns,
-            r.quickstart,
-            r.written.len(),
-            r.deleted.len(),
-            r.unchanged,
-            r.rendered
+            crate::out::count(n(r.patterns), "pattern", "patterns"),
+            crate::out::count(n(r.quickstart), "Quick Start entry", "Quick Start entries"),
+            crate::out::count(n(r.ants), "ant", "ants"),
+            crate::out::count(n(r.written.len()), "file", "files"),
+            n(r.deleted.len()),
+            crate::out::count(n(r.unchanged), "item", "items"),
+            r.rendered,
         );
         s
     }

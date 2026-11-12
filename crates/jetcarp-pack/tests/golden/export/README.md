@@ -15,13 +15,13 @@ described in the JETCARP book's *Pack format* reference.
 
 ## Tables
 
-- `annotations`: 7 rows in 1 parts
+- `annotations`: 7 rows in 1 part
 - `patterns`: 3 rows in 3 parts
-- `provenance`: 4 rows in 1 parts
-- `quickstart`: 1 rows in 1 parts
-- `raters`: 3 rows in 1 parts
-- `ratings`: 3 rows in 1 parts
-- `rules`: 1 rows in 1 parts
-- `sightings`: 3 rows in 1 parts
-- `tilings`: 1 rows in 1 parts
-- `verifications`: 3 rows in 1 parts
+- `provenance`: 4 rows in 1 part
+- `quickstart`: 1 row in 1 part
+- `raters`: 3 rows in 1 part
+- `ratings`: 3 rows in 1 part
+- `rules`: 1 row in 1 part
+- `sightings`: 3 rows in 1 part
+- `tilings`: 1 row in 1 part
+- `verifications`: 3 rows in 1 part

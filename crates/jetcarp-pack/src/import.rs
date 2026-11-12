@@ -135,12 +135,16 @@ fn split_target(t: &str) -> Result<(&str, &str), String> {
 
 /// Check every object a version names against its hash (parts as they are read later; here
 /// the search segments, score sidecars, media files and reference patches).
-fn check_objects(v: &Version, out: &mut Imported) -> Result<(), String> {
+fn check_objects(src: &Source, v: &Version, out: &mut Imported) -> Result<(), String> {
     for tp in v.tables.values() {
         for (p, path) in &tp.parts {
             let (hex, n) = crate::hash::file_hex(path, crate::store::MAX_OBJECT)?;
             if format!("sha256:{hex}") != p.object || n != p.bytes {
-                return Err(format!("part {} is altered or truncated", p.object));
+                return Err(format!(
+                    "part {} ({}) is altered or truncated",
+                    p.object,
+                    src.within(path)
+                ));
             }
             out.objects_checked += 1;
             out.bytes_checked += n;
@@ -150,7 +154,10 @@ fn check_objects(v: &Version, out: &mut Imported) -> Result<(), String> {
         let mut check = |obj: &str, bytes: u64, f: &PathBuf| -> Result<(), String> {
             let (hex, n) = crate::hash::file_hex(f, crate::store::MAX_OBJECT)?;
             if format!("sha256:{hex}") != obj || n != bytes {
-                return Err(format!("search object {obj} is altered or truncated"));
+                return Err(format!(
+                    "search object {obj} ({}) is altered or truncated",
+                    src.within(f)
+                ));
             }
             out.objects_checked += 1;
             out.bytes_checked += n;
@@ -242,7 +249,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             format!(" ({})", v.signed.name)
         }
     ));
-    check_objects(&v, &mut out)?;
+    check_objects(&src, &v, &mut out)?;
 
     // Tilings and rules: pins and semantics against this engine's.
     let tilings: Vec<(usize, TilingRow)> = rows_of(&src, &v, "tilings")?;
@@ -338,7 +345,11 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     }
 
     // Patterns.
-    log("checking ids and storing patterns");
+    log(if opts.dry_run {
+        "checking ids and patterns (a check stores nothing)"
+    } else {
+        "checking ids and storing patterns"
+    });
     let mut seen_ids: HashMap<String, String> = HashMap::new();
     // Every pattern stored, and whether it is new.
     let mut kept: Vec<(String, bool)> = vec![];
@@ -501,7 +512,11 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     }
 
     // Sightings: per pattern, rule and search, the larger of the publishers' totals.
-    log("merging sightings");
+    log(if opts.dry_run {
+        "checking sightings, ants, Quick Start entries, media and ratings"
+    } else {
+        "merging sightings"
+    });
     let mut totals: BTreeMap<
         (String, String, String),
         (String, BTreeMap<String, (u64, u64, String, String)>),

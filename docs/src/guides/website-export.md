@@ -20,7 +20,7 @@ wrote   media/pattern/21e9bac2df7b770a5ff0f34bd68a514a/thumb.png
 …
 wrote   manifest.json
 wrote   index.html
-site: 2 patterns, 0 Quick Start entries; 10 files written, 0 deleted, 0 items unchanged, 2 media rendered
+site: 2 patterns, 0 Quick Start entries, 0 ants; 10 files written, 0 deleted, 0 items unchanged, 2 media rendered
 ```
 
 Pictures and animations a pattern doesn't have yet are rendered first, in the house style. Use
@@ -32,7 +32,7 @@ Run the same command again and it compares each file's hash with the copy alread
 
 ```text
 $ jetcarp site export --to site
-site: 2 patterns, 0 Quick Start entries; 0 files written, 0 deleted, 2 items unchanged, 0 media rendered
+site: 2 patterns, 0 Quick Start entries, 0 ants; 0 files written, 0 deleted, 2 items unchanged, 0 media rendered
 ```
 
 ## What counts as public

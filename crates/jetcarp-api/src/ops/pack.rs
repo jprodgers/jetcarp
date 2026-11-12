@@ -57,6 +57,14 @@ fn load_info() -> Result<PublisherInfo, ApiError> {
     serde_json::from_slice(&b).map_err(|e| ApiError::invalid(format!("{}: {e}", p.display())))
 }
 
+/// The publisher's name, when one is set (`pack.key` with a name, else `JETCARP_FINDER`).
+pub fn publisher_name() -> Option<String> {
+    load_info()
+        .ok()
+        .map(|i| i.name.trim().to_string())
+        .filter(|n| !n.is_empty())
+}
+
 fn save_info(i: &PublisherInfo) -> Result<(), ApiError> {
     let p = publisher_file()?;
     let text = serde_json::to_string_pretty(i).map_err(|e| ApiError::io(e.to_string()))?;
@@ -382,7 +390,13 @@ impl Report for PublishOut {
         );
         if let Some(t) = self.report["tables"].as_object() {
             for (k, v) in t {
-                let _ = writeln!(s, "  {k:<14} {:>9} rows added, {} parts", v[0], v[1]);
+                let (rows, parts) = (v[0].as_u64().unwrap_or(0), v[1].as_u64().unwrap_or(0));
+                let _ = writeln!(
+                    s,
+                    "  {k:<14} {:>9} added, {}",
+                    crate::out::count(rows, "row", "rows"),
+                    crate::out::count(parts, "part", "parts")
+                );
             }
         }
         if let Some(b) = self.report["bytes"].as_u64() {
@@ -536,14 +550,30 @@ pub struct ExportOut {
     pub manifest: String,
     pub files: u64,
     pub bytes: u64,
+    /// Exported straight from the library: the store it was published into first, kept beside
+    /// the export (`.<name>.store`), into which later versions are published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store: Option<String>,
 }
 
 impl Report for ExportOut {
     fn text(&self) -> String {
-        format!(
-            "exported {} into {}: {} files, {} bytes\n",
-            self.manifest, self.to, self.files, self.bytes
-        )
+        let mut s = format!(
+            "exported {} into {}: {}, {}\n",
+            self.manifest,
+            self.to,
+            crate::out::count(self.files, "file", "files"),
+            crate::out::count(self.bytes, "byte", "bytes")
+        );
+        if let Some(st) = &self.store {
+            let _ = writeln!(
+                s,
+                "the version was published first into {st}, a hidden store kept beside the export: \
+                 the same export again publishes the feed's next version into it, as `jetcarp pack \
+                 publish --to {st}` does (then `jetcarp pack export --from {st}` lays it out)"
+            );
+        }
+        s
     }
 }
 
@@ -568,8 +598,9 @@ impl Op for PackExport {
                     .file_name()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_default();
+                // The store the library is published into first, kept (hidden, beside the
+                // export) so the feed's later versions are published into it.
                 let scratch = to.with_file_name(format!(".{name}.store"));
-                let _ = std::fs::remove_dir_all(&scratch);
                 do_publish(cx, &pi, scratch.clone(), p)?;
                 (scratch.clone(), Some(scratch))
             }
@@ -587,11 +618,9 @@ impl Op for PackExport {
                 manifest: e.manifest,
                 files: e.files,
                 bytes: e.bytes,
+                store: scratch.as_ref().map(|s| s.display().to_string()),
             })
         })();
-        if let Some(s) = scratch {
-            let _ = std::fs::remove_dir_all(s);
-        }
         r
     }
 }

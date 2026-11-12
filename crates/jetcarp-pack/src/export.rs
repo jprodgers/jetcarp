@@ -280,10 +280,12 @@ fn readme(v: &Version) -> String {
         .tables
         .iter()
         .map(|(n, tp)| {
+            let rows = tp.parts.iter().map(|p| p.0.rows).sum::<u64>();
+            let parts = tp.parts.len();
             format!(
-                "- `{n}`: {} rows in {} parts",
-                tp.parts.iter().map(|p| p.0.rows).sum::<u64>(),
-                tp.parts.len()
+                "- `{n}`: {rows} row{} in {parts} part{}",
+                if rows == 1 { "" } else { "s" },
+                if parts == 1 { "" } else { "s" }
             )
         })
         .collect();

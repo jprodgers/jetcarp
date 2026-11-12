@@ -119,7 +119,12 @@ fn unknown_versions_features_and_altered_objects_are_refused() {
     let n = b.len();
     b[n / 2] ^= 0xff;
     std::fs::write(path, &b).unwrap();
-    refused(import_from(&s, &h, &dir.join("lib-a")), "altered");
+    // The error names the part's hash and its file in the store.
+    let file = path.strip_prefix(&s).unwrap().display().to_string();
+    refused(
+        import_from(&s, &h, &dir.join("lib-a")),
+        &format!("part {} ({file}) is altered or truncated", part.object),
+    );
     assert!(
         !Library::open(dir.join("lib-a"))
             .contains(&part.rows.to_string())

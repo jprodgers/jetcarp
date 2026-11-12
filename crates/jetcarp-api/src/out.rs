@@ -23,6 +23,12 @@ pub fn stamp() -> String {
 }
 
 /// Local time as RFC 3339, for records.
+/// A count and its noun: `1 row`, `3 rows`.
+pub fn count(n: impl Into<u64>, one: &str, many: &str) -> String {
+    let n = n.into();
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
 pub fn now_rfc3339() -> String {
     chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
 }

@@ -178,7 +178,12 @@ fn site_export_writes_once_and_keeps_its_page() {
     assert!(r.0.written.iter().any(|p| p == "manifest.json"));
     assert!(to.join("index.html").exists());
     assert!(r.text().contains("wrote   patterns/"), "{}", r.text());
-    assert!(r.notes().contains(": 1 patterns, 0 Quick Start entries; "));
+    assert!(
+        r.notes()
+            .contains(": 1 pattern, 0 Quick Start entries, 0 ants; "),
+        "{}",
+        r.notes()
+    );
     // Unchanged the second time; the page too.
     let again = site(a).unwrap();
     assert!(again.0.written.is_empty(), "{:?}", again.0.written);

@@ -184,8 +184,9 @@ exported sha256:a968036b… into /home/ada/packs/penrose-finds-2026.11: 24 files
 
 Without `--from`, it publishes your library first, taking the same options as `pack publish`, and
 exports the result. It keeps the store it made next to the export, in a hidden folder named after
-it, for example `.penrose-finds-2026.11.store`. Use `--views` to add a `views.sql` for
-[DuckDB](https://duckdb.org/) (see [below](#read-a-pack-without-jetcarp)).
+it, for example `.penrose-finds-2026.11.store`, and says so: running the same export again publishes
+the feed's next version into it, as `jetcarp pack publish --to` that folder does. Use `--views` to
+add a `views.sql` for [DuckDB](https://duckdb.org/) (see [below](#read-a-pack-without-jetcarp)).
 
 The export's folder:
 
