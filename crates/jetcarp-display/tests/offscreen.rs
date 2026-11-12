@@ -26,6 +26,16 @@ fn gpu() -> Option<Gpu> {
     let adapter =
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .ok()?;
+    // Windows without a graphics card (a CI runner) offers only WARP, Microsoft's software
+    // renderer, which crashes these tests; JETCARP itself never simulates on a software adapter.
+    // (Mesa's software Vulkan on Linux works, and keeps the tests running in CI there.)
+    if cfg!(windows) && adapter.get_info().device_type == wgpu::DeviceType::Cpu {
+        eprintln!(
+            "skipped: only a software adapter ({})",
+            adapter.get_info().name
+        );
+        return None;
+    }
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
     let renderer = TileRenderer::new(&device, FORMAT);
