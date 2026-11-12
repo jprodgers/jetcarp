@@ -78,8 +78,8 @@ pub fn output_dir() -> PathBuf {
 /// The second place is where prefix installs put it (Homebrew's `pkgshare`, a Python
 /// environment's `share` folder from the wheel); the third is the release archives' own layout.
 /// `<program folder>` is the running program's folder with symbolic links resolved, so a link on
-/// the `PATH` (pipx, uv, the shell installer) leads back to the folder the program really lives
-/// in.
+/// the `PATH` (pipx, uv, Homebrew, winget, the shell installer) leads back to the folder the
+/// program really lives in.
 pub fn bundled_packs_dir() -> Option<PathBuf> {
     let env = std::env::var_os(BUNDLED_PACKS_ENV);
     bundled_packs_from(env.as_deref(), program_path().as_deref())
@@ -117,15 +117,28 @@ fn bundled_packs_places(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf>
     places
 }
 
-/// The running program's file, with symbolic links resolved where that is the norm (not on
-/// Windows, where it would give `\\?\` paths).
+/// The running program's file with symbolic links resolved (winget's portable installs link the
+/// program into a folder on the `PATH` on Windows too).
 fn program_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    if cfg!(windows) {
-        Some(exe)
+    let real = std::fs::canonicalize(&exe).unwrap_or(exe);
+    Some(if cfg!(windows) {
+        plain_path(real)
     } else {
-        Some(std::fs::canonicalize(&exe).unwrap_or(exe))
+        real
+    })
+}
+
+/// `\\?\C:\x` as `C:\x`: Windows' canonical paths are verbatim ones, which read badly in
+/// `jetcarp paths`. Other forms (UNC shares, paths that are not Unicode) are kept as they are.
+pub fn plain_path(p: PathBuf) -> PathBuf {
+    if let Some(rest) = p.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        let b = rest.as_bytes();
+        if b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\' {
+            return PathBuf::from(rest);
+        }
     }
+    p
 }
 
 /// The search databases' folder: `<data>/explore`.
