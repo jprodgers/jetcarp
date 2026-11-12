@@ -704,16 +704,22 @@ pub fn preview_cells(s: &Scene, base: u32) -> Option<u32> {
     })
 }
 
-/// Whether a scene places cells by index (explicit seeds, painted cells, pasted patterns):
-/// such scenes only work at their own size.
+/// Whether a scene places cells by index (explicit seeds, an ant started on a cell, painted
+/// cells, pasted patterns): such scenes only work at their own size.
 pub fn places_cells(s: &Scene) -> bool {
     use crate::world::Command;
-    s.cas
-        .iter()
-        .any(|c| matches!(c.seed, Some(SeedSpec::Cells { .. })))
-        || s.commands
-            .iter()
-            .any(|c| matches!(c, Command::SetCells { .. } | Command::PastePattern { .. }))
+    let by_index = |seed: &Option<SeedSpec>| {
+        matches!(
+            seed,
+            Some(SeedSpec::Cells { .. }) | Some(SeedSpec::AntAt { .. })
+        )
+    };
+    s.cas.iter().any(|c| by_index(&c.seed))
+        || s.commands.iter().any(|c| match c {
+            Command::SetCells { .. } | Command::PastePattern { .. } => true,
+            Command::AddCa { ca } => by_index(&ca.seed),
+            _ => false,
+        })
 }
 
 /// A smaller copy of a scene for live previews: about `cells` cells, sandpiles scaled to match.

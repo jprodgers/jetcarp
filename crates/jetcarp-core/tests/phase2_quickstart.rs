@@ -1,10 +1,39 @@
-//! Quick Start: a working example of every named rule, and the featured entries.
+//! Quick Start: a working example of every named rule, the featured entries, and previews of
+//! scenes that place cells by index.
 use jetcarp_core::quickstart::{
-    BUNDLED, COMPUTING_SCENES, FEATURED, entries, health, preview_cells,
+    BUNDLED, COMPUTING_SCENES, FEATURED, entries, health, places_cells, preview_cells,
+    preview_scene,
 };
 use jetcarp_core::rules::catalog;
+use jetcarp_core::topology::{Boundary, TilingSpec};
+use jetcarp_core::world::{CaSpec, Command, Scene, SeedSpec, World};
 use rayon::prelude::*;
 use std::collections::HashSet;
+
+// A scene that starts an ant on a cell index (an ant run's build-up, as `jetcarp library ants
+// promote` makes it, or a pack's highway) only works at its own size: its card's preview keeps
+// it, where a smaller grid would have no such cell (or put the ant somewhere else).
+#[test]
+fn ant_scenes_keep_their_size_in_previews() {
+    let mut sc = Scene::new(TilingSpec::rect("hex", 400, 300, Boundary::Dead));
+    let ant = CaSpec::new("Turmite RNL").seed(SeedSpec::AntAt {
+        cell: 100_000,
+        heading: 0,
+    });
+    sc.cas = vec![ant.clone()];
+    assert!(places_cells(&sc));
+    let p = preview_scene(&sc, 6000);
+    assert_eq!(p.tiling.size, sc.tiling.size);
+    World::from_scene(&p).unwrap();
+    // The same ant added by a command.
+    sc.cas.clear();
+    sc.commands = vec![Command::AddCa { ca: ant }];
+    assert!(places_cells(&sc));
+    // A random soup of ants is made smaller, as before.
+    sc.commands.clear();
+    sc.cas = vec![CaSpec::new("Turmite RNL").seed(SeedSpec::Random { density: 0.001 })];
+    assert!(!places_cells(&sc));
+}
 
 #[test]
 fn every_named_rule_has_an_example() {
