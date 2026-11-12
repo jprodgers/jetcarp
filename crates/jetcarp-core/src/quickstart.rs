@@ -676,7 +676,7 @@ pub fn jaca_presets() -> Vec<QuickStart> {
                 states,
                 featured: false,
                 rule,
-                source: Some("jaca_search (crates/jetcarp-search/examples/jaca_search.rs)".into()),
+                source: Some("a JACA rule search".into()),
             }
         })
         .collect()

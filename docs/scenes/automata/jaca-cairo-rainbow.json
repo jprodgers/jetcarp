@@ -1,6 +1,6 @@
 {
   "name": "JACA rainbow fronts (Cairo)",
-  "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found with jaca_search. (JETCARP Quick Start preset \"cairo-rainbow\".)",
+  "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found by a JACA rule search. (JETCARP Quick Start preset \"cairo-rainbow\".)",
   "tiling": {
     "boundary": "wrap",
     "family": "cairo",

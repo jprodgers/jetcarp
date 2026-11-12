@@ -1,6 +1,6 @@
 {
   "name": "JACA war on the hat tiling",
-  "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found with jaca_search. (JETCARP Quick Start preset \"hat-war\".)",
+  "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found by a JACA rule search. (JETCARP Quick Start preset \"hat-war\".)",
   "tiling": {
     "boundary": "dead",
     "family": "hat",

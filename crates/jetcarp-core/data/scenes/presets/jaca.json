@@ -53,7 +53,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found with jaca_search.",
+   "description": "A mixed soup on the aperiodic hat tiling sorts itself into territories that push along glowing fronts. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA war on the hat tiling",
    "rng_state": 28,
@@ -86,7 +86,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours only, on a spectre patch: territories form and trade ground across the aperiodic tiles. Found with jaca_search.",
+   "description": "Edge neighbours only, on a spectre patch: territories form and trade ground across the aperiodic tiles. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA war on the spectre",
    "rng_state": 24,
@@ -118,7 +118,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "A mixed soup on herringbone tiles grows into fat, smooth-edged territories. Found with jaca_search.",
+   "description": "A mixed soup on herringbone tiles grows into fat, smooth-edged territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA fat blobs (herringbone)",
    "rng_state": 25,
@@ -153,7 +153,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "On the trihexagonal tiling the territories take a streaky, direction-dependent texture. Found with jaca_search.",
+   "description": "On the trihexagonal tiling the territories take a streaky, direction-dependent texture. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA streaky war (3.6.3.6)",
    "rng_state": 28,
@@ -188,7 +188,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on the truncated hexagonal tiling: annihilations leave glowing worm trails everywhere. Found with jaca_search.",
+   "description": "Blast 1 on the truncated hexagonal tiling: annihilations leave glowing worm trails everywhere. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA lava worms (3.12.12)",
    "rng_state": 26,
@@ -223,7 +223,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "A busy, colourful war on the truncated trihexagonal tiling: the age colouring shows in every patch. Found with jaca_search.",
+   "description": "A busy, colourful war on the truncated trihexagonal tiling: the age colouring shows in every patch. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA busy aging war (4.6.12)",
    "rng_state": 29,
@@ -258,7 +258,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on Penrose kites and darts: smooth bands of each sign separated by glowing no-man's-land. Found with jaca_search.",
+   "description": "Blast 1 on Penrose kites and darts: smooth bands of each sign separated by glowing no-man's-land. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA glowing bands (Penrose kites)",
    "rng_state": 27,
@@ -290,7 +290,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on an isohedral pentagon tiling: clean diagonal bands with glowing trenches. Found with jaca_search.",
+   "description": "Blast 1 on an isohedral pentagon tiling: clean diagonal bands with glowing trenches. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA diagonal trench bands (IH28)",
    "rng_state": 29,
@@ -325,7 +325,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on hexagons: wiggly fronts lit by the explosions along them. Found with jaca_search.",
+   "description": "Blast 1 on hexagons: wiggly fronts lit by the explosions along them. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA wiggly trenches (hexagons)",
    "rng_state": 32,
@@ -360,7 +360,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on the snub hexagonal tiling: territories straighten into bands with glowing trenches. Found with jaca_search.",
+   "description": "Blast 1 on the snub hexagonal tiling: territories straighten into bands with glowing trenches. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA straight trenches (3.3.3.3.6)",
    "rng_state": 28,
@@ -395,7 +395,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on a 2-uniform tiling: curly fronts that keep exploding. Found with jaca_search.",
+   "description": "Blast 1 on a 2-uniform tiling: curly fronts that keep exploding. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA curly trenches (2-uniform)",
    "rng_state": 25,
@@ -434,7 +434,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours, blast 1, a different rule per sign: trenches through striped territories. Found with jaca_search.",
+   "description": "Edge neighbours, blast 1, a different rule per sign: trenches through striped territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA striped trenches (edge, 2-uniform)",
    "rng_state": 25,
@@ -473,7 +473,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours on triangles, blast 1: rounded islands ringed with fire. Found with jaca_search.",
+   "description": "Edge neighbours on triangles, blast 1: rounded islands ringed with fire. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rounded islands (triangles, edge)",
    "rng_state": 21,
@@ -508,7 +508,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1 on the hat tiling: glowing trenches between the two signs' territories. Found with jaca_search.",
+   "description": "Blast 1 on the hat tiling: glowing trenches between the two signs' territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA trenches on the hat",
    "rng_state": 22,
@@ -540,7 +540,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B123 with blast 1: the fronts thicken into glowing ropes. Found with jaca_search.",
+   "description": "B123 with blast 1: the fronts thicken into glowing ropes. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA thick glowing ropes (2-uniform)",
    "rng_state": 29,
@@ -578,7 +578,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 2 on triangles: a lasting band war with thick trenches full of explosions. Found with jaca_search.",
+   "description": "Blast 2 on triangles: a lasting band war with thick trenches full of explosions. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA explosive trenches (blast 2)",
    "rng_state": 27,
@@ -613,7 +613,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 2 on squares, twin rules: a smooth war whose fronts glow with heat. Found with jaca_search.",
+   "description": "Blast 2 on squares, twin rules: a smooth war whose fronts glow with heat. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA heat war (blast 2)",
    "rng_state": 21,
@@ -648,7 +648,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 2 on triangles: one sign pushes the other back behind a wide trench until it is gone. Found with jaca_search.",
+   "description": "Blast 2 on triangles: one sign pushes the other back behind a wide trench until it is gone. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA wide trench conquest (blast 2)",
    "rng_state": 22,
@@ -683,7 +683,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1: islands ringed by glowing beads shrink until one sign holds the grid. Found with jaca_search.",
+   "description": "Blast 1: islands ringed by glowing beads shrink until one sign holds the grid. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA bead borders (square, blast 1)",
    "rng_state": 23,
@@ -718,7 +718,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Territories go still and age while the fronts stay active, so every front is a rainbow of ages. Found with jaca_search.",
+   "description": "Territories go still and age while the fronts stay active, so every front is a rainbow of ages. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (squares)",
    "rng_state": 27,
@@ -753,7 +753,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "The rainbow-front rule (B2/S12467) on the Pythagorean tiling. Found with jaca_search.",
+   "description": "The rainbow-front rule (B2/S12467) on the Pythagorean tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (Pythagorean)",
    "rng_state": 25,
@@ -788,7 +788,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found with jaca_search.",
+   "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (Cairo)",
    "rng_state": 28,
@@ -823,7 +823,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Rainbow fronts on the truncated square tiling. Found with jaca_search.",
+   "description": "Rainbow fronts on the truncated square tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (4.8.8)",
    "rng_state": 26,
@@ -858,7 +858,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Still territories and rainbow fronts on Penrose rhombs. Found with jaca_search.",
+   "description": "Still territories and rainbow fronts on Penrose rhombs. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (Penrose rhombs)",
    "rng_state": 28,
@@ -890,7 +890,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "The same rule on kites and darts: vivid rainbow blobs. Found with jaca_search.",
+   "description": "The same rule on kites and darts: vivid rainbow blobs. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow blobs (Penrose kites)",
    "rng_state": 22,
@@ -922,7 +922,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Rainbow fronts on the trihexagonal tiling. Found with jaca_search.",
+   "description": "Rainbow fronts on the trihexagonal tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (3.6.3.6)",
    "rng_state": 22,
@@ -957,7 +957,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Thin bright fronts crossing striped, still territories. Found with jaca_search.",
+   "description": "Thin bright fronts crossing striped, still territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA line fronts over stripes (3.6.3.6)",
    "rng_state": 24,
@@ -992,7 +992,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Rainbow fronts on the snub hexagonal tiling. Found with jaca_search.",
+   "description": "Rainbow fronts on the snub hexagonal tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (3.3.3.3.6)",
    "rng_state": 31,
@@ -1027,7 +1027,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Nearly the same rule on each side (the -1 side lacks S3), rainbow fronts. Found with jaca_search.",
+   "description": "Nearly the same rule on each side (the -1 side lacks S3), rainbow fronts. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow twins (3.12.12)",
    "rng_state": 32,
@@ -1062,7 +1062,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Rainbow fronts over striped still territories on the elongated triangular tiling. Found with jaca_search.",
+   "description": "Rainbow fronts over striped still territories on the elongated triangular tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow over stripes (3.3.3.4.4)",
    "rng_state": 27,
@@ -1097,7 +1097,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "On bricks the still territories stretch into diagonal rainbow streaks. Found with jaca_search.",
+   "description": "On bricks the still territories stretch into diagonal rainbow streaks. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA diagonal rainbow (brick)",
    "rng_state": 32,
@@ -1132,7 +1132,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Fronts become a network of bright ropes over dark, still territories. Found with jaca_search.",
+   "description": "Fronts become a network of bright ropes over dark, still territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA glowing rope network (2-uniform)",
    "rng_state": 32,
@@ -1171,7 +1171,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours, blast 1: colourful aging patches on the snub square tiling. Found with jaca_search.",
+   "description": "Edge neighbours, blast 1: colourful aging patches on the snub square tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA colourful aging (edge, snub square)",
    "rng_state": 30,
@@ -1207,7 +1207,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours, blast 1, B1/S1: rainbow fronts with sparkles inside the territories. Found with jaca_search.",
+   "description": "Edge neighbours, blast 1, B1/S1: rainbow fronts with sparkles inside the territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA starry rainbow (edge, snub square)",
    "rng_state": 25,
@@ -1243,7 +1243,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours, blast 1: thin glowing lines that slowly straighten. Found with jaca_search.",
+   "description": "Edge neighbours, blast 1: thin glowing lines that slowly straighten. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA glowing line network (edge, Penrose kites)",
    "rng_state": 23,
@@ -1276,7 +1276,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours on squares: smooth plasma-like age gradients between the fronts. Found with jaca_search.",
+   "description": "Edge neighbours on squares: smooth plasma-like age gradients between the fronts. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA smooth plasma (edge, squares)",
    "rng_state": 23,
@@ -1311,7 +1311,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "A still, rainbow side against a sparkling side. Found with jaca_search.",
+   "description": "A still, rainbow side against a sparkling side. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow vs sparkle (Penrose rhombs)",
    "rng_state": 29,
@@ -1343,7 +1343,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "The +1 rule grows still crystal that overruns the -1 noise. Found with jaca_search.",
+   "description": "The +1 rule grows still crystal that overruns the -1 noise. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA crystal overruns noise (4.8.8)",
    "rng_state": 26,
@@ -1378,7 +1378,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Noise eats a still crystal, front by front, until it is gone (by about generation 4,000). Found with jaca_search.",
+   "description": "Noise eats a still crystal, front by front, until it is gone (by about generation 4,000). Found by a JACA rule search.",
    "format": 1,
    "name": "JACA noise conquers crystal (Penrose rhombs)",
    "rng_state": 28,
@@ -1410,7 +1410,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "+B23/S3 against -B25/S1247 with blast 1: glowing islands shrink and vanish. Found with jaca_search.",
+   "description": "+B23/S3 against -B25/S1247 with blast 1: glowing islands shrink and vanish. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA shrinking island (squares, blast 1)",
    "rng_state": 27,
@@ -1445,7 +1445,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "+B2/S12467 against -B256/S0245678: still pink plasma blobs fight a cyan soup. Found with jaca_search.",
+   "description": "+B2/S12467 against -B256/S0245678: still pink plasma blobs fight a cyan soup. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA pink plasma vs cyan (squares)",
    "rng_state": 23,
@@ -1479,7 +1479,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves; the front breaks into rainbow blobs. Found with jaca_search.",
+   "description": "Starts as two halves; the front breaks into rainbow blobs. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves into rainbow blobs (3.3.3.3.6)",
    "rng_state": 28,
@@ -1513,7 +1513,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves; with blast 2 the front dissolves into exploding bubbles. Found with jaca_search.",
+   "description": "Starts as two halves; with blast 2 the front dissolves into exploding bubbles. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves into exploding bubbles (blast 2)",
    "rng_state": 29,
@@ -1550,7 +1550,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves that melt into a rainbow mix. Found with jaca_search.",
+   "description": "Starts as two halves that melt into a rainbow mix. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves melt into rainbow (4.6.12)",
    "rng_state": 29,
@@ -1584,7 +1584,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves; the front erupts into blobs. Found with jaca_search.",
+   "description": "Starts as two halves; the front erupts into blobs. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves erupt (triangles)",
    "rng_state": 22,
@@ -1618,7 +1618,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves; blast 1 turns the front into glowing worms that spread. Found with jaca_search.",
+   "description": "Starts as two halves; blast 1 turns the front into glowing worms that spread. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves into worms (3.12.12, blast 1)",
    "rng_state": 31,
@@ -1652,7 +1652,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Starts as two halves; the front buckles and pinches off islands. Found with jaca_search.",
+   "description": "Starts as two halves; the front buckles and pinches off islands. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves buckle into islands (triangles)",
    "rng_state": 26,
@@ -1687,7 +1687,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours: two halves whose front erupts into rainbow. Found with jaca_search.",
+   "description": "Edge neighbours: two halves whose front erupts into rainbow. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA halves into rainbow (edge, 3.3.3.4.4)",
    "rng_state": 30,
@@ -1721,7 +1721,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Halves of two rules: a noisy side eats the still, glowing strip. Found with jaca_search.",
+   "description": "Halves of two rules: a noisy side eats the still, glowing strip. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA noise eats the stone (IH41)",
    "rng_state": 26,
@@ -1755,7 +1755,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Halves of two rules: the striped still side is eaten by the noise. Found with jaca_search.",
+   "description": "Halves of two rules: the striped still side is eaten by the noise. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA striped stone eaten (3.6.3.6)",
    "rng_state": 25,
@@ -1790,7 +1790,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B36/S3456: smooth annealing fronts that round off and straighten, coloured by age. Found with jaca_search.",
+   "description": "B36/S3456: smooth annealing fronts that round off and straighten, coloured by age. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA smooth rainbow bands (squares)",
    "rng_state": 26,
@@ -1825,7 +1825,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B368/S3456: annealing fronts where the older territory glows red. Found with jaca_search.",
+   "description": "B368/S3456: annealing fronts where the older territory glows red. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA aging territories (squares)",
    "rng_state": 21,
@@ -1860,7 +1860,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Smooth, curvature-driven fronts on the snub square tiling. Found with jaca_search.",
+   "description": "Smooth, curvature-driven fronts on the snub square tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA annealing bands (snub square)",
    "rng_state": 26,
@@ -1895,7 +1895,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Smooth, curvature-driven fronts on triangles. Found with jaca_search.",
+   "description": "Smooth, curvature-driven fronts on triangles. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA annealing (triangles)",
    "rng_state": 26,
@@ -1930,7 +1930,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Smooth territories with a striped texture on the elongated triangular tiling. Found with jaca_search.",
+   "description": "Smooth territories with a striped texture on the elongated triangular tiling. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA striped annealing (3.3.3.4.4)",
    "rng_state": 21,
@@ -1965,7 +1965,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B34/S12356 on the rhombitrihexagonal tiling: a maze-like texture at war with itself. Found with jaca_search.",
+   "description": "B34/S12356 on the rhombitrihexagonal tiling: a maze-like texture at war with itself. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA maze war (3.4.6.4)",
    "rng_state": 29,
@@ -2000,7 +2000,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 1: still shards in a colourful, shifting mosaic. Found with jaca_search.",
+   "description": "Blast 1: still shards in a colourful, shifting mosaic. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA shards and mosaic (3.4.6.4)",
    "rng_state": 25,
@@ -2035,7 +2035,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Two close rules on the truncated square tiling build blocky, rectilinear territories. Found with jaca_search.",
+   "description": "Two close rules on the truncated square tiling build blocky, rectilinear territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA blocky city (4.8.8)",
    "rng_state": 26,
@@ -2070,7 +2070,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Round bubbles of one rule float in the other's still sea. Found with jaca_search.",
+   "description": "Round bubbles of one rule float in the other's still sea. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA bubbles in a still sea (3.4.6.4)",
    "rng_state": 31,
@@ -2105,7 +2105,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Bubbles of B368/S0234568 appear in a still B347/S2456 sea, grow and merge until they hold the grid. Found with jaca_search.",
+   "description": "Bubbles of B368/S0234568 appear in a still B347/S2456 sea, grow and merge until they hold the grid. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA invading bubbles (squares)",
    "rng_state": 24,
@@ -2140,7 +2140,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Rainbow bubbles grow and merge until one side holds everything. Found with jaca_search.",
+   "description": "Rainbow bubbles grow and merge until one side holds everything. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow bubbles (squares)",
    "rng_state": 29,
@@ -2175,7 +2175,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Still dark islands of one rule hold out against the other's noise. Found with jaca_search.",
+   "description": "Still dark islands of one rule hold out against the other's noise. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA dark islands vs noise (3.6.3.6)",
    "rng_state": 21,
@@ -2211,7 +2211,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours and blast 2 on squares: the war draws itself as a diagonal circuit board. Found with jaca_search.",
+   "description": "Edge neighbours and blast 2 on squares: the war draws itself as a diagonal circuit board. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA circuit board (edge, blast 2)",
    "rng_state": 29,
@@ -2247,7 +2247,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B1/S01 with edge neighbours and blast 1 on triangles: still territories with rainbow fronts. Found with jaca_search.",
+   "description": "B1/S01 with edge neighbours and blast 1 on triangles: still territories with rainbow fronts. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA rainbow fronts (triangles, edge)",
    "rng_state": 27,
@@ -2283,7 +2283,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Blast 3 on a 3-uniform tiling with edge neighbours: wide glowing loops that shrink and collapse. Found with jaca_search.",
+   "description": "Blast 3 on a 3-uniform tiling with edge neighbours: wide glowing loops that shrink and collapse. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA collapsing loops (blast 3)",
    "rng_state": 30,
@@ -2322,7 +2322,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours and blast 2: the territories straighten until one glowing front divides the patch, after about 8,000 generations. Found with jaca_search.",
+   "description": "Edge neighbours and blast 2: the territories straighten until one glowing front divides the patch, after about 8,000 generations. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA one glowing front (Penrose rhombs, edge)",
    "rng_state": 31,
@@ -2355,7 +2355,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "Edge neighbours and blast 1: thin red cracks run across the still territories. Found with jaca_search.",
+   "description": "Edge neighbours and blast 1: thin red cracks run across the still territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA cracked territories (squares, edge)",
    "rng_state": 31,
@@ -2390,7 +2390,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B36/S23456: still red and purple blobs of one sign against the other's cyan noise. Found with jaca_search.",
+   "description": "B36/S23456: still red and purple blobs of one sign against the other's cyan noise. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA red blobs vs noise (Penrose rhombs)",
    "rng_state": 28,
@@ -2422,7 +2422,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B3678/S34567: smooth, wavy fronts that glow, with sparkle inside the territories. Found with jaca_search.",
+   "description": "B3678/S34567: smooth, wavy fronts that glow, with sparkle inside the territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA wavy glowing lines (squares)",
    "rng_state": 21,
@@ -2457,7 +2457,7 @@
      "steps_per_gen": 1
     }
    ],
-   "description": "B3,11/S3456 on the elongated triangular tiling: streaky, shard-like territories. Found with jaca_search.",
+   "description": "B3,11/S3456 on the elongated triangular tiling: streaky, shard-like territories. Found by a JACA rule search.",
    "format": 1,
    "name": "JACA streaky shards (3.3.3.4.4)",
    "rng_state": 29,
