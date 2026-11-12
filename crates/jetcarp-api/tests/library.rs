@@ -633,3 +633,64 @@ fn compounds_are_listed_then_split_into_their_parts() {
     assert!(e.message.contains("not a compounds pass"), "{e}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A record a pack retracted stays in the library and shows as retracted: `library show` says by
+/// whom, when and why, and `library list` marks it (the golden packs `minimal`, then
+/// `retraction`, which retracts the blinker).
+#[test]
+fn retracted_records_show_as_retracted() {
+    use jetcarp_api::ops::pack::{ImportIn, PackImport};
+    let dir = scratch("retracted");
+    let cx = jetcarp_api::Ctx::new().with_library(Some(dir.join("lib")));
+    let golden =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../jetcarp-pack/tests/golden");
+    for pack in ["minimal", "retraction"] {
+        PackImport::run(
+            &cx,
+            ImportIn {
+                path: golden.join(pack).display().to_string(),
+                ..Default::default()
+            },
+            &Quiet,
+        )
+        .unwrap();
+    }
+    let q = query(
+        &cx,
+        QueryIn {
+            class: Some("oscillator".into()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(q.patterns.len(), 1);
+    let blinker = q.patterns[0].id.clone();
+    assert_eq!(q.retracted, vec![blinker.clone()]);
+    assert!(q.text().contains("(retracted)"), "{}", q.text());
+    let v = LibraryGet::run(
+        &cx,
+        GetIn {
+            id: blinker.clone(),
+            kind: None,
+            phases: None,
+            bare: false,
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(v.retracted.len(), 1);
+    let line = &v.retracted[0];
+    assert!(
+        line.starts_with("retracted by Golden Publisher A (SHA256:")
+            && line.ends_with(" on 2026-11-11: a test retraction"),
+        "{line}"
+    );
+    assert!(
+        v.text().contains("retracted:   by Golden Publisher A"),
+        "{}",
+        v.text()
+    );
+    // The glider is not retracted.
+    let all = query(&cx, QueryIn::default());
+    assert_eq!(all.retracted, vec![blinker]);
+    let _ = std::fs::remove_dir_all(dir);
+}

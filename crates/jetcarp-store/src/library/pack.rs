@@ -122,6 +122,23 @@ pub struct RetractionRow {
     pub manifest: String,
 }
 
+impl RetractionRow {
+    /// `retracted by <publisher> on <date>: <reason>`, the publisher by name (and key) when the
+    /// library knows the name ([`Library::publisher_names`]), else by key; the date's day only.
+    pub fn describe(&self, names: &HashMap<String, String>) -> String {
+        let who = match names.get(&self.publisher) {
+            Some(n) if !n.is_empty() => format!("{n} ({})", self.publisher),
+            _ => self.publisher.clone(),
+        };
+        let day = self.date.get(..10).unwrap_or(&self.date);
+        if self.reason.trim().is_empty() {
+            format!("retracted by {who} on {day}")
+        } else {
+            format!("retracted by {who} on {day}: {}", self.reason.trim())
+        }
+    }
+}
+
 /// An import as the library keeps it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PackImportRow {
@@ -823,6 +840,48 @@ impl Library {
             }
             Ok(n)
         })
+    }
+
+    /// The names of the publishers whose packs the library imported, by key, as their imports
+    /// recorded them (an import before names were recorded gives none).
+    pub fn publisher_names(&self) -> Result<HashMap<String, String>, String> {
+        self.read(HashMap::new(), |c| {
+            if !has_table(c, "pack_imports")? {
+                return Ok(HashMap::new());
+            }
+            let mut st = c
+                .prepare("SELECT publisher, report FROM pack_imports ORDER BY id")
+                .map_err(e)?;
+            let rows = st
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .map_err(e)?;
+            let mut out = HashMap::new();
+            for row in rows {
+                let (p, report) = row.map_err(e)?;
+                if let Some(n) = serde_json::from_str::<Value>(&report)
+                    .ok()
+                    .and_then(|v| v["publisher_name"].as_str().map(str::to_string))
+                    .filter(|n| !n.is_empty())
+                {
+                    out.insert(p, n);
+                }
+            }
+            Ok(out)
+        })
+    }
+
+    /// The retractions recorded for records of one kind (`pattern`, `ant`, `quickstart`), by id.
+    pub fn retractions_by_id(
+        &self,
+        kind: &str,
+    ) -> Result<HashMap<String, Vec<RetractionRow>>, String> {
+        let mut out: HashMap<String, Vec<RetractionRow>> = HashMap::new();
+        for r in self.retractions()? {
+            if r.target_kind == kind {
+                out.entry(r.target_id.clone()).or_default().push(r);
+            }
+        }
+        Ok(out)
     }
 
     /// Retractions recorded from packs.

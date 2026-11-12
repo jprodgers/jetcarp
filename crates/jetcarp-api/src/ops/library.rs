@@ -289,14 +289,24 @@ pub struct QueryOut {
     /// Ants: outcome counts per tiling (of `job`, when given).
     #[schemars(with = "Vec<Value>")]
     pub census: Vec<AntCensus>,
+    /// The records shown that a pack retracted (`library show` says by whom and why).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub retracted: Vec<String>,
 }
 
 impl Report for QueryOut {
     fn text(&self) -> String {
         let mut s = String::new();
+        let mark = |id: &str| {
+            if self.retracted.iter().any(|x| x == id) {
+                "  (retracted)"
+            } else {
+                ""
+            }
+        };
         if self.kind == "ant" {
             for r in &self.ants {
-                let _ = writeln!(s, "{}", r.line());
+                let _ = writeln!(s, "{}{}", r.line(), mark(&r.id));
             }
             return s;
         }
@@ -309,7 +319,7 @@ impl Report for QueryOut {
             );
         }
         for r in &self.patterns {
-            let _ = writeln!(s, "{}", r.summary());
+            let _ = writeln!(s, "{}{}", r.summary(), mark(&r.id));
         }
         s
     }
@@ -336,10 +346,16 @@ impl Op for LibraryQuery {
                 } else {
                     lib.query(&q).map_err(catalog_err)?
                 };
+                let by = lib.retractions_by_id("pattern").map_err(catalog_err)?;
                 Ok(QueryOut {
                     catalog,
                     kind: "pattern".into(),
                     matching: Some(matching),
+                    retracted: patterns
+                        .iter()
+                        .filter(|r| by.contains_key(&r.id))
+                        .map(|r| r.id.clone())
+                        .collect(),
                     patterns,
                     ants: Vec::new(),
                     census: Vec::new(),
@@ -348,12 +364,18 @@ impl Op for LibraryQuery {
             "ant" => {
                 let q = a.ant_query()?;
                 let ants = lib.ants(&q).map_err(catalog_err)?;
+                let by = lib.retractions_by_id("ant").map_err(catalog_err)?;
                 Ok(QueryOut {
                     catalog,
                     kind: "ant".into(),
                     matching: None,
                     patterns: Vec::new(),
                     census: lib.ant_census(q.job).map_err(catalog_err)?,
+                    retracted: ants
+                        .iter()
+                        .filter(|r| by.contains_key(&r.id))
+                        .map(|r| r.id.clone())
+                        .collect(),
                     ants,
                 })
             }
@@ -436,20 +458,31 @@ pub struct RecordView {
     /// Spaceships: the lattice vector moved per period in each paste orientation.
     pub orientations: Vec<[i32; 2]>,
     pub phases: Vec<PhaseText>,
+    /// Retractions a pack recorded for it: `retracted by <publisher> on <date>: <reason>`. A
+    /// retracted record stays in the library, shown as retracted.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub retracted: Vec<String>,
 }
 
 impl Report for RecordView {
     fn text(&self) -> String {
         let (Some(r), "pattern") = (&self.pattern, self.kind.as_str()) else {
-            return self
+            let mut s = self
                 .ant
                 .as_ref()
                 .map(|a| format!("{}\n", a.line()))
                 .unwrap_or_default();
+            for x in &self.retracted {
+                let _ = writeln!(s, "{x}");
+            }
+            return s;
         };
         let mut s = String::new();
         let _ = writeln!(s, "id:          {}", r.id);
         let _ = writeln!(s, "label:       {}", r.label());
+        for x in &self.retracted {
+            let _ = writeln!(s, "retracted:   {}", x.trim_start_matches("retracted "));
+        }
         let _ = writeln!(
             s,
             "rule:        {} ({:?} neighbours, {} step(s) per generation)",
@@ -581,6 +614,16 @@ impl Report for RecordView {
     }
 }
 
+/// A record's retractions, described ([`jetcarp_store::library::pack::RetractionRow::describe`]).
+fn retracted(lib: &jetcarp_store::Library, kind: &str, id: &str) -> Result<Vec<String>, ApiError> {
+    let mut by = lib.retractions_by_id(kind).map_err(catalog_err)?;
+    let Some(rows) = by.remove(id) else {
+        return Ok(Vec::new());
+    };
+    let names = lib.publisher_names().map_err(catalog_err)?;
+    Ok(rows.iter().map(|r| r.describe(&names)).collect())
+}
+
 /// `library.get`.
 pub struct LibraryGet;
 impl Op for LibraryGet {
@@ -596,6 +639,7 @@ impl Op for LibraryGet {
             return Ok(RecordView {
                 kind: "ant".into(),
                 label: r.line(),
+                retracted: retracted(&lib, "ant", &r.id)?,
                 pattern: None,
                 ant: Some(r),
                 sightings: Vec::new(),
@@ -604,6 +648,7 @@ impl Op for LibraryGet {
             });
         }
         let r = lib.get(&a.id).map_err(catalog_err)?;
+        let retracted = retracted(&lib, "pattern", &r.id)?;
         if a.bare {
             return Ok(RecordView {
                 kind: "pattern".into(),
@@ -613,6 +658,7 @@ impl Op for LibraryGet {
                 phases: Vec::new(),
                 pattern: Some(r),
                 ant: None,
+                retracted,
             });
         }
         Ok(RecordView {
@@ -623,6 +669,7 @@ impl Op for LibraryGet {
             phases: phases_text(&r, a.phases.unwrap_or(1))?,
             pattern: Some(r),
             ant: None,
+            retracted,
         })
     }
 }

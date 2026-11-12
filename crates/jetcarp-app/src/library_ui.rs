@@ -179,6 +179,8 @@ pub struct LibraryWindow {
     /// Palette of the thumbnails and the phase strip (`None`: the rule's colours; saved in the
     /// settings).
     pub palette: Option<String>,
+    /// Records a pack retracted, by id: `retracted by <publisher> on <date>: <reason>`.
+    retracted: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl Default for LibraryWindow {
@@ -203,6 +205,7 @@ impl Default for LibraryWindow {
             phase: 0,
             palette: None,
             moves: vec![],
+            retracted: Default::default(),
         }
     }
 }
@@ -233,6 +236,14 @@ impl LibraryWindow {
             }
             Err(e) => self.error = Some(e),
         }
+        let names = self.lib.publisher_names().unwrap_or_default();
+        self.retracted = self
+            .lib
+            .retractions_by_id("pattern")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, rows)| (id, rows.iter().map(|r| r.describe(&names)).collect()))
+            .collect();
         self.loaded = Some(Instant::now());
         self.dirty = true;
     }
@@ -468,6 +479,7 @@ impl LibraryWindow {
                 return;
             }
             let recs = &self.records;
+            let retracted = &self.retracted;
             let sel = self.selected.clone();
             let res = thumbs::grid(
                 ui,
@@ -484,7 +496,11 @@ impl LibraryWindow {
                     thumbs::Cell {
                         image: Some(thumb(r, self.palette.as_deref())),
                         placeholder: String::new(),
-                        title: r.label(),
+                        title: if retracted.contains_key(&r.id) {
+                            format!("{} (retracted)", r.label())
+                        } else {
+                            r.label()
+                        },
                         subtitle: format!(
                             "score {:.0} · seen {} · {} · {}",
                             r.score,
@@ -530,6 +546,14 @@ impl LibraryWindow {
                 ui.ctx().copy_text(r.id.clone());
             }
         });
+        for x in self.retracted.get(&r.id).into_iter().flatten() {
+            // A retracted record stays here, shown as retracted, with who did and why.
+            let mut t = x.clone();
+            if let Some(f) = t.get_mut(..1) {
+                f.make_ascii_uppercase();
+            }
+            ui.colored_label(Color32::from_rgb(230, 110, 90), t);
+        }
         if r.needs_reverify {
             ui.colored_label(
                 Color32::from_rgb(230, 160, 60),

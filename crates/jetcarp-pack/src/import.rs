@@ -855,6 +855,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             imported: now.clone(),
             engine_version: jetcarp_core::VERSION.into(),
             report: json!({
+                "publisher_name": out.publisher_name,
                 "patterns_added": out.patterns_added,
                 "patterns_merged": out.patterns_merged,
                 "flagged": out.flagged,

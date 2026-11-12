@@ -85,7 +85,9 @@ What happens to each kind of record:
 - **Quick Start entries** appear in the Quick Start menu.
 - **Ratings** are kept under each rater's name, as the pack gives it.
 - **Retractions.** A publisher can withdraw a record in a later version. Importing that version flags
-  the record as retracted, with the reason, and never deletes your copy.
+  the record as retracted, with the reason, and never deletes your copy: `jetcarp library show`
+  says *retracted by PUBLISHER on DATE: REASON*, `jetcarp library list` marks it, and so does the
+  app's library window.
 
 `--strict` refuses a pack that has two different rows for one record id, instead of keeping the
 first. `--library FILE` imports into another library file than your usual one.
