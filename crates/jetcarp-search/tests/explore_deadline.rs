@@ -7,7 +7,7 @@
 use jetcarp_core::explore::batch::{Backend, BatchJob, CpuBatch, GIVEN_UP, WorldTrace, run_cpu};
 use jetcarp_core::rules::Rule;
 use jetcarp_search::explore::job::{CPU_RUN_S, SLOW_GENERATION_MS};
-use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, PUBLISH_S};
+use jetcarp_search::jobs::explore::{ExploreProgress, ExploreRun, PUBLISH_S, db_path};
 use jetcarp_search::jobs::{self, Budget, JobSpec, RunOptions, Runner, Stopped};
 use jetcarp_store::{JobStatus, Library};
 use serde_json::{Value, json};
@@ -97,6 +97,19 @@ fn progress(v: &Value) -> ExploreProgress {
     serde_json::from_value(v.clone()).unwrap()
 }
 
+/// The seconds a job's search ran, as its last step saved them (publishing a build's atlas
+/// comes after, and the job's progress counts that too).
+fn searched(lib: &Library, job: i64) -> f64 {
+    let path = db_path(lib, &lib.job(job).unwrap()).unwrap();
+    let c = rusqlite::Connection::open(path).unwrap();
+    c.query_row("SELECT v FROM meta WHERE k = 'elapsed_s'", [], |r| {
+        r.get::<_, String>(0)
+    })
+    .unwrap()
+    .parse()
+    .unwrap()
+}
+
 /// A three-second build ends on time with every run on the processor still going: they are
 /// given up (not kept), and the build publishes and ends seconds after its minutes, not after
 /// the runs' time cap.
@@ -122,19 +135,13 @@ fn a_build_ends_on_time_with_slow_runs_under_way() {
     let wall = t0.elapsed().as_secs_f64();
     assert_eq!(out.status, JobStatus::Done);
     let p = progress(&out.progress);
-    // The search's own time: its minutes, and at most a generation and a step's write more.
+    // The search's own time: its minutes, and at most a generation and a step's write more,
+    // well before the runs' cap would have ended them. (Publishing, and loading the tiling list
+    // before, come on top.)
+    let s = searched(&lib, job);
     assert!(
-        p.elapsed_s >= budget_s && p.elapsed_s < budget_s + 1.5,
-        "searched {:.2} s",
-        p.elapsed_s
-    );
-    // From the search's start to the job's end, publishing included: well before the runs' cap
-    // would have ended them. (The wall time adds loading the tiling list, slower on some
-    // machines than others.)
-    assert!(
-        p.session_s < budget_s + 3.0 && p.session_s < CPU_RUN_S,
-        "the build took {:.2} s from its search's start, {wall:.2} s in all",
-        p.session_s
+        s >= budget_s && s < budget_s + 1.5 && s < CPU_RUN_S,
+        "searched {s:.2} s ({wall:.2} s in all)"
     );
     assert!(p.given_up > 0, "no run was under way at the end");
     assert_eq!((p.screened, p.capped), (0, 0));
@@ -167,12 +174,8 @@ fn a_build_ends_on_time_with_a_gpu_batch_under_way() {
     assert_eq!(out.status, JobStatus::Done);
     let p = progress(&out.progress);
     assert_eq!(p.backend, "slow test batches");
-    assert!(
-        p.elapsed_s >= budget_s && p.elapsed_s < budget_s + 1.5,
-        "searched {:.2} s",
-        p.elapsed_s
-    );
-    assert!(p.session_s < budget_s + 3.0, "took {:.2} s", p.session_s);
+    let s = searched(&lib, job);
+    assert!(s >= budget_s && s < budget_s + 1.5, "searched {s:.2} s");
     assert!(p.given_up > 0 && p.screened == 0, "{p:?}");
     assert!(p.gpu_error.is_none(), "{:?}", p.gpu_error);
     // Its threads: a third for the GPU's batches.

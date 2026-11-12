@@ -270,6 +270,43 @@ const MAX_EXPLICIT_TAPS: usize = 60_000_000;
 /// aperiodic patches for each cell (cells near the patch edge by the median full kernel, so the
 /// cells past the edge count as 0).
 pub fn kernel(topo: &Topology, rule: &LeniaRule) -> Result<Kernel, String> {
+    kernel_while(topo, rule, &|| true).unwrap_or_else(|| Err("stopped".into()))
+}
+
+/// [`kernel`], asking `go` now and then while it works through an aperiodic patch's cells,
+/// which takes seconds (about 14 s on one thread for R = 17 on a 64,000-cell Penrose patch);
+/// `None` once `go` says stop. A kernel it finishes is [`kernel`]'s.
+pub fn kernel_while(
+    topo: &Topology,
+    rule: &LeniaRule,
+    go: &(dyn Fn() -> bool + Sync),
+) -> Option<Result<Kernel, String>> {
+    let stopped = std::sync::atomic::AtomicBool::new(false);
+    let r = kernel_in(topo, rule, &|i| {
+        use std::sync::atomic::Ordering::Relaxed;
+        if stopped.load(Relaxed) {
+            return false;
+        }
+        if i % 256 == 0 && !go() {
+            stopped.store(true, Relaxed);
+            return false;
+        }
+        true
+    });
+    if stopped.load(std::sync::atomic::Ordering::Relaxed) {
+        None
+    } else {
+        Some(r)
+    }
+}
+
+/// [`kernel`], asking `go(cell)` before each aperiodic cell's taps (false: they are left empty,
+/// and the caller throws the kernel away).
+fn kernel_in(
+    topo: &Topology,
+    rule: &LeniaRule,
+    go: &(dyn Fn(usize) -> bool + Sync),
+) -> Result<Kernel, String> {
     match &topo.storage {
         Storage::Lattice(g) => {
             let nt = g.ntypes as usize;
@@ -330,6 +367,9 @@ pub fn kernel(topo: &Topology, rule: &LeniaRule) -> Result<Kernel, String> {
             let lists: Vec<Vec<(u32, f64)>> = (0..n)
                 .into_par_iter()
                 .map(|i| {
+                    if !go(i) {
+                        return Vec::new();
+                    }
                     // Breadth-first over touching cells until past the kernel's reach.
                     let mut seen = std::collections::HashSet::new();
                     let mut q = std::collections::VecDeque::new();

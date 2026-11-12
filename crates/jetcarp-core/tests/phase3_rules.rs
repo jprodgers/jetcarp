@@ -547,6 +547,13 @@ fn lenia_kernels_sum_to_one() {
     let ones = sums.iter().filter(|s| (*s - 1.0).abs() < 1e-5).count();
     assert!(ones * 2 > sums.len(), "{ones} of {}", sums.len());
     assert!(sums.iter().all(|&s| s <= 1.0 + 1e-5));
+    // Built while a condition holds: the same kernel, or none once it says stop.
+    let rule = lenia_rule("Lenia R=3,T=10,b=1,m=0.15,s=0.015");
+    let again = jetcarp_core::lenia::kernel_while(&t, &rule, &|| true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(again.sums(), sums);
+    assert!(jetcarp_core::lenia::kernel_while(&t, &rule, &|| false).is_none());
 }
 
 #[test]

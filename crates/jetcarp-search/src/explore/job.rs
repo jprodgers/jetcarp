@@ -22,7 +22,7 @@ use jetcarp_core::explore::space::{self, Fam, Grid, TilingChoice, sample_ltl, sa
 use jetcarp_core::ltl::Hood;
 use jetcarp_core::rng::Rng;
 use jetcarp_core::rules::Rule;
-use jetcarp_core::topology::Nb;
+use jetcarp_core::topology::{Nb, Storage};
 use jetcarp_core::world::World;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -1461,6 +1461,24 @@ impl Search {
         let slow = SLOW_GENERATION_MS.load(Ordering::Relaxed);
         let r = catch_unwind(AssertUnwindSafe(|| {
             let mut world = prepare(grid, &c).ok()?;
+            // A Lenia kernel on an aperiodic patch takes seconds to build (14 s on one thread
+            // for R = 17 on a 64,000-cell Penrose patch), in the run's first generation: built
+            // here instead, where a stop or the run's end gives it up.
+            if let Some(ca) = world.cas.first_mut()
+                && let Rule::Lenia(l) = &ca.rule
+                && ca.kernel.is_none()
+                && !matches!(grid.topo.storage, Storage::Lattice(_))
+            {
+                match jetcarp_core::lenia::kernel_while(&grid.topo, l, &|| !lim.cut()) {
+                    None => {
+                        cut = Some("given up");
+                        return Some(None);
+                    }
+                    Some(Ok(k)) => ca.kernel = Some(Arc::new(k)),
+                    // The first generation finds the same error.
+                    Some(Err(_)) => {}
+                }
+            }
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
             let (t, reached) = trace_world_while(&mut world, c.gens, window, &mut |_| {
                 if slow > 0 {
