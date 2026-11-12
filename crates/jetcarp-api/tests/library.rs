@@ -503,3 +503,189 @@ fn reverify_checks_flagged_or_all_records_as_a_job() {
     assert_eq!(i.0.needs_reverify, 0);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// The record of the one object the finder sees in `cells` (`i,j,k,s` tuples on a wrapped Life
+/// grid) when it does not split compounds, in the first generation where it sees one: what
+/// earlier builds stored.
+fn unsplit_record(cells: &str) -> jetcarp_core::pattern::PatternRecord {
+    use jetcarp_core::objects::{ObjectOptions, find_objects};
+    use jetcarp_core::pattern::{DiscoveredBy, Provenance, decode_cells, record_from_object};
+    use jetcarp_core::{Boundary, CaSpec, Command, SeedSpec, TilingSpec, World};
+    let mut w = World::new(TilingSpec::rect("square", 64, 64, Boundary::Wrap), 1).unwrap();
+    let g = w.topo.lattice().unwrap().clone();
+    let cells = decode_cells(cells)
+        .unwrap()
+        .iter()
+        .map(|c| [g.resolve(c.i + 20, c.j + 20, c.k).unwrap() as u32, 1])
+        .collect();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells }),
+    })
+    .unwrap();
+    let opts = ObjectOptions {
+        separate: false,
+        ..ObjectOptions::default()
+    };
+    for _ in 0..8 {
+        let r = find_objects(&w, &opts).unwrap();
+        if r.objects.len() == 1 {
+            let prov = Provenance {
+                source: "an old build".into(),
+                jetcarp_version: jetcarp_core::VERSION.into(),
+                date: jetcarp_core::pattern::now_utc(),
+                ..Default::default()
+            };
+            return record_from_object(&w, w.cas[0].id, &r.objects[0], prov, DiscoveredBy::Search)
+                .unwrap();
+        }
+        w.apply(Command::Step { gens: 1 }).unwrap();
+    }
+    panic!("never one group");
+}
+
+// `library.compounds` finds the compounds an earlier build stored (two gliders flying together,
+// two blocks a cell apart, a pulsar with blinkers) and lists them without changing anything;
+// with `apply` it stores their parts, credited with the compounds' sightings, removes the
+// uncurated compounds, and keeps the curated one tagged. A second pass finds nothing new.
+#[test]
+fn compounds_are_listed_then_split_into_their_parts() {
+    let dir = scratch("lib-compounds");
+    let (lib, cx) = catalog(&dir);
+    let glider = lib.get("glider").unwrap();
+    // Two gliders side by side, as a 20,000-soup hunt stored them.
+    let pair = unsplit_record(
+        "0,0,0,1 1,0,0,1 2,0,0,1 0,1,0,1 1,2,0,1 4,3,0,1 5,3,0,1 6,3,0,1 4,4,0,1 5,5,0,1",
+    );
+    assert_eq!((pair.class, pair.cells), (PatternClass::Spaceship, 10));
+    let biblock = unsplit_record("0,0,0,1 1,0,0,1 3,0,0,1 4,0,0,1 0,1,0,1 1,1,0,1 3,1,0,1 4,1,0,1");
+    assert_eq!((biblock.class, biblock.cells), (PatternClass::StillLife, 8));
+    // A pulsar with four blinkers beside it, as the same hunt stored it.
+    let mut favourite = unsplit_record(
+        "2,0,0,1 3,0,0,1 4,0,0,1 8,0,0,1 9,0,0,1 10,0,0,1 0,2,0,1 5,2,0,1 7,2,0,1 12,2,0,1 0,3,0,1 \
+         5,3,0,1 7,3,0,1 12,3,0,1 0,4,0,1 5,4,0,1 7,4,0,1 12,4,0,1 2,5,0,1 3,5,0,1 4,5,0,1 8,5,0,1 \
+         9,5,0,1 10,5,0,1 2,7,0,1 3,7,0,1 4,7,0,1 8,7,0,1 9,7,0,1 10,7,0,1 0,8,0,1 5,8,0,1 7,8,0,1 \
+         12,8,0,1 0,9,0,1 5,9,0,1 7,9,0,1 12,9,0,1 0,10,0,1 5,10,0,1 7,10,0,1 12,10,0,1 15,11,0,1 \
+         2,12,0,1 3,12,0,1 4,12,0,1 8,12,0,1 9,12,0,1 10,12,0,1 15,12,0,1 15,13,0,1 11,15,0,1 \
+         12,15,0,1 13,15,0,1 17,15,0,1 18,15,0,1 19,15,0,1 15,17,0,1 15,18,0,1 15,19,0,1",
+    );
+    assert_eq!(
+        (favourite.class, favourite.period),
+        (PatternClass::Oscillator, 6)
+    );
+    favourite.name = Some("pulsar with blinkers".into());
+    for r in [pair.clone(), biblock.clone(), favourite.clone()] {
+        lib.add(r).unwrap();
+    }
+    // A second sighting of the pair, so its glider gains four copies.
+    lib.add(pair.clone()).unwrap();
+    let before = lib.count(&Default::default()).unwrap();
+    assert_eq!(before, 5);
+    let report = dir.join("compounds.jsonl");
+    let dry = LibraryCompounds::run(
+        &cx,
+        CompoundsIn {
+            report: Some(report.display().to_string()),
+            threads: 2,
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    let p = &dry.progress;
+    assert_eq!(dry.status, "done");
+    assert_eq!((p.checked, p.compounds, p.removed, p.kept), (5, 3, 2, 1));
+    assert_eq!(p.by_class["spaceship"], 1);
+    assert!(
+        dry.text().contains("nothing changed (dry run)"),
+        "{}",
+        dry.text()
+    );
+    let row = p.examples.iter().find(|c| c.id == pair.id).unwrap();
+    assert_eq!(row.action, "would remove");
+    assert_eq!(row.parts.len(), 1);
+    assert_eq!(
+        (row.parts[0].id.as_str(), row.parts[0].copies),
+        (glider.id.as_str(), 2)
+    );
+    assert!(row.parts[0].stored);
+    let fav = p.examples.iter().find(|c| c.id == favourite.id).unwrap();
+    assert_eq!(fav.action, "would keep");
+    // Nothing changed; the report holds every compound with its whole record and history.
+    assert_eq!(lib.count(&Default::default()).unwrap(), before);
+    assert_eq!(lib.get(&glider.id).unwrap().seen, glider.seen);
+    let lines: Vec<serde_json::Value> = std::fs::read_to_string(&report)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(lines.len(), 3);
+    assert!(lines.iter().all(|l| l["record"]["phases"].is_array()));
+    assert!(lines.iter().all(|l| l["provenance"][0]["kind"] == "found"));
+    // Apply: the parts are stored and credited, the uncurated compounds removed.
+    let done = LibraryCompounds::run(
+        &cx,
+        CompoundsIn {
+            apply: true,
+            threads: 2,
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    let p = &done.progress;
+    assert_eq!((p.compounds, p.removed, p.kept), (3, 2, 1));
+    assert!(done.text().contains("removed 2"), "{}", done.text());
+    assert!(std::path::Path::new(&p.report).exists());
+    assert!(lib.get(&pair.id).is_err());
+    assert!(lib.get(&biblock.id).is_err());
+    let kept = lib.get(&favourite.id).unwrap();
+    assert!(kept.tags.iter().any(|t| t == "compound"), "{:?}", kept.tags);
+    assert!(kept.notes.contains("Compound: "), "{}", kept.notes);
+    // The pair was seen twice: four more gliders.
+    let g = lib.get(&glider.id).unwrap();
+    assert_eq!(g.seen, glider.seen + 4);
+    let h = lib.provenance("pattern", &glider.id).unwrap();
+    let last = h.last().unwrap();
+    assert_eq!(last.kind, "reverified");
+    assert!(
+        last.source
+            .starts_with("compound-split: 2 copies in compound"),
+        "{}",
+        last.source
+    );
+    // The blocks are new: two copies of the bi-block's one sighting, with its history.
+    let blocks = lib
+        .query(&jetcarp_store::Query {
+            class: Some(PatternClass::StillLife),
+            ..Default::default()
+        })
+        .unwrap();
+    let block = blocks.iter().find(|r| r.cells == 4).unwrap();
+    assert_eq!(block.seen, 2);
+    let h = lib.provenance("pattern", &block.id).unwrap();
+    assert_eq!(
+        (h[0].kind.as_str(), h[0].source.as_str()),
+        ("found", "an old build")
+    );
+    assert!(h.last().unwrap().source.contains("which was removed"));
+    // The kept compound gave a pulsar, and its blinkers joined the stored one.
+    let all = lib.list().unwrap();
+    assert!(all.iter().any(|r| r.cells == 48 && r.period == 3));
+    // A second pass changes nothing: the kept compound is tagged.
+    let again = LibraryCompounds::run(
+        &cx,
+        CompoundsIn {
+            apply: true,
+            ..Default::default()
+        },
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!((again.progress.compounds, again.progress.already), (0, 1));
+    let e = fails(
+        call_json(&cx, "library.compounds", json!({"job": 0})),
+        ErrorKind::Invalid,
+    );
+    assert!(e.message.contains("not a compounds pass"), "{e}");
+    let _ = std::fs::remove_dir_all(dir);
+}

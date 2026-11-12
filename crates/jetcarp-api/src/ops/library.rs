@@ -3,7 +3,8 @@
 //! pattern's phases (`library.render`), JSON records out and in (`library.export`,
 //! `library.import`), scenes made of patterns (`library.paste`), checking records again
 //! (`library.verify`; `library.reverify`, the job that clears the flags a geometry change or a
-//! change in a rule's meaning leaves), and making the file smaller (`library.prune`).
+//! change in a rule's meaning leaves), splitting stored compounds into their parts
+//! (`library.compounds`, a job), and making the file smaller (`library.prune`).
 //!
 //! Records are patterns (verified still lifes, oscillators, spaceships, guns, movers) and ant
 //! runs (ids `ant-...`). The catalog is the context's ([`Ctx::library`]). Searches that add to it
@@ -1628,6 +1629,176 @@ impl Op for LibraryReverify {
             status: out.status,
             progress,
             flagged: lib.flagged().map_err(catalog_err)?.into_iter().collect(),
+            seconds: out.seconds,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// library.compounds
+
+/// Find the stored compounds (several independent objects stored as one pattern) and, with
+/// `apply`, store their parts in their place.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompoundsIn {
+    /// Change the library: store each compound's parts (credited with its seen count and
+    /// sightings, and given its history), then remove the compound, or keep it tagged
+    /// `compound` when someone curated it or a part does not run in all its rules. Without it
+    /// (the default) nothing changes: the compounds are only listed.
+    #[serde(default)]
+    pub apply: bool,
+    /// The report file, one JSON object per compound (default:
+    /// `reports/compounds-<job>.jsonl` beside the library).
+    #[serde(default)]
+    pub report: Option<String>,
+    /// Resume this compounds job instead of starting one.
+    #[serde(default)]
+    pub job: Option<i64>,
+    /// Worker threads (0 or absent: all cores).
+    #[serde(default)]
+    pub threads: usize,
+    /// Stop after this many minutes, resumable with `job`.
+    #[serde(default)]
+    pub minutes: Option<f64>,
+}
+
+/// What a compounds pass found and did.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct CompoundsReport {
+    /// The library file.
+    pub catalog: String,
+    /// The `compounds` job.
+    pub job: i64,
+    /// `done`, or `paused` when stopped (resume with `job`).
+    pub status: String,
+    /// Examined, compounds found (by class and tiling), removed or kept, parts, the first 200
+    /// compounds with their parts, and the report file.
+    #[schemars(with = "Value")]
+    pub progress: jetcarp_search::jobs::compounds::CompoundsProgress,
+    pub seconds: f64,
+}
+
+impl Report for CompoundsReport {
+    fn text(&self) -> String {
+        let p = &self.progress;
+        let mut s = String::new();
+        for c in p.examples.iter().take(10) {
+            let parts: Vec<String> = c
+                .parts
+                .iter()
+                .map(|x| {
+                    format!(
+                        "{}{} {}",
+                        if x.copies > 1 {
+                            format!("{} x ", x.copies)
+                        } else {
+                            String::new()
+                        },
+                        &x.id[..8.min(x.id.len())],
+                        x.label
+                    )
+                })
+                .collect();
+            let _ = writeln!(
+                s,
+                "  {:<12} {} {} ({}, {}): {}",
+                c.action,
+                &c.id[..8.min(c.id.len())],
+                c.label,
+                c.tiling,
+                c.rule,
+                if parts.is_empty() {
+                    c.why.clone()
+                } else {
+                    parts.join(" + ")
+                }
+            );
+        }
+        if p.compounds > 10 {
+            let _ = writeln!(s, "  ... {} more in the report", p.compounds - 10);
+        }
+        if !p.by_class.is_empty() {
+            let _ = writeln!(
+                s,
+                "  by class: {}",
+                p.by_class
+                    .iter()
+                    .map(|(k, v)| format!("{k} {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        let _ = writeln!(s, "{} ({:.1} s)", p.line, self.seconds);
+        let _ = writeln!(s, "report: {}", p.report);
+        if self.status == "paused" {
+            let _ = writeln!(s, "paused: resume with --job {}", self.job);
+        } else if !p.apply && p.compounds > 0 {
+            let _ = writeln!(s, "nothing changed (dry run); --apply splits them");
+        }
+        s
+    }
+}
+
+/// `library.compounds`.
+pub struct LibraryCompounds;
+impl Op for LibraryCompounds {
+    const NAME: &'static str = "library.compounds";
+    const SUMMARY: &'static str = "Find the stored patterns that are several independent objects (two gliders flying together, an oscillator beside a still life) as a resumable job, writing a report of each with its parts; with apply, store the parts (credited with the compound's sightings) and remove the compound, or keep it tagged when curated.";
+    const READ_ONLY: bool = false;
+    type In = CompoundsIn;
+    type Out = CompoundsReport;
+    fn run(cx: &Ctx, a: CompoundsIn, p: &dyn Progress) -> Result<CompoundsReport, ApiError> {
+        use jetcarp_search::jobs::compounds::{CompoundsProgress, CompoundsSpec};
+        use jetcarp_search::jobs::{self, Budget, JobSpec};
+        let lib = cx.library();
+        let budget = Budget {
+            minutes: a.minutes,
+            ..Default::default()
+        };
+        let job = match a.job {
+            Some(j) => {
+                let row = lib.job(j).map_err(catalog_err)?;
+                if row.kind != "compounds" {
+                    return Err(ApiError::invalid(format!(
+                        "job {j} is a {} job, not a compounds pass",
+                        row.kind
+                    )));
+                }
+                j
+            }
+            None => {
+                let spec = CompoundsSpec {
+                    apply: a.apply,
+                    report: a.report.clone(),
+                    ..Default::default()
+                };
+                let js = JobSpec {
+                    strategy: "compounds".into(),
+                    spec: serde_json::to_value(spec)
+                        .map_err(|e| ApiError::engine(e.to_string()))?,
+                    label: None,
+                    budget: Budget::default(),
+                };
+                jobs::create(&lib, &js).map_err(ApiError::invalid)?
+            }
+        };
+        let how = super::search::How {
+            threads: a.threads,
+            gpu: false,
+            budget,
+            background: false,
+            detach: false,
+            files: Default::default(),
+        };
+        let out = super::search::run_job(cx, &lib, job, &how, p)?;
+        let progress: CompoundsProgress =
+            serde_json::from_value(out.progress.clone()).unwrap_or_default();
+        Ok(CompoundsReport {
+            catalog: lib.path().display().to_string(),
+            job,
+            status: out.status,
+            progress,
             seconds: out.seconds,
         })
     }

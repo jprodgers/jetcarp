@@ -100,8 +100,17 @@ fn job_specs_make_jobs_with_labels_and_budgets() {
     assert_eq!(
         names,
         [
-            "hunt", "search", "ants", "census", "mover", "pile", "collide", "evolve", "explore",
-            "reverify"
+            "hunt",
+            "search",
+            "ants",
+            "census",
+            "mover",
+            "pile",
+            "collide",
+            "evolve",
+            "explore",
+            "reverify",
+            "compounds"
         ]
     );
     // Every kind but explore resumes exactly; an explore search continues from its archive.

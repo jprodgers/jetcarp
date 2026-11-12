@@ -71,6 +71,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 mod ants;
 mod census;
+mod compounds;
 mod dashboard;
 mod jobs;
 pub mod pack;
@@ -82,6 +83,7 @@ pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_identity, ant
 mod ratings;
 mod reverify;
 mod unstored;
+pub use compounds::{COMPOUND_TAG, CompoundCounts, CompoundSplit};
 pub use dashboard::{FindRow, HeatQuery, HeatRow, UsageRow};
 pub use jobs::{RemovedJob, StepEnd, StepWrite};
 pub use provenance::{AliasRow, History, Origin, ProvenanceRow};
@@ -327,7 +329,7 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
 
 /// The short key of a tiling (its family, or its catalog id: `square`, `k3-019`), the
 /// `tiling_key` columns.
-pub(super) fn short_tiling_key(t: &TilingSpec) -> String {
+pub fn short_tiling_key(t: &TilingSpec) -> String {
     t.params
         .as_ref()
         .and_then(|p| p.get("catalog"))

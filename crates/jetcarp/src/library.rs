@@ -1,5 +1,5 @@
 //! `jetcarp library`: the pattern library (list, show, paste, promote, render, update, export,
-//! import, remove, quickstart, info, verify, reverify, prune) and its ant runs (`library ants`)
+//! import, remove, quickstart, info, verify, reverify, compounds, prune) and its ant runs (`library ants`)
 //! and movers (`library movers`). Searches that add to it are jobs: `jetcarp search`,
 //! `jetcarp jobs`.
 
@@ -8,10 +8,10 @@ use anyhow::Result;
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{self, NoInput, Op, Quiet};
 use jetcarp_api::ops::library::{
-    ExportIn, GetIn, ImportIn, LibraryExport, LibraryGet, LibraryImport, LibraryInfoOp,
-    LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove, LibraryRender, LibraryReverify,
-    LibraryUpdate, LibraryVerify, PasteSceneIn, PruneIn, QueryIn, RemoveIn, RenderIn, ReverifyIn,
-    UpdateIn, VerifyIn,
+    CompoundsIn, ExportIn, GetIn, ImportIn, LibraryCompounds, LibraryExport, LibraryGet,
+    LibraryImport, LibraryInfoOp, LibraryPaste, LibraryPrune, LibraryQuery, LibraryRemove,
+    LibraryRender, LibraryReverify, LibraryUpdate, LibraryVerify, PasteSceneIn, PruneIn, QueryIn,
+    RemoveIn, RenderIn, ReverifyIn, UpdateIn, VerifyIn,
 };
 use jetcarp_api::ops::quickstart::{
     AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
@@ -153,6 +153,31 @@ enum LibCmd {
         #[arg(long)]
         periods: Option<u64>,
         /// Resume this re-verification job.
+        #[arg(long)]
+        job: Option<i64>,
+        /// Worker threads (default: all cores).
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Stop after this many minutes (resume with --job).
+        #[arg(long)]
+        minutes: Option<f64>,
+    },
+    /// Find the stored compounds: patterns that are several independent objects, such as two
+    /// gliders flying side by side or a pulsar with blinkers beside it (each part runs alone as
+    /// an object of the same period and velocity, and the pattern is exactly the union of the
+    /// parts' runs). Lists them and writes a report (one JSON object per compound, with its parts
+    /// and the whole record); nothing changes without --apply. With --apply each compound's parts
+    /// are stored (credited with its seen count and sightings, and given its history) and the
+    /// compound is removed, or kept tagged `compound` when someone curated it or a part does not
+    /// run in all its rules. Runs as a job, resumable with --job.
+    Compounds {
+        /// Change the library (default: a dry run that only lists).
+        #[arg(long)]
+        apply: bool,
+        /// The report file (default: reports/compounds-<job>.jsonl beside the library).
+        #[arg(long)]
+        report: Option<PathBuf>,
+        /// Resume this compounds job.
         #[arg(long)]
         job: Option<i64>,
         /// Worker threads (default: all cores).
@@ -454,6 +479,24 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 minutes,
             };
             let out = LibraryReverify::run(&cx, a, &crate::ProgressLine)?;
+            eprintln!();
+            show(&out, json)
+        }
+        LibCmd::Compounds {
+            apply,
+            report,
+            job,
+            threads,
+            minutes,
+        } => {
+            let a = CompoundsIn {
+                apply,
+                report: report.as_deref().map(path),
+                job,
+                threads,
+                minutes,
+            };
+            let out = LibraryCompounds::run(&cx, a, &crate::ProgressLine)?;
             eprintln!();
             show(&out, json)
         }

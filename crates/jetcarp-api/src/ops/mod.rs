@@ -73,6 +73,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<library::LibraryPaste>::NEW,
     &Plain::<library::LibraryVerify>::NEW,
     &Plain::<library::LibraryReverify>::NEW,
+    &Plain::<library::LibraryCompounds>::NEW,
     &Plain::<library::LibraryPrune>::NEW,
     &Plain::<quickstart::QuickstartList>::NEW,
     &Plain::<quickstart::QuickstartGet>::NEW,

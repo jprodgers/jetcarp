@@ -9,9 +9,9 @@
 //! while it still holds the job ([`Library::job_step`]).
 
 use super::{
-    AddOutcome, AntRow, JobStatus, Library, Origin, PatternRecord, Reverified, Sighting,
-    UnstoredFlush, add_in, ants::put_ant, census, e, name_of, now_utc, prepare, provenance,
-    reverify, sightings_in, unstored,
+    AddOutcome, AntRow, CompoundSplit, JobStatus, Library, Origin, PatternRecord, Reverified,
+    Sighting, UnstoredFlush, add_in, ants::put_ant, census, compounds, e, name_of, now_utc,
+    prepare, provenance, reverify, sightings_in, unstored,
 };
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, params};
@@ -47,6 +47,8 @@ pub struct StepWrite {
     pub census: Vec<(usize, String, Value)>,
     /// What re-verifying records found (the `reverify` job).
     pub reverified: Vec<Reverified>,
+    /// Compounds split into their parts (the `compounds` job).
+    pub compounds: Vec<CompoundSplit>,
     pub status: Option<JobStatus>,
     /// The heartbeat to record (seconds since 1970).
     pub heartbeat: i64,
@@ -156,6 +158,7 @@ impl Library {
             }
             census::rows_in(tx, job, &w.census)?;
             reverify::reverified_in(tx, job, &w.reverified)?;
+            compounds::split_in(tx, job, &w.compounds)?;
             let (progress, checkpoint) = end(&out)?;
             tx.execute(
                 "UPDATE jobs SET updated = ?2,
