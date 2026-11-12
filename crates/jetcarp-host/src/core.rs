@@ -531,14 +531,11 @@ impl Core {
     }
 
     /// Puts the host's own things in order before the process ends ([`jetcarp_display::exit`]):
-    /// the link closes (its endpoint file goes), the screens' worlds and GPU buffers are dropped,
-    /// and the GPU is waited on until it is idle. The device itself is left for the process's end.
+    /// the link closes, so its endpoint file goes. Nothing on the GPU is touched: the screens'
+    /// buffers, the device and the instance all end with the process (dropping them, or waiting
+    /// on the device, crashed Windows' software renderer on CI with 0xC0000005).
     pub fn shutdown(&mut self) {
         self.listener = None;
-        self.screens.clear();
-        if let Some(g) = &self.gpu {
-            jetcarp_display::exit::wait_idle(&g.device);
-        }
     }
 
     pub fn frame_time(&self) -> Duration {
