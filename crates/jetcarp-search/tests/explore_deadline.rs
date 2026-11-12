@@ -1,8 +1,9 @@
-//! An explore search's time with slow runs under way on the processor: a Quick Start build ends
-//! within its minutes and a little more, a step that lasts several seconds writes the job's
-//! progress while it runs, and a pause asked by another process stops it within seconds. Every
-//! run on the processor here waits [`SLOW_GENERATION_MS`] at each generation (this test binary's
-//! own setting), so its runs take tens of seconds and a step lasts until their time cap.
+//! An explore search's time with slow runs under way on the processor, or a slow batch on a GPU:
+//! a Quick Start build ends within its minutes and a little more, a step that lasts several
+//! seconds writes the job's progress while it runs, and a pause asked by another process stops it
+//! within seconds. Every run on the processor here waits [`SLOW_GENERATION_MS`] at each
+//! generation (this test binary's own setting), so its runs take tens of seconds and a step lasts
+//! until their time cap.
 
 use jetcarp_core::explore::batch::{Backend, BatchJob, CpuBatch, GIVEN_UP, WorldTrace, run_cpu};
 use jetcarp_core::rules::Rule;
