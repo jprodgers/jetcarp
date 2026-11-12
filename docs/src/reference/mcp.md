@@ -60,12 +60,20 @@ command line and scripts read, so the three cannot drift apart. Small models' ha
 a number or `true` given as text, a list as comma-separated text, or an action's options as JSON
 text are read as meant.
 
-The rest of this page is generated from the server's own `tools/list` and `resources/list` by
-`docs/tools/gen-mcp.py`.
+A client hands the whole tool list to the model with every request, so the list stays short
+(about 45 KB): an argument with many settings, such as each of `search_start`'s strategies or
+`pack`'s actions, is listed with a line about what it does and the resource that holds its
+settings in full, `jetcarp://schema/{tool}/{argument}` (for example
+`jetcarp://schema/search_start/hunt`). A client without resources gets the same JSON Schema from
+`help {"schema": "search_start/hunt"}`, and a setting the server refuses is answered with the
+resource that lists the right ones. The tables below show every setting.
+
+The rest of this page is generated from the server's own `tools/list`, `resources/list` and
+settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 83 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 113 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}.
 
@@ -97,13 +105,14 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 
 ### `help`
 
-**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: the first-run profile, the folders and free space, the packs that came with JETCARP, the GPU, the library's counts; read only, since setup is the user's choice, made in the app or with `jetcarp setup`), or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"}; the same pages are the resources jetcarp://docs/{page}.
+**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice) or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {"schema": "search_start/hunt"}.
 
 *reads only*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching", "reference/rule-notation", "tutorials/hunting-spaceships" (help {"topic": "pages"} lists them). |
+| `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching" (topic pages lists them). |
+| `schema` | string | A JSON Schema: a tool argument's settings ("search_start/hunt" is jetcarp://schema/search_start/hunt), "scene.json" or "pack.json". |
 | `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"pages"` | Which guide (default overview). |
 
 Example:
@@ -125,7 +134,7 @@ Example:
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `family` | string | rules: Only rules of this family (part of its name, any case, ignoring spaces and punctuation), e.g. "Life-like", "Generations", "Elementary", "Agents". Default: every rule. |
+| `family` | string | rules: only this family (part of its name, any case), e.g. "Life-like", "Generations", "Agents". |
 | `limit` | integer | tilings: With `search`: most matches listed (default 60). |
 | `search` | string | tilings: List the tilings (families, catalog tilings, isohedral types) whose id or name contains this text, any case, e.g. "k2-", "3.4.6.4", "ih4". Default: the tiling families. |
 | `what` | `"rules"`, `"tilings"`, `"isohedral"`, `"palettes"`, `"seeds"`, `"commands"` | What to list (default rules). |
@@ -144,20 +153,20 @@ Example:
 
 ### `world_new`
 
-**Make or open a world.** Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {"tiling": "hex", "width": 60, "height": 60, "boundary": "wrap", "cas": ["B24/S35"]}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {"cas": [{"rule": "Life", "seed": "empty"}]} is a blank field to draw on (reference {"what": "seeds"} lists the seeds, {"what": "tilings"} the tilings). Size: width and height (8 to 4096 unit cells each), or `cells` (about that many, up to 4000000), or `level` on aperiodic tilings. Or open one: `quickstart` (an entry of the app's Quick Start by handle, e.g. "life"; library_query {"kind": "quickstart"} lists them), `pattern` (a library pattern alone on a grid sized for it, e.g. "glider"), `scene` (scene JSON, as world_status {"scene": true} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.
+**Make or open a world.** Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {"tiling": "hex", "width": 60, "height": 60, "boundary": "wrap", "cas": ["B24/S35"]}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {"cas": [{"rule": "Life", "seed": "empty"}]} is a blank field to draw on (reference {"what": "seeds"} lists the seeds, {"what": "tilings"} the tilings). Size: width and height (8 to 4096 unit cells each), or `cells` (about that many, up to 4000000), or `level` on aperiodic tilings. Or open one: `quickstart` (a Quick Start entry by handle, e.g. "life"), `pattern` (a library pattern on a grid sized for it, e.g. "glider"), `scene` (scene JSON, as world_status {"scene": true} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.
 
 *may replace or delete something*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `boundary` | string | "wrap" (default), "dead", or "live" (aperiodic tilings are always dead). |
-| `cas` | any | The CAs, in order: rule names or notation ("Life", "B3/S23", "Brian's Brain"), or CA objects in the scene format (`{"rule": "Life", "seed": "random:0.2", "neighborhood": "edge", "palette": "Tide"}`). A single string is one CA. |
+| `cas` | any | The CAs, in order: rule names or notation ("Life", "B3/S23"), or CA objects as in a scene ({"rule": "Life", "seed": "random:0.2"}); one string is one CA. |
 | `cells` | integer | Instead of width and height: about this many cells in a roughly square region. |
 | `height` | integer | Grid height in unit cells. |
 | `level` | integer | Aperiodic tilings: the substitution level. |
 | `name` | string | Scene name. |
 | `path` | string | A scene .json file. |
-| `pattern` | string | A library pattern (id, unique prefix, or name such as `glider`): the pattern alone, centred on a wrapped grid sized for it, in the rule it runs in (on an aperiodic patch, where it was found). |
+| `pattern` | string | A library pattern (id, prefix or name, e.g. `glider`) alone on a wrapped grid sized for it, in a rule it runs in. |
 | `quickstart` | string | A Quick Start entry by handle (`life`, `find:<id>`, `atlas:<...>`, `qs-<hex>`): the scene the app's Quick Start opens. |
 | `rng_seed` | integer or string | Random seed (default 1): the same seed gives the same run. Any `u64`; beyond 2^53 - 1 also as a string of decimal digits. |
 | `scene` | any | Scene JSON: the object, or its text. |
@@ -184,7 +193,7 @@ Example:
 
 ### `world_status`
 
-**World status.** Reports the current world: tiling and grid size (width x height for coordinates), generation, state hash, whether it is running, empty, frozen, or repeating with a period (checked exactly), population per field, and the CAs with their ids and rules. Cheap; call it whenever you need ids or sizes. {"scene": true} returns the world's scene JSON instead (world_new {"scene": ...} reproduces this exact state); {"save_path": "glider.json"} also writes the scene to a file (the JETCARP app and `jetcarp run` open it).
+**World status.** Reports the current world: tiling and grid size (width x height for coordinates), generation, state hash, whether it is running, empty, frozen, or repeating with a period (checked exactly), population per field, and the CAs with their ids and rules. Cheap; call it whenever you need ids or sizes. {"scene": true} returns the world's scene JSON instead (world_new {"scene": ...} reproduces this exact state); {"save_path": "glider.json"} also writes it to a file (the app and `jetcarp run` open it).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -204,13 +213,13 @@ Example:
 
 ### `world_read`
 
-**Read cells, a cell, or the objects.** Looks at a CA's field. With no arguments: a text picture of the smallest box around the non-empty cells (one row per line, prefixed by its row number y, with a ruler of column numbers; '.' empty, 'O' live, digits for higher states or sandpile grains), the live-cell count and the bounding box, which tells you where a pattern is. x, y, width, height show a fixed region; {"format": "list"} gives [x, y, state] triples instead. {"format": "objects"} runs the object finder: every still life, oscillator, spaceship and gun in the field, named and classed by running it alone, with where it is ({"format": "objects", "catalog": true} also verifies each distinct one and adds it to the library). {"cell": {"x": 3, "y": 4}} (or {"cell": {"index": 120}}) describes one cell: its tile type, centre, value in every field, and its neighbours in clockwise order, which shows the neighbour layout on hexagons, triangles and other tilings before you draw.
+**Read cells, a cell, or the objects.** Looks at a CA's field. With no arguments: a text picture of the smallest box around the non-empty cells (one row per line, prefixed by its row number y, with a ruler of column numbers; '.' empty, 'O' live, digits for higher states or sandpile grains), the live-cell count and the bounding box. x, y, width, height show a fixed region; {"format": "list"} gives [x, y, state] triples instead. {"format": "objects"} runs the object finder: every still life, oscillator, spaceship and gun in the field, named and classed, with where it is (`catalog`: true also stores each distinct one in the library). {"cell": {"x": 3, "y": 4}} describes one cell: its tile type, centre, value in every field, and its neighbours in clockwise order (the neighbour layout on hexagons, triangles and other tilings, before you draw).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `ca` | integer or string | Which CA: its id number or its name (world_status lists them). Default: the first CA. |
 | `catalog` | boolean | With format objects: Also verify each distinct still life, oscillator and spaceship and add it to the library (copies add to its seen count), as a search would. |
-| `cell` | object | One cell to describe instead: {"x", "y"} or {"index"}. |
+| `cell` | object | One cell to describe instead: {"x", "y"} or {"index"}. Settings: `jetcarp://schema/world_read/cell`. |
 | `cell.index` | integer | Cell index (instead of x, y; required on aperiodic tilings). |
 | `cell.x` | integer | Column. |
 | `cell.y` | integer | Row. |
@@ -234,12 +243,12 @@ Example:
 
 ### `world_edit`
 
-**Draw, paste, reseed, or apply commands.** Changes the world through logged commands (world_status {"scene": true} replays them). Give one of: `cells` to draw: a text picture, RLE, [x, y] cells, or cell indices, e.g. {"cells": {"pattern": ".O.\n..O\nOOO", "x": 10, "y": 10}} (a glider moving down-right; x = column, y = row, (0, 0) is the top-left cell; only live pattern cells are written, `clear_first` empties the field first, `erase` clears the cells instead; on sandpiles values are grains added); `paste` to place a library pattern, e.g. {"paste": {"id": "glider", "x": 10, "y": 10, "orientation": 1}} (the world must use its tiling; on aperiodic patches use `index` or at "original"); `reseed` to put new life into a settled world now ({"reseed": {"mode": "blobs"}}), or automatically ({"reseed": {"policies": [{"mode": "rain", "when": {"kind": "settled"}, "cooldown": 300}]}}), or {"reseed": {}} to report the policies and recent activity; or `commands`, the app's own commands in order (add, change or remove CAs, step, reset, set the tiling, palettes, sandpile actions), e.g. {"commands": [{"op": "add_ca", "ca": {"rule": "Ant RL", "seed": "ants:3"}}]}; reference {"what": "commands"} lists them. `ca` picks the CA (id or name; default the first) for cells, paste and reseed. Next: world_step, world_read.
+**Draw, paste, reseed, or apply commands.** Changes the world through logged commands (world_status {"scene": true} replays them). Give one of: `cells` to draw a text picture, RLE, [x, y] cells or cell indices, e.g. {"cells": {"pattern": ".O.\n..O\nOOO", "x": 10, "y": 10}} (a glider moving down-right; x = column, y = row, (0, 0) is the top-left cell); `paste` to place a library pattern, e.g. {"paste": {"id": "glider", "x": 10, "y": 10, "orientation": 1}}; `reseed` to put new life into a settled world, now ({"reseed": {"mode": "blobs"}}) or by policies; or `commands`, the app's own commands in order, e.g. {"commands": [{"op": "add_ca", "ca": {"rule": "Ant RL", "seed": "ants:3"}}]}; reference {"what": "commands"} lists them. `ca` picks the CA (id or name; default the first) for cells, paste and reseed. Next: world_step, world_read.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `ca` | integer or string | Which CA: its id number or its name (world_status lists them). Default: the first CA. |
-| `cells` | object | Cells to draw into a CA's field. Give one of `pattern`, `rle`, `cells`, or `indices` (or only `clear_first`). |
+| `cells` | object | Cells to draw into a CA's field: one of `pattern`, `rle`, `cells` or `indices` (or only `clear_first`). Only the live cells of a pattern are written; `clear_first` empties the field first, and `erase` clears the cells instead. On sandpiles the values are grains added. Settings: `jetcarp://schema/world_edit/cells`. |
 | `cells.cells` | any | Cells as [x, y] or [x, y, state] (or {"x", "y", "state"}). |
 | `cells.clear_first` | boolean | Empty the whole field before drawing. |
 | `cells.erase` | boolean | Set the listed or pattern cells to empty instead. |
@@ -250,7 +259,7 @@ Example:
 | `cells.x` | integer | Column of the pattern's top-left corner (default: centred). |
 | `cells.y` | integer | Row of the pattern's top-left corner (default: centred). |
 | `commands` | array of object | Command objects, each with an "op" field (one object, or their JSON text, works too): add_ca, remove_ca, update_ca, seed, clear, set_cells, step, reset, set_rng_state, set_tiling, sandpile, set_palette, reseed, set_reseed, ... |
-| `paste` | object | A library pattern to paste, and where. |
+| `paste` | object | A library pattern to paste, and where. The world must use the pattern's tiling; on aperiodic patches give `index`, or `at` "original" (where it was found). Settings: `jetcarp://schema/world_edit/paste`. |
 | `paste.at` | string | "center" (default on lattices) or "original" (aperiodic: where it was found; the default there). |
 | `paste.id` (required) | string | Pattern id, unique id prefix, or name ("glider"). |
 | `paste.index` | integer | Cell index for the corner (lattice) or the anchor tile (aperiodic patches). |
@@ -258,7 +267,7 @@ Example:
 | `paste.phase` | integer | Which phase to paste (default 0). |
 | `paste.x` | integer | Column of the pattern's top-left corner (with y). |
 | `paste.y` | integer | Row of the pattern's top-left corner (with x). |
-| `reseed` | object | Reseed now, set the automatic policies, or (with neither) report them. |
+| `reseed` | object | Reseed now, set the automatic policies, or report them. `mode` reseeds now; with neither `mode` nor `policies` it reports the policies and the recent activity. Policies: {"policies": [{"mode": "rain", "when": {"kind": "settled"}, "cooldown": 300}]}. Settings: `jetcarp://schema/world_edit/reseed`. |
 | `reseed.activity_gens` | integer | Recent generations of activity to report (default 64, at most 512). |
 | `reseed.mode` | any | Reseed now with this mode: "random", "rain", "blobs", a name and a sign ("rain:pos"), or an object such as {"kind": "rain", "drops": 30}. |
 | `reseed.policies` | any | Replace the automatic policies ([] clears them). |
@@ -301,14 +310,14 @@ Example:
 
 ### `world_render`
 
-**Render a picture.** Renders the whole world as a PNG and returns it, so you (and the user) can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. `save_path` also writes the PNG (scene embedded). {"wallpaper": {...}} writes desktop-sized pictures instead and returns their paths: {"wallpaper": {"size": "4K"}}, {"wallpaper": {"size": "2560x1440", "fresh": true, "cell_px": 3, "gens": 300, "palette": "Paper"}} (a new grid of the world's tiling sized for the picture), {"wallpaper": {"monitors": "2560x1440+0+0,1920x1080+2560+180", "split": true}} (one picture per monitor, cut so they line up).
+**Render a picture.** Renders the whole world as a PNG and returns it, so you (and the user) can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. `save_path` also writes the PNG (scene embedded). {"wallpaper": {"size": "4K"}} writes desktop-sized pictures instead and returns their paths (also on a fresh grid sized for the picture, or one picture per monitor, cut so they line up).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `max_side` | integer | Longest image side in pixels, 64 to 2048 (default 640). |
 | `outlines` | boolean | Draw tile outlines (default: only when tiles are at least 7 px). |
 | `save_path` | string | Also write the PNG to this file (scene embedded; its folder is created). |
-| `wallpaper` | object | Write desktop-sized pictures of the world instead (files under the output folder's wallpapers/ unless `out` is given). |
+| `wallpaper` | object | Write desktop-sized pictures of the world instead. They go under the output folder's wallpapers/ unless `out` is given. E.g. {"size": "4K"}; {"size": "2560x1440", "fresh": true, "cell_px": 3, "gens": 300, "palette": "Paper"} (a new grid of the world's tiling sized for the picture); {"monitors": "2560x1440+0+0,1920x1080+2560+180", "split": true} (one picture per monitor, cut so they line up). Settings: `jetcarp://schema/world_render/wallpaper`. |
 | `wallpaper.cell_px` | number | Tile size in pixels for `fresh` and `fit` repeat (default 4). |
 | `wallpaper.center` | array of number | World point at the image centre (with `scale`) instead of fitting. |
 | `wallpaper.fit` | string | cover (default: fill and crop, no stage showing), contain (the whole grid, letterboxed), or repeat (a wrap-edge grid tiled at `cell_px`). |
@@ -336,7 +345,7 @@ Example:
 
 ### `run_script`
 
-**Run a JETCARP script.** Runs a JETCARP script (the Rhai language) and returns its log, errors with line numbers, output folders and sweep summaries. Scripts make their own worlds (the current world is not changed), run them until something happens, save PNGs, and run parallel rule sweeps into new folders under the output folder. Example: `let w = world(#{ tiling: "hex", size: [120, 80], boundary: "dead" }); w.add_ca("HexW3 8229", #{ seed: "top_center" }); let r = w.run(#{ until: "done" }); print(r.generations); w.save_png(out_dir("test") + "/a.png");` or `sweep(#{ rules: "W", until: "done", png: #{ size: [400, 300] } });`. help {"topic": "scripts"} lists every function. Limits: 600 seconds at most (default 60, `max_seconds`), worlds of at most 4000000 cells; files are written only inside the output folder and read only there. Stops early when the client cancels the call; with a progress token, sweeps report their progress.
+**Run a JETCARP script.** Runs a JETCARP script (the Rhai language) and returns its log, errors with line numbers, output folders and sweep summaries. Scripts make their own worlds (the current world is not changed), run them until something happens, save PNGs, and run parallel rule sweeps into new folders under the output folder. Example: `let w = world(#{ tiling: "hex", size: [120, 80], boundary: "dead" }); w.add_ca("HexW3 8229", #{ seed: "top_center" }); let r = w.run(#{ until: "done" }); print(r.generations); w.save_png(out_dir("test") + "/a.png");` or `sweep(#{ rules: "W", until: "done", png: #{ size: [400, 300] } });`. help {"topic": "scripts"} lists every function. Limits: 600 seconds at most (default 60, `max_seconds`), worlds of at most 4000000 cells; files are written only inside the output folder and read only there. Stops early when the client cancels the call.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -362,7 +371,7 @@ Example:
 
 ### `library_query`
 
-**List or read library records.** Lists or reads the library: what searches found and what you and the user kept. `kind`: "pattern" (default: verified still lifes, oscillators, spaceships, guns, puffers, movers; rule-free, each with every rule it was verified in and the range of rules it runs identically in), "ant" (ant and turmite runs: highway, periodic, symmetric, bounded or chaotic, with period, displacement, onset, and the outcome census per tiling), "quickstart" (the app's Quick Start entries by handle: built-in examples, entries from packs, an explore search's atlas, and promotions), or "summary" (how many of each the library holds). Listings come best first, at most 100 a call (`limit`, default 20; page with `offset`); the filters are optional and say which kind they apply to. With `id`, one record in full: a pattern's rules and range, sightings, the cells of its phases (drawn as text on squares and hexagons; `phases` how many), which way it moves per paste orientation; an ant run's outcome and proof; a Quick Start entry with its scene. Ids: a pattern's hex id, a unique prefix, or a name ("glider"); ant-...; a Quick Start handle (find:..., atlas:..., life). Examples: {"class": "spaceship", "tiling": "hex"}, {"works_in": "B36/S23"}, {"kind": "ant", "outcome": "highway", "sort": "onset"}, {"kind": "quickstart", "source": "builtin"}, {"id": "glider", "phases": 4}. Next: world_new {"pattern": id} or world_edit {"paste": {"id": id}} to run one; library_curate to curate; media_render for pictures.
+**List or read library records.** Lists or reads the library: what searches found and what you and the user kept. `kind`: "pattern" (default: verified still lifes, oscillators, spaceships, guns, puffers and movers, each with the rules it was verified in and the range of rules it runs identically in), "ant" (ant and turmite runs, classed highway, periodic, symmetric, bounded or chaotic), "quickstart" (the app's Quick Start entries: built-in examples, packs, explore atlases, promotions) or "summary" (counts). Listings come best first (`limit`, default 20, at most 100; `offset` pages); each filter says which kind it applies to. With `id`, one record in full: a pattern's rules, sightings, the cells of its phases as text, and which way it moves per paste orientation; an ant run's outcome and proof; a Quick Start entry with its scene. Examples: {"class": "spaceship", "tiling": "hex"}, {"works_in": "B36/S23"}, {"kind": "ant", "outcome": "highway"}, {"id": "glider", "phases": 4}. Next: world_new {"pattern": id} or world_edit {"paste": {"id": id}} to run one; library_curate to curate; media_render for pictures.
 
 *reads only*
 
@@ -371,7 +380,7 @@ Example:
 | `class` | string | Patterns of this class: still_life, oscillator, spaceship, puffer, gun, mover. |
 | `discovered_by` | string | Patterns found by: search, script, llm, user. |
 | `hidden` | boolean | Quick Start: Only hidden entries (true) or only shown ones (false); default both. |
-| `id` | string | Read this one record in full instead of listing: a pattern's id, unique prefix or name ("glider"); an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life). |
+| `id` | string | Read this record in full instead: a pattern's id, prefix or name ("glider"), an ant run (ant-...) or a Quick Start handle (find:..., life). |
 | `job` | integer | Ants of this search job. |
 | `kind` | `"pattern"`, `"ant"`, `"quickstart"`, `"summary"` | What to list or read (default pattern; with `id`, the id's form says). |
 | `limit` | integer | At most this many records (default 20, at most 100). |
@@ -385,7 +394,7 @@ Example:
 | `phases` | integer | Phases to draw as text (default 1). |
 | `rule` | string | Patterns verified in a rule whose notation contains this; ants: this turn string or table (`RL`, `Turmite LLRR`; its mirror image matches too). |
 | `sort` | string | Ant order: score (default), onset, period, speed, rule. |
-| `source` | string | Quick Start: Only entries from this source: builtin, pack, atlas, promotion, or all (default: every source but the built-in examples; give builtin for those). |
+| `source` | string | Quick Start: only entries from this source: builtin, pack, atlas, promotion, or all (default: all but builtin). |
 | `state` | string | Patterns in this curation state: new, reviewed, promoted, rejected. |
 | `tag` | string | Patterns with this tag. |
 | `text` | string | Patterns whose name or label contains this; Quick Start entries whose title, rule or tiling contains it. |
@@ -407,13 +416,13 @@ Example:
 
 ### `library_curate`
 
-**Curate library records.** Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (patterns: name, tags or add_tags / remove_tags, notes or append_notes, rating 1-5 (0 clears), state new / reviewed / promoted / rejected, discovered_by; ant runs: name, notes, rating, state), e.g. {"id": "glider", "changes": {"rating": 4, "append_notes": "LLM: a clean c/4 ship"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good: a pattern with its rules, sightings and Quick Start entry, an ant run, or a Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under "My finds": {"quickstart": {"pattern": "<id>", "title": "Trihex glider"}}, or {"ant": "ant-..."}, {"search_run": <run id>, "job": <explore job>}, {"folder": "<sweep folder>", "run": "#12"} (a run of a run_script sweep), {"scene": "<scene file>"}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side, a pulsar with blinkers) and lists them with their parts: {"compounds": {}}; {"compounds": {"apply": true}} stores the parts in their place.
+**Curate library records.** Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (name, tags, notes, rating 1-5, state), e.g. {"id": "glider", "changes": {"rating": 4, "append_notes": "LLM: a clean c/4 ship"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good, a pattern with its rules, sightings and Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under "My finds", e.g. {"quickstart": {"pattern": "<id>", "title": "Trihex glider"}}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side) and lists their parts ({"compounds": {}}; with {"apply": true} it stores the parts instead).
 
 *may replace or delete something*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `changes` | object | Patterns and ant runs: the changes (what is not given stays). |
+| `changes` | object | Patterns and ant runs: the changes (what is not given stays). Patterns: name, tags or add_tags / remove_tags, notes or append_notes, rating 1-5 (0 clears), state new / reviewed / promoted / rejected, discovered_by; ant runs: name, notes, rating, state. Settings: `jetcarp://schema/library_curate/changes`. |
 | `changes.add_tags` | array of string | Patterns: tags to add. |
 | `changes.append_notes` | string | Patterns: add a paragraph to the notes. |
 | `changes.discovered_by` | string | Patterns: who found it (search, script, llm, user). |
@@ -423,14 +432,14 @@ Example:
 | `changes.remove_tags` | array of string | Patterns: tags to remove. |
 | `changes.state` | string | Patterns: new, reviewed, promoted, rejected. Ants: any word. |
 | `changes.tags` | array of string | Patterns: replace all tags. |
-| `compounds` | object | Find stored patterns that are several independent objects, as a resumable job: {} lists them with their parts (nothing changes); {"apply": true} stores each compound's parts in its place (credited with its sightings) and removes it, or keeps it tagged `compound` when curated. |
+| `compounds` | object | Find stored patterns that are several independent objects, as a resumable job. {} lists them with their parts (nothing changes); {"apply": true} stores each compound's parts in its place (credited with its sightings) and removes it, or keeps it tagged `compound` when curated. Settings: `jetcarp://schema/library_curate/compounds`. |
 | `compounds.apply` | boolean | Change the library: store each compound's parts (credited with its seen count and sightings, and given its history), then remove the compound, or keep it tagged `compound` when someone curated it or a part does not run in all its rules. Without it (the default) nothing changes: the compounds are only listed. |
 | `compounds.job` | integer | Resume this compounds job instead of starting one. |
 | `compounds.minutes` | number | Stop after this many minutes (default 5, at most 10), resumable with `job`. |
 | `hidden` | boolean | Quick Start entries: leave it out of the menu, packs and the website (true), or show it again (false). |
 | `id` | string | The record: a pattern's id, unique prefix or name; an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life). |
 | `kind` | `"pattern"`, `"ant"`, `"quickstart"` | What `id` names (default: from its form). |
-| `quickstart` | object | Add an entry to the Quick Start under "My finds": one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`. |
+| `quickstart` | object | Add an entry to the Quick Start under "My finds". It takes one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`, e.g. {"pattern": "<id>", "title": "Trihex glider"}, {"ant": "ant-..."}, {"search_run": <run id>, "job": <explore job>}, {"folder": "<sweep folder>", "run": "#12"} (a run of a run_script sweep), {"scene": "<scene file>"}. Settings: `jetcarp://schema/library_curate/quickstart`. |
 | `quickstart.ant` | string | An ant run (`ant-...`): its build-up from step 0; the run's state becomes promoted. |
 | `quickstart.description` | string | Patterns, ants, search runs and scenes: the description (default: generated, or the scene's). |
 | `quickstart.favourite` | boolean | Sweep runs: also star the run in the folder's favourites.json (default true). |
@@ -462,11 +471,11 @@ Example:
 
 ### `search_start`
 
-**Start or resume a search.** Starts a search as a library job and returns its job id at once; job_status follows it, job_stop stops it. Give one strategy as a key holding its settings (every setting is optional): `hunt` (soups on an unbounded plane), `search` (soups on a bounded grid of any tiling), `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, or `explore` (help {"topic": "searches"} explains each). Or {"resume": job} carries on a stopped job. The job runs on a thread of this server, so it stops when the server exits (it stays resumable); {"detach": true} runs it in a process of its own that outlives the server (explore searches do this by default where they can). `wait_s` (at most 600) waits for the job to end before answering, with its status. `budget` ends this run at a checkpoint after so many minutes or items. Results go to the library (library_query), an explore search's runs to search_runs. Examples: {"hunt": {"rules": ["B3/S23"], "soups": 20000}, "wait_s": 120}, {"ants": {"tilings": "hex", "strings": [2, 4]}}, {"pile": {"tiling": "hex", "grains": "1e6"}}, {"collide": {"a": "block", "b": "glider"}, "wait_s": 60}, {"explore": {"tilings": "square,hex", "families": "life_like,cyclic"}, "budget": {"minutes": 5}}.
+**Start or resume a search.** Starts a search as a library job and returns its job id at once; job_status follows it, job_stop stops it. Give one strategy as a key holding its settings (every setting is optional; each strategy names the resource listing them): `hunt`, `search`, `ants`, `census`, `mover`, `pile`, `collide`, `evolve` or `explore` (help {"topic": "searches"} explains each). Or {"resume": job} carries on a stopped job. The job runs on a thread of this server, so it stops when the server exits (it stays resumable); {"detach": true} runs it in a process of its own that outlives the server (explore searches do this by default where they can). `wait_s` waits for the job to end, and `budget` ends this run early. Results go to the library (library_query), an explore search's runs to search_runs. Examples: {"hunt": {"rules": ["B3/S23"], "soups": 20000}, "wait_s": 120}, {"ants": {"tilings": "hex", "strings": [2, 4]}}, {"pile": {"tiling": "hex", "grains": "1e6"}}, {"collide": {"a": "block", "b": "glider"}, "wait_s": 60}, {"explore": {"tilings": "square,hex", "families": "life_like,cyclic"}, "budget": {"minutes": 5}}.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `ants` | object | Ant and turmite rules (turn strings such as RL or LLRR, or turmite tables) on a periodic tiling, from an empty field or soups; each run classed highway (proved exactly), periodic, symmetric, bounded or chaotic, and stored. |
+| `ants` | object | Ant and turmite rules on a periodic tiling, every run classed and stored. Turn strings such as RL or LLRR, or turmite tables, from an empty field or soups; each run is classed highway (proved exactly), periodic, symmetric, bounded or chaotic. Settings: `jetcarp://schema/search_start/ants`. |
 | `ants.all_max` | integer | Tables: enumerate every table up to this many, else sample `sample` of them (default 1,000,000). |
 | `ants.alphabet` | string | Turn letters to use, e.g. "LR" (default: the tiling's). |
 | `ants.density` | number | Soup density (default 0.5). |
@@ -481,11 +490,11 @@ Example:
 | `ants.symmetry` | boolean | Test for mirror-symmetric growth (default true). |
 | `ants.tables` | array or integer or string | Turmite tables: [states, colours] or "2x2". |
 | `ants.tilings` | array or string | Periodic tilings: ids, catalog ids, vertex configurations, or sets (default square). |
-| `budget` | object | This run's budget; the job stays resumable past it. |
+| `budget` | object | This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable. Settings: `jetcarp://schema/search_start/budget`. |
 | `budget.items` | integer | Stop at the next checkpoint after this many units in this run: soups (per rule and tiling for hunts), runs, rules, or generations. |
 | `budget.minutes` | number | Stop at the next checkpoint after this many minutes. |
 | `budget.until` | integer | Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed. |
-| `census` | object | Rules classed by what their soups do (die, freeze, oscillate, grow, ...), with a table and a contact sheet. |
+| `census` | object | Rules classed by what their soups do (die, freeze, oscillate, grow, ...), with a table and a contact sheet. Settings: `jetcarp://schema/search_start/census`. |
 | `census.all` | boolean | Every B/S rule over `birth` and `survive` (with `rules` too: added to them). |
 | `census.all_max` | integer | With no rules: every B/S rule over `birth` and `survive` when there are at most this many, else a sample (default 32,768; 0: always a sample, added to `rules` when there are some). |
 | `census.birth` | array or string | Birth digits for B/S rules: "1-8", "1,2,3,6", "1-max" (the tiling's largest degree), or a list (default 1 to max). |
@@ -507,7 +516,7 @@ Example:
 | `census.states` | integer | Generations rules with this many states (B/S rules otherwise). |
 | `census.survive` | array or string | Survival digits for B/S rules, as `birth` (default 0 to max). |
 | `census.tiling` | object or string | The tiling: an id ("hex", "k2-01", "spectre") or a tiling map (default square). |
-| `collide` | object | Pattern `b` shot into pattern `a` at every offset and phase; each run classed, new products verified and stored. |
+| `collide` | object | Pattern `b` shot into pattern `a` at every offset and phase. Each run is classed, and new products are verified and stored. Settings: `jetcarp://schema/search_start/collide`. |
 | `collide.a` | string | Pattern A (stays at the origin): id, unique prefix, or name. |
 | `collide.b` | string | Pattern B (placed at each offset). |
 | `collide.dx` | array or integer or string | B's x offsets instead: [lo, hi] or "lo..hi". |
@@ -521,7 +530,7 @@ Example:
 | `collide.rule` | string | The rule to run (both must work in it; default: A's rule if B works in it, else B's). |
 | `collide.store` | boolean | Store the products in the catalog (default true; false only reports them). |
 | `detach` | boolean | Run in a process of its own (`jetcarp jobs resume JOB`) and answer at once. |
-| `evolve` | object | The evolutionary glider search: multi-state priority rules evolve towards rules whose seeds travel far; verified movers are stored. |
+| `evolve` | object | The evolutionary glider search, storing the movers it verifies. Multi-state priority rules evolve towards rules whose seeds travel far. Settings: `jetcarp://schema/search_start/evolve`. |
 | `evolve.cap` | integer | Population cap during the GA (default 64; explosive rules score 0). |
 | `evolve.champions` | integer | Distinct top genomes verified at the end (default 16). |
 | `evolve.folder` | string | The run's folder (default: a new `evolve-<tiling>` folder in `out`). |
@@ -539,7 +548,7 @@ Example:
 | `evolve.tiling` | string | Tiling: a family id (spectre (default), hat, penrose-kd, square, hex, ...) or catalog:<id>. |
 | `evolve.track_gens` | integer | Generations the mover tracker may run on aperiodic patches (default 20,000). |
 | `evolve.verify` | array or string | Verification radii as multiples of the radius: a list or "1,2,4" (default 1,2,4). |
-| `explore` | object | The broad search over tilings, rule families, rules and seeds, keeping the best runs of each kind of behaviour and breeding from them; every run is stored in the job's own database (search_runs reads them). Not deterministic: a resumed search continues from its archive. |
+| `explore` | object | The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive. Settings: `jetcarp://schema/search_start/explore`. |
 | `explore.batch` | integer | Most worlds in a GPU batch (default 1024). |
 | `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000). |
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
@@ -551,8 +560,8 @@ Example:
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
 | `explore.tilings` | array or string | Only these tilings: keys (square, hex, trihex, spectre, ih28, catalog:k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
-| `gpu` | boolean | Hunts: run the start of each soup on the GPU (results are identical). Piles: topple on the GPU (periodic tilings). Explore: run the rules a GPU can run on it, when there is one. Default false; explore true. |
-| `hunt` | object | A soup hunt: small random soups on an unbounded plane (B/S and Generations rules without B0, any periodic tiling), each run until it settles; ships that fly away are cut out; every object is classed and new patterns are verified and stored. Thousands of soups a second for Life. |
+| `gpu` | boolean | Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true. |
+| `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |
 | `hunt.density` | number | Soup density (default 0.5). |
 | `hunt.gens` | integer | Generations before a soup that has not settled is censused as it is (default 20,000). |
 | `hunt.margin` | integer | Empty margin around the soup before escaping ships are cut (default 0: automatic). |
@@ -568,7 +577,7 @@ Example:
 | `hunt.store` | any | Storage policy: "all" (every new object as a full record), or {max_cells, max_volume, min_seen} (default 64, 4000, 2: larger still lifes and oscillators are counted, not stored, until seen that often). |
 | `hunt.tilings` | array or string | Tilings: family ids, catalog ids, or sets (all-periodic, archimedean, kuniform:2, isohedral), as a list or text; tiling maps work too (default square). |
 | `label` | string | A name to find the job by (scripts, the dashboard). |
-| `mover` | object | A pattern on an aperiodic tiling (Spectre, hat, Penrose) followed far on a sliding window of generated supertiles; a verified mover is stored with its distance. |
+| `mover` | object | A pattern on an aperiodic tiling followed far, and stored with its distance when verified. It runs on a sliding window of generated supertiles (Spectre, hat, Penrose). Settings: `jetcarp://schema/search_start/mover`. |
 | `mover.at` | integer | The tile for `states`. |
 | `mover.cells` | array or string | Starting cells: [[tile, state], ...] or "1203:1,1204:3". |
 | `mover.fixed_levels` | integer | Spectre: follow the fixed patches' Delta chain up to this level (default 8). |
@@ -583,7 +592,7 @@ Example:
 | `mover.states` | array or string | Instead of cells: states on a tile and an edge neighbour (default [1, 3]), tried near the patch's deepest tile (or at `at`) until one travels. |
 | `mover.store` | boolean | Store a verified mover in the catalog (default false). |
 | `mover.tiling` | string | Aperiodic tiling: spectre (default), hat, penrose-kd, penrose-rhomb. |
-| `pile` | object | One large sandpile: N grains dropped on one cell of an unbounded grid, built by doubling, with pictures in its folder under the output folder. |
+| `pile` | object | One large sandpile: N grains dropped on one cell of an unbounded grid. It is built by doubling, with pictures in its folder under the output folder. Settings: `jetcarp://schema/search_start/pile`. |
 | `pile.centre` | string | cell (default), vertex, or edge: where the grains go. |
 | `pile.folder` | string | The pile's own folder: carried on from where it stopped when it holds a step file (the job whose folder it is, or a new job for it), else the new pile is built there. A finished pile given picture options (palette, reverse, px, margin, preview, png) is exported again in them. |
 | `pile.gpu` | boolean | Topple on the GPU when there is one (periodic tilings). |
@@ -600,7 +609,7 @@ Example:
 | `pile.reverse` | boolean | Run the palette the other way (height 1 at its last stop). |
 | `pile.tiling` | string | Tiling id: square (default), hex, triangle, snubsq, cairo, k3-012, ih41, spectre, hat, ... |
 | `resume` | integer | Carry on this job (stopped, paused, or cut off) instead of starting one. |
-| `search` | object | Soups on a bounded grid of any tiling (aperiodic patches too), each run for `gens`; the objects left are verified and stored. |
+| `search` | object | Soups on a bounded grid of any tiling, aperiodic patches too. Each runs for `gens`, and the objects left are verified and stored. Settings: `jetcarp://schema/search_start/search`. |
 | `search.boundary` | string | wrap (default) or dead. |
 | `search.density` | number | Soup density (default 0.37). |
 | `search.gens` | integer | Generations per soup (default 2000). |
@@ -638,7 +647,7 @@ Example:
 
 ### `job_status`
 
-**Job status, finds and report.** Reports a library job's progress, whatever started it: hunts (soups, objects by class), ant searches (runs, outcomes), piles (doubling step, grains, the pictures when done), movers, bounded searches, collisions, censuses, evolve and explore searches. With `wait_s` (at most 600) it waits for a running job to end before answering, so one call replaces many polls. `finds` adds the job's newest and rarest finds (pattern ids for library_query); `report` gives a Markdown report of what it searched and found instead. Without `job`, lists the jobs, newest first, optionally of one kind or status. Examples: {"job": 3, "wait_s": 300}, {"job": 3, "finds": 10}, {"job": 3, "report": true}, {"kind": "ants"}.
+**Job status, finds and report.** Reports a library job's progress, whatever started it and whatever its kind (hunts, ant searches, piles, movers, collisions, censuses, evolve and explore searches). With `wait_s` (at most 600) it waits for a running job to end before answering, so one call replaces many polls. `finds` adds the job's newest and rarest finds (pattern ids for library_query); `report` gives a Markdown report of what it searched and found instead. Without `job`, lists the jobs, newest first, optionally of one kind or status. Examples: {"job": 3, "wait_s": 300}, {"job": 3, "finds": 10}, {"job": 3, "report": true}, {"kind": "ants"}.
 
 *reads only*
 
@@ -687,7 +696,7 @@ Example:
 
 ### `search_runs`
 
-**An explore search's runs.** Reads an explore search's stored runs (search_start {"explore": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), tiling, fate, min_score, min_movers, stage (1 screened, 2 confirmed on bigger grids) or reviewed. Or one action: `sheet` returns a picture of runs at several moments, labelled, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}, at most 36 runs); `scene` returns one run's scene JSON, for world_new {"scene": ...} ({"scene": {"run": 12}}); `try` runs a configuration of your own now and returns its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); `review` records your verdict on a run ({"review": {"run": 12, "verdict": "keep", "note": "slow gliders on a calm background"}}), which feeds what is published and the score. For other questions, the sealed runs are Parquet files (runs/part-*.parquet in the search's folder) that DuckDB, Polars or pyarrow read.
+**An explore search's runs.** Reads an explore search's stored runs (search_start {"explore": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family, tiling, fate, min_score, min_movers, stage or reviewed. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({"scene": {"run": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); or `review`, your verdict on a run ({"review": {"run": 12, "verdict": "keep", "note": "slow gliders"}}), which feeds what is published and the score. The sealed runs are also Parquet files (runs/part-*.parquet in the search's folder) for DuckDB, Polars or pyarrow.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -699,15 +708,15 @@ Example:
 | `min_movers` | integer | Only runs with at least this many moving objects. |
 | `min_score` | number | Only runs with at least this score. |
 | `order` | string | score (default, best first), newest, or id. |
-| `review` | object | Record a verdict on a run. |
+| `review` | object | Record a verdict on a run. Settings: `jetcarp://schema/search_runs/review`. |
 | `review.note` | string | What was seen, in a sentence. |
 | `review.run` | integer | The run reviewed. |
 | `review.verdict` | string | keep, maybe, or drop. |
 | `reviewed` | string | Only reviewed runs: any, keep, maybe, or drop. |
-| `scene` | object | One run's scene JSON. |
+| `scene` | object | One run's scene JSON. Settings: `jetcarp://schema/search_runs/scene`. |
 | `scene.run` (required) | integer | The run's id. |
 | `scene.save` | string | Also save the scene here (JSON). |
-| `sheet` | object | A contact sheet of runs, returned as a picture. |
+| `sheet` | object | A contact sheet of runs, returned as a picture (at most 36 runs). Settings: `jetcarp://schema/search_runs/sheet`. |
 | `sheet.cols` | integer | Thumbnails per row (default 8). |
 | `sheet.fracs` | array of number | Moments to show, as fractions of each run (default [0.25, 1]). |
 | `sheet.ids` | array of integer | Run ids to show. |
@@ -716,7 +725,7 @@ Example:
 | `sheet.px` | integer | Pixels per thumbnail (default 200). |
 | `stage` | integer | 1 screened (default), 2 confirmation runs on bigger grids. |
 | `tiling` | string | Only this tiling key. |
-| `try` | object | Try one configuration now (CPU), returning its measures and a picture. |
+| `try` | object | Try one configuration now (CPU), returning its measures and a picture. Settings: `jetcarp://schema/search_runs/try`. |
 | `try.cells` | integer | About this many cells (default 16,000). |
 | `try.gens` | integer | Generations (default 1024). |
 | `try.nb` | string | touch or edge (default: touch, or what the notation says). |
@@ -747,7 +756,7 @@ Example:
 
 ### `media_render`
 
-**Render animations and posters.** Renders media and returns the file paths: per-step PNG frames, an animation (a GIF for small ones, an animated WebP for large ones), a poster frame and a thumbnail, in one house style. Library records' media are stored once each by content in the library's media/ folder: a pattern is shown alone on an empty field for one seamless period (spaceships in a window that moves with them, guns with their stream); an ant highway as one seamless period in a window moving with the ant (mode seed: the run from step 0); a Quick Start entry from its seed. A `scene` (JSON) renders from its seed into the output folder. Up-to-date media are not rendered again. Give one of pattern, quickstart, ant, scene, or missing (everything whose media are missing or stale). `poster`: true also returns the first poster inline, to look at. Examples: {"pattern": "glider", "poster": true}, {"ant": "ant-...", "mode": "seed", "gens": 300}, {"missing": true, "class": ["spaceship"], "limit": 20}, {"pattern": "glider", "palette": "Paper"}.
+**Render animations and posters.** Renders media and returns the file paths: per-step PNG frames, an animation (GIF when small, else animated WebP), a poster frame and a thumbnail, in one house style. Give one of `pattern` (alone on an empty field for one seamless period; spaceships in a window that moves with them, guns with their stream), `ant` (a highway's loop in a window moving with the ant, or with mode seed the run from step 0), `quickstart` (from its seed), `scene` (from its seed, into the output folder) or `missing` (every record whose media are missing or stale). Library records' media are stored once by content in the library's media/ folder, and up-to-date media are not rendered again. `poster`: true also returns the first poster inline, to look at. Examples: {"pattern": "glider", "poster": true}, {"ant": "ant-...", "mode": "seed", "gens": 300}, {"missing": true, "class": ["spaceship"], "limit": 20}.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -764,11 +773,11 @@ Example:
 | `only_patterns` | boolean | With `missing`: patterns only. |
 | `only_quickstart` | boolean | With `missing`: Quick Start entries only. |
 | `out` | string | With `scene` or a built-in Quick Start entry: the folder for its files (default `<output folder>/media/<scene name>`). |
-| `palette` | string | Colour the media with this palette instead of the house style: a built-in name or hex colours like `#103050-#4fc3ff` (part of the render key: media stored in another palette render again). |
+| `palette` | string | A palette instead of the house style: a built-in name, or hex colours like `#103050-#4fc3ff`. |
 | `pattern` | string | A library pattern: id, unique id prefix, or name. |
 | `periods` | integer | Alone: full periods shown (default 1). |
 | `poster` | boolean | Also return the first target's poster inline (PNG). |
-| `quickstart` | string | A Quick Start entry: one of the catalog's (`find:...`, its media stored in the catalog), or a built-in one by id (`life`) or number in `jetcarp quickstart`, rendered from its seed like `scene` (into `out`, default `<output folder>/media/<id>`). |
+| `quickstart` | string | A Quick Start entry: a catalog one (`find:...`, media stored in the catalog) or a built-in one (`life`), rendered from its seed into `out`. |
 | `scene` | any | Any scene (JSON: the object or its text), from its seed, into `out` (not the catalog). |
 
 Example:
@@ -785,11 +794,11 @@ Example:
 
 ### `pack`
 
-**Packs and the website export.** Packs: signed, content-addressed folders of library records (Parquet tables and JSON) that anyone can read, check and import. Give one action as a key holding its options: `info` summarises a store's or export's version (title, publisher and signature, tables, searches) without reading every file; `check` checks every hash, id and signature, importing nothing; `import` brings it into the library (records merged by id, a sample verified again); `publish` writes the library, or a selection (`ids`, `query`), as a new signed version of a feed in a store; `export` lays one version out with readable file names for a single download (from a store, or publishing first with `publish` options); `site` writes the website export (the public part of the library as JSON and media, with manifest.json and a viewer page). Paths must be inside the output folder (relative paths start there), the library's folder, or the packs that came with JETCARP. Publishing signs with the publisher key in JETCARP's settings, which only the user makes (`jetcarp pack key`). Examples: {"info": {"path": "packs/starter"}}, {"import": {"path": "packs/starter"}}, {"publish": {"feed": "my-finds", "to": "packs/my-finds", "query": {"class": "spaceship"}}}, {"export": {"from": "packs/my-finds", "to": "my-finds-1"}}, {"site": {"to": "site"}}.
+**Packs and the website export.** Packs: signed, content-addressed folders of library records (Parquet tables and JSON) that anyone can read, check and import. Give one action as a key holding its options: `info` (a version's summary), `check` (every hash, id and signature, importing nothing), `import` (into the library, records merged by id), `publish` (the library, or a selection, as a new signed version of a feed in a store), `export` (one version laid out with readable file names, for a single download) or `site` (the website export). Paths must be inside the output folder (relative paths start there), the library's folder, or the packs that came with JETCARP. Publishing signs with the publisher key in JETCARP's settings, which only the user makes (`jetcarp pack key`). Examples: {"info": {"path": "packs/starter"}}, {"import": {"path": "packs/starter"}}, {"publish": {"feed": "my-finds", "to": "packs/my-finds", "query": {"class": "spaceship"}}}, {"export": {"from": "packs/my-finds", "to": "my-finds-1"}}.
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `check` | object | Check a store or export without importing it. |
+| `check` | object | Check a store or export without importing it. Every hash, id and signature is checked. Settings: `jetcarp://schema/pack/check`. |
 | `check.allow_unsigned` | boolean | Import a version that its publisher did not sign. |
 | `check.feed` | string | The feed, when the store has several. |
 | `check.manifest` | string | A version other than the feed's newest (`sha256:...`). |
@@ -799,12 +808,12 @@ Example:
 | `check.strict` | boolean | Refuse two different rows for one record id. |
 | `check.verify` | string | `sample` (default), `full` or `none`. |
 | `check.verify_seconds` | number | Most seconds verification may take (default 600). |
-| `export` | object | Lay one version out with readable file names: from a store (`from`), or publishing the library first (`publish`). |
+| `export` | object | Lay one version out with readable file names. It comes from a store (`from`), or from publishing the library first (`publish`). Settings: `jetcarp://schema/pack/export`. |
 | `export.from` | string | Export a version of this store (default: publish the library first, as `pack publish` would, into a scratch store beside the export). |
 | `export.manifest` | string | The version (default: the newest of the store's feed). |
 | `export.publish` | object | Without `from`: what to publish first (the publish options; its `to` is ignored). |
 | `export.to` (required) | string | The export's folder (conventionally `<feed>-<version label>`). |
-| `import` | object | Import a store or export into the library. |
+| `import` | object | Import a store or export into the library. Records are merged by id, and a sample is verified again. Settings: `jetcarp://schema/pack/import`. |
 | `import.allow_unsigned` | boolean | Import a version that its publisher did not sign. |
 | `import.feed` | string | The feed, when the store has several. |
 | `import.manifest` | string | A version other than the feed's newest (`sha256:...`). |
@@ -814,11 +823,11 @@ Example:
 | `import.strict` | boolean | Refuse two different rows for one record id. |
 | `import.verify` | string | `sample` (default), `full` or `none`. |
 | `import.verify_seconds` | number | Most seconds verification may take (default 600). |
-| `info` | object | A version's summary. |
+| `info` | object | A version's summary. It gives the title, publisher and signature, tables and searches, without reading every file. Settings: `jetcarp://schema/pack/info`. |
 | `info.feed` | string | The feed, when the store has several. |
 | `info.manifest` | string | A version other than the feed's newest (`sha256:...`). |
 | `info.path` (required) | string | The store's or export's folder. |
-| `publish` | object | Publish the library (or a selection) as a new signed version of a feed. |
+| `publish` | object | Publish the library (or a selection) as a new signed version of a feed. A selection is `ids` or `query`. Settings: `jetcarp://schema/pack/publish`. |
 | `publish.created` | string | The version's time, RFC 3339 UTC (default: now), for reproducible packs. |
 | `publish.description` | string | What the pack holds, for people. |
 | `publish.feed` (required) | string | The feed: letters, digits and `-` (`jetcarp-starter`). |
@@ -837,7 +846,7 @@ Example:
 | `publish.to` (required) | string | The store's folder (made if missing; a new version of the feed if it has one). |
 | `publish.version_label` | string | Free text for people (`2026.11`). |
 | `publish.views` | boolean | Write views.sql (DuckDB views over the store). |
-| `site` | object | The website export into the folder `to`. |
+| `site` | object | The website export into the folder `to`. It is the public part of the library as JSON and media, with manifest.json and a viewer page. Settings: `jetcarp://schema/pack/site`. |
 | `site.ant_outcome` | array of string | Only ants with these outcomes (highway, symmetric, ...; default all). |
 | `site.ants` | array of string | Ant and turmite curation states exported (default promoted and reviewed; empty: none). |
 | `site.class` | array of string | Only patterns of these classes. |
@@ -867,7 +876,7 @@ Example:
 
 ### `files_list`
 
-**List output files.** Lists what JETCARP wrote, read only: the output folder (root "out", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root "catalog": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind (dir or file), size, modified time, and for folders what marks them (manifest.json = a sweep or export, pile.json = a pile, favourites.json). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {"path": "piles"}, {"root": "catalog", "path": "media"}, {"file": "piles/hex-1000000/pile.json"}.
+**List output files.** Lists what JETCARP wrote, read only: the output folder (root "out", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root "catalog": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {"path": "piles"}, {"file": "piles/hex-1000000/pile.json"}.
 
 *reads only*
 
@@ -920,7 +929,7 @@ Example:
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"quit"` | Default status. reload rereads host.json. wallpaper shows every screen as the desktop background (on GNOME this needs the extension) or back in a window; login sets whether the host starts at login; open_app opens the JETCARP app. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"quit"` | Default status. wallpaper puts every screen on the desktop background (GNOME: with the extension) or back in a window; login sets whether the host starts at login; open_app opens the app; reload rereads host.json. |
 | `name` | string | With action rotation: the rotation to run (saved). |
 | `on` | boolean | With wallpaper or login: on or off. Default on. |
 | `screen` | integer | With next, previous, or rotation: which screen, counted from 0. Default: every screen for next and previous, the first for rotation. |
@@ -938,7 +947,7 @@ Example:
 
 ### `app_display`
 
-**The app's displays and screensaver.** Reads and changes how the JETCARP app shows the grid. With no arguments it only returns the state: where the grid shows (mode window, fullscreen, or outputs: chrome-less full-screen windows on chosen monitors that span one canvas or mirror one view), the monitors (deduplicated; index is what `monitors` and `fullscreen_monitor` take), the canvas size in pixels, the cell size, running state and speed, the menu and panes, keep-awake (and which backend holds it), and screensaver mode with its playlist, the screensaver profiles (`profiles`: name, built-in or yours, what it shows, cell size, reseeding) and the one showing (`screensaver.profile`). Arguments change those; several can be given at once and are applied in a sensible order (outputs and cell size before the screensaver starts). Examples: {"screensaver": true}, {"screensaver": true, "profile": "Hodgepodge"}, {"saver": {"source": "playlist", "playlist": ["profile:Life", "profile:Star Wars"], "minutes": 3}}, {"mode": "outputs", "monitors": [0, 1], "arrangement": "span"}, {"cell_px": 1, "refill": true}, {"playlist": "next"}, {"saver": {"source": "playlist", "playlist": ["rule:B3/S23", "scene:scenes/a.json"], "minutes": 2, "shuffle": true}}.
+**The app's displays and screensaver.** Reads and changes how the JETCARP app shows the grid. With no arguments it returns the state: where the grid shows (the window, full screen, or outputs: chrome-less full-screen windows on chosen monitors, spanning one canvas or mirroring one view), the monitors (by the index `monitors` takes), the canvas and cell size, running state and speed, the menu and panes, keep-awake, and the screensaver: its mode, rotation and profiles. Arguments change those, several at once, in a sensible order (outputs and cell size before the screensaver starts). Examples: {"screensaver": true, "profile": "Hodgepodge"}, {"saver": {"source": "rotation", "rotation": "Classics, hourly"}}, {"mode": "outputs", "monitors": [0, 1], "arrangement": "span"}, {"cell_px": 1, "refill": true}, {"skip": "next"}.
 
 *Listed by the app's own server, and by `jetcarp mcp`, which passes it to the app once attached (`use_app`); an error otherwise.*
 
@@ -952,24 +961,24 @@ Example:
 | `gpu` | boolean | Step on the GPU where the rules allow it (results are identical). |
 | `hide_preview` | boolean | With outputs on, draw no grid in the main window (saves GPU work). |
 | `identify` | boolean | true: show each monitor's index full screen on it for three seconds. |
-| `keep_awake` | boolean | Keep the computer awake (no screen blanking, locking, or suspend) while the app is open. |
+| `keep_awake` | boolean | Keep the computer awake (no blanking, locking or suspend) while the app is open. |
 | `menu_autohide` | boolean | Auto-hide the menu bar. |
 | `mode` | `"window"`, `"fullscreen"`, `"outputs"` | Where the grid shows: the main window, the main window full screen, or the output windows. |
 | `monitors` | array of integer | Output monitors by index (full screen on each). Also sets mode outputs unless mode is given. |
 | `panes_hidden` | boolean | Hide every pane (the grid fills the main window). |
 | `pixel_zoom` | boolean | true: zoom so one cell edge is cell_px pixels, the camera snapped to whole pixels. |
 | `playing` | boolean | Run (true) or pause (false) generations. |
-| `profile` | string | A screensaver profile by name (the state's `profiles` lists them): the screensaver shows it from now on (source profile); with screensaver true it starts on it, and while the screensaver runs it switches at once. A profile is a complete setup: scene, palette, reseed policies, cell size, speed. |
+| `profile` | string | A screensaver profile by name (the state's `profiles` lists them; a complete setup): the screensaver shows it from now on, switching to it at once if running. |
 | `refill` | boolean | true: rebuild the tiling now to fill the canvas at cell_px (periodic tilings), zoomed pixel-exact. |
-| `rotation` | string | A rotation by name (the state's `rotations` lists them): the screensaver runs it from now on; with screensaver true it starts on it, and while the screensaver runs it switches. |
-| `save_rotation` | object | Create or replace a rotation: {name, description, order (in_order, shuffle, daily, hourly), default_minutes (or null), look, script (Rhai), items: [{source, label, end, hold_s, look, schedule}]}. source is {kind: profile, name}, {kind: scene, path}, {kind: quick_start, id}, or {kind: series, rules, from, to, family, boundary, seed}. end is a list of {kind: minutes, minutes}, {kind: generations, gens}, {kind: settled, latest}, {kind: low_activity, below, for_gens}, {kind: done}, or {kind: clock, at: "HH:MM"}; any one ends the item. schedule is {days: ["mon", ...], from, to}. |
-| `saver` | object | Screensaver settings to change (saved): source (profile, rotation, current, scene, quickstart), profile (a profile name), rotation (a rotation name), scene (a scene file), quickstart (a Quick Start id), cell_px, refill, speed (0: max), gpu (these four for the current world, scene files, and Quick Start ids; profiles carry their own), keep_awake, exit_any_input (else Esc only), control (start the AI-control endpoint), hide_windows, cursor_hide_s, caption (true or false to show what is running, or an object with show, corner (BottomLeft, BottomRight, TopLeft, TopRight), size, generation, seconds). |
-| `screensaver` | boolean | Start (true) or end (false) screensaver mode: every control hidden, the grid on the outputs (or the main window full screen), running. |
+| `rotation` | string | A rotation by name (the state's `rotations` lists them): the screensaver runs it from now on, switching to it at once if running. |
+| `save_rotation` | object | Create or replace a rotation. It is {name, description, order (in_order, shuffle, daily, hourly), default_minutes (or null), look, script (Rhai), items: [{source, label, end, hold_s, look, schedule}]}. source is {kind: profile, name}, {kind: scene, path}, {kind: quick_start, id}, or {kind: series, rules, from, to, family, boundary, seed}. end is a list of {kind: minutes, minutes}, {kind: generations, gens}, {kind: settled, latest}, {kind: low_activity, below, for_gens}, {kind: done}, or {kind: clock, at: "HH:MM"}; any one ends the item. schedule is {days: ["mon", ...], from, to}. Settings: `jetcarp://schema/app_display/save_rotation`. |
+| `saver` | object | Screensaver settings to change (saved). They are source (profile, rotation, current, scene, quickstart), profile (a profile name), rotation (a rotation name), scene (a scene file), quickstart (a Quick Start id), cell_px, refill, speed (0: max), gpu (these four for the current world, scene files, and Quick Start ids; profiles carry their own), keep_awake, exit_any_input (else Esc only), control (start the AI-control endpoint), hide_windows, cursor_hide_s, caption (true or false to show what is running, or an object with show, corner (BottomLeft, BottomRight, TopLeft, TopRight), size, generation, seconds). Settings: `jetcarp://schema/app_display/saver`. |
+| `screensaver` | boolean | Start (true) or end (false) screensaver mode: no controls, the grid running on the outputs (or full screen). |
 | `skip` | `"next"`, `"previous"` | While the screensaver runs a rotation: show the next or previous item now. |
 | `speed` | number | Generations per second; 0 runs as fast as possible. |
 | `status_bar` | boolean | Show the status bar. |
-| `units` | `"pixels"`, `"logical"` | Canvas units for the span: physical pixels, or logical pixels (mixed scale factors with positions in logical pixels). |
-| `windows` | array of string | Outputs as plain windows instead of monitors, each "WxH@X,Y" (size in pixels at canvas position X,Y), for trying spans on one monitor. Also sets mode outputs unless mode is given. |
+| `units` | `"pixels"`, `"logical"` | Span units: physical pixels, or logical pixels (for monitors of mixed scale factors). |
+| `windows` | array of string | Outputs as plain windows instead of monitors, each "WxH@X,Y" (pixels, at canvas position X,Y), to try spans on one monitor; sets mode outputs unless mode is given. |
 
 Example:
 
@@ -995,6 +1004,17 @@ Resources are what a client can read without calling a tool. Clients that do not
 | `jetcarp://reference/script-api` | text/markdown | Scripting (Rhai) API: Every function a JETCARP script (run_script) can call. |
 | `jetcarp://schema/scene.json` | application/schema+json | Scene file JSON Schema: The JSON Schema of a JETCARP scene file (world_status {"scene": true} returns one). |
 | `jetcarp://schema/pack.json` | application/schema+json | Pack manifest JSON Schema: The JSON Schema of a pack version's manifest (pack.json in an export). |
+
+The settings of 30 tool arguments, which `tools/list` only summarises (each argument names its resource, and its settings are listed with the tool above); `help {"schema": "search_start/hunt"}` returns the same JSON Schema:
+
+- `world_read`: `cell` (`jetcarp://schema/world_read/<argument>`)
+- `world_edit`: `cells`, `paste`, `reseed` (`jetcarp://schema/world_edit/<argument>`)
+- `world_render`: `wallpaper` (`jetcarp://schema/world_render/<argument>`)
+- `library_curate`: `changes`, `quickstart`, `compounds` (`jetcarp://schema/library_curate/<argument>`)
+- `search_start`: `hunt`, `search`, `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, `explore`, `budget` (`jetcarp://schema/search_start/<argument>`)
+- `search_runs`: `sheet`, `scene`, `try`, `review` (`jetcarp://schema/search_runs/<argument>`)
+- `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
+- `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
 And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
 
@@ -1085,6 +1105,7 @@ Templates, for one record at a time:
 | URI template | Type | What |
 | --- | --- | --- |
 | `jetcarp://docs/{page}` | text/markdown | A page of the JETCARP book: A page by its path without .md, e.g. jetcarp://docs/guides/searching (resources/list lists every page). |
+| `jetcarp://schema/{tool}/{argument}` | application/schema+json | A tool argument's settings: The JSON Schema of a tool argument's settings, for the arguments tools/list only summarises, e.g. jetcarp://schema/search_start/hunt or jetcarp://schema/pack/publish (resources/list lists every one). |
 | `jetcarp://job/{id}` | application/json | A library job: One search job's status and progress (as job_status reports it), by its id. |
 | `jetcarp://pattern/{id}` | application/json | A library pattern: One pattern's record (rules, range, sightings, the cells of its phases), by id, unique prefix, or name. |
 | `jetcarp://quickstart/{handle}` | application/json | A Quick Start entry: One Quick Start entry with its scene, by handle (life, find:<id>, atlas:<...>). |

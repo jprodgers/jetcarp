@@ -3,9 +3,11 @@
 
 Input: the server's own `tools/list`, `resources/list` and `resources/templates/list`, asked over
 stdio from `jetcarp mcp` (run with its folders pointed at an empty temporary folder, so nothing of
-the user's is read, and no app or host of theirs is found). Every tool gets its description, its
-arguments from its input schema (an action's own options listed under it), its hints, and an
-example call from EXAMPLES below.
+the user's is read, and no app or host of theirs is found), and then `resources/read` of every
+settings resource (`jetcarp://schema/{tool}/{argument}`: the arguments whose settings `tools/list`
+only summarises). Every tool gets its description, its arguments from its input schema (an
+action's own options listed under it, from its settings resource where it has one), its hints, and
+an example call from EXAMPLES below.
 
 The examples are checked against the schemas: every argument an example gives must be one the
 tool takes (nested actions too), and every tool must have an example; a tool or argument that is
@@ -68,7 +70,18 @@ ONLY = {
 }
 
 
-def ask(jetcarp: str) -> dict:
+SETTINGS = "jetcarp://schema/"
+
+
+def settings_part(uri: str):
+    """(tool, argument) of a settings resource, or None for any other resource."""
+    if not uri.startswith(SETTINGS):
+        return None
+    rest = uri[len(SETTINGS):].split("/")
+    return tuple(rest) if len(rest) == 2 else None
+
+
+def ask(jetcarp: str, reads=()) -> dict:
     msgs = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
          "params": {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -78,6 +91,8 @@ def ask(jetcarp: str) -> dict:
         {"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}},
         {"jsonrpc": "2.0", "id": 4, "method": "resources/templates/list", "params": {}},
     ]
+    for i, uri in enumerate(reads):
+        msgs.append({"jsonrpc": "2.0", "id": 100 + i, "method": "resources/read", "params": {"uri": uri}})
     with tempfile.TemporaryDirectory(prefix="jetcarp-gen-mcp-") as tmp:
         env = dict(os.environ)
         for k, sub in [("JETCARP_CONFIG_DIR", "config"), ("JETCARP_DATA_DIR", "data"), ("JETCARP_OUT", "out"),
@@ -93,7 +108,7 @@ def ask(jetcarp: str) -> dict:
         if "error" in m:
             sys.exit(f"jetcarp mcp: {m['error']}")
         out[m["id"]] = m["result"]
-    if sorted(out) != [1, 2, 3, 4]:
+    if sorted(out) != [1, 2, 3, 4] + [100 + i for i in range(len(reads))]:
         sys.exit(f"jetcarp mcp answered {sorted(out)}; stderr: {r.stderr.strip()}")
     return out
 
@@ -114,27 +129,34 @@ def cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-def check_example(name: str, schema: dict, args: dict, at: str, problems: list):
+def check_example(name: str, schema: dict, args: dict, at: str, problems: list, parts=None):
     props = schema.get("properties") or {}
     for k, v in args.items():
         if k not in props:
             problems.append(f"the example for {name} gives `{at}{k}`, which the tool does not take")
             continue
-        p = props[k]
+        p = (parts or {}).get(k) or props[k]
         if isinstance(v, dict) and p.get("properties"):
             check_example(name, p, v, f"{at}{k}.", problems)
 
 
-def arguments(schema: dict) -> list:
+def arguments(schema: dict, parts: dict) -> list:
+    """The argument table: an argument whose settings are a resource of their own (`parts`, by
+    argument) is described as its resource describes it, naming the resource, with its settings
+    under it."""
     props = schema.get("properties") or {}
     required = set(schema.get("required") or [])
     rows = ["| Argument | Type | Meaning |", "| --- | --- | --- |"]
     for k in sorted(props):
         p = props[k]
         req = " (required)" if k in required else ""
-        rows.append(f"| `{k}`{req} | {cell(type_of(p))} | {cell(p.get('description', ''))} |")
-        sub = p.get("properties") or {}
-        sub_req = set(p.get("required") or [])
+        what = p.get("description", "")
+        if k in parts:
+            what = f"{parts[k].get('description', '')} Settings: `{parts[k]['$id']}`."
+        rows.append(f"| `{k}`{req} | {cell(type_of(p))} | {cell(what)} |")
+        full = parts.get(k) or p
+        sub = full.get("properties") or {}
+        sub_req = set(full.get("required") or [])
         for k2 in sorted(sub):
             p2 = sub[k2]
             r2 = " (required)" if k2 in sub_req else ""
@@ -150,6 +172,12 @@ def generate(jetcarp: str) -> str:
     tools = got[2]["tools"]
     resources = got[3]["resources"]
     templates = got[4]["resourceTemplates"]
+    reads = [r["uri"] for r in resources if settings_part(r["uri"])]
+    read = ask(jetcarp, reads)
+    parts = {}
+    for i, uri in enumerate(reads):
+        tool, arg = settings_part(uri)
+        parts.setdefault(tool, {})[arg] = json.loads(read[100 + i]["contents"][0]["text"])
     problems = []
     names = [t["name"] for t in tools]
     for n in names:
@@ -160,7 +188,8 @@ def generate(jetcarp: str) -> str:
             problems.append(f"docs/tools/gen-mcp.py has an example for {n}, which the server no longer lists")
     for t in tools:
         if t["name"] in EXAMPLES:
-            check_example(t["name"], t["inputSchema"], EXAMPLES[t["name"]], "", problems)
+            check_example(t["name"], t["inputSchema"], EXAMPLES[t["name"]], "", problems,
+                          parts.get(t["name"]))
     if problems:
         for p in problems:
             print(p, file=sys.stderr)
@@ -186,18 +215,30 @@ def generate(jetcarp: str) -> str:
         s += [f"### `{t['name']}`", "", f"**{t['title']}.** " + t["description"], ""]
         if hints:
             s += ["*" + "; ".join(hints) + "*", ""]
-        s += arguments(t["inputSchema"])
+        s += arguments(t["inputSchema"], parts.get(t["name"], {}))
         s += ["", "Example:", "", "```json",
               json.dumps({"name": t["name"], "arguments": EXAMPLES[t["name"]]}, indent=2, ensure_ascii=False),
               "```", ""]
-    fixed = [r for r in resources if not r["uri"].startswith("jetcarp://docs/")]
+    fixed = [r for r in resources
+             if not r["uri"].startswith("jetcarp://docs/") and not settings_part(r["uri"])]
     docs = [r for r in resources if r["uri"].startswith("jetcarp://docs/")]
+    settings = [r for r in resources if settings_part(r["uri"])]
     s += ["## Resources", "",
           "Resources are what a client can read without calling a tool. Clients that do not offer them "
           "can reach the same text through `help` and `reference`.", "",
           "| URI | Type | What |", "| --- | --- | --- |"]
     for r in fixed:
         s.append(f"| `{r['uri']}` | {r['mimeType']} | {cell(r['title'])}: {cell(r['description'])} |")
+    s += ["",
+          f"The settings of {len(settings)} tool arguments, which `tools/list` only summarises (each argument "
+          "names its resource, and its settings are listed with the tool above); `help {\"schema\": "
+          "\"search_start/hunt\"}` returns the same JSON Schema:", ""]
+    by_tool = {}
+    for r in settings:
+        tool, arg = settings_part(r["uri"])
+        by_tool.setdefault(tool, []).append(f"`{arg}`")
+    for tool, args in by_tool.items():
+        s.append(f"- `{tool}`: {', '.join(args)} (`jetcarp://schema/{tool}/<argument>`)")
     s += ["",
           f"And the {len(docs)} pages of this book, `jetcarp://docs/<page>` by their path without `.md` "
           "(`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the "
