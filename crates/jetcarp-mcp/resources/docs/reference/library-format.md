@@ -463,8 +463,10 @@ it, and it comes from one of four sources:
   hidden when the next JETCARP writes its built-ins; one deleted comes back with them.
 - What the menu shows is kept with the entry, so the menu never reads a scene to list it: `category`
   (*Gliders & ships*, *Oscillators*, *Classics*, *My finds*…), `grid_group`, `family`, `tiling_name`,
-  `tiling_key`, `rule`, `score`, `rank` (its order within its source) and `featured` (a hand-made
-  built-in scene).
+  `tiling_key`, `rule`, `score`, `rank` (its order within its source) and `featured`: a built-in
+  that is a hand-made scene or one picked with the
+  [starter pack](../getting-started/installing.md#the-starter-pack), which the menu's *Featured*
+  order mixes in with the best entries.
 - An atlas entry also keeps `preview`, the scene on the smaller grid the run was found on, which its
   card runs, and `mature`, that scene's cells at generation `mature_gen` (deflated), so the card starts
   where the action is. Opening the entry loads `scene`, the run on the larger grid it was confirmed
@@ -479,7 +481,7 @@ and its card runs its scene made smaller, from the start. Built-in entries are n
 every JETCARP has them.
 
 The menu leaves out a built-in example of a named rule when an atlas entry has the same rule, unless
-the built-in is a hand-made scene, so that every named rule can be reached without showing it twice.
+the built-in is featured, so that every named rule can be reached without showing it twice.
 
 ## Ratings of search runs
 

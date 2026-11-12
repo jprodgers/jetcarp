@@ -130,7 +130,7 @@ pub struct QuickStartRow {
     pub score: Option<f64>,
     /// Order within its source (built-ins as built, atlas rows best first).
     pub rank: i64,
-    /// A hand-made built-in scene.
+    /// A featured built-in: a hand-made scene, or one picked for the starter set.
     pub featured: bool,
     pub hidden: bool,
     pub created: String,

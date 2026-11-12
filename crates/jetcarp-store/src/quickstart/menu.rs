@@ -4,8 +4,8 @@
 //! **Entries.** [`load`] reads the table only: what each shown entry lists ([`MenuRow`]: no
 //! scene, so a menu of thousands holds none in memory; [`super::card`] and [`super::scene`] read
 //! those by handle when a card is on screen or an entry is opened). A built-in entry whose rule
-//! an atlas entry has is left out, unless it is a hand-made featured scene, so every named rule
-//! stays reachable without showing it twice.
+//! an atlas entry has is left out, unless it is featured (a hand-made scene, or one picked for
+//! the starter set), so every named rule stays reachable without showing it twice.
 //!
 //! **Categories**: the category (an atlas entry's from its run; a built-in's or a promotion's the
 //! nearest one, or "Classics", "My finds", "Packs"), the grid group ([`super::grid_group`]:
@@ -13,10 +13,10 @@
 //! family ([`super::family_label`]: Life-like, Generations, ...), and the source ([`QsSource`]).
 //!
 //! **Order**: [`Sort::Featured`] is a seeded [`shuffle`] of the best entries of every category
-//! (the app draws a new seed at each start and on "Shuffle", and keeps the order through reloads
-//! in between with [`keep_order`]); Score, Rule, and Tiling are
-//! plain sorts. Filtering is [`select`] and the sidebar's counts are [`facets_for`]: each
-//! dimension is counted with the filters of the others applied.
+//! and the featured built-ins (the app draws a new seed at each start and on "Shuffle", and keeps
+//! the order through reloads in between with [`keep_order`]); Score, Rule, and Tiling are plain
+//! sorts. Filtering is [`select`] and the sidebar's counts are [`facets_for`]: each dimension is
+//! counted with the filters of the others applied.
 //!
 //! **Opening rows.** [`popular`]: entries opened at least once, most opens first, then the
 //! user's rating, then the latest open. [`recent`]: latest open first. [`random`]: a seeded draw
@@ -58,7 +58,7 @@ pub struct Item {
     /// The category.
     pub behaviour: String,
     pub score: Option<f64>,
-    /// A hand-made built-in scene.
+    /// A featured built-in: a hand-made scene, or one picked for the starter set.
     pub featured: bool,
     /// It has a small preview scene of its own (an atlas entry): "open at preview size".
     pub has_preview: bool,
@@ -300,7 +300,7 @@ const BAND: usize = 40;
 /// How many bands a category's entries wait behind the best of the others.
 fn band_penalty(it: &Item) -> usize {
     if it.source == QsSource::Builtin {
-        return if it.featured { 1 } else { 6 };
+        return if it.featured { 0 } else { 6 };
     }
     match it.behaviour.as_str() {
         "Quick deaths" | "Frozen at once" | "Static" | "Quiet rows" => 4,
@@ -312,13 +312,16 @@ fn band_penalty(it: &Item) -> usize {
 /// Assign [`Item::shuffle_rank`], the [`Sort::Featured`] order: the best [`BAND`] entries of every
 /// category shuffled together, then the next band, ..., so the top of the screen is a mix of the
 /// highest-scoring entries across all categories, different for each seed. Promotions rank with
-/// the best bands; dull categories wait a few bands, and the built-ins after the rest. Atlas and
-/// pack entries are grouped by category; promotions and built-ins each form one group.
+/// the best bands, and so do all the featured built-ins (a hand-picked set, not ranked by score);
+/// dull categories wait a few bands, and the other built-ins after the rest. Atlas and pack
+/// entries are grouped by category; promotions, featured built-ins and the other built-ins each
+/// form one group.
 pub fn shuffle(items: &mut [Item], seed: u64) {
     let mut by_cat: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, it) in items.iter().enumerate() {
         let group = match it.source {
             QsSource::Promotion => "\u{0}my finds",
+            QsSource::Builtin if it.featured => "\u{0}featured",
             QsSource::Builtin => "\u{0}classics",
             QsSource::Atlas | QsSource::Pack => it.behaviour.as_str(),
         };
@@ -335,7 +338,13 @@ pub fn shuffle(items: &mut [Item], seed: u64) {
                 .then(items[a].handle.cmp(&items[b].handle))
         });
         for (pos, i) in list.into_iter().enumerate() {
-            keys.push((pos / BAND + band_penalty(&items[i]), r.next_u64(), i));
+            let it = &items[i];
+            let band = if it.source == QsSource::Builtin && it.featured {
+                0
+            } else {
+                pos / BAND
+            };
+            keys.push((band + band_penalty(it), r.next_u64(), i));
         }
     }
     keys.sort_unstable_by_key(|k| (k.0, k.1));

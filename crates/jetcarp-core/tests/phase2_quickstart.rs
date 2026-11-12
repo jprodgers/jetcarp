@@ -1,7 +1,10 @@
-//! Quick Start: a working example of every named rule.
-use jetcarp_core::quickstart::{entries, health, preview_cells};
+//! Quick Start: a working example of every named rule, and the featured entries.
+use jetcarp_core::quickstart::{
+    BUNDLED, COMPUTING_SCENES, FEATURED, entries, health, preview_cells,
+};
 use jetcarp_core::rules::catalog;
 use rayon::prelude::*;
+use std::collections::HashSet;
 
 #[test]
 fn every_named_rule_has_an_example() {
@@ -15,6 +18,35 @@ fn every_named_rule_has_an_example() {
         );
     }
     assert!(all.len() >= 190, "only {} examples", all.len());
+}
+
+// The featured entries are the hand-made scenes and the starter set's built-ins (`FEATURED`), and
+// every listed id names an entry, once: a renamed built-in fails here instead of dropping out of
+// the starter set. 71 = 25 hand-made scenes + 46 more kept in the curation of 2026-11-11 (the
+// list's other 17 are hand-made); a later curation changes this count with the list.
+#[test]
+fn featured_entries_are_the_hand_made_scenes_and_the_list() {
+    let all = entries();
+    let mut listed = HashSet::new();
+    for id in FEATURED {
+        assert!(listed.insert(*id), "FEATURED lists {id} twice");
+        let e = all
+            .iter()
+            .find(|q| q.id == *id)
+            .unwrap_or_else(|| panic!("FEATURED lists {id}, which is not a built-in entry"));
+        assert!(e.featured, "{id}");
+    }
+    let hand_made: HashSet<&str> = BUNDLED
+        .iter()
+        .chain(COMPUTING_SCENES)
+        .map(|(id, _)| *id)
+        .collect();
+    for e in &all {
+        let want = hand_made.contains(e.id.as_str()) || listed.contains(e.id.as_str());
+        assert_eq!(e.featured, want, "{}", e.id);
+    }
+    assert_eq!(hand_made.len(), 25);
+    assert_eq!(all.iter().filter(|q| q.featured).count(), 71);
 }
 
 // Every example, at the size its live preview uses, is alive and still doing something after 300

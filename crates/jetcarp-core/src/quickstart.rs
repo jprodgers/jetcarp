@@ -6,7 +6,7 @@ use crate::rules::{CatalogEntry, FieldKind, Rule, catalog};
 use crate::topology::{Boundary, Nb, SizeSpec, TilingSpec};
 use crate::world::{CaSpec, Scene, SeedSpec};
 
-/// Hand-made scenes, shown first ("Featured").
+/// Hand-made scenes, listed first and always featured.
 pub static BUNDLED: &[(&str, &str)] = &[
     ("life", include_str!("../data/scenes/life.json")),
     (
@@ -85,6 +85,82 @@ pub static BUNDLED: &[(&str, &str)] = &[
     ),
 ];
 
+/// The built-in entries picked for the starter set, by id: every built-in kept in the curation
+/// of 2026-11-11 (Jimmie Rodgers's keeps among the hand-made scenes, the named rules, the tiling
+/// showcases and the JACA presets, plus the Spectre glider, kept among the top finds). These are
+/// featured, as the hand-made scenes ([`BUNDLED`], [`COMPUTING_SCENES`]) always are; built-ins
+/// never travel in a pack, so this list is how the starter set reaches them. A later curation
+/// edits only this list. `tests/phase2_quickstart.rs` checks that each names an entry.
+pub static FEATURED: &[&str] = &[
+    // Hand-made scenes (featured anyway).
+    "life",
+    "rule30-life-ants",
+    "script-five",
+    "hex-wolfram",
+    "sandpile-identity-cairo",
+    "brians-brain",
+    "langtons-ant",
+    "turmite-llrr",
+    "wireworld",
+    "sandpile-hex",
+    "spectre-glider",
+    "life-triangle",
+    "layered-spectre",
+    "penrose-kd-sandpile",
+    "penrose-rhomb-brain",
+    "wireworld-adder",
+    "life-and",
+    // Named rules.
+    "rule:B36/S23",
+    "rule:B3678/S34678",
+    "rule:B1357/S1357",
+    "rule:B3/S12345",
+    "rule:B2/S345/C4",
+    "rule:R5,C2,S33-57,B34-45",
+    "rule:Cyclic 16/1",
+    "rule:ForestFire 0.01/0.0001",
+    "rule:Hodgepodge 200/3/3/28",
+    "rule:W110",
+    "rule:HexT 90",
+    "rule:Lenia R=13,T=10,b=1,m=0.15,s=0.015",
+    "rule:Table parity",
+    "rule:Layer 3/012",
+    "rule:JACA B3/S23",
+    // Tiling showcases.
+    "tiling:quad",
+    // JACA presets.
+    "jaca:trihex-streaks",
+    "jaca:trunchex-worms",
+    "jaca:ih28-bands",
+    "jaca:k2-curly-trenches",
+    "jaca:k2-ropes",
+    "jaca:square-beads",
+    "jaca:square-rainbow",
+    "jaca:penrose-kd-rainbow",
+    "jaca:trihex-rainbow",
+    "jaca:snubhex-rainbow",
+    "jaca:trunchex-twins",
+    "jaca:k2-rope-network",
+    "jaca:snubsq-starry",
+    "jaca:square-plasma",
+    "jaca:penrose-rainbow-vs-sparkle",
+    "jaca:square-pink-plasma",
+    "jaca:k2-halves-bubbles",
+    "jaca:trunctrihex-halves",
+    "jaca:trunchex-halves-worms",
+    "jaca:square-anneal-rainbow",
+    "jaca:rhombitrihex-shards",
+    "jaca:oct-city",
+    "jaca:square-bubbles",
+    "jaca:square-rainbow-bubbles",
+    "jaca:trihex-dark-islands",
+    "jaca:square-circuit",
+    "jaca:triangle-edge-rainbow",
+    "jaca:square-cracks",
+    "jaca:penrose-pink-bands",
+    "jaca:square-wavy-lines",
+];
+
 /// Family of the computing demos.
 pub const COMPUTING: &str = "Computing";
 
@@ -111,6 +187,7 @@ pub struct QuickStart {
     pub tiling: String,
     /// States in the main CA's field (sandpiles: 0).
     pub states: u32,
+    /// A hand-made scene, or one picked for the starter set ([`FEATURED`]).
     pub featured: bool,
     /// Notation of the main CA.
     pub rule: String,
@@ -513,7 +590,9 @@ fn showcases() -> Vec<QuickStart> {
     out
 }
 
-/// All Quick Start entries: featured scenes first, then one per named rule in catalog order.
+/// All Quick Start entries: the hand-made scenes first, then one per named rule in catalog order,
+/// the JACA presets and the tiling showcases. The hand-made scenes and those in [`FEATURED`] are
+/// featured.
 pub fn entries() -> Vec<QuickStart> {
     let mut out = Vec::new();
     for (id, json) in BUNDLED {
@@ -562,6 +641,9 @@ pub fn entries() -> Vec<QuickStart> {
     }
     out.extend(jaca_presets());
     out.extend(showcases());
+    for q in &mut out {
+        q.featured |= FEATURED.contains(&q.id.as_str());
+    }
     out
 }
 

@@ -658,6 +658,55 @@ fn the_featured_order_survives_a_reload() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn featured_built_ins_shuffle_in_with_the_best() {
+    let (lib, dir) = temp_lib("featured");
+    // An atlas of 60 entries in one category, best first.
+    let runs: Vec<Run> = (0..60)
+        .map(|k| Run {
+            id: k + 1,
+            category: "Turbulence",
+            family: "life_like",
+            tiling: "square",
+            group: "square",
+            rule: Box::leak(format!("B3{k}/S23").into_boxed_str()),
+            seed: "{}",
+            score: 100.0 - k as f64,
+        })
+        .collect();
+    let (_, _, short) = publish(&lib, &runs);
+    let mut items = menu::load(&lib);
+    let featured = |i: &menu::Item| i.source == QsSource::Builtin && i.featured;
+    let plain = |i: &menu::Item| i.source == QsSource::Builtin && !i.featured;
+    // The hand-made scenes and the starter set's picks (a named rule, a JACA preset).
+    for h in ["life", "rule:B36/S23", "jaca:square-beads"] {
+        assert!(items.iter().any(|i| i.handle == h && featured(i)), "{h}");
+    }
+    let n = items.iter().filter(|i| featured(i)).count();
+    for seed in [3, 4] {
+        menu::shuffle(&mut items, seed);
+        let order = menu::select(&items, &Filter::default(), Sort::Featured);
+        let at = |p: &dyn Fn(&menu::Item) -> bool| -> Vec<usize> {
+            (0..order.len()).filter(|&k| p(&items[order[k]])).collect()
+        };
+        // Every featured built-in shuffles in with the atlas's best band (its first 40): mixed
+        // with them, ahead of the atlas's next band and of every other built-in.
+        let (f, p) = (at(&featured), at(&plain));
+        assert_eq!(f.len(), n);
+        let next_band = order
+            .iter()
+            .position(|&i| items[i].handle == format!("atlas:{short}-41"))
+            .unwrap();
+        assert!(f.iter().max() < Some(&next_band), "in the first band");
+        assert!(
+            next_band < *p.iter().min().unwrap(),
+            "before the other built-ins"
+        );
+        assert!(f.iter().min() < Some(&40), "mixed in with the best");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn scene_row(id: &str, title: &str) -> QuickStartRow {
     let e = jetcarp_core::quickstart::entries()
         .into_iter()
