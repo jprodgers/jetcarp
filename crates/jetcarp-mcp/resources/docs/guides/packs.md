@@ -158,7 +158,7 @@ feed's file in `refs/` names its newest version and is signed too.
 | --- | --- |
 | `--id ID` | Only these records: ids, id prefixes or names (repeat it) |
 | `--query JSON` | Only the patterns a library query finds, such as `'{"class":"spaceship"}'` |
-| `--search UUID` | Only these explore searches (repeat it) |
+| `--search UUID` | Only these explore searches (repeat it). Without it, every search goes in, or none when `--id` or `--query` chose the records |
 | `--no-searches`, `--no-ants`, `--no-quickstart`, `--no-media`, `--no-ratings` | Leave that kind out |
 
 **Describe it:** `--title`, `--description` and `--version-label` (free text such as `2026.11`)

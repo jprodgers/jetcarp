@@ -29,7 +29,8 @@ pub struct WallpaperArgs {
     #[arg(long)]
     scale: Option<f64>,
     /// Build a fresh grid of the scene's tiling sized to fill the image at --cell-px (the
-    /// scene's CAs and seeds, without its edits).
+    /// scene's CAs and seeds, without its edits). An aperiodic tiling gets the substitution
+    /// level nearest that.
     #[arg(long)]
     fresh: bool,
     /// Tile size in pixels for --fresh and --fit repeat.

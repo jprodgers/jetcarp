@@ -21,7 +21,7 @@ $ jetcarp quickstart build --minutes 3
 explore search job 22 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches, 310 confirmed, 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-  status done, 3 min 17 s run over every session, 1,041 confirmation runs, 29,454 candidates tried, 1.22 GB
+  status done, 3 min 17 s run over every session, 1,041 confirmation runs, 29,454 candidates tried, 1.22 GB of memory
   …
   family                     runs   mean   best  elites
   life_like                 8,427   0.27   1.35   1,761
@@ -204,7 +204,7 @@ Then export the entries you choose, by their ids:
 
 ```text
 $ jetcarp pack export --to my-finds-2026.11 --feed my-finds --title "My finds" --version-label 2026.11 \
-    --id find:run-a0e3aa0c-17127 --id find:scene-3eb3915ac28926d6 --no-searches
+    --id find:run-a0e3aa0c-17127 --id find:scene-3eb3915ac28926d6
 publishing feed my-finds (version 1) into /home/ada/.my-finds-2026.11.store
 …
 exported sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 into /home/ada/my-finds-2026.11: 15 files, 25647 bytes
@@ -221,9 +221,9 @@ export sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 (
 
 The folder `my-finds-2026.11` is the pack: zip it and send it, and the other person imports it with
 `jetcarp pack import`, or adds it with *Add packs from a folder…* on the setup window's packs page
-(*Researcher* and *Everything*). Your explore searches go in unless you leave them out with
-`--no-searches` or choose some with `--search`. Without `--id`, the export holds your whole library
-but its hidden entries: every pattern, ant run and Quick Start entry, the starter pack's included.
+(*Researcher* and *Everything*). With `--id`, your explore searches stay out unless you name some
+with `--search`. Without `--id`, the export holds your whole library but its hidden entries: every
+pattern, ant run and Quick Start entry, the starter pack's included, and every explore search.
 `--query` chooses patterns by a library query.
 
 ## 7. Longer searches

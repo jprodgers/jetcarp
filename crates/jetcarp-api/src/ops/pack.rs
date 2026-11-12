@@ -347,7 +347,8 @@ pub struct PublishIn {
     /// Only the patterns a library query finds (the `library.query` filters, as JSON).
     #[serde(default)]
     pub query: Option<Value>,
-    /// Only these explore searches (uuids); default every one with a folder.
+    /// Only these explore searches (uuids). Default: every one with a folder, or none when records
+    /// are chosen with `ids` or `query`.
     #[serde(default)]
     pub searches: Option<Vec<String>>,
     /// Leave out search runs.
@@ -419,6 +420,30 @@ impl Report for PublishOut {
     }
 }
 
+/// A Quick Start entry (not a built-in one, which packs never carry) by the start of its handle
+/// or id, as patterns and ant runs are found by the start of theirs.
+fn quickstart_by_prefix(lib: &jetcarp_store::Library, k: &str) -> Result<String, ApiError> {
+    let rows = lib.quickstart(&[]).map_err(catalog_err)?;
+    let found: Vec<_> = rows
+        .iter()
+        .filter(|r| r.source != jetcarp_store::QsSource::Builtin)
+        .filter(|r| r.handle.starts_with(k) || r.id.starts_with(k))
+        .collect();
+    match found.as_slice() {
+        [one] => Ok(one.id.clone()),
+        [] => Err(ApiError::not_found(format!("no record '{k}'"))),
+        many => Err(ApiError::invalid(format!(
+            "'{k}' starts {} Quick Start entries ({}, ...): give more of it",
+            many.len(),
+            many.iter()
+                .take(3)
+                .map(|r| r.handle.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
+    }
+}
+
 fn selection(cx: &Ctx, a: &PublishIn) -> Result<Selection, ApiError> {
     let lib = cx.library();
     let mut ids: Option<std::collections::HashSet<String>> = None;
@@ -430,20 +455,30 @@ fn selection(cx: &Ctx, a: &PublishIn) -> Result<Selection, ApiError> {
             .extend(found.into_iter().map(|r| r.id));
     }
     for k in &a.ids {
-        let id = lib
+        let id = match lib
             .get(k)
             .map(|r| r.id)
             .or_else(|_| lib.ant(k).map(|r| r.id))
             .or_else(|_| lib.get_quickstart(k).map(|r| r.id))
-            .map_err(|_| ApiError::not_found(format!("no record '{k}'")))?;
+        {
+            Ok(id) => id,
+            Err(_) => quickstart_by_prefix(&lib, k)?,
+        };
         ids.get_or_insert_with(Default::default).insert(id);
     }
+    // A selection of records (`--id`, `--query`) takes searches only when they are named with
+    // `--search`: sharing a few finds should not ship every explore search in the library.
+    let selective = ids.is_some();
     Ok(Selection {
         ids,
         searches: if a.no_searches {
             Some(vec![])
-        } else {
+        } else if a.searches.is_some() {
             a.searches.clone()
+        } else if selective {
+            Some(vec![])
+        } else {
+            None
         },
         ants: !a.no_ants,
         quickstart: !a.no_quickstart,
@@ -924,15 +959,21 @@ impl Report for InfoOut {
         for (k, t) in &self.tables {
             let _ = writeln!(
                 s,
-                "  {k:<14} {:>9} rows in {} parts, {} bytes",
-                t.rows, t.parts, t.bytes
+                "  {k:<14} {:>14} in {}, {} bytes",
+                crate::out::count(t.rows, "row", "rows"),
+                crate::out::count(t.parts as u64, "part", "parts"),
+                t.bytes
             );
         }
         if !self.searches.is_empty() {
             let _ = writeln!(s, "  searches: {}", self.searches.join(", "));
         }
         if self.retracts > 0 {
-            let _ = writeln!(s, "  withdraws {} records", self.retracts);
+            let _ = writeln!(
+                s,
+                "  withdraws {}",
+                crate::out::count(self.retracts as u64, "record", "records")
+            );
         }
         if self.feeds.len() > 1 {
             let _ = writeln!(s, "  the store's feeds: {}", self.feeds.join(", "));

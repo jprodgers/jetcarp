@@ -202,6 +202,7 @@ pub struct CatalogInfo {
     pub pattern_rules: i64,
     pub sightings: i64,
     pub seen: i64,
+    /// Jobs other than job 0 (the patterns added by hand).
     pub jobs: i64,
     pub quickstart: i64,
     pub ratings: i64,
@@ -1325,7 +1326,10 @@ impl Library {
                         r.get(0)
                     })
                     .map_err(e)?,
-                jobs: n("jobs")?,
+                // Job 0 holds the patterns added by hand; it is not a search.
+                jobs: c
+                    .query_row("SELECT count(*) FROM jobs WHERE id > 0", [], |r| r.get(0))
+                    .map_err(e)?,
                 quickstart: n("quickstart")?,
                 ratings: n("ratings")?,
                 media: n("media")?,

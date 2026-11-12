@@ -321,7 +321,7 @@ Example:
 | `wallpaper.cell_px` | number | Tile size in pixels for `fresh` and `fit` repeat (default 4). |
 | `wallpaper.center` | array of number | World point at the image centre (with `scale`) instead of fitting. |
 | `wallpaper.fit` | string | cover (default: fill and crop, no stage showing), contain (the whole grid, letterboxed), or repeat (a wrap-edge grid tiled at `cell_px`). |
-| `wallpaper.fresh` | boolean | Render a new grid of the world's tiling sized to fill the image at `cell_px` (its CAs and seeds, without its edits). |
+| `wallpaper.fresh` | boolean | Render a new grid of the world's tiling sized to fill the image at `cell_px` (its CAs and seeds, without its edits). An aperiodic tiling gets the substitution level nearest that. |
 | `wallpaper.gens` | integer | Generations to run first (on the host's world: only with `fresh`). |
 | `wallpaper.monitors` | string | Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout): the image spans them. |
 | `wallpaper.out` | string | Output .png file or folder (default <Pictures>/JETCARP/wallpapers/). |
@@ -841,7 +841,7 @@ Example:
 | `publish.no_searches` | boolean | Leave out search runs. |
 | `publish.query` | any | Only the patterns a library query finds (the `library_query` filters, as JSON). |
 | `publish.retract` | array of string | Withdraw records: `pattern:<id>=reason` (also `ant:` and `quickstart:`). |
-| `publish.searches` | array of string | Only these explore searches (uuids); default every one with a folder. |
+| `publish.searches` | array of string | Only these explore searches (uuids). Default: every one with a folder, or none when records are chosen with `ids` or `query`. |
 | `publish.title` | string | The pack's title, for people. |
 | `publish.to` (required) | string | The store's folder (made if missing; a new version of the feed if it has one). |
 | `publish.version_label` | string | Free text for people (`2026.11`). |

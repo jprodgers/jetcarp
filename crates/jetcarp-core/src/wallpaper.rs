@@ -8,8 +8,9 @@
 //! - [`split`] cuts a span image into one image per monitor, from the monitors' rectangles in
 //!   span pixels, so each monitor's wallpaper lines up with its neighbours.
 //! - [`fresh_tiling`] sizes a tiling to fill an image at a given cell size, for a fresh grid made
-//!   for the wallpaper.
+//!   for the wallpaper (an aperiodic tiling gets the substitution level nearest that size).
 
+use crate::aperiodic;
 use crate::geom::P;
 use crate::render::{self, Image, ViewOptions};
 use crate::topology::{SizeSpec, TilingSpec};
@@ -180,14 +181,38 @@ pub fn crop(img: &Image, x: u32, y: u32, w: u32, h: u32) -> Image {
 }
 
 /// The tiling spec sized to fill a `width` x `height` image with tiles about `cell_px` pixels
-/// across (see [`crate::topology::fill_size`]). Aperiodic tilings keep their size.
+/// across (see [`crate::topology::fill_size`]). An aperiodic tiling gets the substitution level
+/// nearest that size.
 pub fn fresh_tiling(spec: &TilingSpec, width: u32, height: u32, cell_px: f64) -> TilingSpec {
-    let size = crate::topology::fill_size(spec, width as f64, height as f64, cell_px);
     let mut s = spec.clone();
+    if let Some(level) = fresh_level(&spec.family, width, height, cell_px) {
+        s.size = Some(SizeSpec::Level(level));
+        return s;
+    }
+    let size = crate::topology::fill_size(spec, width as f64, height as f64, cell_px);
     if matches!(size, SizeSpec::Rect { .. }) {
         s.size = Some(size);
     }
     s
+}
+
+/// For an aperiodic family, the substitution level whose patch shows tiles nearest `cell_px`
+/// across once [`Fit::Cover`] crops it to the image (`None` for other families). A round patch
+/// holds a `width` x `height` rectangle in about half its area, so the patch wants about twice
+/// the image's tiles; levels grow about eightfold, so the tiles come out within about 1.7 times
+/// of `cell_px` either way. Levels stop at [`aperiodic::auto_level_max`].
+fn fresh_level(family: &str, width: u32, height: u32, cell_px: f64) -> Option<u32> {
+    let fam = crate::families::family(family)?;
+    if fam.kind != crate::families::FamilyKind::Aperiodic {
+        return None;
+    }
+    let want = 2.0 * width as f64 * height as f64 / cell_px.max(1e-3).powi(2);
+    let off = |count: f64| (count / want).ln().abs();
+    let (lo, _) = aperiodic::level_range(family);
+    (lo..=aperiodic::auto_level_max(family))
+        .filter_map(|l| Some((l, aperiodic::tile_count(family, l)? as f64)))
+        .min_by(|a, b| off(a.1).total_cmp(&off(b.1)))
+        .map(|(l, _)| l)
 }
 
 /// Where a wallpaper looks: (centre, pixels per world unit, repeat a wrap-edge grid).
@@ -313,6 +338,29 @@ pub fn wallpaper(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fresh_aperiodic_tilings_pick_a_level() {
+        let at =
+            |family: &str, w, h, px| match fresh_tiling(&TilingSpec::new(family), w, h, px).size {
+                Some(SizeSpec::Level(l)) => l,
+                other => panic!("{family}: {other:?}"),
+            };
+        // 1920 x 1080 at 4 px wants about 260,000 tiles: the 280,000-tile hat patch.
+        assert_eq!(at("hat", 1920, 1080, 4.0), 6);
+        // Larger tiles, a smaller patch; never past the largest automatic level.
+        assert!(at("hat", 1920, 1080, 16.0) < 6);
+        assert_eq!(
+            at("spectre", 7680, 4320, 1.0),
+            aperiodic::auto_level_max("spectre")
+        );
+        assert!(at("penrose-rhomb", 640, 480, 8.0) >= 1);
+        // A periodic tiling still gets a rectangle.
+        assert!(matches!(
+            fresh_tiling(&TilingSpec::new("square"), 1920, 1080, 4.0).size,
+            Some(SizeSpec::Rect { .. })
+        ));
+    }
 
     #[test]
     fn parses_sizes_and_monitors() {

@@ -1685,7 +1685,7 @@ Options:
       --created <CREATED>              The version's time (RFC 3339 UTC, default now), for reproducible packs
       --id <IDS>                       Only these records (ids, prefixes or names; repeat)
       --query <QUERY>                  Only the patterns a library query finds, as JSON ('{"class":"spaceship"}')
-      --search <SEARCHES>              Only these explore searches (uuids; repeat)
+      --search <SEARCHES>              Only these explore searches (uuids; repeat). Default: every search, or none with --id or --query
       --no-searches                    Leave out explore searches (their runs, scores and settings)
       --no-media                       Leave out media (posters, thumbnails, animations)
       --no-ratings                     Leave out ratings (otherwise only consented raters' go in)
@@ -1719,7 +1719,7 @@ Options:
       --created <CREATED>              The version's time (RFC 3339 UTC, default now), for reproducible packs
       --id <IDS>                       Only these records (ids, prefixes or names; repeat)
       --query <QUERY>                  Only the patterns a library query finds, as JSON ('{"class":"spaceship"}')
-      --search <SEARCHES>              Only these explore searches (uuids; repeat)
+      --search <SEARCHES>              Only these explore searches (uuids; repeat). Default: every search, or none with --id or --query
       --no-searches                    Leave out explore searches (their runs, scores and settings)
       --no-media                       Leave out media (posters, thumbnails, animations)
       --no-ratings                     Leave out ratings (otherwise only consented raters' go in)
@@ -2011,7 +2011,7 @@ Options:
       --fit <FIT>            cover (fill and crop, no stage showing), contain (whole grid, letterboxed), or repeat (a wrap-edge grid tiled at --cell-px) [default: cover]
       --center <CENTER>      Look at this world point (`X,Y`) at --scale pixels per world unit instead of fitting
       --scale <SCALE>        Pixels per world unit, with --center
-      --fresh                Build a fresh grid of the scene's tiling sized to fill the image at --cell-px (the scene's CAs and seeds, without its edits)
+      --fresh                Build a fresh grid of the scene's tiling sized to fill the image at --cell-px (the scene's CAs and seeds, without its edits). An aperiodic tiling gets the substitution level nearest that
       --cell-px <CELL_PX>    Tile size in pixels for --fresh and --fit repeat [default: 4]
       --gens <GENS>          Generations to run before rendering [default: 0]
       --gpu                  Step on the GPU where the rules allow it (results are identical)

@@ -46,7 +46,7 @@ pub struct WallpaperIn {
     #[serde(default = "cell_px_default")]
     pub cell_px: f64,
     /// Render a new grid of the world's tiling sized to fill the image at `cell_px` (its CAs and
-    /// seeds, without its edits).
+    /// seeds, without its edits). An aperiodic tiling gets the substitution level nearest that.
     #[serde(default)]
     pub fresh: bool,
     /// Generations to run first (on the host's world: only with `fresh`).

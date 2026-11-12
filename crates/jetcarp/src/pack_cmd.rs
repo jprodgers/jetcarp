@@ -49,7 +49,7 @@ struct PublishFlags {
     /// Only the patterns a library query finds, as JSON ('{"class":"spaceship"}').
     #[arg(long)]
     query: Option<String>,
-    /// Only these explore searches (uuids; repeat).
+    /// Only these explore searches (uuids; repeat). Default: every search, or none with --id or --query
     #[arg(long = "search")]
     searches: Vec<String>,
     /// Leave out explore searches (their runs, scores and settings).

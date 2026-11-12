@@ -182,7 +182,7 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
             let _ = writeln!(s, "{line}");
             let _ = writeln!(
                 s,
-                "  status {}, {} run over every session, {} confirmation runs, {} candidates tried, {} GB",
+                "  status {}, {} run over every session, {} confirmation runs, {} candidates tried, {} GB of memory",
                 p.status,
                 duration(p.elapsed_s),
                 digits(p.confirmed),
