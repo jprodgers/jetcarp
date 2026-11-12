@@ -207,7 +207,11 @@ const WINDOW: usize = 17;
 /// Longest a screening run on the processor may take. A slower one (a sandpile, which takes tens
 /// of seconds at the default size; Lenia on a slow machine) stops there and is kept as a run of
 /// the generations it reached: its candidate's `gens`, below the usual run length, so it replays
-/// exactly. A step and a build then end on time, and no thread waits on one run for a minute.
+/// exactly. A step then ends within seconds of its deadline, and no round waits on one run for a
+/// minute. It is wall time: a run's world steps in parallel on the run's pool, and while its
+/// thread waits for a step it may take up another run, so on a busy pool a run reaches fewer
+/// generations than alone. (Each run on a thread of its own, stepping alone, kept the caps exact
+/// but screened about a fifth fewer runs.)
 pub const CPU_RUN_S: f64 = 8.0;
 /// The same for a confirmation run on the processor (four times the cells, four times the
 /// generations).
@@ -1393,14 +1397,23 @@ impl Search {
             Some(Some(evaluate(grid, &c, &t)))
         }));
         let secs = t_eval.elapsed().as_secs_f64();
-        if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() && secs > 2.0 {
+        // How long past the run's end this one went on (it is given up at its next generation).
+        let late = lim.end.map_or(0.0, |e| {
+            Instant::now().saturating_duration_since(e).as_secs_f64()
+        });
+        if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some() && (secs > 2.0 || late > 0.5) {
             let how = match cut {
                 Some("capped") => format!(" (capped at generation {})", c.gens),
                 Some(w) => format!(" ({w})"),
                 None => String::new(),
             };
+            let late = if late > 0.5 {
+                format!(", {late:.2}s past the end")
+            } else {
+                String::new()
+            };
             eprintln!(
-                "cpu run stage {stage} {} {fam_name} cells={} gens={gens}: {secs:.2}s{how}",
+                "cpu run stage {stage} {} {fam_name} cells={} gens={gens}: {secs:.2}s{how}{late}",
                 grid.key,
                 grid.topo.len(),
             );

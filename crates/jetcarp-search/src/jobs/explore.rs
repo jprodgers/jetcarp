@@ -625,7 +625,7 @@ impl Strategy for ExploreRun {
                 .saturating_duration_since(until)
                 .as_secs_f64();
             eprintln!(
-                "step at {:.1} s ended {past:.2} s past its deadline{}",
+                "step ending at {:.1} s ran {past:.2} s past its deadline{}",
                 elapsed(r),
                 if end.is_some_and(|e| Instant::now() >= e) {
                     " (the run's end)"
@@ -730,13 +730,12 @@ impl Strategy for ExploreRun {
             min_score: b.min_score,
             max_entries: b.max_entries,
         };
-        let t0 = Instant::now();
+        let (searched, t0) = (elapsed(r), Instant::now());
         let rows = crate::explore::atlas::rows(&r.runs, &opts, &r.spec.uuid)?;
         let w = cx.lib.publish_atlas(cx.job, &r.spec.uuid, &rows)?;
         if trace() {
             eprintln!(
-                "build: searched {:.1} s, published {} atlas entries in {:.2} s",
-                elapsed(r),
+                "build: searched {searched:.1} s, published {} atlas entries in {:.2} s",
                 rows.len(),
                 t0.elapsed().as_secs_f64()
             );
