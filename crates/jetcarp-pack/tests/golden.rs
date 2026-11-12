@@ -19,6 +19,9 @@ use jetcarp_store::Library;
 use std::path::{Path, PathBuf};
 
 const FIXED: &str = "2026-11-11T00:00:00Z";
+/// The JETCARP version the golden packs name (in each manifest's `engine` and in their scenes),
+/// whatever version writes them, so writing them again changes nothing.
+const GOLDEN_ENGINE: &str = "0.4.0";
 
 fn golden_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
@@ -243,7 +246,16 @@ fn fixed(mut r: jetcarp_core::pattern::PatternRecord) -> jetcarp_core::pattern::
     r.verified = v;
     r.created = FIXED.into();
     r.updated = FIXED.into();
+    golden_versions(&mut r);
     r
+}
+
+/// The JETCARP version a record names (found, verified, last checked) as the golden packs name
+/// it, whatever version writes them.
+fn golden_versions(r: &mut jetcarp_core::pattern::PatternRecord) {
+    r.provenance.jetcarp_version = GOLDEN_ENGINE.into();
+    r.verified.jetcarp_version = GOLDEN_ENGINE.into();
+    r.engine_version = GOLDEN_ENGINE.into();
 }
 
 /// Fix every time and random uuid a library holds, so the same steps make the same pack.
@@ -289,6 +301,51 @@ fn fix_library(lib: &Library) {
          UPDATE media SET created = '{FIXED}', updated = '{FIXED}';"
     ))
     .unwrap();
+    // The version that wrote each row, as the golden packs name it whatever version writes them.
+    let tables = [
+        "provenance",
+        "patterns",
+        "pattern_rules",
+        "engine_pins",
+        "ants",
+        "jobs",
+        "quickstart",
+    ];
+    for table in tables {
+        c.execute(
+            &format!("UPDATE {table} SET engine_version = ?1 WHERE engine_version = ?2"),
+            [GOLDEN_ENGINE, jetcarp_core::VERSION],
+        )
+        .unwrap();
+    }
+    // And in the JSON rows keep (a pattern's verification, a scene, a media file's notes).
+    let (from, to) = (
+        format!("\"{}\"", jetcarp_core::VERSION),
+        format!("\"{GOLDEN_ENGINE}\""),
+    );
+    let names = |sql: &str| -> Vec<String> {
+        let mut st = c.prepare(sql).unwrap();
+        st.query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    };
+    let all =
+        names("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
+    for t in all {
+        for col in names(&format!(
+            "SELECT name FROM pragma_table_info('{t}') WHERE type = 'TEXT'"
+        )) {
+            c.execute(
+                &format!(
+                    "UPDATE \"{t}\" SET \"{col}\" = replace(\"{col}\", ?1, ?2) \
+                     WHERE instr(\"{col}\", ?1) > 0"
+                ),
+                [&from, &to],
+            )
+            .unwrap();
+        }
+    }
     c.execute_batch(&trigger).unwrap();
 }
 
@@ -377,7 +434,7 @@ fn library_a(dir: &Path) -> Library {
         jetcarp_core::Boundary::Wrap,
     ));
     scene.name = "Glider".into();
-    scene.jetcarp_version = jetcarp_core::VERSION.into();
+    scene.jetcarp_version = GOLDEN_ENGINE.into();
     scene.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
     let mut q = jetcarp_store::QuickStartRow::for_scene("golden-glider", "scene", scene);
     q.created = FIXED.into();
@@ -427,7 +484,7 @@ fn library_numbers(dir: &Path) -> Library {
         jetcarp_core::Boundary::Wrap,
     ));
     scene.name = "A Life soup".into();
-    scene.jetcarp_version = jetcarp_core::VERSION.into();
+    scene.jetcarp_version = GOLDEN_ENGINE.into();
     scene.rng_state = BIG;
     scene.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
     let mut q = jetcarp_store::QuickStartRow::for_scene("golden-soup", "scene", scene);
@@ -461,6 +518,7 @@ fn opts(feed: &str, to: &Path, title: &str) -> publish::Options {
         description: format!("Golden pack: {title}. Made by JETCARP's tests; never rewritten."),
         version_label: "golden-1".into(),
         created: Some(FIXED.into()),
+        engine_version: Some(GOLDEN_ENGINE.into()),
         ..Default::default()
     }
 }
@@ -701,7 +759,12 @@ fn tiny_png(w: u32) -> Vec<u8> {
 /// A search folder as an explore search seals it: two segments of three runs, one rescore.
 fn fake_search(dir: &Path, uuid: &str) {
     use jetcarp_search::explore::runs::{Manifest, ScoreFile, ScoreSet, SegmentEntry};
-    use jetcarp_search::explore::segments::{RunRec, SegmentWriter};
+    use jetcarp_search::explore::segments::{RunRec, SegmentWriter, Tuning};
+    // The files name the golden version, whatever version writes them.
+    let tuning = Tuning {
+        engine_version: Some(GOLDEN_ENGINE),
+        ..Default::default()
+    };
     std::fs::create_dir_all(dir.join("runs")).unwrap();
     let mut segments = vec![];
     for seg in 1..=2i64 {
@@ -711,7 +774,7 @@ fn fake_search(dir: &Path, uuid: &str) {
             ("jetcarp.segment".to_string(), format!("part-{seg:06}")),
             ("jetcarp.engine_version".to_string(), "golden".to_string()),
         ];
-        let mut w = SegmentWriter::create(&dir.join(&file), &kv).unwrap();
+        let mut w = SegmentWriter::create_tuned(&dir.join(&file), &kv, &tuning).unwrap();
         for k in 0..3 {
             let id = (seg - 1) * 3 + k + 1;
             w.push(RunRec {
@@ -753,7 +816,7 @@ fn fake_search(dir: &Path, uuid: &str) {
     // One rescore of segment 1.
     std::fs::create_dir_all(dir.join("scores-1")).unwrap();
     let sf = "scores-1/part-000001.parquet".to_string();
-    let mut w = SegmentWriter::create_scores(&dir.join(&sf), &[], vec![3]).unwrap();
+    let mut w = SegmentWriter::create_scores_tuned(&dir.join(&sf), &[], vec![3], &tuning).unwrap();
     for id in 1..=3 {
         w.push(RunRec {
             id,
@@ -819,6 +882,7 @@ fn aperiodic_library(dir: &Path) -> Library {
             r.verified.date = FIXED.into();
             r.created = FIXED.into();
             r.updated = FIXED.into();
+            golden_versions(&mut r);
             r
         })
         .collect();

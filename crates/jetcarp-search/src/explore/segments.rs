@@ -323,6 +323,9 @@ pub struct Tuning {
     /// Text with many distinct values (rules, seeds) plain rather than in a dictionary: a reader
     /// of a few rows then decodes one small page, not the whole dictionary.
     pub plain_text: bool,
+    /// The JETCARP version a file's `created_by` names (None: this one's). Fixed where the same
+    /// bytes must come from any version (the golden packs' search).
+    pub engine_version: Option<&'static str>,
 }
 
 impl Default for Tuning {
@@ -333,6 +336,7 @@ impl Default for Tuning {
             page_rows: PAGE_ROWS,
             split_floats: true,
             plain_text: true,
+            engine_version: None,
         }
     }
 }
@@ -345,7 +349,10 @@ fn properties(kv: &[(String, String)], t: &Tuning) -> Result<WriterProperties, S
         .set_data_page_row_count_limit(t.page_rows)
         .set_write_batch_size(t.page_rows.clamp(1, 1024))
         .set_statistics_enabled(EnabledStatistics::Page)
-        .set_created_by(format!("JETCARP {}", jetcarp_core::VERSION))
+        .set_created_by(format!(
+            "JETCARP {}",
+            t.engine_version.unwrap_or(jetcarp_core::VERSION)
+        ))
         .set_key_value_metadata(Some(
             kv.iter()
                 .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
@@ -430,6 +437,16 @@ impl SegmentWriter {
         kv: &[(String, String)],
         groups: Vec<usize>,
     ) -> Result<SegmentWriter, String> {
+        Self::create_scores_tuned(path, kv, groups, &Tuning::default())
+    }
+
+    /// [`create_scores`](Self::create_scores) with other settings (compression, the version named).
+    pub fn create_scores_tuned(
+        path: &Path,
+        kv: &[(String, String)],
+        groups: Vec<usize>,
+        t: &Tuning,
+    ) -> Result<SegmentWriter, String> {
         Self::make(
             path,
             kv,
@@ -437,7 +454,7 @@ impl SegmentWriter {
             SCORE_SCHEMA,
             Some(groups),
             true,
-            &Tuning::default(),
+            t,
         )
     }
 

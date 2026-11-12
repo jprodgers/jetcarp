@@ -86,6 +86,9 @@ pub struct Options {
     pub related: Vec<Related>,
     /// The version's time (default: now); fixed for reproducible packs.
     pub created: Option<String>,
+    /// The JETCARP version the manifest's `engine` names (default: this one's); fixed for packs
+    /// that must come out the same from any version (the golden packs).
+    pub engine_version: Option<String>,
     pub selection: Selection,
     /// Records to withdraw: `pattern:<id>`, `ant:<id>`, `quickstart:<id>`, with a reason (a
     /// Quick Start entry by either id; the manifest names its pack id).
@@ -110,6 +113,7 @@ impl Default for Options {
             doi: String::new(),
             related: vec![],
             created: None,
+            engine_version: None,
             selection: Selection::default(),
             retract: vec![],
             merge: vec![],
@@ -1212,7 +1216,13 @@ pub fn publish(
         related: opts.related.clone(),
         parents: out.parents.clone(),
         publisher: me.clone(),
-        engine: engine(),
+        engine: Engine {
+            version: opts
+                .engine_version
+                .clone()
+                .unwrap_or_else(|| jetcarp_core::VERSION.into()),
+            ..engine()
+        },
         tables: tables_out,
         searches,
         retracts,
