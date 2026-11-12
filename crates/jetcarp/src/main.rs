@@ -24,6 +24,7 @@ mod platform;
 mod research;
 mod script_cmd;
 mod search_cmd;
+mod setup_cmd;
 mod wallpaper_cmd;
 
 #[derive(Parser)]
@@ -175,6 +176,11 @@ enum Cmd {
     /// Print the settings, data, and output folders JETCARP uses (environment overrides
     /// included).
     Paths,
+    /// First-run setup: choose a profile (desktop-art, explorer, researcher, everything,
+    /// blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as
+    /// jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where
+    /// things stand.
+    Setup(setup_cmd::SetupArgs),
     /// List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet.
     Isohedral {
         /// Write a contact sheet of all 81 types here instead of listing them.
@@ -224,7 +230,8 @@ enum Cmd {
     #[command(hide = true)]
     Api(api_cmd::ApiArgs),
     /// Quick Start examples: list the built-in ones, check that each one works, or render a
-    /// contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas.
+    /// contact sheet; `publish` an explore job's best runs into the Quick Start as its atlas, or
+    /// `build` some: a search of so many minutes, then its atlas published.
     #[command(args_conflicts_with_subcommands = true)]
     Quickstart {
         #[command(subcommand)]
@@ -318,6 +325,35 @@ enum QuickstartSub {
         /// Catalog: a .sqlite file, or a folder holding library.sqlite.
         #[arg(long)]
         library: Option<PathBuf>,
+    },
+    /// Build Quick Start entries of your own: an explore search of MINUTES in all (on the GPU
+    /// when there is one), then its best runs published into the Quick Start, as one job.
+    /// Ctrl-C stops it; `jetcarp jobs resume JOB` carries it on to its end.
+    Build {
+        /// Minutes to search before publishing.
+        #[arg(long, default_value_t = 10.0)]
+        minutes: f64,
+        /// Only these tilings (keys, separated by commas or spaces; default: every one).
+        #[arg(long)]
+        tilings: Option<String>,
+        /// Only these rule families (default: every one).
+        #[arg(long)]
+        families: Option<String>,
+        /// Run on the CPU only.
+        #[arg(long)]
+        no_gpu: bool,
+        /// Worker threads (default: all cores).
+        #[arg(long)]
+        threads: Option<usize>,
+        /// Run in a process of its own and return at once.
+        #[arg(long)]
+        detach: bool,
+        /// Catalog: a .sqlite file, or a folder holding library.sqlite.
+        #[arg(long)]
+        library: Option<PathBuf>,
+        /// No progress on standard error.
+        #[arg(long)]
+        quiet: bool,
     },
 }
 
@@ -491,6 +527,7 @@ fn run() -> Result<()> {
             show(&system::SystemUninstall::run(&cx, a, &Quiet)?, json)?;
         }
         Cmd::Paths => show(&system::SystemPaths::run(&cx, NoInput {}, &Quiet)?, json)?,
+        Cmd::Setup(a) => setup_cmd::run(a, json)?,
         Cmd::Palettes => show(
             &reference::ReferencePalettes::run(&cx, NoInput {}, &Quiet)?,
             json,
@@ -518,6 +555,38 @@ fn run() -> Result<()> {
                 max_entries,
             };
             show(&quickstart::QuickstartPublish::run(&cx, a, &Quiet)?, json)?;
+        }
+        Cmd::Quickstart {
+            sub:
+                Some(QuickstartSub::Build {
+                    minutes,
+                    tilings,
+                    families,
+                    no_gpu,
+                    threads,
+                    detach,
+                    library,
+                    quiet,
+                }),
+            ..
+        } => {
+            let cx = platform::ctx().with_library(library.map(jetcarp_store::Library::file_for));
+            let a = quickstart::BuildIn {
+                minutes: Some(minutes),
+                search: jetcarp_api::ops::search::ExploreIn {
+                    tilings: tilings.map(serde_json::Value::String),
+                    families: families.map(serde_json::Value::String),
+                    ..Default::default()
+                },
+                gpu: Some(!no_gpu),
+                threads,
+                detach,
+                ..Default::default()
+            };
+            let p = search_cmd::CliProgress::new(quiet || json);
+            let r = quickstart::QuickstartBuild::run(&cx, a, &p);
+            p.finish();
+            show(&r?, json)?;
         }
         Cmd::Quickstart {
             sub: None,
