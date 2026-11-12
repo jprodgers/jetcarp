@@ -140,3 +140,23 @@ fn a_new_canvas_rebuilds_the_world_once_the_size_holds() {
         x.world().is_some_and(|w| w.topo.len() > cells)
     });
 }
+
+#[test]
+fn just_after_a_skip_the_status_is_the_new_items() {
+    let mut st = stage_of(vec![life_item(600.0), life_item(600.0)], no_lookup(), 1 << 30);
+    let mut s = sim();
+    until(&mut st, &mut s, 0.0, |x| x.world().is_some());
+    for k in 1..20 {
+        st.tick(k as f64, &mut s, Duration::from_millis(1));
+    }
+    let before = st.status();
+    assert!(before.generation > 0 && before.cells > 0, "{before:?}");
+    st.skip(1).unwrap();
+    // The old world is still on screen, but the reply to `next` is about the new item.
+    assert!(st.world().is_some());
+    let after = st.status();
+    assert_eq!((after.number, after.generation, after.cells), (2, 0, 0));
+    assert!(after.building && after.caption.is_empty(), "{after:?}");
+    until(&mut st, &mut s, 30.0, |x| x.status().cells > 0);
+    assert_eq!(st.status().number, 2);
+}

@@ -44,9 +44,14 @@ struct Built {
     geometry: Geometry,
     profile: Profile,
     note: Option<String>,
+    /// The rotation's slot it was built for.
+    slot: usize,
 }
 
 struct Show {
+    /// The rotation's slot this world is (until the next one is built, the current slot may be
+    /// another).
+    slot: usize,
     world: World,
     geometry: Arc<Geometry>,
     center: [f64; 2],
@@ -273,6 +278,7 @@ impl Stage {
         }
         let (tx, rx) = channel();
         let id = NEXT_GEOMETRY.fetch_add(1, Ordering::Relaxed);
+        let index = self.player.current_index();
         let spawned = std::thread::Builder::new()
             .name("jetcarp-stage-build".into())
             .spawn(move || {
@@ -283,6 +289,7 @@ impl Stage {
                         geometry,
                         profile,
                         note,
+                        slot: index,
                     }
                 });
                 let _ = tx.send(built);
@@ -302,6 +309,7 @@ impl Stage {
             geometry,
             profile,
             note,
+            slot,
         } = b;
         if let Some(n) = note {
             self.notes.push(n);
@@ -320,6 +328,7 @@ impl Stage {
         self.acc = 0.0;
         self.epoch += 1;
         self.show = Some(Show {
+            slot,
             world,
             geometry: Arc::new(geometry),
             center,
@@ -537,8 +546,14 @@ impl Stage {
         self.show.as_ref().map_or(0.0, |s| now - s.since)
     }
 
+    /// What the stage is doing. Just after a skip the old item's world is still on screen while
+    /// the new one is built: the numbers are then the new item's (nothing yet), not the old one's.
     pub fn status(&self) -> StageStatus {
-        let w = self.world();
+        let w = self
+            .show
+            .as_ref()
+            .filter(|s| s.slot == self.player.current_index())
+            .map(|s| &s.world);
         StageStatus {
             rotation: self.rotation.clone(),
             label: self
@@ -554,7 +569,9 @@ impl Stage {
             building: self.building.is_some() || self.load_pending,
             canvas: self.canvas,
             seconds_left: self.player.seconds_left(self.play_time),
-            caption: self.caption(true),
+            caption: w
+                .map(|w| caption::lines(w, Some(self.place()), true))
+                .unwrap_or_default(),
         }
     }
 }
