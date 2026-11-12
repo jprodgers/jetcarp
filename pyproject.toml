@@ -1,0 +1,59 @@
+# The Python package: JETCARP's program in a wheel, for pip, pipx and uv. There is no Python code;
+# maturin builds the Rust program and installs it on the PATH (`bindings = "bin"`). The release
+# workflow builds the wheels with packaging/build.sh, which first puts the starter pack (and on
+# macOS the screen saver's code) in target/wheel-data, so a wheel installs them as
+# <environment>/share/jetcarp/packs and <environment>/lib/jetcarp, where `jetcarp paths` finds them.
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "jetcarp"
+dynamic = ["version"]
+description = "Cellular automata on almost any tiling of the plane: square, hexagonal, Archimedean, k-uniform, isohedral and aperiodic (Penrose, hat, spectre). An app, a command line, scripting and an MCP server."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Unlicense OR MIT"
+license-files = [
+    "COPYING",
+    "UNLICENSE",
+    "LICENSE-MIT",
+    "THIRD_PARTY_NOTICES.md",
+    "THIRD_PARTY_LICENSES.html",
+]
+authors = [{ name = "Jimmie Rodgers", email = "jimmie@jimmieprodgers.com" }]
+keywords = ["cellular automata", "tilings", "aperiodic", "game of life", "simulation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Life",
+    "Topic :: Artistic Software",
+]
+
+[project.urls]
+Homepage = "https://github.com/jprodgers/jetcarp"
+Documentation = "https://jprodgers.github.io/jetcarp/"
+Repository = "https://github.com/jprodgers/jetcarp"
+Issues = "https://github.com/jprodgers/jetcarp/issues"
+Changelog = "https://jprodgers.github.io/jetcarp/about/changelog.html"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/jetcarp/Cargo.toml"
+# The release build without debug information, stripped (Cargo.toml's `dist` profile).
+profile = "dist"
+locked = true
+# Extra files the wheel installs into the environment; made by packaging/build.sh, absent in a
+# plain `maturin build`.
+data = "target/wheel-data"
