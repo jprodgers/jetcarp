@@ -282,3 +282,46 @@ fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
     .unwrap();
     assert_eq!(saved["screens"][0]["place"], "wallpaper");
 }
+
+/// `jetcarp host start` with its output captured, as `| tee`, `$(...)` and CI steps do: the output
+/// ends when the command does, not when the host it started stops, because the host gets none of
+/// the command's handles.
+#[test]
+fn host_start_can_be_captured_and_returns() {
+    use std::io::Read;
+    let dir = home("start");
+    let command = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+        c.args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        with_env(&mut c, &dir);
+        c
+    };
+    /// Stops the host however the test ends.
+    struct Stop(Command);
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            let _ = self.0.output();
+        }
+    }
+    let mut start = command(&["host", "start", "--headless"]).spawn().unwrap();
+    let _stop = Stop(command(&["host", "stop"]));
+    let (mut out, mut err) = (start.stdout.take().unwrap(), start.stderr.take().unwrap());
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut o, mut e) = (String::new(), String::new());
+        let _ = out.read_to_string(&mut o);
+        let _ = err.read_to_string(&mut e);
+        let _ = tx.send((o, e));
+    });
+    let (o, e) = rx
+        .recv_timeout(Duration::from_secs(60))
+        .expect("the output of `host start` ends with it (the host holds none of it)");
+    assert!(start.wait().unwrap().success(), "{e}");
+    assert!(o.starts_with("running, pid"), "{o}");
+    // And the host is still running.
+    let v = call_in(&dir, &json!({"action": "status"})).unwrap();
+    assert_eq!(v["running"], true);
+}

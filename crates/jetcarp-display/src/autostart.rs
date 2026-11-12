@@ -9,7 +9,7 @@
 //! registry key on Windows. None needs administrator rights.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// A program and its arguments.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,17 +27,39 @@ impl ProgramCommand {
 
     /// The command as one Windows command line (each part quoted when it needs it).
     pub fn command_line(&self) -> String {
-        let quote = |s: &str| {
-            if s.is_empty() || s.contains([' ', '\t', '"']) {
-                format!("\"{}\"", s.replace('"', "\\\""))
-            } else {
-                s.to_string()
-            }
-        };
         let mut parts = vec![format!("\"{}\"", self.program.display())];
-        parts.extend(self.args.iter().map(|a| quote(a)));
+        parts.extend(self.args.iter().map(|a| quote_arg(a)));
         parts.join(" ")
     }
+}
+
+/// One argument of a Windows command line, as programs split it again (`CommandLineToArgvW` and
+/// the C runtime): quoted when it holds a space, a tab or a quote, or is empty; inside quotes a
+/// quote takes a backslash, and so does each backslash before a quote or before the closing one.
+fn quote_arg(s: &str) -> String {
+    if !s.is_empty() && !s.contains([' ', '\t', '"']) {
+        return s.to_string();
+    }
+    let mut out = String::from("\"");
+    let mut backslashes = 0;
+    for c in s.chars() {
+        match c {
+            '\\' => backslashes += 1,
+            '"' => {
+                out.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
+                out.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                out.extend(std::iter::repeat_n('\\', backslashes));
+                out.push(c);
+                backslashes = 0;
+            }
+        }
+    }
+    out.extend(std::iter::repeat_n('\\', backslashes * 2));
+    out.push('"');
+    out
 }
 
 /// The `jetcarp` executable: this program, or the `jetcarp` beside it when this is the Windows
@@ -130,20 +152,130 @@ fn no_console(c: &mut Command) {
     c.creation_flags(CREATE_NO_WINDOW);
 }
 
+/// Starts `path` so it outlives this program, with nothing of this program's: standard input,
+/// output and error are the null device, and no other handle or descriptor goes with it. So
+/// `jetcarp host start | tee log`, `$(...)` and a subprocess capturing the output end when the
+/// command does, not when the host it started stops.
 #[cfg(not(windows))]
-fn no_console(_: &mut Command) {}
-
-/// Starts `path` so it outlives this program.
 pub fn spawn_detached(path: &Path, args: &[&str]) -> Result<(), String> {
-    let mut c = Command::new(path);
-    c.args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    no_console(&mut c);
-    c.spawn()
+    // Every descriptor Rust opens is closed on exec, and these three are replaced.
+    Command::new(path)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .map(|_| ())
         .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Windows: as elsewhere. The standard library's `Command` lets the child inherit every handle
+/// this process may pass on, including a pipe it was given as its own output (Git Bash's `| tee`
+/// waited for the host), so the process is made here, inheriting only the null device given as
+/// its standard handles (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`).
+#[cfg(windows)]
+pub fn spawn_detached(path: &Path, args: &[&str]) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CREATE_NO_WINDOW, CreateProcessW, DeleteProcThreadAttributeList,
+        EXTENDED_STARTUPINFO_PRESENT, InitializeProcThreadAttributeList,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
+        STARTUPINFOEXW, UpdateProcThreadAttribute,
+    };
+    let err = |what: &str| format!("{}: {what}: {}", path.display(), std::io::Error::last_os_error());
+    let wide = |s: &std::ffi::OsStr| -> Vec<u16> { s.encode_wide().chain(Some(0)).collect() };
+    let cmd = ProgramCommand {
+        program: path.to_path_buf(),
+        args: args.iter().map(|a| a.to_string()).collect(),
+    };
+    let app = wide(path.as_os_str());
+    let mut line = wide(std::ffi::OsStr::new(&cmd.command_line()));
+    let sa = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: std::ptr::null_mut(),
+        bInheritHandle: 1,
+    };
+    let nul_name = wide(std::ffi::OsStr::new("NUL"));
+    let nul: HANDLE = unsafe {
+        CreateFileW(
+            nul_name.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &sa,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            std::ptr::null_mut(),
+        )
+    };
+    if nul == INVALID_HANDLE_VALUE {
+        return Err(err("the null device"));
+    }
+    // The attribute list, in memory aligned for the pointers it holds.
+    let mut size = 0usize;
+    unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut size) };
+    let mut buf = vec![0usize; size.div_ceil(std::mem::size_of::<usize>()).max(1)];
+    let list: windows_sys::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST =
+        buf.as_mut_ptr().cast();
+    let result = (|| {
+        if unsafe { InitializeProcThreadAttributeList(list, 1, 0, &mut size) } == 0 {
+            return Err(err("attribute list"));
+        }
+        let handles = [nul];
+        let set = unsafe {
+            UpdateProcThreadAttribute(
+                list,
+                0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                handles.as_ptr().cast(),
+                std::mem::size_of_val(&handles),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        let started = set != 0 && {
+            let mut si = STARTUPINFOEXW::default();
+            si.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+            si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+            si.StartupInfo.hStdInput = nul;
+            si.StartupInfo.hStdOutput = nul;
+            si.StartupInfo.hStdError = nul;
+            si.lpAttributeList = list;
+            let mut pi = PROCESS_INFORMATION::default();
+            let ok = unsafe {
+                CreateProcessW(
+                    app.as_ptr(),
+                    line.as_mut_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    1,
+                    EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    &si.StartupInfo,
+                    &mut pi,
+                )
+            };
+            if ok != 0 {
+                unsafe {
+                    CloseHandle(pi.hThread);
+                    CloseHandle(pi.hProcess);
+                }
+            }
+            ok != 0
+        };
+        let e = (!started).then(|| err("could not start it"));
+        unsafe { DeleteProcThreadAttributeList(list) };
+        e.map_or(Ok(()), Err)
+    })();
+    unsafe { CloseHandle(nul) };
+    result
 }
 
 /// One `Exec` argument of a desktop entry, quoted as the Desktop Entry spec asks: inside quotes
@@ -339,6 +471,12 @@ mod tests {
         );
         c.args.push("a b".into());
         assert!(c.command_line().ends_with(r#" "a b""#));
+        // As `CommandLineToArgvW` reads them back.
+        assert_eq!(quote_arg(""), r#""""#);
+        assert_eq!(quote_arg(r"C:\dir\x"), r"C:\dir\x");
+        assert_eq!(quote_arg(r"a\b c\"), r#""a\b c\\""#);
+        assert_eq!(quote_arg(r#"say "hi""#), r#""say \"hi\"""#);
+        assert_eq!(quote_arg(r#"a\"b"#), r#""a\\\"b""#);
     }
 
     #[test]
