@@ -249,6 +249,7 @@ pub struct ScriptStatus {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct WorldStatus {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     /// Running, empty, frozen, or repeating with a period (checked exactly).
     pub status: String,
@@ -538,6 +539,7 @@ pub struct NewWorldIn {
         serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
         deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
     )]
+    #[schemars(schema_with = "crate::op::uint_opt_schema")]
     pub rng_seed: Option<u64>,
     /// Scene name.
     #[serde(default)]
@@ -783,6 +785,7 @@ pub struct SavedScene {
     pub path: std::path::PathBuf,
     pub bytes: usize,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
 }
@@ -881,6 +884,7 @@ pub struct Drawn {
     /// The field's population after drawing.
     pub population: u64,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
 }
 
@@ -1261,6 +1265,7 @@ pub struct Region {
 pub struct CellsView {
     pub ca: CaBrief,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     /// Non-empty cells in the whole field.
     pub non_empty: usize,
@@ -1684,6 +1689,7 @@ pub struct Activity {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct ReseedReport {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub policies: Vec<PolicyStatus>,
     pub last_activity: Value,
@@ -1989,6 +1995,7 @@ pub struct StepIn {
 pub struct Stepped {
     pub ran: u64,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub seconds: f64,
     /// `cancelled`, or `settled` (stopped early), when it stopped before the count.
@@ -2116,6 +2123,7 @@ pub struct Rendered {
     pub width: u32,
     pub height: u32,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub tiling: String,
     pub cells: usize,

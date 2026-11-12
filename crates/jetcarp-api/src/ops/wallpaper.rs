@@ -92,6 +92,7 @@ pub struct WallpaperOut {
     pub fit: Fit,
     /// The generation and state hash of the world drawn.
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
     /// The paths as the user wrote the output folder (the command line prints these).

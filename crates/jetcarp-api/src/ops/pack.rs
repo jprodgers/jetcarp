@@ -629,6 +629,7 @@ pub struct ImportIn {
         serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
         deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
     )]
+    #[schemars(schema_with = "crate::op::uint_opt_schema")]
     pub seed: Option<u64>,
     /// Most seconds verification may take (default 600).
     #[serde(default)]

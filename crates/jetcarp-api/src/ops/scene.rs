@@ -51,6 +51,7 @@ pub struct SceneSource {
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
 pub struct Recorded {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
 }
@@ -143,6 +144,7 @@ impl Op for SceneSave {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Verified {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
     /// What loading it let pass (palettes this JETCARP does not know).
@@ -255,6 +257,7 @@ pub struct RunSummary {
     pub tiling: String,
     pub cells: usize,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
     pub status: String,

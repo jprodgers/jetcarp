@@ -510,6 +510,7 @@ pub struct TryIn {
         serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
         deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
     )]
+    #[schemars(schema_with = "crate::op::uint_opt_schema")]
     pub rng: Option<u64>,
     /// Picture size in pixels (default 420).
     #[serde(default)]
@@ -1009,6 +1010,7 @@ pub struct ClipsIn {
         serialize_with = "jetcarp_core::json_int::uint::serialize",
         deserialize_with = "jetcarp_core::json_int::uint::deserialize"
     )]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub seed: u64,
     /// These runs instead of a sample.
     #[serde(default)]

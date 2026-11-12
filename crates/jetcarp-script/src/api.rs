@@ -61,11 +61,15 @@ fn map_json(m: &Map) -> R<Value> {
     to_json(&Dynamic::from_map(m.clone()))
 }
 
-/// `--set` values: integers, floats, true/false, else text.
+/// `--set` values: integers, floats, true/false, else text. A whole number beyond a script's
+/// integers (2^63 - 1), such as a random state, stays text, which seeds and states read exactly,
+/// rather than becoming a float that rounds it.
 pub fn param_value(s: &str) -> Value {
     let t = s.trim();
     if let Ok(i) = t.parse::<i64>() {
         json!(i)
+    } else if t.parse::<u64>().is_ok() {
+        json!(t)
     } else if let Ok(f) = t.parse::<f64>() {
         json!(f)
     } else if t == "true" || t == "false" {
@@ -535,7 +539,9 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
     let c = ctx.clone();
     e.register_fn("write_json", move |path: &str, v: Dynamic| -> R<String> {
         let p = c.writable(path).or_err()?;
-        let text = serde_json::to_string_pretty(&to_json(&v)?).map_err(|e| e.to_string())?;
+        // A generation after a jump, or a random state, beyond 2^53 - 1 is a decimal string.
+        let v = jetcarp_core::json_int::safe(to_json(&v)?);
+        let text = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
         out::write_bytes(&p, text.as_bytes()).or_err()?;
         c.files_written
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -585,7 +591,8 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
         std::path::Path::new(a).join(b).display().to_string()
     });
     e.register_fn("to_json", |v: Dynamic| -> R<String> {
-        serde_json::to_string(&to_json(&v)?).map_err(|e| e.to_string().into())
+        serde_json::to_string(&jetcarp_core::json_int::safe(to_json(&v)?))
+            .map_err(|e| e.to_string().into())
     });
     e.register_fn("parse_json", |t: &str| -> R<Dynamic> {
         let v: Value = serde_json::from_str(t).map_err(|e| format!("parse_json: {e}"))?;

@@ -123,7 +123,7 @@ pub fn definitions() -> Vec<Value> {
                 "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Neighbourhood (default touch, or what the notation says)."},
                 "cells": {"type": "integer", "minimum": 100, "maximum": 100000, "description": "About this many cells (default 16000)."},
                 "gens": {"type": "integer", "minimum": 1, "maximum": 8000, "description": "Generations (default 1024)."},
-                "rng": {"type": "integer", "description": "Random seed (default 1)."},
+                "rng": {"type": ["integer", "string"], "description": "Random seed (default 1). Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
                 "px": {"type": "integer", "minimum": 64, "maximum": 800, "description": "Picture size (default 420)."}
             }, "required": ["tiling", "rule"], "additionalProperties": false}),
         ),

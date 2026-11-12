@@ -647,6 +647,7 @@ pub struct CheckIn {
 pub struct HealthOut {
     pub works: bool,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub cells: usize,
     pub population: u64,

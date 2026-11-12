@@ -1139,6 +1139,7 @@ pub struct PastedScene {
     pub hash: String,
     pub png: Option<String>,
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     #[schemars(with = "Value")]
     pub scene: Scene,

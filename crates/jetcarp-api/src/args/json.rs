@@ -18,7 +18,9 @@ pub fn get_str<'a>(v: &'a Value, key: &str) -> Result<Option<&'a str>, String> {
     }
 }
 
-/// A whole number ≥ 0 under `key`: a number (`3`, `3.0`) or text (`"3"`).
+/// A whole number ≥ 0 under `key`: a number (`3`, `3.0`) or text (`"3"`, and a random state
+/// beyond 2^53 as JETCARP writes one, `"17705299566207515059"`). A float beyond 2^53 is refused:
+/// it may be another number rounded.
 pub fn get_u64(v: &Value, key: &str) -> Result<Option<u64>, String> {
     match get(v, key) {
         None => Ok(None),
@@ -26,7 +28,11 @@ pub fn get_u64(v: &Value, key: &str) -> Result<Option<u64>, String> {
             .as_u64()
             .or_else(|| {
                 x.as_f64()
-                    .filter(|f| *f >= 0.0 && f.fract() == 0.0)
+                    .filter(|f| {
+                        *f >= 0.0
+                            && f.fract() == 0.0
+                            && *f <= jetcarp_core::json_int::MAX_SAFE as f64
+                    })
                     .map(|f| f as u64)
             })
             .or_else(|| x.as_str().and_then(|s| s.trim().parse().ok()))

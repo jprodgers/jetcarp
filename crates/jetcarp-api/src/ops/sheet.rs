@@ -239,6 +239,7 @@ pub struct IsohedralIn {
         serialize_with = "jetcarp_core::json_int::uint::serialize",
         deserialize_with = "jetcarp_core::json_int::uint::deserialize"
     )]
+    #[schemars(schema_with = "crate::op::uint_schema")]
     pub seed: u64,
     /// The PNG to write.
     pub png: String,

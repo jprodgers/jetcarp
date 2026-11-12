@@ -240,6 +240,27 @@ pub fn to_value<T: Serialize>(out: &T) -> Value {
     jetcarp_core::json_int::safe(serde_json::to_value(out).unwrap_or(Value::Null))
 }
 
+/// The schema of a `u64` written by [`jetcarp_core::json_int`]: a whole number, or beyond
+/// 2^53 − 1 a string of its decimal digits.
+pub fn uint_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": ["integer", "string"],
+        "minimum": 0,
+        "pattern": "^[0-9]+$",
+        "description": "A whole number; beyond 2^53 - 1 a string of its decimal digits."
+    })
+}
+
+/// [`uint_schema`], or `null`.
+pub fn uint_opt_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": ["integer", "string", "null"],
+        "minimum": 0,
+        "pattern": "^[0-9]+$",
+        "description": "A whole number; beyond 2^53 - 1 a string of its decimal digits."
+    })
+}
+
 /// An output as pretty-printed JSON.
 pub fn to_pretty<T: Serialize>(out: &T) -> String {
     serde_json::to_string_pretty(&to_value(out)).unwrap_or_default()

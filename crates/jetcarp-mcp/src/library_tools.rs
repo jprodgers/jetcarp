@@ -106,7 +106,7 @@ pub fn definitions() -> Vec<Value> {
                 "height": {"type": "integer", "minimum": 16, "maximum": 128, "description": "Grid height (default 48)."},
                 "gens": {"type": "integer", "minimum": 10, "maximum": Limits::INTERACTIVE.max_search_gens, "description": "Generations per soup (default 1000)."},
                 "density": {"type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Soup density (default 0.37)."},
-                "seed": {"type": "integer", "minimum": 0, "description": "Soup s uses RNG state seed + s (default 1)."},
+                "seed": {"type": ["integer", "string"], "minimum": 0, "description": "Soup s uses RNG state seed + s (default 1). Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
                 "store": {"type": "boolean", "description": "Add what is found to the library (default true)."},
             }, "additionalProperties": false}),
         ),

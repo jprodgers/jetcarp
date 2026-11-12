@@ -289,7 +289,10 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
     if resume
         && let Ok(old) = std::fs::read_to_string(&run_json)
         && let Ok(old) = serde_json::from_str::<Value>(&old)
-        && old.get("sweep").is_some_and(|s| s != &settings)
+        // A run.json written before large integers were strings compares as it is written now.
+        && old
+            .get("sweep")
+            .is_some_and(|s| jetcarp_core::json_int::safe(s.clone()) != settings)
     {
         return Err(format!(
             "{} holds a different sweep (its run.json settings differ); use a new folder or resume: false",

@@ -723,7 +723,8 @@ impl Core {
             self.act(&params["arguments"])
         };
         let (text, is_error) = match result {
-            Ok(v) => (v.to_string(), false),
+            // A generation after a jump beyond 2^53 - 1 is a decimal string.
+            Ok(v) => (jetcarp_core::json_int::safe(v).to_string(), false),
             Err(e) => (e, true),
         };
         let reply = id.map(|id| {
