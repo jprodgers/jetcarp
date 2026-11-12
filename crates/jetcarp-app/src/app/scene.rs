@@ -97,7 +97,7 @@ impl JetcarpApp {
         }
     }
 
-    pub(super) fn blank_slate(&mut self) {
+    pub(super) fn empty_world(&mut self) {
         self.t_family = "square".into();
         self.t_boundary = Boundary::Wrap;
         self.t_size = SizeChoice::Fill;
@@ -105,7 +105,7 @@ impl JetcarpApp {
         match World::new(spec, 1) {
             Ok(w) => {
                 self.world = w;
-                self.scene_name = "Blank slate".into();
+                self.scene_name = "Empty world".into();
                 self.scene_desc = "Add a CA from the panel on the left.".into();
                 self.on_new_topology();
                 self.draw_target = None;

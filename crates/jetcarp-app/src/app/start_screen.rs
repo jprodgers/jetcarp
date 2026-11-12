@@ -23,8 +23,8 @@ impl JetcarpApp {
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Quick Start").size(20.0).strong());
-                ui.label("Pick a running example to open it, or start from a");
-                if ui.button(RichText::new("Blank Slate").size(16.0)).clicked() {
+                ui.label("Pick a running example to open it, or start from an");
+                if ui.button(RichText::new("Empty world").size(16.0)).clicked() {
                     blank = true;
                 }
                 ui.add_space(12.0);
@@ -89,7 +89,7 @@ impl JetcarpApp {
             None => {}
         }
         if blank {
-            self.blank_slate();
+            self.empty_world();
         }
     }
 }

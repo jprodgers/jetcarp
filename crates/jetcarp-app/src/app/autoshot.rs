@@ -48,7 +48,7 @@ impl JetcarpApp {
             .unwrap_or(90);
         match std::env::var("JETCARP_SCENE").as_deref() {
             Ok("start") | Err(_) => {}
-            Ok("blank") => self.blank_slate(),
+            Ok("empty" | "blank") => self.empty_world(),
             Ok(name) => {
                 // A bundled scene, a Quick Start id (`rule:B3/S23`), or a file path.
                 let scene = self.menu.scene_of(name).or_else(|| {

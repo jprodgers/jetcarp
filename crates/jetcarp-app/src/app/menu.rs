@@ -130,7 +130,7 @@ impl ToolWin {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Action {
     QuickStart,
-    NewBlank,
+    NewEmpty,
     OpenScene,
     SaveScene,
     ExportPng,
@@ -202,7 +202,7 @@ impl Action {
         use Action::*;
         let mut v = vec![
             QuickStart,
-            NewBlank,
+            NewEmpty,
             OpenScene,
             SaveScene,
             ExportPng,
@@ -251,7 +251,7 @@ impl Action {
         use Action::*;
         match self {
             QuickStart => "Quick Start".into(),
-            NewBlank => "New blank slate".into(),
+            NewEmpty => "New empty world".into(),
             OpenScene => "Open scene…".into(),
             SaveScene => "Save scene…".into(),
             ExportPng => "Export PNG…".into(),
@@ -300,7 +300,7 @@ impl Action {
         use Action::*;
         match self {
             QuickStart => "Back to the Quick Start list",
-            NewBlank => "A square grid with no CAs",
+            NewEmpty => "A square grid with no CAs",
             ExportPng => "Large images are written in strips",
             ExportSheet => "A labelled PNG of the first elementary CA's rule and the ones after it",
             Reset => "Clear and reseed every CA",
@@ -350,7 +350,7 @@ impl Action {
         use Action::*;
         match self {
             QuickStart => ks!(ctrl(Key::H)),
-            NewBlank => ks!(ctrl(Key::N)),
+            NewEmpty => ks!(ctrl(Key::N)),
             OpenScene => ks!(ctrl(Key::O)),
             SaveScene => ks!(ctrl(Key::S)),
             ExportPng => ks!(ctrl(Key::E)),
@@ -405,7 +405,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
         "File",
         &[
             A(A_::QuickStart),
-            A(A_::NewBlank),
+            A(A_::NewEmpty),
             Sep,
             A(A_::OpenScene),
             A(A_::SaveScene),
@@ -720,7 +720,7 @@ impl JetcarpApp {
                 self.screen = Screen::Start;
                 self.refresh_finds();
             }
-            NewBlank => self.blank_slate(),
+            NewEmpty => self.empty_world(),
             OpenScene => self.open_scene(),
             SaveScene => self.save_scene(),
             ExportPng => self.export_png(),
