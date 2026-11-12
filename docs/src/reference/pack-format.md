@@ -53,12 +53,25 @@ A pack makes four promises:
     are not that form, and SHOULD refuse a ref or key statement that is not; JETCARP refuses all
     four.
   - MUST NOT hold a number written with a fraction or an exponent (`1.0` and `1e5` included), or
-    an integer beyond ±2^53 (that bound included). Decimal quantities are strings, written as
-    ECMAScript writes the number (`"0.35"`, `"2"`).
+    an integer outside ±(2^53 − 1). Decimal quantities are strings, written as ECMAScript writes
+    the number (`"0.35"`, `"2"`), and so is a larger integer (below).
   - nest arrays and objects at most 32 deep, and are at most 16 MiB.
   - A reader MUST ignore members it does not know (a later minor version may add them).
 - **JSON in table cells** (scenes, ranges, render settings and the like) is RFC 8785 canonical
   JSON too, but it MAY hold non-integer numbers: a cell is data, not a pack document.
+- **Large integers.** An integer outside ±(2^53 − 1) is a string of its decimal digits, in pack
+  documents and in table cells alike, as I-JSON ([RFC 7493](https://www.rfc-editor.org/rfc/rfc7493#section-2.2))
+  recommends: a scene's `"rng_state":"17705299566207515059"`, a find's soup state in
+  `provenance.run`, an ant soup's `state`. A double, which is what RFC 8785 writes a number as and
+  what most readers read one as, holds an integer exactly only within that bound; past it, two
+  random states can share one double, and a scene read back would start from another soup. A
+  writer MUST NOT write such an integer as a number: it refuses it (*JETCARP's RFC 8785 writer
+  refuses it, naming it, rather than rounding it*). A reader reads a member it knows to be an
+  integer from either form, a number (as a small one is, and as scenes written before this rule
+  have every one) or a string of decimal digits, and MUST NOT read it through a double. A pack
+  document with a number beyond the bound is refused (above); in a cell a reader MAY refuse one,
+  since no conforming writer writes it (the independent reader in `tools/jetcarp_pack` does).
+  Integer columns in Parquet are not JSON: they hold their values exactly.
 - **Times** are RFC 3339 strings in UTC with `Z` and whole seconds (`2026-11-11T09:02:38Z`):
   every time in a pack, in documents and in table columns alike (`raters.consent_date` too; a
   calendar date alone is written as its midnight, `2026-11-01T00:00:00Z`). Times are
@@ -632,7 +645,7 @@ interest score, which it computes again.*
 | `rule: string`, `kind: string` | the ant or turmite rule notation; `string` (a turn string) or `table` |
 | `family: string`, `semantics: string` | `ant` or `turmite`, and its version |
 | `states: int32`, `colors: int32` | |
-| `start: string` | the start, as in the identity (JSON) |
+| `start: string` | the start, as in the identity (RFC 8785 JSON; a soup's `state` beyond 2^53 − 1 a string) |
 | `outcome: string` | `highway`, `periodic`, `symmetric`, `bounded`, `chaotic` |
 | `period: int64?`, `dx: int32?`, `dy: int32?`, `onset: int64?`, `speed: float64?` | highways and periodic runs: the period in steps, the displacement per period in lattice steps, the first step of the periodic tail, and (highways) the distance per step in cell sizes (world units over the square root of a tile's mean area, to 6 decimals) |
 | `steps: int64`, `cells: int64` | how many steps it was run, and its coloured (non-zero) cells at the end |
@@ -789,9 +802,10 @@ in the manifest maps a search's uuid to its **search index**:
 - `scores`: each rescore, with the sidecar of each segment it changed. A run's score is the one in
   its segment's newest sidecar, or the segment's own.
 - `spec` and `remeasure`: the search's settings and import record, copied from its folder's manifest
-  with every local path stripped and every non-integer number written as a string (as ECMAScript
-  writes it). A reader that needs the numbers reads such a string back as a number: JETCARP does,
-  for the settings it knows to be numbers and for the record's seconds.
+  with every local path stripped, every non-integer number written as a string (as ECMAScript
+  writes it) and every integer beyond ±(2^53 − 1) as its decimal digits (a `seed`, say). A reader
+  that needs the numbers reads such a string back as a number: JETCARP does, for the settings it
+  knows to be numbers and for the record's seconds.
 - **What a search carries.** Its runs (every sealed segment and score sidecar), its settings and its
   record, and nothing of its working database: everything a stopped search needs is rebuilt from
   the runs (its archive of elites, offered in id order with each run's newest score; coverage and
@@ -951,6 +965,7 @@ packs; none is ever deleted or rewritten.
 | `aperiodic` | patterns on a Penrose kite-and-dart patch, with the reference patch | `sha256:96d960bec9f37024594372e1e3370630eb27ba4329ade27ca13fe2b4977b12e4` |
 | `ants` | two ant runs on the square grid: Langton's ant (a highway, named) and LLRR (symmetric growth) | `sha256:c5f2ab90b2bb2f269a62db194cc951eb77f0753b18e4658d93b0749ad53b317d` |
 | `export` | `minimal` as an export | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
+| `numbers` | random states beyond 2^53, as decimal strings: a Quick Start scene's `rng_state`, a block's find in `provenance.run`, and Langton's ant from a soup's `state` | `sha256:74f36181bc2ec72a7a9d1c45164d98cfec1e964f224ad704abe9f635cc243e38` |
 
 Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
 fixed, including the times a search stamps on what it finds (a find's date and its verification's),
@@ -1075,7 +1090,7 @@ the rules above.
 | A site's anchor | `anchor`, `anchor_shape`, `anchor_point` in `site`; `patch` and `anchor` may differ between packs |
 | A find's run | `provenance.run` on row 0; `machine` and `pack` columns |
 | The publisher's own ratings, groups, consent | the rater book (`raters.json`); a group needs every member's consent; rater ids `rater-` and 16 hex |
-| Integers ±2^53, numbers with fractions | the bound included; any fraction or exponent refused |
+| Integers ±2^53, numbers with fractions | within ±(2^53 − 1), that bound included; a larger integer is a string of its decimal digits, in documents and cells; any fraction or exponent refused in documents |
 | Canonical refs and keys | MUST be canonical; JETCARP refuses one that is not |
 | A signature's final newline | written as `ssh-keygen` writes it; accepted without |
 | Unknown tables | ignored; `engine.schemes.tables` informational |

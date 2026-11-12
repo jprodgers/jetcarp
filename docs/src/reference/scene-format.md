@@ -75,7 +75,7 @@ replays it and answers `ok: generation 100 hash 1adf6e3234b7f199`.
 | `format` | number | `1` | The scene format version (see [Versions](#versions)) |
 | `name`, `description` | text | empty | Shown in the app and in Quick Start |
 | `tiling` | object | required | The tiling (see [below](#tiling-tiling)) |
-| `rng_state` | number | `0` | The starting state of the scene's random-number generator (SplitMix64, written out in JETCARP's own code so that it never changes with a dependency) |
+| `rng_state` | number, or text | `0` | The starting state of the scene's random-number generator (SplitMix64, written out in JETCARP's own code so that it never changes with a dependency): a whole number from 0 to 2^64 − 1, as text beyond 2^53 − 1 (see [Large numbers](#large-numbers)) |
 | `tables` | list | none | [Rule tables](../automata/rule-tables.md#jetcarps-own-format) that the scene's `Table <name>` rules use, beyond the built-in one |
 | `cas` | list | none | The automata, in the order they run (see [below](#automata-cas)) |
 | `palettes` | list | none | Palettes of the scene's own: `{"name": …, "stops": [[r, g, b], …], "background": [r, g, b], "stage": [r, g, b]}`, the last two optional (see [Palettes](palettes.md#choosing-a-palette)) |
@@ -86,6 +86,28 @@ replays it and answers `ok: generation 100 hash 1adf6e3234b7f199`.
 | `record` | object | none | The generation and hash when saved (see [below](#record-and-verification)) |
 
 Fields that JETCARP does not know are ignored when a scene is read.
+
+### Large numbers
+
+Most programs read a JSON number as a double (JavaScript does, and so does the canonical JSON that
+packs use), and a double holds every whole number exactly only up to 2^53. So an integer outside
+±(2^53 − 1) is written as a string of its decimal digits, as I-JSON
+([RFC 7493](https://www.rfc-editor.org/rfc/rfc7493#section-2.2)) recommends, and a smaller one as a
+number:
+
+```json
+"rng_state": "17705299566207515059"
+"rng_state": 30
+```
+
+A random state can be anything up to 2^64 − 1, so most of the states JETCARP makes itself (an
+atlas entry's, a search's soups) are written as text. JETCARP reads either form wherever the scene
+holds a whole number: `rng_state`, the `state` of `set_rng_state`, the `gens` of `step` and `jump`
+(a jump can be 2^60 generations), the record's `generation`, a pile seed's `grains`, a sandpile's
+`add_random` count, and the generation counts of scripts and reseed policies. Scenes written before
+this rule, with every number a number, read as they always have, and either form gives the same
+world and the same state hash. The same rule holds for every JSON file JETCARP writes, and for the
+answers of its API and MCP server.
 
 ## Tiling (`tiling`)
 

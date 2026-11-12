@@ -66,7 +66,9 @@ phases=<phase 0>;<phase 1>;...
   - Every member's value is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) canonical JSON:
     object keys sorted by their UTF-16 code units at every depth, no whitespace, strings escaped as
     RFC 8785 says, and numbers as ECMAScript writes them (`1`, not `1.0`; `0.000001` but `1e-7`;
-    `1e+21`; minus zero as `0`).
+    `1e+21`; minus zero as `0`). An integer outside ±(2^53 − 1), which a double cannot hold and
+    RFC 8785 cannot write, is a string of its decimal digits, as in all of JETCARP's JSON
+    ([Scene format](scene-format.md#large-numbers)); no tiling's parameters hold one.
   - Tilings at their default shapes have no numbers in their parameters, so the rule for numbers
     never changes their keys; a reshaped tiling's numbers get their one spelling, for example
     `{"family":"cairo","params":{"a":[1e-7,0.000001],"b":1},"boundary":"dead"}`.
@@ -178,8 +180,12 @@ the other). An id names an evolution on its tiles.
 jetcarp-ant-v1
 rule=<rule notation, such as "Ant RL" or "Turmite 1R1,1L0/1R1,0N0">
 tiling=<tiling key>
-start=<the start as JSON: "empty", or the start cells>
+start=<the start as RFC 8785 JSON: "empty", or the soup it started from>
 ```
+
+A soup start is `{"soup":{"density":0.5,"h":8,"state":3,"w":8}}`: its size in unit cells, its
+density and its random state, which is a string of decimal digits beyond 2^53 − 1
+(`"state":"17705299566207515059"`), as a soup's state from a search usually is.
 
 An ant and its mirror image (`RL` and `LR`) are two records, as the searches store them.
 
