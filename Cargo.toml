@@ -17,7 +17,8 @@ keywords = ["cellular-automata", "tilings", "aperiodic", "game-of-life", "simula
 categories = ["science", "simulation", "mathematics"]
 # Every crate but jetcarp-saver goes to crates.io, together and in dependency order, from the
 # release workflow's crates.io job, which runs only when switched on (`cargo publish --workspace`).
-publish = true
+# Naming the registry also tells cargo-about (packaging/about.toml) that these are JETCARP's own.
+publish = ["crates-io"]
 
 # The workspace's own crates carry their exact version, which crates.io needs, so a published
 # jetcarp always builds with the crates it was released with.
