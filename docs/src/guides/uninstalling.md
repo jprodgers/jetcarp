@@ -16,10 +16,13 @@ Would undo (run again with --yes):
   stop the host starting at login
 
 Kept the data folder /home/ada/.local/share/jetcarp (2.1 GB); add --data to delete it.
+Kept the settings folder /home/ada/.config/jetcarp; add --settings to delete it.
 Your pictures and exports in /home/ada/Pictures/JETCARP are never deleted.
 
 To remove the program itself, use what installed it: the installer again with `--uninstall`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo uninstall jetcarp`, or delete its folder.
 ```
+
+(On Windows the installer's option is `-Uninstall`, and the last line says so.)
 
 `jetcarp uninstall --yes` does it, and reports each step as *done* or *FAILED* with the reason. The
 steps it may list are:

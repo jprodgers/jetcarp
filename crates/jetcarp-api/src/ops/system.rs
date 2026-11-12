@@ -358,6 +358,9 @@ pub struct UninstallReport {
     pub steps: Vec<UndoResult>,
     /// The data folder, when it was kept.
     pub kept_data: Option<KeptFolder>,
+    /// The settings folder, when it was kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kept_settings: Option<PathBuf>,
     /// The output folder (never deleted).
     pub output: PathBuf,
 }
@@ -399,16 +402,30 @@ impl Report for UninstallReport {
                 human_bytes(k.bytes)
             );
         }
+        if let Some(k) = &self.kept_settings {
+            let _ = writeln!(
+                s,
+                "{}Kept the settings folder {}; add --settings to delete it.",
+                if self.kept_data.is_some() { "" } else { "\n" },
+                k.display()
+            );
+        }
         let _ = writeln!(
             s,
             "Your pictures and exports in {} are never deleted.",
             self.output.display()
         );
-        s.push_str(
+        let _ = writeln!(
+            s,
             "\nTo remove the program itself, use what installed it: the installer again with \
-             `--uninstall`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip \
-             uninstall jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo \
-             uninstall jetcarp`, or delete its folder.\n",
+             `{}`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall \
+             jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo uninstall \
+             jetcarp`, or delete its folder.",
+            if cfg!(windows) {
+                "-Uninstall"
+            } else {
+                "--uninstall"
+            }
         );
         if self.done
             && self
@@ -595,10 +612,12 @@ impl Op for SystemUninstall {
             bytes: folder_size(&data),
             path: data,
         });
+        let kept_settings = paths.settings.clone().filter(|c| !a.settings && c.exists());
         Ok(UninstallReport {
             done: a.yes,
             steps,
             kept_data,
+            kept_settings,
             output: paths.output,
         })
     }
