@@ -653,9 +653,9 @@ pub(crate) fn sandpile_pile(c: &Arc<Ctx>, m: &Map, parent: Option<&std::path::Pa
     }
     if out.status != "done" {
         return Err(e(format!(
-            "sandpile_pile stopped in step {}; resume with folder: \"{}\"",
+            "sandpile_pile stopped in step {}; resume with folder: {}",
             p.step + 1,
-            p.folder
+            serde_json::to_string(&p.folder).unwrap_or_default()
         )));
     }
     let dir = std::path::PathBuf::from(&p.folder);

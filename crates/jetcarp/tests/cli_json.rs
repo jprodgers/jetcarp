@@ -410,7 +410,8 @@ fn search_and_jobs_commands_as_json() {
         "--json",
     ]);
     assert_eq!(c["result"]["rules"].as_array().unwrap().len(), 2);
-    assert_eq!(c["files"][0], csv.to_str().unwrap());
+    // The program prints the path normalised (on Windows, with `\` throughout).
+    assert_eq!(std::path::Path::new(c["files"][0].as_str().unwrap()), csv);
     let k = json_of(&[
         "search",
         "collide",

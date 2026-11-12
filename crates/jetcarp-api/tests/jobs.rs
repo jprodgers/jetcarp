@@ -392,7 +392,7 @@ fn ants_piles_evolve_searches_and_movers_run_as_jobs() {
     assert_eq!(p["status"], "done", "{p}");
     assert_eq!(p["result"]["grains"], 2000);
     let folder = p["progress"]["folder"].as_str().unwrap().to_string();
-    assert!(folder.starts_with(&dir.join("out/piles").display().to_string()));
+    assert!(std::path::Path::new(&folder).starts_with(dir.join("out").join("piles")));
     assert!(std::path::Path::new(&folder).join("pile.png").is_file());
     let again = start(
         &cx,

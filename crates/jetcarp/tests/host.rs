@@ -249,7 +249,8 @@ fn each_screen_runs_its_own_rotation_and_moves_alone() {
 fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
     let h = Host::start("hold", Some("Wolfram series"));
     let v = h.wait(|v| v["running"] == true, "the host");
-    assert_eq!(v["extension"], false);
+    // Windows and macOS need no helper to show a wallpaper, so there it counts as present.
+    assert_eq!(v["extension"], cfg!(any(windows, target_os = "macos")));
     assert_eq!(v["wallpaper"], false);
 
     // A heartbeat says nothing need be drawn: paused, but not by the user.

@@ -711,8 +711,8 @@ fn scripts_promote_sweep_runs() {
     o.library = Some(root.join("lib"));
     let bad = run(
         &format!(
-            "library().promote_run(\"{}\", \"W99\");",
-            folder(&s).display()
+            "library().promote_run({:?}, \"W99\");",
+            folder(&s).display().to_string()
         ),
         o,
     );

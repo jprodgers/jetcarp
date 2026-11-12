@@ -524,10 +524,11 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
     ctx.record_sweep(summary.clone());
     if cancelled {
         return Err(format!(
-            "stopped after {} of {} runs; run again with folder: \"{}\" to resume",
+            "stopped after {} of {} runs; run again with folder: {} to resume",
             all.len(),
             plan.items.len(),
-            folder.display()
+            // Quoted and escaped as a script reads it (backslashes in Windows paths).
+            serde_json::to_string(&folder.display().to_string()).unwrap_or_default()
         ));
     }
     if let Some(e) = failed {

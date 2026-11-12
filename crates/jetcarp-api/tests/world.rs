@@ -579,10 +579,10 @@ fn reseed_render_save_and_open() {
     .unwrap();
     assert_eq!(&pic.png[..8], b"\x89PNG\r\n\x1a\n");
     assert!(png.is_file());
-    assert!(
-        pic.text()
-            .ends_with(&format!(" Saved to {}.", png.display()))
-    );
+    assert!(pic.text().ends_with(&format!(
+        " Saved to {}.",
+        jetcarp_api::out::absolute(&png).display()
+    )));
     fails(
         WorldRender::run(
             &cx,

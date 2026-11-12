@@ -931,13 +931,15 @@ impl Op for JobsRemove {
         let row = lib.job(a.job).map_err(catalog_err)?;
         let s = dashboard::summaries(std::slice::from_ref(&row), dashboard::now_seconds());
         let stale = s.first().is_some_and(|s| s.stale);
-        if cx.registry().is_running(&lib, a.job) || (row.status == JobStatus::Running && !stale) {
+        if row.status == JobStatus::Running && !stale {
             return Err(ApiError::conflict(format!(
                 "{} {} is running; stop it first (jobs.stop)",
                 noun(&row.kind),
                 a.job
             )));
         }
+        // A job stopped in this process may still be writing its last checkpoint (its row
+        // already says paused): wait for it rather than refuse.
         let _ = cx.registry().wait(&lib, a.job);
         let folder = jobs::kind(&row.kind)
             .work_dir(&lib, &row)

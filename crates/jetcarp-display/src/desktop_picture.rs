@@ -615,6 +615,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_files_each_system_shows_are_read_from_its_description() {
         // GNOME, as `gsettings get` prints the keys; the dark picture is the same file.
         let gnome = serde_json::json!({
@@ -634,11 +635,20 @@ mod tests {
             files_named(&mac),
             [PathBuf::from("/Users/a/Pictures/x.heic")]
         );
-        // Windows: one path, or an empty one for a plain colour. (On Linux a Windows path is
-        // not absolute, so only the empty case is checked here.)
+        // Windows: one path, or an empty one for a plain colour. (On Unix a Windows path is
+        // not absolute, so only the empty case is checked here; Windows has its own test.)
         assert!(files_named(&Value::String(String::new())).is_empty());
         assert!(files_named(&Value::Null).is_empty());
         assert_eq!(unescape("%2Fa%zz%4"), "/a%zz%4");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_file_windows_shows_is_read_from_its_description() {
+        let p = r"C:\Users\a b\AppData\Roaming\jetcarp\desktop-pictures\still-1.png";
+        assert_eq!(files_named(&Value::String(p.into())), [PathBuf::from(p)]);
+        assert!(files_named(&Value::String(String::new())).is_empty());
+        assert!(files_named(&Value::Null).is_empty());
     }
 
     #[test]

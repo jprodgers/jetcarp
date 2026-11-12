@@ -88,7 +88,7 @@ pub struct Guard {
 impl Guard {
     pub fn allows(&self, p: &Path) -> bool {
         let p = absolute(p);
-        self.roots.iter().any(|r| p.starts_with(r))
+        self.roots.iter().any(|r| p.starts_with(absolute(r)))
     }
     /// Resolve `path` (relative paths are relative to `base`) and check it may be written.
     /// Creates the parent folder.

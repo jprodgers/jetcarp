@@ -449,14 +449,21 @@ impl Core {
         built
     }
 
-    /// Asked to quit, and every answer (including the one to "quit") has gone back.
+    /// Asked to quit, every answer (including the one to "quit") has gone back, and the callers
+    /// have hung up (or `QUIT_GRACE` has passed). Waiting for the callers to close first matters
+    /// on Windows: a process that exits with a connection still open resets it, and the caller
+    /// can lose an answer it has not read yet.
     pub fn finished(&mut self) -> bool {
         if !self.quit {
             return false;
         }
         let now = self.now();
         let since = *self.quit_at.get_or_insert(now);
-        !self.listener.as_ref().is_some_and(Listener::busy) || now - since >= QUIT_GRACE
+        let settled = self
+            .listener
+            .as_ref()
+            .is_none_or(|l| !l.busy() && l.connection_count() == 0);
+        settled || now - since >= QUIT_GRACE
     }
 
     pub fn frame_time(&self) -> Duration {
