@@ -143,7 +143,9 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
                 eprintln!(
                     "(Setup last ran on {} with {}.)\n",
                     r.date.get(..10).unwrap_or(&r.date),
-                    r.profile
+                    Profile::parse(&r.profile)
+                        .map(|p| p.title())
+                        .unwrap_or(&r.profile)
                 );
             }
             ask_profile(&st)?

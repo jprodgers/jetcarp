@@ -1012,7 +1012,7 @@ impl Report for SetupStatus {
             (Some(r), p) => format!(
                 "setup: {} on {} (JETCARP {})\n",
                 p.map(Profile::title).unwrap_or(r.profile.as_str()),
-                r.date,
+                when(&r.date),
                 r.jetcarp
             ),
             (None, _) => {
@@ -1104,6 +1104,16 @@ impl Report for SetupStatus {
             );
         }
         s
+    }
+}
+
+/// `2026-11-12T07:27:09Z` as `2026-11-12 07:27 UTC` (other forms as they are).
+fn when(t: &str) -> String {
+    match (t.get(..10), t.get(11..16)) {
+        (Some(d), Some(hm)) if t.ends_with('Z') && t.as_bytes().get(10) == Some(&b'T') => {
+            format!("{d} {hm} UTC")
+        }
+        _ => t.to_string(),
     }
 }
 
