@@ -54,7 +54,7 @@ where
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MediaRenderIn {
-    /// A catalog pattern: id, unique id prefix, or name.
+    /// A library pattern: id, unique id prefix, or name.
     #[serde(default)]
     pub pattern: Option<String>,
     /// A Quick Start entry: one of the catalog's (`find:...`, its media stored in the catalog),

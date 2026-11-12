@@ -177,20 +177,47 @@ fn tools_list_is_well_formed_and_from_the_operations() {
             );
         }
     }
+    // Operation names become the tools that call them.
+    for t in list {
+        let s = t.to_string();
+        for o in jetcarp_api::ops::OPS {
+            let name = o.name();
+            if let Some(i) = s.find(name) {
+                // `library.sqlite` is a file, not an operation.
+                let after = s[i + name.len()..].chars().next().unwrap_or(' ');
+                assert!(
+                    after.is_alphanumeric() || after == '_',
+                    "{} names the operation {name}: ...{}...",
+                    t["name"],
+                    &s[i.saturating_sub(60)..(i + 60).min(s.len())]
+                );
+            }
+        }
+    }
     // The schemas are the operations' own: a field documented on an operation's input shows
-    // up with the same words.
+    // up with the same words (operation names in them become these tools' names).
     let by = |n: &str| list.iter().find(|t| t["name"] == n).unwrap().clone();
-    let draw = jetcarp_api::op::input_schema::<jetcarp_api::ops::world::DrawIn>();
+    let op = |mut v: Value| {
+        jetcarp_mcp::schema::mcp_words(&mut v);
+        v
+    };
+    let draw = op(jetcarp_api::op::input_schema::<
+        jetcarp_api::ops::world::DrawIn,
+    >());
     assert_eq!(
         by("world_edit")["inputSchema"]["properties"]["cells"]["properties"]["rle"],
         draw["properties"]["rle"]
     );
-    let hunt = jetcarp_api::op::input_schema::<jetcarp_api::ops::search::HuntIn>();
+    let hunt = op(jetcarp_api::op::input_schema::<
+        jetcarp_api::ops::search::HuntIn,
+    >());
     assert_eq!(
         by("search_start")["inputSchema"]["properties"]["hunt"]["properties"],
         hunt["properties"]
     );
-    let new = jetcarp_api::op::input_schema::<jetcarp_api::ops::world::NewWorldIn>();
+    let new = op(jetcarp_api::op::input_schema::<
+        jetcarp_api::ops::world::NewWorldIn,
+    >());
     for (k, v) in new["properties"].as_object().unwrap() {
         assert_eq!(&by("world_new")["inputSchema"]["properties"][k], v, "{k}");
     }

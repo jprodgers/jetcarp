@@ -134,11 +134,13 @@ pub(crate) struct Tool {
 
 impl Tool {
     fn definition(&self) -> Value {
+        let mut schema = (self.schema)();
+        schema::mcp_words(&mut schema);
         json!({
             "name": self.name,
             "title": self.title,
             "description": (self.description)(),
-            "inputSchema": (self.schema)(),
+            "inputSchema": schema,
             "annotations": {
                 "title": self.title,
                 "readOnlyHint": self.read_only,

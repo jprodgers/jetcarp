@@ -204,6 +204,48 @@ pub fn pick(args: &Value, keys: &[&str]) -> Value {
     Value::Object(o)
 }
 
+/// Operation names in the operations' own descriptions, and what a client of these tools calls
+/// instead.
+const OP_WORDS: &[(&str, &str)] = &[
+    ("world.status", "world_status"),
+    ("reference.tilings", "reference {\"what\": \"tilings\"}"),
+    ("reference.palettes", "reference {\"what\": \"palettes\"}"),
+    ("reference.seeds", "reference {\"what\": \"seeds\"}"),
+    ("reference.rules", "reference {\"what\": \"rules\"}"),
+    ("library.query", "library_query"),
+    ("jobs.list", "job_status"),
+    ("jobs.status", "job_status"),
+    ("jobs.stop", "job_stop"),
+    ("jobs.resume", "search_start {\"resume\": job}"),
+    ("search.start", "search_start"),
+    ("pack.publish", "pack publish"),
+    (
+        ", which `quickstart.check` lists",
+        "; give builtin for those",
+    ),
+];
+
+/// Every description in `v` in these tools' words: operation names become the tools that call
+/// them (`world.status` is `world_status` here).
+pub fn mcp_words(v: &mut Value) {
+    match v {
+        Value::Object(o) => {
+            if let Some(Value::String(d)) = o.get_mut("description") {
+                for (op, tool) in OP_WORDS.iter().rev() {
+                    if d.contains(op) {
+                        *d = d.replace(op, tool);
+                    }
+                }
+            }
+            for (_, x) in o.iter_mut() {
+                mcp_words(x);
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(mcp_words),
+        _ => {}
+    }
+}
+
 /// Refuse arguments the tool's schema does not list, naming the ones it does.
 pub fn check_known(tool: &str, schema: &Value, args: &Value) -> Result<(), String> {
     let p = props(schema);

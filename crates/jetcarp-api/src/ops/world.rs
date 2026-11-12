@@ -1128,7 +1128,7 @@ impl WorldOp for WorldDraw {
     }
 }
 
-/// A catalog pattern to paste.
+/// A library pattern to paste, and where.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PasteIn {
