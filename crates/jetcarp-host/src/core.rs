@@ -113,11 +113,33 @@ pub struct Core {
     extension_seen: Option<f64>,
     /// Names of the monitors, in the OS's order.
     pub monitors: Vec<String>,
+    /// Their bounds, in physical pixels of the desktop (empty when headless).
+    pub monitor_rects: Vec<jetcarp_display::workarea::Rect>,
     /// Set when the screens were rebuilt, so surfaces match them again.
     pub screens_changed: bool,
     /// Asked to quit; the host ends once [`Core::finished`] says so.
     pub quit: bool,
     quit_at: Option<f64>,
+}
+
+/// The wallpaper screen monitor `i` of `count` showed: the one placed on it, else one across every
+/// monitor, else (on the primary) one whose monitor has gone, as the live wallpaper does.
+fn still_screen<'a>(
+    walls: &[&'a Screen],
+    i: usize,
+    count: usize,
+    primary: usize,
+) -> Option<&'a Screen> {
+    walls
+        .iter()
+        .find(|s| s.monitor == Some(i))
+        .or_else(|| walls.iter().find(|s| s.monitor.is_none()))
+        .or_else(|| {
+            (i == primary)
+                .then(|| walls.iter().find(|s| s.monitor.is_some_and(|m| m >= count)))
+                .flatten()
+        })
+        .copied()
 }
 
 /// The start of a wallpaper window's title; GNOME's extension looks for it.
@@ -217,6 +239,7 @@ impl Core {
             desktop_layout: None,
             extension_seen: None,
             monitors: vec![],
+            monitor_rects: vec![],
             screens_changed: false,
             quit: false,
             quit_at: None,
@@ -628,20 +651,48 @@ impl Core {
         jetcarp_display::desktop_picture::wanted(&self.settings)
     }
 
-    /// Leaves a still of the first wallpaper screen's scene as the desktop picture.
-    pub fn leave_still(&mut self) -> Result<std::path::PathBuf, String> {
-        let screen = self
+    /// Leaves a still of what each monitor showed as its desktop picture (where the system has
+    /// one picture for every monitor, the primary monitor's), or of the first wallpaper screen's
+    /// scene when the monitors are not known.
+    pub fn leave_still(&mut self) -> Result<Vec<std::path::PathBuf>, String> {
+        use jetcarp_display::desktop_picture::{self, Still};
+        let none = "no scene to leave on the desktop";
+        let walls: Vec<&Screen> = self
             .screens
             .iter()
-            .filter(|s| s.place == Place::Wallpaper)
-            .find(|s| s.stage.world().is_some())
-            .ok_or("no scene to leave on the desktop")?;
-        let image = screen
-            .stage
-            .still()
-            .ok_or("no scene to leave on the desktop")?;
-        let png = jetcarp_core::media::encode::png(&image)?;
-        jetcarp_display::desktop_picture::show(&png)
+            .filter(|s| s.place == Place::Wallpaper && s.stage.world().is_some())
+            .collect();
+        let first = walls.first().ok_or(none)?;
+        let rects = &self.monitor_rects;
+        // The primary monitor sits at 0, 0.
+        let primary = rects.iter().position(|r| (r.x, r.y) == (0, 0)).unwrap_or(0);
+        let mut stills = vec![];
+        for (i, &r) in rects.iter().enumerate() {
+            let Some(s) = still_screen(&walls, i, rects.len(), primary) else {
+                continue;
+            };
+            let Some(image) = s.stage.still_at([r.w, r.h]) else {
+                continue;
+            };
+            let still = Still {
+                monitor: Some(r),
+                png: jetcarp_core::media::encode::png(&image)?,
+            };
+            // The primary monitor's first, for a system with one picture.
+            if i == primary {
+                stills.insert(0, still);
+            } else {
+                stills.push(still);
+            }
+        }
+        if stills.is_empty() {
+            let image = first.stage.still().ok_or(none)?;
+            stills.push(Still {
+                monitor: None,
+                png: jetcarp_core::media::encode::png(&image)?,
+            });
+        }
+        desktop_picture::show_each(&stills)
     }
 
     /// Puts the user's desktop picture back once no still is wanted.
@@ -660,7 +711,7 @@ impl Core {
         }
     }
 
-    /// While the live wallpaper can't be shown, keeps a still of each new item on the desktop.
+    /// While the live wallpaper can't be shown, keeps stills of each new item on the desktop.
     fn refresh_still(&mut self) {
         if !self.is_host || !self.wallpaper_failing || !self.wants_still() {
             self.still_for = None;

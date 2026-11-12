@@ -488,20 +488,27 @@ impl Stage {
         Some(views.draw(&s.world, &s.geometry, self.epoch, req).0)
     }
 
-    /// The colour behind the grid.
     /// The current world as the canvas shows it, drawn on the CPU: for a still desktop picture.
     pub fn still(&self) -> Option<jetcarp_core::render::Image> {
-        let s = self.show.as_ref()?;
         let [w, h] = self.canvas;
+        self.still_at([w as u32, h as u32])
+    }
+
+    /// The same, `size` pixels around the canvas's middle: what a monitor of that size shows (a
+    /// monitor smaller than the canvas shows its middle).
+    pub fn still_at(&self, size: [u32; 2]) -> Option<jetcarp_core::render::Image> {
+        let s = self.show.as_ref()?;
         Some(jetcarp_core::render::render_view(
             &s.world,
-            (w as u32).max(1),
-            (h as u32).max(1),
+            size[0].max(1),
+            size[1].max(1),
             s.center,
             s.zoom,
             &jetcarp_core::render::ViewOptions::default(),
         ))
     }
+
+    /// The colour behind the grid.
 
     pub fn backdrop(&self) -> [u8; 3] {
         self.show.as_ref().map_or([0, 0, 0], |s| {

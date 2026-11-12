@@ -611,6 +611,10 @@ impl App {
         }
         let names: Vec<String> = geometry.iter().map(|g| g.0.clone()).collect();
         let renamed = names != self.core.monitors;
+        self.core.monitor_rects = geometry
+            .iter()
+            .map(|g| Rect::new(g.1.0, g.1.1, g.2.0, g.2.1))
+            .collect();
         self.geometry = geometry;
         self.core.monitors = names;
         // Windows under the icons don't follow a monitor by themselves: make them again.
@@ -968,7 +972,10 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
     }
     if mode == Mode::Host && app.core.wants_still() {
         match app.core.leave_still() {
-            Ok(p) => say!("jetcarp-host: left {} as the desktop picture", p.display()),
+            Ok(p) => {
+                let names: Vec<String> = p.iter().map(|p| p.display().to_string()).collect();
+                say!("jetcarp-host: left {} as the desktop picture", names.join(", "));
+            }
             Err(e) => say!("jetcarp-host: no still picture: {e}"),
         }
     }

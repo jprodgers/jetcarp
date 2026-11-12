@@ -194,9 +194,8 @@ pub(crate) mod mac {
         const ENCODING: Encoding = Encoding::Struct("CGRect", &[Point::ENCODING, Size::ENCODING]);
     }
 
-    /// One `NSScreen`.
+    /// One `NSScreen`'s place.
     pub struct Screen {
-        pub object: Retained<AnyObject>,
         pub frame: NsRect,
         pub visible: NsRect,
         /// Physical pixels per point.
@@ -219,7 +218,6 @@ pub(crate) mod mac {
             let visible: NsRect = unsafe { msg_send![&*object, visibleFrame] };
             let scale: f64 = unsafe { msg_send![&*object, backingScaleFactor] };
             out.push(Screen {
-                object,
                 frame,
                 visible,
                 scale: if scale > 0.0 { scale } else { 1.0 },

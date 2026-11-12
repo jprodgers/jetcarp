@@ -194,9 +194,10 @@ icons, on every Space and ignoring the mouse; the host has no Dock icon while it
 
 **A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host
 sets a picture of its scene as the desktop's own background when it stops, and while the live one
-cannot be shown, through the system's own setting. Your own picture is remembered and put back when
-the still or the live background is turned off, unless you have chosen another picture in the
-meantime. It is off by default.
+cannot be shown, through the system's own setting. On Windows and macOS each monitor gets a picture of
+what it showed; GNOME has one background for every monitor, so there it is the primary monitor's.
+Your own picture (each monitor's) is remembered and put back when the still or the live background
+is turned off, unless you have chosen another picture in the meantime. It is off by default.
 
 ## The system's screen saver
 
