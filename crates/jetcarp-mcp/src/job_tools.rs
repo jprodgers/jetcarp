@@ -18,19 +18,20 @@ use serde_json::{Map, Value, json};
 /// Longest wait one call makes for a job, in seconds.
 pub const MAX_WAIT_S: f64 = 600.0;
 
-/// The strategies, in the order the schema lists them, with their one-line descriptions.
+/// The strategies, in the order the schema lists them, with their descriptions (`tools/list` shows
+/// the first sentence, the strategy's settings resource all of it).
 const STRATEGIES: &[(&str, &str)] = &[
     (
         "hunt",
-        "A soup hunt: small random soups on an unbounded plane (B/S and Generations rules without B0, any periodic tiling), each run until it settles; ships that fly away are cut out; every object is classed and new patterns are verified and stored. Thousands of soups a second for Life.",
+        "Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life.",
     ),
     (
         "search",
-        "Soups on a bounded grid of any tiling (aperiodic patches too), each run for `gens`; the objects left are verified and stored.",
+        "Soups on a bounded grid of any tiling, aperiodic patches too. Each runs for `gens`, and the objects left are verified and stored.",
     ),
     (
         "ants",
-        "Ant and turmite rules (turn strings such as RL or LLRR, or turmite tables) on a periodic tiling, from an empty field or soups; each run classed highway (proved exactly), periodic, symmetric, bounded or chaotic, and stored.",
+        "Ant and turmite rules on a periodic tiling, every run classed and stored. Turn strings such as RL or LLRR, or turmite tables, from an empty field or soups; each run is classed highway (proved exactly), periodic, symmetric, bounded or chaotic.",
     ),
     (
         "census",
@@ -38,23 +39,23 @@ const STRATEGIES: &[(&str, &str)] = &[
     ),
     (
         "mover",
-        "A pattern on an aperiodic tiling (Spectre, hat, Penrose) followed far on a sliding window of generated supertiles; a verified mover is stored with its distance.",
+        "A pattern on an aperiodic tiling followed far, and stored with its distance when verified. It runs on a sliding window of generated supertiles (Spectre, hat, Penrose).",
     ),
     (
         "pile",
-        "One large sandpile: N grains dropped on one cell of an unbounded grid, built by doubling, with pictures in its folder under the output folder.",
+        "One large sandpile: N grains dropped on one cell of an unbounded grid. It is built by doubling, with pictures in its folder under the output folder.",
     ),
     (
         "collide",
-        "Pattern `b` shot into pattern `a` at every offset and phase; each run classed, new products verified and stored.",
+        "Pattern `b` shot into pattern `a` at every offset and phase. Each run is classed, and new products are verified and stored.",
     ),
     (
         "evolve",
-        "The evolutionary glider search: multi-state priority rules evolve towards rules whose seeds travel far; verified movers are stored.",
+        "The evolutionary glider search, storing the movers it verifies. Multi-state priority rules evolve towards rules whose seeds travel far.",
     ),
     (
         "explore",
-        "The broad search over tilings, rule families, rules and seeds, keeping the best runs of each kind of behaviour and breeding from them; every run is stored in the job's own database (search_runs reads them). Not deterministic: a resumed search continues from its archive.",
+        "The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive.",
     ),
 ];
 
@@ -81,7 +82,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             destructive: false,
             description: || {
                 format!(
-                    "Starts a search as a library job and returns its job id at once; job_status follows it, job_stop stops it. Give one strategy as a key holding its settings (every setting is optional): `hunt` (soups on an unbounded plane), `search` (soups on a bounded grid of any tiling), `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, or `explore` (help {{\"topic\": \"searches\"}} explains each). Or {{\"resume\": job}} carries on a stopped job. The job runs on a thread of this server, so it stops when the server exits (it stays resumable); {{\"detach\": true}} runs it in a process of its own that outlives the server (explore searches do this by default where they can). `wait_s` (at most {MAX_WAIT_S:.0}) waits for the job to end before answering, with its status. `budget` ends this run at a checkpoint after so many minutes or items. Results go to the library (library_query), an explore search's runs to search_runs. Examples: {{\"hunt\": {{\"rules\": [\"B3/S23\"], \"soups\": 20000}}, \"wait_s\": 120}}, {{\"ants\": {{\"tilings\": \"hex\", \"strings\": [2, 4]}}}}, {{\"pile\": {{\"tiling\": \"hex\", \"grains\": \"1e6\"}}}}, {{\"collide\": {{\"a\": \"block\", \"b\": \"glider\"}}, \"wait_s\": 60}}, {{\"explore\": {{\"tilings\": \"square,hex\", \"families\": \"life_like,cyclic\"}}, \"budget\": {{\"minutes\": 5}}}}."
+                    "Starts a search as a library job and returns its job id at once; job_status follows it, job_stop stops it. Give one strategy as a key holding its settings (every setting is optional; each strategy names the resource listing them): `hunt`, `search`, `ants`, `census`, `mover`, `pile`, `collide`, `evolve` or `explore` (help {{\"topic\": \"searches\"}} explains each). Or {{\"resume\": job}} carries on a stopped job. The job runs on a thread of this server, so it stops when the server exits (it stays resumable); {{\"detach\": true}} runs it in a process of its own that outlives the server (explore searches do this by default where they can). `wait_s` waits for the job to end, and `budget` ends this run early. Results go to the library (library_query), an explore search's runs to search_runs. Examples: {{\"hunt\": {{\"rules\": [\"B3/S23\"], \"soups\": 20000}}, \"wait_s\": 120}}, {{\"ants\": {{\"tilings\": \"hex\", \"strings\": [2, 4]}}}}, {{\"pile\": {{\"tiling\": \"hex\", \"grains\": \"1e6\"}}}}, {{\"collide\": {{\"a\": \"block\", \"b\": \"glider\"}}, \"wait_s\": 60}}, {{\"explore\": {{\"tilings\": \"square,hex\", \"families\": \"life_like,cyclic\"}}, \"budget\": {{\"minutes\": 5}}}}."
                 )
             },
             schema: || {
@@ -96,11 +97,13 @@ pub(crate) fn tools() -> Vec<Tool> {
                 for k in ["resume", "label", "budget", "threads", "detach"] {
                     p.insert(k.into(), start[k].clone());
                 }
+                p["budget"]["description"] = json!(
+                    "This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable."
+                );
                 let mut gpu = start["gpu"].clone();
-                gpu["description"] = json!(format!(
-                    "{} Default false; explore true.",
-                    gpu["description"].as_str().unwrap_or("")
-                ));
+                gpu["description"] = json!(
+                    "Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true."
+                );
                 p.insert("gpu".into(), gpu);
                 p.insert(
                     "wait_s".into(),
@@ -117,7 +120,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             destructive: false,
             description: || {
                 format!(
-                    "Reports a library job's progress, whatever started it: hunts (soups, objects by class), ant searches (runs, outcomes), piles (doubling step, grains, the pictures when done), movers, bounded searches, collisions, censuses, evolve and explore searches. With `wait_s` (at most {MAX_WAIT_S:.0}) it waits for a running job to end before answering, so one call replaces many polls. `finds` adds the job's newest and rarest finds (pattern ids for library_query); `report` gives a Markdown report of what it searched and found instead. Without `job`, lists the jobs, newest first, optionally of one kind or status. Examples: {{\"job\": 3, \"wait_s\": 300}}, {{\"job\": 3, \"finds\": 10}}, {{\"job\": 3, \"report\": true}}, {{\"kind\": \"ants\"}}."
+                    "Reports a library job's progress, whatever started it and whatever its kind (hunts, ant searches, piles, movers, collisions, censuses, evolve and explore searches). With `wait_s` (at most {MAX_WAIT_S:.0}) it waits for a running job to end before answering, so one call replaces many polls. `finds` adds the job's newest and rarest finds (pattern ids for library_query); `report` gives a Markdown report of what it searched and found instead. Without `job`, lists the jobs, newest first, optionally of one kind or status. Examples: {{\"job\": 3, \"wait_s\": 300}}, {{\"job\": 3, \"finds\": 10}}, {{\"job\": 3, \"report\": true}}, {{\"kind\": \"ants\"}}."
                 )
             },
             schema: || {
@@ -270,9 +273,9 @@ fn search_start(c: &mut Call) -> Res {
     }
     let budget: Option<BudgetIn> = match rest.get("budget") {
         None => None,
-        Some(b) => Some(
-            serde_json::from_value(b.clone()).map_err(|e| format!("search_start budget: {e}"))?,
-        ),
+        Some(b) => Some(serde_json::from_value(b.clone()).map_err(|e| {
+            schema::with_settings("search_start budget", format!("search_start budget: {e}"))
+        })?),
     };
     let input = SearchStartIn {
         strategy,
@@ -355,12 +358,15 @@ fn started(c: &Call, job: i64, max_s: f64) -> Result<(), String> {
     }
 }
 
-/// A strategy's settings read into its input type (so a bad key is refused here), as JSON.
+/// A strategy's settings read into its input type (so a bad key is refused here, naming the
+/// resource with the strategy's settings), as JSON.
 fn check<T: serde::de::DeserializeOwned + serde::Serialize>(
     name: &str,
     v: Value,
 ) -> Result<Value, String> {
-    let t: T = serde_json::from_value(v).map_err(|e| format!("search_start {name}: {e}"))?;
+    let what = format!("search_start {name}");
+    let t: T = serde_json::from_value(v)
+        .map_err(|e| schema::with_settings(&what, format!("{what}: {e}")))?;
     Ok(op::to_value(&t))
 }
 

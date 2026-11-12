@@ -23,7 +23,7 @@ fn use_app_definition() -> Value {
             "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "App port, if not the one the app recorded."},
             "token": {"type": "string", "description": "App token shown in its AI control window, if needed."},
         }, "additionalProperties": false},
-        "annotations": {"title": "Attach to the JETCARP app", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+        "annotations": crate::tools::annotations("Attach to the JETCARP app", false, false, true),
     })
 }
 
@@ -33,12 +33,12 @@ fn host_control_definition() -> Value {
         "title": "JETCARP background host",
         "description": "Controls the JETCARP background host, the separate program that keeps live scenes running as wallpapers or windows without the app. Returns its status: each screen's rotation, item, generation and caption, memory use, and recent problems. Fails if the host is not running; the user starts it with `jetcarp host start`. Examples: {}, {\"action\": \"next\"}, {\"action\": \"pause\"}, {\"action\": \"wallpaper\", \"on\": false}.",
         "inputSchema": {"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "quit"], "description": "Default status. reload rereads host.json. wallpaper shows every screen as the desktop background (on GNOME this needs the extension) or back in a window; login sets whether the host starts at login; open_app opens the JETCARP app."},
+            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "quit"], "description": "Default status. wallpaper puts every screen on the desktop background (GNOME: with the extension) or back in a window; login sets whether the host starts at login; open_app opens the app; reload rereads host.json."},
             "on": {"type": "boolean", "description": "With wallpaper or login: on or off. Default on."},
             "name": {"type": "string", "description": "With action rotation: the rotation to run (saved)."},
             "screen": {"type": "integer", "minimum": 0, "description": "With next, previous, or rotation: which screen, counted from 0. Default: every screen for next and previous, the first for rotation."},
         }, "additionalProperties": false},
-        "annotations": {"title": "JETCARP background host", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false},
+        "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
 }
 

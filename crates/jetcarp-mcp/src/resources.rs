@@ -5,6 +5,7 @@
 //! | `jetcarp://docs/{page}` | a page of the JETCARP book (Markdown), e.g. `jetcarp://docs/guides/searching` |
 //! | `jetcarp://reference/rules`, `tilings`, `palettes`, `script-api` | the rule names and notation, tiling ids, palettes, and the Rhai function reference |
 //! | `jetcarp://schema/scene.json`, `pack.json` | JSON Schemas of the scene file and the pack manifest |
+//! | `jetcarp://schema/{tool}/{argument}` | the full settings of a tool argument that `tools/list` only summarises ([`crate::tools::parts`]): `search_start`'s strategies, `pack`'s actions, and a few more |
 //! | `jetcarp://job/{id}` | one library job's status (JSON) |
 //! | `jetcarp://pattern/{id}` | one library pattern's record (JSON) |
 //! | `jetcarp://quickstart/{handle}` | one Quick Start entry with its scene (JSON) |
@@ -74,6 +75,18 @@ pub fn list() -> Value {
             );
         }
     }
+    for (tool, part) in crate::tools::all_parts() {
+        let what = crate::tools::part_schema(tool, part)
+            .and_then(|s| s["description"].as_str().map(String::from))
+            .unwrap_or_default();
+        v.push(json!({
+            "uri": crate::tools::part_uri(tool, part),
+            "name": format!("schema/{tool}/{part}"),
+            "title": format!("{tool} {part}: settings"),
+            "description": format!("The JSON Schema of {tool}'s `{part}` settings. {what}").trim_end(),
+            "mimeType": "application/schema+json",
+        }));
+    }
     for p in crate::docs::pages() {
         v.push(json!({
             "uri": format!("{DOCS}{}", p.path),
@@ -92,6 +105,9 @@ pub fn templates() -> Value {
         {"uriTemplate": "jetcarp://docs/{page}", "name": "docs", "title": "A page of the JETCARP book",
          "description": "A page by its path without .md, e.g. jetcarp://docs/guides/searching (resources/list lists every page).",
          "mimeType": "text/markdown"},
+        {"uriTemplate": "jetcarp://schema/{tool}/{argument}", "name": "settings", "title": "A tool argument's settings",
+         "description": "The JSON Schema of a tool argument's settings, for the arguments tools/list only summarises, e.g. jetcarp://schema/search_start/hunt or jetcarp://schema/pack/publish (resources/list lists every one).",
+         "mimeType": "application/schema+json"},
         {"uriTemplate": "jetcarp://job/{id}", "name": "job", "title": "A library job",
          "description": "One search job's status and progress (as job_status reports it), by its id.",
          "mimeType": "application/json"},
@@ -143,9 +159,7 @@ pub fn read(uri: &str) -> Result<Value, String> {
                 .unwrap_or("text/plain");
             Ok(contents(uri, mime, text))
         }
-        "schema" => crate::docs::schema(&key)
-            .map(|t| contents(uri, "application/schema+json", t.to_string()))
-            .ok_or_else(|| format!("no schema '{key}': scene.json or pack.json")),
+        "schema" => schema_text(&key).map(|t| contents(uri, "application/schema+json", t)),
         "job" => {
             let job: i64 = key
                 .parse()
@@ -186,6 +200,31 @@ pub fn read(uri: &str) -> Result<Value, String> {
             "no resource kind '{k}': docs, reference, schema, job, pattern, quickstart"
         )),
     }
+}
+
+/// A schema by its name after `jetcarp://schema/`: `scene.json`, `pack.json`, or a tool argument's
+/// settings (`search_start/hunt`). `help {"schema": ...}` answers with the same text.
+pub fn schema_text(key: &str) -> Result<String, String> {
+    let key = key
+        .trim()
+        .trim_start_matches("jetcarp://schema/")
+        .trim_matches('/');
+    if let Some((tool, part)) = key.split_once('/') {
+        return crate::tools::part_schema(tool, part)
+            .map(|s| serde_json::to_string_pretty(&s).unwrap_or_default())
+            .ok_or_else(|| {
+                let all: Vec<String> = crate::tools::all_parts()
+                    .iter()
+                    .map(|(t, p)| format!("{t}/{p}"))
+                    .collect();
+                format!("no settings schema '{key}': {}", all.join(", "))
+            });
+    }
+    crate::docs::schema(key).map(String::from).ok_or_else(|| {
+        format!(
+            "no schema '{key}': scene.json, pack.json, or a tool argument's settings such as search_start/hunt (resources/list lists them)"
+        )
+    })
 }
 
 /// `%3A` and the like in a URI's path, as a client may send a handle (`find%3A...`).

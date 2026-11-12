@@ -255,6 +255,19 @@ impl Server {
                     t.extend(crate::app_tools::definitions());
                 }
                 t.extend(self.extra_tools.iter().cloned());
+                // A tool's title is its own field from MCP 2025-06-18; older clients read it from
+                // the annotations, and newer ones need it only once (the list goes to the model).
+                let old = self
+                    .legacy_version
+                    .as_deref()
+                    .is_some_and(|v| v < "2025-06-18");
+                if !old {
+                    for x in &mut t {
+                        if let Some(a) = x.get_mut("annotations").and_then(Value::as_object_mut) {
+                            a.remove("title");
+                        }
+                    }
+                }
                 Ok(json!({"tools": t, "ttlMs": 3_600_000, "cacheScope": "public"}))
             }
             "tools/call" => {

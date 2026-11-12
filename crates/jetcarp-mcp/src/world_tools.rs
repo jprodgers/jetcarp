@@ -37,13 +37,23 @@ pub(crate) fn tools() -> Vec<Tool> {
             destructive: true,
             description: || {
                 format!(
-                    "Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {{\"tiling\": \"hex\", \"width\": 60, \"height\": 60, \"boundary\": \"wrap\", \"cas\": [\"B24/S35\"]}}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {{\"cas\": [{{\"rule\": \"Life\", \"seed\": \"empty\"}}]}} is a blank field to draw on (reference {{\"what\": \"seeds\"}} lists the seeds, {{\"what\": \"tilings\"}} the tilings). Size: width and height (8 to 4096 unit cells each), or `cells` (about that many, up to {}), or `level` on aperiodic tilings. Or open one: `quickstart` (an entry of the app's Quick Start by handle, e.g. \"life\"; library_query {{\"kind\": \"quickstart\"}} lists them), `pattern` (a library pattern alone on a grid sized for it, e.g. \"glider\"), `scene` (scene JSON, as world_status {{\"scene\": true}} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.",
+                    "Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {{\"tiling\": \"hex\", \"width\": 60, \"height\": 60, \"boundary\": \"wrap\", \"cas\": [\"B24/S35\"]}}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {{\"cas\": [{{\"rule\": \"Life\", \"seed\": \"empty\"}}]}} is a blank field to draw on (reference {{\"what\": \"seeds\"}} lists the seeds, {{\"what\": \"tilings\"}} the tilings). Size: width and height (8 to 4096 unit cells each), or `cells` (about that many, up to {}), or `level` on aperiodic tilings. Or open one: `quickstart` (a Quick Start entry by handle, e.g. \"life\"), `pattern` (a library pattern on a grid sized for it, e.g. \"glider\"), `scene` (scene JSON, as world_status {{\"scene\": true}} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.",
                     crate::tools::MAX_CELLS
                 )
             },
             schema: || {
                 let mut p = schema::props(&input_schema::<NewWorldIn>());
                 p.extend(schema::props(&input_schema::<OpenIn>()));
+                schema::retell(
+                    &mut p,
+                    "cas",
+                    "The CAs, in order: rule names or notation (\"Life\", \"B3/S23\"), or CA objects as in a scene ({\"rule\": \"Life\", \"seed\": \"random:0.2\"}); one string is one CA.",
+                );
+                schema::retell(
+                    &mut p,
+                    "pattern",
+                    "A library pattern (id, prefix or name, e.g. `glider`) alone on a wrapped grid sized for it, in a rule it runs in.",
+                );
                 object(p, &[])
             },
             run: world_new,
@@ -54,7 +64,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: false,
             destructive: false,
             description: || {
-                "Reports the current world: tiling and grid size (width x height for coordinates), generation, state hash, whether it is running, empty, frozen, or repeating with a period (checked exactly), population per field, and the CAs with their ids and rules. Cheap; call it whenever you need ids or sizes. {\"scene\": true} returns the world's scene JSON instead (world_new {\"scene\": ...} reproduces this exact state); {\"save_path\": \"glider.json\"} also writes the scene to a file (the JETCARP app and `jetcarp run` open it).".into()
+                "Reports the current world: tiling and grid size (width x height for coordinates), generation, state hash, whether it is running, empty, frozen, or repeating with a period (checked exactly), population per field, and the CAs with their ids and rules. Cheap; call it whenever you need ids or sizes. {\"scene\": true} returns the world's scene JSON instead (world_new {\"scene\": ...} reproduces this exact state); {\"save_path\": \"glider.json\"} also writes it to a file (the app and `jetcarp run` open it).".into()
             },
             schema: || {
                 let mut p = schema::props(&input_schema::<StatusIn>());
@@ -73,7 +83,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: false,
             destructive: false,
             description: || {
-                "Looks at a CA's field. With no arguments: a text picture of the smallest box around the non-empty cells (one row per line, prefixed by its row number y, with a ruler of column numbers; '.' empty, 'O' live, digits for higher states or sandpile grains), the live-cell count and the bounding box, which tells you where a pattern is. x, y, width, height show a fixed region; {\"format\": \"list\"} gives [x, y, state] triples instead. {\"format\": \"objects\"} runs the object finder: every still life, oscillator, spaceship and gun in the field, named and classed by running it alone, with where it is ({\"format\": \"objects\", \"catalog\": true} also verifies each distinct one and adds it to the library). {\"cell\": {\"x\": 3, \"y\": 4}} (or {\"cell\": {\"index\": 120}}) describes one cell: its tile type, centre, value in every field, and its neighbours in clockwise order, which shows the neighbour layout on hexagons, triangles and other tilings before you draw.".into()
+                "Looks at a CA's field. With no arguments: a text picture of the smallest box around the non-empty cells (one row per line, prefixed by its row number y, with a ruler of column numbers; '.' empty, 'O' live, digits for higher states or sandpile grains), the live-cell count and the bounding box. x, y, width, height show a fixed region; {\"format\": \"list\"} gives [x, y, state] triples instead. {\"format\": \"objects\"} runs the object finder: every still life, oscillator, spaceship and gun in the field, named and classed, with where it is (`catalog`: true also stores each distinct one in the library). {\"cell\": {\"x\": 3, \"y\": 4}} describes one cell: its tile type, centre, value in every field, and its neighbours in clockwise order (the neighbour layout on hexagons, triangles and other tilings, before you draw).".into()
             },
             schema: || {
                 let read = schema::describe(
@@ -113,7 +123,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: false,
             destructive: false,
             description: || {
-                "Changes the world through logged commands (world_status {\"scene\": true} replays them). Give one of: `cells` to draw: a text picture, RLE, [x, y] cells, or cell indices, e.g. {\"cells\": {\"pattern\": \".O.\\n..O\\nOOO\", \"x\": 10, \"y\": 10}} (a glider moving down-right; x = column, y = row, (0, 0) is the top-left cell; only live pattern cells are written, `clear_first` empties the field first, `erase` clears the cells instead; on sandpiles values are grains added); `paste` to place a library pattern, e.g. {\"paste\": {\"id\": \"glider\", \"x\": 10, \"y\": 10, \"orientation\": 1}} (the world must use its tiling; on aperiodic patches use `index` or at \"original\"); `reseed` to put new life into a settled world now ({\"reseed\": {\"mode\": \"blobs\"}}), or automatically ({\"reseed\": {\"policies\": [{\"mode\": \"rain\", \"when\": {\"kind\": \"settled\"}, \"cooldown\": 300}]}}), or {\"reseed\": {}} to report the policies and recent activity; or `commands`, the app's own commands in order (add, change or remove CAs, step, reset, set the tiling, palettes, sandpile actions), e.g. {\"commands\": [{\"op\": \"add_ca\", \"ca\": {\"rule\": \"Ant RL\", \"seed\": \"ants:3\"}}]}; reference {\"what\": \"commands\"} lists them. `ca` picks the CA (id or name; default the first) for cells, paste and reseed. Next: world_step, world_read.".into()
+                "Changes the world through logged commands (world_status {\"scene\": true} replays them). Give one of: `cells` to draw a text picture, RLE, [x, y] cells or cell indices, e.g. {\"cells\": {\"pattern\": \".O.\\n..O\\nOOO\", \"x\": 10, \"y\": 10}} (a glider moving down-right; x = column, y = row, (0, 0) is the top-left cell); `paste` to place a library pattern, e.g. {\"paste\": {\"id\": \"glider\", \"x\": 10, \"y\": 10, \"orientation\": 1}}; `reseed` to put new life into a settled world, now ({\"reseed\": {\"mode\": \"blobs\"}}) or by policies; or `commands`, the app's own commands in order, e.g. {\"commands\": [{\"op\": \"add_ca\", \"ca\": {\"rule\": \"Ant RL\", \"seed\": \"ants:3\"}}]}; reference {\"what\": \"commands\"} lists them. `ca` picks the CA (id or name; default the first) for cells, paste and reseed. Next: world_step, world_read.".into()
             },
             schema: || {
                 let ca = schema::props(&input_schema::<DrawIn>())["ca"].clone();
@@ -126,15 +136,39 @@ pub(crate) fn tools() -> Vec<Tool> {
                         ("ca", ca),
                         (
                             "cells",
-                            schema::without(schema::op(input_schema::<DrawIn>(), None), &["ca"]),
+                            schema::without(
+                                schema::op(
+                                    input_schema::<DrawIn>(),
+                                    Some(
+                                        "Cells to draw into a CA's field: one of `pattern`, `rle`, `cells` or `indices` (or only `clear_first`). Only the live cells of a pattern are written; `clear_first` empties the field first, and `erase` clears the cells instead. On sandpiles the values are grains added.",
+                                    ),
+                                ),
+                                &["ca"],
+                            ),
                         ),
                         (
                             "paste",
-                            schema::without(schema::op(input_schema::<PasteIn>(), None), &["ca"]),
+                            schema::without(
+                                schema::op(
+                                    input_schema::<PasteIn>(),
+                                    Some(
+                                        "A library pattern to paste, and where. The world must use the pattern's tiling; on aperiodic patches give `index`, or `at` \"original\" (where it was found).",
+                                    ),
+                                ),
+                                &["ca"],
+                            ),
                         ),
                         (
                             "reseed",
-                            schema::without(schema::op(input_schema::<ReseedIn>(), None), &["ca"]),
+                            schema::without(
+                                schema::op(
+                                    input_schema::<ReseedIn>(),
+                                    Some(
+                                        "Reseed now, set the automatic policies, or report them. `mode` reseeds now; with neither `mode` nor `policies` it reports the policies and the recent activity. Policies: {\"policies\": [{\"mode\": \"rain\", \"when\": {\"kind\": \"settled\"}, \"cooldown\": 300}]}.",
+                                    ),
+                                ),
+                                &["ca"],
+                            ),
                         ),
                         ("commands", commands),
                     ]),
@@ -163,7 +197,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: false,
             destructive: false,
             description: || {
-                "Renders the whole world as a PNG and returns it, so you (and the user) can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. `save_path` also writes the PNG (scene embedded). {\"wallpaper\": {...}} writes desktop-sized pictures instead and returns their paths: {\"wallpaper\": {\"size\": \"4K\"}}, {\"wallpaper\": {\"size\": \"2560x1440\", \"fresh\": true, \"cell_px\": 3, \"gens\": 300, \"palette\": \"Paper\"}} (a new grid of the world's tiling sized for the picture), {\"wallpaper\": {\"monitors\": \"2560x1440+0+0,1920x1080+2560+180\", \"split\": true}} (one picture per monitor, cut so they line up).".into()
+                "Renders the whole world as a PNG and returns it, so you (and the user) can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. `save_path` also writes the PNG (scene embedded). {\"wallpaper\": {\"size\": \"4K\"}} writes desktop-sized pictures instead and returns their paths (also on a fresh grid sized for the picture, or one picture per monitor, cut so they line up).".into()
             },
             schema: || {
                 let mut p = schema::props(&input_schema::<RenderIn>());
@@ -172,7 +206,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                     schema::without(
                         schema::op(
                             input_schema::<WallpaperIn>(),
-                            Some("Write desktop-sized pictures of the world instead (files under the output folder's wallpapers/ unless `out` is given)."),
+                            Some("Write desktop-sized pictures of the world instead. They go under the output folder's wallpapers/ unless `out` is given. E.g. {\"size\": \"4K\"}; {\"size\": \"2560x1440\", \"fresh\": true, \"cell_px\": 3, \"gens\": 300, \"palette\": \"Paper\"} (a new grid of the world's tiling sized for the picture); {\"monitors\": \"2560x1440+0+0,1920x1080+2560+180\", \"split\": true} (one picture per monitor, cut so they line up)."),
                         ),
                         &["source", "gpu"],
                     ),

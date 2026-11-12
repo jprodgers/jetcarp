@@ -20,7 +20,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: true,
         destructive: false,
         description: || {
-            "Lists what JETCARP wrote, read only: the output folder (root \"out\", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root \"catalog\": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind (dir or file), size, modified time, and for folders what marks them (manifest.json = a sweep or export, pile.json = a pile, favourites.json). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"root\": \"catalog\", \"path\": \"media\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.".into()
+            "Lists what JETCARP wrote, read only: the output folder (root \"out\", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root \"catalog\": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.".into()
         },
         schema: || object(schema::props(&input_schema::<FilesIn>()), &[]),
         run: files_list,

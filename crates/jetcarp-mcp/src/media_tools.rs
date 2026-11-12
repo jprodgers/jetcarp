@@ -14,13 +14,23 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: false,
         destructive: false,
         description: || {
-            "Renders media and returns the file paths: per-step PNG frames, an animation (a GIF for small ones, an animated WebP for large ones), a poster frame and a thumbnail, in one house style. Library records' media are stored once each by content in the library's media/ folder: a pattern is shown alone on an empty field for one seamless period (spaceships in a window that moves with them, guns with their stream); an ant highway as one seamless period in a window moving with the ant (mode seed: the run from step 0); a Quick Start entry from its seed. A `scene` (JSON) renders from its seed into the output folder. Up-to-date media are not rendered again. Give one of pattern, quickstart, ant, scene, or missing (everything whose media are missing or stale). `poster`: true also returns the first poster inline, to look at. Examples: {\"pattern\": \"glider\", \"poster\": true}, {\"ant\": \"ant-...\", \"mode\": \"seed\", \"gens\": 300}, {\"missing\": true, \"class\": [\"spaceship\"], \"limit\": 20}, {\"pattern\": \"glider\", \"palette\": \"Paper\"}.".into()
+            "Renders media and returns the file paths: per-step PNG frames, an animation (GIF when small, else animated WebP), a poster frame and a thumbnail, in one house style. Give one of `pattern` (alone on an empty field for one seamless period; spaceships in a window that moves with them, guns with their stream), `ant` (a highway's loop in a window moving with the ant, or with mode seed the run from step 0), `quickstart` (from its seed), `scene` (from its seed, into the output folder) or `missing` (every record whose media are missing or stale). Library records' media are stored once by content in the library's media/ folder, and up-to-date media are not rendered again. `poster`: true also returns the first poster inline, to look at. Examples: {\"pattern\": \"glider\", \"poster\": true}, {\"ant\": \"ant-...\", \"mode\": \"seed\", \"gens\": 300}, {\"missing\": true, \"class\": [\"spaceship\"], \"limit\": 20}.".into()
         },
         schema: || {
             let mut p = schema::props(&schema::without(
                 input_schema::<MediaRenderIn>(),
                 &["threads"],
             ));
+            schema::retell(
+                &mut p,
+                "quickstart",
+                "A Quick Start entry: a catalog one (`find:...`, media stored in the catalog) or a built-in one (`life`), rendered from its seed into `out`.",
+            );
+            schema::retell(
+                &mut p,
+                "palette",
+                "A palette instead of the house style: a built-in name, or hex colours like `#103050-#4fc3ff`.",
+            );
             p.insert(
                 "poster".into(),
                 json!({"type": "boolean", "description": "Also return the first target's poster inline (PNG)."}),

@@ -99,6 +99,9 @@ fn a_whole_session_over_stdio() {
         .collect();
     want.extend(["use_app", "host_control", "app_display"].map(String::from));
     assert_eq!(names, want);
+    // The whole list goes to the model with every request: the long settings are resources.
+    let size = tools.to_string().len();
+    assert!(size <= 45_000, "tools/list is {size} bytes");
 
     let res = c.request("resources/list", json!({}));
     let n = res["result"]["resources"].as_array().unwrap().len();
@@ -106,7 +109,7 @@ fn a_whole_session_over_stdio() {
     let t = c.request("resources/templates/list", json!({}));
     assert_eq!(
         t["result"]["resourceTemplates"].as_array().unwrap().len(),
-        4
+        5
     );
     let r = c.request(
         "resources/read",

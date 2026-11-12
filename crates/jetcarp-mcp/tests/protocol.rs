@@ -134,8 +134,16 @@ fn tools_list_is_well_formed_and_from_the_operations() {
             t["description"].as_str().unwrap().len() > 200,
             "{name} explains itself"
         );
-        assert!(t["title"].is_string() && t["annotations"]["title"].is_string());
-        assert!(t["annotations"]["readOnlyHint"].is_boolean());
+        // The title once: annotations.title is for clients older than 2025-06-18.
+        assert!(t["title"].is_string() && t["annotations"]["title"].is_null());
+        // A tool that changes nothing says so; one that changes things says whether it may
+        // destroy something (MCP assumes it may). The other hints are left at MCP's defaults.
+        let a = &t["annotations"];
+        assert!(
+            a["readOnlyHint"] == true || a["destructiveHint"].is_boolean(),
+            "{name}: {a}"
+        );
+        assert_eq!(a["openWorldHint"], false, "{name}");
         // Strict clients: no null types, no $ref, no unknown formats.
         let text = schema.to_string();
         assert!(!text.contains("\"$ref\""), "{name}: {text}");
@@ -201,44 +209,199 @@ fn tools_list_is_well_formed_and_from_the_operations() {
         jetcarp_mcp::schema::mcp_words(&mut v);
         v
     };
+    // The settings tools/list only summarises are resources of their own, made from the same
+    // types (tools::part_schema is what resources/read serves).
+    let part = |t: &str, k: &str| tools::part_schema(t, k).unwrap_or_else(|| panic!("{t} {k}"));
     let draw = op(jetcarp_api::op::input_schema::<
         jetcarp_api::ops::world::DrawIn,
     >());
     assert_eq!(
-        by("world_edit")["inputSchema"]["properties"]["cells"]["properties"]["rle"],
+        part("world_edit", "cells")["properties"]["rle"],
         draw["properties"]["rle"]
     );
     let hunt = op(jetcarp_api::op::input_schema::<
         jetcarp_api::ops::search::HuntIn,
     >());
     assert_eq!(
-        by("search_start")["inputSchema"]["properties"]["hunt"]["properties"],
+        part("search_start", "hunt")["properties"],
         hunt["properties"]
     );
     let new = op(jetcarp_api::op::input_schema::<
         jetcarp_api::ops::world::NewWorldIn,
     >());
+    // The same, but for a description told more briefly here.
+    let bare = |v: &Value| {
+        let mut v = v.clone();
+        v.as_object_mut().map(|o| o.remove("description"));
+        v
+    };
     for (k, v) in new["properties"].as_object().unwrap() {
-        assert_eq!(&by("world_new")["inputSchema"]["properties"][k], v, "{k}");
+        assert_eq!(
+            bare(&by("world_new")["inputSchema"]["properties"][k]),
+            bare(v),
+            "{k}"
+        );
     }
     // Packs: no rater consent, no key making.
     let pack = by("pack");
     for a in ["info", "check", "import", "publish", "export", "site"] {
         assert!(pack["inputSchema"]["properties"][a].is_object(), "pack {a}");
+        assert!(part("pack", a)["properties"].is_object(), "pack {a}");
     }
     assert!(pack["inputSchema"]["properties"].get("rater").is_none());
     assert!(pack["inputSchema"]["properties"].get("key").is_none());
-    assert!(
-        pack["inputSchema"]["properties"]["publish"]["properties"]
-            .get("key")
-            .is_none()
-    );
-    // And the search strategies, each its operation's.
+    assert!(part("pack", "publish")["properties"].get("key").is_none());
+    // And the search strategies, each its operation's, each pointing to its settings.
     for st in jetcarp_mcp::job_tools::strategies() {
+        assert!(part("search_start", st)["properties"].is_object(), "{st}");
+        let d = by("search_start")["inputSchema"]["properties"][st]["description"].clone();
         assert!(
-            by("search_start")["inputSchema"]["properties"][st]["properties"].is_object(),
-            "{st}"
+            d.as_str()
+                .unwrap()
+                .ends_with(&tools::part_uri("search_start", st)),
+            "{st}: {d}"
         );
+    }
+}
+
+/// tools/list goes to the model whole, so it stays small (the stdio test holds the whole list to
+/// 45 KB): the long settings are resources the tools name, and each of those can be read (and
+/// through help, for clients without resources).
+#[test]
+fn summarised_settings_are_resources() {
+    let (mut s, mut h) = new();
+    let r = s.handle(&mut h, &req(1, "tools/list", json!({}))).unwrap();
+    let mut all = r["result"]["tools"].as_array().unwrap().clone();
+    all.extend(jetcarp_mcp::app_tools::definitions());
+    let listed = s
+        .handle(&mut h, &req(2, "resources/list", json!({})))
+        .unwrap();
+    let uris: Vec<String> = listed["result"]["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["uri"].as_str().unwrap().to_string())
+        .collect();
+    let mut pointers = 0;
+    for t in &all {
+        let name = t["name"].as_str().unwrap();
+        for (k, p) in t["inputSchema"]["properties"].as_object().unwrap() {
+            let d = p["description"].as_str().unwrap();
+            let Some(i) = d.find("Settings: jetcarp://schema/") else {
+                continue;
+            };
+            pointers += 1;
+            let uri = &d[i + "Settings: ".len()..];
+            assert_eq!(uri, tools::part_uri(name, k), "{name}.{k}");
+            assert!(uris.iter().any(|u| u == uri), "{uri} is listed");
+            assert_eq!(p["type"], "object", "{name}.{k}");
+            let r = s
+                .handle(&mut h, &req(3, "resources/read", json!({"uri": uri})))
+                .unwrap();
+            let c = &r["result"]["contents"][0];
+            assert_eq!(c["mimeType"], "application/schema+json", "{uri}");
+            let text = c["text"].as_str().unwrap();
+            let full: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(full["$id"], uri, "{uri}");
+            assert_eq!(full["type"], "object", "{uri}");
+            // The listing gives the first sentence of the whole description.
+            let whole = full["description"].as_str().unwrap();
+            let first = d[..i].trim_end();
+            let first = first.split(" Needs `").next().unwrap();
+            assert!(whole.starts_with(first), "{uri}: {first} / {whole}");
+            // help gives the same text.
+            let help = ok(&call(
+                &mut s,
+                &mut h,
+                "help",
+                json!({"schema": format!("{name}/{k}")}),
+            ));
+            assert_eq!(help, text, "{uri}");
+        }
+    }
+    assert_eq!(pointers, tools::all_parts().len());
+    assert!(pointers >= 30, "{pointers} settings resources");
+    // A bad setting is refused naming the resource with the right ones.
+    for (tool, args, uri) in [
+        (
+            "search_start",
+            json!({"hunt": {"no_such_setting": 1}}),
+            "jetcarp://schema/search_start/hunt",
+        ),
+        (
+            "search_start",
+            json!({"census": {"soups": "many"}}),
+            "jetcarp://schema/search_start/census",
+        ),
+        (
+            "search_start",
+            json!({"hunt": {}, "budget": {"hours": 1}}),
+            "jetcarp://schema/search_start/budget",
+        ),
+        (
+            "world_edit",
+            json!({"cells": {"pattern": "O", "no_such_setting": 1}}),
+            "jetcarp://schema/world_edit/cells",
+        ),
+        (
+            "pack",
+            json!({"info": {"path": "x", "no_such_setting": 1}}),
+            "jetcarp://schema/pack/info",
+        ),
+        (
+            "search_runs",
+            json!({"try": {"tiling": "hex"}}),
+            "jetcarp://schema/search_runs/try",
+        ),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(e.contains(uri), "{tool} {args}: {e}");
+    }
+    // An unknown one says which there are.
+    let r = s
+        .handle(
+            &mut h,
+            &req(
+                4,
+                "resources/read",
+                json!({"uri": "jetcarp://schema/pack/nope"}),
+            ),
+        )
+        .unwrap();
+    assert_eq!(r["error"]["code"], protocol::RESOURCE_NOT_FOUND);
+    assert!(
+        r["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("pack/publish")
+    );
+}
+
+/// Clients older than MCP 2025-06-18 read a tool's title from its annotations.
+#[test]
+fn old_clients_get_titles_in_the_annotations() {
+    for (version, in_annotations) in [("2025-03-26", true), ("2025-06-18", false)] {
+        let (mut s, mut h) = new();
+        s.handle(
+            &mut h,
+            &req(
+                1,
+                "initialize",
+                json!({"protocolVersion": version, "capabilities": {},
+                       "clientInfo": {"name": "t", "version": "1"}}),
+            ),
+        )
+        .unwrap();
+        let r = s.handle(&mut h, &req(2, "tools/list", json!({}))).unwrap();
+        for t in r["result"]["tools"].as_array().unwrap() {
+            assert!(t["title"].is_string());
+            assert_eq!(
+                t["annotations"]["title"].is_string(),
+                in_annotations,
+                "{version} {}",
+                t["name"]
+            );
+        }
     }
 }
 
@@ -284,6 +447,7 @@ fn resources_are_listed_and_read() {
         "jetcarp://job/{id}",
         "jetcarp://pattern/{id}",
         "jetcarp://quickstart/{handle}",
+        "jetcarp://schema/{tool}/{argument}",
     ] {
         assert!(templates.contains(&u), "{u}");
     }

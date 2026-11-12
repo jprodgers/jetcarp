@@ -16,7 +16,7 @@ use jetcarp_api::ops::pack::{
 };
 use serde_json::{Map, Value, json};
 
-const ACTIONS: &[&str] = &["info", "check", "import", "publish", "export", "site"];
+pub(crate) const ACTIONS: &[&str] = &["info", "check", "import", "publish", "export", "site"];
 
 pub(crate) fn tools() -> Vec<Tool> {
     vec![Tool {
@@ -25,14 +25,14 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: false,
         destructive: false,
         description: || {
-            "Packs: signed, content-addressed folders of library records (Parquet tables and JSON) that anyone can read, check and import. Give one action as a key holding its options: `info` summarises a store's or export's version (title, publisher and signature, tables, searches) without reading every file; `check` checks every hash, id and signature, importing nothing; `import` brings it into the library (records merged by id, a sample verified again); `publish` writes the library, or a selection (`ids`, `query`), as a new signed version of a feed in a store; `export` lays one version out with readable file names for a single download (from a store, or publishing first with `publish` options); `site` writes the website export (the public part of the library as JSON and media, with manifest.json and a viewer page). Paths must be inside the output folder (relative paths start there), the library's folder, or the packs that came with JETCARP. Publishing signs with the publisher key in JETCARP's settings, which only the user makes (`jetcarp pack key`). Examples: {\"info\": {\"path\": \"packs/starter\"}}, {\"import\": {\"path\": \"packs/starter\"}}, {\"publish\": {\"feed\": \"my-finds\", \"to\": \"packs/my-finds\", \"query\": {\"class\": \"spaceship\"}}}, {\"export\": {\"from\": \"packs/my-finds\", \"to\": \"my-finds-1\"}}, {\"site\": {\"to\": \"site\"}}.".into()
+            "Packs: signed, content-addressed folders of library records (Parquet tables and JSON) that anyone can read, check and import. Give one action as a key holding its options: `info` (a version's summary), `check` (every hash, id and signature, importing nothing), `import` (into the library, records merged by id), `publish` (the library, or a selection, as a new signed version of a feed in a store), `export` (one version laid out with readable file names, for a single download) or `site` (the website export). Paths must be inside the output folder (relative paths start there), the library's folder, or the packs that came with JETCARP. Publishing signs with the publisher key in JETCARP's settings, which only the user makes (`jetcarp pack key`). Examples: {\"info\": {\"path\": \"packs/starter\"}}, {\"import\": {\"path\": \"packs/starter\"}}, {\"publish\": {\"feed\": \"my-finds\", \"to\": \"packs/my-finds\", \"query\": {\"class\": \"spaceship\"}}}, {\"export\": {\"from\": \"packs/my-finds\", \"to\": \"my-finds-1\"}}.".into()
         },
         schema: || {
             let publish = schema::without(input_schema::<PublishIn>(), &["key"]);
             let mut export = schema::op(
                 input_schema::<ExportIn>(),
                 Some(
-                    "Lay one version out with readable file names: from a store (`from`), or publishing the library first (`publish`).",
+                    "Lay one version out with readable file names. It comes from a store (`from`), or from publishing the library first (`publish`).",
                 ),
             );
             export["properties"]["publish"] = schema::without(
@@ -47,27 +47,27 @@ pub(crate) fn tools() -> Vec<Tool> {
             let mut p = Map::new();
             p.insert(
                 "info".into(),
-                schema::op(input_schema::<InfoIn>(), Some("A version's summary.")),
+                schema::op(input_schema::<InfoIn>(), Some("A version's summary. It gives the title, publisher and signature, tables and searches, without reading every file.")),
             );
             p.insert(
                 "check".into(),
                 schema::op(
                     input_schema::<ImportIn>(),
-                    Some("Check a store or export without importing it."),
+                    Some("Check a store or export without importing it. Every hash, id and signature is checked."),
                 ),
             );
             p.insert(
                 "import".into(),
                 schema::op(
                     input_schema::<ImportIn>(),
-                    Some("Import a store or export into the library."),
+                    Some("Import a store or export into the library. Records are merged by id, and a sample is verified again."),
                 ),
             );
             p.insert(
                 "publish".into(),
                 schema::op(
                     publish,
-                    Some("Publish the library (or a selection) as a new signed version of a feed."),
+                    Some("Publish the library (or a selection) as a new signed version of a feed. A selection is `ids` or `query`."),
                 ),
             );
             p.insert("export".into(), export);
@@ -75,7 +75,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                 "site".into(),
                 schema::op(
                     input_schema::<SiteIn>(),
-                    Some("The website export into the folder `to`."),
+                    Some("The website export into the folder `to`. It is the public part of the library as JSON and media, with manifest.json and a viewer page."),
                 ),
             );
             object(p, &[])

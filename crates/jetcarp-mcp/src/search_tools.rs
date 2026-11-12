@@ -23,7 +23,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: false,
         destructive: false,
         description: || {
-            "Reads an explore search's stored runs (search_start {\"explore\": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), tiling, fate, min_score, min_movers, stage (1 screened, 2 confirmed on bigger grids) or reviewed. Or one action: `sheet` returns a picture of runs at several moments, labelled, to judge by eye ({\"sheet\": {\"ids\": [12, 40, 7]}}, at most 36 runs); `scene` returns one run's scene JSON, for world_new {\"scene\": ...} ({\"scene\": {\"run\": 12}}); `try` runs a configuration of your own now and returns its measures and a picture ({\"try\": {\"tiling\": \"hex\", \"rule\": \"B2/S34\", \"seed\": \"random:0.3\"}}); `review` records your verdict on a run ({\"review\": {\"run\": 12, \"verdict\": \"keep\", \"note\": \"slow gliders on a calm background\"}}), which feeds what is published and the score. For other questions, the sealed runs are Parquet files (runs/part-*.parquet in the search's folder) that DuckDB, Polars or pyarrow read.".into()
+            "Reads an explore search's stored runs (search_start {\"explore\": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family, tiling, fate, min_score, min_movers, stage or reviewed. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({\"sheet\": {\"ids\": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({\"scene\": {\"run\": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({\"try\": {\"tiling\": \"hex\", \"rule\": \"B2/S34\", \"seed\": \"random:0.3\"}}); or `review`, your verdict on a run ({\"review\": {\"run\": 12, \"verdict\": \"keep\", \"note\": \"slow gliders\"}}), which feeds what is published and the score. The sealed runs are also Parquet files (runs/part-*.parquet in the search's folder) for DuckDB, Polars or pyarrow.".into()
         },
         schema: || {
             let mut p = schema::props(&input_schema::<RunsIn>());
@@ -37,7 +37,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                 schema::without(
                     schema::op(
                         input_schema::<SheetIn>(),
-                        Some("A contact sheet of runs, returned as a picture."),
+                        Some(&format!("A contact sheet of runs, returned as a picture (at most {MAX_SHEET} runs).")),
                     ),
                     &["job", "max"],
                 ),

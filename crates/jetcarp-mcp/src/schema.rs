@@ -58,6 +58,14 @@ pub fn describe(mut s: Value, key: &str, description: &str) -> Value {
     s
 }
 
+/// Property `key`'s description in these tools' own shorter words (`tools/list` goes to the model
+/// whole); the operation's description stays as it is for its other callers.
+pub fn retell(p: &mut Map<String, Value>, key: &str, description: &str) {
+    if let Some(v) = p.get_mut(key) {
+        v["description"] = json!(description);
+    }
+}
+
 /// A tool's input schema: an object with these properties, nothing else.
 pub fn object(props: Map<String, Value>, required: &[&str]) -> Value {
     let mut o = json!({"type": "object", "properties": props, "additionalProperties": false});
@@ -75,6 +83,47 @@ pub fn named(items: Vec<(&str, Value)>) -> Map<String, Value> {
 /// A text property limited to these words.
 pub fn words(values: &[&str], description: &str) -> Value {
     json!({"type": "string", "enum": values, "description": description})
+}
+
+/// The first sentence of a description (a full stop before a space, not after `e.g` or `i.e`).
+pub fn first_sentence(s: &str) -> &str {
+    let mut from = 0;
+    while let Some(i) = s[from..].find(". ") {
+        let end = from + i;
+        let before = &s[..end];
+        if !(before.ends_with("e.g") || before.ends_with("i.e") || before.ends_with("etc")) {
+            return &s[..=end];
+        }
+        from = end + 2;
+    }
+    s
+}
+
+/// A tool argument as `tools/list` shows it when its settings are a resource of their own
+/// ([`crate::tools::parts`]): an object with the first sentence of its description, the settings
+/// it cannot do without, and the resource with the whole description and every setting's type
+/// and meaning.
+pub fn pointer(full: &Value, uri: &str) -> Value {
+    let mut d = first_sentence(
+        full.get("description")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim_end(),
+    )
+    .to_string();
+    if !d.is_empty() && !d.ends_with('.') {
+        d.push('.');
+    }
+    let required: Vec<&str> = full
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if !required.is_empty() {
+        d.push_str(&format!(" Needs `{}`.", required.join("`, `")));
+    }
+    d.push_str(&format!(" Settings: {uri}"));
+    json!({"type": "object", "description": d.trim_start()})
 }
 
 fn has_type(s: &Value, t: &str) -> bool {
@@ -184,10 +233,23 @@ pub fn coerce(schema: &Value, v: &mut Value) {
 
 /// Read `v` (coerced to `schema` first; `null` counts as `{}`) into an operation's input type.
 /// `what` names the part in the error (`world_edit cells`).
+/// When `what` is a tool argument whose settings are a resource of their own (`pack publish`),
+/// the error names that resource.
 pub fn read<T: DeserializeOwned>(schema: &Value, what: &str, v: Value) -> Result<T, String> {
     let mut v = if v.is_null() { json!({}) } else { v };
     coerce(schema, &mut v);
-    serde_json::from_value(v).map_err(|e| format!("{what}: {e}"))
+    serde_json::from_value(v).map_err(|e| with_settings(what, format!("{what}: {e}")))
+}
+
+/// `e`, naming where the settings are when `what` is a tool argument with a schema resource of its
+/// own (`search_start hunt`: jetcarp://schema/search_start/hunt).
+pub fn with_settings(what: &str, e: String) -> String {
+    match what.split_once(' ') {
+        Some((tool, part)) if crate::tools::parts(tool).contains(&part) => {
+            format!("{e} (the settings: {})", crate::tools::part_uri(tool, part))
+        }
+        _ => e,
+    }
 }
 
 /// The properties of `args` named `keys`, as one object (the arguments an action's input takes
@@ -317,6 +379,22 @@ mod tests {
         let mut v = json!({"n": "ten"});
         coerce(&s, &mut v);
         assert_eq!(v, json!({"n": "ten"}));
+    }
+
+    #[test]
+    fn a_pointer_gives_the_first_sentence_what_is_needed_and_the_resource() {
+        assert_eq!(first_sentence("One. Two."), "One.");
+        assert_eq!(
+            first_sentence("Soups, e.g. small ones. More."),
+            "Soups, e.g. small ones."
+        );
+        assert_eq!(first_sentence("No full stop"), "No full stop");
+        let full = json!({"type": "object", "description": "Publish a feed. Signed.",
+            "properties": {"feed": {}, "to": {}, "ids": {}}, "required": ["feed", "to"]});
+        assert_eq!(
+            pointer(&full, "jetcarp://schema/pack/publish"),
+            json!({"type": "object", "description": "Publish a feed. Needs `feed`, `to`. Settings: jetcarp://schema/pack/publish"})
+        );
     }
 
     #[test]

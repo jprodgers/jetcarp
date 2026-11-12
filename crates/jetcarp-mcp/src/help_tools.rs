@@ -19,7 +19,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: true,
             destructive: false,
             description: || {
-                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), \"setup\" (this installation as its user set it up: the first-run profile, the folders and free space, the packs that came with JETCARP, the GPU, the library's counts; read only, since setup is the user's choice, made in the app or with `jetcarp setup`), or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"}; the same pages are the resources jetcarp://docs/{page}.".into()
+                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), \"setup\" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice) or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {\"schema\": \"search_start/hunt\"}.".into()
             },
             schema: || {
                 object(
@@ -36,7 +36,11 @@ pub(crate) fn tools() -> Vec<Tool> {
                         ),
                         (
                             "page",
-                            json!({"type": "string", "description": "A page of the JETCARP book by its path without .md, e.g. \"guides/searching\", \"reference/rule-notation\", \"tutorials/hunting-spaceships\" (help {\"topic\": \"pages\"} lists them)."}),
+                            json!({"type": "string", "description": "A page of the JETCARP book by its path without .md, e.g. \"guides/searching\" (topic pages lists them)."}),
+                        ),
+                        (
+                            "schema",
+                            json!({"type": "string", "description": "A JSON Schema: a tool argument's settings (\"search_start/hunt\" is jetcarp://schema/search_start/hunt), \"scene.json\" or \"pack.json\"."}),
                         ),
                     ]),
                     &[],
@@ -76,6 +80,11 @@ pub(crate) fn tools() -> Vec<Tool> {
                     v["description"] = json!(format!("{which}: {d}"));
                     p.insert(k, v);
                 }
+                schema::retell(
+                    &mut p,
+                    "family",
+                    "rules: only this family (part of its name, any case), e.g. \"Life-like\", \"Generations\", \"Agents\".",
+                );
                 object(p, &[])
             },
             run: reference,
@@ -85,6 +94,9 @@ pub(crate) fn tools() -> Vec<Tool> {
 
 fn help(c: &mut Call) -> Res {
     let a = c.args;
+    if let Some(s) = a.get("schema").and_then(Value::as_str) {
+        return crate::resources::schema_text(s).map(ToolOutput::text);
+    }
     if let Some(page) = a.get("page").and_then(Value::as_str) {
         let key = page
             .trim()

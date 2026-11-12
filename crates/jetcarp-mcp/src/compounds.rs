@@ -25,7 +25,7 @@ pub(crate) fn schema() -> Option<Value> {
     s = schema::op(
         s,
         Some(
-            "Find stored patterns that are several independent objects, as a resumable job: {} lists them with their parts (nothing changes); {\"apply\": true} stores each compound's parts in its place (credited with its sightings) and removes it, or keeps it tagged `compound` when curated.",
+            "Find stored patterns that are several independent objects, as a resumable job. {} lists them with their parts (nothing changes); {\"apply\": true} stores each compound's parts in its place (credited with its sightings) and removes it, or keeps it tagged `compound` when curated.",
         ),
     );
     s = schema::describe(

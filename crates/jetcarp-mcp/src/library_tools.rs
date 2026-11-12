@@ -31,7 +31,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: true,
             destructive: false,
             description: || {
-                "Lists or reads the library: what searches found and what you and the user kept. `kind`: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns, puffers, movers; rule-free, each with every rule it was verified in and the range of rules it runs identically in), \"ant\" (ant and turmite runs: highway, periodic, symmetric, bounded or chaotic, with period, displacement, onset, and the outcome census per tiling), \"quickstart\" (the app's Quick Start entries by handle: built-in examples, entries from packs, an explore search's atlas, and promotions), or \"summary\" (how many of each the library holds). Listings come best first, at most 100 a call (`limit`, default 20; page with `offset`); the filters are optional and say which kind they apply to. With `id`, one record in full: a pattern's rules and range, sightings, the cells of its phases (drawn as text on squares and hexagons; `phases` how many), which way it moves per paste orientation; an ant run's outcome and proof; a Quick Start entry with its scene. Ids: a pattern's hex id, a unique prefix, or a name (\"glider\"); ant-...; a Quick Start handle (find:..., atlas:..., life). Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\", \"source\": \"builtin\"}, {\"id\": \"glider\", \"phases\": 4}. Next: world_new {\"pattern\": id} or world_edit {\"paste\": {\"id\": id}} to run one; library_curate to curate; media_render for pictures.".into()
+                "Lists or reads the library: what searches found and what you and the user kept. `kind`: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns, puffers and movers, each with the rules it was verified in and the range of rules it runs identically in), \"ant\" (ant and turmite runs, classed highway, periodic, symmetric, bounded or chaotic), \"quickstart\" (the app's Quick Start entries: built-in examples, packs, explore atlases, promotions) or \"summary\" (counts). Listings come best first (`limit`, default 20, at most 100; `offset` pages); each filter says which kind it applies to. With `id`, one record in full: a pattern's rules, sightings, the cells of its phases as text, and which way it moves per paste orientation; an ant run's outcome and proof; a Quick Start entry with its scene. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\"}, {\"id\": \"glider\", \"phases\": 4}. Next: world_new {\"pattern\": id} or world_edit {\"paste\": {\"id\": id}} to run one; library_curate to curate; media_render for pictures.".into()
             },
             schema: || {
                 let mut p = named(vec![(
@@ -59,7 +59,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                 let g = schema::props(&input_schema::<GetIn>());
                 p.insert(
                     "id".into(),
-                    json!({"type": "string", "description": "Read this one record in full instead of listing: a pattern's id, unique prefix or name (\"glider\"); an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life)."}),
+                    json!({"type": "string", "description": "Read this record in full instead: a pattern's id, prefix or name (\"glider\"), an ant run (ant-...) or a Quick Start handle (find:..., life)."}),
                 );
                 p.insert("phases".into(), g["phases"].clone());
                 let l = schema::props(&input_schema::<ListIn>());
@@ -69,6 +69,11 @@ pub(crate) fn tools() -> Vec<Tool> {
                     v["description"] = json!(format!("Quick Start: {d}"));
                     p.insert(k.into(), v);
                 }
+                schema::retell(
+                    &mut p,
+                    "source",
+                    "Quick Start: only entries from this source: builtin, pack, atlas, promotion, or all (default: all but builtin).",
+                );
                 object(p, &[])
             },
             run: library_query,
@@ -79,7 +84,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: false,
             destructive: true,
             description: || {
-                "Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (patterns: name, tags or add_tags / remove_tags, notes or append_notes, rating 1-5 (0 clears), state new / reviewed / promoted / rejected, discovered_by; ant runs: name, notes, rating, state), e.g. {\"id\": \"glider\", \"changes\": {\"rating\": 4, \"append_notes\": \"LLM: a clean c/4 ship\"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good: a pattern with its rules, sightings and Quick Start entry, an ant run, or a Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under \"My finds\": {\"quickstart\": {\"pattern\": \"<id>\", \"title\": \"Trihex glider\"}}, or {\"ant\": \"ant-...\"}, {\"search_run\": <run id>, \"job\": <explore job>}, {\"folder\": \"<sweep folder>\", \"run\": \"#12\"} (a run of a run_script sweep), {\"scene\": \"<scene file>\"}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side, a pulsar with blinkers) and lists them with their parts: {\"compounds\": {}}; {\"compounds\": {\"apply\": true}} stores the parts in their place.".into()
+                "Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (name, tags, notes, rating 1-5, state), e.g. {\"id\": \"glider\", \"changes\": {\"rating\": 4, \"append_notes\": \"LLM: a clean c/4 ship\"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good, a pattern with its rules, sightings and Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under \"My finds\", e.g. {\"quickstart\": {\"pattern\": \"<id>\", \"title\": \"Trihex glider\"}}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side) and lists their parts ({\"compounds\": {}}; with {\"apply\": true} it stores the parts instead).".into()
             },
             schema: || {
                 let mut p = named(vec![
@@ -100,7 +105,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                             schema::op(
                                 input_schema::<UpdateIn>(),
                                 Some(
-                                    "Patterns and ant runs: the changes (what is not given stays).",
+                                    "Patterns and ant runs: the changes (what is not given stays). Patterns: name, tags or add_tags / remove_tags, notes or append_notes, rating 1-5 (0 clears), state new / reviewed / promoted / rejected, discovered_by; ant runs: name, notes, rating, state.",
                                 ),
                             ),
                             &["id", "kind"],
@@ -119,7 +124,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                         schema::op(
                             input_schema::<AddIn>(),
                             Some(
-                                "Add an entry to the Quick Start under \"My finds\": one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`.",
+                                "Add an entry to the Quick Start under \"My finds\". It takes one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`, e.g. {\"pattern\": \"<id>\", \"title\": \"Trihex glider\"}, {\"ant\": \"ant-...\"}, {\"search_run\": <run id>, \"job\": <explore job>}, {\"folder\": \"<sweep folder>\", \"run\": \"#12\"} (a run of a run_script sweep), {\"scene\": \"<scene file>\"}.",
                             ),
                         ),
                     ),

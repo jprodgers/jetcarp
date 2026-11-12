@@ -132,24 +132,121 @@ pub(crate) struct Tool {
     pub run: fn(&mut Call) -> Res,
 }
 
+/// Where the full settings schemas of tool arguments are: `jetcarp://schema/{tool}/{argument}`.
+pub const SCHEMA_URI: &str = "jetcarp://schema/";
+
+/// The arguments of a tool whose settings are long enough to be resources of their own
+/// (`jetcarp://schema/{tool}/{argument}`, [`part_schema`]) rather than part of `tools/list`, which
+/// a client hands to the model whole: `search_start`'s strategies and budget, `pack`'s actions, and
+/// the larger arguments of the other tools. The listing shows each as an object with the first
+/// sentence of its description, the settings it cannot do without, and the resource
+/// ([`schema::pointer`]); a call is still read and checked against the full schema, and a bad
+/// setting is refused naming the resource ([`schema::with_settings`]).
+pub fn parts(tool: &str) -> Vec<&'static str> {
+    match tool {
+        "search_start" => {
+            let mut v = crate::job_tools::strategies();
+            v.push("budget");
+            v
+        }
+        "world_read" => vec!["cell"],
+        "pack" => crate::pack_tools::ACTIONS.to_vec(),
+        "search_runs" => vec!["sheet", "scene", "try", "review"],
+        "world_edit" => vec!["cells", "paste", "reseed"],
+        "world_render" => vec!["wallpaper"],
+        "library_curate" => vec!["changes", "quickstart", "compounds"],
+        "app_display" => vec!["save_rotation", "saver"],
+        _ => vec![],
+    }
+}
+
+/// A tool's full input schema: a shared tool's, or an app tool's.
+fn full_schema(tool: &str) -> Option<Value> {
+    match registry().iter().find(|t| t.name == tool) {
+        Some(t) => Some((t.schema)()),
+        None => crate::app_tools::full_schema(tool),
+    }
+}
+
+/// The resource holding a tool argument's full settings schema.
+pub fn part_uri(tool: &str, part: &str) -> String {
+    format!("{SCHEMA_URI}{tool}/{part}")
+}
+
+/// Every tool argument with a settings resource of its own, as `(tool, argument)`, in the order
+/// `tools/list` shows them (the app's tools last).
+pub fn all_parts() -> Vec<(&'static str, &'static str)> {
+    let names = registry()
+        .iter()
+        .map(|t| t.name)
+        .chain(crate::app_tools::NAMES.iter().copied());
+    let mut v = vec![];
+    for name in names {
+        let Some(full) = full_schema(name) else {
+            continue;
+        };
+        for p in parts(name) {
+            if full["properties"].get(p).is_some() {
+                v.push((name, p));
+            }
+        }
+    }
+    v
+}
+
+/// A tool argument's full settings schema, in these tools' words (the resource
+/// `jetcarp://schema/{tool}/{argument}`), or None when it has no resource of its own.
+pub fn part_schema(tool: &str, part: &str) -> Option<Value> {
+    if !parts(tool).contains(&part) {
+        return None;
+    }
+    let mut s = full_schema(tool)?.get("properties")?.get(part)?.clone();
+    schema::mcp_words(&mut s);
+    let o = s.as_object_mut()?;
+    o.insert(
+        "$schema".into(),
+        json!("https://json-schema.org/draft/2020-12/schema"),
+    );
+    o.insert("$id".into(), json!(part_uri(tool, part)));
+    o.insert("title".into(), json!(format!("{tool} {part}")));
+    Some(s)
+}
+
 impl Tool {
     fn definition(&self) -> Value {
         let mut schema = (self.schema)();
+        for key in parts(self.name) {
+            if let Some(p) = schema.get_mut("properties").and_then(|p| p.get_mut(key)) {
+                *p = schema::pointer(p, &part_uri(self.name, key));
+            }
+        }
         schema::mcp_words(&mut schema);
         json!({
             "name": self.name,
             "title": self.title,
             "description": (self.description)(),
             "inputSchema": schema,
-            "annotations": {
-                "title": self.title,
-                "readOnlyHint": self.read_only,
-                "destructiveHint": self.destructive,
-                "idempotentHint": self.read_only,
-                "openWorldHint": false,
-            },
+            "annotations": annotations(self.title, self.read_only, self.destructive, false),
         })
     }
+}
+
+/// A tool's annotations, without the hints that say what MCP assumes when they are left out
+/// (`readOnlyHint` false, `idempotentHint` false) or that mean nothing for a tool that changes
+/// nothing (`destructiveHint`, `idempotentHint`): `tools/list` is handed to the model whole.
+/// Whether a tool that changes things may destroy something is always said, since MCP assumes
+/// it may.
+pub fn annotations(title: &str, read_only: bool, destructive: bool, idempotent: bool) -> Value {
+    let mut a = json!({"title": title, "openWorldHint": false});
+    if read_only {
+        a["readOnlyHint"] = json!(true);
+    } else {
+        a["destructiveHint"] = json!(destructive);
+        if idempotent {
+            a["idempotentHint"] = json!(true);
+        }
+    }
+    a
 }
 
 /// The shared tools, in the order `tools/list` shows them.
