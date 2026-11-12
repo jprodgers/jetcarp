@@ -214,8 +214,31 @@ login entry and the screen saver use it.
 ## The starter pack
 
 Releases come with a starter pack: a folder of [packs](../guides/packs.md) (each a pack store, as
-[Pack format](../reference/pack-format.md#the-store) lays out) that the first-run setup offers to
-import into your library. JETCARP looks for this folder in one place, the first of:
+[Pack format](../reference/pack-format.md#the-store) lays out) that the
+[first-run setup](first-run.md) imports into your library if you choose the Explorer, Researcher or
+Everything profile. The starter pack itself is the pack whose feed or folder has `starter` in its
+name, such as the feed `jetcarp-starter`; when no pack in the folder is named so, setup counts every
+one of them as the starter pack. Everything imports every pack in the folder.
+
+In 0.4.0 the folder holds one pack, `jetcarp-starter` (version 2026.11, CC0-1.0, signed by Jimmie
+Rodgers, about 1.5 MB): 79 Quick Start entries that Jimmie Rodgers picked, with the records they
+show.
+
+- 36 from the atlas of an [exploratory search](../research/search-methods.md#explore) over every
+  tiling and rule family.
+- 18 spaceships and 8 oscillators found by soup searches on Archimedean, k-uniform, isohedral and
+  aperiodic tilings, with their pattern records.
+- 8 ant and turmite highways, with their ant records.
+- 7 sandpile identities: on the hat, the Spectre, both Penrose tilings, the snub square tiling, a
+  3-uniform tiling and an isohedral one.
+- 2 hat gliders: James Edmond's glider B, and the table JETCARP's evolutionary search found that
+  runs exactly like it.
+
+The 63 built-in examples picked with them (hand-made scenes, named rules, a tiling showcase and
+JACA presets) are part of the program and need no pack. They are *featured*: the Quick Start
+menu's *Featured* order mixes them in with the best entries, the pack's among them.
+
+JETCARP looks for the starter pack's folder in one place, the first of:
 
 1. `JETCARP_BUNDLED_PACKS`, if it is set;
 2. `share/jetcarp/packs` beside the folder the program is in (`<program folder>/../share/jetcarp/packs`),

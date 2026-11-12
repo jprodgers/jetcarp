@@ -43,6 +43,11 @@ The first public release.
   canonical JSON that other tools read without JETCARP, checked hash by hash and id by id on import;
   ratings go in only with each rater's consent. See [Packs](../guides/packs.md) and
   [Pack format](../reference/pack-format.md).
+- **A starter pack** beside the program: 79 Quick Start entries that Jimmie Rodgers picked (36 from
+  the atlas of an exploratory search, 18 spaceships, 8 oscillators, 8 ant and turmite highways, 7
+  sandpile identities and 2 hat gliders), with the 26 pattern records and 8 ant records they show.
+  The 63 built-in examples picked with them are featured in the Quick Start menu. See
+  [The starter pack](../getting-started/installing.md#the-starter-pack).
 - **Reproducibility.** Every run is a scene that replays bit for bit to a recorded state hash, and
   every picture JETCARP saves carries its scene; see [Reproducibility](../research/reproducibility.md).
 - **Installing.** Archives for Linux (x86_64 and ARM, glibc 2.28 or newer), Windows and macOS (Apple

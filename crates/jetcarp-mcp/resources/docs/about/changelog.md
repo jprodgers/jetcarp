@@ -26,7 +26,7 @@ The first public release.
   and macOS), or as a still picture; see [Wallpapers](../guides/wallpapers.md).
 - **One program for every front end.** `jetcarp` opens the app, and its subcommands are the command
   line, the background host (`jetcarp host`) and an MCP server for AI assistants (`jetcarp mcp`).
-  Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 75 named
+  Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 79 named
   operations, each with JSON Schemas for its input and output (`jetcarp api list`).
 - **AI assistants.** `jetcarp mcp` gives an assistant such as Claude Code or Claude Desktop 18 tools
   over those operations (worlds, scripts, the library, searches, media and packs), the app's
@@ -43,12 +43,23 @@ The first public release.
   canonical JSON that other tools read without JETCARP, checked hash by hash and id by id on import;
   ratings go in only with each rater's consent. See [Packs](../guides/packs.md) and
   [Pack format](../reference/pack-format.md).
+- **A starter pack** beside the program: 79 Quick Start entries that Jimmie Rodgers picked (36 from
+  the atlas of an exploratory search, 18 spaceships, 8 oscillators, 8 ant and turmite highways, 7
+  sandpile identities and 2 hat gliders), with the 26 pattern records and 8 ant records they show.
+  The 63 built-in examples picked with them are featured in the Quick Start menu. See
+  [The starter pack](../getting-started/installing.md#the-starter-pack).
 - **Reproducibility.** Every run is a scene that replays bit for bit to a recorded state hash, and
   every picture JETCARP saves carries its scene; see [Reproducibility](../research/reproducibility.md).
 - **Installing.** Archives for Linux (x86_64 and ARM, glibc 2.28 or newer), Windows and macOS (Apple
   silicon and Intel), installers that check every download, Python wheels for pipx, uv and pip, a
   Homebrew tap, a Scoop bucket and crates.io, with a starter pack beside the program; see
   [Installing JETCARP](../getting-started/installing.md).
+- **First-run setup.** On its first launch the app asks what JETCARP is for, in five profiles
+  (Desktop art, Explorer, Researcher, Everything, Blank slate), and sets it up: a data folder of your
+  choosing for big libraries, the starter pack and packs of your own imported, a Quick Start build
+  that searches for so many minutes and adds its best runs to the Quick Start, and the live
+  wallpaper and screen saver offered, never turned on unasked. The work runs as background jobs;
+  `jetcarp setup` does the same in a terminal. See [First run and setup](../getting-started/first-run.md).
 - **No network, no telemetry.** JETCARP makes no network connections; see `SECURITY.md`.
 - **This book**, with a page on the history and credits of every automaton and tiling.
 
