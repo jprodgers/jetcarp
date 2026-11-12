@@ -94,13 +94,17 @@ fn jetcarp_env() -> Vec<(String, String)> {
 /// The folders as `jetcarp paths` prints them.
 fn paths_text(p: &Paths) -> String {
     format!(
-        "settings: {}\ndata:     {}\noutput:   {}\n",
+        "settings: {}\ndata:     {}\noutput:   {}\nbundled:  {}\n",
         p.settings
             .as_ref()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "(none on this system)".into()),
         p.data.display(),
-        p.output.display()
+        p.output.display(),
+        p.bundled_packs
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(no packs came with the program)".into())
     )
 }
 
@@ -114,8 +118,7 @@ impl Report for Paths {
 pub struct SystemPaths;
 impl Op for SystemPaths {
     const NAME: &'static str = "system.paths";
-    const SUMMARY: &'static str =
-        "The settings, data, and output folders JETCARP uses (environment overrides included).";
+    const SUMMARY: &'static str = "The settings, data, and output folders JETCARP uses (environment overrides included), and the folder of packs that came with the program.";
     const READ_ONLY: bool = true;
     type In = NoInput;
     type Out = Paths;
@@ -136,6 +139,12 @@ pub struct DoctorFolders {
     pub library_exists: bool,
     #[serde(skip)]
     pub library_bytes: u64,
+    /// The packs that came with the program (see `system.paths`).
+    pub bundled_packs: Option<PathBuf>,
+    /// Bytes in that folder; none when it is missing.
+    pub bundled_packs_bytes: Option<u64>,
+    /// Where the program looked for them, in order (`$JETCARP_BUNDLED_PACKS` alone when set).
+    pub bundled_packs_searched: Vec<PathBuf>,
 }
 
 /// What JETCARP sees on this machine.
@@ -164,9 +173,37 @@ impl Report for DoctorReport {
             settings: f.settings.clone(),
             data: f.data.clone(),
             output: f.output.clone(),
+            bundled_packs: f.bundled_packs.clone(),
         };
         for l in paths_text(&paths).lines() {
+            if l.starts_with("bundled:") {
+                continue;
+            }
             let _ = writeln!(s, "  {l}");
+        }
+        match (&f.bundled_packs, f.bundled_packs_bytes) {
+            (Some(p), Some(b)) => {
+                let _ = writeln!(s, "  bundled:  {} ({})", p.display(), human_bytes(b));
+            }
+            (Some(p), None) => {
+                let _ = writeln!(s, "  bundled:  {} (missing)", p.display());
+            }
+            (None, _) => {
+                let looked: Vec<String> = f
+                    .bundled_packs_searched
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                let _ = writeln!(
+                    s,
+                    "  bundled:  none (looked in {})",
+                    if looked.is_empty() {
+                        "no folder: the program's own path is unknown".into()
+                    } else {
+                        looked.join(", ")
+                    }
+                );
+            }
         }
         let _ = writeln!(
             s,
@@ -242,6 +279,11 @@ impl Op for SystemDoctor {
         let paths = cx.paths();
         let library = cx.library_path();
         let library_exists = library.exists();
+        let bundled_packs_bytes = paths
+            .bundled_packs
+            .as_ref()
+            .filter(|p| p.is_dir())
+            .map(|p| folder_size(p));
         Ok(DoctorReport {
             version: jetcarp_core::VERSION.to_string(),
             os: std::env::consts::OS.to_string(),
@@ -261,6 +303,9 @@ impl Op for SystemDoctor {
                 },
                 library,
                 library_exists,
+                bundled_packs: paths.bundled_packs,
+                bundled_packs_bytes,
+                bundled_packs_searched: jetcarp_core::paths::bundled_packs_candidates(),
             },
             gpu: cx.platform.gpu_adapters(),
             desktop: cx.platform.desktop(),

@@ -12,8 +12,15 @@
 //! `%LOCALAPPDATA%` on Windows. Data uses the local folder, not the roaming one, because search
 //! databases can be large. On macOS both are the same folder, so data goes in a `data` subfolder
 //! there.
+//!
+//! One more folder belongs to the program, not the user: the packs that came with it (the
+//! starter pack), which JETCARP reads but never writes; see [`bundled_packs_dir`].
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+
+/// The variable that names the folder of packs that came with the program.
+pub const BUNDLED_PACKS_ENV: &str = "JETCARP_BUNDLED_PACKS";
 
 /// The folder name inside the operating system's settings and data folders.
 pub const APP_DIR: &str = "jetcarp";
@@ -62,6 +69,65 @@ pub fn output_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("jetcarp-out"))
 }
 
+/// The folder of packs that came with the program (each a pack store, as `pack-format.md` lays
+/// one out), for the first-run setup to offer: `$JETCARP_BUNDLED_PACKS` when set, else the first
+/// of `<program folder>/../share/jetcarp/packs` and `<program folder>/packs` that is a folder.
+/// `None` when there is none, as after `cargo install` or with a release built without the
+/// starter pack.
+///
+/// The second place is where prefix installs put it (Homebrew's `pkgshare`, a Python
+/// environment's `share` folder from the wheel); the third is the release archives' own layout.
+/// `<program folder>` is the running program's folder with symbolic links resolved, so a link on
+/// the `PATH` (pipx, uv, the shell installer) leads back to the folder the program really lives
+/// in.
+pub fn bundled_packs_dir() -> Option<PathBuf> {
+    let env = std::env::var_os(BUNDLED_PACKS_ENV);
+    bundled_packs_from(env.as_deref(), program_path().as_deref())
+}
+
+/// The places [`bundled_packs_dir`] looks, in order: `$JETCARP_BUNDLED_PACKS` alone when set,
+/// else the two folders beside the program. For `jetcarp doctor` when none is found.
+pub fn bundled_packs_candidates() -> Vec<PathBuf> {
+    let env = std::env::var_os(BUNDLED_PACKS_ENV);
+    bundled_packs_places(env.as_deref(), program_path().as_deref())
+}
+
+/// [`bundled_packs_dir`] with the variable's value and the program's path given (for tests).
+pub fn bundled_packs_from(env: Option<&OsStr>, exe: Option<&Path>) -> Option<PathBuf> {
+    let places = bundled_packs_places(env, exe);
+    if env.is_some_and(|v| !v.is_empty()) {
+        // An explicit choice stands even when the folder is missing, so the doctor can say so.
+        return places.into_iter().next();
+    }
+    places.into_iter().find(|p| p.is_dir())
+}
+
+fn bundled_packs_places(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf> {
+    if let Some(v) = env.filter(|v| !v.is_empty()) {
+        return vec![PathBuf::from(v)];
+    }
+    let Some(dir) = exe.and_then(Path::parent) else {
+        return Vec::new();
+    };
+    let mut places = Vec::new();
+    if let Some(prefix) = dir.parent() {
+        places.push(prefix.join("share").join(APP_DIR).join("packs"));
+    }
+    places.push(dir.join("packs"));
+    places
+}
+
+/// The running program's file, with symbolic links resolved where that is the norm (not on
+/// Windows, where it would give `\\?\` paths).
+fn program_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    if cfg!(windows) {
+        Some(exe)
+    } else {
+        Some(std::fs::canonicalize(&exe).unwrap_or(exe))
+    }
+}
+
 /// The search databases' folder: `<data>/explore`.
 pub fn explore_dir() -> PathBuf {
     data_dir().join("explore")
@@ -103,9 +169,12 @@ pub fn describe() -> String {
             .unwrap_or_else(|| "(none on this system)".into())
     };
     format!(
-        "settings: {}\ndata:     {}\noutput:   {}\n",
+        "settings: {}\ndata:     {}\noutput:   {}\nbundled:  {}\n",
         show(config_dir()),
         data_dir().display(),
-        output_dir().display()
+        output_dir().display(),
+        bundled_packs_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(no packs came with the program)".into())
     )
 }

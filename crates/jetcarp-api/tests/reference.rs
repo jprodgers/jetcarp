@@ -146,10 +146,15 @@ fn paths_and_doctor() {
     assert_eq!(p.output, jetcarp_core::paths::output_dir());
     let t = p.text();
     let lines: Vec<&str> = t.lines().collect();
-    assert_eq!(lines.len(), 3);
+    assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("settings: ") && lines[1].starts_with("data:     "));
-    // `jetcarp paths --json` prints these three keys, as it always has.
-    assert_eq!(keys(&to_value(&p)), ["data", "output", "settings"]);
+    assert!(lines[3].starts_with("bundled:  "), "{t}");
+    assert_eq!(p.bundled_packs, jetcarp_core::paths::bundled_packs_dir());
+    // `jetcarp paths --json` prints the three folders and the bundled packs.
+    assert_eq!(
+        keys(&to_value(&p)),
+        ["bundled_packs", "data", "output", "settings"]
+    );
     // Without a platform there is no GPU and no desktop integration.
     let d = SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
     assert!(d.gpu.is_empty());
@@ -157,6 +162,7 @@ fn paths_and_doctor() {
     let t = d.text();
     assert!(t.starts_with("JETCARP "), "{t}");
     assert!(t.contains("\nFolders\n  settings: "), "{t}");
+    assert_eq!(t.matches("\n  bundled:  ").count(), 1, "{t}");
     assert!(
         t.contains("  none found: simulation runs on the CPU\n"),
         "{t}"

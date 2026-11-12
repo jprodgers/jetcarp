@@ -289,6 +289,10 @@ pub struct Paths {
     pub data: PathBuf,
     /// Output: pictures, sweeps, media (`$JETCARP_OUT`, else `<Pictures>/JETCARP`).
     pub output: PathBuf,
+    /// The packs that came with the program, read and never written: `$JETCARP_BUNDLED_PACKS`,
+    /// else `<program folder>/../share/jetcarp/packs`, else `<program folder>/packs`; none when
+    /// the install has none ([`jetcarp_core::paths::bundled_packs_dir`]).
+    pub bundled_packs: Option<PathBuf>,
 }
 
 /// What an operation runs with. Cheap to make; the folders are read from the environment when an
@@ -396,6 +400,7 @@ impl Ctx {
                 .out_root
                 .clone()
                 .unwrap_or_else(jetcarp_core::paths::output_dir),
+            bundled_packs: jetcarp_core::paths::bundled_packs_dir(),
         }
     }
 
