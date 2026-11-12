@@ -15,11 +15,11 @@ Python standard library only. For each library entry in state `new` (highest sco
    such as "glider" are kept; the suggestion goes into the note). `discovered_by` is left alone:
    it records who found the pattern, not who described it.
 
-    python3 tools/curate.py --limit 5                      # default library ($JETCARP_LIBRARY)
-    python3 tools/curate.py --library /tmp/lib --dry-run   # show what would be written
-    python3 tools/curate.py --base-url http://localhost:1234/v1 --model qwen/qwen3.8-27b
+    python3 contrib/llm/curate.py --limit 5                      # default library ($JETCARP_LIBRARY)
+    python3 contrib/llm/curate.py --library /tmp/lib --dry-run   # show what would be written
+    python3 contrib/llm/curate.py --base-url http://localhost:1234/v1 --model qwen/qwen3.8-27b
 
-A log (prompts, answers, what was written) goes to tools/curate_logs/ unless --no-log.
+A log (prompts, answers, what was written) goes to curate_logs/ beside this script unless --no-log.
 """
 
 import argparse
@@ -36,7 +36,7 @@ import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.path.dirname(os.path.dirname(HERE))
 
 SYSTEM = (
     "You are a curator of a catalog of cellular-automaton patterns (like the LifeWiki pattern "

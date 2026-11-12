@@ -7,3 +7,6 @@
 __pycache__/
 .claude/
 /dist
+/contrib/llm/curate_logs/
+/contrib/llm/mcp_transcripts/
+mcp_transcripts/
