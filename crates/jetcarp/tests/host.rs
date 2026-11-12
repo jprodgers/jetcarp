@@ -1,6 +1,7 @@
 //! Runs the real host program with its own folders, and drives it over its link.
 
 use serde_json::{Value, json};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -169,9 +170,18 @@ fn runs_scenes_and_answers_its_link() {
     // The answer to "quit" is written back before the host goes, rather than the caller seeing
     // the connection reset (as `jetcarp host stop` sometimes did on Windows).
     let bye = h.call(json!({"action": "quit"}));
-    assert!(bye.is_ok_and(|v| v["running"] == true));
+    let ok = bye.as_ref().is_ok_and(|v| v["running"] == true);
     let status = h.child.wait().unwrap();
-    assert!(status.success(), "{status:?}");
+    // On failure, say how the host ended and what it printed, which a CI log otherwise lacks.
+    let mut err = String::new();
+    if let Some(mut e) = h.child.stderr.take() {
+        let _ = e.read_to_string(&mut err);
+    }
+    assert!(
+        ok,
+        "answer to quit: {bye:?}; the host ended with {status:?}; its stderr:\n{err}"
+    );
+    assert!(status.success(), "{status:?}; its stderr:\n{err}");
     assert!(!h.home.join("run/jetcarp/host-endpoint.json").exists());
 }
 
@@ -321,8 +331,29 @@ fn host_start_can_be_captured_and_returns() {
         .expect("the output of `host start` ends with it (the host holds none of it)");
     assert!(start.wait().unwrap().success(), "{e}");
     assert!(o.starts_with("running, pid"), "{o}");
-    // And the host is still running.
-    let v = call_in(&dir, &json!({"action": "status"})).unwrap();
+    // And the host is still running. On failure, say whether its process is alive (CI logs show
+    // nothing else of a detached host).
+    let v = call_in(&dir, &json!({"action": "status"})).unwrap_or_else(|e| {
+        let pid = std::fs::read_to_string(dir.join("run/jetcarp/host-endpoint.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| v["pid"].as_u64());
+        let alive = pid.map(|p| {
+            if cfg!(windows) {
+                let out = Command::new("tasklist")
+                    .args(["/FI", &format!("PID eq {p}"), "/NH"])
+                    .output();
+                out.map(|o| String::from_utf8_lossy(&o.stdout).contains(&p.to_string()))
+                    .unwrap_or(false)
+            } else {
+                Command::new("kill")
+                    .args(["-0", &p.to_string()])
+                    .status()
+                    .is_ok_and(|s| s.success())
+            }
+        });
+        panic!("status after host start: {e}; host pid {pid:?}, alive: {alive:?}")
+    });
     assert_eq!(v["running"], true);
 }
 
