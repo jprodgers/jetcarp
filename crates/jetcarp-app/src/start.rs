@@ -8,7 +8,7 @@
 //! frame is proportional to the cards on screen: the filter, the sort, and the counts are
 //! cached and recomputed only when they change. Live previews run on background threads for
 //! the cards on screen only (see [`crate::previews`]), each read from the library by handle and
-//! starting from its mature state.
+//! starting from its mature state. A card's menu (right click) rates the entry or hides it.
 //!
 //! The menu loads on a background thread and reloads when the library's Quick Start rows change.
 
@@ -77,6 +77,20 @@ pub struct Menu {
     /// The library's file, which every card reads its entry from.
     lib_path: Arc<PathBuf>,
     facets: Option<(u64, Filter, std::sync::Arc<Facets>)>,
+    /// The cards drawn in the last frame, in order, with their places (the offscreen tests click
+    /// them).
+    #[cfg(test)]
+    drawn: Vec<(String, Rect)>,
+    /// Where an open card menu's five stars and *Hide* button are (the offscreen tests click
+    /// them).
+    #[cfg(test)]
+    menu_places: Vec<Rect>,
+}
+
+/// What a card's menu asked for.
+enum CardAct {
+    Rate(u8),
+    Hide,
 }
 
 fn stamp(lib: &Library) -> String {
@@ -154,6 +168,10 @@ impl Menu {
             lib,
             lib_path,
             facets: None,
+            #[cfg(test)]
+            drawn: vec![],
+            #[cfg(test)]
+            menu_places: vec![],
         };
         m.rows();
         m.reload();
@@ -252,6 +270,35 @@ impl Menu {
         });
     }
 
+    /// Rate an entry (1 to 5) or hide it, from its card's menu: in memory now, in the library on
+    /// a background thread (a hidden entry leaves the menu when it reloads, a moment later).
+    fn card_act(&mut self, i: usize, act: CardAct) {
+        let it = self.items[i].clone();
+        let path = self.lib.path().to_path_buf();
+        match act {
+            CardAct::Rate(stars) => {
+                for x in self.items.iter_mut() {
+                    if menu::rating_target(x) == menu::rating_target(&it) {
+                        x.rating = Some(stars as f64);
+                    }
+                }
+                self.rev += 1;
+                std::thread::spawn(move || {
+                    if let Err(e) = menu::rate(&Library::open(path), &it, stars) {
+                        eprintln!("Quick Start rating: {e}");
+                    }
+                });
+            }
+            CardAct::Hide => {
+                std::thread::spawn(move || {
+                    if let Err(e) = Library::open(path).set_quickstart_hidden(&it.handle, true) {
+                        eprintln!("Quick Start: {e}");
+                    }
+                });
+            }
+        }
+    }
+
     /// The order the grid shows, recomputed only when the filter, the sort, or the entries
     /// change.
     fn update_order(&mut self) {
@@ -293,6 +340,8 @@ impl Menu {
 
     /// The whole Quick Start screen below the header. Returns the entry to open.
     pub fn show(&mut self, ui: &mut egui::Ui) -> Option<MenuAction> {
+        #[cfg(test)]
+        self.drawn.clear();
         self.poll();
         let ctx = ui.ctx().clone();
         let now = self.now();
@@ -530,6 +579,8 @@ impl Menu {
         let it = &self.items[i];
         let library = &self.lib_path;
         self.pool.see(it.id(), now, || source_of(it, library));
+        #[cfg(test)]
+        self.drawn.push((it.handle.clone(), rect));
         let p = ui.painter_at(rect);
         let hovered = resp.hovered();
         let cat = category_color(&it.behaviour);
@@ -656,8 +707,61 @@ impl Menu {
         if it.has_preview {
             tip.push_str("\n\nClick to open at full size; Shift-click at preview size.");
         }
-        resp.on_hover_text(tip);
+        tip.push_str("\nRight-click to rate or hide it.");
+        let title = it.title.clone();
+        let rating = it.rating.map(|r| r.round() as u8);
+        let mut act = None;
+        #[cfg(test)]
+        let mut places: Vec<Rect> = vec![];
+        resp.on_hover_text(tip).context_menu(|ui| {
+            ui.label(RichText::new(&title).strong());
+            ui.horizontal(|ui| {
+                ui.label("Rate");
+                for k in 1..=5u8 {
+                    let on = rating.is_some_and(|r| r >= k);
+                    let b = thumbs::star_button(ui, on, "");
+                    #[cfg(test)]
+                    places.push(b.rect);
+                    if b.on_hover_text(format!("{k} of 5")).clicked() {
+                        act = Some(CardAct::Rate(k));
+                        ui.close();
+                    }
+                }
+            });
+            let h = ui
+                .button("Hide from Quick Start")
+                .on_hover_text("Leave it out of the menu, packs and the website");
+            #[cfg(test)]
+            places.push(h.rect);
+            if h.clicked() {
+                act = Some(CardAct::Hide);
+                ui.close();
+            }
+        });
+        #[cfg(test)]
+        if !places.is_empty() {
+            self.menu_places = places;
+        }
+        if let Some(a) = act {
+            self.card_act(i, a);
+        }
         action
+    }
+}
+
+#[cfg(test)]
+impl Menu {
+    /// Loaded from the library, with entries.
+    pub fn test_loaded(&self) -> bool {
+        self.loading.is_none() && !self.items.is_empty()
+    }
+    /// The first card drawn in the last frame, and its place.
+    pub fn test_first_card(&self) -> Option<(String, Rect)> {
+        self.drawn.first().cloned()
+    }
+    /// Where the open card menu's stars (1 to 5) and *Hide* button were last drawn.
+    pub fn test_menu_places(&self) -> Vec<Rect> {
+        self.menu_places.clone()
     }
 }
 

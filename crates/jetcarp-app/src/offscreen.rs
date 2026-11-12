@@ -43,7 +43,17 @@ impl Offscreen {
     }
 
     /// Run one frame of `ui` (`dt` seconds after the last) and return its pixels (RGBA).
-    pub fn frame(&mut self, dt: f64, mut ui: impl FnMut(&egui::Context)) -> Vec<u8> {
+    pub fn frame(&mut self, dt: f64, ui: impl FnMut(&egui::Context)) -> Vec<u8> {
+        self.frame_with(dt, vec![], ui)
+    }
+
+    /// [`frame`](Self::frame) with input events (pointer moves and clicks).
+    pub fn frame_with(
+        &mut self,
+        dt: f64,
+        events: Vec<egui::Event>,
+        mut ui: impl FnMut(&egui::Context),
+    ) -> Vec<u8> {
         self.time += dt;
         let [w, h] = self.size;
         let input = egui::RawInput {
@@ -52,6 +62,7 @@ impl Offscreen {
                 egui::vec2(w as f32, h as f32),
             )),
             time: Some(self.time),
+            events,
             ..Default::default()
         };
         let mut out = self.ctx.run_pass(input, |ctx| ui(ctx));
@@ -452,6 +463,114 @@ mod tests {
         let p = dir.join(format!("{name}.png"));
         o.save(&px, &p).unwrap();
         eprintln!("wrote {}", p.display());
+    }
+
+    /// The Quick Start screen over the scratch catalog `JETCARP_LIBRARY` (which should hold
+    /// entries of every source: an atlas, a pack's entry, a promotion; the built-ins come by
+    /// themselves): every source's cards, a card's menu opened by a right click, and a rating and
+    /// a hide from that menu reaching the library.
+    #[test]
+    #[ignore]
+    fn offscreen_start_screen() {
+        use crate::start::Menu;
+        use jetcarp_store::{Library, QsSource};
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(1400, 900) else {
+            return;
+        };
+        // As the app draws it each frame, noticing changes to the library's entries.
+        let show = |m: &mut Menu, ctx: &egui::Context| {
+            m.refresh_if_changed();
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let _ = m.show(ui);
+                });
+            });
+        };
+        // A click of a mouse button at a point (moved there first).
+        let click = |o: &mut Offscreen, m: &mut Menu, at: egui::Pos2, button| {
+            let press = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            o.frame_with(0.05, vec![egui::Event::PointerMoved(at)], |ctx| {
+                show(m, ctx)
+            });
+            o.frame_with(0.05, vec![press(true)], |ctx| show(m, ctx));
+            o.frame_with(0.05, vec![press(false)], |ctx| show(m, ctx));
+        };
+        let mut m = Menu::new();
+        let loaded = frames_until(&mut o, 120.0, &mut m, show, |m| m.test_loaded());
+        assert!(loaded, "the menu never loaded");
+        // Time for the cards on screen to build and run.
+        frames_until(&mut o, 5.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "start");
+        let mut counts = vec![];
+        for s in QsSource::ALL {
+            m.view.filter.source = Some(s);
+            frames_until(&mut o, 4.0, &mut m, show, |_| false);
+            shot(&mut o, &mut m, show, &dir, &format!("start-{}", s.name()));
+            counts.push((s, m.items.iter().filter(|i| i.source == s).count()));
+        }
+        eprintln!("entries by source: {counts:?}");
+        assert!(counts.iter().all(|c| c.1 > 0), "{counts:?}");
+        // A card's menu, by a right click on the first atlas card.
+        m.view.filter.source = Some(QsSource::Atlas);
+        frames_until(&mut o, 2.0, &mut m, show, |_| false);
+        let (handle, rect) = m.test_first_card().expect("a card on screen");
+        click(
+            &mut o,
+            &mut m,
+            rect.center(),
+            egui::PointerButton::Secondary,
+        );
+        shot(&mut o, &mut m, show, &dir, "start-card-menu");
+        let places = m.test_menu_places();
+        assert_eq!(places.len(), 6, "five stars and Hide in the card's menu");
+        // Its fourth star clicked: the card shows the rating at once, and the library has it.
+        click(
+            &mut o,
+            &mut m,
+            places[3].center(),
+            egui::PointerButton::Primary,
+        );
+        let lib = Library::open_default();
+        let row = lib.get_quickstart(&handle).unwrap();
+        let rated = frames_until(&mut o, 10.0, &mut m, show, |_| {
+            lib.user_ratings()
+                .unwrap()
+                .get(&("quickstart".to_string(), row.id.clone()))
+                == Some(&4.0)
+        });
+        assert!(rated, "the rating never reached the library");
+        shot(&mut o, &mut m, show, &dir, "start-rated");
+        // Hidden from it: gone from the menu after its reload, and hidden in the library.
+        click(
+            &mut o,
+            &mut m,
+            rect.center(),
+            egui::PointerButton::Secondary,
+        );
+        let places = m.test_menu_places();
+        click(
+            &mut o,
+            &mut m,
+            places[5].center(),
+            egui::PointerButton::Primary,
+        );
+        let gone = frames_until(&mut o, 20.0, &mut m, show, |m| {
+            m.test_loaded() && m.items.iter().all(|i| i.handle != handle)
+        });
+        assert!(gone, "the hidden entry stayed in the menu");
+        assert!(lib.get_quickstart(&handle).unwrap().hidden);
+        lib.set_quickstart_hidden(&handle, false).unwrap();
+        eprintln!("rated and hid {handle}");
     }
 
     /// The Hunts dashboard (the scratch catalog `JETCARP_LIBRARY`): a hunt started from its
