@@ -52,6 +52,10 @@ Error: part sha256:d7762c49… is altered or truncated
 A pack that its publisher didn't sign is refused unless you add `--allow-unsigned`. A store with
 several feeds needs `--feed NAME`, and `--manifest sha256:…` picks a version other than the newest.
 
+To see what a pack holds before checking all of it, `jetcarp pack info` reads only its manifest
+and signatures: the title and description, the publisher and whether they signed it, and the rows,
+parts and bytes of each table.
+
 ## Import a pack
 
 `jetcarp pack import` runs the same checks and then merges the pack into your library:

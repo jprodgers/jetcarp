@@ -124,4 +124,6 @@ grows, and shows each step's progress and the time left. *Stop (resumable)* stop
 
 The same piles are `jetcarp search pile` (the pile as a search strategy, taking the same options),
 `sandpile_pile(#{ … })` in Rhai scripts (see [Scripting](../reference/scripting.md#large-sandpiles)),
-and the MCP server's search tools (see [MCP tools](../reference/mcp.md)).
+and, from an AI assistant, the MCP tool `search_start` with `pile` (`{"pile": {"tiling": "hex",
+"grains": "1e6"}}`), followed with `job_status` and stopped with `job_stop` (see
+[MCP tools](../reference/mcp.md#search_start)).

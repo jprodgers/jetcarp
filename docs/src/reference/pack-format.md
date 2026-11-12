@@ -193,6 +193,11 @@ id. The minimal golden pack's, pretty-printed (stored without whitespace):
 | `stats` | counts for people (`patterns`, `ants`, `quickstart` rows, and `bytes` of its tables' parts and search runs); not authoritative |
 | `slice_of`, `filter` | optional: the manifest says it names a subset of another manifest's objects (`filter` describes which, for people); informational |
 
+*[`pack.schema.json`](pack.schema.json) is a JSON Schema (draft 07) of a manifest's shape, for tools
+that check JSON (the MCP server offers it as `jetcarp://schema/pack.json`). It checks members and
+their forms only; this page is the normative text, and a reader still checks canonical JSON, hashes
+and signatures.*
+
 **Every manifest is a full snapshot.** A version's content is what its manifest and indexes name;
 no reader walks history to read it. An unchanged table keeps its index hash, so a new version
 costs only its new indexes and parts.
@@ -1040,12 +1045,15 @@ ORDER BY period;
 | `jetcarp pack rater NAME [--show-name] [--notes] [--withdraw]` | records a rater's consent, with a pseudonymous id made once |
 | `jetcarp pack publish --feed NAME --to DIR [--id ID]... [--query JSON] [--no-searches] [--retract pattern:ID=reason] [--merge STORE] [--views]` | publishes the library, or a selection, as a new signed version of a feed |
 | `jetcarp pack export --to DIR [--from STORE]` | lays one version out for a single download |
+| `jetcarp pack info DIR [--feed F] [--manifest H]` | summarises a version (title, publisher and signature, tables, searches) without reading its data files |
 | `jetcarp pack check DIR` | checks a store or export without importing it |
 | `jetcarp pack import DIR [--verify sample\|full\|none] [--allow-unsigned] [--strict]` | imports a store or export |
 
 `--created TIME` fixes a version's time, so the same library publishes to byte-identical files.
-The operations are `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check` and
-`pack.import`.
+The operations are `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.info`,
+`pack.check` and `pack.import`. The MCP tool `pack` offers info, check, import, publish, export and
+the website export, but never `pack.key` or `pack.rater`: making a key and recording consent are
+for people.
 
 ## Questions settled while building it
 

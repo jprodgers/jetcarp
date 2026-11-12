@@ -144,7 +144,8 @@ ok: generation 100 hash 1adf6e3234b7f199
 
 - **Scripts** read and write scenes with `load_scene(path)`, `scene_world(json)`, `w.save_scene(path)`
   and `w.scene()` (see [Scripting (Rhai) API](../reference/scripting.md)).
-- **MCP tools** have `load_scene` and `get_scene` (see [MCP tools](../reference/mcp.md)).
+- **MCP tools** open a scene with `world_new` (`scene` or `path`) and return or save one with
+  `world_status` (`scene` or `save_path`) (see [MCP tools](../reference/mcp.md)).
 - **Pictures and the desktop.** `jetcarp wallpaper scene.json`, `jetcarp media render --scene`,
   screensaver profiles and rotations all take scene files (see [Pictures and animations](pictures.md)
   and [Wallpapers, screensavers and the background host](wallpapers.md)).

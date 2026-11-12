@@ -254,7 +254,10 @@ replay to the same hashes.
 
 ## JSON Schema
 
-There is no JSON Schema for scenes yet. The scene types are defined in JETCARP's Rust code
-(`crates/jetcarp-core/src/world.rs`, with the tiling in `topology.rs`), and the operation that reads a
-scene (`jetcarp api schema scene.load`) accepts any JSON object for it. A schema for scenes and packs
-is planned.
+[`scene.schema.json`](scene.schema.json) is a JSON Schema (draft 07) of the scene file: every field
+above, the seeds and the commands, for editors and other tools that check JSON. It accepts every
+scene that ships with JETCARP (a test checks them all) and, as JETCARP does, fields it does not know.
+The MCP server offers it as the resource `jetcarp://schema/scene.json`. The scene types themselves
+are defined in JETCARP's Rust code (`crates/jetcarp-core/src/world.rs`, with the tiling in
+`topology.rs`), which is what reads a scene; where the schema and the code disagree, the code is
+right, and the schema is a bug to report.

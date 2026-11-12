@@ -28,23 +28,27 @@ unless you switch scripts on for that pack.
 
 **Rhai scripts run only when you run them** (`jetcarp script FILE`, from the app, or through the
 MCP server's `run_script` tool), and they write files only inside JETCARP's output folder or the
-folder you give with `--out`.
+folder you give with `--out` (through the MCP server, also the folders you allow with `--allow`).
 
 **The local link and its token.** The running app (only while *AI control* is switched on) and the
 background host accept commands over TCP on `127.0.0.1`, which other computers cannot reach. A
-connection must first send a 128-bit token, which the app or host makes afresh each time it starts
-listening, and is closed if the token is wrong (the comparison takes the same time whichever
-character is wrong). The port and the token are kept in a file in JETCARP's runtime folder
-(`$XDG_RUNTIME_DIR/jetcarp`, else `~/.cache/jetcarp`, on Linux and macOS; `%LOCALAPPDATA%\jetcarp`
-on Windows), which only your user can read (on Windows, through the permissions of your own
-profile folder). Anything that can read that file,
-which means any program running as you, can control JETCARP; that is the boundary the token draws.
-`jetcarp mcp`, the MCP server, reads that file to reach the app or host, and otherwise talks only
-over its standard input and output to the AI client that started it.
+connection must first send a 128-bit token, which the app or host makes afresh, from the operating
+system's random source, each time it starts listening; a connection with a wrong token is told so
+and closed (the comparison takes the same time whichever character is wrong). The port and the
+token are kept in a file in JETCARP's runtime folder (`$XDG_RUNTIME_DIR/jetcarp`, else
+`~/.cache/jetcarp`, on Linux and macOS; `%LOCALAPPDATA%\jetcarp` on Windows; `JETCARP_RUNTIME_DIR`
+when set), which only your user can read: on Linux and macOS the folder is made private (mode
+0700) and the file too (0600), and both are checked, so the file is not left behind when they
+cannot be; on Windows, through the permissions of your own profile folder. Anything that can read
+that file, which means any program running as you, can control JETCARP; that is the boundary the
+token draws. `jetcarp mcp`, the MCP server, reads that file to reach the app or host, and
+otherwise talks only over its standard input and output to the AI client that started it.
 
 **An AI client connected to JETCARP can do what its tools allow:** change and run worlds, run
-searches, write pictures and run Rhai scripts, within the same folder limits as you. Connect only
-clients you trust, and switch AI control off when you are not using it.
+searches, curate the library, write pictures and run Rhai scripts. Its tools read and write files
+only in JETCARP's output folder, the library's folder and folders you name with
+`jetcarp mcp --allow`; it cannot make your pack-signing key or record anyone's consent to publish
+their ratings. Connect only clients you trust, and switch AI control off when you are not using it.
 
 **Files it writes** are listed in [Folders and environment variables](docs/src/reference/folders.md)
 and [Uninstalling](docs/src/guides/uninstalling.md): its settings, data and output folders, the

@@ -80,8 +80,8 @@ the reference below with a search box. Ctrl+Enter runs the script. It runs in th
 the app keeps simulating, and `show(w)` puts a copy of a world in the main view.
 
 **From an AI assistant**, the MCP tool `run_script` runs a script with a time limit (60 seconds by
-default) and a limit on world size, and reads files only from the output folder (see
-[MCP tools](mcp.md)).
+default, 600 at most) and a limit on world size (4 million cells), and reads and writes files only
+in the output folder and the folders given with `jetcarp mcp --allow` (see [MCP tools](mcp.md)).
 
 ## Parameters: `--set`
 
