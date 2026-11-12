@@ -77,7 +77,7 @@ out again.
 
 <img src="../images/getting-started/setup-4-packs.png" alt="The packs page for Explorer: the starter pack ticked, with its patterns, Quick Start entries and size" width="600">
 
-<img src="../images/getting-started/setup-4-packs-researcher.png" alt="The packs page for Researcher: the starter pack, and a folder added with Add packs from a folder, holding an exploratory search sample" width="600">
+<img src="../images/getting-started/setup-4-packs-researcher.png" alt="The packs page for Researcher: the starter pack, and a folder added with Add packs from a folder, holding a Quick Start atlas" width="600">
 
 **Desktop** (Desktop art and Everything). The desktop offers, each off until you tick it.
 
@@ -88,7 +88,7 @@ can switch off (Explorer) or lengthen and shorten, from 1 minute to 600. It also
 build runs on the GPU, and roughly what it all takes. **Start** begins; for a profile with nothing to
 import or build the button says **Finish**.
 
-<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, about 80 MB and 11 minutes" width="600">
+<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, about 83 MB and 11 minutes" width="600">
 
 **Setting up.** Each job with its progress. They run in the background, so **Continue in the
 background** closes the window and they carry on; **Tools → Hunts…** shows them too, and the new
@@ -100,8 +100,8 @@ done the button says **Close**.
 
 <img src="../images/getting-started/setup-8-done.png" alt="Explorer: all set; the starter pack imported and the Quick Start build done, with the number of atlas entries it published" width="600">
 
-The pictures here were made with an example starter pack and a one-minute build, so the numbers on
-your computer will differ.
+The pictures here were made with the starter pack and a one-minute build, so the numbers on your
+computer will differ.
 
 ## The desktop offers
 
@@ -129,13 +129,13 @@ $ jetcarp setup --profile explorer --yes --quickstart-minutes 1
 
 setting up JETCARP as Explorer:
   1. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
-  2. import JETCARP starter pack (44 patterns, 8 Quick Start entries, 160.2 KB)
+  2. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB)
   3. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
 pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-pack import 1: JETCARP starter pack imported: 44 patterns new, 0 merged, 8 Quick Start entries, 0 ant runs (done)
-Quick Start build (explore 2): 615 atlas entries published (615 new, 0 updated, 0 removed); 15,424 runs (75/s), 4,875 elites in 2,725 niches, 180 confirmed, 15 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
+pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
+Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); 9,980 runs (115/s), 2,994 elites in 1,664 niches, 122 confirmed, 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 ```
@@ -157,19 +157,19 @@ here. After the setup above:
 
 ```text
 $ jetcarp setup --status
-setup: Explorer on 2026-11-12 07:27 UTC (JETCARP 0.4.0)
+setup: Explorer on 2026-11-12 11:57 UTC (JETCARP 0.4.0)
   settings: /home/ada/.config/jetcarp
   data:     /home/ada/.local/share/jetcarp, 7.4 TB free
   library:  /home/ada/.local/share/jetcarp/library.sqlite
   output:   /home/ada/Pictures/JETCARP
   bundled:  /home/ada/.local/lib/jetcarp/packs
 packs that came with JETCARP:
-  JETCARP starter pack (jetcarp-starter/jetcarp-starter): 44 patterns, 8 Quick Start entries, 160.2 KB; the starter pack, imported
+  JETCARP starter pack (jetcarp-starter/jetcarp-starter): 26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB; the starter pack, imported
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (a Quick Start build runs on it)
-library: 44 patterns, 0 ant runs, 4 jobs; Quick Start entries: 364 built in, 8 from packs, 615 from searches
+library: 26 patterns, 8 ant runs, 24 jobs; Quick Start entries: 364 built in, 79 from packs, 873 from searches
 setup's jobs:
-  pack import 1: JETCARP starter pack imported: 44 patterns new, 0 merged, 8 Quick Start entries, 0 ant runs (done)
-  Quick Start build (explore 2): 615 atlas entries published (615 new, 0 updated, 0 removed); … (done)
+  pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
+  Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); … (done)
 profiles:
   desktop-art  Desktop art: Moving pictures for your desktop: … (no extra disk space or time)
   explorer     Explorer: The built-in examples and the starter pack's patterns, and a ten-minute search … (about 80 MB and 11 minutes)
