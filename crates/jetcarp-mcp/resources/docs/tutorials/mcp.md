@@ -68,7 +68,9 @@ field 0 [Brian's Brain (id 1)]: 690 live
 Saved to /home/ada/Pictures/JETCARP/brain.png.
 ```
 
-The picture comes back to the assistant, which shows it to you:
+The picture comes back to the assistant. Claude Desktop shows it to you in the conversation; a
+terminal client such as Claude Code can't show pictures, so ask for it to be saved ("…and save the
+picture as brain.png") and open the file from JETCARP's output folder:
 
 ![Brian's Brain after 200 generations, from the session](../images/tutorials/mcp-brians-brain.png)
 

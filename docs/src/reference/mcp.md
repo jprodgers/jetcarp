@@ -310,7 +310,7 @@ Example:
 
 ### `world_render`
 
-**Render a picture.** Renders the whole world as a PNG and returns it, so you (and the user) can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. `save_path` also writes the PNG (scene embedded). {"wallpaper": {"size": "4K"}} writes desktop-sized pictures instead and returns their paths (also on a fresh grid sized for the picture, or one picture per monitor, cut so they line up).
+**Render a picture.** Renders the whole world as a PNG and returns it, so you can see it: empty cells dark, live cells in the CA's palette, brighter for young cells. The user sees it only where the client shows tool images (terminal clients don't), so pass `save_path` when they want the picture: it also writes the PNG (scene embedded) and says where. {"wallpaper": {"size": "4K"}} writes desktop-sized pictures instead and returns their paths (also on a fresh grid sized for the picture, or one picture per monitor, cut so they line up).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
