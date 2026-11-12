@@ -770,6 +770,22 @@ impl Library {
         .unwrap_or_default()
     }
 
+    /// How many Quick Start entries each source has (`builtin`, `pack`, `atlas`, `promotion`),
+    /// hidden ones included; sources with none are left out.
+    pub fn quickstart_counts(&self) -> Result<std::collections::BTreeMap<String, u64>, String> {
+        self.read(Default::default(), |c| {
+            let mut st = c
+                .prepare("SELECT source, count(*) FROM quickstart GROUP BY source")
+                .map_err(e)?;
+            st.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+            })
+            .map_err(e)?
+            .collect::<Result<_, _>>()
+            .map_err(e)
+        })
+    }
+
     /// Count an opening of a Quick Start entry, by its handle.
     pub fn note_quickstart_open(&self, handle: &str) -> Result<(), String> {
         let now = now_utc();

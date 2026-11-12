@@ -728,10 +728,16 @@ impl Library {
     /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/library.sqlite`
     /// ([`jetcarp_core::paths::data_dir`]).
     pub fn default_path() -> PathBuf {
+        Library::default_path_in(&jetcarp_core::paths::data_dir())
+    }
+
+    /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/library.sqlite` in this
+    /// data folder.
+    pub fn default_path_in(data: &Path) -> PathBuf {
         if let Some(p) = std::env::var_os("JETCARP_LIBRARY").filter(|p| !p.is_empty()) {
             return Library::file_for(PathBuf::from(p));
         }
-        jetcarp_core::paths::data_dir().join(FILE)
+        data.join(FILE)
     }
 
     /// The library file for a path: itself if it names a `.sqlite`/`.db` file, else
