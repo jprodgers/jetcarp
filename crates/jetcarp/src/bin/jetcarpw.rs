@@ -63,7 +63,9 @@ fn main() -> ExitCode {
     c.args(std::env::args_os().skip(1));
     no_console(&mut c);
     match c.status() {
-        Ok(s) => ExitCode::from(s.code().unwrap_or(1).clamp(0, 255) as u8),
+        // The program's own code, whole: Windows codes are 32-bit, and a crash (0xC0000005)
+        // is negative as an i32, so it must not be clamped into 0..=255 (it would read as 0).
+        Ok(s) => std::process::exit(s.code().unwrap_or(1)),
         Err(_) => ExitCode::FAILURE,
     }
 }

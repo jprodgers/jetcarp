@@ -274,8 +274,19 @@ impl GpuSim {
         device: wgpu::Device,
         queue: wgpu::Queue,
     ) -> Result<GpuSim, String> {
+        // Windows' software renderer (WARP, which a machine with no graphics card falls back to)
+        // crashes in the simulation's compute shaders (0xC0000005 in d3d10warp.dll, stepping
+        // Life). Mesa's software Vulkan on Linux works, and CI runs the GPU tests on it.
+        let info = adapter.get_info();
+        if cfg!(windows) && info.device_type == wgpu::DeviceType::Cpu {
+            return Err(format!(
+                "only a software adapter is available ({}), which the GPU simulation does not use \
+                 on Windows",
+                info.name
+            ));
+        }
         check_adapter(adapter)?;
-        Ok(GpuSim::new(device, queue, describe(&adapter.get_info())))
+        Ok(GpuSim::new(device, queue, describe(&info)))
     }
 
     /// Use an existing device that is known to run compute shaders.
