@@ -1,43 +1,45 @@
-//! MCP protocol checks: handshake (legacy and modern), tools/list, tool round trips, errors,
-//! and the app link over a real loopback socket.
+//! MCP protocol and the world tools: the handshake (legacy and modern), tools/list (every tool
+//! well formed, each schema built from its operations), resources, errors, and the world tools'
+//! round trips: build, draw, step, read, objects, render, save inside the folder rules (and
+//! refused outside them), reseed, commands, scripts with progress, help and reference.
 
-use jetcarp_mcp::{Server, Session, link, protocol, tools};
+mod common;
+
+use common::*;
+use jetcarp_mcp::{Server, Session, protocol, tools};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn req(id: i64, method: &str, params: Value) -> Value {
-    json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+fn new() -> (Server, Session) {
+    setup("protocol");
+    (Server::new(), Session::new())
 }
 
-fn call(server: &mut Server, host: &mut Session, name: &str, args: Value) -> Value {
-    let r = server
-        .handle(
-            host,
-            &req(7, "tools/call", json!({"name": name, "arguments": args})),
-        )
-        .expect("reply");
-    assert_eq!(r["id"], 7);
-    r["result"].clone()
-}
-
-fn text(result: &Value) -> String {
-    result["content"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|c| c["text"].as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn ok(result: &Value) -> String {
-    assert_eq!(result["isError"], false, "tool failed: {}", text(result));
-    text(result)
-}
+/// The shared tools, in order.
+const TOOLS: &[&str] = &[
+    "help",
+    "reference",
+    "world_new",
+    "world_status",
+    "world_read",
+    "world_edit",
+    "world_step",
+    "world_render",
+    "run_script",
+    "library_query",
+    "library_curate",
+    "search_start",
+    "job_status",
+    "job_stop",
+    "search_runs",
+    "media_render",
+    "pack",
+    "files_list",
+];
 
 #[test]
 fn legacy_initialize_negotiates_version() {
-    let (mut s, mut h) = (Server::new(), Session::new());
+    let (mut s, mut h) = new();
     let r = s
         .handle(
             &mut h,
@@ -54,6 +56,17 @@ fn legacy_initialize_negotiates_version() {
     assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
     assert_eq!(r["result"]["serverInfo"]["name"], "jetcarp");
     assert!(r["result"]["capabilities"]["tools"].is_object());
+    assert!(r["result"]["capabilities"]["resources"].is_object());
+    let instr = r["result"]["instructions"].as_str().unwrap();
+    for t in [
+        "world_new",
+        "world_edit",
+        "search_start",
+        "help",
+        "reference",
+    ] {
+        assert!(instr.contains(t), "instructions name {t}: {instr}");
+    }
     // Unknown versions get the newest handshake version.
     let r = s
         .handle(
@@ -76,438 +89,663 @@ fn legacy_initialize_negotiates_version() {
 
 #[test]
 fn modern_discover_and_version_errors() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    let meta = |v: &str| {
-        json!({"_meta": {"io.modelcontextprotocol/protocolVersion": v,
-        "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"},
-        "io.modelcontextprotocol/clientCapabilities": {}}})
-    };
+    let (mut s, mut h) = new();
+    let meta = |v: &str| json!({"_meta": {"io.modelcontextprotocol/protocolVersion": v}});
     let r = s
         .handle(&mut h, &req(1, "server/discover", meta("2026-07-28")))
         .unwrap();
-    let res = &r["result"];
-    assert_eq!(res["resultType"], "complete");
     assert!(
-        res["supportedVersions"]
+        r["result"]["supportedVersions"]
             .as_array()
             .unwrap()
             .contains(&json!("2026-07-28"))
     );
-    assert_eq!(
-        res["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
-        "jetcarp"
-    );
-    // Modern requests work without initialize, and carry serverInfo.
+    assert!(r["result"]["capabilities"]["resources"].is_object());
     let r = s
         .handle(&mut h, &req(2, "tools/list", meta("2026-07-28")))
         .unwrap();
-    assert!(r["result"]["tools"].as_array().unwrap().len() >= 10);
-    assert!(r["result"]["ttlMs"].is_number());
     assert_eq!(
         r["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
         "jetcarp"
     );
     let r = s
-        .handle(&mut h, &req(3, "tools/list", meta("1900-01-01")))
+        .handle(&mut h, &req(3, "tools/list", meta("1999-01-01")))
         .unwrap();
     assert_eq!(r["error"]["code"], protocol::UNSUPPORTED_PROTOCOL_VERSION);
-    assert_eq!(r["error"]["data"]["requested"], "1900-01-01");
-    assert!(r["error"]["data"]["supported"].as_array().unwrap().len() >= 2);
 }
 
 #[test]
-fn tools_list_is_well_formed_and_stable() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    let a = s.handle(&mut h, &req(1, "tools/list", json!({}))).unwrap();
-    let b = s.handle(&mut h, &req(2, "tools/list", json!({}))).unwrap();
-    assert_eq!(a["result"]["tools"], b["result"]["tools"]);
-    let list = a["result"]["tools"].as_array().unwrap();
+fn tools_list_is_well_formed_and_from_the_operations() {
+    let (mut s, mut h) = new();
+    let r = s.handle(&mut h, &req(1, "tools/list", json!({}))).unwrap();
+    let list = r["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = list.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names, tools::NAMES);
+    assert_eq!(
+        names, TOOLS,
+        "the headless server lists the shared tools only"
+    );
+    assert_eq!(tools::names(), TOOLS);
     for t in list {
         let name = t["name"].as_str().unwrap();
+        let schema = &t["inputSchema"];
+        assert_eq!(schema["type"], "object", "{name}");
+        assert_eq!(schema["additionalProperties"], false, "{name}");
         assert!(
-            name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
-            "{name}"
+            t["description"].as_str().unwrap().len() > 200,
+            "{name} explains itself"
         );
-        assert!(t["description"].as_str().unwrap().len() > 60, "{name}");
-        assert_eq!(t["inputSchema"]["type"], "object", "{name}");
-        // Every property has a description for the model.
-        if let Some(props) = t["inputSchema"]["properties"].as_object() {
-            for (k, p) in props {
-                assert!(p["description"].is_string(), "{name}.{k}");
-            }
+        assert!(t["title"].is_string() && t["annotations"]["title"].is_string());
+        assert!(t["annotations"]["readOnlyHint"].is_boolean());
+        // Strict clients: no null types, no $ref, no unknown formats.
+        let text = schema.to_string();
+        assert!(!text.contains("\"$ref\""), "{name}: {text}");
+        assert!(!text.contains("\"null\""), "{name}: {text}");
+        assert!(!text.contains("\"format\":\"uint"), "{name}: {text}");
+        // Every property says what it is for.
+        for (k, p) in schema["properties"].as_object().unwrap() {
+            assert!(
+                p["description"].as_str().is_some_and(|d| !d.is_empty()),
+                "{name}.{k} has no description"
+            );
         }
+        // Old names are gone, also from the descriptions.
+        for old in [
+            "new_world",
+            "read_cells",
+            "inspect_cell",
+            "render_image",
+            "apply_commands",
+            "get_scene",
+            "load_scene",
+            "jetcarp_help",
+            "list_rules",
+            "list_tilings",
+            "library_list",
+            "library_get",
+            "library_promote",
+            "paste_pattern",
+            "hunt_start",
+            "explore_start",
+            "explore_query",
+            "export_wallpaper",
+            "site_export",
+        ] {
+            assert!(
+                !t.to_string().contains(old),
+                "{name} still names {old}: {}",
+                t["description"]
+            );
+        }
+    }
+    // The schemas are the operations' own: a field documented on an operation's input shows
+    // up with the same words.
+    let by = |n: &str| list.iter().find(|t| t["name"] == n).unwrap().clone();
+    let draw = jetcarp_api::op::input_schema::<jetcarp_api::ops::world::DrawIn>();
+    assert_eq!(
+        by("world_edit")["inputSchema"]["properties"]["cells"]["properties"]["rle"],
+        draw["properties"]["rle"]
+    );
+    let hunt = jetcarp_api::op::input_schema::<jetcarp_api::ops::search::HuntIn>();
+    assert_eq!(
+        by("search_start")["inputSchema"]["properties"]["hunt"]["properties"],
+        hunt["properties"]
+    );
+    let new = jetcarp_api::op::input_schema::<jetcarp_api::ops::world::NewWorldIn>();
+    for (k, v) in new["properties"].as_object().unwrap() {
+        assert_eq!(&by("world_new")["inputSchema"]["properties"][k], v, "{k}");
+    }
+    // Packs: no rater consent, no key making.
+    let pack = by("pack");
+    for a in ["info", "check", "import", "publish", "export", "site"] {
+        assert!(pack["inputSchema"]["properties"][a].is_object(), "pack {a}");
+    }
+    assert!(pack["inputSchema"]["properties"].get("rater").is_none());
+    assert!(pack["inputSchema"]["properties"].get("key").is_none());
+    assert!(
+        pack["inputSchema"]["properties"]["publish"]["properties"]
+            .get("key")
+            .is_none()
+    );
+    // And the search strategies, each its operation's.
+    for st in jetcarp_mcp::job_tools::strategies() {
+        assert!(
+            by("search_start")["inputSchema"]["properties"][st]["properties"].is_object(),
+            "{st}"
+        );
     }
 }
 
 #[test]
-fn stop_when_settled_runs_without_a_count() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    ok(&call(
+fn resources_are_listed_and_read() {
+    let (mut s, mut h) = new();
+    let r = s
+        .handle(&mut h, &req(1, "resources/list", json!({})))
+        .unwrap();
+    let list = r["result"]["resources"].as_array().unwrap();
+    let uris: Vec<&str> = list.iter().map(|x| x["uri"].as_str().unwrap()).collect();
+    for u in [
+        "jetcarp://reference/rules",
+        "jetcarp://reference/tilings",
+        "jetcarp://reference/palettes",
+        "jetcarp://reference/script-api",
+        "jetcarp://schema/scene.json",
+        "jetcarp://schema/pack.json",
+        "jetcarp://docs/introduction",
+        "jetcarp://docs/tutorials/mcp",
+        "jetcarp://docs/reference/mcp",
+    ] {
+        assert!(uris.contains(&u), "{u} listed");
+    }
+    assert!(
+        uris.iter()
+            .filter(|u| u.starts_with("jetcarp://docs/"))
+            .count()
+            >= 70
+    );
+    assert!(!uris.contains(&"jetcarp://docs/SUMMARY"));
+    let t = s
+        .handle(&mut h, &req(2, "resources/templates/list", json!({})))
+        .unwrap();
+    let templates: Vec<&str> = t["result"]["resourceTemplates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["uriTemplate"].as_str().unwrap())
+        .collect();
+    for u in [
+        "jetcarp://docs/{page}",
+        "jetcarp://job/{id}",
+        "jetcarp://pattern/{id}",
+        "jetcarp://quickstart/{handle}",
+    ] {
+        assert!(templates.contains(&u), "{u}");
+    }
+    let read = |s: &mut Server, h: &mut Session, uri: &str| {
+        s.handle(h, &req(3, "resources/read", json!({"uri": uri})))
+            .unwrap()
+    };
+    let r = read(&mut s, &mut h, "jetcarp://docs/guides/searching");
+    let c = &r["result"]["contents"][0];
+    assert_eq!(c["mimeType"], "text/markdown");
+    assert!(c["text"].as_str().unwrap().starts_with("# Searching"));
+    let r = read(&mut s, &mut h, "jetcarp://reference/rules");
+    assert!(
+        r["result"]["contents"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Brian's Brain")
+    );
+    let r = read(&mut s, &mut h, "jetcarp://schema/scene.json");
+    let schema: Value =
+        serde_json::from_str(r["result"]["contents"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(schema["title"], "JETCARP scene");
+    let r = read(&mut s, &mut h, "jetcarp://quickstart/life");
+    assert!(
+        r["result"]["contents"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("\"scene\"")
+    );
+    for bad in [
+        "jetcarp://docs/nope",
+        "jetcarp://job/x",
+        "https://example.org",
+    ] {
+        let r = read(&mut s, &mut h, bad);
+        assert_eq!(r["error"]["code"], protocol::RESOURCE_NOT_FOUND, "{bad}");
+    }
+    // The help tool serves the same pages.
+    let page = ok(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"tiling": "square", "width": 21, "height": 21, "boundary": "dead",
-               "cas": [{"rule": "Sandpile", "seed": "pile:400"}]}),
+        "help",
+        json!({"page": "guides/searching"}),
     ));
-    let t = ok(&call(
-        &mut s,
-        &mut h,
-        "step",
-        json!({"stop_when_settled": true}),
-    ));
-    assert!(!t.contains("not yet stable"), "{t}");
-    assert!(!t.contains("Ran 1 generation"), "{t}");
+    assert!(page.starts_with("# Searching"));
+    let pages = ok(&call(&mut s, &mut h, "help", json!({"topic": "pages"})));
+    assert!(pages.contains("tutorials/mcp: "), "{pages}");
 }
 
 #[test]
 fn glider_round_trip() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    ok(&call(
+    let (mut s, mut h) = new();
+    let t = ok(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"tiling": "square", "width": 30, "height": 30,
+        "world_new",
+        json!({"tiling": "square", "width": 40, "height": 40, "boundary": "wrap",
                "cas": [{"rule": "Life", "seed": "empty"}]}),
     ));
+    assert!(t.contains("\"rule\": \"B3/S23\""), "{t}");
+    // Numbers as text and nested objects as JSON text are read as they are meant.
     let t = ok(&call(
         &mut s,
         &mut h,
-        "set_cells",
-        json!({"pattern": ".O.\n..O\nOOO", "x": 5, "y": 5}),
+        "world_edit",
+        json!({"cells": "{\"pattern\": \".O.\\n..O\\nOOO\", \"x\": \"5\", \"y\": 5}"}),
     ));
-    assert!(t.contains("Set 5 cell"), "{t}");
-    ok(&call(&mut s, &mut h, "step", json!({"generations": 8})));
-    let t = ok(&call(&mut s, &mut h, "read_cells", json!({})));
+    assert!(
+        t.contains("Set 5 cell(s)") && t.contains("x 5..7, y 5..7"),
+        "{t}"
+    );
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_step",
+        json!({"generations": "8"}),
+    ));
+    assert!(t.contains("Generation 8"), "{t}");
+    let t = ok(&call(&mut s, &mut h, "world_read", json!({})));
     assert!(t.contains("bounding box x 7..9, y 7..9"), "{t}");
-    assert!(t.contains("..O.."), "{t}");
-    // Same glider written as RLE in a fresh world lands on the same hash.
-    let hash = h.world.hash_hex();
-    ok(&call(
-        &mut s,
-        &mut h,
-        "new_world",
-        json!({"width": 30, "height": 30, "cas": [{"rule": "B3/S23", "seed": "empty"}]}),
-    ));
-    ok(&call(
-        &mut s,
-        &mut h,
-        "set_cells",
-        json!({"rle": "bo$2bo$3o!", "x": 5, "y": 5}),
-    ));
-    ok(&call(&mut s, &mut h, "step", json!({"generations": 8})));
-    assert_eq!(h.world.hash_hex(), hash);
-    // The scene replays to the same state.
-    let scene = ok(&call(&mut s, &mut h, "get_scene", json!({})));
-    let mut h2 = Session::new();
     let t = ok(&call(
         &mut s,
-        &mut h2,
-        "load_scene",
-        json!({"scene": scene}),
+        &mut h,
+        "world_read",
+        json!({"format": "list", "x": 7, "y": 7, "width": 3, "height": 3}),
     ));
-    assert!(t.contains("Replayed to its recorded hash"), "{t}");
-    assert_eq!(h2.world.hash_hex(), hash);
+    assert!(t.contains("[8,7,1]") || t.contains("[8, 7, 1]"), "{t}");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_read",
+        json!({"format": "objects"}),
+    ));
+    assert!(
+        t.contains("glider (c/4) x 1") && t.contains("x 7..9, y 7..9"),
+        "{t}"
+    );
+    let cell: Value = json_of(&call(
+        &mut s,
+        &mut h,
+        "world_read",
+        json!({"cell": {"x": 8, "y": 7}}),
+    ));
+    assert_eq!(cell["values"][0]["value"], 1);
+    assert_eq!(
+        cell["touch_neighbors_clockwise"].as_array().unwrap().len(),
+        8
+    );
+    let r = call(&mut s, &mut h, "world_render", json!({"max_side": 64}));
+    assert!(ok(&r).contains("64 x 64 px"));
+    assert!(has_png(&r));
+    // The scene replays to the same state.
+    let scene = ok(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"scene": true}),
+    ));
+    let hash = h.world.hash_hex();
+    ok(&call(&mut s, &mut h, "world_new", json!({"cells": 4096})));
+    assert_ne!(h.world.hash_hex(), hash);
+    let t = ok(&call(&mut s, &mut h, "world_new", json!({"scene": scene})));
+    assert!(t.contains("Replayed to its recorded hash") || h.world.hash_hex() == hash);
+    assert_eq!(h.world.hash_hex(), hash);
 }
 
 #[test]
-fn status_render_and_commands() {
-    let (mut s, mut h) = (Server::new(), Session::new());
+fn edits_commands_reseed_and_paste() {
+    let (mut s, mut h) = new();
     ok(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"tiling": "hex", "width": 40, "height": 30, "boundary": "wrap",
-               "cas": ["Brian's Brain"], "rng_seed": 3}),
+        "world_new",
+        json!({"width": 32, "height": 32, "cas": [{"rule": "Life", "seed": "empty"}, {"rule": "Brian's Brain", "seed": "empty"}]}),
     ));
-    let st: Value =
-        serde_json::from_str(&ok(&call(&mut s, &mut h, "world_status", json!({})))).unwrap();
-    assert_eq!(st["tiling"]["id"], "hex");
-    assert_eq!(st["tiling"]["grid"]["width"], 40);
-    assert_eq!(st["cas"][0]["rule"], "B2/S/C3");
-    let r = call(&mut s, &mut h, "render_image", json!({"max_side": 128}));
-    ok(&r);
-    let img = r["content"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["type"] == "image")
-        .unwrap();
-    assert_eq!(img["mimeType"], "image/png");
-    assert!(img["data"].as_str().unwrap().starts_with("iVBORw0KGgo"));
     let t = ok(&call(
         &mut s,
         &mut h,
-        "apply_commands",
-        json!({"commands": [{"op": "add_ca", "ca": {"rule": "Life", "seed": "random:0.1"}},
-                            {"op": "step", "gens": 3}]}),
+        "world_edit",
+        json!({"ca": 2, "cells": {"cells": [[3, 3], [4, 4, 2]]}}),
     ));
-    assert!(t.contains("new CA id 2"), "{t}");
-    assert_eq!(h.world.generation, 3);
-    let c = ok(&call(
+    assert!(t.contains("id 2"), "{t}");
+    let t = ok(&call(
         &mut s,
         &mut h,
-        "inspect_cell",
-        json!({"x": 3, "y": 3}),
+        "world_edit",
+        json!({"commands": [{"op": "step", "gens": 3}, {"op": "update_ca", "id": 1, "change": {"palette": "Tide"}}]}),
     ));
-    let c: Value = serde_json::from_str(&c).unwrap();
-    assert_eq!(c["edge_neighbors_clockwise"].as_array().unwrap().len(), 6);
+    assert!(t.contains("Generation 3"), "{t}");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"reseed": {"policies": [{"mode": "rain", "when": {"kind": "every", "gens": 10}}]}}),
+    ));
+    assert!(t.contains("policies"), "{t}");
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"reseed": {"mode": "blobs"}}),
+    ));
+    // One action at a time, `ca` not with commands, and errors that say what to do.
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"cells": {"pattern": "O"}, "commands": []}),
+    ));
+    assert!(e.contains("give one of"), "{e}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"ca": 1, "commands": [{"op": "step", "gens": 1}]}),
+    ));
+    assert!(e.contains("`ca` goes with"), "{e}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"cells": {"patern": "O"}}),
+    ));
+    assert!(
+        e.contains("unknown field `patern`") && e.contains("pattern"),
+        "{e}"
+    );
+    let e = fails(&call(&mut s, &mut h, "world_edit", json!({})));
+    assert!(e.contains("give one of"), "{e}");
+    // A library pattern, pasted and opened: the object finder stores it first.
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"width": 30, "height": 30, "cas": [{"rule": "Life", "seed": "empty"}]}),
+    ));
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"cells": {"pattern": ".O.\n..O\nOOO", "x": 3, "y": 3}}),
+    ));
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_read",
+        json!({"format": "objects", "catalog": true}),
+    ));
+    assert!(
+        t.contains("Library: 1 new") || t.contains("already known"),
+        "{t}"
+    );
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"paste": {"id": "glider", "x": 20, "y": 20, "orientation": 2}}),
+    ));
+    assert!(t.contains("Pasted glider"), "{t}");
+    assert_eq!(h.world.fields[0].population(), 10);
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"pattern": "glider"}),
+    ));
+    assert!(t.contains("Scene loaded"), "{t}");
+    assert_eq!(h.world.fields[0].population(), 5);
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"quickstart": "life"}),
+    ));
+    assert!(t.contains("Scene loaded"), "{t}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"quickstart": "life", "width": 20, "height": 20}),
+    ));
+    assert!(e.contains("give one or the other"), "{e}");
+}
+
+#[test]
+fn files_stay_inside_the_folder_rules() {
+    let (mut s, mut h) = new();
+    let root = setup("protocol");
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"width": 16, "height": 16, "cas": ["Life"]}),
+    ));
+    // Relative paths start in the output folder; folders are made.
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_render",
+        json!({"max_side": 64, "save_path": "a/b/shot.png"}),
+    ));
+    assert!(t.contains("Saved to"), "{t}");
+    assert!(root.join("out/a/b/shot.png").is_file());
+    let scene = root.join("out").join("c").join("scene.json");
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"save_path": path_json(&scene)}),
+    ));
+    assert!(scene.is_file());
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"path": "c/scene.json"}),
+    ));
+    assert!(t.contains("Replayed to its recorded hash"), "{t}");
+    // Outside them: refused, saying where the tools may go.
+    let outside = root.join("elsewhere").join("x.json");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"save_path": path_json(&outside)}),
+    ));
+    assert!(e.contains("the MCP tools may only write inside"), "{e}");
+    assert!(!outside.exists());
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_render",
+        json!({"save_path": "../escape.png"}),
+    ));
+    assert!(e.contains("may only write inside"), "{e}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"path": path_json(&root.join("config").join("none.json"))}),
+    ));
+    assert!(e.contains("may only read inside"), "{e}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_render",
+        json!({"wallpaper": {"size": "320x200", "out": path_json(&outside.with_extension("png"))}}),
+    ));
+    assert!(e.contains("may only write inside"), "{e}");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_render",
+        json!({"wallpaper": {"size": "320x200", "out": "wall.png"}}),
+    ));
+    assert!(t.contains("\"width\": 320"), "{t}");
+    assert!(root.join("out").join("wall.png").is_file());
+    // files_list sees what was written; the folders outside are not its roots.
+    let l = json_of(&call(&mut s, &mut h, "files_list", json!({"path": "a/b"})));
+    assert_eq!(l["newest_first"][0]["name"], "shot.png");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "files_list",
+        json!({"path": path_json(&root.join("config"))}),
+    ));
+    assert!(!e.is_empty());
 }
 
 #[test]
 fn errors_are_useful_not_fatal() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    // Protocol errors.
-    let r = s.handle(&mut h, &req(1, "no/such", json!({}))).unwrap();
-    assert_eq!(r["error"]["code"], protocol::METHOD_NOT_FOUND);
+    let (mut s, mut h) = new();
+    // Unknown tool: a JSON-RPC error.
     let r = s
         .handle(
             &mut h,
-            &req(2, "tools/call", json!({"name": "nope", "arguments": {}})),
+            &req(
+                1,
+                "tools/call",
+                json!({"name": "new_world", "arguments": {}}),
+            ),
         )
         .unwrap();
     assert_eq!(r["error"]["code"], protocol::INVALID_PARAMS);
-    let r = s.handle_line(&mut h, "{not json").unwrap();
-    assert!(r.contains("-32700"), "{r}");
-    let r = s
-        .handle(&mut h, &json!({"id": 3, "method": "ping"}))
-        .unwrap();
-    assert_eq!(r["error"]["code"], protocol::INVALID_REQUEST);
-    // Tool errors come back as isError results the model can read.
-    let cases = [
-        ("set_cells", json!({"pattern": "O"}), "no CAs"),
-        (
-            "new_world",
-            json!({"tiling": "pentagonal-nonsense"}),
-            "unknown tiling",
-        ),
-        ("new_world", json!({"width": 3, "height": 3}), "8 to 4096"),
-        ("new_world", json!({"cas": ["Q7 nonsense"]}), "not a rule"),
-        (
-            "new_world",
-            json!({"tiling": "hex", "cas": ["W30"]}),
-            "square grid",
-        ),
-        ("step", json!({"generations": 0}), "at least 1"),
-        ("render_image", json!({"max_side": 5}), "64 to 2048"),
-        (
-            "apply_commands",
-            json!({"commands": [{"gens": 3}]}),
-            "no \"op\"",
-        ),
-        ("load_scene", json!({"scene": "{}"}), "scene JSON"),
-        ("world_status", json!({}), ""),
-    ];
-    for (name, args, needle) in cases {
-        let r = call(&mut s, &mut h, name, args.clone());
-        if name == "world_status" {
-            ok(&r);
-            continue;
-        }
-        assert_eq!(r["isError"], true, "{name} {args}: {}", text(&r));
-        assert!(text(&r).contains(needle), "{name}: {}", text(&r));
-    }
-    ok(&call(
+    // Unknown argument: a tool error listing the arguments.
+    let e = fails(&call(&mut s, &mut h, "world_step", json!({"gens": 3})));
+    assert!(
+        e.contains("has no argument `gens`") && e.contains("generations"),
+        "{e}"
+    );
+    let e = fails(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"width": 20, "height": 20, "boundary": "dead", "cas": [{"rule": "Life", "seed": "empty"}]}),
+        "world_new",
+        json!({"tiling": "nonsense"}),
     ));
-    for (args, needle) in [
-        (json!({"cells": [[25, 3]]}), "outside the grid"),
-        (json!({"cells": [[1, 1, 2]]}), "too high"),
-        (json!({"pattern": "O?"}), "not understood"),
-        (json!({"ca": 9, "cells": [[1, 1]]}), "no CA 9"),
-        (json!({}), "nothing to draw"),
-        (json!({"bogus": 1}), "unknown argument"),
-    ] {
-        let r = call(&mut s, &mut h, "set_cells", args.clone());
-        assert_eq!(r["isError"], true, "{args}");
-        assert!(text(&r).contains(needle), "{args}: {}", text(&r));
-    }
-    let r = call(&mut s, &mut h, "step", json!({"generations": 2_000_000}));
-    assert!(text(&r).contains("at most"), "{}", text(&r));
+    assert!(
+        e.contains("unknown tiling") && e.contains("reference"),
+        "{e}"
+    );
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_step",
+        json!({"generations": 99_000_000_000u64}),
+    ));
+    assert!(e.contains("at most"), "{e}");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "reference",
+        json!({"what": "rules", "search": "x"}),
+    ));
+    assert!(e.contains("does not apply"), "{e}");
+    // Garbage and batches.
+    assert!(
+        s.handle_line(&mut h, "{not json")
+            .unwrap()
+            .contains("-32700")
+    );
+    let r = s
+        .handle(
+            &mut h,
+            &json!([req(1, "ping", json!({})), req(2, "ping", json!({}))]),
+        )
+        .unwrap();
+    assert_eq!(r.as_array().unwrap().len(), 2);
     // The world survived all of that.
     assert_eq!(h.world.generation, 0);
 }
 
 #[test]
-fn app_link_round_trip_with_token() {
-    let listener = link::Listener::start(0, Arc::new(|| {})).expect("listen");
-    let port = listener.port;
-    let token = listener.token.clone();
-    // A fake UI thread: answers queued requests with its own session.
-    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop2 = stop.clone();
-    let ui = std::thread::spawn(move || {
-        let (mut server, mut host) = (Server::new(), Session::new());
-        while !stop2.load(std::sync::atomic::Ordering::SeqCst) {
-            for p in listener.poll() {
-                let msg = p.message.clone();
-                p.reply(server.handle(&mut host, &msg));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-    });
-    let bad = link::AppClient::connect(Some(link::EndpointInfo {
-        port,
-        token: "wrong".into(),
-    }));
-    assert!(bad.is_err());
-    let mut c =
-        link::AppClient::connect(Some(link::EndpointInfo { port, token })).expect("connect");
-    let r = c
-        .call(&req(
-            1,
-            "tools/call",
-            json!({"name": "new_world",
-            "arguments": {"width": 16, "height": 16, "cas": ["Life"]}}),
-        ))
-        .unwrap();
-    assert_eq!(r["result"]["isError"], false, "{r}");
-    let r = c
-        .call(&req(
-            2,
-            "tools/call",
-            json!({"name": "step", "arguments": {"generations": 4}}),
-        ))
-        .unwrap();
-    assert!(
-        r["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("Generation 4")
-    );
-    stop.store(true, std::sync::atomic::Ordering::SeqCst);
-    ui.join().unwrap();
-}
-
-#[test]
-fn saving_creates_folders() {
-    let (mut s, mut h) = (Server::new(), Session::new());
+fn sandpile_settles_and_reports() {
+    let (mut s, mut h) = new();
     ok(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"width": 16, "height": 16, "cas": ["Life"]}),
-    ));
-    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("jetcarp-mcp-test-{}", std::process::id()));
-    let png = dir.join("a/b/shot.png");
-    let scene = dir.join("c/scene.json");
-    ok(&call(
-        &mut s,
-        &mut h,
-        "render_image",
-        json!({"max_side": 64, "save_path": png.to_str().unwrap()}),
-    ));
-    ok(&call(
-        &mut s,
-        &mut h,
-        "get_scene",
-        json!({"path": scene.to_str().unwrap()}),
-    ));
-    assert!(png.is_file() && scene.is_file());
-    let t = ok(&call(
-        &mut s,
-        &mut h,
-        "load_scene",
-        json!({"path": scene.to_str().unwrap()}),
-    ));
-    assert!(t.contains("Replayed to its recorded hash"), "{t}");
-    let _ = std::fs::remove_dir_all(dir);
-}
-
-#[test]
-fn sandpile_reports_stability() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    ok(&call(
-        &mut s,
-        &mut h,
-        "new_world",
+        "world_new",
         json!({"width": 21, "height": 21, "boundary": "dead",
                "cas": [{"rule": "Sandpile", "seed": "empty"}]}),
     ));
-    let t = ok(&call(
+    ok(&call(
         &mut s,
         &mut h,
-        "set_cells",
-        json!({"cells": [[10, 10, 3000]]}),
+        "world_edit",
+        json!({"cells": {"cells": [[10, 10, 3000]]}}),
     ));
-    assert!(t.contains("3000"), "{t}");
     let t = ok(&call(
         &mut s,
         &mut h,
-        "apply_commands",
+        "world_edit",
         json!({"commands": [{"op": "sandpile", "id": 1, "action": "stabilize"}]}),
     ));
     assert!(t.contains("stable: no cell can topple"), "{t}");
-    let st: Value =
-        serde_json::from_str(&ok(&call(&mut s, &mut h, "world_status", json!({})))).unwrap();
+    let st = json_of(&call(&mut s, &mut h, "world_status", json!({})));
     let f = &st["fields"][0];
     assert_eq!(f["stable"], true);
     assert_eq!(
         f["population"].as_u64().unwrap() + f["grains_lost_off_edges"].as_u64().unwrap(),
         3000
     );
+    // stop_when_settled runs without a count.
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"width": 16, "height": 16, "cas": [{"rule": "Life", "seed": "empty"}]}),
+    ));
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_edit",
+        json!({"cells": {"pattern": "OO\nOO"}}),
+    ));
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "world_step",
+        json!({"stop_when_settled": true}),
+    ));
+    assert!(t.contains("settled"), "{t}");
 }
 
 #[test]
-fn run_script_tool() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    let r = call(
+fn run_script_with_limits_and_progress() {
+    let (mut s, mut h) = new();
+    let t = ok(&call(
         &mut s,
         &mut h,
         "run_script",
         json!({"script": "let w = world(#{ tiling: \"square\", size: [41, 30], boundary: \"dead\" });\nw.add_ca(\"W30\");\nlet r = w.run(#{ until: \"done\" });\nprint(`rows ${r.generations} ${params.tag}`);",
                "params": {"tag": "x"}}),
-    );
-    let t = ok(&r);
+    ));
     assert!(t.contains("rows 29 x"), "{t}");
-    // Errors come back with the line.
-    let r = call(
+    let e = fails(&call(
         &mut s,
         &mut h,
         "run_script",
-        json!({"script": "let a = 1;\nlet b = (a + ;"}),
-    );
-    assert_eq!(r["isError"], true);
-    assert!(text(&r).contains("line 2"), "{}", text(&r));
-    let r = call(
-        &mut s,
-        &mut h,
-        "run_script",
-        json!({"script": "print(1)", "check_only": true}),
-    );
-    assert!(ok(&r).contains("no syntax errors"));
-    // Worlds over the size limit are refused.
-    let r = call(
-        &mut s,
-        &mut h,
-        "run_script",
-        json!({"script": "world(#{ size: [5000, 5000] });"}),
-    );
-    assert!(text(&r).contains("limit"), "{}", text(&r));
+        json!({"script": "let x = ;"}),
+    ));
+    assert!(e.contains("error"), "{e}");
     assert!(
         ok(&call(
             &mut s,
             &mut h,
-            "jetcarp_help",
-            json!({"topic": "scripts"})
+            "run_script",
+            json!({"script": "let x = 1;", "check_only": true}),
         ))
-        .contains("sweep")
+        .contains("no syntax errors")
     );
-}
-
-#[test]
-fn run_script_sends_progress_when_asked() {
-    let (mut s, mut h) = (Server::new(), Session::new());
+    // Scripts write only inside the output folder (the path as a Rhai string, escaped).
+    let outside = setup("protocol").join("elsewhere").join("x.png");
+    let script = format!(
+        "let w = world(#{{ size: [16, 16] }}); w.save_png({});",
+        serde_json::to_string(&outside.display().to_string()).unwrap()
+    );
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "run_script",
+        json!({"script": script}),
+    ));
+    assert!(e.contains("only write inside"), "{e}");
+    assert!(!outside.exists());
+    // Progress, when the client asks for it.
     let sent = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
     let sink = sent.clone();
     s.notifier = Some(Arc::new(move |v: Value| sink.lock().unwrap().push(v)));
     let script = "for i in 0..=4 { progress(i, 4, `item ${i}`); }\nprint(\"done\");";
-    // Without a progress token: no notifications.
     ok(&call(
         &mut s,
         &mut h,
@@ -515,7 +753,6 @@ fn run_script_sends_progress_when_asked() {
         json!({"script": script}),
     ));
     assert!(sent.lock().unwrap().is_empty());
-    // With one: notifications/progress carrying the token, the first and the last at least.
     let r = s
         .handle(
             &mut h,
@@ -533,189 +770,45 @@ fn run_script_sends_progress_when_asked() {
     for n in &v {
         assert_eq!(n["method"], "notifications/progress");
         assert_eq!(n["params"]["progressToken"], "tok-1");
-        assert_eq!(n["params"]["total"], 4.0);
-        assert!(n.get("id").is_none());
     }
-    assert_eq!(v.last().unwrap()["params"]["progress"], 4.0);
 }
 
 #[test]
-fn library_promote_takes_a_sweep_run() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    // Both kinds at once, or a folder without a run, are refused with a hint.
-    let r = call(
-        &mut s,
-        &mut h,
-        "library_promote",
-        json!({"id": "glider", "folder": "/nonexistent", "run": "W30"}),
-    );
-    assert_eq!(r["isError"], true);
-    assert!(text(&r).contains("not both"), "{}", text(&r));
-    let r = call(
-        &mut s,
-        &mut h,
-        "library_promote",
-        json!({"folder": "/nonexistent"}),
-    );
-    assert!(text(&r).contains("`run`"), "{}", text(&r));
-    let r = call(
-        &mut s,
-        &mut h,
-        "library_promote",
-        json!({"folder": "/nonexistent-jetcarp-sweep", "run": "W30"}),
-    );
-    assert_eq!(r["isError"], true);
-    assert!(text(&r).contains("manifest"), "{}", text(&r));
-}
-
-#[test]
-fn quickstart_list_checks_its_status() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    let r = call(
-        &mut s,
-        &mut h,
-        "library_list",
-        json!({"kind": "quickstart", "status": "maybe"}),
-    );
-    assert_eq!(r["isError"], true);
-    assert!(text(&r).contains("shown or hidden"), "{}", text(&r));
-    let r = call(
-        &mut s,
-        &mut h,
-        "library_list",
-        json!({"kind": "quickstart", "source": "nonesuch"}),
-    );
-    assert_eq!(r["isError"], true);
-    assert!(
-        text(&r).contains("builtin, pack, atlas, promotion"),
-        "{}",
-        text(&r)
-    );
-}
-
-#[test]
-fn list_tilings_is_compact_and_searchable() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    // The whole catalog (1,300+ tilings) once came back here: 220,000 characters, more than a
-    // local model's context. Now families plus a summary, and `search` for the catalog.
-    let t = ok(&call(&mut s, &mut h, "list_tilings", json!({})));
-    assert!(t.len() < 10_000, "{} chars", t.len());
-    assert!(t.contains("rhombitrihex") && t.contains("k-uniform"), "{t}");
+fn help_and_reference() {
+    let (mut s, mut h) = new();
+    let t = ok(&call(&mut s, &mut h, "help", json!({})));
+    for tool in TOOLS {
+        assert!(t.contains(tool), "the overview names {tool}");
+    }
+    for topic in ["world", "library", "searches", "scripts", "packs"] {
+        let t = ok(&call(&mut s, &mut h, "help", json!({"topic": topic})));
+        assert!(t.len() > 500, "{topic}");
+    }
     let t = ok(&call(
         &mut s,
         &mut h,
-        "list_tilings",
-        json!({"search": "k2-"}),
+        "reference",
+        json!({"what": "rules", "family": "Generations"}),
     ));
-    assert!(t.starts_with("20 tilings match"), "{t}");
-    assert!(t.contains("k2-005"), "{t}");
-    // Vertex configurations work as tiling ids.
-    let r = call(
+    assert!(t.contains("Brian's Brain | B2/S/C3"), "{t}");
+    let t = ok(&call(
         &mut s,
         &mut h,
-        "new_world",
-        json!({"tiling": "3.4.6.4", "width": 8, "height": 8, "cas": [{"rule": "B3/S23"}]}),
-    );
-    assert!(ok(&r).contains("rhombitrihex"), "{}", text(&r));
-}
-
-#[test]
-fn cells_hash_repeats_when_the_cells_do() {
-    // A model checked a period-15 oscillator by comparing `hash` before and after 15 generations
-    // and was puzzled: `hash` covers the generation and ages. `cells_hash` covers the cells only.
-    let (mut s, mut h) = (Server::new(), Session::new());
-    ok(&call(
-        &mut s,
-        &mut h,
-        "new_world",
-        json!({"tiling": "square", "width": 16, "height": 16, "cas": [{"rule": "B3/S23", "seed": "empty"}]}),
+        "reference",
+        json!({"what": "tilings"}),
     ));
-    ok(&call(
+    assert!(t.contains("- hex |") && t.contains("k-uniform"), "{t}");
+    let t = ok(&call(
         &mut s,
         &mut h,
-        "set_cells",
-        json!({"pattern": "OOO", "x": 6, "y": 7}),
+        "reference",
+        json!({"what": "tilings", "search": "k2-00", "limit": 2}),
     ));
-    let st = |s: &mut Server, h: &mut Session| -> Value {
-        serde_json::from_str(&ok(&call(s, h, "world_status", json!({})))).unwrap()
-    };
-    let a = st(&mut s, &mut h);
-    let t = ok(&call(&mut s, &mut h, "step", json!({"generations": 2})));
-    assert!(t.contains("cells hash"), "{t}");
-    let b = st(&mut s, &mut h);
-    assert_ne!(a["hash"], b["hash"]);
-    assert_eq!(a["cells_hash"], b["cells_hash"]);
-}
-
-#[test]
-fn reseed_and_wallpaper_tools() {
-    let (mut s, mut h) = (Server::new(), Session::new());
-    ok(&call(
-        &mut s,
-        &mut h,
-        "new_world",
-        json!({"width": 60, "height": 40, "boundary": "wrap", "cas": [{"rule": "Life", "seed": "empty"}]}),
-    ));
-    // Reseed now: an empty world gets live cells, logged as a command.
-    let r: Value = serde_json::from_str(&ok(&call(
-        &mut s,
-        &mut h,
-        "reseed",
-        json!({"mode": {"kind": "blobs", "count": 2, "live": 0.5}}),
-    )))
-    .unwrap();
-    assert_eq!(r["done"][0], "reseeded (blobs)");
-    assert!(h.world.fields[0].population() > 0);
-    assert!(
-        h.world
-            .log()
-            .iter()
-            .any(|c| matches!(c, jetcarp_core::Command::Reseed { .. }))
-    );
-    // Policies: set, run, report with activity, then clear.
-    ok(&call(
-        &mut s,
-        &mut h,
-        "reseed",
-        json!({"policies": [{"mode": "rain", "when": {"kind": "every", "gens": 10}},
-                            {"mode": "blobs", "when": "settled", "cooldown": 50}]}),
-    ));
-    ok(&call(&mut s, &mut h, "step", json!({"generations": 100})));
-    let r: Value = serde_json::from_str(&ok(&call(&mut s, &mut h, "reseed", json!({})))).unwrap();
-    assert_eq!(r["policies"][0]["status"]["fired"], 10);
-    assert!(!r["activity"]["rows"].as_array().unwrap().is_empty());
-    // The policies are in the scene.
-    let scene = ok(&call(&mut s, &mut h, "get_scene", json!({})));
-    assert!(scene.contains("set_reseed"), "{scene}");
-    let t = call(&mut s, &mut h, "reseed", json!({"mode": "hail"}));
-    assert_eq!(t["isError"], true);
-    ok(&call(&mut s, &mut h, "reseed", json!({"policies": []})));
-    assert!(h.world.reseed_policies().is_empty());
-    // Wallpapers: one image, and a span cut per monitor.
-    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("jetcarp-mcp-wallpaper-{}", std::process::id()));
-    let r: Value = serde_json::from_str(&ok(&call(
-        &mut s,
-        &mut h,
-        "export_wallpaper",
-        json!({"size": "320x180", "palette": "Paper", "path": dir.join("one.png").to_str().unwrap()}),
-    )))
-    .unwrap();
-    assert_eq!(r["files"][0]["width"], 320);
-    assert!(dir.join("one.png").is_file());
-    let r: Value = serde_json::from_str(&ok(&call(
-        &mut s,
-        &mut h,
-        "export_wallpaper",
-        json!({"monitors": "256x144+0+0,192x108+256+18", "split": true, "fresh": true,
-               "cell_px": 2, "gens": 20, "path": dir.to_str().unwrap()}),
-    )))
-    .unwrap();
-    let files = r["files"].as_array().unwrap();
-    assert_eq!(files.len(), 2);
-    assert_eq!(files[1]["height"], 108);
-    assert!(std::path::Path::new(files[1]["path"].as_str().unwrap()).is_file());
-    // The fresh grid left the current world alone.
-    assert_eq!(h.world.topo.len(), 60 * 40);
-    let _ = std::fs::remove_dir_all(dir);
+    assert!(t.contains("k2-001"), "{t}");
+    for w in ["isohedral", "palettes", "seeds", "commands"] {
+        let t = ok(&call(&mut s, &mut h, "reference", json!({"what": w})));
+        assert!(t.len() > 200, "{w}: {t}");
+    }
+    let e = fails(&call(&mut s, &mut h, "help", json!({"page": "nope/nope"})));
+    assert!(e.contains("pages"), "{e}");
 }

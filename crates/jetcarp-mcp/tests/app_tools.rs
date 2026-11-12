@@ -1,5 +1,8 @@
 //! App-only tools: `app_display` is listed and answered by a host with a display (the app),
-//! and refused with a useful error by the headless session.
+//! and refused with a useful error by the headless session; and the world tools act on the app's
+//! world through its host.
+
+mod common;
 
 use jetcarp_core::world::Applied;
 use jetcarp_mcp::{Host, Server, Session, tools};
@@ -78,11 +81,12 @@ fn text(r: &Value) -> String {
 
 #[test]
 fn listed_only_for_hosts_with_a_display() {
+    common::setup("app_tools");
     let mut server = Server::new();
     let mut headless = Session::new();
     let n = names(&mut server, &mut headless);
     assert!(!n.iter().any(|x| x == "app_display"));
-    assert_eq!(n, tools::NAMES);
+    assert_eq!(n, tools::names());
     let mut app = FakeApp {
         s: Session::new(),
         screensaver: false,
@@ -110,6 +114,7 @@ fn listed_only_for_hosts_with_a_display() {
 
 #[test]
 fn calls_reach_the_host() {
+    common::setup("app_tools");
     let mut server = Server::new();
     let mut app = FakeApp {
         s: Session::new(),
@@ -134,10 +139,26 @@ fn calls_reach_the_host() {
     let r = call(&mut server, &mut app, json!({"cell_px": 100}));
     assert_eq!(r["isError"], true);
     assert!(text(&r).contains("1 to 64"));
+    // The world tools act on the app's world, through its commands.
+    let r = common::call(
+        &mut server,
+        &mut app,
+        "world_new",
+        json!({"width": 16, "height": 16, "cas": ["Life"]}),
+    );
+    common::ok(&r);
+    common::ok(&common::call(
+        &mut server,
+        &mut app,
+        "world_step",
+        json!({"generations": 3}),
+    ));
+    assert_eq!(app.s.world.generation, 3);
 }
 
 #[test]
 fn headless_session_explains() {
+    common::setup("app_tools");
     let mut server = Server::new();
     let mut s = Session::new();
     let r = call(&mut server, &mut s, json!({"screensaver": true}));
