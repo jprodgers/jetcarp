@@ -1,15 +1,16 @@
 //! `jetcarp pack`: packs (the book's *Pack format* reference). `key` makes or shows the
 //! publisher's key, `rater` records a rater's consent, `publish` writes a new signed version of
-//! a feed into a store, `export` lays one version out for a single download, `check` checks a
-//! store or export, and `import` brings one into the library. The work is in the operations
-//! `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check` and `pack.import`.
+//! a feed into a store, `export` lays one version out for a single download, `info` summarises
+//! a version, `check` checks a store or export, and `import` brings one into the library. The
+//! work is in the operations `pack.key`, `pack.rater`, `pack.publish`, `pack.export`,
+//! `pack.info`, `pack.check` and `pack.import`.
 
 use crate::show;
 use anyhow::Result;
 use jetcarp_api::op::{Op, Progress};
 use jetcarp_api::ops::pack::{
-    ExportIn, ImportIn, KeyIn, PackCheck, PackExport, PackImport, PackKey, PackPublish, PackRater,
-    PublishIn, RaterIn,
+    ExportIn, ImportIn, InfoIn, KeyIn, PackCheck, PackExport, PackImport, PackInfo, PackKey,
+    PackPublish, PackRater, PublishIn, RaterIn,
 };
 use std::path::PathBuf;
 
@@ -188,6 +189,18 @@ enum PackCmd {
         #[command(flatten)]
         sel: PublishFlags,
     },
+    /// A version's summary: title, publisher and signature, tables (rows, parts, bytes),
+    /// searches (nothing is imported, and the data files are not read).
+    Info {
+        /// A store's or export's folder.
+        path: String,
+        /// The feed, when the store has several.
+        #[arg(long)]
+        feed: Option<String>,
+        /// A version other than the feed's newest (sha256:...).
+        #[arg(long)]
+        manifest: Option<String>,
+    },
     /// Check a store or export: format, signatures, every hash and id (nothing is imported).
     Check {
         #[command(flatten)]
@@ -302,6 +315,22 @@ pub fn run(a: PackArgs, json: bool) -> Result<()> {
                 json,
             )
         }
+        PackCmd::Info {
+            path,
+            feed,
+            manifest,
+        } => show(
+            &PackInfo::run(
+                &cx,
+                InfoIn {
+                    path,
+                    feed,
+                    manifest,
+                },
+                &Log,
+            )?,
+            json,
+        ),
         PackCmd::Check { r } => show(&PackCheck::run(&cx, read_in(&r), &Log)?, json),
         PackCmd::Import {
             r,

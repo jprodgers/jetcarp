@@ -186,10 +186,12 @@ impl Op for QuickstartGet {
     type In = IdIn;
     type Out = EntryRow;
     fn run(cx: &Ctx, a: IdIn, _: &dyn Progress) -> Result<EntryRow, ApiError> {
-        cx.library()
-            .get_quickstart(&a.id)
-            .map(EntryRow)
-            .map_err(catalog_err)
+        let lib = cx.library();
+        // A built-in entry reads the same before the library's file is made.
+        if let Some(r) = jetcarp_store::quickstart::unmade_builtin(&lib, &a.id) {
+            return Ok(EntryRow(r.clone()));
+        }
+        lib.get_quickstart(&a.id).map(EntryRow).map_err(catalog_err)
     }
 }
 

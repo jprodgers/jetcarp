@@ -1,7 +1,8 @@
 //! `pack.*`: packs (format 1.0, the book's *Pack format* reference): the publisher's key
 //! (`pack.key`), raters' consent (`pack.rater`), publishing the library into a store
 //! (`pack.publish`), exporting a version for a single download (`pack.export`), checking a store
-//! or export without importing it (`pack.check`) and importing one (`pack.import`).
+//! or export without importing it (`pack.check`), a version's summary (`pack.info`) and
+//! importing one (`pack.import`).
 //!
 //! The publisher's key and settings live in the settings folder (`<config>/pack/`): the Ed25519
 //! key in OpenSSH format (`publisher_ed25519`), who the publisher is (`publisher.json`, names
@@ -85,6 +86,15 @@ fn publisher(key: Option<&str>, cx: &Ctx) -> Result<(Publisher, bool), ApiError>
         },
         made,
     ))
+}
+
+/// The publisher's key file in the settings folder, and whether it has been made (`pack.key`
+/// makes it; `pack.publish` makes it on first use). Front ends that must not make one (the MCP
+/// server) check this first.
+pub fn publisher_key() -> Result<(PathBuf, bool), ApiError> {
+    let p = sign::key_file().map_err(ApiError::io)?;
+    let made = p.is_file();
+    Ok((p, made))
 }
 
 fn book_path() -> Result<PathBuf, ApiError> {
@@ -814,6 +824,181 @@ impl Op for PackImport {
         exists(&o.path)?;
         let r = pimport::import(&cx.library(), &o, &|l| p.log(l)).map_err(ApiError::invalid)?;
         Ok(import_out(r))
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// pack.info
+
+/// A store or an export to describe.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InfoIn {
+    /// The store's or export's folder.
+    pub path: String,
+    /// The feed, when the store has several.
+    #[serde(default)]
+    pub feed: Option<String>,
+    /// A version other than the feed's newest (`sha256:...`).
+    #[serde(default)]
+    pub manifest: Option<String>,
+}
+
+/// One table of a version.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct TableInfo {
+    pub rows: u64,
+    pub parts: usize,
+    pub bytes: u64,
+}
+
+/// A version's manifest, summarised.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct InfoOut {
+    /// `store` or `export`.
+    pub kind: String,
+    /// A store's feeds (an export has none).
+    pub feeds: Vec<String>,
+    pub manifest: String,
+    pub feed: String,
+    pub title: String,
+    pub description: String,
+    pub version_label: String,
+    pub created: String,
+    pub licence: String,
+    /// The publisher's id (the first key of its chain of statements).
+    pub publisher: String,
+    /// Who the publisher's key statement names, if anyone.
+    pub publisher_name: String,
+    /// A signature by the publisher's key verifies.
+    pub signed: bool,
+    /// Signatures that did not verify, and why.
+    pub bad_signatures: Vec<String>,
+    /// Rows, parts and bytes of each table.
+    pub tables: std::collections::BTreeMap<String, TableInfo>,
+    /// The explore searches it carries (uuids).
+    pub searches: Vec<String>,
+    /// Records it withdraws.
+    pub retracts: usize,
+    /// The versions it follows.
+    pub parents: Vec<String>,
+    /// The manifest's own counts.
+    pub stats: std::collections::BTreeMap<String, u64>,
+}
+
+impl Report for InfoOut {
+    fn text(&self) -> String {
+        let mut s = format!(
+            "{} {} (feed {}{})\n",
+            self.kind,
+            self.manifest,
+            self.feed,
+            if self.version_label.is_empty() {
+                String::new()
+            } else {
+                format!(", version {}", self.version_label)
+            }
+        );
+        if !self.title.is_empty() {
+            let _ = writeln!(s, "  {}", self.title);
+        }
+        if !self.description.is_empty() {
+            let _ = writeln!(s, "  {}", self.description);
+        }
+        let _ = writeln!(
+            s,
+            "  publisher {}{}, {}",
+            self.publisher,
+            if self.publisher_name.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", self.publisher_name)
+            },
+            if self.signed {
+                "signed by its publisher"
+            } else {
+                "not signed by its publisher"
+            }
+        );
+        let _ = writeln!(s, "  created {}, licence {}", self.created, self.licence);
+        for (k, t) in &self.tables {
+            let _ = writeln!(
+                s,
+                "  {k:<14} {:>9} rows in {} parts, {} bytes",
+                t.rows, t.parts, t.bytes
+            );
+        }
+        if !self.searches.is_empty() {
+            let _ = writeln!(s, "  searches: {}", self.searches.join(", "));
+        }
+        if self.retracts > 0 {
+            let _ = writeln!(s, "  withdraws {} records", self.retracts);
+        }
+        if self.feeds.len() > 1 {
+            let _ = writeln!(s, "  the store's feeds: {}", self.feeds.join(", "));
+        }
+        s
+    }
+}
+
+/// `pack.info`.
+pub struct PackInfo;
+impl Op for PackInfo {
+    const NAME: &'static str = "pack.info";
+    const SUMMARY: &'static str = "Summarise a pack store's or export's version (title, publisher, signature, tables, searches) without importing or checking every file.";
+    const READ_ONLY: bool = true;
+    type In = InfoIn;
+    type Out = InfoOut;
+    fn run(cx: &Ctx, a: InfoIn, _: &dyn Progress) -> Result<InfoOut, ApiError> {
+        let path = cx.fs.readable(&a.path)?;
+        exists(&path)?;
+        let src = Source::open(&path).map_err(ApiError::invalid)?;
+        let h = match &a.manifest {
+            Some(h) => h.clone(),
+            None => src
+                .default_manifest(a.feed.as_deref())
+                .map_err(ApiError::invalid)?,
+        };
+        let v = src.version(&h).map_err(ApiError::invalid)?;
+        let m = &v.manifest;
+        let tables = v
+            .tables
+            .iter()
+            .map(|(k, t)| {
+                (
+                    k.clone(),
+                    TableInfo {
+                        rows: t.parts.iter().map(|(p, _)| p.rows).sum(),
+                        parts: t.parts.len(),
+                        bytes: t.parts.iter().map(|(p, _)| p.bytes).sum(),
+                    },
+                )
+            })
+            .collect();
+        Ok(InfoOut {
+            kind: match src {
+                Source::Store(_) => "store",
+                Source::Export(_) => "export",
+            }
+            .into(),
+            feeds: src.feeds(),
+            manifest: v.hash.clone(),
+            feed: m.feed.clone(),
+            title: m.title.clone(),
+            description: m.description.clone(),
+            version_label: m.version_label.clone(),
+            created: m.created.clone(),
+            licence: m.licence.clone(),
+            publisher: m.publisher.clone(),
+            publisher_name: v.signed.name.clone(),
+            signed: v.signed.by_publisher,
+            bad_signatures: v.signed.bad.clone(),
+            tables,
+            searches: m.searches.keys().cloned().collect(),
+            retracts: m.retracts.len(),
+            parents: m.parents.clone(),
+            stats: m.stats.clone(),
+        })
     }
 }
 

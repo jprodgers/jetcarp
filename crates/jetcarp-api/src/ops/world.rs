@@ -126,7 +126,7 @@ fn ca_item(v: &Value, l: &Limits) -> Result<CaSpec, ApiError> {
 pub fn ca_index(w: &World, v: Option<&Value>) -> Result<usize, ApiError> {
     if w.cas.is_empty() {
         return Err(ApiError::invalid(
-            "this world has no CAs yet. Create a world with new_world (e.g. cas: [\"Life\"]) or add one with apply_commands add_ca.",
+            "this world has no CAs yet. Make a world with world_new (e.g. cas: [\"Life\"]), or add a CA with the command add_ca (world_edit commands).",
         ));
     }
     let list = || {
@@ -555,7 +555,7 @@ pub fn tiling_of(a: &NewWorldIn, l: &Limits) -> Result<TilingSpec, ApiError> {
     let mut spec = args::tiling_by_id(id).map_err(|_| {
         let ids: Vec<&str> = families::FAMILIES.iter().map(|f| f.id).collect();
         ApiError::not_found(format!(
-            "unknown tiling '{id}'. Tiling ids: {}. See list_tilings.",
+            "unknown tiling '{id}'. Tiling ids: {}. See reference {{\"what\": \"tilings\"}}.",
             ids.join(", ")
         ))
     })?;
@@ -692,7 +692,7 @@ impl WorldOp for WorldNew {
     }
 }
 
-/// A scene to open (JSON or a file).
+/// What to open: a scene (JSON or a file), a Quick Start entry, or a library pattern. Give one.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenIn {
@@ -702,6 +702,51 @@ pub struct OpenIn {
     /// A scene .json file.
     #[serde(default)]
     pub path: Option<String>,
+    /// A Quick Start entry by handle (`life`, `find:<id>`, `atlas:<...>`, `qs-<hex>`): the scene
+    /// the app's Quick Start opens.
+    #[serde(default)]
+    pub quickstart: Option<String>,
+    /// A library pattern (id, unique prefix, or name such as `glider`): the pattern alone,
+    /// centred on a wrapped grid sized for it, in the rule it runs in (on an aperiodic patch,
+    /// where it was found).
+    #[serde(default)]
+    pub pattern: Option<String>,
+}
+
+/// The scene an [`OpenIn`] names.
+fn scene_to_open(cx: &Ctx, a: &OpenIn) -> Result<Scene, ApiError> {
+    let scene = a.scene.as_ref().filter(|v| !v.is_null());
+    let given = [
+        scene.is_some(),
+        a.path.is_some(),
+        a.quickstart.is_some(),
+        a.pattern.is_some(),
+    ];
+    match given.iter().filter(|g| **g).count() {
+        0 => {
+            return Err(ApiError::invalid(
+                "give `scene` (JSON), `path`, `quickstart`, or `pattern`",
+            ));
+        }
+        1 => {}
+        _ => {
+            return Err(ApiError::invalid(
+                "give one of `scene`, `path`, `quickstart`, or `pattern`",
+            ));
+        }
+    }
+    if let Some(key) = &a.quickstart {
+        return jetcarp_store::quickstart::scene(&cx.library(), key)
+            .map_err(|e| ApiError::not_found(e).hint("quickstart.list lists the entries"));
+    }
+    if let Some(key) = &a.pattern {
+        let rec = cx
+            .library()
+            .get(key)
+            .map_err(crate::ops::library::catalog_err)?;
+        return pattern::promote::showcase_scene(&rec, None, None).kind(ErrorKind::Engine);
+    }
+    read_scene(cx, scene, a.path.as_deref())
 }
 
 /// A scene opened.
@@ -740,7 +785,7 @@ impl Report for OpenOut {
 pub struct WorldOpen;
 impl WorldOp for WorldOpen {
     const NAME: &'static str = "world.open";
-    const SUMMARY: &'static str = "Replace the world with a scene (JSON or a .json file), replaying its commands so the state matches the saved one.";
+    const SUMMARY: &'static str = "Replace the world with a scene (JSON or a .json file, its commands replayed so the state matches the saved one), a Quick Start entry, or a library pattern alone on a grid sized for it.";
     const READ_ONLY: bool = false;
     type In = OpenIn;
     type Out = OpenOut;
@@ -750,7 +795,7 @@ impl WorldOp for WorldOpen {
         a: OpenIn,
         _: &dyn Progress,
     ) -> Result<OpenOut, ApiError> {
-        let scene = read_scene(cx, a.scene.as_ref(), a.path.as_deref())?;
+        let scene = scene_to_open(cx, &a)?;
         check_tiling_size(&scene.tiling, &cx.limits)?;
         let recorded = scene.record.as_ref().map(|r| Recorded {
             generation: r.generation,
@@ -939,7 +984,7 @@ impl WorldOp for WorldDraw {
         let (erase, clear_first) = (a.erase, a.clear_first);
         if erase && height {
             return Err(ApiError::invalid(
-                "erase does not apply to sandpile grains; use apply_commands {\"op\":\"clear\",\"id\":..} to empty the field",
+                "erase does not apply to sandpile grains; use the command {\"op\":\"clear\",\"id\":..} (world_edit commands) to empty the field",
             ));
         }
         let default_state = a.state.unwrap_or(1);
@@ -948,7 +993,7 @@ impl WorldOp for WorldDraw {
         }
         let need_grid = || {
             grid.ok_or_else(|| {
-                ApiError::invalid("this tiling is an aperiodic patch with no x/y grid; give `indices` instead (see inspect_cell)")
+                ApiError::invalid("this tiling is an aperiodic patch with no x/y grid; give `indices` instead (world_read with `cell` shows a cell's index and neighbours)")
             })
         };
         let mut writes: Vec<[u32; 2]> = Vec::new();
@@ -1648,6 +1693,242 @@ impl WorldOp for WorldInspect {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Objects
+
+/// Which CA's objects to find, and whether to store them.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ObjectsIn {
+    #[serde(default)]
+    #[schemars(schema_with = "ca_ref_schema")]
+    pub ca: Option<Value>,
+    /// Longest period looked for (default 64, at most 1024).
+    #[serde(default)]
+    pub max_period: Option<u64>,
+    /// Also verify each distinct still life, oscillator and spaceship and add it to the library
+    /// (copies add to its seen count), as a search would.
+    #[serde(default)]
+    pub catalog: bool,
+}
+
+/// One object found.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct FoundObject {
+    pub id: usize,
+    /// `glider (c/4)`, `blinker (p2)`, `block`; `other` for what is none of these.
+    pub label: String,
+    /// still_life, oscillator, spaceship, puffer, gun, or other.
+    pub kind: String,
+    pub period: Option<u64>,
+    /// Spaceships: the speed (`c/4 diagonal`).
+    pub speed: Option<String>,
+    /// Spaceships: the lattice displacement per period.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub displacement: Option<[i32; 2]>,
+    /// Live cells now.
+    pub size: usize,
+    /// Grid tilings: the cells' columns and rows now, `[x0, x1, y0, y1]` (an object that wraps
+    /// across the edge spans the whole width or height).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xy_box: Option<[usize; 4]>,
+    /// The first cell's index (every tiling).
+    pub first_cell: Option<u32>,
+    /// Why an `other` object is none of the classes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// One kind of object and how many there are.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct ObjectCount {
+    pub label: String,
+    pub kind: String,
+    pub count: usize,
+}
+
+/// The objects a world holds now.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct ObjectsOut {
+    /// `block x 41, blinker (p2) x 12, glider (c/4) x 3`.
+    pub summary: String,
+    pub generation: u64,
+    /// The CA examined.
+    pub ca_id: u32,
+    pub rule: String,
+    pub live_cells: u64,
+    /// Objects by class: still_life, oscillator, spaceship, other.
+    pub totals: std::collections::BTreeMap<String, usize>,
+    pub counts: Vec<ObjectCount>,
+    /// The objects, at most 200.
+    pub objects: Vec<FoundObject>,
+    /// More objects than are listed.
+    pub more: usize,
+    /// With `catalog`: what was stored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<crate::catalog::CatalogReport>,
+}
+
+impl Report for ObjectsOut {
+    fn text(&self) -> String {
+        let mut s = format!(
+            "Generation {}, CA {} ({}): {} live cells. {}\n",
+            self.generation, self.ca_id, self.rule, self.live_cells, self.summary
+        );
+        for o in &self.objects {
+            let at = match (o.xy_box, o.first_cell) {
+                (Some([x0, x1, y0, y1]), _) => format!("x {x0}..{x1}, y {y0}..{y1}"),
+                (None, Some(c)) => format!("cell {c}"),
+                _ => String::new(),
+            };
+            let _ = writeln!(
+                s,
+                "  {:>3}  {:<28} {:>4} cells  {at}{}",
+                o.id,
+                o.label,
+                o.size,
+                o.reason
+                    .as_deref()
+                    .map(|r| format!("  ({r})"))
+                    .unwrap_or_default()
+            );
+        }
+        if self.more > 0 {
+            let _ = writeln!(s, "  ... and {} more", self.more);
+        }
+        if let Some(c) = &self.catalog {
+            let _ = writeln!(
+                s,
+                "Library: {} new, {} already known, {} skipped, {} failed verification.",
+                c.added.len(),
+                c.merged.len(),
+                c.skipped,
+                c.failed.len()
+            );
+            for id in c.added.iter().take(20) {
+                let _ = writeln!(s, "  new {id}");
+            }
+        }
+        s
+    }
+}
+
+/// `world.objects`.
+pub struct WorldObjects;
+impl WorldOp for WorldObjects {
+    const NAME: &'static str = "world.objects";
+    const SUMMARY: &'static str = "The objects a CA's field holds now (still lifes, oscillators, spaceships, guns, and the rest), each run alone to class it, with where it is; optionally verify and add each distinct one to the library.";
+    const READ_ONLY: bool = false;
+    type In = ObjectsIn;
+    type Out = ObjectsOut;
+    fn run(
+        cx: &Ctx,
+        host: &mut dyn Host,
+        a: ObjectsIn,
+        _: &dyn Progress,
+    ) -> Result<ObjectsOut, ApiError> {
+        use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects};
+        let w = host.world();
+        let ca = match &a.ca {
+            None | Some(Value::Null) => None,
+            v => Some(w.cas[ca_index(w, v.as_ref())?].id),
+        };
+        let max_period = a.max_period.unwrap_or(64).clamp(1, 1024);
+        let opts = ObjectOptions {
+            ca,
+            max_period,
+            ..ObjectOptions::default()
+        };
+        let r = find_objects(w, &opts).kind(ErrorKind::Invalid)?;
+        let g = Grid::of(&w.topo);
+        let kind = |c: &ObjClass| c.kind().replace(' ', "_");
+        let label = |name: &str, c: &ObjClass| match c.tag() {
+            Some(t) if !name.contains(&t) => format!("{name} ({t})"),
+            _ => name.to_string(),
+        };
+        const LISTED: usize = 200;
+        let objects = r
+            .objects
+            .iter()
+            .take(LISTED)
+            .map(|o| {
+                let xy_box = g.filter(|_| !o.cells.is_empty()).map(|g| {
+                    let (mut b, mut first) = ([usize::MAX, 0, usize::MAX, 0], true);
+                    for &c in &o.cells {
+                        let (x, y) = g.xy(c as usize);
+                        if first {
+                            b = [x, x, y, y];
+                            first = false;
+                        }
+                        b = [b[0].min(x), b[1].max(x), b[2].min(y), b[3].max(y)];
+                    }
+                    b
+                });
+                FoundObject {
+                    id: o.id,
+                    label: label(&o.name, &o.class),
+                    kind: kind(&o.class),
+                    period: o.class.period(),
+                    speed: o.class.speed_in(r.lattice),
+                    displacement: match o.class {
+                        ObjClass::Spaceship { dx, dy, .. } => Some([dx, dy]),
+                        _ => None,
+                    },
+                    size: o.size,
+                    xy_box,
+                    first_cell: o.cells.first().copied(),
+                    reason: match &o.class {
+                        ObjClass::Other { reason } => Some(reason.clone()),
+                        _ => None,
+                    },
+                }
+            })
+            .collect();
+        let t = r.class_totals();
+        let totals = ["still_life", "oscillator", "spaceship", "other"]
+            .iter()
+            .zip(t)
+            .map(|(k, n)| (k.to_string(), n))
+            .collect();
+        let counts = r
+            .counts
+            .iter()
+            .map(|c| ObjectCount {
+                label: c.label(),
+                kind: kind(&c.class),
+                count: c.count,
+            })
+            .collect();
+        let catalog = if a.catalog {
+            Some(
+                crate::catalog::catalog_world(
+                    &cx.library(),
+                    w,
+                    Some(r.ca_id),
+                    Some(max_period),
+                    "world.objects",
+                    jetcarp_core::pattern::DiscoveredBy::User,
+                )
+                .map_err(crate::ops::library::catalog_err)?,
+            )
+        } else {
+            None
+        };
+        Ok(ObjectsOut {
+            summary: r.summary_line(),
+            generation: w.generation,
+            ca_id: r.ca_id,
+            rule: r.rule.clone(),
+            live_cells: r.live_cells,
+            totals,
+            counts,
+            more: r.objects.len().saturating_sub(LISTED),
+            objects,
+            catalog,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Reseeding
 
 /// Reseed now, set the automatic policies, or (with neither) report them.
@@ -1842,7 +2123,7 @@ pub fn prepare_command(v: &Value, w: &World, l: &Limits) -> Result<Command, ApiE
         v["action"] = json!(a.to_ascii_lowercase());
     }
     let cmd: Command = serde_json::from_value(v.clone()).map_err(|e| {
-        ApiError::invalid(format!("could not read command {v}: {e}. See the apply_commands description for the command shapes."))
+        ApiError::invalid(format!("could not read command {v}: {e}. reference {{\"what\": \"commands\"}} shows the command shapes."))
     })?;
     match &cmd {
         Command::Step { gens } => check_work(w, *gens, l)?,
@@ -2038,7 +2319,7 @@ impl WorldOp for WorldStep {
         check_work(host.world(), gens, &cx.limits)?;
         if host.world().cas.iter().all(|c| !c.enabled) {
             return Err(ApiError::invalid(
-                "no CA is enabled, so nothing would change. Enable one with apply_commands update_ca {\"enabled\": true}, or add one.",
+                "no CA is enabled, so nothing would change. Enable one with the command update_ca {\"enabled\": true} (world_edit commands), or add one.",
             ));
         }
         let g0 = host.world().generation;

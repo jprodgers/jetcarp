@@ -21,6 +21,8 @@
 //! `api` feature).
 
 pub mod args;
+#[cfg(feature = "ops")]
+pub mod catalog;
 pub mod cells;
 #[cfg(feature = "ops")]
 pub mod ctx;

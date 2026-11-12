@@ -6,7 +6,7 @@
 //! | [`reference`] | `reference.rules`, `reference.tilings`, `reference.isohedral`, `reference.palettes`, `reference.seeds` |
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
-//! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
+//! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.objects`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
 //! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune` |
 //! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
@@ -15,7 +15,7 @@
 //! | [`search`] | `search.start` |
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
 //! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
-//! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.import` (with the `pack` feature) |
+//! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
 
 pub mod explore;
 pub mod files;
@@ -56,6 +56,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &OnWorld::<world::WorldSave>::NEW,
     &OnWorld::<world::WorldRead>::NEW,
     &OnWorld::<world::WorldInspect>::NEW,
+    &OnWorld::<world::WorldObjects>::NEW,
     &OnWorld::<world::WorldDraw>::NEW,
     &OnWorld::<world::WorldPaste>::NEW,
     &OnWorld::<world::WorldReseed>::NEW,
@@ -114,6 +115,8 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<pack::PackExport>::NEW,
     #[cfg(feature = "pack")]
     &Plain::<pack::PackCheck>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<pack::PackInfo>::NEW,
     #[cfg(feature = "pack")]
     &Plain::<pack::PackImport>::NEW,
 ];

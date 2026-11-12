@@ -93,10 +93,11 @@ impl Limits {
 
 /// Where an operation may read and write files.
 ///
-/// The command line and the MCP server read and write wherever they are told (paths are the
-/// user's or the client's own). Scripts write only inside the output root and the folders the
-/// user allowed, and with `restrict_reads` read only there too (the `writable`, `readable`, and
-/// `allow_dirs` rules of `jetcarp_script::RunOptions`).
+/// The command line reads and writes wherever it is told (paths are the user's own). Scripts
+/// write only inside the output root and the folders the user allowed, and with `restrict_reads`
+/// read only there too (the `writable`, `readable`, and `allow_dirs` rules of
+/// `jetcarp_script::RunOptions`). The MCP server reads and writes only inside the output folder,
+/// the library's folder and the folders its user allowed ([`FsPolicy::who`] names it in errors).
 #[derive(Clone, Debug, Default)]
 pub struct FsPolicy {
     /// Where relative paths start (default: the working directory).
@@ -105,6 +106,9 @@ pub struct FsPolicy {
     pub write: Option<Guard>,
     /// Reads must stay inside these folders; `None` allows any path.
     pub read: Option<Guard>,
+    /// Who the rules are for, in the error a refused path gives (`the MCP tools`): "... may
+    /// only write inside ...". `None`: the script's wording.
+    pub who: Option<String>,
 }
 
 impl FsPolicy {
@@ -121,6 +125,7 @@ impl FsPolicy {
             base: Some(base),
             read: restrict_reads.then(|| g.clone()),
             write: Some(g),
+            who: None,
         }
     }
 
@@ -133,7 +138,14 @@ impl FsPolicy {
     /// A file `path` may be written to: made absolute, checked, and its folder created.
     pub fn writable(&self, path: &str) -> Result<PathBuf, ApiError> {
         if let Some(g) = &self.write {
-            return g.writable(&self.base(), path).map_err(ApiError::io);
+            return g.writable(&self.base(), path).map_err(|e| match &self.who {
+                Some(who) => ApiError::io(format!(
+                    "{who} may only write inside {} (got {})",
+                    roots_text(g),
+                    out::absolute(&self.base().join(path.trim())).display()
+                )),
+                None => ApiError::io(e),
+            });
         }
         let p = path.trim();
         if p.is_empty() {
@@ -172,13 +184,29 @@ impl FsPolicy {
         if let Some(g) = &self.read
             && !g.allows(&p)
         {
-            return Err(ApiError::io(format!(
-                "this run may only read inside the output folders, not {}",
-                p.display()
-            )));
+            return Err(ApiError::io(match &self.who {
+                Some(who) => format!(
+                    "{who} may only read inside {}, not {}",
+                    roots_text(g),
+                    p.display()
+                ),
+                None => format!(
+                    "this run may only read inside the output folders, not {}",
+                    p.display()
+                ),
+            }));
         }
         Ok(p)
     }
+}
+
+/// A guard's folders, for an error.
+fn roots_text(g: &Guard) -> String {
+    g.roots
+        .iter()
+        .map(|r| r.display().to_string())
+        .collect::<Vec<_>>()
+        .join(" or ")
 }
 
 /// A graphics adapter as `jetcarp doctor` lists it.
