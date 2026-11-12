@@ -29,6 +29,8 @@ if [ -n "$packs" ]; then
 fi
 
 version=$("$py" packaging/package.py version)
+# A wheel's name spells a pre-release Python's way: 0.4.0rc1 for 0.4.0-rc.1.
+wheel_version=$("$py" packaging/package.py version --wheel)
 echo "JETCARP $version for $target"
 
 # What differs by system: the Windows launcher, the Linux glibc floor, the macOS saver.
@@ -70,12 +72,17 @@ if [[ $target == *-apple-darwin ]]; then
     # if the wheel's copy (packed before this) is not validly signed.
     codesign --force --sign - "$bins/jetcarp"
     wheel=""
-    for w in "$dist"/jetcarp-"$version"-*macosx_*_"$wheel_arch".whl; do
+    for w in "$dist"/jetcarp-"$wheel_version"-*macosx_*_"$wheel_arch".whl; do
         wheel=$w
     done
+    if [ ! -f "$wheel" ]; then
+        echo "no macOS wheel for $wheel_version in $dist:" >&2
+        ls "$dist" >&2
+        exit 1
+    fi
     check=$(mktemp -d)
     "$py" -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$wheel" "$check"
-    codesign --verify --verbose "$check/jetcarp-$version.data/scripts/jetcarp"
+    codesign --verify --verbose "$check/jetcarp-$wheel_version.data/scripts/jetcarp"
     rm -rf "$check"
 fi
 if [[ $target == *-unknown-linux-gnu ]]; then

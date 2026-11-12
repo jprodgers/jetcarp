@@ -101,6 +101,20 @@ def is_prerelease(ver):
     return base_version(ver) != ver
 
 
+def wheel_version(ver):
+    """The version as Python spells it in a wheel's name (PEP 440): 0.4.0rc1 for 0.4.0-rc.1."""
+    m = SEMVER.match(ver)
+    if not m:
+        die(f"{ver} is not a version like 0.4.0 or 0.4.0-rc.1")
+    base, pre = ".".join(m.groups()[:3]), m.group(4)
+    if not pre:
+        return base
+    pm = re.fullmatch(r"(alpha|beta|rc|a|b)\.?(\d+)", pre)
+    if not pm:
+        die(f"{ver}: a pre-release must be alpha.N, beta.N or rc.N for Python to read it")
+    return base + {"alpha": "a", "beta": "b"}.get(pm.group(1), pm.group(1)) + pm.group(2)
+
+
 def cmd_set_version(a):
     new = a.version.lstrip("v")
     base_version(new)
@@ -190,8 +204,8 @@ def check_packs(packs):
     return p
 
 
-def cmd_version(_a):
-    print(version())
+def cmd_version(a):
+    print(wheel_version(version()) if getattr(a, "wheel", False) else version())
 
 
 def cmd_wheel_data(a):
@@ -557,7 +571,9 @@ def cmd_manifests(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("version").set_defaults(fn=cmd_version)
+    p = sub.add_parser("version")
+    p.add_argument("--wheel", action="store_true", help="as a wheel's name spells it (PEP 440)")
+    p.set_defaults(fn=cmd_version)
     p = sub.add_parser("set-version")
     p.add_argument("version")
     p.set_defaults(fn=cmd_set_version)
