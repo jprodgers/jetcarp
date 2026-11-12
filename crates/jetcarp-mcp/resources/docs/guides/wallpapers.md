@@ -121,13 +121,21 @@ as the desktop background, on a chosen monitor or across all of them.
 ```text
 $ jetcarp host start --rotation "Wolfram series"
 running, pid 676359, up 0.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells
+screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells · window
+caption: off
 $ jetcarp host next
 running, pid 676359, up 3.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W1 (2 of 256) · generation 198 · 57600 cells
+screen 0: Wolfram series · W1 (2 of 256) · starting · window
+caption: off
 $ jetcarp host stop
 stopped
 ```
+
+`status` (and every command that changes something) says what each screen shows and where (a window,
+or the desktop background on a monitor or on every monitor), the monitors, whether the caption is
+on, and, while it is paused, why: by hand, on battery, the processor is busy, or held by the desktop
+(windows cover it, or the screen is locked or off). Just after `next` the new item is *starting*
+until its world is built.
 
 | Command | Effect |
 | --- | --- |
@@ -194,9 +202,10 @@ icons, on every Space and ignoring the mouse; the host has no Dock icon while it
 
 **A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host
 sets a picture of its scene as the desktop's own background when it stops, and while the live one
-cannot be shown, through the system's own setting. Your own picture is remembered and put back when
-the still or the live background is turned off, unless you have chosen another picture in the
-meantime. It is off by default.
+cannot be shown, through the system's own setting. On Windows and macOS each monitor gets a picture of
+what it showed; GNOME has one background for every monitor, so there it is the primary monitor's.
+Your own picture (each monitor's) is remembered and put back when the still or the live background
+is turned off, unless you have chosen another picture in the meantime. It is off by default.
 
 ## The system's screen saver
 
@@ -211,7 +220,9 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
   button opens the JETCARP app. It needs `jetcarpw.exe`, the windowless launcher, beside
   `jetcarp.exe`; a build from source makes it with
   `cargo build --release -p jetcarp --features windows-launcher`. Removing it also clears the
-  selection if JETCARP was the chosen screen saver.
+  selection if JETCARP was the chosen screen saver. Close *Screen Saver Settings* first (`install`
+  opens it): while the dialog's preview runs the `.scr`, Windows won't let it be deleted, and
+  `remove` says so and changes nothing.
 - **macOS.** macOS runs screen savers in a sandbox that cannot read JETCARP's settings, so installing
   builds `~/Library/Screen Savers/JETCARP.saver` with the rotation and every item's scene copied
   inside it, signs it for this machine, and opens System Settings where screen savers are chosen
@@ -232,9 +243,15 @@ you log in; `jetcarp host login off` stops that. It uses each system's own per-u
 | macOS | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` (it takes effect at the next login) |
 | Windows | The value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 
-The entry runs `jetcarp host serve` (on Windows through `jetcarpw.exe` when it is there, so no console
-window opens) at the path the program has now. If you move the program, turn the setting off and on
-again. A host already running is left alone.
+The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` when it is there, so no
+console window opens) at the path the program has now. If you move the program, turn the setting off
+and on again. A host already running is left alone.
+
+Started at login, the host shows only the screens placed on the desktop, and opens no windows: a
+screen in a window (after `jetcarp host wallpaper off`, say) waits unseen, and with no desktop screens
+the host just waits in the notification area or the menu bar (on GNOME, the top bar's menu). This
+holds for the whole run; `jetcarp host stop` and `jetcarp host start` start a host that opens windows
+as usual. `jetcarp host status` lists a waiting screen as *not shown (started at login)*.
 
 More: [Rotations](rotations.md), [Reseeding](reseeding.md), [Folders](../reference/folders.md) and
 [Uninstalling](uninstalling.md).

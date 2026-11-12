@@ -1,0 +1,1 @@
+{"children":[],"format":"jetcarp-index","parts":[{"bytes":30965,"first":"{\"family\":\"cairo\",\"boundary\":\"dead\"}","last":"{\"family\":\"trunctrihex\",\"boundary\":\"dead\"}","object":"sha256:070450115ec85cce9ce38af1033d3a44554dcf7ac372ba2d74260c1e38c8fb73","partition":{},"rows":47}],"schema":"jetcarp-tilings 1","table":"tilings","version":"1.0"}

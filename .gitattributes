@@ -3,3 +3,5 @@
 # The golden packs are checked byte for byte (their hashes and signatures cover their bytes), so
 # a Windows checkout must not give their text files CRLF line endings.
 /crates/jetcarp-pack/tests/golden/** -text
+# The starter pack is a signed store too: its bytes must reach every checkout unchanged.
+/packaging/starter-pack/** -text

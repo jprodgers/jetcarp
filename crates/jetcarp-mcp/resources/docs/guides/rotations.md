@@ -2,7 +2,7 @@
 
 A *rotation* is what the screensaver or the background host shows over time: a list of items, each a
 [screensaver profile](wallpapers.md#screensaver-profiles), a scene file, a Quick Start entry or a whole
-series of rules, played in order, shuffled, or one a day. Each item has the conditions that end it,
+series of rules, played in order, shuffled, one a day or one an hour. Each item has the conditions that end it,
 such as a number of minutes, the world settling, or a time of day, and can be limited to certain days
 and hours. A rotation can also have a short script that decides when to move on. This guide covers the
 built-in rotations, using one, and making your own.
@@ -12,8 +12,8 @@ built-in rotations, using one, and making your own.
 | Rotation | What it shows |
 | --- | --- |
 | *Wolfram series* | All 256 elementary rules, each drawn line by line to the bottom of the screen, then the next (4-pixel cells, in Ink) |
-| *A classic a day* | A different classic each day, restarting if it ends: Life, Langton's ant, a forest fire, cyclic spirals, the turmite LLRR, Penrose waves and Hodgepodge. The background host runs this one unless told otherwise |
-| *Classics, hourly* | The same classics in a new random order, an hour each |
+| *A classic a day* | A different classic each day, the same one all day, restarting if it ends: Life, Langton's ant, a forest fire, cyclic spirals, the turmite LLRR, Penrose waves and Hodgepodge. The background host runs this one unless told otherwise |
+| *Classics, hourly* | The same classics, one each hour of the clock, in a new random order each time through, restarting if one ends |
 | *Until it settles* | Life, HighLife (`B36/S23`) and `B368/S245` with no reseeding, each until it settles (at most 30,000 generations), then the next |
 
 ## Use a rotation
@@ -32,14 +32,38 @@ While a rotation runs, the ◀ and ▶ buttons in the pane, *Next* and *Previous
 A rotation that names an item that no longer exists (a deleted profile, say) leaves it out; one that
 cannot be found at all shows Life instead.
 
+## When a rotation moves on
+
+*In order* and *Shuffled* rotations move on when an item ends: any of its endings holds (minutes,
+generations, settling, finishing, a time of day), after its hold. An item with no endings takes its
+profile's minutes, else the rotation's default, and with neither it runs until something else moves
+on. The minutes count only while the rotation runs, so a pause doesn't use up an item's time.
+
+*One a day* and *One an hour* rotations follow the clock instead, so the same item shows all day (or
+all hour), and a program started again shows the same item:
+
+- **One a day** shows item *d* mod *n* on day *d* (counting the days since 1 January 1970, by the
+  computer's own date) of a rotation with *n* items, and the next one tomorrow, at midnight.
+- **One an hour** shows one item each hour of the clock: every item once, in an order shuffled from
+  the clock, then every item again in another order (never the same item twice in a row), changing
+  on the hour.
+- **An item that finishes starts again.** When nothing in it can change any more (Langton's ant has
+  walked off the edge, a world has died), or one of its endings holds, it starts again from its
+  beginning, once it has run at least a minute. It doesn't give way to the next item.
+- **Skipping** with *Next* or *Previous* (or `jetcarp host next`) shows another item until the day or
+  the hour changes; then the clock's choice comes back.
+- An item that cannot be shown at all (a scene that won't build) gives way to the next, as in any
+  rotation, until the day or the hour changes.
+
 ## Make a rotation in the app
 
 In the *Screensaver* pane, set *Show* to *A rotation*. Under the rotation's name are *Edit*, *New*,
 *Duplicate* and, for one of your own, *Delete* (for an edited built-in rotation, *Revert to built-in*).
 The editor has:
 
-- **Name**, and **Order**: *In order*, *Shuffled* (a new random order each time through) or *One a
-  day* (one item per calendar day, the next one tomorrow; it restarts if it ends during the day).
+- **Name**, and **Order**: *In order*, *Shuffled* (a new random order each time through), *One a
+  day* (one item per calendar day, the next one tomorrow) or *One an hour* (one item per hour of the
+  clock); see [When a rotation moves on](#when-a-rotation-moves-on).
   *Default* sets the minutes for items with no ending of their own; untick it and such items run until
   something else moves on.
 - **Settings for every item:** a cell size, a speed, a palette, whether periodic tilings are rebuilt to
@@ -96,7 +120,7 @@ then Langton's ant for ten minutes, and from 10 pm to 6 am also the 256 elementa
 | Field | Meaning |
 | --- | --- |
 | `name`, `description` | Shown in the app and the host's menu |
-| `order` | `in_order` (default), `shuffle` or `daily` |
+| `order` | `in_order` (default), `shuffle`, `daily` or `hourly` |
 | `default_minutes` | Minutes for items with no ending of their own (5 if left out); `null` lets them run until something else moves on |
 | `look` | Settings for every item that is not a stored profile: `cell_px`, `speed` (generations per second), `refill`, `gpu`, `palette`, `color_by`, and `reseed` (a list of [reseed policies](reseeding.md); `[]` for none). The app's editor sets all but `gpu` and `color_by`, and of `reseed` only *No reseeding* |
 | `items` | The items, in order |

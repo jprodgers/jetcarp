@@ -97,14 +97,14 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 
 ### `help`
 
-**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"}; the same pages are the resources jetcarp://docs/{page}.
+**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: the first-run profile, the folders and free space, the packs that came with JETCARP, the GPU, the library's counts; read only, since setup is the user's choice, made in the app or with `jetcarp setup`), or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"}; the same pages are the resources jetcarp://docs/{page}.
 
 *reads only*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching", "reference/rule-notation", "tutorials/hunting-spaceships" (help {"topic": "pages"} lists them). |
-| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"pages"` | Which guide (default overview). |
+| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"pages"` | Which guide (default overview). |
 
 Example:
 
@@ -962,7 +962,7 @@ Example:
 | `profile` | string | A screensaver profile by name (the state's `profiles` lists them): the screensaver shows it from now on (source profile); with screensaver true it starts on it, and while the screensaver runs it switches at once. A profile is a complete setup: scene, palette, reseed policies, cell size, speed. |
 | `refill` | boolean | true: rebuild the tiling now to fill the canvas at cell_px (periodic tilings), zoomed pixel-exact. |
 | `rotation` | string | A rotation by name (the state's `rotations` lists them): the screensaver runs it from now on; with screensaver true it starts on it, and while the screensaver runs it switches. |
-| `save_rotation` | object | Create or replace a rotation: {name, description, order (in_order, shuffle, daily), default_minutes (or null), look, script (Rhai), items: [{source, label, end, hold_s, look, schedule}]}. source is {kind: profile, name}, {kind: scene, path}, {kind: quick_start, id}, or {kind: series, rules, from, to, family, boundary, seed}. end is a list of {kind: minutes, minutes}, {kind: generations, gens}, {kind: settled, latest}, {kind: low_activity, below, for_gens}, {kind: done}, or {kind: clock, at: "HH:MM"}; any one ends the item. schedule is {days: ["mon", ...], from, to}. |
+| `save_rotation` | object | Create or replace a rotation: {name, description, order (in_order, shuffle, daily, hourly), default_minutes (or null), look, script (Rhai), items: [{source, label, end, hold_s, look, schedule}]}. source is {kind: profile, name}, {kind: scene, path}, {kind: quick_start, id}, or {kind: series, rules, from, to, family, boundary, seed}. end is a list of {kind: minutes, minutes}, {kind: generations, gens}, {kind: settled, latest}, {kind: low_activity, below, for_gens}, {kind: done}, or {kind: clock, at: "HH:MM"}; any one ends the item. schedule is {days: ["mon", ...], from, to}. |
 | `saver` | object | Screensaver settings to change (saved): source (profile, rotation, current, scene, quickstart), profile (a profile name), rotation (a rotation name), scene (a scene file), quickstart (a Quick Start id), cell_px, refill, speed (0: max), gpu (these four for the current world, scene files, and Quick Start ids; profiles carry their own), keep_awake, exit_any_input (else Esc only), control (start the AI-control endpoint), hide_windows, cursor_hide_s, caption (true or false to show what is running, or an object with show, corner (BottomLeft, BottomRight, TopLeft, TopRight), size, generation, seconds). |
 | `screensaver` | boolean | Start (true) or end (false) screensaver mode: every control hidden, the grid on the outputs (or the main window full screen), running. |
 | `skip` | `"next"`, `"previous"` | While the screensaver runs a rotation: show the next or previous item now. |
@@ -1007,7 +1007,7 @@ And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/getting-started/core-ideas`: Core ideas: tilings, cell fields, rules, scenes
 - `jetcarp://docs/tutorials/first-wallpaper`: Your first live wallpaper
 - `jetcarp://docs/tutorials/life-on-a-new-tiling`: Life on a new tiling
-- `jetcarp://docs/tutorials/hunting-spaceships`: Hunting for spaceships
+- `jetcarp://docs/tutorials/hunting-spaceships`: 3. Hunting for spaceships
 - `jetcarp://docs/tutorials/building-quick-start`: Building your own Quick Start
 - `jetcarp://docs/tutorials/scripting-a-sweep`: 5. Scripting a rule sweep
 - `jetcarp://docs/tutorials/mcp`: 6. Driving JETCARP from an AI assistant (MCP)

@@ -1,0 +1,1 @@
+{"children":[],"format":"jetcarp-index","parts":[{"bytes":2410,"first":"B2,8,9,10,11,13,14,15,18,19,20,22,24/S1,10,11,12,13,14,15,19,20,22,24","last":"B4567/S023467","object":"sha256:63890afc48ea563072e86638159d63d57b6541458acfde537979c46b68123167","partition":{},"rows":23}],"schema":"jetcarp-rules 1","table":"rules","version":"1.0"}
