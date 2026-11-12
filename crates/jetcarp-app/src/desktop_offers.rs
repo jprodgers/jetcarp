@@ -81,7 +81,7 @@ impl Offer {
         match self {
             Offer::Wallpaper => wallpaper_on(),
             Offer::Login => {
-                let cmd = autostart::host_command()?;
+                let cmd = autostart::login_command()?;
                 autostart::set(true, &cmd)?;
                 Ok("the background host starts at login".into())
             }

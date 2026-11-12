@@ -1202,12 +1202,25 @@ impl Search {
         parent: Option<i64>,
         stage: u8,
     ) -> Option<RunOut> {
+        let t_eval = Instant::now();
+        let fam_name = c.fam.name();
         let r = catch_unwind(AssertUnwindSafe(|| {
             let mut world = prepare(grid, &c).ok()?;
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
             let t = trace_world(&mut world, c.gens, &frames_for(c.gens, window)).ok()?;
             Some(evaluate(grid, &c, &t))
         }));
+        if std::env::var_os("JETCARP_EXPLORE_TRACE").is_some()
+            && t_eval.elapsed().as_secs_f64() > 2.0
+        {
+            eprintln!(
+                "cpu run stage {stage} {} {fam_name} cells={} gens={}: {:.2}s",
+                grid.key,
+                grid.topo.len(),
+                c.gens,
+                t_eval.elapsed().as_secs_f64()
+            );
+        }
         let (fate, feat, score, bin) = match r {
             Ok(x) => x?,
             Err(_) => {
