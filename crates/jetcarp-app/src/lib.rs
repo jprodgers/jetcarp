@@ -39,6 +39,8 @@ pub use cli::LaunchArgs;
 
 /// Opens the app window and runs until it closes.
 pub fn run(launch: LaunchArgs) -> Result<(), String> {
+    // On macOS the application menu takes its name from the process: JETCARP, not `jetcarp`.
+    jetcarp_display::set_process_name("JETCARP");
     // Scripts run from the app may ask for GPU toppling of large sandpiles.
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()

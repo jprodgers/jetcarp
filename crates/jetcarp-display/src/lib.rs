@@ -8,6 +8,36 @@
 //! ([`saver::install`], which bakes those scenes into the bundle). The saver's own code is built
 //! without it, so it links no store, job runner or SQLite.
 
+/// On macOS, names this process `name`. winit makes the application menu's items from the process
+/// name ("About JETCARP", "Hide JETCARP", "Quit JETCARP"), and a program that is not an app bundle
+/// is otherwise named after its file, `jetcarp`. Call it before the event loop starts. Nothing
+/// elsewhere.
+pub fn set_process_name(name: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::msg_send;
+        use objc2::rc::Retained;
+        use objc2::runtime::{AnyClass, AnyObject};
+        let (Some(info), Some(strings), Ok(c)) = (
+            AnyClass::get(c"NSProcessInfo"),
+            AnyClass::get(c"NSString"),
+            std::ffi::CString::new(name),
+        ) else {
+            return;
+        };
+        unsafe {
+            let process: Option<Retained<AnyObject>> = msg_send![info, processInfo];
+            let s: Option<Retained<AnyObject>> =
+                msg_send![strings, stringWithUTF8String: c.as_ptr()];
+            if let (Some(process), Some(s)) = (process, s) {
+                let _: () = msg_send![&*process, setProcessName: &*s];
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = name;
+}
+
 pub mod autostart;
 pub mod caption;
 pub mod desktop_picture;
