@@ -48,9 +48,9 @@ with exactly three live neighbours and a live one survives with two or three (se
 [Rule notation](../reference/rule-notation.md)).
 
 Life starts on a random soup: each tile alive with a chance of 30%, the usual seed for a rule like
-Life. To start again from a different soup, *Seed → Random cells in every CA* (or *Random* in the
-*CAs* pane) adds more random cells, and *Edit → Reset* (R) clears the world and seeds it again.
-Leave it as it is here, to see what this page shows.
+Life. *Seed → Random cells in every CA* (or *Random* in the *CAs* pane) scatters more random cells
+over it, and *Edit → Reset* (R) clears the world and puts the first soup back. Leave it as it is
+here, to see what this page shows.
 
 ## 4. Run it
 
@@ -76,11 +76,11 @@ This ship is not new. It is in the book's [Findings](../research/findings.md#lif
 very likely the period-20 ship Martin Büttner found on this tiling in 2014. JETCARP's census of Life
 on the 2- and 3-uniform tilings saw it 5,772 times.
 
-There were two of these ships at generation 100; one crashed at about generation 330. Let the world
-run on and watch the other: at about generation 615 it flies into a still life, and both are gone,
-leaving a new still life and an oscillator behind. On a small wrapped world a ship eventually hits
-something. [Hunting for spaceships](hunting-spaceships.md) searches for ships on
-an unbounded plane instead.
+There were two of these ships at generation 100, but one crashed at about generation 310. Let the
+world run on and watch the other: at about generation 615 it flies into a still life, and both are
+gone, leaving a new still life and an oscillator behind. On a small wrapped world a ship eventually
+hits something. [Hunting for spaceships](hunting-spaceships.md) searches for ships on an unbounded
+plane instead.
 
 ## 6. Try another neighbourhood
 
