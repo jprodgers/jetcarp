@@ -1,6 +1,6 @@
 [package]
 name = "jetcarp-mcp"
-description = "JETCARP's MCP (Model Context Protocol) server over the command layer: tools, JSON-RPC handling, and the local app link. Transport independent; shared by jetcarp-cli and jetcarp-app."
+description = "JETCARP's MCP (Model Context Protocol) server over the operations layer: tools, the book as resources, JSON-RPC handling, and the local app link. Transport independent; shared by the jetcarp program and the app."
 version.workspace = true
 readme.workspace = true
 edition.workspace = true
@@ -18,7 +18,10 @@ jetcarp-store.workspace = true
 jetcarp-search.workspace = true
 jetcarp-api.workspace = true
 jetcarp-script.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+# The local link's token: 128 bits from the operating system's random source (pure Rust).
+getrandom = "0.3.4"
 
 [[bin]]
 name = "jetcarp-mcp"

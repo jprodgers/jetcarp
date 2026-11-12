@@ -5,13 +5,16 @@
 //! both sides exchange newline-delimited JSON-RPC messages, exactly as MCP over stdio. The app
 //! answers them on its UI thread with the same [`crate::Server`] the CLI uses.
 //!
-//! The port and token are also written to [`endpoint_file`] (readable only by this user) so the
-//! CLI finds them without configuration.
+//! The token is 128 bits from the operating system's random source, made afresh each time a
+//! listener starts. The port and token are also written to [`endpoint_file`] (on Unix in a
+//! folder of mode 0700, the file 0600, both checked: readable only by this user) so the CLI finds
+//! them without configuration. A connection that sends a wrong token is answered `{"ok": false}`
+//! and closed; the comparison takes the same time whichever character differs.
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -78,22 +81,80 @@ impl EndpointInfo {
     }
 }
 
-/// 128 random bits as hex. std's `RandomState` keys come from the OS random source.
-fn new_token() -> String {
-    use std::hash::{BuildHasher, Hasher};
-    (0..2)
-        .map(|k| {
-            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-            h.write_u64(k);
-            h.write_u128(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0),
-            );
-            format!("{:016x}", h.finish())
-        })
-        .collect()
+/// A new token: 128 bits from the operating system's random source (`getrandom`: the
+/// `getrandom` system call on Linux, `getentropy` on macOS, `ProcessPrng` on Windows), as 32
+/// lower-case hex digits. Fails rather than fall back to anything weaker.
+pub fn new_token() -> std::io::Result<String> {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b)
+        .map_err(|e| std::io::Error::other(format!("no random source for the link token: {e}")))?;
+    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+}
+
+/// Write `text` to `p` so that only this user can read it: on Unix the folder is made (or made
+/// again) mode 0700 and the file 0600, both checked afterwards; elsewhere the file inherits the
+/// user's own profile folder's permissions. The file is written beside its place and renamed
+/// over it, so a reader never sees half of it.
+pub fn write_private(p: &Path, text: &str) -> std::io::Result<()> {
+    let dir = p
+        .parent()
+        .ok_or_else(|| std::io::Error::other("the endpoint file has no folder"))?;
+    let tmp = dir.join(format!(
+        ".{}.{}.tmp",
+        p.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id()
+    ));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        if !meta.is_dir() {
+            return Err(std::io::Error::other(format!(
+                "{} is not a folder",
+                dir.display()
+            )));
+        }
+        if meta.permissions().mode() & 0o777 != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        let _ = std::fs::remove_file(&tmp);
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, p)?;
+        let (d, m) = (private_mode(dir)?, private_mode(p)?);
+        if d != 0o700 || m != 0o600 {
+            let _ = std::fs::remove_file(p);
+            return Err(std::io::Error::other(format!(
+                "{} could not be kept private (folder mode {d:o}, file mode {m:o})",
+                p.display()
+            )));
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(dir)?;
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, p)
+    }
+}
+
+/// A file's or folder's permission bits (Unix).
+#[cfg(unix)]
+pub fn private_mode(p: &Path) -> std::io::Result<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    Ok(std::fs::symlink_metadata(p)?.permissions().mode() & 0o777)
 }
 
 /// A request waiting for the UI thread.
@@ -167,7 +228,7 @@ impl Listener {
         let sock = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))?;
         sock.set_nonblocking(true)?;
         let port = sock.local_addr()?.port();
-        let token = new_token();
+        let token = new_token()?;
         let (tx, rx) = channel::<Pending>();
         let stop = Arc::new(AtomicBool::new(false));
         let connections = Arc::new(Mutex::new(0));
@@ -233,27 +294,14 @@ impl Listener {
     fn write_file(&self) -> std::io::Result<()> {
         let p =
             runtime_file(self.file).ok_or_else(|| std::io::Error::other("no runtime directory"))?;
-        let dir = p.parent().unwrap();
-        std::fs::create_dir_all(dir)?;
         let text =
             json!({"port": self.port, "token": self.token, "pid": std::process::id()}).to_string();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-            let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&p)?;
-            f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-            f.write_all(text.as_bytes())
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::write(&p, text)
-        }
+        write_private(&p, &text)
+    }
+
+    /// Whether the endpoint file was written (the token is then readable by this user only).
+    pub fn wrote_file(&self) -> bool {
+        self.wrote_file
     }
 
     /// Requests that arrived since the last call.

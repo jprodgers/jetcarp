@@ -2503,11 +2503,13 @@ name = "jetcarp-mcp"
 version = "0.4.0-rc.1"
 dependencies = [
  "dirs",
+ "getrandom 0.3.4",
  "jetcarp-api",
  "jetcarp-core",
  "jetcarp-script",
  "jetcarp-search",
  "jetcarp-store",
+ "serde",
  "serde_json",
 ]
 
