@@ -274,31 +274,42 @@ const SNUB_BOUND_PAIR: &str = "0,0,1,1 0,0,2,1 0,0,4,1 0,0,5,1 1,0,2,1 3,0,1,1 3
     1,2,1,1 2,2,0,1 2,2,1,1 2,2,2,1 2,2,4,1 4,2,1,1 4,2,4,1 5,2,1,1 5,2,2,1 2,3,0,1 2,3,1,1 \
     2,3,4,1 5,3,0,1 5,3,3,1";
 
+/// Another such pair, from a 20,000-soup Life hunt on 3.3.4.3.4: in some phases its halves are a
+/// glider, a glider and a piece that dies alone, the second glider too far from the piece for the
+/// piece to be merged with both.
+const SNUB_BOUND_PAIR_2: &str = "0,0,1,1 0,0,2,1 0,0,4,1 0,0,5,1 1,0,2,1 0,1,0,1 0,1,1,1 0,1,3,1 \
+    0,1,4,1 1,1,1,1 1,1,2,1 4,1,1,1 4,1,2,1 4,1,4,1 4,1,5,1 5,1,2,1 1,2,0,1 4,2,0,1 4,2,1,1 \
+    4,2,3,1 5,2,1,1 3,3,1,1 3,3,4,1 4,3,0,1 4,3,1,1 4,3,2,1 4,3,3,1 1,6,1,1 1,6,2,1 1,6,4,1 \
+    2,6,2,1 1,7,4,1 2,7,0,1";
+
 #[test]
 fn a_bound_pair_stays_one_ship() {
-    let mut w = pasted("snubsq", 32, "B3/S23", SNUB_BOUND_PAIR);
     let c = Census::new("B3/S23", &TilingSpec::new("snubsq"), None, 64).unwrap();
-    let mut phases = Vec::new();
-    for g in 0..16 {
-        let r = objects(&w);
-        assert_eq!(r.objects.len(), 1, "generation {g}: {}", r.summary_line());
-        assert!(
-            matches!(r.objects[0].class, ObjClass::Spaceship { period: 16, .. }),
-            "generation {g}: {}",
-            r.summary_line()
-        );
-        let found = census(&c, &w);
-        assert_eq!(found.len(), 1, "generation {g}: {found:?}");
-        phases.push(lattice_cells(&w));
-        step(&mut w);
+    for cells in [SNUB_BOUND_PAIR, SNUB_BOUND_PAIR_2] {
+        let mut w = pasted("snubsq", 32, "B3/S23", cells);
+        let mut phases = Vec::new();
+        for g in 0..16 {
+            let r = objects(&w);
+            assert_eq!(r.objects.len(), 1, "generation {g}: {}", r.summary_line());
+            assert!(
+                matches!(r.objects[0].class, ObjClass::Spaceship { period: 16, .. }),
+                "generation {g}: {}",
+                r.summary_line()
+            );
+            let found = census(&c, &w);
+            assert_eq!(found.len(), 1, "generation {g}: {found:?}");
+            phases.push(lattice_cells(&w));
+            step(&mut w);
+        }
+        // At some phase it is several atoms, and one of them is a glider alone; still they
+        // interact.
+        assert!(phases.iter().any(|p| compound::atoms(&c, p).len() >= 2));
+        let d = {
+            let (a, b) = (&phases[0], &lattice_cells(&w));
+            [b[0].i - a[0].i, b[0].j - a[0].j]
+        };
+        assert!(compound::split(&c, &phases, d).is_none());
     }
-    // At some phase it is several atoms, and one of them is a glider alone; still they interact.
-    assert!(phases.iter().any(|p| compound::atoms(&c, p).len() >= 2));
-    let d = {
-        let (a, b) = (&phases[0], &lattice_cells(&w));
-        [b[0].i - a[0].i, b[0].j - a[0].j]
-    };
-    assert!(compound::split(&c, &phases, d).is_none());
 }
 
 /// A tag-along: a 4.8.8 ship (B27/S25, `5aec548b` of the curation) whose core, `69c9912a`,

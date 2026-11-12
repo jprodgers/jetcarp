@@ -509,6 +509,30 @@ pub fn lattice_close(a: &[LCell], b: &[LCell], reach: (i32, i32)) -> bool {
     ba[0] - bb[1] <= ri && bb[0] - ba[1] <= ri && ba[2] - bb[3] <= rj && bb[2] - ba[3] <= rj
 }
 
+/// Do `a` and `b` (lattice cells) touch or share a neighbour, through the neighbour offsets
+/// `offs[k]` = `(di, dj, k2)` of a tile of type `k`? Exact; the bounding boxes are tried first.
+pub fn lattice_meet(
+    a: &[LCell],
+    b: &[LCell],
+    reach: (i32, i32),
+    offs: &[Vec<(i32, i32, u32)>],
+) -> bool {
+    if !lattice_close(a, b, reach) {
+        return false;
+    }
+    let there: HashSet<(i32, i32, u32)> = b.iter().map(|c| (c.i, c.j, c.k)).collect();
+    a.iter().any(|c| {
+        there.contains(&(c.i, c.j, c.k))
+            || offs[c.k as usize].iter().any(|&(di, dj, k1)| {
+                let (i, j) = (c.i + di, c.j + dj);
+                there.contains(&(i, j, k1))
+                    || offs[k1 as usize]
+                        .iter()
+                        .any(|&(ei, ej, k2)| there.contains(&(i + ei, j + ej, k2)))
+            })
+    })
+}
+
 /// The larger axis gap between two bounding boxes (0 when they overlap).
 pub fn lattice_distance(a: &[LCell], b: &[LCell]) -> f64 {
     let (ba, bb) = (bbox(a), bbox(b));

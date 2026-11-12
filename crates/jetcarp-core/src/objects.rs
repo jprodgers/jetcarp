@@ -474,6 +474,8 @@ struct Ctx {
     nb: Nb,
     max_period: u64,
     separate: bool,
+    /// Pieces that die alone are retried with objects within this many steps.
+    piece_distance: u32,
     /// Lattice: how far (in rows or row positions) one generation can reach.
     reach: i32,
     syms: Vec<[i32; 4]>,
@@ -484,6 +486,8 @@ struct Ctx {
     /// Lattices, B/S and Generations rules at one step per generation: the bit-parallel
     /// stepper, for the many short runs that split compounds.
     bits: Option<Arc<crate::hunt::bits::Plan>>,
+    /// Lattices: the neighbour offsets `(di, dj, k2)` of each tile type.
+    offs: Vec<Vec<(i32, i32, u32)>>,
 }
 
 fn round8(v: i64) -> u32 {
@@ -921,7 +925,7 @@ impl compound::Runner for Ctx {
     }
     fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
         match self.lattice() {
-            Some(_) => compound::lattice_close(a, b, self.offset_reach()),
+            Some(_) => compound::lattice_meet(a, b, self.offset_reach(), &self.offs),
             None => compound::explicit_close(a, b, &|x, out| self.explicit_neighbours(x, out)),
         }
     }
@@ -1131,7 +1135,12 @@ fn join_interacting(ctx: &Ctx, items: Vec<(Group, Part)>) -> Result<Vec<(Group, 
             };
             let (pa, pb) = (&items[a].1, &items[b].1);
             let (da, db) = (ds[a].unwrap(), ds[b].unwrap());
-            let close = (0..=l)
+            // Two still lifes are where they will always be: one look.
+            let last = match (&pa.class, &pb.class) {
+                (ObjClass::StillLife, ObjClass::StillLife) => 0,
+                _ => l,
+            };
+            let close = (0..=last)
                 .any(|g| compound::Runner::close(ctx, &phase_at(pa, da, g), &phase_at(pb, db, g)));
             if !close {
                 return false;
@@ -1167,7 +1176,43 @@ fn join_interacting(ctx: &Ctx, items: Vec<(Group, Part)>) -> Result<Vec<(Group, 
             }
         }
     }
-    // Each set run as one; periodic sets replace their members (at the first one's place).
+    // Each set run as one; periodic sets replace their members (at the first one's place). A set
+    // that is not periodic may be missing a piece that dies alone, shed by its members: it is
+    // tried again with the loose pieces within `piece_distance` steps (all, then one by one).
+    let run_set = |set: &[usize]| -> Result<Option<Vec<(Group, Part)>>, String> {
+        let mut g = Group {
+            cells: vec![],
+            ids: vec![],
+            subs: vec![],
+            unsplittable: None,
+        };
+        for &k in set {
+            g.cells.extend(items[k].0.cells.iter().copied());
+            g.ids.extend(items[k].0.ids.iter().copied());
+        }
+        g.subs = vec![(0..g.cells.len()).collect()];
+        let (class, phases) = ctx.classify(&g.cells)?;
+        if periodic_d(&class).is_none() {
+            return Ok(None);
+        }
+        let whole = Part {
+            class,
+            phases,
+            members: (0..g.cells.len()).collect(),
+        };
+        Ok(Some(
+            split_part(ctx, &g, whole)
+                .into_iter()
+                .map(|p| own_group(&g, p))
+                .collect(),
+        ))
+    };
+    let loose: HashMap<usize, usize> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, (g, p))| g.unsplittable.is_none() && matches!(p.class, ObjClass::Other { .. }))
+        .flat_map(|(k, (g, _))| g.ids.iter().map(move |&c| (c as usize, k)))
+        .collect();
     let mut replace: HashMap<usize, Vec<(Group, Part)>> = HashMap::new();
     let mut gone: HashSet<usize> = HashSet::new();
     let mut keys: Vec<usize> = sets.keys().copied().collect();
@@ -1175,32 +1220,54 @@ fn join_interacting(ctx: &Ctx, items: Vec<(Group, Part)>) -> Result<Vec<(Group, 
     for r in keys {
         let mut set = sets[&r].clone();
         set.sort_unstable();
-        let mut g = Group {
-            cells: vec![],
-            ids: vec![],
-            subs: vec![],
-            unsplittable: None,
-        };
-        for &k in &set {
-            g.cells.extend(items[k].0.cells.iter().copied());
-            g.ids.extend(items[k].0.ids.iter().copied());
+        let mut got = run_set(&set)?;
+        if got.is_none() && !loose.is_empty() && ctx.piece_distance > 0 {
+            // Loose pieces near the set, nearest first.
+            let mut seen: HashSet<usize> = set
+                .iter()
+                .flat_map(|&k| items[k].0.ids.iter().map(|&c| c as usize))
+                .collect();
+            let mut frontier: Vec<usize> = seen.iter().copied().collect();
+            frontier.sort_unstable();
+            let mut near: Vec<usize> = Vec::new();
+            for _ in 0..ctx.piece_distance {
+                let mut next = Vec::new();
+                for &x in &frontier {
+                    ctx.topo.for_each_neighbor(x, ctx.nb, |y| {
+                        if seen.insert(y) {
+                            next.push(y);
+                            if let Some(&k) = loose.get(&y)
+                                && !near.contains(&k)
+                                && !gone.contains(&k)
+                            {
+                                near.push(k);
+                            }
+                        }
+                    });
+                }
+                frontier = next;
+            }
+            near.truncate(4);
+            let mut tries: Vec<Vec<usize>> = Vec::new();
+            if near.len() > 1 {
+                tries.push(near.clone());
+            }
+            tries.extend(near.iter().map(|&k| vec![k]));
+            for t in tries {
+                let mut s = set.clone();
+                s.extend(t);
+                s.sort_unstable();
+                if let Some(x) = run_set(&s)? {
+                    set = s;
+                    got = Some(x);
+                    break;
+                }
+            }
         }
-        g.subs = vec![(0..g.cells.len()).collect()];
-        let (class, phases) = ctx.classify(&g.cells)?;
-        if periodic_d(&class).is_none() {
-            continue;
+        if let Some(out) = got {
+            gone.extend(set.iter().copied());
+            replace.insert(set[0], out);
         }
-        let whole = Part {
-            class,
-            phases,
-            members: (0..g.cells.len()).collect(),
-        };
-        let out: Vec<(Group, Part)> = split_part(ctx, &g, whole)
-            .into_iter()
-            .map(|p| own_group(&g, p))
-            .collect();
-        gone.extend(set.iter().copied());
-        replace.insert(set[0], out);
     }
     let mut out = Vec::with_capacity(n);
     for (k, it) in items.into_iter().enumerate() {
@@ -1450,7 +1517,7 @@ pub fn runner_for(
             .find(|c| supported(&c.rule).is_ok())
             .ok_or("no CA with a B/S, Generations, WireWorld, or table rule")?,
     };
-    Ok(Box::new(make_ctx(world, ca, 64, true)?))
+    Ok(Box::new(make_ctx(world, ca, 64, true, 8)?))
 }
 
 fn make_ctx(
@@ -1458,6 +1525,7 @@ fn make_ctx(
     ca: &crate::world::CaInstance,
     max_period: u64,
     separate: bool,
+    piece_distance: u32,
 ) -> Result<Ctx, String> {
     let isotropic = supported(&ca.rule)?;
     let topo = world.topo.clone();
@@ -1494,6 +1562,7 @@ fn make_ctx(
         nb,
         max_period,
         separate,
+        piece_distance,
         reach,
         syms,
         frames: Mutex::new(HashMap::new()),
@@ -1506,6 +1575,15 @@ fn make_ctx(
             .filter(|_| ca.steps_per_gen == 1 && ca.table.is_none())
             .and_then(|g| crate::hunt::bits::Plan::new(&ca.rule, g, nb).ok())
             .map(Arc::new),
+        offs: topo
+            .lattice()
+            .map(|g| {
+                g.offsets[nb as usize]
+                    .iter()
+                    .map(|v| v.iter().map(|o| (o.di, o.dj, o.k)).collect())
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
 }
 
@@ -1528,7 +1606,13 @@ pub fn find_objects(world: &World, opts: &ObjectOptions) -> Result<ObjectReport,
     }
     let max_period = opts.max_period.clamp(1, 100_000);
     let d = opts.merge_distance.clamp(1, 4);
-    let ctx = make_ctx(world, ca, max_period, opts.separate)?;
+    let ctx = make_ctx(
+        world,
+        ca,
+        max_period,
+        opts.separate,
+        opts.piece_distance.min(16),
+    )?;
     let nb = ctx.nb;
 
     let groups = build_groups(&ctx, &field.state, d);

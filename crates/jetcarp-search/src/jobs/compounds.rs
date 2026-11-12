@@ -134,11 +134,18 @@ impl CompoundsProgress {
         } else {
             ("would remove", "would keep")
         };
+        // Parts the pass stores after its place are examined too, so `checked` can pass `total`.
+        let examined = if self.checked > self.total {
+            format!(
+                "{} examined ({} at the start, then parts it stored)",
+                self.checked, self.total
+            )
+        } else {
+            format!("{} of {} examined", self.checked, self.total)
+        };
         format!(
-            "compounds {}: {} of {} examined, {} compounds ({r} {}, {k} {}{}{}), {} parts ({} new){}",
+            "compounds {}: {examined}, {} compounds ({r} {}, {k} {}{}{}), {} parts ({} new){}",
             self.job,
-            self.checked,
-            self.total,
             self.compounds,
             self.removed,
             self.kept,
@@ -225,7 +232,7 @@ impl StrategyKind for CompoundsKind {
         };
         s.unit = "records".into();
         s.done = p.checked;
-        s.total = Some(p.total);
+        s.total = Some(p.total.max(p.checked));
         s.elapsed_s = p.elapsed_s;
         s
     }

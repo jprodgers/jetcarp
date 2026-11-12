@@ -186,6 +186,8 @@ pub struct Env {
     pub period: u64,
     pub d: [i32; 2],
     pub boxes: Vec<[i32; 4]>,
+    /// One period of phases (at the group's origin).
+    pub phases: Vec<Phase>,
 }
 
 impl Env {
@@ -194,7 +196,16 @@ impl Env {
             period,
             d,
             boxes: phases.iter().map(|p| bbox_of(p)).collect(),
+            phases: phases.to_vec(),
         }
+    }
+    /// The cells at generation `g`, the group's origin at `o`.
+    fn cells_at(&self, g: u64, o: [i32; 2]) -> impl Iterator<Item = (i32, i32, u32)> + '_ {
+        let n = (g / self.period) as i32;
+        let (di, dj) = (o[0] + self.d[0] * n, o[1] + self.d[1] * n);
+        self.phases[(g % self.period) as usize]
+            .iter()
+            .map(move |c| (c.i + di, c.j + dj, c.k))
     }
     /// The bounding box at generation `g`, the group's origin at `o`.
     fn at(&self, g: u64, o: [i32; 2]) -> [i32; 4] {
@@ -604,7 +615,9 @@ impl Census {
         cache.add_bytes(
             key_bytes(key.len())
                 + parts.len() * 48
-                + env.as_ref().map_or(0, |e| e.boxes.len() * 16),
+                + env.as_ref().map_or(0, |e| {
+                    e.boxes.len() * 16 + e.phases.iter().map(|p| key_bytes(p.len())).sum::<usize>()
+                }),
         );
         cache.groups.insert(key, (parts.clone(), env.clone()));
         (parts, env)
@@ -658,26 +671,17 @@ impl Census {
             }
             if ok && self.joint_is_union(cells, &runs, l) {
                 // Where the whole group is: the union of its parts, phase by phase.
-                let boxes = (0..l as usize)
+                let phases: Vec<Phase> = (0..l as usize)
                     .map(|t| {
-                        let mut b = [i32::MAX, i32::MIN, i32::MAX, i32::MIN];
-                        for (_, _, ph) in &runs {
-                            let x = bbox_of(&ph[t % ph.len()]);
-                            b = [
-                                b[0].min(x[0]),
-                                b[1].max(x[1]),
-                                b[2].min(x[2]),
-                                b[3].max(x[3]),
-                            ];
-                        }
-                        b
+                        let mut v: Phase = runs
+                            .iter()
+                            .flat_map(|(_, _, ph)| ph[t % ph.len()].iter().copied())
+                            .collect();
+                        v.sort_unstable();
+                        v
                     })
                     .collect();
-                let env = Env {
-                    period: l,
-                    d: [0, 0],
-                    boxes,
-                };
+                let env = Env::of(l, [0, 0], &phases);
                 let parts = runs
                     .into_iter()
                     .flat_map(|(period, d, phases)| self.periodic_parts(cache, period, d, &phases))
@@ -905,7 +909,30 @@ impl Census {
             let mut members: Vec<usize> = set.iter().flat_map(|&u| units[u].0.clone()).collect();
             members.sort_unstable();
             let cells = cells_of(&groups, &members);
-            if let Some((p, _)) = self.merge_run(cache, &cells) {
+            let mut got = self.merge_run(cache, &cells);
+            // Not periodic alone: perhaps missing a piece that dies alone, shed by its members.
+            if got.is_none() && self.piece_distance > 0 {
+                let near = self.loose_near(&groups, &cells, |g| {
+                    !absorbed[g] && is_other(g) && !members.contains(&g)
+                });
+                let mut tries: Vec<Vec<usize>> = Vec::new();
+                if near.len() > 1 {
+                    tries.push(near.clone());
+                }
+                tries.extend(near.iter().map(|&g| vec![g]));
+                for t in tries {
+                    let mut m = members.clone();
+                    m.extend(t);
+                    m.sort_unstable();
+                    let c = cells_of(&groups, &m);
+                    if let Some(x) = self.merge_run(cache, &c) {
+                        members = m;
+                        got = Some(x);
+                        break;
+                    }
+                }
+            }
+            if let Some((p, _)) = got {
                 for &u in &set {
                     at_head.remove(&units[u].0[0]);
                 }
@@ -924,6 +951,50 @@ impl Census {
                 out.extend(p.iter().cloned());
             }
         }
+        out
+    }
+
+    /// Groups that pass `take` with a cell within `piece_distance` neighbour steps of `cells`,
+    /// nearest first (at most four).
+    fn loose_near(
+        &self,
+        groups: &[Group],
+        cells: &[LCell],
+        take: impl Fn(usize) -> bool,
+    ) -> Vec<usize> {
+        let mut owner: FastMap<(i32, i32, u32), usize> = FastMap::default();
+        for (g, grp) in groups.iter().enumerate().filter(|(g, _)| take(*g)) {
+            for c in &grp.cells {
+                owner.insert((c.i, c.j, c.k), g);
+            }
+        }
+        let mut out = Vec::new();
+        if owner.is_empty() {
+            return out;
+        }
+        let mut seen: FastMap<(i32, i32, u32), ()> =
+            cells.iter().map(|c| ((c.i, c.j, c.k), ())).collect();
+        let mut frontier: Vec<(i32, i32, u32)> = seen.keys().copied().collect();
+        frontier.sort_unstable();
+        for _ in 0..self.piece_distance {
+            let mut next = Vec::new();
+            for &(i, j, k) in &frontier {
+                for &(di, dj, k2) in &self.n1[k as usize] {
+                    let y = (i + di, j + dj, k2);
+                    if seen.insert(y, ()).is_none() {
+                        next.push(y);
+                        if let Some(&g) = owner.get(&y)
+                            && !out.contains(&g)
+                        {
+                            out.push(g);
+                        }
+                    }
+                }
+            }
+            next.sort_unstable();
+            frontier = next;
+        }
+        out.truncate(4);
         out
     }
 
@@ -1004,13 +1075,31 @@ impl Census {
                     continue;
                 }
                 let (ea, eb) = (&units[a].2, &units[b].2);
+                // Two still lifes in separate groups never come within two steps.
+                if ea.period == 1 && eb.period == 1 && ea.d == [0, 0] && eb.d == [0, 0] {
+                    continue;
+                }
                 let l = ea.period / gcd(ea.period, eb.period) * eb.period;
                 if l > self.max_period {
                     continue;
                 }
                 let lh = compound::horizon(l);
                 let (oa, ob) = (origin(a), origin(b));
-                if !(0..=lh).any(|t| near(ea.at(t, oa), eb.at(t, ob))) {
+                // Some cell of one shares a neighbour with (or touches) a cell of the other.
+                let close = (0..=lh).any(|t| {
+                    if !near(ea.at(t, oa), eb.at(t, ob)) {
+                        return false;
+                    }
+                    let there: FastMap<(i32, i32, u32), ()> =
+                        eb.cells_at(t, ob).map(|c| (c, ())).collect();
+                    ea.cells_at(t, oa).any(|(i, j, k)| {
+                        there.contains_key(&(i, j, k))
+                            || self.n2[k as usize]
+                                .iter()
+                                .any(|&(di, dj, k2)| there.contains_key(&(i + di, j + dj, k2)))
+                    })
+                });
+                if !close {
                     continue;
                 }
                 let mut cells: Vec<LCell> = units[a].1.clone();
@@ -1240,7 +1329,7 @@ impl Runner for BitRunner {
         }
     }
     fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
-        compound::lattice_close(a, b, (self.0.reach_i, self.0.reach_j))
+        compound::lattice_meet(a, b, (self.0.reach_i, self.0.reach_j), &self.0.offs)
     }
     fn distance(&self, a: &[LCell], b: &[LCell]) -> f64 {
         compound::lattice_distance(a, b)
@@ -1257,7 +1346,7 @@ impl Runner for Census {
         }
     }
     fn close(&self, a: &[LCell], b: &[LCell]) -> bool {
-        compound::lattice_close(a, b, (self.plan.reach_i, self.plan.reach_j))
+        compound::lattice_meet(a, b, (self.plan.reach_i, self.plan.reach_j), &self.n1)
     }
     fn distance(&self, a: &[LCell], b: &[LCell]) -> f64 {
         compound::lattice_distance(a, b)
