@@ -630,7 +630,9 @@ fn set_data_dir(cx: &Ctx, a: &DataDirIn) -> Result<DataDirOut, ApiError> {
     let target = match chosen {
         Some(p) => Some(crate::out::absolute(&cx.fs.readable(p)?)),
         None => None,
-    };
+    }
+    // The usual folder chosen by name is no choice at all: paths.json goes.
+    .filter(|t| *t != cpaths::default_data_dir());
     let data = target.clone().unwrap_or_else(cpaths::default_data_dir);
     let has_library = check_data_dir(&data)?;
     let mut notes = vec![];
@@ -793,6 +795,8 @@ pub struct SetupJob {
     pub stale: bool,
     /// The fraction done, when it is known (a Quick Start build's minutes, an import's end).
     pub fraction: Option<f64>,
+    /// Units done (a build's runs screened; an import's 1 once it is done).
+    pub done: u64,
     pub line: String,
 }
 
@@ -841,7 +845,8 @@ pub fn setup_job(cx: &Ctx, lib: &Library, job: i64) -> Option<SetupJob> {
         label: row.label().unwrap_or_default().to_string(),
         status,
         here,
-        stale: !here && sum.is_some_and(|s| s.stale),
+        stale: !here && sum.as_ref().is_some_and(|s| s.stale),
+        done: sum.as_ref().map(|s| s.done).unwrap_or(0),
         fraction,
         line: super::search::line_of(k, &row, &progress),
     })

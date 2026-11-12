@@ -313,9 +313,13 @@ impl JetcarpApp {
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
         let mut app = app.with_autoshot(&cc.egui_ctx);
+        let saver = launch.screensaver;
         app.apply_launch(&cc.egui_ctx, launch);
-        // The first launch (setup never ran) opens the setup wizard; screenshot runs never do.
-        if std::env::var_os("JETCARP_SCREENSHOT").is_none() && crate::setup_ui::Wizard::first_run()
+        // The first launch (setup never ran) opens the setup wizard; screenshot runs and a
+        // launch into screensaver mode never do.
+        if !saver
+            && std::env::var_os("JETCARP_SCREENSHOT").is_none()
+            && crate::setup_ui::Wizard::first_run()
         {
             app.setup.show_again();
         }

@@ -69,7 +69,7 @@ impl Offer {
     pub fn available(self) -> Result<(), String> {
         match self {
             Offer::Saver if !saver::AVAILABLE => Err(
-                "this system has no screen saver list; on GNOME the wallpaper can run on the lock screen (`jetcarp host lock screensaver`)".into(),
+                "this system has no screen saver list; on GNOME the wallpaper can run on the lock screen instead (jetcarp host lock screensaver)".into(),
             ),
             _ => Ok(()),
         }

@@ -1030,7 +1030,7 @@ impl Wizard {
                         Ok(()) => {
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(RichText::new("The same as").small().weak());
-                                ui.label(RichText::new(o.commands()).small().monospace().weak());
+                                ui.label(RichText::new(o.commands()).monospace().size(10.5).weak());
                             });
                         }
                     }
@@ -1230,6 +1230,14 @@ impl Wizard {
                     bar = bar.animate(true);
                 }
                 ui.add(bar.desired_height(8.0));
+                if j.kind == "explore" && j.done == 0 && !j.settled() {
+                    ui.label(
+                        RichText::new(
+                            "Starting the search: its first results take a minute or so to arrive.",
+                        )
+                        .small(),
+                    );
+                }
                 ui.label(RichText::new(&j.line).small().weak());
             });
         }
