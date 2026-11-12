@@ -101,7 +101,8 @@ define, puffers, guns and other classes are skipped with a reason. Each record h
 The limits in pack-format.md's "Limits" table are all enforced:
 - Objects over 4 GiB and documents over 16 MiB are refused before reading.
 - JSON nesting over 32 is checked before parsing. Duplicate keys, NaN, numbers with a fraction or
-  exponent, and integers beyond 2^53 are refused.
+  exponent, and integers beyond ±(2^53 − 1) are refused (a pack writes a larger integer as a
+  string of its decimal digits).
 - An index may list 10,000 parts and 10,000 children, 8 levels deep, and each index is read once.
 - A Parquet footer is checked before pyarrow parses it: 16 MiB, Thrift nesting 32, 1,024 columns.
 - Then every page header is read: the pages' uncompressed sizes may total at most 64 times the

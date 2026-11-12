@@ -2,7 +2,7 @@
 
 `loads()` refuses, before parsing, input over the size limit, a byte-order mark, bytes that are not
 UTF-8, and nesting deeper than the limit (so Python's recursive parser never meets a hostile depth).
-While parsing it refuses duplicate keys, NaN and Infinity, integers outside +-2^53, and (unless
+While parsing it refuses duplicate keys, NaN and Infinity, integers outside +-(2^53 - 1), and (unless
 allowed) any non-integer number. After parsing it refuses lone surrogates, which RFC 8785 cannot
 write.
 """
@@ -47,10 +47,10 @@ def loads(data, *, max_bytes, max_depth=32, allow_floats=False, what="document")
 
     def parse_int(s):
         if len(s.lstrip("-")) > 17:
-            raise JsonError(f"{what} has an integer outside +-2^53: {s[:40]}")
+            raise JsonError(f"{what} has an integer outside +-(2^53 - 1): {s[:40]}")
         n = int(s)
         if abs(n) > jcs.MAX_SAFE_INTEGER:
-            raise JsonError(f"{what} has an integer outside +-2^53: {s}")
+            raise JsonError(f"{what} has an integer outside +-(2^53 - 1): {s}")
         return n
 
     def parse_float(s):

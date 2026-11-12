@@ -63,12 +63,17 @@ class Numbers(unittest.TestCase):
             self.assertEqual(jcs.number(x), text)
 
     def test_documents_hold_integers_only(self):
-        self.assertEqual(jcs.dumps({"a": 2 ** 53}), '{"a":9007199254740992}')
+        self.assertEqual(jcs.dumps({"a": 2 ** 53 - 1}), '{"a":9007199254740991}')
         with self.assertRaises(jcs.CanonicalError):
             jcs.dumps({"a": 1.5})
+        for n in (2 ** 53, -(2 ** 53), 2 ** 53 + 1):
+            with self.assertRaises(jcs.CanonicalError):
+                jcs.dumps({"a": n})
+        # Not rounded to a double in cells either: such an integer is a string.
         with self.assertRaises(jcs.CanonicalError):
-            jcs.dumps({"a": 2 ** 53 + 1})
-        self.assertEqual(jcs.dumps(2 ** 60, allow_floats=True), "1152921504606847000")
+            jcs.dumps(2 ** 60, allow_floats=True)
+        self.assertEqual(jcs.dumps({"rng_state": "17705299566207515059"}, allow_floats=True),
+                         '{"rng_state":"17705299566207515059"}')
 
 
 class Text(unittest.TestCase):
@@ -157,7 +162,7 @@ class SafeJson(unittest.TestCase):
 
     def test_refusals(self):
         for text, why in (('{"a":1,"a":2}', "repeats"), ("1.5", "non-integer"), ("1e5", "non-integer"),
-                          ("NaN", "not JSON"), ("[Infinity]", "not JSON"), ("9007199254740993", "outside"),
+                          ("NaN", "not JSON"), ("[Infinity]", "not JSON"), ("9007199254740993", "outside"), ("9007199254740992", "outside"),
                           ("-" + "9" * 30, "outside"), ('"\\ud800"', "lone surrogate"), ("[1,]", "not valid")):
             with self.subTest(text=text):
                 with self.assertRaisesRegex(safejson.JsonError, why):

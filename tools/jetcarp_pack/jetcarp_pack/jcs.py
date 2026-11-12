@@ -5,12 +5,16 @@ booleans, null, arrays and objects (pack-format.md, "Encodings"), so `canonical(
 unless `allow_floats` is set. Numbers are still written exactly as RFC 8785 says, because the
 identity's `tiling=` line uses RFC 8785 values whose parameters may be floats (pack-format.md "Ids",
 library-format.md).
+
+An integer outside +-(2^53 - 1) is refused everywhere, floats allowed or not: a double cannot hold it
+exactly, and a pack writes such an integer as a string of its decimal digits (pack-format.md,
+"Encodings"; I-JSON, RFC 7493), as the `rfc8785` package refuses it too.
 """
 
 import math
 import re
 
-MAX_SAFE_INTEGER = 2 ** 53
+MAX_SAFE_INTEGER = 2 ** 53 - 1
 
 _ESCAPES = {'"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 _NEEDS_ESCAPE = re.compile('["\\\\\x00-\x1f]')
@@ -45,13 +49,9 @@ def _write(value, out, allow_floats, depth):
     elif isinstance(value, str):
         out.append(string(value))
     elif isinstance(value, int):
-        if allow_floats and abs(value) > MAX_SAFE_INTEGER:
-            # RFC 8785 numbers are IEEE 754 doubles; a big integer is written as its double.
-            out.append(number(float(value)))
-        elif abs(value) > MAX_SAFE_INTEGER:
-            raise CanonicalError(f"integer {value} is outside +-2^53")
-        else:
-            out.append(str(value))
+        if abs(value) > MAX_SAFE_INTEGER:
+            raise CanonicalError(f"integer {value} is outside +-(2^53 - 1) (such an integer is a string)")
+        out.append(str(value))
     elif isinstance(value, float):
         if not allow_floats:
             raise CanonicalError(f"non-integer number {value!r} in a pack document")

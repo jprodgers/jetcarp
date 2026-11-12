@@ -20,7 +20,7 @@ from .base import codes, fails, run
 GOLDEN = os.path.join(os.path.dirname(__file__), "..", "..", "..", "crates", "jetcarp-pack", "tests", "golden")
 
 # Every golden pack JETCARP keeps, the ants pack the cross-check asked for among them.
-EXPECTED = {"minimal", "retraction", "merge", "searches", "media", "aperiodic", "ants", "export"}
+EXPECTED = {"minimal", "retraction", "merge", "searches", "media", "aperiodic", "ants", "export", "numbers"}
 
 
 def hashes():

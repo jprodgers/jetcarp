@@ -25,8 +25,10 @@ SPDX = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+-]{0,63}\Z")
 QUICKSTART_ID = re.compile(r"qs-[0-9a-f]{32}\Z")
 RATER_ID = re.compile(r"rater-[0-9a-f]{16}\Z")
 _CELL = re.compile(r"(-?\d{1,10}),(-?\d{1,10}),(-?\d{1,10}),(-?\d{1,10})\Z")
-# Absolute paths as pack-format.md lists them: /x/y, ~/, C:\, \\server\, file://
-_LOCAL_PATH = re.compile(r"(^|[\s'\"=(\[,])(/[^/\s]+/|~/|[A-Za-z]:\\|\\\\[^\\\s]+\\|file://)")
+# Absolute paths as pack-format.md lists them: /x/y, ~/, C:\, \\server\, file://. The first segment of
+# /x/y holds no quote, bracket, brace, comma or colon, so the JSON after a rule such as "B2/S10,/C14"
+# in a compact scene is no path.
+_LOCAL_PATH = re.compile(r"(^|[\s'\"=(\[,])(/[^/\s'\"{}\[\],:]+/|~/|[A-Za-z]:\\|\\\\[^\\\s]+\\|file://)")
 
 
 class IdentityError(ValueError):

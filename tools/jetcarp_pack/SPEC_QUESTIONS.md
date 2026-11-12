@@ -150,7 +150,7 @@ first version of this file.
 
 | # | Question | How pack-format.md settled it | Reader |
 | --- | --- | --- | --- |
-| C1 | ±2^53 | Inclusive; any fraction or exponent refused | Agrees |
+| C1 | ±2^53 | Integers within ±(2^53 − 1), that bound included; a larger integer is a string of its decimal digits; any fraction or exponent refused | Agrees |
 | C2 | Canonical refs and key statements | MUST be canonical; JETCARP refuses them | Agrees: now refused (was a WARN) |
 | C3 | A signature's final newline | As `ssh-keygen` writes it; accepted without | Agrees |
 | C4 | Unknown tables; `engine.schemes.tables` | Ignored; informational | Agrees |
@@ -159,7 +159,7 @@ first version of this file.
 | C7 | Optional tables' types and sorts | Given | Agrees (`raters` is an event table: question 6 above) |
 | C8 | Group raters | A group's `consent_date` is its latest member's; no nesting; no name or ORCID; every member consented | Agrees; also `notes` must be agreed for a note |
 | C9 | Rater ids | `rater-` and 16 hex digits | Agrees; checked |
-| C10 | Ant `start=` | JSON: `start="empty"` | Agrees |
+| C10 | Ant `start=` | RFC 8785 JSON, as the `start` column: `start="empty"`; a soup's `state` beyond 2^53 − 1 a string | Agrees |
 | C11 | Receipts | Reserved; named by their own SHA-256 | Agrees: no longer read (0.4 writes none) |
 | C12 | NFC | SHOULD; readers never normalise | Agrees: WARN only, hashes over bytes as given |
 | C13 | Local paths | `/x/y`, `~/`, `C:\`, `\\server\`, `file://`; never in a pack | Agrees: those forms, in every text cell and the manifest, are a FAIL |
