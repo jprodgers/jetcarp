@@ -303,7 +303,7 @@ Options:
       --limit <LIMIT>
           Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
       --threads <THREADS>
-          Worker threads (default: all cores). Results do not depend on this
+          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach
           Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet
@@ -365,7 +365,7 @@ Options:
       --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>          Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
       --rules <RULES>              Rules separated by spaces or semicolons ("B3/S23 B36/S23") [default: B3/S23]
@@ -401,7 +401,7 @@ Options:
       --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>        Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                    No progress on stderr
       --tilings <TILINGS>        Tilings: family ids, catalog ids, vertex configurations, or sets (archimedean, kuniform:2, isohedral, all-periodic) [default: square]
@@ -436,7 +436,7 @@ Options:
       --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>          Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
       --tilings <TILINGS>          The tiling: an id such as k2-017 (see `jetcarp tilings`), or a scene or tile JSON file, whose tiling replaces --size and --boundary. A census runs on one tiling [default: square]
@@ -480,7 +480,7 @@ Options:
       --minutes <MINUTES>            Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>                Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>            Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>            Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                       Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                        No progress on stderr
       --rule <RULE>                  Rule notation (SpectreGlider, "Priority 4: ...", B/S) [default: SpectreGlider]
@@ -515,7 +515,7 @@ Options:
       --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>  Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet              No progress on stderr
       --tiling <TILING>    Tiling id: square, hex, triangle, snubsq, cairo, k3-012, ih41, spectre, hat, ... [default: square]
@@ -553,7 +553,7 @@ Options:
       --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>              Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                          No progress on stderr
       --offsets <OFFSETS>              Offset range for both axes, like -6..6 (overridden by --dx/--dy) [default: -6..6]
@@ -589,7 +589,7 @@ Options:
       --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>        Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                    No progress on stderr
       --tiling <TILING>          Tiling: an id such as spectre, hat, penrose-kd, penrose-rhomb, square, hex, trihex or k2-017 (k-uniform and Archimedean tilings; `catalog:k2-017` works too) [default: spectre]
@@ -625,7 +625,7 @@ Options:
       --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>              Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                          No progress on stderr
       --hours <HOURS>                  Hours to run (the same as --minutes 60 x HOURS)
@@ -764,7 +764,7 @@ Arguments:
 Options:
       --json                 Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
-      --threads <THREADS>    Worker threads (default: all cores)
+      --threads <THREADS>    Worker threads (default: all cores; an explore search leaves two free)
       --gpu                  Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU batch stepper, when there is one
       --minutes <MINUTES>    Stop at the next checkpoint after this many minutes
       --until <UNTIL>        Stop at the next checkpoint after this Unix time (seconds since 1970)
@@ -970,7 +970,7 @@ Options:
       --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
-      --threads <THREADS>  Worker threads (default: all cores). Results do not depend on this
+      --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet              No progress on stderr
       --tiling <TILING>    Tiling id: square, hex, triangle, snubsq, cairo, k3-012, ih41, spectre, hat, ... [default: square]
@@ -1595,7 +1595,7 @@ Options:
       --tilings <TILINGS>    Only these tilings (ids such as hex or k2-017, separated by commas or spaces; default: every one)
       --families <FAMILIES>  Only these rule families (default: every one)
       --no-gpu               Run on the CPU only
-      --threads <THREADS>    Worker threads (default: all cores)
+      --threads <THREADS>    Worker threads (default: every core but two, a third of them for the GPU's batches)
       --detach               Run in a process of its own and return at once
       --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite
       --quiet                No progress on standard error
@@ -2702,7 +2702,7 @@ Options:
   -y, --yes                     Ask nothing: do what the profile does (the desktop offers are only printed)
       --status                  Only show where things stand: whether setup has run, the folders, the packs that came with JETCARP, the GPU, and what each profile takes here
       --no-gpu                  The Quick Start build runs on the CPU even when there is a GPU
-      --threads <THREADS>       Worker threads (default: all cores)
+      --threads <THREADS>       Worker threads (default: all cores, and all but two for the Quick Start build)
       --quiet                   No progress on standard error
   -h, --help                    Print help
 ```

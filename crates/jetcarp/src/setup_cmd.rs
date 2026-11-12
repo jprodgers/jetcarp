@@ -44,7 +44,7 @@ pub struct SetupArgs {
     /// The Quick Start build runs on the CPU even when there is a GPU.
     #[arg(long)]
     no_gpu: bool,
-    /// Worker threads (default: all cores).
+    /// Worker threads (default: all cores, and all but two for the Quick Start build).
     #[arg(long)]
     threads: Option<usize>,
     /// No progress on standard error.

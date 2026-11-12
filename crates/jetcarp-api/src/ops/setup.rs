@@ -1206,7 +1206,7 @@ pub struct ApplyIn {
     /// How much of each pack is verified again on import: sample (default), full, none.
     #[serde(default)]
     pub verify: Option<String>,
-    /// Worker threads (default 0: all cores).
+    /// Worker threads (default 0: all cores, and all but two for the Quick Start build).
     #[serde(default)]
     pub threads: Option<usize>,
     /// Start the jobs on threads of this process and answer at once (else they run here, one

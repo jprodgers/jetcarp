@@ -68,7 +68,7 @@ enum JobsCmd {
     /// Carry on a stopped, paused, or cut-off job from its last checkpoint.
     Resume {
         job: i64,
-        /// Worker threads (default: all cores).
+        /// Worker threads (default: all cores; an explore search leaves two free).
         #[arg(long)]
         threads: Option<usize>,
         /// Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU

@@ -343,7 +343,7 @@ enum QuickstartSub {
         /// Run on the CPU only.
         #[arg(long)]
         no_gpu: bool,
-        /// Worker threads (default: all cores).
+        /// Worker threads (default: every core but two, a third of them for the GPU's batches).
         #[arg(long)]
         threads: Option<usize>,
         /// Run in a process of its own and return at once.

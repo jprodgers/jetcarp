@@ -92,7 +92,8 @@ pub struct JobFlags {
     /// generations); the job stays resumable.
     #[arg(long)]
     limit: Option<u64>,
-    /// Worker threads (default: all cores). Results do not depend on this.
+    /// Worker threads (default: all cores; an explore search leaves two free). Results do not
+    /// depend on this.
     #[arg(long)]
     threads: Option<usize>,
     /// Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it).

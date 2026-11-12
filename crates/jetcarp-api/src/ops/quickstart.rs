@@ -1155,7 +1155,7 @@ pub struct BuildIn {
     /// The job's label (default "Quick Start build").
     #[serde(default)]
     pub label: Option<String>,
-    /// Worker threads (default 0: all cores).
+    /// Worker threads (default 0: every core but two, a third of them for the GPU's batches).
     #[serde(default)]
     pub threads: Option<usize>,
     /// Run on a thread of this process and answer at once.

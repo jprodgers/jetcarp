@@ -1643,7 +1643,7 @@ pub struct SearchStartIn {
     /// This run's budget; the job stays resumable past it.
     #[serde(default)]
     pub budget: Option<BudgetIn>,
-    /// Worker threads (default 0: all cores; results do not depend on them).
+    /// Worker threads (default 0: all cores, and all but two for an explore search; results do not depend on them).
     #[serde(default)]
     pub threads: Option<usize>,
     /// Hunts: run the start of each soup on the GPU (results are identical). Piles: topple on the GPU (periodic tilings). Explore: run the rules a GPU can run on it, when there is one.
