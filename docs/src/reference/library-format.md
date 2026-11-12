@@ -381,10 +381,15 @@ commit `f3492e8` is the last that has it. What the import did:
   wrote in CART's format before the library had a schema: the Life census and the mining hunts. Their
   records were verified and merged in the same way, and their row 0 states the engine version the
   records give (`0.4.0`).
-- **Counts.** The library holds 723,736 records: 415,086 from CART's catalog (its 416,392 records,
+- **Counts.** The import made 723,736 records: 415,086 from CART's catalog (its 416,392 records,
   of which 2,498 merged into 1,192), 308,595 from the census (whose other 487 records were already
-  there and gained their rules), and 55 from the hunts (86 already there). 295 of them are
+  there and gained their rules), and 55 from the hunts (86 already there). 295 of them were
   spaceships.
+- **Compounds split.** CART's object finder stored many objects that were several independent ones
+  side by side. The [compound pass](#compounds) then examined every record: 218,175 were compounds
+  (156,903 still lifes, 61,125 oscillators and 147 spaceships). 211,579 were replaced by their
+  parts, and 6,596 kept, tagged `compound`, because a part does not run in every rule the compound
+  does. The library now holds 587,072 records, 148 of them spaceships.
 
 ## Tables
 
