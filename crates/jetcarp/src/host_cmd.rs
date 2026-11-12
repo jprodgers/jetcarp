@@ -227,6 +227,8 @@ fn status_lines(v: &Value) -> Vec<String> {
         let place = match s["monitor"].as_u64().map(|m| m as usize) {
             Some(m) => match monitors.get(m) {
                 Some(name) => format!("{shown} on monitor {m} ({name})"),
+                // A host just started may not have read its monitors yet.
+                None if monitors.is_empty() => format!("{shown} on monitor {m}"),
                 None => format!("{shown} on monitor {m} (not connected)"),
             },
             None if shown == "wallpaper" && monitors.len() > 1 => {
