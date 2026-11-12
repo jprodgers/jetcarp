@@ -225,17 +225,21 @@ fn sign(bundle: &Path) -> Result<(), String> {
     }
 }
 
-/// The built saver code, beside this program: beside the file it really is when it was started
-/// through a link (Homebrew, pipx and the shell installer put one on the `PATH`), else beside the
-/// link.
+/// The built saver code: beside this program (a build folder, a release archive, the shell
+/// installer's folder), else in `../lib/jetcarp/` from it (Homebrew, and the wheel's data in a
+/// Python environment). The program is the file it really is when it was started through a link
+/// on the `PATH`.
 pub fn built_dylib() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let real = std::fs::canonicalize(&exe).unwrap_or_else(|_| exe.clone());
     let path = real.with_file_name(DYLIB);
-    if path.exists() {
-        Ok(path)
-    } else if exe.with_file_name(DYLIB).exists() {
-        Ok(exe.with_file_name(DYLIB))
+    let mut places = vec![path.clone()];
+    if let Some(prefix) = real.parent().and_then(Path::parent) {
+        places.push(prefix.join("lib").join("jetcarp").join(DYLIB));
+    }
+    places.push(exe.with_file_name(DYLIB));
+    if let Some(found) = places.into_iter().find(|p| p.is_file()) {
+        Ok(found)
     } else {
         Err(format!(
             "{} was not found. Build it with `cargo build --release -p jetcarp-saver`.",
