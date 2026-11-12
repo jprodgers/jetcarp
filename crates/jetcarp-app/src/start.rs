@@ -12,7 +12,7 @@
 //!
 //! The menu loads on a background thread and reloads when the library's Quick Start rows change.
 
-use crate::previews::{MAX_LIVE, Pool, Source};
+use crate::previews::{MAX_LIVE, PICTURE_HEIGHT, Pool, Source};
 use crate::thumbs;
 use eframe::egui::{self, Color32, Rect, RichText, Sense};
 use jetcarp_core::Scene;
@@ -509,7 +509,7 @@ impl Menu {
                     }
                     ui.label(RichText::new(title).strong());
                     let w = 168.0;
-                    let h = (w * 0.62f32).round();
+                    let h = (w * PICTURE_HEIGHT).round();
                     egui::ScrollArea::horizontal()
                         .id_salt(("qs-row", title))
                         .max_height(h + 62.0)
@@ -537,7 +537,7 @@ impl Menu {
         let avail = ui.available_width() - 14.0;
         let cols = (((avail + gap) / (self.view.card_w + gap)).floor() as usize).max(1);
         let cw = ((avail + gap) / cols as f32 - gap).max(80.0);
-        let img_h = (cw * 0.62).round();
+        let img_h = (cw * PICTURE_HEIGHT).round();
         let row_h = img_h + CAPTION_H + 8.0;
         let rows = order.len().div_ceil(cols);
         *side = ((cw * ui.ctx().pixels_per_point() / 20.0).ceil() as u32 * 20).clamp(120, 480);

@@ -9,9 +9,21 @@
 //!
 //! Colouring is fast because a card keeps a map from pixels to cells, rendered once for its
 //! tiling and shared by every card on that tiling. Topologies are shared the same way.
+//!
+//! A card whose live cells fill only a small part of its world (a ship in a grid it can travel)
+//! is framed on them instead, following them as they move ([`frame`]). Its pixel map is its own:
+//! a view a little larger than the card, which the card's picture is a window into, drawn again
+//! only when the window reaches its edge or the frame zooms out.
+
+mod frame;
+pub use frame::PICTURE_HEIGHT;
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
-use jetcarp_core::render::{Colorer, RenderOptions, ViewColors, render_with_colors};
+use jetcarp_core::geom::P;
+use jetcarp_core::render::{
+    Colorer, RenderOptions, ViewColors, ViewOptions, render_view_with, render_with_colors,
+    torus_periods,
+};
 use jetcarp_core::topology::Topology;
 use jetcarp_core::{Scene, Status, World};
 use jetcarp_store::Library;
@@ -72,7 +84,31 @@ impl PixelMap {
                 [(v >> 16) as u8, (v >> 8) as u8, v as u8, 0x7f]
             })
             .collect();
-        let img = render_with_colors(world, &enc, &opts);
+        PixelMap::decode(render_with_colors(world, &enc, &opts))
+    }
+
+    /// The map of a `width` x `height` view centred on world point `center` at `scale` pixels
+    /// per world unit (a wrap-edge lattice repeating around its grid).
+    fn view(world: &World, (width, height): (u32, u32), center: P, scale: f64) -> PixelMap {
+        let enc = |i: usize| {
+            let v = i as u32 + 1;
+            [(v >> 16) as u8, (v >> 8) as u8, v as u8, 0x7f]
+        };
+        let opts = ViewOptions {
+            outline_min_px: 0.0,
+            repeat: true,
+            colors: Some(ViewColors {
+                stage: [0; 4],
+                outline: [0; 4],
+            }),
+        };
+        PixelMap::decode(render_view_with(
+            world, &enc, width, height, center, scale, &opts,
+        ))
+    }
+
+    /// Cells from a picture whose cells are coloured by index (alpha 0x7f).
+    fn decode(img: jetcarp_core::render::Image) -> PixelMap {
         let cell = img
             .rgba
             .as_chunks::<4>()
@@ -117,6 +153,96 @@ impl PixelMap {
             .collect();
         ColorImage::new([self.width as usize, self.height as usize], pixels)
     }
+
+    /// The `w` x `h` window of the map at pixel (`x`, `y`), coloured from the world: only the
+    /// cells in it are coloured, each once per run of pixels.
+    fn paint_window(&self, world: &World, (x, y): (u32, u32), (w, h): (u32, u32)) -> ColorImage {
+        let c = Colorer::new(world);
+        let stage = ViewColors::for_world(world).stage;
+        let stage = Color32::from_rgba_premultiplied(stage[0], stage[1], stage[2], stage[3]);
+        let mut pixels = Vec::with_capacity(w as usize * h as usize);
+        let mut last = (u32::MAX, stage);
+        for row in y..(y + h).min(self.height) {
+            let start = (row * self.width + x) as usize;
+            let end = start + w.min(self.width.saturating_sub(x)) as usize;
+            for &i in &self.cell[start..end] {
+                if i == u32::MAX {
+                    pixels.push(stage);
+                    continue;
+                }
+                if i != last.0 {
+                    let p = c.color(i as usize);
+                    last = (i, Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3]));
+                }
+                pixels.push(last.1);
+            }
+        }
+        pixels.resize(w as usize * h as usize, stage);
+        ColorImage::new([w as usize, h as usize], pixels)
+    }
+}
+
+/// A card framed on its live cells (see [`frame`]).
+struct Framed {
+    /// World units across the card's picture.
+    width: f64,
+    /// The world point at the picture's centre.
+    cam: P,
+    /// The pixel map the picture is a window into, once drawn.
+    map: Option<FrameMap>,
+}
+
+/// A framed card's own pixel map: `pad` pixels more than the picture on every side.
+struct FrameMap {
+    map: PixelMap,
+    /// The world point at the map's centre, and pixels per world unit.
+    center: P,
+    scale: f64,
+    /// The picture's size it was drawn for.
+    picture: (u32, u32),
+    pad: u32,
+}
+
+impl Framed {
+    /// The card's picture, `side` pixels wide, drawing the map again when the frame zoomed out,
+    /// the card changed size, or the picture would leave the map.
+    fn paint(&mut self, world: &World, side: u32) -> ColorImage {
+        let picture = (side, ((side as f32 * PICTURE_HEIGHT).round() as u32).max(1));
+        let scale = picture.0 as f64 / self.width;
+        let window = |m: &FrameMap, cam: P| {
+            let x = m.pad as f64 + ((cam[0] - m.center[0]) * m.scale).round();
+            let y = m.pad as f64 + ((cam[1] - m.center[1]) * m.scale).round();
+            let fits = 0.0..=2.0 * m.pad as f64;
+            (fits.contains(&x) && fits.contains(&y)).then_some((x as u32, y as u32))
+        };
+        let current = self
+            .map
+            .as_ref()
+            .filter(|m| m.picture == picture && m.scale == scale)
+            .and_then(|m| window(m, self.cam));
+        let at = match current {
+            Some(at) => at,
+            None => {
+                // On a torus the frame may have travelled copies away: take it back to the
+                // copy nearest the grid (the same picture).
+                if let Some(t) = torus_periods(&world.topo) {
+                    self.cam = frame::nearest_copy(self.cam, frame::middle(world.topo.bounds), t);
+                }
+                let pad = (picture.0 / 6).max(12);
+                let size = (picture.0 + 2 * pad, picture.1 + 2 * pad);
+                self.map = Some(FrameMap {
+                    map: PixelMap::view(world, size, self.cam, scale),
+                    center: self.cam,
+                    scale,
+                    picture,
+                    pad,
+                });
+                (pad, pad)
+            }
+        };
+        let m = self.map.as_ref().expect("drawn above");
+        m.map.paint_window(world, at, picture)
+    }
 }
 
 /// A running card (owned by a worker while it is stepped), boxed: it moves through the shared
@@ -135,6 +261,74 @@ struct Running {
     rest_until: Option<Instant>,
     side: u32,
     map: Arc<PixelMap>,
+    /// Mean cell size (world units).
+    cell: f64,
+    /// Framed on its live cells, or shown whole.
+    frame: Option<Framed>,
+    /// Steps until a card shown whole looks at its live cells again.
+    look_in: u32,
+}
+
+impl Running {
+    /// Frames the card on its live cells, follows them, or shows the whole world again (see
+    /// [`frame`]).
+    fn reframe(&mut self) {
+        let framed = self.frame.is_some();
+        if !framed {
+            if self.look_in > 0 {
+                self.look_in -= 1;
+                return;
+            }
+            self.look_in = frame::LOOK_EVERY;
+        }
+        let b = match frame::live_box(&self.world, self.frame.as_ref().map(|f| f.cam)) {
+            // A dying pattern keeps its frame.
+            frame::Live::Empty => return,
+            frame::Live::Dense => {
+                self.frame = None;
+                return;
+            }
+            frame::Live::Box(b) => b,
+        };
+        let bounds = self.world.topo.bounds;
+        let widest = frame::widest_frame(b, frame::whole_view(bounds, frame::ASPECT), framed);
+        let need = frame::frame_width(b, self.cell, frame::ASPECT);
+        if need > widest {
+            self.frame = None;
+            return;
+        }
+        let width = match &self.frame {
+            Some(f) if need <= f.width => f.width,
+            Some(_) => (need * frame::HEADROOM).min(widest),
+            None => need,
+        };
+        let edges = torus_periods(&self.world.topo).is_none().then_some(bounds);
+        let size = (width, width / frame::ASPECT);
+        match &mut self.frame {
+            Some(f) => {
+                if width != f.width {
+                    f.width = width;
+                    f.map = None;
+                }
+                f.cam = frame::follow(f.cam, b, size, self.cell, edges, false);
+            }
+            None => {
+                self.frame = Some(Framed {
+                    width,
+                    cam: frame::follow(frame::middle(b), b, size, self.cell, edges, true),
+                    map: None,
+                })
+            }
+        }
+    }
+
+    /// The card's picture: its frame, or the whole world.
+    fn picture(&mut self) -> ColorImage {
+        match &mut self.frame {
+            Some(f) => f.paint(&self.world, self.side),
+            None => self.map.paint(&self.world),
+        }
+    }
 }
 
 /// A topology, its pixel maps by side, and when it was last used.
@@ -367,8 +561,9 @@ impl Worker {
             qs::apply_mature(&mut world, state, mature_gen);
         }
         let map = self.pixel_map(&key, side, &world);
-        Ok(Box::new(Running {
+        let mut run = Box::new(Running {
             start_gen: world.generation,
+            cell: jetcarp_core::world::cell_size(&world.topo),
             world,
             scene,
             mature,
@@ -376,7 +571,11 @@ impl Worker {
             rest_until: None,
             side,
             map,
-        }))
+            frame: None,
+            look_in: 0,
+        });
+        run.reframe();
+        Ok(run)
     }
 
     /// Back to the start of a card after a rest (or a very long run).
@@ -388,6 +587,10 @@ impl Worker {
         run.start_gen = world.generation;
         run.world = world;
         run.rest_until = None;
+        // Framed afresh: the start is small again.
+        run.frame = None;
+        run.look_in = 0;
+        run.reframe();
         Ok(())
     }
 
@@ -398,8 +601,8 @@ impl Worker {
         // A new card: build and paint before any step.
         let Some(mut run) = run else {
             return match self.build(&source, side) {
-                Ok(run) => {
-                    let img = Some(run.map.paint(&run.world));
+                Ok(mut run) => {
+                    let img = Some(run.picture());
                     Done {
                         run: Some(run),
                         img,
@@ -436,7 +639,7 @@ impl Worker {
                 return fail();
             }
             return Done {
-                img: Some(run.map.paint(&run.world)),
+                img: Some(run.picture()),
                 run: Some(run),
                 due: t0 + TICK,
                 failed: false,
@@ -458,8 +661,10 @@ impl Worker {
         } else if restart && let Err(e) = self.restart(&mut run) {
             eprintln!("preview: {e}");
             return fail();
+        } else if !restart {
+            run.reframe();
         }
-        let img = Some(run.map.paint(&run.world));
+        let img = Some(run.picture());
         // A costly card waits longer, so cheap ones aren't held back.
         let cost = t0.elapsed();
         let due = run.rest_until.unwrap_or(t0 + TICK.max(cost * 5));
@@ -849,5 +1054,134 @@ mod tests {
             g.cards.get_mut(id).unwrap().due = now;
         }
         assert!(matches!(pick(&mut g, now), Pick::Wait(_)));
+    }
+
+    /// A glider (moving down and right) at cell (x, y) of a `w` x `h` square grid with wrap
+    /// edges, as a pasted pattern would be (placed cells keep the scene's size).
+    fn glider_at(w: u32, h: u32, x: u32, y: u32) -> Arc<Source> {
+        let cells = [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)]
+            .map(|(dx, dy)| [((y + dy) % h) * w + (x + dx) % w, 1])
+            .to_vec();
+        let mut s = Scene::new(TilingSpec::rect("square", w, h, Boundary::Wrap));
+        s.cas = vec![CaSpec::new("B3/S23").seed(SeedSpec::Cells { cells })];
+        Arc::new(Source::Scene(Box::new(s)))
+    }
+
+    /// The live cells' box, measured around the frame, lies inside the frame.
+    fn inside_frame(run: &Running) -> bool {
+        let f = run.frame.as_ref().expect("framed");
+        let frame::Live::Box(b) = frame::live_box(&run.world, Some(f.cam)) else {
+            return false;
+        };
+        let (hw, hh) = (f.width / 2.0, f.width / frame::ASPECT / 2.0);
+        b[0] >= f.cam[0] - hw
+            && b[2] <= f.cam[0] + hw
+            && b[1] >= f.cam[1] - hh
+            && b[3] <= f.cam[1] + hh
+    }
+
+    #[test]
+    fn a_small_pattern_in_a_large_world_is_framed_and_a_soup_is_not() {
+        let mut w = worker();
+        // A glider in a 200 x 150 grid: framed, its picture in the card's shape, the glider
+        // showing.
+        let done = w.work(job(&glider_at(200, 150, 100, 70), None, 240));
+        let run = done.run.unwrap();
+        let f = run
+            .frame
+            .as_ref()
+            .expect("a glider in a large grid is framed");
+        assert!(
+            (f.width - frame::MIN_CELLS * frame::ASPECT).abs() < 1e-6,
+            "the least frame: {} cells across",
+            f.width
+        );
+        let img = done.img.unwrap();
+        assert_eq!(img.size, [240, 149]);
+        let stage = img.pixels[0];
+        let lit = img.pixels.iter().filter(|&&p| p != stage).count();
+        // Five cells of about (149 / 16)^2 pixels each, give or take the cells' edges.
+        assert!((5 * 60..5 * 120).contains(&lit), "{lit} pixels of glider");
+        // A soup over the same grid: shown whole, at the whole tiling's shape (4:3).
+        let soup = src("B3/S23", SeedSpec::Random { density: 0.4 });
+        let done = w.work(job(&soup, None, 240));
+        assert!(done.run.unwrap().frame.is_none());
+        assert_eq!(done.img.unwrap().size, [240, 180]);
+        // A glider in a grid not much larger than the least frame: shown whole.
+        let done = w.work(job(&glider_at(30, 20, 10, 10), None, 240));
+        assert!(done.run.unwrap().frame.is_none());
+    }
+
+    #[test]
+    fn a_framed_card_follows_its_ship_across_a_wrap_edge() {
+        let mut w = worker();
+        let source = glider_at(200, 150, 185, 135);
+        let done = w.work(job(&source, None, 240));
+        let mut run = done.run.unwrap();
+        let start = run.frame.as_ref().unwrap().cam;
+        let width = run.frame.as_ref().unwrap().width;
+        let mut redrawn = 0;
+        let mut last_map = None;
+        // About 200 generations: the glider crosses both wrap edges.
+        while run.world.generation < 200 {
+            let d = w.work(job(&source, Some(run), 240));
+            run = d.run.unwrap();
+            assert!(d.img.is_some_and(|i| i.size == [240, 149]));
+            assert!(
+                inside_frame(&run),
+                "generation {}: the glider left the frame",
+                run.world.generation
+            );
+            let f = run.frame.as_ref().unwrap();
+            assert_eq!(f.width, width, "a glider never needs a larger frame");
+            let m = f.map.as_ref().unwrap().center;
+            if last_map != Some(m) {
+                redrawn += 1;
+                last_map = Some(m);
+            }
+        }
+        // It moved about 50 cells down and right, round the torus (taken back near the grid).
+        let end = run.frame.as_ref().unwrap().cam;
+        let moved = frame::nearest_copy(end, start, torus_periods(&run.world.topo).unwrap());
+        let (dx, dy) = (moved[0] - start[0], moved[1] - start[1]);
+        assert!(
+            (40.0..60.0).contains(&dx) && (40.0..60.0).contains(&dy),
+            "{dx}, {dy}"
+        );
+        // The map was drawn again now and then, not every step (each step moves the window).
+        assert!(redrawn < 40, "{redrawn} maps for about 100 steps");
+    }
+
+    #[test]
+    fn a_frame_across_a_wrap_edge_shows_no_seams() {
+        // A few cells at the grid's first cells, so the frame straddles both wrap edges of a
+        // tiling whose grid has ragged edges.
+        let specs = ["trihex", "snubhex", "oct", "rhombitrihex"]
+            .map(|f| TilingSpec::rect(f, 40, 30, Boundary::Wrap))
+            .into_iter()
+            .chain([serde_json::from_value(serde_json::json!({
+                "family": "periodic", "params": {"catalog": "k3-021"},
+                "size": {"rect": {"w": 32, "h": 21}}, "boundary": "wrap"
+            }))
+            .unwrap()]);
+        for spec in specs {
+            let family = serde_json::to_string(&spec).unwrap();
+            let mut s = Scene::new(spec);
+            let cells = (0..4).map(|i| [i, 1]).collect();
+            s.cas = vec![CaSpec::new("B/S012345678").seed(SeedSpec::Cells { cells })];
+            let source = Arc::new(Source::Scene(Box::new(s)));
+            let mut w = worker();
+            let done = w.work(job(&source, None, 240));
+            let run = done.run.unwrap();
+            assert!(run.frame.is_some(), "{family}: framed");
+            let stage = ViewColors::for_world(&run.world).stage;
+            let stage = Color32::from_rgba_premultiplied(stage[0], stage[1], stage[2], stage[3]);
+            let img = done.img.unwrap();
+            let gaps = img.pixels.iter().filter(|&&p| p == stage).count();
+            assert_eq!(
+                gaps, 0,
+                "{family}: {gaps} pixels of stage between the copies"
+            );
+        }
     }
 }

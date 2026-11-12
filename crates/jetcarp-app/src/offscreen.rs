@@ -781,4 +781,45 @@ mod tests {
             eprintln!("wrote {}", p.display());
         }
     }
+
+    /// The Start screen over a scratch catalog `JETCARP_LIBRARY` holding the starter pack: the
+    /// whole screen, the pack's cards, and its ships (twice, a few seconds apart, to see them
+    /// followed) and oscillators, framed on their few live cells in large grids.
+    #[test]
+    #[ignore]
+    fn offscreen_start_screen_starter_pack() {
+        use crate::start::Menu;
+        use jetcarp_store::QsSource;
+        let Some(dir) = out_dir() else { return };
+        assert!(
+            std::env::var_os("JETCARP_LIBRARY").is_some(),
+            "set JETCARP_LIBRARY"
+        );
+        let Some(mut o) = Offscreen::new(1400, 900) else {
+            return;
+        };
+        let show = |m: &mut Menu, ctx: &egui::Context| {
+            m.refresh_if_changed();
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let _ = m.show(ui);
+                });
+            });
+        };
+        let mut m = Menu::new();
+        assert!(frames_until(&mut o, 120.0, &mut m, show, |m| m.test_loaded()));
+        frames_until(&mut o, 8.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "starter-start");
+        m.view.filter.source = Some(QsSource::Pack);
+        frames_until(&mut o, 6.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "starter-pack");
+        m.view.filter.behaviour = "Gliders & ships".into();
+        frames_until(&mut o, 6.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "starter-ships");
+        frames_until(&mut o, 3.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "starter-ships-later");
+        m.view.filter.behaviour = "Oscillators".into();
+        frames_until(&mut o, 6.0, &mut m, show, |_| false);
+        shot(&mut o, &mut m, show, &dir, "starter-oscillators");
+    }
 }
