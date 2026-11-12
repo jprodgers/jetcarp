@@ -106,8 +106,25 @@ impl JetcarpApp {
         self.menu.refresh_if_changed();
     }
 
+    /// The setup wizard (`crate::setup_ui`). Once a setup chose a new data folder, the windows
+    /// that hold the library open it again from there.
+    pub(super) fn setup_window(&mut self, ctx: &egui::Context) {
+        self.setup.show(ctx);
+        if self.setup.take_data_changed() {
+            let palettes = self.tool_palettes();
+            self.menu = start::Menu::new();
+            self.dash = Default::default();
+            self.library = Default::default();
+            self.ants = Default::default();
+            self.catalog_tools = Default::default();
+            self.pile = Default::default();
+            self.set_tool_palettes(palettes);
+        }
+    }
+
     /// Every tool window (every frame, on both screens).
     pub(super) fn tool_windows(&mut self, ctx: &egui::Context) {
+        self.setup_window(ctx);
         self.script_windows(ctx);
         self.pile.show(ctx);
         self.hlview.show(ctx);

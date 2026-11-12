@@ -190,6 +190,8 @@ pub struct JetcarpApp {
     pal_ui: palette_ui::PaletteUi,
     /// The wallpaper export dialog (`wallpaper_ui.rs`).
     wallpaper: wallpaper_ui::WallpaperUi,
+    /// The setup wizard (`crate::setup_ui`): at the first launch, and Help → Setup….
+    setup: crate::setup_ui::Wizard,
 }
 
 /// What the status and menu bars show about the world, kept until its revision changes.
@@ -306,11 +308,17 @@ impl JetcarpApp {
             reseed: Default::default(),
             pal_ui: Default::default(),
             wallpaper: Default::default(),
+            setup: crate::setup_ui::Wizard::for_app(),
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
         let mut app = app.with_autoshot(&cc.egui_ctx);
         app.apply_launch(&cc.egui_ctx, launch);
+        // The first launch (setup never ran) opens the setup wizard; screenshot runs never do.
+        if std::env::var_os("JETCARP_SCREENSHOT").is_none() && crate::setup_ui::Wizard::first_run()
+        {
+            app.setup.show_again();
+        }
         app
     }
 

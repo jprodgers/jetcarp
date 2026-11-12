@@ -173,6 +173,8 @@ pub(super) enum Action {
     IdentifyMonitors,
     /// Switch automatic reseeding on or off (installs a preset when there are no policies).
     AutoReseed,
+    /// The setup wizard (`crate::setup_ui`).
+    Setup,
     /// Show (and focus) a control pane, wherever it is.
     Pane(&'static str),
     /// Open or close a tool window.
@@ -238,6 +240,7 @@ impl Action {
             KeepAwake,
             IdentifyMonitors,
             AutoReseed,
+            Setup,
         ];
         v.extend(panes::PANES.iter().map(|p| Pane(p.id)));
         v.extend(ToolWin::ALL.map(Tool));
@@ -286,6 +289,7 @@ impl Action {
             KeepAwake => "Keep awake".into(),
             IdentifyMonitors => "Identify monitors".into(),
             AutoReseed => "Auto reseed".into(),
+            Setup => "Setup…".into(),
             Pane("screensaver") => "Screensaver settings…".into(),
             Pane(id) => panes::pane_def(id).map(|d| d.title).unwrap_or(id).into(),
             Tool(t) => t.label().into(),
@@ -331,6 +335,9 @@ impl Action {
             IdentifyMonitors => "Show each monitor's number on it for three seconds",
             AutoReseed => {
                 "Run the automatic reseed policies (the Reseed pane edits them); with none, install the Screensaver preset"
+            }
+            Setup => {
+                "Choose what JETCARP sets up: packs, Quick Start entries of your own, the desktop"
             }
             Tool(t) => t.hint(),
             _ => "",
@@ -531,7 +538,12 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
     ),
     (
         "Help",
-        &[A(A_::Tool(ToolWin::Shortcuts)), A(A_::Tool(ToolWin::About))],
+        &[
+            A(A_::Setup),
+            Sep,
+            A(A_::Tool(ToolWin::Shortcuts)),
+            A(A_::Tool(ToolWin::About)),
+        ],
     ),
 ];
 
@@ -804,6 +816,7 @@ impl JetcarpApp {
             KeepAwake => self.shell.display.keep_awake = !self.shell.display.keep_awake,
             IdentifyMonitors => self.identify_monitors(ctx),
             AutoReseed => self.toggle_auto_reseed(),
+            Setup => self.setup.show_again(),
             Tool(t) => {
                 let on = !self.tool_open(t);
                 self.set_tool_open(t, on);
