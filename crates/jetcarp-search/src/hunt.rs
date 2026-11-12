@@ -51,6 +51,7 @@ pub struct HuntSpec {
     pub soups: Option<u64>,
     #[serde(default)]
     pub soup: SoupSpec,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub seed: u64,
     /// A soup not settled by then is censused as it is (`unsettled`).
     pub max_gens: u64,
@@ -78,8 +79,12 @@ pub struct HuntSpec {
 /// one-off still lifes and oscillators, about 10 KB of record each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorePolicy {
+    /// [`StorePolicy::all`]'s are `u64::MAX`, a decimal string in JSON.
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub max_cells: u64,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub max_volume: u64,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub min_seen: u64,
 }
 

@@ -505,7 +505,11 @@ pub struct TryIn {
     #[serde(default)]
     pub gens: Option<u32>,
     /// The random seed (default 1).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub rng: Option<u64>,
     /// Picture size in pixels (default 420).
     #[serde(default)]
@@ -1000,7 +1004,11 @@ pub struct ClipsIn {
     #[serde(default = "sample_default")]
     pub sample: usize,
     /// The sample's random seed (default 1).
-    #[serde(default = "seed_default")]
+    #[serde(
+        default = "seed_default",
+        serialize_with = "jetcarp_core::json_int::uint::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint::deserialize"
+    )]
     pub seed: u64,
     /// These runs instead of a sample.
     #[serde(default)]

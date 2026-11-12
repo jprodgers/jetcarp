@@ -1,6 +1,6 @@
 //! The JSON documents of a pack (manifests, indexes, refs, key statements): RFC 8785 canonical
-//! form ([`jetcarp_core::jcs`]), no non-integer numbers, integers within ±2^53, nesting to 32
-//! levels, and at most 16 MiB. Reading checks all of it before the document is used.
+//! form ([`jetcarp_core::jcs`]), no non-integer numbers, integers within ±(2^53 − 1), nesting to
+//! 32 levels, and at most 16 MiB. Reading checks all of it before the document is used.
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -10,13 +10,14 @@ use serde_json::{Map, Number, Value};
 pub const MAX_DOC: u64 = 16 << 20;
 /// Deepest nesting of arrays and objects.
 pub const MAX_DEPTH: usize = 32;
-/// Largest integer magnitude: 2^53.
-pub const MAX_INT: u64 = 1 << 53;
+/// Largest integer magnitude: 2^53 − 1, the largest every JSON reader holds exactly
+/// ([`jetcarp_core::json_int::MAX_SAFE`]). A larger integer is a decimal string.
+pub const MAX_INT: u64 = jetcarp_core::json_int::MAX_SAFE;
 
 /// The canonical bytes of a document, refusing what a pack document may not hold.
 pub fn canonical(v: &Value) -> Result<Vec<u8>, String> {
     check(v, 0)?;
-    Ok(jetcarp_core::jcs::to_string(v).into_bytes())
+    Ok(jetcarp_core::jcs::to_string(v)?.into_bytes())
 }
 
 /// The canonical bytes of a serializable document.
@@ -54,7 +55,8 @@ fn check_number(n: &Number) -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "a pack document holds only integers within ±2^53 (decimals are strings), not {n}"
+        "a pack document holds only integers within ±(2^53 - 1) (decimals, and larger \
+         integers, are strings), not {n}"
     ))
 }
 
@@ -87,7 +89,7 @@ pub fn depth_of(bytes: &[u8]) -> usize {
 }
 
 /// Parse a pack document: at most [`MAX_DOC`] bytes, nested at most [`MAX_DEPTH`] levels, UTF-8,
-/// its numbers integers within ±2^53, and (with `strict`) written in canonical form.
+/// its numbers integers within ±(2^53 − 1), and (with `strict`) written in canonical form.
 pub fn parse(bytes: &[u8], what: &str, strict: bool) -> Result<Value, String> {
     if bytes.len() as u64 > MAX_DOC {
         return Err(format!("{what}: larger than 16 MiB"));
@@ -101,7 +103,7 @@ pub fn parse(bytes: &[u8], what: &str, strict: bool) -> Result<Value, String> {
     }
     let v: Value = serde_json::from_str(text).map_err(|e| format!("{what}: not JSON: {e}"))?;
     check(&v, 0).map_err(|e| format!("{what}: {e}"))?;
-    if strict && jetcarp_core::jcs::to_string(&v).as_bytes() != bytes {
+    if strict && jetcarp_core::jcs::to_string(&v)?.as_bytes() != bytes {
         return Err(format!("{what}: not in RFC 8785 canonical form"));
     }
     Ok(v)
@@ -113,19 +115,20 @@ pub fn parse_as<T: DeserializeOwned>(bytes: &[u8], what: &str, strict: bool) -> 
     serde_json::from_value(v).map_err(|e| format!("{what}: {e}"))
 }
 
-/// A value made fit for a pack document: every non-integer number, and every integer beyond
-/// ±2^53, becomes a string holding the number as ECMAScript writes it (RFC 8785's form), so a
-/// search's settings (densities such as `0.35`) can be copied into an index. Integers and
-/// everything else stay as they are.
+/// A value made fit for a pack document: every non-integer number becomes a string holding the
+/// number as ECMAScript writes it (RFC 8785's form), and every integer beyond ±(2^53 − 1) a
+/// string of its decimal digits, exactly, so a search's settings (densities such as `0.35`, a
+/// seed such as `"17705299566207515059"`) can be copied into an index. Integers within the bound
+/// and everything else stay as they are.
 pub fn sanitize(v: Value) -> Value {
     match v {
         Value::Number(n) => {
             if check_number(&n).is_ok() {
                 Value::Number(n)
+            } else if n.is_u64() || n.is_i64() {
+                Value::String(n.to_string())
             } else {
-                let mut s = String::new();
-                jetcarp_core::jcs::write(&mut s, &Value::Number(n));
-                Value::String(s)
+                Value::String(jetcarp_core::jcs::to_string_safe(&Value::Number(n)))
             }
         }
         Value::Array(a) => Value::Array(a.into_iter().map(sanitize).collect()),
@@ -140,9 +143,7 @@ pub fn sanitize(v: Value) -> Value {
 
 /// A decimal as a string: the shortest digits that read back to the same double (`0.15`, `2`).
 pub fn decimal(x: f64) -> String {
-    let mut s = String::new();
-    jetcarp_core::jcs::write(&mut s, &serde_json::json!(x));
-    s
+    jetcarp_core::jcs::to_string_safe(&serde_json::json!(x))
 }
 
 #[cfg(test)]
@@ -152,11 +153,11 @@ mod tests {
 
     #[test]
     fn documents_are_canonical_and_bounded() {
-        let v = json!({"b": 1, "a": [true, null, "x"], "c": {"z": -5, "y": 9007199254740992u64}});
+        let v = json!({"b": 1, "a": [true, null, "x"], "c": {"z": -5, "y": 9007199254740991u64}});
         let b = canonical(&v).unwrap();
         assert_eq!(
             String::from_utf8(b.clone()).unwrap(),
-            r#"{"a":[true,null,"x"],"b":1,"c":{"y":9007199254740992,"z":-5}}"#
+            r#"{"a":[true,null,"x"],"b":1,"c":{"y":9007199254740991,"z":-5}}"#
         );
         assert_eq!(parse(&b, "doc", true).unwrap(), v);
         // Not canonical: refused when strict.
@@ -164,10 +165,14 @@ mod tests {
         assert!(parse(br#"{"b":1, "a":2}"#, "doc", false).is_ok());
         // Floats and big integers are refused; sanitize writes them as strings.
         assert!(canonical(&json!({"x": 0.5})).is_err());
-        assert!(canonical(&json!({"x": 9007199254740993u64})).is_err());
+        assert!(canonical(&json!({"x": 9007199254740992u64})).is_err());
+        assert!(canonical(&json!({"x": -9007199254740992i64})).is_err());
+        assert!(parse(br#"{"x":9007199254740992}"#, "doc", false).is_err());
+        // Large integers become their exact digits, not the nearest double's.
         assert_eq!(
-            sanitize(json!({"x": 0.35, "n": [1e21, 3]})),
-            json!({"x": "0.35", "n": ["1e+21", 3]})
+            sanitize(json!({"x": 0.35, "n": [1e21, 3], "seed": u64::MAX, "s": i64::MIN})),
+            json!({"x": "0.35", "n": ["1e+21", 3], "seed": "18446744073709551615",
+                   "s": "-9223372036854775808"})
         );
         assert_eq!(decimal(2.0), "2");
         assert_eq!(decimal(0.000001), "0.000001");

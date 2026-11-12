@@ -37,6 +37,7 @@ pub struct SearchSpec {
     /// Generations per soup (a soup that settles earlier stops there).
     pub gens: u64,
     /// Soup `s` uses RNG state `seed + s`.
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub seed: u64,
     /// Longest period looked for.
     pub max_period: u64,

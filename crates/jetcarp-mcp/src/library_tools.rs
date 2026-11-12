@@ -8,7 +8,9 @@
 //! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`),
 //! bounded by the server's limits (`Limits::INTERACTIVE`, which the operation checks).
 
-use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool};
+use crate::tools::{
+    Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool, uint,
+};
 use jetcarp_api::Limits;
 use jetcarp_api::op::{self, Callbacks, Op, Quiet, Report, WorldOp};
 use jetcarp_api::ops::library::{
@@ -568,7 +570,7 @@ fn search_tool(
                 .unwrap_or(0.37)
                 .clamp(0.0, 1.0),
         ),
-        seed: Some(int(args, "seed")?.unwrap_or(1).max(0) as u64),
+        seed: Some(uint(args, "seed")?.unwrap_or(1)),
         store: Some(store),
         ..Default::default()
     };

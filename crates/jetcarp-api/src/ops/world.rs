@@ -248,6 +248,7 @@ pub struct ScriptStatus {
 /// A world's status: what `world_status` reports.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct WorldStatus {
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     /// Running, empty, frozen, or repeating with a period (checked exactly).
     pub status: String,
@@ -530,9 +531,14 @@ pub struct NewWorldIn {
     /// "edge", "palette": "Tide"}`). A single string is one CA.
     #[serde(default)]
     pub cas: Option<Value>,
-    /// Random seed (default 1): the same seed gives the same run.
-    #[serde(default)]
-    pub rng_seed: Option<Int>,
+    /// Random seed (default 1): the same seed gives the same run. Any `u64`; beyond 2^53 - 1 also
+    /// as a string of decimal digits.
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
+    pub rng_seed: Option<u64>,
     /// Scene name.
     #[serde(default)]
     pub name: Option<String>,
@@ -655,7 +661,7 @@ impl WorldOp for WorldNew {
         let l = &cx.limits;
         let tiling = tiling_of(&a, l)?;
         let mut scene = Scene::new(tiling);
-        scene.rng_state = a.rng_seed.unwrap_or(1).max(0) as u64;
+        scene.rng_state = a.rng_seed.unwrap_or(1);
         scene.name = a.name.clone().unwrap_or_default();
         match &a.cas {
             None | Some(Value::Null) => {}
@@ -776,6 +782,7 @@ pub struct SaveIn {
 pub struct SavedScene {
     pub path: std::path::PathBuf,
     pub bytes: usize,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub hash: String,
 }
@@ -873,6 +880,7 @@ pub struct Drawn {
     pub pattern_box: Option<[Int; 4]>,
     /// The field's population after drawing.
     pub population: u64,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
 }
 
@@ -1252,6 +1260,7 @@ pub struct Region {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct CellsView {
     pub ca: CaBrief,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     /// Non-empty cells in the whole field.
     pub non_empty: usize,
@@ -1674,6 +1683,7 @@ pub struct Activity {
 /// Reseed policies, their status, and recent activity.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct ReseedReport {
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub policies: Vec<PolicyStatus>,
     pub last_activity: Value,
@@ -1978,6 +1988,7 @@ pub struct StepIn {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Stepped {
     pub ran: u64,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub seconds: f64,
     /// `cancelled`, or `settled` (stopped early), when it stopped before the count.
@@ -2104,6 +2115,7 @@ pub struct RenderIn {
 pub struct Rendered {
     pub width: u32,
     pub height: u32,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub tiling: String,
     pub cells: usize,

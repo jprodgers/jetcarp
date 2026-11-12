@@ -41,6 +41,7 @@ pub struct CensusSpec {
     pub density: f64,
     /// Generation limit per run.
     pub gens: u64,
+    #[serde(with = "crate::json_int::uint")]
     pub seed: u64,
     /// A run whose population exceeds this fraction of the cells is stopped and called exploded.
     pub explode_fraction: f64,
@@ -93,6 +94,7 @@ impl RunClass {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunResult {
     pub soup: u32,
+    #[serde(with = "crate::json_int::uint")]
     pub rng_state: u64,
     pub class: RunClass,
     /// Exact period for frozen (1) and oscillating runs.
@@ -152,6 +154,7 @@ pub struct CensusReport {
     /// True when some cells have missing neighbours (dead edges or a patch boundary).
     pub dead_boundary: bool,
     /// RNG state of each soup.
+    #[serde(with = "crate::json_int::uint_vec")]
     pub rng_states: Vec<u64>,
     pub rules: Vec<RuleSummary>,
 }

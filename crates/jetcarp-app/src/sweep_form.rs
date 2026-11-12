@@ -504,7 +504,12 @@ impl SweepForm {
                     );
                 }
                 if self.rng_seed != 1 {
-                    put("rng_seed", json!(self.rng_seed));
+                    // A world's random state is any u64: beyond 2^53 - 1 a decimal string,
+                    // which `rng_seed` reads too (a Rhai integer stops at 2^63).
+                    put(
+                        "rng_seed",
+                        jetcarp_core::json_int::safe(json!(self.rng_seed)),
+                    );
                 }
             }
         }

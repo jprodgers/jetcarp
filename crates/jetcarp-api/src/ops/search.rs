@@ -251,7 +251,11 @@ pub struct HuntIn {
     #[serde(default)]
     pub shape: Option<String>,
     /// Soup i uses an RNG state from (seed, i) (default 1).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Generations before a soup that has not settled is censused as it is (default 20,000).
     #[serde(default)]
@@ -370,7 +374,11 @@ pub struct BoundedIn {
     #[serde(default)]
     pub gens: Option<u64>,
     /// Soup s uses RNG state seed + s (default 1).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Longest period looked for (default 64).
     #[serde(default)]
@@ -481,7 +489,11 @@ pub struct AntsIn {
     #[serde(default)]
     pub density: Option<f64>,
     /// Seed of the soups and of sampled tables (default 1).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Steps before a run is classed as it is (default 1,000,000).
     #[serde(default)]
@@ -606,7 +618,11 @@ pub struct CensusIn {
     #[serde(default)]
     pub sample: Option<usize>,
     /// The sample's seed (default: from `seed`).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub sample_seed: Option<u64>,
     /// With no rules: every B/S rule over `birth` and `survive` when there are at most this many, else a sample (default 32,768; 0: always a sample, added to `rules` when there are some).
     #[serde(default)]
@@ -632,7 +648,11 @@ pub struct CensusIn {
     #[serde(default)]
     pub gens: Option<u64>,
     /// Default 1.
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// A run is called exploded once its population exceeds this fraction of the cells (default 0.5).
     #[serde(default)]
@@ -1198,7 +1218,11 @@ pub struct EvolveIn {
     #[serde(default)]
     pub gens: Option<usize>,
     /// RNG seed: the run is a pure function of it (default 1).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Arena radius in edge rings (default 48).
     #[serde(default)]
@@ -1322,7 +1346,11 @@ pub struct ExploreIn {
     #[serde(default)]
     pub batch: Option<usize>,
     /// Where the random draws start (default 0).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything).
     #[serde(default)]

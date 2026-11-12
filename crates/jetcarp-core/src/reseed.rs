@@ -307,17 +307,24 @@ pub enum ReseedWhen {
     Settled {
         #[serde(default = "d_activity")]
         activity: f64,
-        #[serde(default = "d_for_gens")]
+        #[serde(default = "d_for_gens", with = "crate::json_int::uint")]
         for_gens: u64,
         #[serde(default = "d_cycle")]
         cycle: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         period: Option<u64>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "crate::json_int::uint_opt"
+        )]
         latest: Option<u64>,
     },
     /// Every `gens` generations (1 = every generation, a continuous drizzle).
-    Every { gens: u64 },
+    Every {
+        #[serde(with = "crate::json_int::uint")]
+        gens: u64,
+    },
 }
 
 /// Settled policies fire only at generations that are multiples of this, so a GPU stepper can
@@ -363,7 +370,7 @@ pub struct AutoReseed {
     /// Generations after this policy fires (or is installed, or a manual reseed) during which it
     /// cannot fire, so a new seed can develop. Settled policies start counting quiet generations
     /// only after it.
-    #[serde(default)]
+    #[serde(default, with = "crate::json_int::uint")]
     pub cooldown: u64,
     #[serde(default = "yes")]
     pub enabled: bool,

@@ -18,17 +18,37 @@ pub enum CaRef {
 #[serde(tag = "when", rename_all = "snake_case")]
 pub enum Trigger {
     /// After this many generations in the step.
-    Generations { n: u64 },
+    Generations {
+        #[serde(with = "crate::json_int::uint")]
+        n: u64,
+    },
     /// Live cells (summed over the running CAs' fields) at or below `n`.
-    PopulationBelow { n: u64 },
+    PopulationBelow {
+        #[serde(with = "crate::json_int::uint")]
+        n: u64,
+    },
     /// Live cells at or above `n`.
-    PopulationAbove { n: u64 },
+    PopulationAbove {
+        #[serde(with = "crate::json_int::uint")]
+        n: u64,
+    },
     /// Fewer than `fraction` of cells changed, for `for_gens` generations in a row.
-    ActivityBelow { fraction: f64, for_gens: u64 },
+    ActivityBelow {
+        fraction: f64,
+        #[serde(with = "crate::json_int::uint")]
+        for_gens: u64,
+    },
     /// More than `fraction` of cells changed, for `for_gens` generations in a row.
-    ActivityAbove { fraction: f64, for_gens: u64 },
+    ActivityAbove {
+        fraction: f64,
+        #[serde(with = "crate::json_int::uint")]
+        for_gens: u64,
+    },
     /// The state repeats exactly with a period of at most `max_period` (1 = frozen).
-    Repeats { max_period: u64 },
+    Repeats {
+        #[serde(with = "crate::json_int::uint")]
+        max_period: u64,
+    },
     /// No running CA can change anything any more ([`crate::World::done`]): an elementary rule
     /// reached the bottom row, the field froze or died out, a sandpile is stable, ...
     Done,
@@ -77,7 +97,11 @@ pub struct ScriptStep {
     pub run: Vec<CaRef>,
     pub until: Trigger,
     /// Optional safety limit: move on after this many generations even if `until` has not fired.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::json_int::uint_opt"
+    )]
     pub max_gens: Option<u64>,
 }
 

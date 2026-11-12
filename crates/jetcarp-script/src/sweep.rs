@@ -336,7 +336,7 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
                 o.insert(k.clone(), x.clone());
             }
         }
-        r
+        jetcarp_core::json_int::safe(r)
     };
     out::write_bytes(
         &run_json,
@@ -611,7 +611,8 @@ fn run_one(
             row.insert(k, x);
         }
     }
-    Ok(Some(Value::Object(row)))
+    // A callback's values are the script's: a large integer among them is a decimal string.
+    Ok(Some(jetcarp_core::json_int::safe(Value::Object(row))))
 }
 
 /// Rows from an earlier, possibly interrupted, run of the same sweep in this folder.
@@ -662,7 +663,7 @@ fn settings_json(v: &Value, plan: &Plan, tiling: &TilingSpec) -> Value {
         serde_json::to_value(plan.screen).unwrap_or(Value::Null),
     );
     s.insert("callback".into(), json!(v.get("keep").is_some()));
-    Value::Object(s)
+    jetcarp_core::json_int::safe(Value::Object(s))
 }
 
 fn default_label(items: &[Item]) -> String {
@@ -781,8 +782,12 @@ pub fn rhai_literal(v: &Value, indent: usize) -> String {
                 } else {
                     f.to_string()
                 }
-            } else {
+            } else if n.is_i64() {
                 n.to_string()
+            } else {
+                // Beyond a Rhai integer (2^63 - 1): its digits as text, which the options that
+                // take one read too.
+                format!("\"{n}\"")
             }
         }
         Value::String(s) => serde_json::to_string(s).unwrap(),

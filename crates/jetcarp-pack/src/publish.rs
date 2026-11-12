@@ -425,7 +425,7 @@ fn inherit(src: &Source, parents: &[Version], me: &str) -> Result<Inherited, Str
                             inh.rows
                                 .entry(name.clone())
                                 .or_default()
-                                .insert(jetcarp_core::jcs::to_string(&r));
+                                .insert(jetcarp_core::jcs::to_string_safe(&r));
                         }
                     }
                 }
@@ -477,7 +477,7 @@ impl NewRows {
             if facts && inh.keys[self.name].contains(&parquet_io::first_key(def, &v)) {
                 return Ok(());
             }
-            if events && inh.rows[self.name].contains(&jetcarp_core::jcs::to_string(&v)) {
+            if events && inh.rows[self.name].contains(&jetcarp_core::jcs::to_string_safe(&v)) {
                 return Ok(());
             }
         }
@@ -662,12 +662,12 @@ pub fn publish(
                         ver.date.clone()
                     },
                     range: if main {
-                        rec.range.as_ref().map(jcs)
+                        rec.range.as_ref().map(jcs).transpose()?
                     } else {
                         None
                     },
                     mover: if main {
-                        rec.mover.as_ref().map(jcs)
+                        rec.mover.as_ref().map(jcs).transpose()?
                     } else {
                         None
                     },
@@ -691,8 +691,8 @@ pub fn publish(
                     pin: rec.geometry_pin.clone(),
                     semantics: rec.semantics.clone(),
                     date: rec.verified.date.clone(),
-                    range: rec.range.as_ref().map(jcs),
-                    mover: rec.mover.as_ref().map(jcs),
+                    range: rec.range.as_ref().map(jcs).transpose()?,
+                    mover: rec.mover.as_ref().map(jcs).transpose()?,
                 },
             )?;
         }
@@ -733,27 +733,27 @@ pub fn publish(
                     p,
                     &me,
                     (p.seq == 0).then_some(&rec.provenance),
-                ),
+                )?,
             )?;
         }
         let mut ann = vec![];
         if let Some(nm) = &rec.name {
-            ann.push(("name", jcs(nm)));
+            ann.push(("name", jcs(nm)?));
         }
         if !rec.tags.is_empty() {
-            ann.push(("tags", jcs(&rec.tags)));
+            ann.push(("tags", jcs(&rec.tags)?));
         }
         if !rec.notes.is_empty() {
-            ann.push(("notes", jcs(&crate::paths::strip(&rec.notes))));
+            ann.push(("notes", jcs(&crate::paths::strip(&rec.notes))?));
         }
         if rec.state != jetcarp_core::pattern::CurationState::New {
-            ann.push(("state", jcs(&rec.state.name())));
+            ann.push(("state", jcs(&rec.state.name())?));
         }
         if let Some(r) = rec.rating {
             ann.push(("rating", r.to_string()));
         }
         if rec.discovered_by != jetcarp_core::pattern::DiscoveredBy::Search {
-            ann.push(("discovered_by", jcs(&rec.discovered_by)));
+            ann.push(("discovered_by", jcs(&rec.discovered_by)?));
         }
         let tg = target("pattern", &rec.id);
         for (field, value) in ann {
@@ -826,11 +826,20 @@ pub fn publish(
                     for p in &a.provenance {
                         t.get_mut("provenance")
                             .unwrap()
-                            .push(&inh, &provenance_row("ant", &a.row.id, p, &me, None))?;
+                            .push(&inh, &provenance_row("ant", &a.row.id, p, &me, None)?)?;
                     }
                     let tg = target("ant", &a.row.id);
                     if let Some(nm) = &a.row.name {
-                        annotate(&mut t, &inh, &tg, &me, "name", jcs(nm), &a.row.updated, rev)?;
+                        annotate(
+                            &mut t,
+                            &inh,
+                            &tg,
+                            &me,
+                            "name",
+                            jcs(nm)?,
+                            &a.row.updated,
+                            rev,
+                        )?;
                     }
                     if !a.row.notes.is_empty() {
                         annotate(
@@ -839,7 +848,7 @@ pub fn publish(
                             &tg,
                             &me,
                             "notes",
-                            jcs(&crate::paths::strip(&a.row.notes)),
+                            jcs(&crate::paths::strip(&a.row.notes))?,
                             &a.row.updated,
                             rev,
                         )?;
@@ -887,7 +896,7 @@ pub fn publish(
                 for p in &q.provenance {
                     t.get_mut("provenance")
                         .unwrap()
-                        .push(&inh, &provenance_row("quickstart", &r.id, p, &me, None))?;
+                        .push(&inh, &provenance_row("quickstart", &r.id, p, &me, None)?)?;
                 }
             }
             Err(e) => out.notes.push(format!("left out: {e}")),
@@ -1011,7 +1020,7 @@ pub fn publish(
                     frames: m.frames as i32,
                     bytes: bytes as i64,
                     render_key: m.key.clone(),
-                    render: jetcarp_core::jcs::to_string(&crate::paths::strip_json(render)),
+                    render: jetcarp_core::jcs::to_string_safe(&crate::paths::strip_json(render)),
                 },
             )?;
             media_n += 1;
@@ -1310,9 +1319,18 @@ fn provenance_row(
     p: &jetcarp_store::library::ProvenanceRow,
     me: &str,
     run: Option<&jetcarp_core::pattern::Provenance>,
-) -> crate::tables::ProvenanceRow {
+) -> Result<crate::tables::ProvenanceRow, String> {
     let strip = |s: &str| opt(&crate::paths::strip(s));
-    crate::tables::ProvenanceRow {
+    let run = match run {
+        None => None,
+        Some(r) => Some(
+            jetcarp_core::jcs::to_string(&crate::paths::strip_json(
+                serde_json::to_value(r).map_err(|e| e.to_string())?,
+            ))
+            .map_err(|e| format!("{kind} {id}: provenance: {e}"))?,
+        ),
+    };
+    Ok(crate::tables::ProvenanceRow {
         target: target(kind, id),
         publisher: me.to_string(),
         seq: p.seq as i32,
@@ -1327,12 +1345,8 @@ fn provenance_row(
         date: p.date.clone(),
         source: strip(&p.source),
         pack: opt(&p.pack_hash),
-        run: run.map(|r| {
-            jetcarp_core::jcs::to_string(&crate::paths::strip_json(
-                serde_json::to_value(r).unwrap_or_default(),
-            ))
-        }),
-    }
+        run,
+    })
 }
 
 /// Write a table's index (child indexes when it has more than 10,000 parts).

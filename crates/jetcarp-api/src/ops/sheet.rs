@@ -234,7 +234,11 @@ pub struct IsohedralIn {
     #[serde(default = "iso_thumb_default")]
     pub thumb: u32,
     /// RNG state for the edge shapes (default 7).
-    #[serde(default = "seed_default")]
+    #[serde(
+        default = "seed_default",
+        serialize_with = "jetcarp_core::json_int::uint::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint::deserialize"
+    )]
     pub seed: u64,
     /// The PNG to write.
     pub png: String,

@@ -60,7 +60,11 @@ pub enum SizeSpec {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TilingSpec {
     pub family: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::json_int::safe_opt"
+    )]
     pub params: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edges: Option<Vec<EdgeShape>>,

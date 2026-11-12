@@ -1502,6 +1502,7 @@ pub fn last_report() -> Option<JumpReport> {
 /// Result of a jump.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize)]
 pub struct JumpReport {
+    #[serde(with = "crate::json_int::uint")]
     pub generations: u64,
     pub seconds: f64,
     /// Summed over the fields (one universe each).

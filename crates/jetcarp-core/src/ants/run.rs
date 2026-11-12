@@ -54,6 +54,7 @@ pub enum Start {
         w: u32,
         h: u32,
         density: f64,
+        #[serde(with = "crate::json_int::uint")]
         state: u64,
     },
 }

@@ -624,7 +624,11 @@ pub struct ImportIn {
     #[serde(default)]
     pub sample: Option<u64>,
     /// The sample's seed (default: from the manifest hash).
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "jetcarp_core::json_int::uint_opt::serialize",
+        deserialize_with = "jetcarp_core::json_int::uint_opt::deserialize"
+    )]
     pub seed: Option<u64>,
     /// Most seconds verification may take (default 600).
     #[serde(default)]

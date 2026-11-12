@@ -64,7 +64,7 @@ pub fn properties() -> WriterProperties {
 pub fn sort_key(def: &TableDef, row: &Value) -> (Vec<Key>, String) {
     (
         def.sort.iter().map(|c| Key::of(&row[*c])).collect(),
-        jetcarp_core::jcs::to_string(row),
+        jetcarp_core::jcs::to_string_safe(row),
     )
 }
 
@@ -307,7 +307,7 @@ pub fn write_table_text(
     let mut order: Vec<usize> = (0..texts.len()).collect();
     let canon = |i: usize| {
         serde_json::from_str::<Value>(&texts[i])
-            .map(|v| jetcarp_core::jcs::to_string(&v))
+            .map(|v| jetcarp_core::jcs::to_string_safe(&v))
             .unwrap_or_default()
     };
     order.par_sort_by(|&a, &b| {

@@ -205,15 +205,28 @@ pub struct Provenance {
     /// The tiling of the run (with its size and boundary).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiling: Option<TilingSpec>,
-    /// RNG state of the soup (search: seed + soup).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// RNG state of the soup (search: seed + soup). In JSON a number, or a decimal string beyond
+    /// 2^53 − 1 ([`crate::json_int`]), as are `soup` and `generation`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::json_int::uint_opt"
+    )]
     pub rng_state: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::json_int::uint_opt"
+    )]
     pub soup: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub density: Option<f64>,
     /// Generation of the run when the object was taken.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::json_int::uint_opt"
+    )]
     pub generation: Option<u64>,
     pub jetcarp_version: String,
     /// UTC time, `YYYY-MM-DDTHH:MM:SSZ`.
@@ -641,7 +654,8 @@ pub fn identity_tiling(t: &TilingSpec) -> TilingSpec {
 /// Its own members come in the fixed order of [`TilingSpec`]'s fields, `family`, `params` (if
 /// set), `edges` (if set), `boundary` (always `"dead"`), as ids have always written them. Every
 /// value in it is RFC 8785 canonical JSON ([`crate::jcs`]): keys sorted at every depth, no
-/// whitespace, numbers as ECMAScript writes them (`1`, not `1.0`). So the line has one spelling,
+/// whitespace, numbers as ECMAScript writes them (`1`, not `1.0`), and an integer beyond
+/// ±(2^53 − 1) as a decimal string, as JETCARP writes one everywhere. So the line has one spelling,
 /// which an independent implementation can write too. On tilings at their default shapes (no
 /// numbers in their parameters) it is the same text as [`tiling_key`] without an aperiodic
 /// family's level.
@@ -651,14 +665,14 @@ pub fn identity_key(t: &TilingSpec) -> String {
     crate::jcs::write_str(&mut out, &s.family);
     if let Some(p) = &s.params {
         out.push_str(",\"params\":");
-        crate::jcs::write(&mut out, p);
+        crate::jcs::write_safe(&mut out, p);
     }
     if let Some(e) = &s.edges {
         out.push_str(",\"edges\":");
-        crate::jcs::write(&mut out, &serde_json::to_value(e).unwrap_or_default());
+        crate::jcs::write_safe(&mut out, &serde_json::to_value(e).unwrap_or_default());
     }
     out.push_str(",\"boundary\":");
-    crate::jcs::write(
+    crate::jcs::write_safe(
         &mut out,
         &serde_json::to_value(s.boundary).unwrap_or_default(),
     );

@@ -1157,7 +1157,7 @@ fn tune(input: &str, output: &str) {
         .collect();
     for (p, (rng, note)) in list.iter_mut().zip(&picks) {
         eprintln!("{}: {note}", p["id"]);
-        p["scene"]["rng_state"] = serde_json::json!(rng);
+        p["scene"]["rng_state"] = jetcarp_core::json_int::safe(serde_json::json!(rng));
     }
     std::fs::write(output, serde_json::to_string_pretty(&list).unwrap()).unwrap();
 }

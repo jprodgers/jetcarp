@@ -646,6 +646,7 @@ pub struct CheckIn {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct HealthOut {
     pub works: bool,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub cells: usize,
     pub population: u64,

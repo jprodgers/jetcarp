@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rng {
+    #[serde(with = "crate::json_int::uint")]
     pub state: u64,
 }
 

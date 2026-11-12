@@ -21,9 +21,18 @@ use jetcarp_core::world::Scene;
 use serde::Serialize;
 use serde_json::Value;
 
-/// JSON text of a value in RFC 8785 form (what a table cell holding JSON contains).
-pub fn jcs<T: Serialize>(t: &T) -> String {
-    jetcarp_core::jcs::to_string(&serde_json::to_value(t).unwrap_or(Value::Null))
+/// JSON text of a value in RFC 8785 form (what a table cell holding JSON contains). A value
+/// holding an integer beyond ±(2^53 − 1) as a number is refused: JETCARP's records write such an
+/// integer as a decimal string ([`jetcarp_core::json_int`]).
+pub fn jcs<T: Serialize>(t: &T) -> Result<String, String> {
+    let v = serde_json::to_value(t).map_err(|e| e.to_string())?;
+    Ok(jetcarp_core::jcs::to_string(&v)?)
+}
+
+/// JSON text of a free-form value in RFC 8785 form, an integer in it beyond ±(2^53 − 1) written
+/// as a decimal string (a tiling's parameters, as its identity's `tiling=` line writes them).
+pub fn jcs_free(v: &Value) -> String {
+    jetcarp_core::jcs::to_string_safe(v)
 }
 
 fn nb_name(nb: Nb) -> &'static str {
@@ -144,7 +153,7 @@ pub fn site_row(s: &Site) -> SiteRow {
     SiteRow {
         patch: PatchRow {
             family: s.patch.family.clone(),
-            params: s.patch.params.as_ref().map(jcs),
+            params: s.patch.params.as_ref().map(jcs_free),
             level: patch_level(&s.patch),
         },
         anchor: s.anchor as i32,
@@ -314,7 +323,7 @@ pub fn pattern_row(rec: &PatternRecord) -> Result<PatternRow, String> {
                 .unwrap_or_default()
         }),
         site: rec.site.as_ref().map(site_row),
-        gun: rec.gun.as_ref().map(jcs),
+        gun: rec.gun.as_ref().map(jcs).transpose()?,
         family: jetcarp_core::semantics::family(&Rule::parse(&rec.rule)?.0).into(),
         semantics: if rec.semantics.is_empty() {
             jetcarp_core::semantics::FIRST.into()
@@ -486,8 +495,8 @@ pub fn tiling_row(pin_key: &str) -> Result<(TilingRow, Option<Vec<RefTileRow>>),
         name: pattern::tiling_display_name(&spec),
         kind: "lattice".into(),
         family: spec.family.clone(),
-        params: spec.params.as_ref().map(jcs),
-        edges: spec.edges.as_ref().map(jcs),
+        params: spec.params.as_ref().map(jcs_free),
+        edges: spec.edges.as_ref().map(jcs).transpose()?,
         tiling_group: tiling_group(&spec),
         ..Default::default()
     };
@@ -670,7 +679,7 @@ pub fn ant_row(a: &jetcarp_store::AntRow, pin_key: &str) -> Result<AntPackRow, S
         semantics: semantics.into(),
         states: a.states as i32,
         colors: a.colors as i32,
-        start: serde_json::to_string(&a.start).unwrap_or_default(),
+        start: jetcarp_store::library::start_text(&a.start),
         outcome: a.outcome.name().into(),
         period: a.period.map(|x| x as i64),
         dx: a.d.map(|d| d[0]),
@@ -679,7 +688,8 @@ pub fn ant_row(a: &jetcarp_store::AntRow, pin_key: &str) -> Result<AntPackRow, S
         speed: a.speed,
         steps: a.steps as i64,
         cells: a.cells as i64,
-        run: jcs(&serde_json::json!({"run": a.run, "limits": a.limits})),
+        run: jcs(&serde_json::json!({"run": a.run, "limits": a.limits}))
+            .map_err(|e| format!("ant {}: {e}", a.id))?,
         tiling_group: tiling_group(&a.tiling),
     })
 }
@@ -801,7 +811,8 @@ pub fn quickstart_pack_id(
         return Err(format!("Quick Start {}: no geometry pin", q.row.id));
     }
     let scene = serde_json::to_value(&q.row.scene).map_err(|e| e.to_string())?;
-    let scene_text = jetcarp_core::jcs::to_string(&crate::paths::strip_json(scene));
+    let scene_text = jetcarp_core::jcs::to_string(&crate::paths::strip_json(scene))
+        .map_err(|e| format!("Quick Start {}: {e}", q.row.id))?;
     Ok((quickstart_id(&scene_text, &q.pin), scene_text))
 }
 

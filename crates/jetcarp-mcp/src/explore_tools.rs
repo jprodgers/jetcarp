@@ -9,7 +9,7 @@
 //! the app, in tests) on a thread of this process. The tool names are as before (step 11 of the
 //! architecture plan regroups them).
 
-use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool};
+use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool, uint};
 use crate::util;
 use jetcarp_api::op::{self, Op, Quiet};
 use jetcarp_api::ops::explore::{
@@ -389,7 +389,7 @@ fn try_tool(args: &Value) -> Res {
         nb: string(args, "nb")?.map(String::from),
         cells: Some(int(args, "cells")?.unwrap_or(16000).clamp(100, 100_000) as u32),
         gens: Some(int(args, "gens")?.unwrap_or(1024).clamp(1, 8000) as u32),
-        rng: int(args, "rng")?.map(|r| r as u64),
+        rng: uint(args, "rng")?,
         px: Some(int(args, "px")?.unwrap_or(420).clamp(64, 800) as u32),
         png: None,
     };

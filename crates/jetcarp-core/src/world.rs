@@ -180,7 +180,10 @@ pub enum SeedSpec {
     /// One turmite agent on this cell, facing this edge slot (ant searches' scenes).
     AntAt { cell: u32, heading: u16 },
     /// Grains on the centre cell.
-    Pile { grains: u64 },
+    Pile {
+        #[serde(with = "crate::json_int::uint")]
+        grains: u64,
+    },
     /// Every cell gets a uniformly random state (multi-state rules).
     RandomStates,
     /// JACA: each cell is live with probability `density`, and a live cell is -1 with
@@ -548,6 +551,7 @@ pub enum Command {
     },
     /// Set the RNG state and reseed everything. Starts a new base.
     SetRngState {
+        #[serde(with = "crate::json_int::uint")]
         state: u64,
     },
     /// Clear all fields, reseed every CA from its seed spec, generation 0. Starts a new base.
@@ -577,11 +581,13 @@ pub enum Command {
         cells: Vec<[u32; 2]>,
     },
     Step {
+        #[serde(with = "crate::json_int::uint")]
         gens: u64,
     },
     /// Advance `gens` generations with HashLife (`hashlife.rs`): one CA on a wrap-edge lattice
     /// whose torus has power-of-two sides. States equal `Step`; live cells end with age 1.
     Jump {
+        #[serde(with = "crate::json_int::uint")]
         gens: u64,
     },
     /// Make a rule table available to `Table <name>` rules.
@@ -639,7 +645,10 @@ pub enum SandpileOp {
     /// Add this many grains to every cell (sinks excepted).
     AddEverywhere { grains: u32 },
     /// Drop this many single grains on random cells (from the world RNG).
-    AddRandom { count: u64 },
+    AddRandom {
+        #[serde(with = "crate::json_int::uint")]
+        count: u64,
+    },
     /// Topple until stable, without counting generations.
     Stabilize,
     /// Replace the field with the identity of the sandpile group.
@@ -665,6 +674,7 @@ pub struct Applied {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Record {
+    #[serde(with = "crate::json_int::uint")]
     pub generation: u64,
     pub hash: String,
     pub jetcarp_version: String,
@@ -684,8 +694,9 @@ pub struct Scene {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
     pub tiling: TilingSpec,
-    /// Initial SplitMix64 state. Replaying the commands advances it identically.
-    #[serde(default)]
+    /// Initial SplitMix64 state. Replaying the commands advances it identically. In JSON a
+    /// number, or a decimal string beyond 2^53 − 1 ([`crate::json_int`]).
+    #[serde(default, with = "crate::json_int::uint")]
     pub rng_state: u64,
     /// Rule tables used by this scene, beyond the built-in ones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -704,7 +715,11 @@ pub struct Scene {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<Command>,
     /// App view state (camera, palette display); ignored by the engine.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::json_int::safe_opt"
+    )]
     pub view: Option<serde_json::Value>,
     /// Generation and hash when saved, for verification.
     #[serde(default, skip_serializing_if = "Option::is_none")]

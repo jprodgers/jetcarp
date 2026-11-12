@@ -79,7 +79,9 @@ pub mod provenance;
 mod query;
 pub mod quickstart;
 pub mod schema;
-pub use ants::{AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_identity, ant_score};
+pub use ants::{
+    AntCensus, AntQuery, AntRow, AntUpdate, ant_id, ant_identity, ant_score, start_text,
+};
 mod ratings;
 mod reverify;
 mod unstored;

@@ -40,6 +40,7 @@ pub struct Soups {
     pub density: f64,
     /// Soups per rule and tiling.
     pub soups: u64,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub seed: u64,
 }
 

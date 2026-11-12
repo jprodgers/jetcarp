@@ -33,6 +33,7 @@ pub struct UnstoredRow {
     pub count: u64,
     pub soups: u64,
     pub first_soup: u64,
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub rng_state: u64,
     pub generation: u64,
 }

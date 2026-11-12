@@ -18,6 +18,7 @@ pub struct Cand {
     pub cells: u32,
     pub gens: u32,
     pub steps: u32,
+    #[serde(with = "crate::json_int::uint")]
     pub rng: u64,
     /// How this candidate was made (`random`, `mutate`, `seed`, `transplant`, `cover`, `named`).
     pub origin: String,

@@ -65,6 +65,8 @@ pub struct PileProgress {
     pub steps: u32,
     /// Grains in the pile after the steps done.
     pub grains_done: u64,
+    /// Beyond 2^53 on a pile of a billion grains or so: a decimal string in JSON then.
+    #[serde(with = "jetcarp_core::json_int::uint")]
     pub topplings: u64,
     pub sweeps: u64,
     /// Seconds of toppling (finished steps).

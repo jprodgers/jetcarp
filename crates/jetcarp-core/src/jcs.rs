@@ -9,9 +9,13 @@
 //!   strings are UTF-8, so they hold no lone surrogates.
 //! - **Numbers** (section 3.2.2.3): the IEEE 754 double as ECMAScript's `Number::toString` writes
 //!   it, the shortest digits that read back to the same double ([`ryu_js`]): `1`, not `1.0`;
-//!   `0.000001` but `1e-7`; `1e+21`; minus zero as `0`. Integers are numbers too, so one beyond
-//!   2^53 is written as the double nearest it, as RFC 8785 says. A `serde_json` value holds no NaN
-//!   or infinity, which RFC 8785 refuses.
+//!   `0.000001` but `1e-7`; `1e+21`; minus zero as `0`. A `serde_json` value holds no NaN or
+//!   infinity, which RFC 8785 refuses.
+//! - **Integers** are numbers too, and a double holds an integer exactly only within
+//!   ±(2^53 − 1). One beyond is **refused** ([`UnsafeInteger`], which names it), as the `rfc8785`
+//!   Python package refuses it, rather than written as the double nearest it, which would change
+//!   a scene's random state, say, and so its world. JETCARP writes such an integer as a decimal
+//!   string ([`crate::json_int`]), as I-JSON (RFC 7493) asks.
 //!
 //! [`crate::pattern::identity_key`] writes the `tiling=` line of an identity text with it. The
 //! tests check it against RFC 8785's own samples (Appendix B's numbers, the sorting sample of
@@ -22,19 +26,44 @@
 use serde_json::{Number, Value};
 use std::fmt::Write;
 
-/// The canonical text of a JSON value.
-pub fn to_string(v: &Value) -> String {
-    let mut out = String::new();
-    write(&mut out, v);
-    out
+/// An integer beyond ±(2^53 − 1), which canonical JSON cannot write exactly: what [`to_string`]
+/// and [`write`] refuse. It holds the integer's decimal digits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsafeInteger(pub String);
+
+impl std::fmt::Display for UnsafeInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "canonical JSON cannot hold the integer {} exactly (it is beyond ±(2^53 - 1)); \
+             JETCARP writes such an integer as a decimal string",
+            self.0
+        )
+    }
 }
 
-/// Append the canonical text of a JSON value.
-pub fn write(out: &mut String, v: &Value) {
+impl std::error::Error for UnsafeInteger {}
+
+impl From<UnsafeInteger> for String {
+    fn from(e: UnsafeInteger) -> String {
+        e.to_string()
+    }
+}
+
+/// The canonical text of a JSON value, or the first integer in it beyond ±(2^53 − 1).
+pub fn to_string(v: &Value) -> Result<String, UnsafeInteger> {
+    let mut out = String::new();
+    write(&mut out, v)?;
+    Ok(out)
+}
+
+/// Append the canonical text of a JSON value, or refuse an integer in it beyond ±(2^53 − 1)
+/// (`out` then holds the text up to it).
+pub fn write(out: &mut String, v: &Value) -> Result<(), UnsafeInteger> {
     match v {
         Value::Null => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Value::Number(n) => write_number(out, n),
+        Value::Number(n) => write_number(out, n)?,
         Value::String(s) => write_str(out, s),
         Value::Array(a) => {
             out.push('[');
@@ -42,7 +71,7 @@ pub fn write(out: &mut String, v: &Value) {
                 if i > 0 {
                     out.push(',');
                 }
-                write(out, x);
+                write(out, x)?;
             }
             out.push(']');
         }
@@ -56,15 +85,42 @@ pub fn write(out: &mut String, v: &Value) {
                 }
                 write_str(out, k);
                 out.push(':');
-                write(out, x);
+                write(out, x)?;
             }
             out.push('}');
         }
     }
+    Ok(())
 }
 
-/// Append a number: its double, as ECMAScript writes it.
-fn write_number(out: &mut String, n: &Number) {
+/// The canonical text of a free-form value with its integers beyond ±(2^53 − 1) written as
+/// decimal strings first ([`crate::json_int::safe`]), so nothing in it is refused: for JSON that
+/// is not a typed record's (a tiling's parameters, say), where that is how JETCARP writes it.
+pub fn to_string_safe(v: &Value) -> String {
+    let mut out = String::new();
+    write_safe(&mut out, v);
+    out
+}
+
+/// Append [`to_string_safe`]'s text.
+pub fn write_safe(out: &mut String, v: &Value) {
+    match write(out, &crate::json_int::safe(v.clone())) {
+        Ok(()) => {}
+        // Not reachable: `safe` leaves no integer that `write` refuses.
+        Err(e) => unreachable!("{e}"),
+    }
+}
+
+/// Append a number: its double, as ECMAScript writes it; an integer only within ±(2^53 − 1).
+fn write_number(out: &mut String, n: &Number) -> Result<(), UnsafeInteger> {
+    let beyond = match (n.as_u64(), n.as_i64()) {
+        (Some(u), _) => !crate::json_int::safe_u64(u),
+        (None, Some(i)) => !crate::json_int::safe_i64(i),
+        _ => false,
+    };
+    if beyond {
+        return Err(UnsafeInteger(n.to_string()));
+    }
     match n.as_f64() {
         // Minus zero is `0` in ECMAScript; written out here rather than left to the formatter.
         Some(x) if x == 0.0 => out.push('0'),
@@ -72,6 +128,7 @@ fn write_number(out: &mut String, n: &Number) {
         // Not reachable: a serde_json number is always a finite double.
         _ => out.push_str("null"),
     }
+    Ok(())
 }
 
 /// Append a string, quoted and escaped as RFC 8785 says.
@@ -135,18 +192,49 @@ mod tests {
     fn numbers_match_rfc_8785_appendix_b() {
         for (bits, want) in APPENDIX_B {
             let x = f64::from_bits(bits);
-            assert_eq!(to_string(&json!(x)), want, "{bits:016x}");
+            assert_eq!(to_string(&json!(x)).unwrap(), want, "{bits:016x}");
             // Read back, the text is the same double (minus zero aside).
             let back: f64 = want.parse().unwrap();
             assert!(back == x, "{want} reads back as {back}, not {x}");
         }
         // Integers and the float of the same value are one spelling.
         assert_eq!(
-            to_string(&json!([1, 1.0, -3, -3.0, 0.5, 100, 1e2])),
+            to_string(&json!([1, 1.0, -3, -3.0, 0.5, 100, 1e2])).unwrap(),
             "[1,1,-3,-3,0.5,100,100]"
         );
-        // Beyond 2^53 an integer is the double nearest it.
-        assert_eq!(to_string(&json!(9007199254740993u64)), "9007199254740992");
+    }
+
+    #[test]
+    fn integers_beyond_2_53_are_refused() {
+        // Within ±(2^53 - 1): written exactly.
+        assert_eq!(
+            to_string(&json!([9007199254740991u64, -9007199254740991i64])).unwrap(),
+            "[9007199254740991,-9007199254740991]"
+        );
+        // Beyond: refused, naming the integer, at any depth, rather than rounded to a double.
+        for (v, n) in [
+            (json!(9007199254740992u64), "9007199254740992"),
+            (json!(-9007199254740992i64), "-9007199254740992"),
+            (
+                json!({"a": [1, {"rng_state": 17705299566207515059u64}]}),
+                "17705299566207515059",
+            ),
+            (json!(u64::MAX), "18446744073709551615"),
+            (json!(i64::MIN), "-9223372036854775808"),
+        ] {
+            let e = to_string(&v).unwrap_err();
+            assert_eq!(e, UnsafeInteger(n.into()));
+            assert!(e.to_string().contains(n), "{e}");
+        }
+        // As a decimal string it is fine, and a double of that size is a double.
+        assert_eq!(
+            to_string(&json!({"rng_state": "17705299566207515059", "x": 1e30})).unwrap(),
+            r#"{"rng_state":"17705299566207515059","x":1e+30}"#
+        );
+        assert_eq!(
+            to_string(&json!(9007199254740992.0)).unwrap(),
+            "9007199254740992"
+        );
     }
 
     #[test]
@@ -165,7 +253,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let text = to_string(&v);
+        let text = to_string(&v).unwrap();
         let order: Vec<&str> = [
             "Carriage Return",
             "One",
@@ -185,7 +273,7 @@ mod tests {
         );
         // Nested objects too, and arrays keep their order.
         assert_eq!(
-            to_string(&json!({"b": [{"z": 1, "a": 2}, 0], "a": {"y": null, "x": true}})),
+            to_string(&json!({"b": [{"z": 1, "a": 2}, 0], "a": {"y": null, "x": true}})).unwrap(),
             r#"{"a":{"x":true,"y":null},"b":[{"a":2,"z":1},0]}"#
         );
     }
@@ -202,7 +290,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let text = to_string(&v);
+        let text = to_string(&v).unwrap();
         assert_eq!(
             text,
             r#"{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}"#
@@ -226,7 +314,7 @@ mod tests {
             .chain([0x7f, 0x80, 0x2028, 0x1f600])
             .filter_map(char::from_u32)
             .collect();
-        let text = to_string(&json!(s));
+        let text = to_string(&json!(s)).unwrap();
         assert!(text.starts_with(
             r#""\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e"#
         ));

@@ -70,7 +70,7 @@ pub struct Tables {
     /// Tables kept when sampling.
     #[serde(default = "sample")]
     pub sample: u64,
-    #[serde(default = "one")]
+    #[serde(default = "one", with = "crate::json_int::uint")]
     pub seed: u64,
 }
 fn all_max() -> u64 {

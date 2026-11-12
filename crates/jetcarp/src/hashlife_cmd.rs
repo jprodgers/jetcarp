@@ -374,6 +374,7 @@ pub fn run(a: HashlifeArgs) -> Result<()> {
         }
     }
     if a.json {
+        let out = jetcarp_core::json_int::safe(out);
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         for l in lines {

@@ -51,6 +51,7 @@ pub struct EvolveSpec {
     pub states: u8,
     pub pop: usize,
     pub gens: usize,
+    #[serde(with = "crate::json_int::uint")]
     pub seed: u64,
     pub radius: u32,
     pub horizon: u64,
@@ -534,6 +535,7 @@ pub struct EvolveCheckpoint {
     /// The next generation to evaluate.
     pub next: usize,
     pub pop: Vec<PriorityRule>,
+    #[serde(with = "crate::json_int::uint")]
     pub rng: u64,
     pub hof: BTreeMap<String, Champion>,
     pub checked: BTreeMap<String, CrossCheck>,

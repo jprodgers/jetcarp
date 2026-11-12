@@ -406,7 +406,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         for r in rows {
             let p: PatternRow = de(r, "patterns")?;
             let text = if opts.strict {
-                jetcarp_core::jcs::to_string(&serde_json::to_value(&p).unwrap_or_default())
+                jetcarp_core::jcs::to_string_safe(&serde_json::to_value(&p).unwrap_or_default())
             } else {
                 String::new()
             };
@@ -719,7 +719,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     // RFC 8785 text.
     let mut raters: HashMap<String, (String, RaterRow)> = HashMap::new();
     for (_, r) in rows_of::<RaterRow>(&src, &v, "raters")? {
-        let text = jetcarp_core::jcs::to_string(&serde_json::to_value(&r).unwrap_or_default());
+        let text = jetcarp_core::jcs::to_string_safe(&serde_json::to_value(&r).unwrap_or_default());
         let key = (r.consent_date.clone(), text);
         match raters.get(&r.rater) {
             Some((t, old)) if (old.consent_date.clone(), t.clone()) >= key => {}

@@ -143,7 +143,7 @@ pub struct Settings {
     #[serde(default = "d_batch")]
     pub batch: usize,
     /// Where the random draws start (a search carries its random states on from there).
-    #[serde(default)]
+    #[serde(default, with = "jetcarp_core::json_int::uint")]
     pub seed: u64,
     /// Only these tilings (keys: `square`, `ih28`, `catalog:k2-001`, ...); empty: all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

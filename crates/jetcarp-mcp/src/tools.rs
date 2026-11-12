@@ -57,8 +57,10 @@ impl ToolOutput {
             ..ToolOutput::text(s)
         }
     }
+    /// JSON text, an integer beyond ±(2^53 − 1) in it written as a decimal string.
     pub fn json(v: &Value) -> ToolOutput {
-        ToolOutput::text(serde_json::to_string_pretty(v).unwrap_or_default())
+        let v = jetcarp_core::json_int::safe(v.clone());
+        ToolOutput::text(serde_json::to_string_pretty(&v).unwrap_or_default())
     }
     /// All text blocks joined (for tests and logs).
     pub fn joined_text(&self) -> String {
@@ -423,10 +425,31 @@ pub(crate) fn int(args: &Value, key: &str) -> Result<Option<i64>, String> {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
             .as_i64()
-            .or_else(|| v.as_f64().filter(|f| f.fract() == 0.0).map(|f| f as i64))
+            .or_else(|| v.as_f64().filter(|f| whole(*f)).map(|f| f as i64))
             .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
             .map(Some)
             .ok_or_else(|| format!("`{key}` must be an integer, got {v}")),
+    }
+}
+
+/// A whole double that is an integer exactly (within ±2^53), so `2.0` reads as 2 but a rounded
+/// `1.7705299566207515e19` is refused rather than read as another number.
+fn whole(f: f64) -> bool {
+    f.fract() == 0.0 && f.abs() <= jetcarp_core::json_int::MAX_SAFE as f64
+}
+
+/// A random seed or state: any `u64`, as a number or a string of decimal digits (how JETCARP
+/// writes one beyond 2^53 - 1, as in a scene's `rng_state`).
+pub(crate) fn uint(args: &Value, key: &str) -> Result<Option<u64>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => jetcarp_core::json_int::value_u64(v)
+            .or_else(|| v.as_f64().filter(|f| *f >= 0.0 && whole(*f)).map(|f| f as u64))
+            .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+            .map(Some)
+            .ok_or_else(|| {
+                format!("`{key}` must be a whole number from 0 to 2^64 - 1 (a string of digits beyond 2^53), got {v}")
+            }),
     }
 }
 
@@ -613,7 +636,7 @@ fn new_world(host: &mut dyn Host, args: &Value) -> Res {
         level: int(args, "level")?,
         boundary: text(args, "boundary")?,
         cas: given(args, "cas"),
-        rng_seed: int(args, "rng_seed")?,
+        rng_seed: uint(args, "rng_seed")?,
         name: text(args, "name")?,
         tiling_params: given(args, "tiling_params"),
     };

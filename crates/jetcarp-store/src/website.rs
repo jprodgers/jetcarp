@@ -435,7 +435,14 @@ fn pattern_json(lib: &Library, r: &PatternRecord, media: &MediaLinks) -> Result<
         verified_periods: r.verified.periods,
         media,
     };
-    serde_json::to_vec_pretty(&p).map_err(|e| e.to_string())
+    site_json(&p)
+}
+
+/// An item's JSON file: pretty-printed, an integer beyond ±(2^53 − 1) written as a decimal
+/// string (a Quick Start scene's `rng_state`, say), so the page's JavaScript reads it exactly.
+fn site_json<T: Serialize>(t: &T) -> Result<Vec<u8>, String> {
+    let v = jetcarp_core::json_int::safe(serde_json::to_value(t).map_err(|e| e.to_string())?);
+    serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
 }
 
 /// An ant or turmite run as the website sees it (no curation notes or timestamps).
@@ -465,7 +472,7 @@ fn ant_json(a: &crate::AntRow, media: &MediaLinks) -> Result<Vec<u8>, String> {
         "state": a.state,
         "media": media,
     });
-    serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
+    site_json(&v)
 }
 
 fn quickstart_json(q: &crate::QuickStartRow, media: &MediaLinks) -> Result<Vec<u8>, String> {
@@ -492,7 +499,7 @@ fn quickstart_json(q: &crate::QuickStartRow, media: &MediaLinks) -> Result<Vec<u
         "scene": scene,
         "media": media,
     });
-    serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())
+    site_json(&v)
 }
 
 struct Planned {

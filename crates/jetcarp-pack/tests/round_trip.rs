@@ -635,3 +635,117 @@ fn atlas_entries_travel_in_a_pack() {
     assert!(lib.quickstart(&[QsSource::Pack]).unwrap().is_empty());
     assert_eq!(lib.quickstart(&[QsSource::Atlas]).unwrap().len(), 3);
 }
+
+/// Random states beyond 2^53 travel exactly: a scene's `rng_state` and a find's soup state are
+/// decimal strings in the pack (RFC 8785 refuses such an integer as a number, and a double would
+/// round it), and come back as the same `u64`, so a scene starts from the same soup and gives
+/// the same world.
+#[test]
+fn large_random_states_travel_exactly() {
+    let dir = temp("big-rng");
+    let lib = small_library(&dir);
+    let states = [
+        17705299566207515059u64,
+        u64::MAX,
+        (1 << 53) + 1,
+        (1 << 53) - 1,
+        3,
+    ];
+    for (k, s) in states.iter().enumerate() {
+        let mut scene = jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+            "square",
+            24,
+            24,
+            jetcarp_core::Boundary::Wrap,
+        ));
+        scene.rng_state = *s;
+        scene.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
+        lib.put_quickstart(&jetcarp_store::QuickStartRow::for_scene(
+            &format!("soup-{k}"),
+            "scene",
+            scene,
+        ))
+        .unwrap();
+    }
+    // A find whose soup's state is beyond 2^53.
+    let mut p = one("B3/S23", "oo/o.o/.o");
+    p.provenance.rng_state = Some(17705299566207515059);
+    p.provenance.soup = Some(12);
+    lib.add(p.clone()).unwrap();
+    let pid = p.id.clone();
+
+    let store = dir.join("store");
+    let out = run(
+        &lib,
+        &publisher(7, "Test Publisher"),
+        &mut book(&[]),
+        &options("big", &store),
+    );
+    assert!(out.notes.is_empty(), "{:?}", out.notes);
+    let src = Source::open(&store).unwrap();
+    let v = src.version(&out.manifest).unwrap();
+    let mut qs = vec![];
+    let mut prov = vec![];
+    src.table_rows(&v, "quickstart", |_, r| {
+        qs.extend(r);
+        Ok(())
+    })
+    .unwrap();
+    src.table_rows(&v, "provenance", |_, r| {
+        prov.extend(r);
+        Ok(())
+    })
+    .unwrap();
+    for s in states {
+        let want = if s > (1 << 53) - 1 {
+            format!("\"rng_state\":\"{s}\"")
+        } else {
+            format!("\"rng_state\":{s}")
+        };
+        assert!(
+            qs.iter()
+                .any(|q| q["scene"].as_str().unwrap().contains(&want)),
+            "no scene cell has {want}"
+        );
+    }
+    let run_cell = prov
+        .iter()
+        .find(|r| r["target"] == format!("pattern:{pid}").as_str() && !r["run"].is_null())
+        .unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        run_cell.contains("\"rng_state\":\"17705299566207515059\""),
+        "{run_cell}"
+    );
+
+    // Into a fresh library: the same states, and the same world after 40 generations.
+    let lib2 = Library::open(dir.join("lib2"));
+    let opts = import::Options {
+        path: store.clone(),
+        verify: VerifyMode::None,
+        ..Default::default()
+    };
+    import::import(&lib2, &opts, &|_| {}).unwrap();
+    let got = lib2.quickstart(&[jetcarp_store::QsSource::Pack]).unwrap();
+    assert_eq!(got.len(), states.len());
+    let world = |sc: &jetcarp_core::Scene| {
+        let mut w = jetcarp_core::World::from_scene(sc).unwrap();
+        for _ in 0..40 {
+            w.step();
+        }
+        w.hash_hex()
+    };
+    for k in 0..states.len() {
+        let orig = lib.get_quickstart(&format!("soup-{k}")).unwrap();
+        let back = got
+            .iter()
+            .find(|g| g.scene.rng_state == orig.scene.rng_state)
+            .unwrap_or_else(|| panic!("no entry has rng_state {}", orig.scene.rng_state));
+        assert_eq!(world(&back.scene), world(&orig.scene));
+    }
+    let back = lib2.get(&pid).unwrap();
+    assert_eq!(back.provenance.rng_state, Some(17705299566207515059));
+    assert_eq!(back.provenance.soup, Some(12));
+}

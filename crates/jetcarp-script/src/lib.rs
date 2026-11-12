@@ -868,6 +868,7 @@ impl Ctx {
                 "script_path": self.opts.script_path.as_ref().map(|p| p.display().to_string()),
                 "script": self.source,
             });
+            let v = jetcarp_core::json_int::safe(v);
             let _ = std::fs::write(&p, serde_json::to_string_pretty(&v).unwrap_or_default());
         }
     }

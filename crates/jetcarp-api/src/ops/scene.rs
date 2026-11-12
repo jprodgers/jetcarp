@@ -50,6 +50,7 @@ pub struct SceneSource {
 /// A generation and state hash a scene recorded.
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
 pub struct Recorded {
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub hash: String,
 }
@@ -141,6 +142,7 @@ impl Op for SceneSave {
 /// A scene that replays to its recorded hash.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct Verified {
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub hash: String,
     /// What loading it let pass (palettes this JETCARP does not know).
@@ -252,6 +254,7 @@ pub struct RunSummary {
     pub scene: String,
     pub tiling: String,
     pub cells: usize,
+    #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     pub generation: u64,
     pub hash: String,
     pub status: String,

@@ -76,6 +76,7 @@ pub struct PileSpec {
     /// the patch, else the smallest level that should hold the pile).
     pub tiling: TilingSpec,
     pub nb: Nb,
+    #[serde(with = "crate::json_int::uint")]
     pub grains: u64,
     #[serde(default)]
     pub centre: Centre,
@@ -93,6 +94,7 @@ pub enum Site {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Source {
     pub site: Site,
+    #[serde(with = "crate::json_int::uint")]
     pub grains: u64,
 }
 
@@ -101,7 +103,10 @@ pub struct Source {
 pub struct StepRecord {
     /// 1-based: after step `k` the pile holds the first `k` binary digits of N.
     pub step: u32,
+    #[serde(with = "crate::json_int::uint")]
     pub grains: u64,
+    /// Beyond 2^53 on a pile of a billion grains or so: a decimal string in JSON then.
+    #[serde(with = "crate::json_int::uint")]
     pub topplings: u64,
     pub sweeps: u64,
     pub seconds: f64,

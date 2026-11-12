@@ -24,7 +24,7 @@ fn canonical_json_matches_the_rfc8785_package() {
         let got = match f[0] {
             "value" => {
                 values += 1;
-                jcs::to_string(&serde_json::from_str(f[1]).unwrap())
+                jcs::to_string(&serde_json::from_str(f[1]).unwrap()).unwrap()
             }
             "tiling" => {
                 tilings += 1;
@@ -79,7 +79,10 @@ def tiling_key(t):
 fn documented_tiling_key(t: &serde_json::Value) -> String {
     use serde_json::{Value, json};
     const APERIODIC: [&str; 4] = ["hat", "spectre", "penrose-kd", "penrose-rhomb"];
-    let mut out = vec![format!("\"family\":{}", jcs::to_string(&t["family"]))];
+    let mut out = vec![format!(
+        "\"family\":{}",
+        jcs::to_string(&t["family"]).unwrap()
+    )];
     let mut params = t.get("params").filter(|p| !p.is_null()).cloned();
     if let Some(Value::Object(m)) = &params
         && APERIODIC.contains(&t["family"].as_str().unwrap_or(""))
@@ -92,7 +95,7 @@ fn documented_tiling_key(t: &serde_json::Value) -> String {
         params = (!kept.is_empty()).then_some(Value::Object(kept));
     }
     if let Some(p) = &params {
-        out.push(format!("\"params\":{}", jcs::to_string(p)));
+        out.push(format!("\"params\":{}", jcs::to_string(p).unwrap()));
     }
     if let Some(Value::Array(edges)) = t.get("edges") {
         let edges: Vec<Value> = edges
@@ -108,7 +111,7 @@ fn documented_tiling_key(t: &serde_json::Value) -> String {
             .collect();
         out.push(format!(
             "\"edges\":{}",
-            jcs::to_string(&Value::Array(edges))
+            jcs::to_string(&Value::Array(edges)).unwrap()
         ));
     }
     out.push("\"boundary\":\"dead\"".into());

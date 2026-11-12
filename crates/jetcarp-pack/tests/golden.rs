@@ -48,6 +48,7 @@ fn every_golden_pack_reads_and_checks() {
         "aperiodic",
         "ants",
         "export",
+        "numbers",
     ] {
         assert!(packs.iter().any(|p| p.0 == want), "no golden pack {want}");
     }
@@ -114,6 +115,30 @@ fn every_golden_pack_reads_and_checks() {
                     ("highway", Some(104), Some(9977))
                 );
                 assert!(ants.iter().any(|a| a.run.symmetry.is_some()));
+            }
+            "numbers" => {
+                // Random states beyond 2^53, written as decimal strings, come back exactly.
+                let q = lib.quickstart(&[jetcarp_store::QsSource::Pack]).unwrap();
+                assert_eq!(q.len(), 1);
+                assert_eq!(q[0].scene.rng_state, BIG);
+                let p = lib.list().unwrap();
+                assert_eq!(p.len(), 1);
+                assert_eq!(lib.get(&p[0].id).unwrap().provenance.rng_state, Some(BIG));
+                let ants = lib.ants(&Default::default()).unwrap();
+                assert_eq!(ants.len(), 1);
+                let a = &ants[0];
+                assert!(
+                    matches!(
+                        a.start,
+                        jetcarp_core::ants::run::Start::Soup { state: BIG, .. }
+                    ),
+                    "{:?}",
+                    a.start
+                );
+                let m = jetcarp_core::ants::search::parse_rule(&a.rule).unwrap();
+                let again =
+                    jetcarp_search::ants::run_one(&m, &a.tiling, &a.start, &a.limits).unwrap();
+                assert_eq!((again.id.as_str(), &again.run), (a.id.as_str(), &a.run));
             }
             _ => {}
         }
@@ -268,6 +293,8 @@ fn fix_library(lib: &Library) {
 }
 
 const PUBLISHER_A: u8 = 11;
+/// A random state beyond 2^53 (a soup's, as searches make them).
+const BIG: u64 = 17705299566207515059;
 const PUBLISHER_B: u8 = 12;
 
 fn golden_book() -> publish::RaterBook {
@@ -384,6 +411,48 @@ fn library_ants(dir: &Path) -> Library {
     lib
 }
 
+/// Random states beyond 2^53: a block whose find's soup had one, a Quick Start scene starting
+/// from one, and Langton's ant from a soup made from one.
+fn library_numbers(dir: &Path) -> Library {
+    let lib = Library::open(dir.join("lib-numbers"));
+    let mut k = fixed(one("B3/S23", BLOCK));
+    k.provenance.source = "search".into();
+    k.provenance.rng_state = Some(BIG);
+    k.provenance.soup = Some(7);
+    lib.add(k).unwrap();
+    let mut scene = jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+        "square",
+        32,
+        32,
+        jetcarp_core::Boundary::Wrap,
+    ));
+    scene.name = "A Life soup".into();
+    scene.jetcarp_version = jetcarp_core::VERSION.into();
+    scene.rng_state = BIG;
+    scene.cas.push(jetcarp_core::CaSpec::new("B3/S23"));
+    let mut q = jetcarp_store::QuickStartRow::for_scene("golden-soup", "scene", scene);
+    q.created = FIXED.into();
+    q.updated = FIXED.into();
+    lib.put_quickstart(&q).unwrap();
+    let m = jetcarp_core::ants::search::parse_rule("RL").unwrap();
+    let t = jetcarp_core::pattern::tiling_list("square").unwrap();
+    let start = jetcarp_core::ants::run::Start::Soup {
+        w: 4,
+        h: 4,
+        density: 0.5,
+        state: BIG,
+    };
+    let lim = jetcarp_core::ants::run::Limits {
+        steps: 2_000,
+        max_period: 2000,
+        symmetry: true,
+    };
+    let a = jetcarp_search::ants::run_one(&m, &t[0], &start, &lim).unwrap();
+    lib.ants_flush(0, &[a], None, None).unwrap();
+    fix_library(&lib);
+    lib
+}
+
 fn opts(feed: &str, to: &Path, title: &str) -> publish::Options {
     publish::Options {
         feed: feed.into(),
@@ -423,6 +492,7 @@ fn write_golden_packs() {
         "aperiodic",
         "ants",
         "export",
+        "numbers",
     ] {
         let _ = std::fs::remove_dir_all(out.join(n));
     }
@@ -594,6 +664,18 @@ fn write_golden_packs() {
     let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
     jetcarp_pack::export::export(&src, &v, &out.join("export")).unwrap();
     put("export", v.hash.clone());
+
+    // numbers: random states beyond 2^53, in a scene, a find's history and an ant's start.
+    let nu = library_numbers(&work);
+    put(
+        "numbers",
+        publish_into(
+            &nu,
+            PUBLISHER_A,
+            "Golden Publisher A",
+            &opts("golden-numbers", &out.join("numbers"), "numbers"),
+        ),
+    );
 
     std::fs::write(out.join("hashes.txt"), lines.join("\n") + "\n").unwrap();
     // Each golden pack stays small.

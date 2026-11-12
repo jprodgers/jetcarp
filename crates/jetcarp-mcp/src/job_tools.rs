@@ -9,7 +9,7 @@
 //! (`background`: the job runs on a thread of this process, in the context's registry, with its
 //! lease and checkpoints), `jobs.status`, `jobs.list`, and `jobs.stop`.
 
-use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool};
+use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool, uint};
 use jetcarp_api::args;
 use jetcarp_api::op::{self, Op, Progress, Quiet};
 use jetcarp_api::ops::jobs::{
@@ -279,7 +279,7 @@ fn hunt_start(args: &Value) -> Res {
             .transpose()?,
         density: num(args, "density"),
         shape: string(args, "shape")?.map(String::from),
-        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        seed: uint(args, "seed")?,
         gens: int(args, "gens")?.map(|x| x.max(1) as u64),
         max_period: int(args, "max_period")?.map(|x| x.clamp(1, 1024) as u64),
         ..Default::default()
@@ -325,7 +325,7 @@ fn ants_start(args: &Value) -> Res {
         soups: int(args, "soups")?.map(|n| n.max(0) as u64),
         size: Some(json!(int(args, "size")?.unwrap_or(8).clamp(1, 64))),
         density: num(args, "density"),
-        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        seed: uint(args, "seed")?,
         steps: int(args, "steps")?.map(|x| x.max(1) as u64),
         max_period: int(args, "max_period")?.map(|x| x.max(1) as u64),
         ..Default::default()
@@ -413,7 +413,7 @@ fn evolve_start(args: &Value) -> Res {
         states: int(args, "states")?.map(|x| x as u8),
         pop: int(args, "pop")?.map(|x| x.max(4) as usize),
         gens: int(args, "gens")?.map(|x| x.max(1) as usize),
-        seed: int(args, "seed")?.map(|x| x.max(0) as u64),
+        seed: uint(args, "seed")?,
         radius: int(args, "radius")?.map(|x| x.max(4) as u32),
         horizon: int(args, "horizon")?.map(|x| x.max(10) as u64),
         stop_on_glider: args

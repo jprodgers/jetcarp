@@ -19,7 +19,7 @@
 //! jetcarp-ant-v1
 //! rule=<rule notation: Ant RL, Turmite 1R1,1L0/1R1,0N0>
 //! tiling=<identity key: as a pattern's (`jetcarp_core::pattern::identity_key`)>
-//! start=<start JSON: "empty", or the start cells>
+//! start=<start JSON in RFC 8785 form (`start_text`): "empty", or the soup>
 //! ```
 //!
 //! An ant and its mirror image (`RL`, `LR`) are two records, as the searches store them.
@@ -117,8 +117,15 @@ pub fn ant_identity(rule: &str, tiling: &TilingSpec, start: &Start) -> String {
     format!(
         "jetcarp-ant-v1\nrule={rule}\ntiling={}\nstart={}",
         jetcarp_core::pattern::identity_key(tiling),
-        serde_json::to_string(start).unwrap_or_default()
+        start_text(start)
     )
+}
+
+/// A start's JSON in an identity and a pack's `start` column: RFC 8785 text, a soup's `state`
+/// beyond 2^53 - 1 a decimal string (`"empty"`, or
+/// `{"soup":{"density":0.5,"h":8,"state":"17705299566207515059","w":8}}`).
+pub fn start_text(start: &Start) -> String {
+    jetcarp_core::jcs::to_string_safe(&serde_json::to_value(start).unwrap_or_default())
 }
 
 /// The library id of a (rule, tiling, start): `ant-` and the content id of its identity on its

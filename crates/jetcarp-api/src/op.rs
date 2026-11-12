@@ -233,9 +233,11 @@ pub fn read_input<T: DeserializeOwned>(name: &str, input: Value) -> Result<T, Ap
     serde_json::from_value(input).map_err(|e| ApiError::invalid(format!("{name}: {e}")))
 }
 
-/// An output as JSON (object keys sorted, as `serde_json::json!` sorts them).
+/// An output as JSON (object keys sorted, as `serde_json::json!` sorts them), an integer in it
+/// beyond ±(2^53 − 1) written as a decimal string ([`jetcarp_core::json_int`]), so a client that
+/// reads numbers as doubles (JavaScript) reads every value exactly.
 pub fn to_value<T: Serialize>(out: &T) -> Value {
-    serde_json::to_value(out).unwrap_or(Value::Null)
+    jetcarp_core::json_int::safe(serde_json::to_value(out).unwrap_or(Value::Null))
 }
 
 /// An output as pretty-printed JSON.
