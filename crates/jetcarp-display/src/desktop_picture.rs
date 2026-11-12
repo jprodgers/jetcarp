@@ -553,12 +553,28 @@ mod windows {
                 Value::Object(each) => {
                     let (w, _com) = wallpaper()?;
                     let here: Vec<String> = monitors(&w)?.into_iter().map(|m| m.0).collect();
-                    for (id, path) in each {
-                        if here.contains(id) {
-                            set_one(&w, id, path.as_str().unwrap_or(""))?;
+                    // Plain colours first: where the per-monitor setting won't take an empty
+                    // path, the older setting clears every monitor's picture.
+                    let mut todo: Vec<(&String, &str)> = each
+                        .iter()
+                        .filter(|(id, _)| here.contains(id))
+                        .map(|(id, p)| (id, p.as_str().unwrap_or("")))
+                        .collect();
+                    todo.sort_by_key(|(_, p)| !p.is_empty());
+                    let mut first_error = None;
+                    for (id, path) in todo {
+                        let set = set_one(&w, id, path).or_else(|e| {
+                            if path.is_empty() {
+                                set_path(std::ffi::OsStr::new(""))
+                            } else {
+                                Err(e)
+                            }
+                        });
+                        if let Err(e) = set {
+                            first_error.get_or_insert(e);
                         }
                     }
-                    Ok(())
+                    first_error.map_or(Ok(()), Err)
                 }
                 // One picture, as 0.4.0-rc.1 saved it.
                 _ => set_path(std::ffi::OsStr::new(original.as_str().unwrap_or(""))),
