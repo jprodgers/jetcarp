@@ -2,6 +2,7 @@
 name = "jetcarp-gpu"
 description = "JETCARP GPU simulation: wgpu compute shaders, bit-identical to the jetcarp-core CPU steppers."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

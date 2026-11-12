@@ -2,6 +2,7 @@
 name = "jetcarp-api"
 description = "JETCARP's operations layer: what the command line, the MCP server, Rhai scripts, and the app all call, with the argument parsers, output folders, and world host they share. No UI or GPU dependencies."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

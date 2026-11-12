@@ -4,7 +4,8 @@ description = "JETCARP's macOS screen saver: the code inside JETCARP.saver, whic
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish.workspace = true
+# The macOS screen saver ships beside the program in releases; it is no library for crates.io.
+publish = false
 license.workspace = true
 authors.workspace = true
 repository.workspace = true

@@ -2,6 +2,7 @@
 name = "jetcarp-pack"
 description = "JETCARP packs (format 1.0): a content-addressed store of Parquet tables and JSON documents, signed with SSH signatures; publishing a library into one, exporting a version, and importing a store or an export with every hash checked. Arrow lives here, so builds without packs (the screensaver) never link it."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

@@ -2,6 +2,7 @@
 name = "jetcarp-display"
 description = "JETCARP display engine: draws worlds with wgpu, steps them on the GPU, and holds scene profiles. No window toolkit, so a wallpaper, a screensaver, or the app can all use it."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

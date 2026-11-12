@@ -2,6 +2,7 @@
 name = "jetcarp-search"
 description = "JETCARP's searches: the job runner (specs, strategies, runner, handles, registry, budgets) and every strategy (soup hunts, bounded soup searches, explore, evolve, ants, movers, census, collisions, sandpiles), the dashboard's logic, and atlas publishing. No UI or GPU dependencies."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

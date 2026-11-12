@@ -2,6 +2,7 @@
 name = "jetcarp-mcp"
 description = "JETCARP's MCP (Model Context Protocol) server over the command layer: tools, JSON-RPC handling, and the local app link. Transport independent; shared by jetcarp-cli and jetcarp-app."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

@@ -8,26 +8,31 @@ version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Jimmie Rodgers <jimmie@jimmieprodgers.com>"]
+description = "JETCARP (Jimmie's Euclidean Tilings and Cellular Automata Research Program): cellular automata on almost any tiling of the plane."
 license = "Unlicense OR MIT"
 repository = "https://github.com/jprodgers/jetcarp"
-homepage = "https://github.com/jprodgers/jetcarp"
+homepage = "https://jprodgers.github.io/jetcarp/"
+readme = "README.md"
 keywords = ["cellular-automata", "tilings", "aperiodic", "game-of-life", "simulation"]
 categories = ["science", "simulation", "mathematics"]
-# Nothing is published until the v0.4.0 release is cut.
-publish = false
+# Every crate but jetcarp-saver goes to crates.io, together and in dependency order, from the
+# release workflow's crates.io job, which runs only when switched on (`cargo publish --workspace`).
+publish = true
 
+# The workspace's own crates carry their exact version, which crates.io needs, so a published
+# jetcarp always builds with the crates it was released with.
 [workspace.dependencies]
-jetcarp-core = { path = "crates/jetcarp-core" }
-jetcarp-store = { path = "crates/jetcarp-store" }
-jetcarp-search = { path = "crates/jetcarp-search" }
-jetcarp-gpu = { path = "crates/jetcarp-gpu" }
-jetcarp-api = { path = "crates/jetcarp-api" }
-jetcarp-mcp = { path = "crates/jetcarp-mcp" }
-jetcarp-script = { path = "crates/jetcarp-script" }
-jetcarp-display = { path = "crates/jetcarp-display" }
-jetcarp-app = { path = "crates/jetcarp-app" }
-jetcarp-host = { path = "crates/jetcarp-host" }
-jetcarp-pack = { path = "crates/jetcarp-pack" }
+jetcarp-core = { path = "crates/jetcarp-core", version = "=0.4.0" }
+jetcarp-store = { path = "crates/jetcarp-store", version = "=0.4.0" }
+jetcarp-search = { path = "crates/jetcarp-search", version = "=0.4.0" }
+jetcarp-gpu = { path = "crates/jetcarp-gpu", version = "=0.4.0" }
+jetcarp-api = { path = "crates/jetcarp-api", version = "=0.4.0" }
+jetcarp-mcp = { path = "crates/jetcarp-mcp", version = "=0.4.0" }
+jetcarp-script = { path = "crates/jetcarp-script", version = "=0.4.0" }
+jetcarp-display = { path = "crates/jetcarp-display", version = "=0.4.0" }
+jetcarp-app = { path = "crates/jetcarp-app", version = "=0.4.0" }
+jetcarp-host = { path = "crates/jetcarp-host", version = "=0.4.0" }
+jetcarp-pack = { path = "crates/jetcarp-pack", version = "=0.4.0" }
 rayon = "1.12"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
@@ -64,3 +69,9 @@ opt-level = 3
 
 [profile.release]
 debug = 1
+
+# What the release workflow ships: the release build without debug information, stripped.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = true

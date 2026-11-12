@@ -2,6 +2,7 @@
 name = "jetcarp-store"
 description = "JETCARP's store: the pattern library (the SQLite catalog and its migrations), the Quick Start menu, the media index, and the website export. No UI or GPU dependencies."
 version.workspace = true
+readme.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
@@ -21,5 +22,6 @@ flate2.workspace = true
 [dev-dependencies]
 # Some tests fill a catalog through a search (a hunt, a bounded search, an ant run, an atlas
 # published from an explore database). Dev-only, so the build has no cycle: jetcarp-search
-# depends on this crate, and this crate's tests on it.
-jetcarp-search.workspace = true
+# depends on this crate, and this crate's tests on it. A path with no version, so `cargo publish`
+# leaves it out of the published crate (crates.io would need jetcarp-search before this crate).
+jetcarp-search = { path = "../jetcarp-search" }

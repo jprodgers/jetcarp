@@ -1,7 +1,7 @@
 [package]
 name = "jetcarp"
 description = "JETCARP (Jimmie's Euclidean Tilings and Cellular Automata Research Program): cellular automata on square, hexagonal, Archimedean, k-uniform, isohedral and aperiodic tilings. One program: the app, the command line, the background host and the MCP server."
-readme = "../../README.md"
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 version.workspace = true
