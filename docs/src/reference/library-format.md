@@ -306,9 +306,46 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `date` | when (UTC) |
 
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
-rows 1, 2, ...: today `reverified`. The records brought in from CART's catalog and from two early development catalogs are the one
+rows 1, 2, ...: today `reverified`, which also records a split of a compound (its `source` begins
+`compound-split:`; see [Compounds](#compounds)). The records brought in from CART's catalog and from two early development catalogs are the one
 exception to how row 0 is written: theirs is their discovery, and their row 1 the import (see
 [Records from CART](#records-from-cart)).
+
+## Compounds
+
+A compound is a record that is several independent objects, such as two gliders flying side by side
+or a pulsar with blinkers beside it (the test is in
+[Search methods](../research/search-methods.md#compounds)). Searches no longer store them, but a
+library made by an earlier build may hold some. `jetcarp library compounds` (the operation
+`library.compounds`, a job of kind `compounds`) finds them, in id order, resumable with `--job`.
+
+- **The report.** Every compound found is written to `reports/compounds-<job>.jsonl` beside the
+  library (or the file `--report` names), one JSON object per line, whether or not the library is
+  changed: `id`, `label`, `class`, `tiling` (its key), `rule`, `period`, `cells`, `seen`, `action`
+  and `why`, `parts` (each part's `id`, `label`, `class`, `period`, `cells`, `copies` in the compound,
+  and `stored`, whether the library held it already), and the compound as it was: `record` (the whole
+  record, as `library export` writes it), `sightings` and `provenance`. A removed compound can be
+  brought back from it.
+- **Without `--apply`** (the default) nothing in the library changes; `action` is `would remove` or
+  `would keep`.
+- **With `--apply`**, for each compound:
+  - Each part is stored, or merged into the stored pattern with its id. A part new to the library
+    takes the compound's history as its own (its provenance rows, copied: it was found when and by
+    whom the compound was).
+  - A compound holding `n` copies of a part was `n` sightings of it. Each of the compound's sightings
+    (rule, job, copies, soups and dates) is credited to the part `n` times over, and so is the rest
+    of its seen count (a record imported with a seen count but no sightings), in every rule of the
+    compound the part runs in. The part also gains those rules.
+  - Every part's history gains a `reverified` row whose `source` is `compound-split: <n> copies in
+    compound <id> (<label>; seen <count>), which was removed` (or `which was kept, tagged compound`).
+  - The compound is **removed** (`action` `remove`), with its rules, sightings, media and history,
+    when nobody curated it and every part runs in every rule the compound runs in (each part's rule
+    range holds the compound's). Otherwise it is **kept** (`keep`): it gains the tag `compound`, a
+    note naming its parts, and a `reverified` row. A curated compound (a name, rating, notes, tags, a
+    curation state other than `new`, a Quick Start entry or a rating row) is left for a person to
+    decide. So is one with a rule where a part alone runs otherwise, since there it may be one object.
+- **Once only.** A record tagged `compound` is passed over, so running the pass again changes
+  nothing.
 
 ## Aliases
 
