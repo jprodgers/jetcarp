@@ -194,7 +194,7 @@ pub struct JetcarpApp {
 /// What the status and menu bars show about the world, kept until its revision changes.
 struct Stats {
     rev: u64,
-    status: String,
+    status: Status,
     populations: Vec<u64>,
     /// None while a large world runs (hashing 17 million cells takes about 50 ms); computed
     /// once it pauses.
@@ -400,7 +400,7 @@ impl JetcarpApp {
             _ => {
                 self.stats = Some(Stats {
                     rev,
-                    status: self.world.status().to_string(),
+                    status: self.world.status(),
                     populations: self.world.fields.iter().map(|f| f.population()).collect(),
                     hash: hash_now.then(|| self.world.hash_hex()),
                 });

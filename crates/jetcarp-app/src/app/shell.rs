@@ -224,7 +224,7 @@ impl JetcarpApp {
                     return;
                 }
                 let (status, pops) = match &self.stats {
-                    Some(s) => (s.status.clone(), s.populations.clone()),
+                    Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
                     None => (String::new(), vec![]),
                 };
                 ui.label(status);
@@ -347,5 +347,38 @@ fn message_color(err: bool) -> Color32 {
         Color32::LIGHT_RED
     } else {
         Color32::LIGHT_GREEN
+    }
+}
+
+/// What the status bar says the world is doing. A world that is still changing reads "Running"
+/// or "Paused", as the menu bar's switch does; one that is empty, frozen or repeating says so,
+/// after "Paused ·" while paused.
+fn run_status(playing: bool, status: &Status) -> String {
+    match (playing, status) {
+        (true, Status::Running) => "Running".into(),
+        (false, Status::Running) => "Paused".into(),
+        (true, s) => s.to_string(),
+        (false, s) => format!("Paused · {s}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_status_bar_says_paused_while_paused() {
+        assert_eq!(run_status(true, &Status::Running), "Running");
+        assert_eq!(run_status(false, &Status::Running), "Paused");
+        assert_eq!(run_status(true, &Status::Empty), "Empty");
+        assert_eq!(run_status(false, &Status::Empty), "Paused · Empty");
+        let frozen = Status::Repeats {
+            period: 1,
+            seen_at: 9,
+        };
+        assert_eq!(
+            run_status(false, &frozen),
+            "Paused · Frozen (seen by generation 9)"
+        );
     }
 }
