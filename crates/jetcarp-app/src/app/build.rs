@@ -21,8 +21,9 @@ pub(super) struct Building {
     rx: Receiver<Result<Built, String>>,
     /// The scene being loaded (None: a tiling change of the current world).
     scene: Option<Box<Scene>>,
-    /// Running when the build started (a tiling change resumes then).
-    was_playing: bool,
+    /// Whether to run once it is in place: a tiling change resumes if it was running, a scene
+    /// as it was asked to.
+    play_after: bool,
 }
 
 enum Built {
@@ -60,6 +61,7 @@ impl JetcarpApp {
         &mut self,
         what: String,
         scene: Option<Box<Scene>>,
+        play_after: bool,
         job: impl FnOnce(u64) -> Result<Built, String> + Send + 'static,
     ) {
         self.geom_counter += 1;
@@ -73,26 +75,31 @@ impl JetcarpApp {
             .expect("spawn build thread");
         // The overlay in the main view says what is being built.
         self.screen = Screen::Sim;
-        let was_playing = self.playing;
         self.playing = false;
         self.building = Some(Building {
             what,
             started: Instant::now(),
             rx,
             scene,
-            was_playing,
+            play_after,
         });
     }
 
     /// Load a scene; a large tiling is built in the background.
     pub(super) fn load_scene_bg(&mut self, scene: &Scene) {
+        self.load_scene_bg_as(scene, self.autoplay);
+    }
+
+    /// [`Self::load_scene_bg`], running once loaded or not (`play`).
+    pub(super) fn load_scene_bg_as(&mut self, scene: &Scene, play: bool) {
         if !heavy(&scene.tiling) {
-            return self.load_scene(scene);
+            return self.load_scene_as(scene, play);
         }
         let s = scene.clone();
         self.start_build(
             describe(&scene.tiling),
             Some(Box::new(scene.clone())),
+            play,
             move |id| {
                 let w = World::from_scene(&s)?;
                 let g = Geometry::build(&w.topo, id);
@@ -107,12 +114,13 @@ impl JetcarpApp {
         self.cancel_build();
         if !heavy(&world.topo.spec) && world.topo.len() < BACKGROUND_CELLS as usize {
             self.world = world;
-            self.after_scene(&scene, None);
+            self.after_scene(&scene, None, self.autoplay);
             self.screen = Screen::Sim;
             return;
         }
         let what = describe(&world.topo.spec);
-        self.start_build(what, Some(Box::new(scene)), move |id| {
+        let play = self.autoplay;
+        self.start_build(what, Some(Box::new(scene)), play, move |id| {
             let g = Geometry::build(&world.topo, id);
             Ok(Built::World(Box::new(world), g))
         });
@@ -125,7 +133,8 @@ impl JetcarpApp {
             return;
         }
         let what = describe(&spec);
-        self.start_build(what, None, move |id| {
+        let play = self.playing;
+        self.start_build(what, None, play, move |id| {
             let topo = Arc::new(Topology::build(&spec)?);
             let g = Geometry::build(&topo, id);
             Ok(Built::Topology(topo, g))
@@ -152,7 +161,7 @@ impl JetcarpApp {
             Ok(Built::World(w, g)) => {
                 self.world = *w;
                 if let Some(scene) = &b.scene {
-                    self.after_scene(scene, Some(g));
+                    self.after_scene(scene, Some(g), b.play_after);
                 }
                 true
             }
@@ -160,7 +169,7 @@ impl JetcarpApp {
                 Ok(_) => {
                     self.on_new_topology_with(Some(g));
                     self.after_exec();
-                    self.playing = b.was_playing;
+                    self.playing = b.play_after;
                     true
                 }
                 Err(e) => {

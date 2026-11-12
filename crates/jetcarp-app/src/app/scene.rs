@@ -6,23 +6,29 @@ impl JetcarpApp {
     /// Load a scene now (AI control expects the world in place when this returns). The UI uses
     /// `load_scene_bg`, which builds large tilings in the background.
     pub(super) fn load_scene(&mut self, scene: &Scene) {
+        self.load_scene_as(scene, self.autoplay);
+    }
+
+    /// [`Self::load_scene`], running afterwards or not (`play`).
+    pub(super) fn load_scene_as(&mut self, scene: &Scene, play: bool) {
         self.cancel_build();
         match World::from_scene(scene) {
             Ok(w) => {
                 self.world = w;
-                self.after_scene(scene, None);
+                self.after_scene(scene, None, play);
             }
             Err(e) => self.message = Some((format!("Could not load scene: {e}"), true)),
         }
     }
 
-    /// The world of `scene` is in place: show it (`geom`: its geometry, if already built).
-    pub(super) fn after_scene(&mut self, scene: &Scene, geom: Option<Geometry>) {
+    /// The world of `scene` is in place: show it (`geom`: its geometry, if already built), and
+    /// run it if `play`.
+    pub(super) fn after_scene(&mut self, scene: &Scene, geom: Option<Geometry>, play: bool) {
         self.scene_name = scene.name.clone();
         self.scene_desc = scene.description.clone();
         self.on_new_topology_with(geom);
         self.draw_target = self.world.cas.first().map(|c| c.id);
-        self.playing = self.autoplay;
+        self.playing = play;
         self.acc = 0.0;
         if let Some(v) = &scene.view {
             if let (Some(c), Some(z)) = (v.get("center"), v.get("zoom").and_then(|z| z.as_f64()))
@@ -138,6 +144,8 @@ impl JetcarpApp {
         }
     }
 
+    /// *File → Open scene…*: the scene opens paused at the generation it was saved at, so that
+    /// is what shows (Quick Start entries and the rest start running).
     pub(super) fn open_scene(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("JETCARP scene", &["json"])
@@ -149,7 +157,7 @@ impl JetcarpApp {
             .map_err(|e| e.to_string())
             .and_then(|t| Scene::from_json(&t))
         {
-            Ok(s) => self.load_scene_bg(&s),
+            Ok(s) => self.load_scene_bg_as(&s, false),
             Err(e) => self.message = Some((format!("Could not open: {e}"), true)),
         }
     }
