@@ -23,7 +23,8 @@ curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp
 On Windows, in PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 | iex"
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
 ```
 
 Or `pipx install jetcarp` (or `uv tool install jetcarp`); `brew tap jprodgers/jetcarp` then

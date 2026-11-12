@@ -422,7 +422,7 @@ def cmd_installers(a):
     for src, dst in [("install.sh", "jetcarp-installer.sh"), ("install.ps1", "jetcarp-installer.ps1")]:
         text = render((ROOT / "packaging" / src).read_text(encoding="utf-8"), values)
         out = dist / dst
-        # LF line endings for both: PowerShell reads them, and `irm | iex` sees a string.
+        # LF line endings for both: PowerShell reads them either way.
         out.write_bytes(text.encode("utf-8"))
         if dst.endswith(".sh"):
             out.chmod(0o755)
@@ -506,10 +506,11 @@ Linux and macOS:
 curl -LsSf {url}/jetcarp-installer.sh | sh
 ```
 
-Windows (PowerShell):
+Windows (PowerShell): save the installer, then run it.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm {url}/jetcarp-installer.ps1 | iex"
+Invoke-WebRequest {url}/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1
 ```
 {others}
 Every way to install, and what to know on each system, is in

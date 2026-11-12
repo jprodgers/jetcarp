@@ -34,11 +34,16 @@ On Linux and macOS, in a terminal:
 curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.sh | sh
 ```
 
-On Windows, in PowerShell:
+On Windows, in PowerShell, save the installer and run it:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 | iex"
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
 ```
+
+(The script is saved first because Microsoft Defender can flag the one-line form some installers
+use, piping a downloaded script into `iex`, as a trojan; run as a file, the same script raises no
+alert.)
 
 Each installer downloads the release archive for your computer and the release's `SHA256SUMS`,
 refuses the archive if its checksum does not match, and unpacks it into a folder of its own:
@@ -54,9 +59,8 @@ says so and shows the line to add. On Windows, open a new terminal afterwards so
 new `PATH`.
 
 The installers take options. With the shell installer, put them after `sh -s --` (or download the
-script and run `sh jetcarp-installer.sh OPTIONS`); with PowerShell, download
-`jetcarp-installer.ps1` and run it with the options, or set the environment variable named with
-each before `irm | iex`.
+script and run `sh jetcarp-installer.sh OPTIONS`); with PowerShell, put them after the script's
+name (`.\jetcarp-installer.ps1 -NoPacks`), or set the environment variable named with each.
 
 | Shell | PowerShell | Variable | Does |
 | --- | --- | --- | --- |
@@ -158,7 +162,8 @@ curl -LsSf https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/je
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/jetcarp-installer.ps1 | iex"
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
 ```
 
 or any installer with `--version 0.4.0-rc.1` (`-Version 0.4.0-rc.1` in PowerShell). Installing

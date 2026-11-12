@@ -7,10 +7,12 @@ Downloads JETCARP's release archive and the release's SHA256SUMS, checks the arc
 unpacks it into one folder (by default %LOCALAPPDATA%\Programs\jetcarp), and adds that folder to
 your user PATH. It changes nothing else, and needs no administrator rights.
 
-  powershell -ExecutionPolicy Bypass -c "irm https://github.com/@REPO@/releases/latest/download/jetcarp-installer.ps1 | iex"
+  Invoke-WebRequest https://github.com/@REPO@/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+  powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
 
-Run as a file, it takes the options below; through `irm | iex`, set the environment variables
-named with each instead (for example $env:JETCARP_NO_PACKS = "1" first).
+Save it and run it as a file, as above: Microsoft Defender can flag the one-line form that pipes a
+downloaded script into iex. It takes the options below, or the environment variables named with
+each (for example $env:JETCARP_NO_PACKS = "1" first).
 
 .PARAMETER Version
 Install release Version instead of @VERSION@, such as 0.4.0, v0.4.0 or 0.4.0-rc.2
@@ -216,7 +218,9 @@ if (-not $NoModifyPath) {
     $UserPath = Get-UserPath
     $Has = @($UserPath -split ";" | Where-Object { $_.TrimEnd("\") -eq $InstallDir.TrimEnd("\") }).Count -gt 0
     if (-not $Has) {
-        $New = if ($UserPath) { "$UserPath;$InstallDir" } else { $InstallDir }
+        # A PATH that ends in ";" would otherwise gain an empty entry.
+        $Trimmed = $UserPath.TrimEnd(";")
+        $New = if ($Trimmed) { "$Trimmed;$InstallDir" } else { $InstallDir }
         Set-UserPath $New
         Say "added $InstallDir to your user PATH; open a new terminal to use ``jetcarp``"
     }
