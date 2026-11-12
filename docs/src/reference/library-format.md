@@ -480,8 +480,8 @@ An atlas entry's category travels as its behaviour, so after an import it keeps 
 and its card runs its scene made smaller, from the start. Built-in entries are never put in a pack:
 every JETCARP has them.
 
-The menu leaves out a built-in example of a named rule when an atlas entry has the same rule, unless
-the built-in is featured, so that every named rule can be reached without showing it twice.
+The menu shows every entry that isn't hidden. A built-in example and an atlas entry with the same rule
+both appear: one is a named example with a hand-made scene, the other a run of a search.
 
 ## Ratings of search runs
 

@@ -45,6 +45,9 @@ const REST: Duration = Duration::from_millis(1400);
 const IDLE_AFTER: Duration = Duration::from_millis(400);
 /// Seconds off screen before a card is forgotten.
 const FORGET_AFTER: f64 = 3.0;
+/// No card seen for this long: the Start screen isn't showing, and time away doesn't count
+/// towards forgetting (coming back from a world finds the previews where they were).
+const AWAY_AFTER: f64 = 0.5;
 /// Distinct tilings kept built (with their pixel maps), least recently used dropped first.
 const TOPO_CACHE: usize = 64;
 /// Delay before a card first seen starts (a card that flies by never gets built).
@@ -728,6 +731,8 @@ pub struct Pool {
     ui: HashMap<Arc<str>, UiCard>,
     /// Drawn this frame, in screen order.
     vis: Vec<Arc<str>>,
+    /// When a card was last seen (the screen last showed).
+    shown: f64,
     /// First seen this frame.
     new: Vec<(Arc<str>, Source)>,
 }
@@ -755,6 +760,7 @@ impl Pool {
             state,
             ui: HashMap::new(),
             vis: Vec::new(),
+            shown: f64::NEG_INFINITY,
             new: Vec::new(),
         }
     }
@@ -790,9 +796,10 @@ impl Pool {
         self.forget(now);
     }
 
-    /// Forget cards off screen for a few seconds (called even when the screen isn't showing).
+    /// Forget cards off screen for a few seconds while the screen shows (called on every
+    /// screen; away from the Start screen, nothing is forgotten).
     pub fn forget(&mut self, now: f64) {
-        if self.ui.values().all(|c| now - c.seen <= FORGET_AFTER) {
+        if now - self.shown > AWAY_AFTER || self.ui.values().all(|c| now - c.seen <= FORGET_AFTER) {
             return;
         }
         let mut g = self.state.0.lock().unwrap();
@@ -807,6 +814,14 @@ impl Pool {
 
     /// A card is on screen this frame; `make` says how to start it the first time.
     pub fn see(&mut self, id: &str, now: f64, make: impl FnOnce() -> Source) {
+        let away = now - self.shown;
+        if away > AWAY_AFTER && self.shown.is_finite() {
+            // Back on the Start screen: the time away doesn't count.
+            for c in self.ui.values_mut() {
+                c.seen += away;
+            }
+        }
+        self.shown = now;
         if let Some(c) = self.ui.get_mut(id) {
             c.seen = now;
             self.vis.push(c.id.clone());
@@ -986,25 +1001,52 @@ mod tests {
 
     #[test]
     fn cards_off_screen_are_forgotten_after_a_while() {
+        fn make() -> Source {
+            Source::Scene(Box::new(scene("B3/S23", SeedSpec::Center)))
+        }
+        // Frames a quarter of a second apart from `from` to `to`, showing `ids`.
+        fn frames(p: &mut Pool, ids: &[&str], from: f64, to: f64) {
+            let mut t = from;
+            while t <= to + 1e-9 {
+                for id in ids {
+                    p.see(id, t, make);
+                }
+                p.end_frame(true, 200);
+                p.forget(t);
+                t += 0.25;
+            }
+        }
+        let cards = |p: &Pool| -> Vec<String> {
+            let mut v: Vec<String> = p
+                .state
+                .0
+                .lock()
+                .unwrap()
+                .cards
+                .keys()
+                .map(|k| k.to_string())
+                .collect();
+            v.sort();
+            v
+        };
         let mut p = Pool::new();
-        let make = || Source::Scene(Box::new(scene("B3/S23", SeedSpec::Center)));
-        p.see("a", 10.0, make);
-        p.see("b", 10.0, make);
-        p.end_frame(true, 200);
-        assert_eq!(p.state.0.lock().unwrap().cards.len(), 2);
-        // Still on screen: kept.
-        p.see("a", 12.0, make);
-        p.end_frame(true, 200);
-        p.forget(12.5);
-        assert_eq!(p.state.0.lock().unwrap().cards.len(), 2);
-        // Off screen for over three seconds: forgotten, world and all.
-        p.forget(14.0);
-        let g = p.state.0.lock().unwrap();
-        assert_eq!(g.cards.len(), 1);
-        assert!(g.cards.contains_key("a"));
-        drop(g);
-        p.forget(16.0);
-        assert_eq!(p.state.0.lock().unwrap().cards.len(), 0);
+        frames(&mut p, &["a", "b"], 10.0, 10.0);
+        assert_eq!(cards(&p), ["a", "b"]);
+        // Off screen for under three seconds: kept.
+        frames(&mut p, &["a"], 10.25, 12.5);
+        assert_eq!(cards(&p), ["a", "b"]);
+        // Over three seconds: forgotten, world and all.
+        frames(&mut p, &["a"], 12.75, 13.5);
+        assert_eq!(cards(&p), ["a"]);
+        // Away from the Start screen (no frames): nothing is forgotten, however long.
+        p.forget(60.0);
+        assert_eq!(cards(&p), ["a"]);
+        // Back, with "a" off screen: the time away doesn't count...
+        frames(&mut p, &["c"], 61.0, 63.75);
+        assert_eq!(cards(&p), ["a", "c"]);
+        // ...but three seconds of showing without it do.
+        frames(&mut p, &["c"], 64.0, 64.5);
+        assert_eq!(cards(&p), ["c"]);
     }
 
     #[test]

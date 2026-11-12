@@ -26,11 +26,11 @@
 //! A rating goes to the most specific target ([`rating_target`]): the pattern or ant run an entry
 //! was made from, else the entry itself.
 
-use super::{CATEGORY_ORDER, GRID_ORDER, canonical_rule};
+use super::{CATEGORY_ORDER, GRID_ORDER};
 use crate::library::MenuRow;
 use crate::{Library, QsSource, UsageRow};
 use jetcarp_core::rng::Rng;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// One entry of the menu.
 #[derive(Clone, Debug)]
@@ -155,22 +155,12 @@ pub fn item(r: MenuRow, rank: usize) -> Item {
 }
 
 /// The menu from rows of the table (shown ones, by rank): promotions, pack entries, the atlas,
-/// then the built-ins whose rules no atlas entry has (and every featured one), each ranked
-/// within its source.
+/// then the built-ins, each ranked within its source. Nothing is left out: a built-in (a named,
+/// hand-made example) and an atlas entry with the same rule (a run of the user's own search)
+/// both show.
 pub fn items_of(rows: Vec<MenuRow>) -> Vec<Item> {
-    let covered: HashSet<String> = rows
-        .iter()
-        .filter(|r| r.source == QsSource::Atlas)
-        .map(|r| canonical_rule(&r.rule))
-        .collect();
     let mut by: HashMap<QsSource, Vec<MenuRow>> = HashMap::new();
     for r in rows {
-        if r.source == QsSource::Builtin
-            && !r.featured
-            && covered.contains(&canonical_rule(&r.rule))
-        {
-            continue;
-        }
         by.entry(r.source).or_default().push(r);
     }
     let mut out = Vec::new();

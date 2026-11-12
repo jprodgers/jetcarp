@@ -331,6 +331,12 @@ pub(crate) fn base_summary(row: &JobRow, k: &dyn StrategyKind) -> JobSummary {
         updated: row.updated.clone(),
         resumable: k.runnable(row),
         deterministic: k.deterministic(),
+        imported_from: row
+            .spec
+            .get("imported_from")
+            .and_then(|v| v.as_str())
+            .filter(|_| row.kind != explore::KIND_NAME)
+            .map(str::to_string),
         ..Default::default()
     }
 }

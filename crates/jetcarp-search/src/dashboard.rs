@@ -69,6 +69,10 @@ pub struct JobSummary {
     /// Stopped and resumed, it ends exactly as an uninterrupted run; otherwise (an explore
     /// search) a resumed run continues from its saved state.
     pub deterministic: bool,
+    /// The pack a job came from, when its finds came with the pack and nothing ran here (an
+    /// imported explore search has progress of its own, so it is not marked).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imported_from: Option<String>,
 }
 
 impl JobSummary {

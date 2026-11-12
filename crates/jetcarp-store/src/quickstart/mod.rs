@@ -380,8 +380,9 @@ fn category_mood(category: &str) -> &'static str {
     }
 }
 
-/// An atlas entry's title: its rule's name in the rule catalog, or a mood (from its category)
-/// and its family (`Oscillating Greenberg-Hastings`).
+/// An atlas entry's title: its rule's name in the rule catalog, a notation that reads as a name
+/// (`Rule 150`, `Ant RRL`, `Turmite LRRL`), or a mood (from its category) and its family
+/// (`Oscillating Greenberg-Hastings`).
 pub fn atlas_title(rule: &str, category: &str, family: &str) -> String {
     static NAMED: OnceLock<std::collections::HashMap<&'static str, &'static str>> = OnceLock::new();
     let named = NAMED.get_or_init(|| {
@@ -392,6 +393,15 @@ pub fn atlas_title(rule: &str, category: &str, family: &str) -> String {
     });
     if let Some(n) = named.get(rule) {
         return (*n).to_string();
+    }
+    if let Some(n) = rule
+        .strip_prefix('W')
+        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return format!("Rule {n}");
+    }
+    if (rule.starts_with("Ant ") || rule.starts_with("Turmite ")) && rule.len() <= 24 {
+        return rule.to_string();
     }
     let mood = category_mood(category);
     if mood.is_empty() {

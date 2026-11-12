@@ -396,6 +396,24 @@ fn hidden_entries_leave_the_menu_and_packs() {
 }
 
 #[test]
+fn atlas_titles_name_what_they_can() {
+    assert_eq!(
+        qs::atlas_title("W30", "Fractals & rows", "Elementary"),
+        "Rule 30"
+    );
+    assert_eq!(
+        qs::atlas_title("W150", "Fractals & rows", "Elementary"),
+        "Rule 150"
+    );
+    assert_eq!(qs::atlas_title("Ant RRL", "Growth", "Agents"), "Ant RRL");
+    assert_eq!(
+        qs::atlas_title("B2/S13/C7", "Turbulence", "Generations"),
+        "Turbulent Generations"
+    );
+    assert_eq!(qs::atlas_title("B3/S23", "Turbulence", "Life-like"), "Life");
+}
+
+#[test]
 fn seed_descriptions_read_well() {
     assert_eq!(
         qs::describe_seed(r#"{"pattern":{"shape":{"kind":"noise"},"fill":{"density":0.85}}}"#),
@@ -508,14 +526,15 @@ fn every_named_rule_is_reachable_with_and_without_the_atlas() {
     let built_in_life = items.iter().filter(|i| i.handle == "rule:B3/S23").count();
     assert_eq!(built_in_life, 1);
 
-    // An atlas covering Life: Life's plain catalog entry goes, the featured scene stays, and
-    // Life is reachable through the atlas.
+    // An atlas with Life on the square grid: every built-in stays (the plain Life entry and
+    // the hand-made scene), and the atlas's entries show too.
     publish(&lib, &sample());
     let items = menu::load(&lib);
+    assert_eq!(items.len(), qs::builtin_rows().len() + sample().len());
     assert_eq!(
         items.iter().filter(|i| i.handle == "rule:B3/S23").count(),
-        0,
-        "the atlas covers Life"
+        1,
+        "built-ins stay"
     );
     assert!(
         items

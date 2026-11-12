@@ -1283,47 +1283,59 @@ impl DashWindow {
         if let Some(e) = &j.error {
             ui.colored_label(Color32::LIGHT_RED, e);
         }
-        // Counters.
-        ui.horizontal_wrapped(|ui| {
-            let tile = |ui: &mut egui::Ui, k: &str, v: String| {
-                egui::Frame::group(ui.style()).show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new(v).strong().size(15.0));
-                        ui.label(RichText::new(k).small().weak());
+        if let Some(pack) = &j.imported_from {
+            ui.label(
+                RichText::new(format!(
+                    "Imported from pack {pack}: its finds came with the pack, and nothing ran here."
+                ))
+                .weak(),
+            );
+        }
+        // Counters (none for a job that never ran here).
+        if j.imported_from.is_none() {
+            ui.horizontal_wrapped(|ui| {
+                let tile = |ui: &mut egui::Ui, k: &str, v: String| {
+                    egui::Frame::group(ui.style()).show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(v).strong().size(15.0));
+                            ui.label(RichText::new(k).small().weak());
+                        });
                     });
-                });
-            };
-            tile(
-                ui,
-                &format!("{} done", j.unit),
-                match j.total {
-                    Some(t) => format!("{} / {}", dashboard::digits(j.done), dashboard::digits(t)),
-                    None => dashboard::digits(j.done),
-                },
-            );
-            tile(
-                ui,
-                "per second",
-                if j.is_running() {
-                    format!("{:.1}", j.per_s)
-                } else {
-                    format!("({:.1})", j.per_s)
-                },
-            );
-            tile(ui, "elapsed", dashboard::duration(j.elapsed_s));
-            tile(
-                ui,
-                "left",
-                match (j.eta_s, j.total) {
-                    (Some(e), _) => dashboard::duration(e),
-                    (None, None) => "runs until stopped".into(),
-                    _ => "–".into(),
-                },
-            );
-            for (k, v) in &j.counters {
-                tile(ui, k, v.clone());
-            }
-        });
+                };
+                tile(
+                    ui,
+                    &format!("{} done", j.unit),
+                    match j.total {
+                        Some(t) => {
+                            format!("{} / {}", dashboard::digits(j.done), dashboard::digits(t))
+                        }
+                        None => dashboard::digits(j.done),
+                    },
+                );
+                tile(
+                    ui,
+                    "per second",
+                    if j.is_running() {
+                        format!("{:.1}", j.per_s)
+                    } else {
+                        format!("({:.1})", j.per_s)
+                    },
+                );
+                tile(ui, "elapsed", dashboard::duration(j.elapsed_s));
+                tile(
+                    ui,
+                    "left",
+                    match (j.eta_s, j.total) {
+                        (Some(e), _) => dashboard::duration(e),
+                        (None, None) if j.is_running() => "runs until stopped".into(),
+                        _ => "–".into(),
+                    },
+                );
+                for (k, v) in &j.counters {
+                    tile(ui, k, v.clone());
+                }
+            });
+        }
         if !j.bars.is_empty() {
             ui.label(RichText::new(&j.bars_title).small().weak());
             bars(ui, &j.bars);

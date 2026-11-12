@@ -171,7 +171,8 @@ impl Wizard {
         !setup::has_run(&Ctx::new())
     }
 
-    /// Open it: on the progress page when setup's jobs have not finished, else at the start.
+    /// Open it: on the progress page when setup's jobs have not finished, else at the start (a
+    /// setup applied earlier in this session included, so another profile can be chosen).
     pub fn show_again(&mut self) {
         self.open = true;
         self.refresh();
@@ -179,9 +180,18 @@ impl Wizard {
             .status
             .as_ref()
             .is_some_and(|s| s.jobs.iter().any(|j| j.status != "done"));
-        if self.applying.is_none() && self.applied.is_none() && !unfinished {
-            self.page = Page::Welcome;
+        if self.applying.is_none() && !unfinished && self.settled() {
+            self.restart();
         }
+    }
+
+    /// Back to the start, to choose a profile again. Setup's earlier jobs stay as they are (a
+    /// status that arrives with some unfinished shows them again).
+    pub fn restart(&mut self) {
+        self.applied = None;
+        self.error = None;
+        self.jobs.clear();
+        self.page = Page::Welcome;
     }
 
     /// Read `setup.status` again, on a worker thread.
@@ -670,7 +680,18 @@ impl Wizard {
                         self.later();
                     }
                 }
-                Page::Progress => {}
+                Page::Progress => {
+                    if self.settled()
+                        && ui
+                            .button("Set up again")
+                            .on_hover_text(
+                                "Back to the start, to choose another profile or more packs",
+                            )
+                            .clicked()
+                    {
+                        self.restart();
+                    }
+                }
                 _ => {}
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -901,7 +922,7 @@ impl Wizard {
                 ui.label(RichText::new(t).strong());
                 ui.label(RichText::new(e.contents()).small());
                 if !e.description.is_empty() {
-                    ui.label(RichText::new(&e.description).small().weak());
+                    ui.label(RichText::new(&e.description).weak());
                 }
                 if e.imported {
                     ui.label(RichText::new("Already in your library.").small().weak());
@@ -1259,7 +1280,8 @@ impl Wizard {
         ui.add_space(8.0);
         ui.label(
             RichText::new(if done {
-                "New entries are in the Quick Start. Help → Setup… opens this again."
+                "New entries are in the Quick Start. Set up again, here or from Help → Setup…, to \
+                 choose another profile."
             } else {
                 "You can close this window: the jobs carry on in the background, a stopped one \
                  resumes from Tools → Hunts…, and new entries appear in the Quick Start as they \
