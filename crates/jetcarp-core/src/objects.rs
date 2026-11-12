@@ -20,12 +20,17 @@
 //!    A group that grows is tested for a **puffer** ([`puffer`]): run alone on the unbounded
 //!    lattice, its moving front recurs exactly, shifted by a lattice vector every `p`
 //!    generations, while the debris behind it grows.
-//! 5. Canonical forms: the minimum over every phase and every lattice symmetry of the normalized
-//!    cell list. Symmetries are the integer lattice maps that preserve the neighbour offsets
-//!    (the 8 of the square grid, 12 on the hexagon grid), used for isotropic rules on one-tile
-//!    lattices; other lattices use translation only. Explicit patches get an invariant (not exact).
+//! 5. Canonical forms: the minimum over every phase and every symmetry of the tiling of the
+//!    normalized cell list. The symmetries are the library's
+//!    ([`crate::pattern::canon::tiling_symmetries`]): the integer lattice maps that preserve the
+//!    neighbour offsets on one-tile lattices (the 8 of the square grid, 12 on the hexagon grid),
+//!    and on lattices with several tile types the maps that also permute the types (4 on
+//!    `k2-017`); only the identity for rule tables. On lattices each object is labelled, and
+//!    counted, by the content id the library gives it, so a ship and its mirror image are one row
+//!    of the census. Explicit patches get an invariant (not exact).
 
 use crate::geom::{P, bbox, centroid};
+use crate::pattern::CellMap;
 use crate::render::Rgba;
 use crate::rng::Fnv;
 use crate::rules::Rule;
@@ -304,10 +309,17 @@ pub struct Object {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lattice_bbox: Option<[i32; 4]>,
     pub centroid: [f64; 2],
-    /// Canonical form shared by every copy of this object in any phase (empty for "other").
+    /// Canonical form shared by every copy of this object in any phase and orientation (empty for
+    /// "other"): on lattice tilings the library's (a record's `canonical`).
     pub canonical: String,
-    /// Short hash of the canonical form; objects with equal keys are counted together.
+    /// Objects with equal keys are counted together. On lattice tilings the first 8 hex digits of
+    /// the library's content id (so a ship and its mirror image share one); on explicit patches a
+    /// short hash of the canonical invariant.
     pub key: String,
+    /// Lattice tilings: the id the library gives this object (as
+    /// [`crate::pattern::record_from_object`] computes it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_id: Option<String>,
     /// False on explicit patches, where the canonical form is an invariant rather than exact.
     pub canonical_exact: bool,
     /// True when `name` is a well-known name (Life objects on the square grid).
@@ -480,7 +492,14 @@ struct Ctx {
     piece_distance: u32,
     /// Lattice: how far (in rows or row positions) one generation can reach.
     reach: i32,
-    syms: Vec<[i32; 4]>,
+    /// The tiling's symmetries as maps on lattice cells (the library's, from
+    /// [`crate::pattern::canon::tiling_symmetries`]; only the identity for rule tables and
+    /// explicit patches).
+    syms: Arc<Vec<CellMap>>,
+    /// The CA's rule, steps per generation, and whether orientation counts (for content ids).
+    notation: String,
+    steps_per_gen: u32,
+    isotropic: bool,
     frames: Mutex<HashMap<(u32, u32), Arc<Topology>>>,
     frame_spec: TilingSpec,
     /// Lattices: the sparse runner for puffer tests (rules it supports).
@@ -829,23 +848,8 @@ impl Ctx {
         };
         let mut best: Option<Phase> = None;
         for ph in phases {
-            for m in &self.syms {
-                let mut v: Phase = ph
-                    .iter()
-                    .map(|c| LCell {
-                        i: m[0] * c.i + m[1] * c.j,
-                        j: m[2] * c.i + m[3] * c.j,
-                        k: c.k,
-                        s: c.s,
-                    })
-                    .collect();
-                let mi = v.iter().map(|c| c.i).min().unwrap_or(0);
-                let mj = v.iter().map(|c| c.j).min().unwrap_or(0);
-                for c in &mut v {
-                    c.i -= mi;
-                    c.j -= mj;
-                }
-                v.sort_unstable();
+            for m in self.syms.iter() {
+                let (v, _) = crate::pattern::orient(ph, m);
                 if best.as_ref().is_none_or(|b| v < *b) {
                     best = Some(v);
                 }
@@ -853,6 +857,63 @@ impl Ctx {
         }
         let b = best.unwrap_or_default();
         (picture(&b, g.ntypes), b.len(), true)
+    }
+
+    /// The library's content id and canonical form of a periodic object on a lattice tiling,
+    /// built as [`crate::pattern::record_from_object`] builds a record, kept per tiling, rule and
+    /// canonical form `text` (the same object has the same `text` in every phase and orientation).
+    /// `None` on explicit patches, or when no record can be made (a rule the library cannot
+    /// replay).
+    fn content(&self, class: &ObjClass, phases: &[Phase], text: &str) -> Option<(String, String)> {
+        use crate::pattern::{DiscoveredBy, PatternClass, Provenance, RecordParts};
+        type Ids = HashMap<String, Option<(String, String)>>;
+        static CACHE: OnceLock<Mutex<Ids>> = OnceLock::new();
+        self.lattice()?;
+        let (class, period, d) = match *class {
+            ObjClass::StillLife => (PatternClass::StillLife, 1, [0, 0]),
+            ObjClass::Oscillator { period } => (PatternClass::Oscillator, period, [0, 0]),
+            ObjClass::Spaceship { period, dx, dy } => (PatternClass::Spaceship, period, [dx, dy]),
+            ObjClass::Puffer { period, dx, dy } => (PatternClass::Puffer, period, [dx, dy]),
+            ObjClass::Other { .. } => return None,
+        };
+        let key = format!(
+            "{}|{:?}|{}|{}|{}|{text}",
+            crate::pattern::tiling_key(&self.topo.spec),
+            self.nb,
+            self.steps_per_gen,
+            self.notation,
+            class.key()
+        );
+        let cache = CACHE.get_or_init(Default::default);
+        if let Some(v) = cache.lock().unwrap().get(&key) {
+            return v.clone();
+        }
+        let what = RecordParts {
+            rule: self.notation.clone(),
+            nb: self.nb,
+            steps_per_gen: self.steps_per_gen,
+            isotropic: self.isotropic,
+            class,
+            period,
+            d,
+            name: None,
+        };
+        let got = crate::pattern::build_record_with(
+            &self.topo,
+            Some(&self.syms),
+            &what,
+            phases,
+            Provenance::default(),
+            DiscoveredBy::Search,
+        )
+        .ok()
+        .map(|r| (r.id, r.canonical));
+        let mut m = cache.lock().unwrap();
+        if m.len() > 100_000 {
+            m.clear();
+        }
+        m.insert(key, got.clone());
+        got
     }
 
     /// Explicit patches: sorted (state, degree, live neighbours) per cell, minimum over phases.
@@ -1592,14 +1653,13 @@ fn make_ctx(
                 .max(1);
             let shear = (g.a2[0] / g.a1[0]).abs();
             let reach = maxoff + (maxoff as f64 * shear).ceil() as i32 + 1;
-            let syms = if isotropic && g.ntypes == 1 {
-                symmetries(g, nb)
-            } else {
-                vec![[1, 0, 0, 1]]
-            };
+            let syms = crate::pattern::canon::tiling_symmetries(&topo.spec, nb, isotropic)
+                .unwrap_or_else(|_| {
+                    Arc::new(crate::pattern::canonical_symmetries(&topo, nb, isotropic))
+                });
             (reach, syms)
         }
-        None => (1, vec![[1, 0, 0, 1]]),
+        None => (1, Arc::new(vec![CellMap::identity(1)])),
     };
     let mut frame_spec = topo.spec.clone();
     frame_spec.boundary = Boundary::Dead;
@@ -1613,6 +1673,9 @@ fn make_ctx(
         piece_distance,
         reach,
         syms,
+        notation: ca.notation(),
+        steps_per_gen: ca.steps_per_gen,
+        isotropic,
         frames: Mutex::new(HashMap::new()),
         frame_spec,
         sparse: topo
@@ -1815,6 +1878,7 @@ fn make_object(
         }
     };
     let mut known_name = false;
+    let mut content_id = None;
     let (canonical, exact, key, name) = match &p.class {
         ObjClass::Other { reason } => (
             String::new(),
@@ -1824,7 +1888,16 @@ fn make_object(
         ),
         class => {
             let (text, n, exact) = ctx.canonical(&p.phases);
-            let key = short_key(&text);
+            // On lattices the library's content id and canonical form, so copies in every
+            // orientation count together and the label names the library's record.
+            let (key, canonical) = match ctx.content(class, &p.phases, &text) {
+                Some((id, form)) => {
+                    let key = id[..8].to_string();
+                    content_id = Some(id);
+                    (key, form)
+                }
+                None => (short_key(&text), text.clone()),
+            };
             let name = names
                 .and_then(|m| m.get(&text).cloned())
                 .inspect(|_| known_name = true)
@@ -1841,7 +1914,7 @@ fn make_object(
                         _ => format!("{} ship {n}c #{k6}", class.tag().unwrap_or_default()),
                     }
                 });
-            (text, exact, key, name)
+            (canonical, exact, key, name)
         }
     };
     Object {
@@ -1855,6 +1928,7 @@ fn make_object(
         centroid,
         canonical,
         key,
+        content_id,
         canonical_exact: exact,
         known_name,
         phases: if matches!(p.class, ObjClass::Other { .. }) {

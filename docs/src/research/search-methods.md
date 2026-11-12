@@ -51,7 +51,10 @@ patch's open boundary.
 Each pattern also gets a rule-free identity: a hash of the tiling, the neighbourhood, the class,
 period and displacement, and its whole evolution over one period in a canonical orientation (the
 smallest over every phase and every symmetry of the tiling). The same object found in another phase,
-orientation or rule is therefore recognised as one pattern. For Life-like and Generations rules the
+orientation or rule is therefore recognised as one pattern. The object finder (`jetcarp objects`, a
+script's `objects()`, the app) uses the same symmetries and, on periodic tilings, labels each object
+by the first digits of this id, so a ship and its mirror image are one line of its census, under the
+id `jetcarp library show` takes. For Life-like and Generations rules the
 catalogue also stores the pattern's *rule range*: every transition the pattern asks of the rule over
 one period fixes some birth and survival counts and forbids others, and every rule between the
 smallest and the largest consistent rule runs the pattern through exactly the same phases. That is how

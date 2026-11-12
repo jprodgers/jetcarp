@@ -155,6 +155,52 @@ fn check_lattice(rec: &PatternRecord) -> usize {
     n
 }
 
+/// The object finder uses the tiling's symmetries and, on lattices, labels each object by the
+/// library's content id: the `k2-017` ship pasted in each of the tiling's 4 orientations is one
+/// line of the census, under the id `record_from_object` gives (it used translations only and a
+/// hash of its own, so a ship and its mirror image were `#653a4c` and `#0abb9c`).
+#[test]
+fn the_object_finder_labels_objects_by_their_content_id() {
+    let rec = census_ship("16bc37c9");
+    let path = format!(
+        "{}/../../docs/scenes/life-census/16bc37c9.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut tiling: TilingSpec = serde_json::from_value(v["tiling"].clone()).unwrap();
+    tiling.size = Some(SizeSpec::Rect { w: 96, h: 48 });
+    tiling.boundary = Boundary::Wrap;
+    let mut w = World::new(tiling, 1).unwrap();
+    let g = w.topo.lattice().unwrap().clone();
+    let syms = tiling_symmetries(&rec.tiling, rec.neighborhood, true).unwrap();
+    assert_eq!(syms.len(), 4);
+    let mut cells = Vec::new();
+    for (mi, m) in syms.iter().enumerate() {
+        for c in rec.phase(0).unwrap() {
+            let c = m.apply(&c);
+            let x = g.resolve(c.i + 10 + 20 * mi as i32, c.j + 20, c.k).unwrap();
+            cells.push([x as u32, c.s as u32]);
+        }
+    }
+    w.apply(Command::AddCa {
+        ca: CaSpec::new(&rec.rule).seed(SeedSpec::Cells { cells }),
+    })
+    .unwrap();
+    let r = find_objects(&w, &ObjectOptions::default()).unwrap();
+    assert_eq!(r.symmetries, 4);
+    assert_eq!(r.objects.len(), 4);
+    for o in &r.objects {
+        assert_eq!(o.content_id.as_deref(), Some(rec.id.as_str()));
+        assert_eq!(o.key, rec.id[..8]);
+        assert_eq!(o.canonical, rec.canonical);
+        assert_eq!(o.name, format!("c/4 ship 6c #{}", &rec.id[..6]));
+    }
+    assert_eq!(r.counts.len(), 1);
+    assert_eq!(r.counts[0].count, 4);
+    assert_eq!(r.summary_line(), "c/4 ship 6c #16bc37 x 4");
+}
+
 #[test]
 fn the_glider_has_one_id_in_every_phase_and_orientation() {
     let g = glider();
