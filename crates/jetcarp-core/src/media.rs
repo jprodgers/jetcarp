@@ -838,7 +838,12 @@ fn alone_run_lattice(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation,
 
 /// Movers on aperiodic patches: from the pattern's site on its patch.
 fn alone_run_patch(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation, String> {
-    let st = &o.style;
+    // The pattern lives on the unbounded tiling, of which the patch is a piece: where the window
+    // reaches past the patch's edge it shows empty plane (the background), not the stage colour
+    // that marks the end of a world, which drew dark wedges along the patch's jagged edge.
+    let mut style = o.style.clone();
+    style.stage = style.background;
+    let st = &style;
     let sc = crate::pattern::promote::showcase_scene(rec, None, None)?;
     let p = rec.period.max(1);
     let n = (p * o.periods.max(8)).clamp(16, 240);

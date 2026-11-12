@@ -211,6 +211,8 @@ fn render_key(source: &Source, mode: MediaMode, o: &MediaOptions) -> String {
             "id": r.id, "rule": r.rule, "nb": r.neighborhood, "steps": r.steps_per_gen,
             "tiling": r.tiling, "class": r.class, "period": r.period, "d": r.displacement,
             "phases": r.phases, "gun": r.gun, "site": r.site.as_ref().map(|s| &s.patch),
+            // Patterns on a patch: rendered again since past the patch's edge is background.
+            "patch_edge": r.site.as_ref().map(|_| "background"),
         }),
         Source::Ant(a) => json!({
             "id": a.id, "rule": a.rule, "tiling": a.tiling, "start": a.start, "period": a.period,
