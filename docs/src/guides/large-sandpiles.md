@@ -71,7 +71,7 @@ palettes` lists them, or give hex colours), and `--reverse` runs it the other wa
 To recolour a pile after it is built, resume it with the picture options you want:
 
 ```sh
-jetcarp pile --resume ~/Pictures/JETCARP/piles/2026-11-12_02-20-55_square-1000000 --palette Tide --reverse
+jetcarp pile --resume /home/ada/Pictures/JETCARP/piles/2026-11-11_21-20-08_square-1000000 --palette Tide --reverse
 ```
 
 A finished pile given `--palette`, `--reverse`, `--px`, `--margin`, `--preview` or `--no-png` is
