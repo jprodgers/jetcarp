@@ -20,6 +20,7 @@
 //! | [`publish`] | a library (and its search folders and media) into a store |
 //! | [`read`] | a store or an export, checked: format, signatures, every hash |
 //! | [`import`] | a checked version into a library |
+//! | [`import_job`] | an import as a catalog job (`pack_import`), registered by [`install`] |
 //! | [`export`] | one version laid out for people |
 //! | [`rows`] | library records as pack rows, and back |
 //! | [`paths`] | keeping local paths out |
@@ -32,6 +33,7 @@ pub mod docs;
 pub mod export;
 pub mod hash;
 pub mod import;
+pub mod import_job;
 pub mod json;
 pub mod parquet_io;
 pub mod paths;
@@ -45,6 +47,13 @@ pub mod thrift;
 
 /// The format's name in a manifest.
 pub const FORMAT: &str = "jetcarp-pack";
+
+/// Register this crate's job kind (`pack_import`, [`import_job`]) with the job runner, so its
+/// jobs are made, run and resumed like every other kind. Called whenever an operations context
+/// is made (`jetcarp_api::Ctx::new`); calling it again does nothing.
+pub fn install() {
+    jetcarp_search::jobs::register(&import_job::KIND);
+}
 
 /// The table schemes a manifest's `engine.schemes` names.
 pub const TABLES_SCHEME: &str = "jetcarp-tables-1";
