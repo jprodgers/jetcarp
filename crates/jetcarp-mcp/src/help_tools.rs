@@ -19,7 +19,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: true,
             destructive: false,
             description: || {
-                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"}; the same pages are the resources jetcarp://docs/{page}.".into()
+                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), \"setup\" (this installation as its user set it up: the first-run profile, the folders and free space, the packs that came with JETCARP, the GPU, the library's counts; read only, since setup is the user's choice, made in the app or with `jetcarp setup`), or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"}; the same pages are the resources jetcarp://docs/{page}.".into()
             },
             schema: || {
                 object(
@@ -29,7 +29,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                             words(
                                 &[
                                     "overview", "world", "library", "searches", "scripts", "packs",
-                                    "pages",
+                                    "setup", "pages",
                                 ],
                                 "Which guide (default overview).",
                             ),
@@ -106,14 +106,25 @@ fn help(c: &mut Call) -> Res {
             "searches" | "jobs" => HELP_SEARCHES.to_string(),
             "scripts" | "script" => jetcarp_script::help_text().to_string(),
             "packs" => HELP_PACKS.to_string(),
+            "setup" => setup_text(),
             "pages" => pages_text(),
             t => {
                 return Err(format!(
-                    "`topic` is overview, world, library, searches, scripts, packs, or pages, not {t}"
+                    "`topic` is overview, world, library, searches, scripts, packs, setup, or pages, not {t}"
                 ));
             }
         },
     ))
+}
+
+/// `help {"topic": "setup"}`: `setup.status` as text, so an assistant knows what this
+/// installation has. It never applies a setup: that is the user's choice.
+fn setup_text() -> String {
+    let st = jetcarp_api::ops::setup::status(ctx());
+    format!(
+        "This JETCARP installation as its user set it up (setup.status). Setup itself is the user's to run, in the app (Help, Setup...) or with `jetcarp setup`; these tools only read it.\n\n{}",
+        st.text()
+    )
 }
 
 /// The book's pages, by section, with their titles.
@@ -337,7 +348,7 @@ Tips
 - world_step with stop_when_settled reports when a pattern dies out, freezes, or repeats (period found by exact comparison). world_status reports `done` when nothing can change any more.
 - Errors explain what to change; fix the arguments and call again.
 - Files: tools read and write only in JETCARP's output folder, the library's folder, and folders the user allowed; relative paths start in the output folder. files_list shows what runs wrote.
-- More: help {"topic": "world"}, {"topic": "library"}, {"topic": "searches"}, {"topic": "scripts"}, {"topic": "packs"}; the book: help {"topic": "pages"}.
+- More: help {"topic": "world"}, {"topic": "library"}, {"topic": "searches"}, {"topic": "scripts"}, {"topic": "packs"}, {"topic": "setup"} (this installation: its folders, packs and GPU); the book: help {"topic": "pages"}.
 "#;
 
 /// `help {"topic": "world"}`.

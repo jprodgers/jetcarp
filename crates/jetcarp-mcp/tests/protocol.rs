@@ -807,10 +807,12 @@ fn help_and_reference() {
     for tool in TOOLS {
         assert!(t.contains(tool), "the overview names {tool}");
     }
-    for topic in ["world", "library", "searches", "scripts", "packs"] {
+    for topic in ["world", "library", "searches", "scripts", "packs", "setup"] {
         let t = ok(&call(&mut s, &mut h, "help", json!({"topic": topic})));
         assert!(t.len() > 500, "{topic}");
     }
+    let t = ok(&call(&mut s, &mut h, "help", json!({"topic": "setup"})));
+    assert!(t.contains("setup.status") && t.contains("profiles:"), "{t}");
     let t = ok(&call(
         &mut s,
         &mut h,
