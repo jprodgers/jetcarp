@@ -4,7 +4,7 @@
 //! or mirroring monitors), screensaver mode and its playlist, keep-awake, the cell size, and the
 //! chrome (menu bar, panes).
 
-use crate::tools::{Res, ToolOutput, tool};
+use crate::tools::{Res, ToolOutput};
 use jetcarp_api::world::Host;
 use serde_json::{Value, json};
 
@@ -17,12 +17,28 @@ pub fn handles(name: &str) -> bool {
 /// The error a host without a display gives.
 pub use jetcarp_api::world::APP_ONLY;
 
+/// A tool's listing (the shared tools' shape).
+fn tool(name: &str, title: &str, description: &str, schema: Value) -> Value {
+    json!({
+        "name": name,
+        "title": title,
+        "description": description,
+        "inputSchema": schema,
+        "annotations": {
+            "title": title,
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+        },
+    })
+}
+
 pub fn definitions() -> Vec<Value> {
     vec![tool(
         "app_display",
         "The app's displays and screensaver",
-        false,
-        "Reads and changes how the JETCARP app shows the grid. With no arguments it only returns the state: where the grid shows (mode window, fullscreen, or outputs: chrome-less full-screen windows on chosen monitors that span one canvas or mirror one view), the monitors (deduplicated; index is what `monitors` and `fullscreen_monitor` take), the canvas size in pixels, the cell size, running state and speed, the menu and panes, keep-awake (and which backend holds it), and screensaver mode with its playlist, the screensaver profiles (`profiles`: name, built-in or yours, what it shows, cell size, reseeding) and the one showing (`screensaver.profile`). Arguments change those; several can be given at once and are applied in a sensible order (outputs and cell size before the screensaver starts). Examples: {\"screensaver\": true}, {\"screensaver\": true, \"profile\": \"Hodgepodge\"}, {\"saver\": {\"source\": \"playlist\", \"playlist\": [\"profile:Life\", \"profile:Star Wars\"], \"minutes\": 3}},{\"mode\": \"outputs\", \"monitors\": [0, 1], \"arrangement\": \"span\"}, {\"cell_px\": 1, \"refill\": true}, {\"playlist\": \"next\"}, {\"saver\": {\"source\": \"playlist\", \"playlist\": [\"rule:B3/S23\", \"scene:/home/me/a.json\"], \"minutes\": 2, \"shuffle\": true}}.",
+        "Reads and changes how the JETCARP app shows the grid. With no arguments it only returns the state: where the grid shows (mode window, fullscreen, or outputs: chrome-less full-screen windows on chosen monitors that span one canvas or mirror one view), the monitors (deduplicated; index is what `monitors` and `fullscreen_monitor` take), the canvas size in pixels, the cell size, running state and speed, the menu and panes, keep-awake (and which backend holds it), and screensaver mode with its playlist, the screensaver profiles (`profiles`: name, built-in or yours, what it shows, cell size, reseeding) and the one showing (`screensaver.profile`). Arguments change those; several can be given at once and are applied in a sensible order (outputs and cell size before the screensaver starts). Examples: {\"screensaver\": true}, {\"screensaver\": true, \"profile\": \"Hodgepodge\"}, {\"saver\": {\"source\": \"playlist\", \"playlist\": [\"profile:Life\", \"profile:Star Wars\"], \"minutes\": 3}}, {\"mode\": \"outputs\", \"monitors\": [0, 1], \"arrangement\": \"span\"}, {\"cell_px\": 1, \"refill\": true}, {\"playlist\": \"next\"}, {\"saver\": {\"source\": \"playlist\", \"playlist\": [\"rule:B3/S23\", \"scene:scenes/a.json\"], \"minutes\": 2, \"shuffle\": true}}.",
         json!({"type": "object", "properties": {
             "screensaver": {"type": "boolean", "description": "Start (true) or end (false) screensaver mode: every control hidden, the grid on the outputs (or the main window full screen), running."},
             "playing": {"type": "boolean", "description": "Run (true) or pause (false) generations."},

@@ -153,8 +153,8 @@ enum Cmd {
     /// `jetcarp search pile`).
     Pile(Box<search_cmd::PileArgs>),
     /// Packs: publish the library as a signed, content-addressed store (Parquet and JSON that
-    /// any tool reads), export a version for a single download, check or import one: `key`,
-    /// `rater`, `publish`, `export`, `check`, `import`.
+    /// any tool reads), export a version for a single download, summarise, check or import one:
+    /// `key`, `rater`, `publish`, `export`, `info`, `check`, `import`.
     Pack(pack_cmd::PackArgs),
     /// Media for the catalog: per-step frames, a GIF or animated WebP, a poster, and a
     /// thumbnail for a pattern (alone), a Quick Start entry (from the seed), an ant run, or a
@@ -202,11 +202,16 @@ enum Cmd {
     /// The background host, which keeps scenes running with no app window: `start`, `stop`,
     /// `status`, `next`, `previous`, `pause`, `resume`, `rotation`, `caption`, `fps`, `login`.
     Host(host_cmd::HostArgs),
-    /// MCP server on stdin/stdout so AI tools (LM Studio, Claude Code) can drive JETCARP.
+    /// MCP server on stdin/stdout so AI assistants (Claude Code, Claude Desktop, LM Studio) can
+    /// drive JETCARP. Its tools read and write files only in JETCARP's output and library folders
+    /// (and folders given with --allow).
     Mcp {
         /// Act on the world in the running JETCARP app (switch on AI control there first).
         #[arg(long)]
         app: bool,
+        /// Let the tools read and write in this folder too (repeatable).
+        #[arg(long, value_name = "DIR")]
+        allow: Vec<PathBuf>,
         /// App port (default: the one the app recorded when AI control was switched on).
         #[arg(long)]
         port: Option<u16>,
@@ -561,9 +566,15 @@ fn run() -> Result<()> {
         },
         Cmd::App(a) => app_cmd::run(a)?,
         Cmd::Host(a) => host_cmd::run(a)?,
-        Cmd::Mcp { app, port, token } => {
+        Cmd::Mcp {
+            app,
+            allow,
+            port,
+            token,
+        } => {
             // The tools get this machine: the GPU, and jobs in processes of their own.
             jetcarp_mcp::tools::set_platform(std::sync::Arc::new(platform::Machine));
+            jetcarp_mcp::tools::allow_dirs(allow);
             jetcarp_mcp::stdio::run(app, port, token).map_err(anyhow::Error::msg)?
         }
         Cmd::Rules => show(

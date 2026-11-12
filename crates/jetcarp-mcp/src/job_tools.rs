@@ -1,556 +1,409 @@
-//! Background jobs over MCP: `hunt_start`, `ants_start`, `pile_start`, `evolve_start`, and
-//! `mover_start` start (or carry on) a hunt, an ant search, a large sandpile, an evolutionary
-//! glider search, or a mover verification in the background, and `job_status` / `job_stop` watch
-//! and stop any catalog job (those, and soup searches, collisions, and censuses), wherever it was
-//! started. One status and one stop tool for every kind keeps the list short for small models;
-//! `kind` filters the listing.
-//!
-//! Each tool reads its arguments as it always has and calls the operations `search.start`
-//! (`background`: the job runs on a thread of this process, in the context's registry, with its
-//! lease and checkpoints), `jobs.status`, `jobs.list`, and `jobs.stop`.
+//! Searches as library jobs: `search_start` starts (or carries on) a search of any strategy in
+//! the background, `job_status` follows one or lists them, and `job_stop` stops one at its next
+//! checkpoint, wherever it was started (here, the command line, a script, the app). They are the
+//! operations `search.start`, `jobs.status`, `jobs.list`, `jobs.report` and `jobs.stop`.
 
-use crate::tools::{Res, ToolOutput, check_unknown, ctx, err, int, string, tool, uint};
-use jetcarp_api::args;
-use jetcarp_api::op::{self, Op, Progress, Quiet};
+use crate::schema::{self, object};
+use crate::tools::{Call, Res, Tool, ToolOutput, ctx, err};
+use jetcarp_api::op::{self, Op, Quiet, Report, input_schema};
 use jetcarp_api::ops::jobs::{
-    JobIn, JobView, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut,
+    JobIn, JobView, JobsReport, JobsStatus, JobsStop, ReportIn, StatusIn, StatusOut,
 };
 use jetcarp_api::ops::search::{
-    AntsIn, EvolveIn, HuntIn, MoverIn, PileIn, SearchStart, SearchStartIn, SearchStarted,
+    AntsIn, BoundedIn, BudgetIn, CensusIn, CollideIn, EvolveIn, ExploreIn, HuntIn, MoverIn, PileIn,
+    SearchStart, SearchStartIn,
 };
-use jetcarp_search::ants::AntProgress;
-use jetcarp_search::hunt::HuntProgress;
-use jetcarp_search::pile::PileProgress;
-use jetcarp_search::window::MoverProgress;
-use serde_json::{Value, json};
-use std::sync::atomic::Ordering;
+use serde_json::{Map, Value, json};
 
-pub const NAMES: &[&str] = &[
-    "hunt_start",
-    "ants_start",
-    "pile_start",
-    "evolve_start",
-    "mover_start",
-    "job_status",
-    "job_stop",
+/// Longest wait one call makes for a job, in seconds.
+pub const MAX_WAIT_S: f64 = 600.0;
+
+/// The strategies, in the order the schema lists them, with their one-line descriptions.
+const STRATEGIES: &[(&str, &str)] = &[
+    (
+        "hunt",
+        "A soup hunt: small random soups on an unbounded plane (B/S and Generations rules without B0, any periodic tiling), each run until it settles; ships that fly away are cut out; every object is classed and new patterns are verified and stored. Thousands of soups a second for Life.",
+    ),
+    (
+        "search",
+        "Soups on a bounded grid of any tiling (aperiodic patches too), each run for `gens`; the objects left are verified and stored.",
+    ),
+    (
+        "ants",
+        "Ant and turmite rules (turn strings such as RL or LLRR, or turmite tables) on a periodic tiling, from an empty field or soups; each run classed highway (proved exactly), periodic, symmetric, bounded or chaotic, and stored.",
+    ),
+    (
+        "census",
+        "Rules classed by what their soups do (die, freeze, oscillate, grow, ...), with a table and a contact sheet.",
+    ),
+    (
+        "mover",
+        "A pattern on an aperiodic tiling (Spectre, hat, Penrose) followed far on a sliding window of generated supertiles; a verified mover is stored with its distance.",
+    ),
+    (
+        "pile",
+        "One large sandpile: N grains dropped on one cell of an unbounded grid, built by doubling, with pictures in its folder under the output folder.",
+    ),
+    (
+        "collide",
+        "Pattern `b` shot into pattern `a` at every offset and phase; each run classed, new products verified and stored.",
+    ),
+    (
+        "evolve",
+        "The evolutionary glider search: multi-state priority rules evolve towards rules whose seeds travel far; verified movers are stored.",
+    ),
+    (
+        "explore",
+        "The broad search over tilings, rule families, rules and seeds, keeping the best runs of each kind of behaviour and breeding from them; every run is stored in the job's own database (search_runs reads them). Not deterministic: a resumed search continues from its archive.",
+    ),
 ];
 
-pub fn handles(name: &str) -> bool {
-    NAMES.contains(&name)
+fn strategy_schema(name: &str) -> Value {
+    match name {
+        "hunt" => input_schema::<HuntIn>(),
+        "search" => input_schema::<BoundedIn>(),
+        "ants" => input_schema::<AntsIn>(),
+        "census" => input_schema::<CensusIn>(),
+        "mover" => input_schema::<MoverIn>(),
+        "pile" => input_schema::<PileIn>(),
+        "collide" => input_schema::<CollideIn>(),
+        "evolve" => input_schema::<EvolveIn>(),
+        _ => input_schema::<ExploreIn>(),
+    }
 }
 
-pub fn definitions() -> Vec<Value> {
+pub(crate) fn tools() -> Vec<Tool> {
     vec![
-        tool(
-            "hunt_start",
-            "Start a soup hunt",
-            false,
-            "Starts a fast soup hunt in the background and returns at once with its job id (poll job_status, stop with job_stop). Small random soups (default 16x16 unit cells at density 0.5) run on an unbounded plane, bit-parallel, until they settle; ships that fly away are cut out and counted; every object is classified, and new patterns are verified and stored in the catalog (library_list shows them; class gun for stationary guns). Thousands of soups per second for Life on squares. Results do not depend on threads. The hunt is a resumable catalog job: {\"resume\": 3} continues job 3. Rules: B/S and Generations rules without B0 (a V suffix means edge neighbours); tilings: any periodic tiling (family id, catalog id, or a set such as \"archimedean\"). Examples: {\"rules\": [\"B3/S23\"], \"soups\": 100000}, {\"rules\": [\"B2/S34\", \"B24/S35\"], \"tilings\": \"hex\", \"soups\": 0} (0 = until stopped).",
-            json!({"type": "object", "properties": {
-                    "rules": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Rules (default [\"B3/S23\"])."},
-                    "tilings": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Tilings (default \"square\")."},
-                    "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Neighbourhood for every rule (default: the notation decides)."},
-                    "soups": {"type": "integer", "minimum": 0, "description": "Soups per rule and tiling (default 10000; 0 = until stopped)."},
-                    "size": {"type": "string", "description": "Soup size WxH in unit cells (default \"16x16\")."},
-                    "density": {"type": "number", "minimum": 0, "maximum": 1, "description": "Default 0.5."},
-                    "shape": {"type": "string", "enum": ["rect", "disc"], "description": "Soup shape (default rect)."},
-                    "seed": {"type": ["integer", "string"], "minimum": 0, "description": "Default 1; soup i uses an RNG state from (seed, i). Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
-                    "gens": {"type": "integer", "minimum": 1, "description": "Generations before an unsettled soup is censused as it is (default 20000)."},
-                    "max_period": {"type": "integer", "minimum": 1, "maximum": 1024, "description": "Longest period looked for (default 64)."},
-                    "threads": {"type": "integer", "minimum": 0, "description": "Worker threads (default 0 = all cores)."},
-                    "resume": {"type": "integer", "minimum": 1, "description": "Continue this hunt job instead of starting a new one."},
-                }, "additionalProperties": false}),
-        ),
-        tool(
-            "ants_start",
-            "Start an ant search",
-            false,
-            "Starts an ant and turmite search in the background and returns its job id at once (poll job_status, stop with job_stop). Turn strings (Langton's ant is RL; L/R turn one edge, N none, U back, L2/R2 two edges on hexagons) and turmite tables (several states) run on an unbounded periodic tiling from an empty field or seeded soups; each run is classed as highway (proved exactly: period, displacement, onset), periodic, symmetric growth, bounded, or chaotic, and stored (library_list {\"kind\": \"ant\"}). Mirror images and repeats are skipped. Results do not depend on threads; {\"resume\": 7} continues job 7. Examples: {\"tilings\": \"square\", \"strings\": [2, 6]}, {\"tilings\": \"hex\", \"strings\": 4}, {\"rules\": [\"RL\", \"LLRR\"], \"soups\": 50}, {\"tilings\": \"square\", \"tables\": [2, 2], \"steps\": 200000}.",
-            json!({"type": "object", "properties": {
-                "tilings": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Periodic tilings (default \"square\"): \"hex\", \"triangle\", \"4.8.8\", \"archimedean\", ..."},
-                "strings": {"type": ["array", "integer"], "items": {"type": "integer"}, "description": "Turn string lengths: [min, max] or one length."},
-                "tables": {"type": "array", "items": {"type": "integer"}, "description": "Turmite tables [states, colours], e.g. [2, 2]."},
-                "alphabet": {"type": "string", "description": "Turn letters to use, e.g. \"LR\" (default: the tiling's)."},
-                "rules": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Explicit rules: \"RL\", \"LLRR\", \"RL2N\", \"1R1,1L0/1R1,0N0\"."},
-                "soups": {"type": "integer", "minimum": 1, "description": "Seeded soups per rule (default: an empty field)."},
-                "size": {"type": "integer", "minimum": 1, "maximum": 64, "description": "Soup side in unit cells (default 8)."},
-                "density": {"type": "number", "minimum": 0, "maximum": 1, "description": "Soup density (default 0.5)."},
-                "seed": {"type": ["integer", "string"], "minimum": 0, "description": "Default 1. Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
-                "steps": {"type": "integer", "minimum": 1, "description": "Steps before a run is classed as it is (default 1000000)."},
-                "max_period": {"type": "integer", "minimum": 1, "maximum": 1000000, "description": "Longest highway period looked for (default 20000)."},
-                "threads": {"type": "integer", "minimum": 0, "description": "Worker threads (default 0 = all cores)."},
-                "resume": {"type": "integer", "minimum": 1, "description": "Continue this ant search instead of starting one."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "pile_start",
-            "Start a large sandpile",
-            false,
-            "Starts a large sandpile in the background and returns its job id at once (poll job_status, stop with job_stop): N grains dropped on one cell of an unbounded grid, built by doubling (N's binary digits), every finished step saved, and a step stopped part way kept as a checkpoint, so a stopped pile resumes where it stopped ({\"resume\": job}), then a cropped pile.png, a preview.png, growth.csv, and pile.json in its folder under <Pictures>/JETCARP/piles (files_list shows them). A million grains takes seconds; 10^8 hours. Example: {\"tiling\": \"hex\", \"grains\": \"1e6\"}.",
-            json!({"type": "object", "properties": {
-                "tiling": {"type": "string", "description": "Tiling id (default \"square\"); aperiodic patches up to level 8."},
-                "grains": {"type": ["integer", "string"], "description": "Grains: 1000000, \"1e7\", \"2^30\"."},
-                "nb": {"type": "string", "enum": ["edge", "touch"], "description": "Neighbourhood (default edge)."},
-                "centre": {"type": "string", "enum": ["cell", "vertex", "edge"], "description": "Where the grains go (default cell)."},
-                "level": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Aperiodic patch level (default: big enough)."},
-                "px": {"type": "number", "minimum": 0.05, "maximum": 64, "description": "Pixels per cell in pile.png (default 2)."},
-                "palette": {"type": "string", "description": "Palette for the heights, with its background and stage: Ember (default) or any built-in (Tide, Prism, Ink, Mono, Aurora, Synthwave, Moss, Candy, Lava, Glacier, Phosphor, Koi, Desert, Thermal, Deep Sea, Paper, Blueprint, Neon, Autumn)."},
-                "reverse": {"type": "boolean", "description": "Run the palette the other way (height 1 at its last stop)."},
-                "gpu": {"type": "boolean", "description": "Topple on the GPU when there is one (periodic tilings)."},
-                "resume": {"type": "integer", "minimum": 1, "description": "Continue this pile job."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "evolve_start",
-            "Start an evolutionary glider search",
-            false,
-            "Starts Edmond's evolutionary glider search in the background and returns its job id at once (poll job_status, stop with job_stop): a population of multi-state priority rules evolves on a tiling (default the aperiodic Spectre) towards rules whose seeds travel far; the best are verified (exactly on lattices, to growing distances on aperiodic patches) and the movers stored in the catalog (library_list {\"class\": \"mover\"}). Deterministic for a seed; checkpointed every generation, so a stopped search resumes from its last generation ({\"resume\": job}) and ends as an uninterrupted one. Its files (fitness.csv, champions.json, gliders.json, run.json, movers.json) go to its folder under <Pictures>/JETCARP. The published settings (population 256, 800 generations, radius 48) take a long time; small ones (pop 32, gens 40, radius 16) take a minute. Example: {\"tiling\": \"spectre\", \"pop\": 32, \"gens\": 40, \"radius\": 16}.",
-            json!({"type": "object", "properties": {
-                "tiling": {"type": "string", "description": "Tiling id (default \"spectre\")."},
-                "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Default touch."},
-                "states": {"type": "integer", "minimum": 2, "maximum": 8, "description": "Default 4."},
-                "pop": {"type": "integer", "minimum": 4, "maximum": 4096, "description": "Population (default 256)."},
-                "gens": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "Generations (default 800)."},
-                "radius": {"type": "integer", "minimum": 4, "maximum": 256, "description": "Arena radius (default 48)."},
-                "horizon": {"type": "integer", "minimum": 10, "description": "Steps per evaluation (default 2500)."},
-                "seed": {"type": ["integer", "string"], "minimum": 0, "description": "Default 1. Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
-                "stop_on_glider": {"type": "boolean", "description": "Stop at the first verified glider."},
-                "threads": {"type": "integer", "minimum": 0, "description": "Worker threads (default all)."},
-                "resume": {"type": "integer", "minimum": 1, "description": "Continue this evolve job from its last generation."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "mover_start",
-            "Verify a mover far on a sliding window",
-            false,
-            "Starts a long mover verification in the background and returns its job id at once (poll job_status, stop with job_stop, resume with {\"resume\": job}): a pattern on an aperiodic tiling (Spectre, hat, Penrose) runs on a sliding window that generates supertiles around it with exact coordinates, dropping tiles behind, so it can be followed far past the fixed level-8 patches (tens of thousands of edge rings a minute for the Spectre glider). The run is exact on one infinite tiling; it ends at `rings` (verified) or `gens`, or when the pattern dies, grows, or repeats. A verified mover goes to the catalog (library_list {\"class\": \"mover\"}) with its distance and a sliding-window flag. Defaults: Edmond's Spectre glider pair (rule SpectreGlider, states 1 and 3 near the deepest tile of level 4). Examples: {\"rings\": 100000}, {\"tiling\": \"hat\", \"rule\": \"Priority 4: 3|n2>=1->2; 0|n3>=2->0; 0|n2>=1->3; 0|n1>=1->2\", \"cells\": [[0, 1], [3, 2]], \"rings\": 20000}.",
-            json!({"type": "object", "properties": {
-                "tiling": {"type": "string", "enum": ["spectre", "hat", "penrose-kd", "penrose-rhomb"], "description": "Default spectre."},
-                "rule": {"type": "string", "description": "Rule notation (default SpectreGlider)."},
-                "level": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Patch level the cells are given on (default 4)."},
-                "cells": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}, "description": "Starting cells [[tile, state], ...] on that level."},
-                "states": {"type": "array", "items": {"type": "integer"}, "description": "Instead of cells: states on a tile and an edge neighbour (default [1, 3]), tried near the deepest tile (or at `at`)."},
-                "at": {"type": "integer", "minimum": 0, "description": "The tile for `states`."},
-                "nb": {"type": "string", "enum": ["touch", "edge"], "description": "Default touch."},
-                "rings": {"type": "integer", "minimum": 1, "description": "Stop, verified, at this many edge rings (default 10000)."},
-                "gens": {"type": "integer", "minimum": 1, "description": "Generation limit (default 100 per ring plus 20000)."},
-                "max_pop": {"type": "integer", "minimum": 1, "description": "Stop as grown above this many cells (default 2000)."},
-                "margin": {"type": "number", "minimum": 8, "description": "World units of tiles kept around the live cells (default 24)."},
-                "store": {"type": "boolean", "description": "Store a verified mover in the catalog (default true)."},
-                "resume": {"type": "integer", "minimum": 1, "description": "Continue this mover job."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "job_status",
-            "Job status",
-            true,
-            "Reports a catalog job's progress: hunts (soups, objects by class, newest finds), ant searches (runs, outcomes, newest highways), piles (doubling step, grains, topplings, the pictures when done), mover verifications (generations, rings, speed, the summary and stored record when done), and finished soup searches, collisions, and census jobs. With `wait_s`, waits up to that many seconds (at most 600) for a running job to finish before answering, so one call replaces many polls. Without `job`, lists every job (newest first), optionally of one `kind`. Example: {\"job\": 3, \"wait_s\": 300}, {\"kind\": \"ants\"}.",
-            json!({"type": "object", "properties": {
-                "job": {"type": "integer", "minimum": 1, "description": "The job id (default: list jobs)."},
-                "wait_s": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Wait up to this many seconds for the job to stop running (default 0: answer now)."},
-                "kind": {"type": "string", "enum": ["hunt", "ants", "pile", "evolve", "mover", "search", "collide", "census", "explore"], "description": "List only this kind."},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Most jobs listed (default 30)."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "job_stop",
-            "Stop a job",
-            false,
-            "Stops a running job at its next checkpoint (a few seconds; a pile saves the step in flight as it stands, and carries it on when resumed): a hunt, ant search, pile, evolve search, mover verification, soup search, collision, census, or explore search. It stays resumable: hunt_start, ants_start, pile_start, evolve_start, mover_start, or explore_start with {\"resume\": job}. Works for jobs started here, by the CLI, by a script, or by the app. Example: {\"job\": 3}.",
-            json!({"type": "object", "properties": {
-                "job": {"type": "integer", "minimum": 1, "description": "The job id."},
-            }, "required": ["job"], "additionalProperties": false}),
-        ),
+        Tool {
+            name: "search_start",
+            title: "Start or resume a search",
+            read_only: false,
+            destructive: false,
+            description: || {
+                format!(
+                    "Starts a search as a library job and returns its job id at once; job_status follows it, job_stop stops it. Give one strategy as a key holding its settings (every setting is optional): `hunt` (soups on an unbounded plane), `search` (soups on a bounded grid of any tiling), `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, or `explore` (help {{\"topic\": \"searches\"}} explains each). Or {{\"resume\": job}} carries on a stopped job. The job runs on a thread of this server, so it stops when the server exits (it stays resumable); {{\"detach\": true}} runs it in a process of its own that outlives the server (explore searches do this by default where they can). `wait_s` (at most {MAX_WAIT_S:.0}) waits for the job to end before answering, with its status. `budget` ends this run at a checkpoint after so many minutes or items. Results go to the library (library_query), an explore search's runs to search_runs. Examples: {{\"hunt\": {{\"rules\": [\"B3/S23\"], \"soups\": 20000}}, \"wait_s\": 120}}, {{\"ants\": {{\"tilings\": \"hex\", \"strings\": [2, 4]}}}}, {{\"pile\": {{\"tiling\": \"hex\", \"grains\": \"1e6\"}}}}, {{\"collide\": {{\"a\": \"block\", \"b\": \"glider\"}}, \"wait_s\": 60}}, {{\"explore\": {{\"tilings\": \"square,hex\", \"families\": \"life_like,cyclic\"}}, \"budget\": {{\"minutes\": 5}}}}."
+                )
+            },
+            schema: || {
+                let start = schema::props(&input_schema::<SearchStartIn>());
+                let mut p = Map::new();
+                for (name, what) in STRATEGIES {
+                    p.insert(
+                        name.to_string(),
+                        schema::op(strategy_schema(name), Some(what)),
+                    );
+                }
+                for k in ["resume", "label", "budget", "threads", "detach"] {
+                    p.insert(k.into(), start[k].clone());
+                }
+                let mut gpu = start["gpu"].clone();
+                gpu["description"] = json!(format!(
+                    "{} Default false; explore true.",
+                    gpu["description"].as_str().unwrap_or("")
+                ));
+                p.insert("gpu".into(), gpu);
+                p.insert(
+                    "wait_s".into(),
+                    json!({"type": "number", "minimum": 0, "maximum": MAX_WAIT_S, "description": "Wait up to this many seconds for the job to end, then answer with its status (default 0: answer at once)."}),
+                );
+                object(p, &[])
+            },
+            run: search_start,
+        },
+        Tool {
+            name: "job_status",
+            title: "Job status, finds and report",
+            read_only: true,
+            destructive: false,
+            description: || {
+                format!(
+                    "Reports a library job's progress, whatever started it: hunts (soups, objects by class), ant searches (runs, outcomes), piles (doubling step, grains, the pictures when done), movers, bounded searches, collisions, censuses, evolve and explore searches. With `wait_s` (at most {MAX_WAIT_S:.0}) it waits for a running job to end before answering, so one call replaces many polls. `finds` adds the job's newest and rarest finds (pattern ids for library_query); `report` gives a Markdown report of what it searched and found instead. Without `job`, lists the jobs, newest first, optionally of one kind or status. Examples: {{\"job\": 3, \"wait_s\": 300}}, {{\"job\": 3, \"finds\": 10}}, {{\"job\": 3, \"report\": true}}, {{\"kind\": \"ants\"}}."
+                )
+            },
+            schema: || {
+                let mut p = schema::props(&input_schema::<StatusIn>());
+                let mut w = p["wait_s"].clone();
+                w["maximum"] = json!(MAX_WAIT_S);
+                p.insert("wait_s".into(), w);
+                p.insert(
+                    "report".into(),
+                    json!({"type": "boolean", "description": "With `job`: a Markdown report of what it searched, for how long, and what it found."}),
+                );
+                object(p, &[])
+            },
+            run: job_status,
+        },
+        Tool {
+            name: "job_stop",
+            title: "Stop a job",
+            read_only: false,
+            destructive: false,
+            description: || {
+                "Stops a running job at its next checkpoint (a few seconds), in whatever process runs it: here, the command line, a script, or the app. It stays resumable: search_start {\"resume\": job} carries it on (a hunt, ant search, pile, evolve or mover job then ends exactly as an uninterrupted run would; an explore search continues from its archive). Example: {\"job\": 3}.".into()
+            },
+            schema: || object(schema::props(&input_schema::<JobIn>()), &["job"]),
+            run: job_stop,
+        },
     ]
 }
 
-pub fn call(name: &str, args: &Value) -> Res {
-    match name {
-        "hunt_start" => hunt_start(args),
-        "ants_start" => ants_start(args),
-        "pile_start" => pile_start(args),
-        "evolve_start" => evolve_start(args),
-        "mover_start" => mover_start(args),
-        "job_status" => status_wait(args, None),
-        "job_stop" => stop(args),
-        _ => Err(format!("unknown tool {name}")),
+/// The CLI's resume hint, as these tools say it.
+fn mcp_words(text: &str, job: i64) -> String {
+    text.replace(
+        &format!("`jetcarp jobs resume {job}`"),
+        &format!("search_start {{\"resume\": {job}}}"),
+    )
+}
+
+/// One job, as `job_status` and `search_start` with a wait report it: its summary (with its
+/// finds, by id), then the facts as one line of JSON.
+pub(crate) fn job_output(v: &JobView) -> ToolOutput {
+    let mut facts = json!({
+        "job": v.job, "kind": v.kind, "status": if v.stale { "stale" } else { v.status.as_str() },
+        "done": v.done, "total": v.total, "unit": v.unit,
+        "elapsed_s": (v.elapsed_s * 10.0).round() / 10.0, "eta_s": v.eta_s.map(|e| e.round()),
+        "resumable": v.resumable,
+    });
+    if let Some(l) = &v.label {
+        facts["label"] = json!(l);
+    }
+    if let Some(e) = &v.error {
+        facts["error"] = json!(e);
+    }
+    if let Some(f) = v.progress.get("folder").filter(|f| !f.is_null()) {
+        facts["folder"] = f.clone();
+    }
+    if let Some(w) = v.waited_s {
+        facts["waited_s"] = json!((w * 10.0).round() / 10.0);
+    }
+    let mut o = ToolOutput::text(mcp_words(&v.text(), v.job));
+    o.content
+        .push(json!({"type": "text", "text": facts.to_string()}));
+    o
+}
+
+/// Wait for a job (with the client's cancel flag), and report it.
+fn wait_for(c: &Call, job: i64, wait_s: f64, finds: Option<usize>) -> Res {
+    let a = StatusIn {
+        job: Some(job),
+        wait_s: (wait_s > 0.0).then_some(wait_s.min(MAX_WAIT_S)),
+        finds,
+        ..Default::default()
+    };
+    let StatusOut::One(v) = JobsStatus::run(ctx(), a, &c.callbacks()).map_err(err)? else {
+        return Err(format!("no job {job}"));
+    };
+    Ok(job_output(&v))
+}
+
+fn number(a: &Value, k: &str) -> Result<Option<f64>, String> {
+    match a.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+            .map(Some)
+            .ok_or_else(|| format!("`{k}` is a number, not {v}")),
     }
 }
 
-/// Text items: a list, or text split at any of `seps`.
-fn list(args: &Value, key: &str, seps: &[char]) -> Result<Vec<String>, String> {
-    Ok(match args.get(key) {
-        None | Some(Value::Null) => vec![],
-        Some(Value::String(s)) => s
-            .split(seps)
-            .map(str::trim)
-            .filter(|x| !x.is_empty())
-            .map(String::from)
-            .collect(),
-        Some(Value::Array(a)) => a
-            .iter()
-            .map(|x| {
-                x.as_str()
-                    .map(String::from)
-                    .ok_or(format!("`{key}` must be text"))
-            })
-            .collect::<Result<_, _>>()?,
-        Some(v) => return Err(format!("`{key}` must be a list of text, got {v}")),
-    })
-}
-
-fn pair(args: &Value, key: &str) -> Result<Option<(u64, u64)>, String> {
-    Ok(match args.get(key) {
-        None | Some(Value::Null) => None,
-        Some(Value::Number(n)) => {
-            let n = n
-                .as_u64()
-                .ok_or(format!("`{key}` must be a whole number"))?;
-            Some((n, n))
+fn search_start(c: &mut Call) -> Res {
+    let a = c.args;
+    let names: Vec<&str> = STRATEGIES.iter().map(|s| s.0).collect();
+    let which = schema::one_of("search_start", a, &names)?;
+    let resume = a.get("resume").filter(|v| !v.is_null());
+    if which.is_none() && resume.is_none() {
+        return Err(format!(
+            "search_start: give a strategy ({}) with its settings, or `resume` with a job id",
+            names.join(", ")
+        ));
+    }
+    let start_schema = input_schema::<SearchStartIn>();
+    let mut rest = schema::pick(
+        a,
+        &["resume", "label", "budget", "threads", "gpu", "detach"],
+    );
+    schema::coerce(&start_schema, &mut rest);
+    let (strategy, spec) = match which {
+        Some(name) => {
+            let s = strategy_schema(name);
+            let mut spec = a[name].clone();
+            if let Value::String(t) = &spec
+                && let Ok(v) = serde_json::from_str::<Value>(t)
+            {
+                spec = v;
+            }
+            if !spec.is_object() {
+                return Err(format!(
+                    "search_start: `{name}` holds an object of settings"
+                ));
+            }
+            schema::coerce(&s, &mut spec);
+            // Read here so a bad setting is refused with the strategy's own words.
+            let spec = match name {
+                "hunt" => check::<HuntIn>(name, spec)?,
+                "search" => check::<BoundedIn>(name, spec)?,
+                "ants" => check::<AntsIn>(name, spec)?,
+                "census" => check::<CensusIn>(name, spec)?,
+                "mover" => check::<MoverIn>(name, spec)?,
+                "pile" => check::<PileIn>(name, spec)?,
+                "collide" => check::<CollideIn>(name, spec)?,
+                "evolve" => check::<EvolveIn>(name, spec)?,
+                _ => check::<ExploreIn>(name, spec)?,
+            };
+            (Some(name.to_string()), spec)
         }
-        Some(Value::Array(a)) if a.len() == 2 => Some((
-            a[0].as_u64().ok_or(format!("`{key}` is [a, b]"))?,
-            a[1].as_u64().ok_or(format!("`{key}` is [a, b]"))?,
-        )),
-        Some(v) => return Err(format!("`{key}` is [a, b] or a number, got {v}")),
-    })
-}
-
-fn num(args: &Value, key: &str) -> Option<f64> {
-    args.get(key).and_then(|v| v.as_f64())
-}
-
-/// Start (or carry on) a job of this strategy in the background, through `search.start`.
-fn start_in_background(
-    strategy: &str,
-    spec: Value,
-    resume: Option<i64>,
-    threads: usize,
-) -> Result<SearchStarted, String> {
-    let a = SearchStartIn {
-        strategy: Some(strategy.into()),
+        None => (None, Value::Null),
+    };
+    let explore = which == Some("explore");
+    let gpu = rest.get("gpu").and_then(Value::as_bool).unwrap_or(explore);
+    let cx = ctx();
+    let detach = rest
+        .get("detach")
+        .and_then(Value::as_bool)
+        .unwrap_or(explore && cx.platform.can_detach());
+    if detach && !cx.platform.can_detach() {
+        return Err(
+            "search_start: this server cannot start a process of its own (it runs inside the app or a test); leave out `detach`"
+                .into(),
+        );
+    }
+    let budget: Option<BudgetIn> = match rest.get("budget") {
+        None => None,
+        Some(b) => Some(
+            serde_json::from_value(b.clone()).map_err(|e| format!("search_start budget: {e}"))?,
+        ),
+    };
+    let input = SearchStartIn {
+        strategy,
         spec,
-        resume,
-        threads: Some(threads),
-        background: true,
+        label: rest.get("label").and_then(Value::as_str).map(String::from),
+        resume: match rest.get("resume") {
+            None => None,
+            Some(v) => Some(
+                v.as_i64()
+                    .ok_or_else(|| format!("search_start: `resume` is a job id, not {v}"))?,
+            ),
+        },
+        budget,
+        threads: rest
+            .get("threads")
+            .and_then(Value::as_u64)
+            .map(|t| t as usize),
+        gpu,
+        background: !detach,
+        detach,
         ..Default::default()
     };
-    SearchStart::run(ctx(), a, &Quiet).map_err(err)
-}
-
-fn with_line(v: Value, line: String) -> Value {
-    let mut v = v;
-    if v.is_object() {
-        v["line"] = json!(line);
+    let out = SearchStart::run(cx, input, &Quiet).map_err(err)?;
+    let wait = number(a, "wait_s")?.unwrap_or(0.0).min(MAX_WAIT_S);
+    if wait > 0.0 {
+        let t0 = std::time::Instant::now();
+        if out.mode == "detached" {
+            // The new process takes the job up in a moment; until then it reads as paused.
+            started(c, out.job, wait.min(20.0))?;
+        }
+        let left = (wait - t0.elapsed().as_secs_f64()).max(0.1);
+        let mut o = wait_for(c, out.job, left, None)?;
+        o.content.insert(
+            0,
+            json!({"type": "text", "text": format!(
+                "{} job {} {} ({}).",
+                out.kind_label,
+                out.job,
+                if out.created { "started" } else { "resumed" },
+                out.mode
+            )}),
+        );
+        return Ok(o);
     }
-    v
-}
-
-fn hunt_start(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "rules",
-            "tilings",
-            "nb",
-            "soups",
-            "size",
-            "density",
-            "shape",
-            "seed",
-            "gens",
-            "max_period",
-            "threads",
-            "resume",
-        ],
-    )?;
-    let rules = list(args, "rules", &[',', ';'])?;
-    let spec = HuntIn {
-        rules: (!rules.is_empty()).then(|| json!(rules)),
-        tilings: Some(json!(list(args, "tilings", &[',', ';'])?.join(","))),
-        nb: string(args, "nb")?.map(String::from),
-        soups: Some(int(args, "soups")?.unwrap_or(10_000).max(0) as u64),
-        size: string(args, "size")?
-            .map(|s| {
-                args::size_pair(s)
-                    .map(|(w, h)| json!([w, h]))
-                    .map_err(|_| format!("bad size '{s}'"))
-            })
-            .transpose()?,
-        density: num(args, "density"),
-        shape: string(args, "shape")?.map(String::from),
-        seed: uint(args, "seed")?,
-        gens: int(args, "gens")?.map(|x| x.max(1) as u64),
-        max_period: int(args, "max_period")?.map(|x| x.clamp(1, 1024) as u64),
-        ..Default::default()
-    };
-    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
-    let out = start_in_background("hunt", op::to_value(&spec), int(args, "resume")?, threads)?;
-    let p: HuntProgress = serde_json::from_value(out.progress).unwrap_or_default();
     Ok(ToolOutput::json(&json!({
         "job": out.job,
-        "status": "running",
-        "catalog": out.catalog,
-        "progress": with_line(serde_json::to_value(&p).unwrap_or_default(), p.line()),
-        "note": "The hunt runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with hunt_start {\"resume\": job}).",
-    })))
-}
-
-fn ants_start(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "tilings",
-            "strings",
-            "tables",
-            "alphabet",
-            "rules",
-            "soups",
-            "size",
-            "density",
-            "seed",
-            "steps",
-            "max_period",
-            "threads",
-            "resume",
-        ],
-    )?;
-    let rules = list(args, "rules", &[',', ';', ' '])?;
-    let spec = AntsIn {
-        tilings: Some(json!(list(args, "tilings", &[',', ';', ' '])?.join(","))),
-        strings: pair(args, "strings")?.map(|(a, b)| json!([a, b])),
-        tables: pair(args, "tables")?.map(|(a, b)| json!([a, b])),
-        alphabet: string(args, "alphabet")?.map(String::from),
-        rules: (!rules.is_empty()).then(|| json!(rules)),
-        soups: int(args, "soups")?.map(|n| n.max(0) as u64),
-        size: Some(json!(int(args, "size")?.unwrap_or(8).clamp(1, 64))),
-        density: num(args, "density"),
-        seed: uint(args, "seed")?,
-        steps: int(args, "steps")?.map(|x| x.max(1) as u64),
-        max_period: int(args, "max_period")?.map(|x| x.max(1) as u64),
-        ..Default::default()
-    };
-    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
-    let out = start_in_background("ants", op::to_value(&spec), int(args, "resume")?, threads)?;
-    let p: AntProgress = serde_json::from_value(out.progress).unwrap_or_default();
-    Ok(ToolOutput::json(&json!({
-        "job": out.job,
-        "status": "running",
-        "catalog": out.catalog,
-        "progress": with_line(serde_json::to_value(&p).unwrap_or_default(), p.line()),
-        "note": "The search runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with ants_start {\"resume\": job}). Results: library_list {\"kind\": \"ant\"}.",
-    })))
-}
-
-fn pile_start(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "tiling", "grains", "nb", "centre", "level", "px", "palette", "reverse", "gpu",
-            "resume",
-        ],
-    )?;
-    let resume = int(args, "resume")?;
-    let spec = if resume.is_some() {
-        Value::Null
-    } else {
-        let grains = match args.get("grains") {
-            Some(g @ (Value::Number(_) | Value::String(_))) => g.clone(),
-            _ => return Err("give `grains`, e.g. 1000000 or \"1e7\"".into()),
-        };
-        op::to_value(&PileIn {
-            tiling: Some(string(args, "tiling")?.unwrap_or("square").to_string()),
-            grains: Some(grains),
-            nb: string(args, "nb")?.map(String::from),
-            centre: string(args, "centre")?.map(String::from),
-            level: int(args, "level")?.map(|l| l.clamp(1, 8) as u32),
-            px: num(args, "px"),
-            palette: string(args, "palette")?.map(String::from),
-            reverse: args.get("reverse").and_then(|v| v.as_bool()),
-            gpu: args.get("gpu").and_then(|v| v.as_bool()),
-            ..Default::default()
-        })
-    };
-    // Topples on the GPU when the job asks for it and the host registered a GPU toppler.
-    let out = start_in_background("pile", spec, resume, 0)?;
-    let p: PileProgress = serde_json::from_value(out.progress).unwrap_or_default();
-    Ok(ToolOutput::json(&json!({
-        "job": out.job,
-        "status": "running",
-        "folder": p.folder,
-        "line": p.line(),
-        "progress": p,
-        "note": "The pile builds in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with pile_start {\"resume\": job}).",
-    })))
-}
-
-fn evolve_start(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "tiling",
-            "nb",
-            "states",
-            "pop",
-            "gens",
-            "radius",
-            "horizon",
-            "seed",
-            "stop_on_glider",
-            "threads",
-            "resume",
-        ],
-    )?;
-    let spec = EvolveIn {
-        tiling: Some(string(args, "tiling")?.unwrap_or("spectre").to_string()),
-        nb: Some(
-            match string(args, "nb")? {
-                Some("edge") => "edge",
-                _ => "touch",
-            }
-            .into(),
+        "kind": out.kind,
+        "started": out.created,
+        "mode": out.mode,
+        "status": out.status,
+        "line": out.line,
+        "folder": out.progress.get("folder"),
+        "note": format!(
+            "The job runs {}: job_status {{\"job\": {j}, \"wait_s\": 300}} waits for it, job_stop {{\"job\": {j}}} stops it, search_start {{\"resume\": {j}}} carries it on.",
+            if out.mode == "detached" { "in a process of its own" } else { "in the background" },
+            j = out.job
         ),
-        states: int(args, "states")?.map(|x| x as u8),
-        pop: int(args, "pop")?.map(|x| x.max(4) as usize),
-        gens: int(args, "gens")?.map(|x| x.max(1) as usize),
-        seed: uint(args, "seed")?,
-        radius: int(args, "radius")?.map(|x| x.max(4) as u32),
-        horizon: int(args, "horizon")?.map(|x| x.max(10) as u64),
-        stop_on_glider: args
-            .get("stop_on_glider")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-        threads: int(args, "threads")?.filter(|&t| t > 0).map(|t| t as usize),
-        ..Default::default()
-    };
-    let threads = int(args, "threads")?.unwrap_or(0).max(0) as usize;
-    let out = start_in_background("evolve", op::to_value(&spec), int(args, "resume")?, threads)?;
-    Ok(ToolOutput::json(&json!({
-        "job": out.job,
-        "status": "running",
-        "note": "The search runs in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with evolve_start {\"resume\": job}). Verified movers go to the catalog.",
     })))
 }
 
-fn mover_start(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "tiling", "rule", "level", "cells", "states", "at", "nb", "rings", "gens", "max_pop",
-            "margin", "store", "resume",
-        ],
-    )?;
-    let spec = MoverIn {
-        tiling: string(args, "tiling")?.map(String::from),
-        rule: string(args, "rule")?.map(String::from),
-        level: Some(int(args, "level")?.unwrap_or(4).clamp(1, 8) as u32),
-        nb: Some(
-            match string(args, "nb")? {
-                Some("edge") => "edge",
-                _ => "touch",
-            }
-            .into(),
-        ),
-        cells: args.get("cells").filter(|c| c.is_array()).cloned(),
-        states: args.get("states").filter(|c| c.is_array()).cloned(),
-        at: int(args, "at")?.map(|x| x.max(0) as u32),
-        rings: Some(int(args, "rings")?.unwrap_or(10_000).max(1) as u32),
-        gens: int(args, "gens")?.map(|x| x.max(1) as u64),
-        max_pop: int(args, "max_pop")?.map(|p| p.max(1) as usize),
-        margin: num(args, "margin"),
-        store: Some(args.get("store").and_then(|v| v.as_bool()).unwrap_or(true)),
-        source: Some("MCP mover_start".into()),
-        ..Default::default()
-    };
-    let out = start_in_background("mover", op::to_value(&spec), int(args, "resume")?, 0)?;
-    let p: MoverProgress = serde_json::from_value(out.progress).unwrap_or_default();
-    let start = ctx()
-        .library()
-        .job(out.job)
-        .ok()
-        .and_then(|j| j.spec.get("track").and_then(|t| t.get("cells")).cloned())
-        .unwrap_or(Value::Null);
-    Ok(ToolOutput::json(&json!({
-        "job": out.job,
-        "status": "running",
-        "start": start,
-        "line": p.line(),
-        "progress": p,
-        "note": "The run continues in the background: poll job_status {\"job\": ...}; job_stop stops it (resumable with mover_start {\"resume\": job}). A verified mover goes to the catalog.",
-    })))
-}
-
-/// One job's progress as `job_status` has always shown it: the kind's progress (live when it
-/// runs here) with its line, or for kinds without a start tool the job's spec and progress.
-fn job_json(v: &JobView) -> Value {
-    let mut out = match v.kind.as_str() {
-        "hunt" => {
-            let p: HuntProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
-            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
-        }
-        "ants" => {
-            let p: AntProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
-            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
-        }
-        "mover" => {
-            let p: MoverProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
-            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
-        }
-        "pile" => {
-            let p: PileProgress = serde_json::from_value(v.progress.clone()).unwrap_or_default();
-            with_line(serde_json::to_value(&p).unwrap_or_default(), p.line())
-        }
-        "evolve" => v.progress.clone(),
-        _ => json!({"job": v.job, "kind": v.kind, "spec": v.spec, "progress": v.progress}),
-    };
-    if !out.is_object() {
-        out = json!({});
-    }
-    out["kind"] = json!(v.kind);
-    out["job"] = json!(v.job);
-    out["status"] = json!(v.status);
-    out
-}
-
-/// `job_status`, with `wait_s` waiting (polling the catalog) until the job is no longer running,
-/// the wait runs out, or the client cancels the call.
-pub fn status_wait(args: &Value, cancel: Option<&std::sync::atomic::AtomicBool>) -> Res {
-    check_unknown(args, &["job", "kind", "limit", "wait_s"])?;
-    let wait = int(args, "wait_s")?.unwrap_or(0).clamp(0, 600) as u64;
-    struct Cancel<'a>(Option<&'a std::sync::atomic::AtomicBool>);
-    impl Progress for Cancel<'_> {
-        fn cancelled(&self) -> bool {
-            self.0.is_some_and(|c| c.load(Ordering::Relaxed))
-        }
-    }
-    if let Some(job) = int(args, "job")? {
+/// Wait (up to `max_s`, or until the client cancels) for a job handed to another process to be
+/// taken up: running, or with time run.
+fn started(c: &Call, job: i64, max_s: f64) -> Result<(), String> {
+    let t0 = std::time::Instant::now();
+    let p = c.callbacks();
+    loop {
         let a = StatusIn {
             job: Some(job),
-            wait_s: (wait > 0).then_some(wait as f64),
             ..Default::default()
         };
-        let StatusOut::One(v) = JobsStatus::run(ctx(), a, &Cancel(cancel)).map_err(err)? else {
-            return Err(format!("no job {job}"));
-        };
-        let mut out = job_json(&v);
-        if let Some(w) = v.waited_s {
-            out["waited_s"] = json!(w as u64);
+        if let StatusOut::One(v) = JobsStatus::run(ctx(), a, &Quiet).map_err(err)?
+            && (v.status != "paused" || v.elapsed_s > 0.0)
+        {
+            return Ok(());
         }
-        return Ok(ToolOutput::json(&out));
+        if jetcarp_api::Progress::cancelled(&p) || t0.elapsed().as_secs_f64() >= max_s {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
-    let a = ListIn {
-        kind: string(args, "kind")?.map(String::from),
-        limit: Some(int(args, "limit")?.unwrap_or(30).clamp(1, 200) as usize),
-        ..Default::default()
+}
+
+/// A strategy's settings read into its input type (so a bad key is refused here), as JSON.
+fn check<T: serde::de::DeserializeOwned + serde::Serialize>(
+    name: &str,
+    v: Value,
+) -> Result<Value, String> {
+    let t: T = serde_json::from_value(v).map_err(|e| format!("search_start {name}: {e}"))?;
+    Ok(op::to_value(&t))
+}
+
+fn job_status(c: &mut Call) -> Res {
+    let a = c.args;
+    let report = match a.get("report") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(Value::String(s)) if s == "true" || s == "false" => s == "true",
+        Some(v) => return Err(format!("job_status: `report` is true or false, not {v}")),
     };
-    let l = JobsList::run(ctx(), a, &Quiet).map_err(err)?;
+    let mut rest = a.clone();
+    if let Some(o) = rest.as_object_mut() {
+        o.remove("report");
+    }
+    let mut input: StatusIn = schema::read(&input_schema::<StatusIn>(), "job_status", rest)?;
+    if report {
+        let job = input.job.ok_or("job_status: `report` needs the `job`")?;
+        let r = JobsReport::run(
+            ctx(),
+            ReportIn {
+                job: Some(job),
+                ..Default::default()
+            },
+            &Quiet,
+        )
+        .map_err(err)?;
+        return Ok(ToolOutput::text(r.text()));
+    }
+    if let Some(job) = input.job {
+        return wait_for(c, job, input.wait_s.unwrap_or(0.0), input.finds);
+    }
+    input.limit = Some(input.limit.unwrap_or(30).min(200));
+    let StatusOut::List(l) = JobsStatus::run(ctx(), input, &Quiet).map_err(err)? else {
+        return Err("job_status: no list".into());
+    };
     let jobs: Vec<Value> = l
         .jobs
         .iter()
         .map(|j| {
             json!({
-                "job": j.job, "kind": j.kind, "status": j.status, "line": j.line,
-                "created": j.created, "updated": j.updated,
+                "job": j.job, "kind": j.kind, "status": j.status, "label": j.label,
+                "line": j.line, "created": j.created, "updated": j.updated,
             })
         })
         .collect();
@@ -560,23 +413,24 @@ pub fn status_wait(args: &Value, cancel: Option<&std::sync::atomic::AtomicBool>)
     })))
 }
 
-fn stop(args: &Value) -> Res {
-    check_unknown(args, &["job"])?;
-    let job = int(args, "job")?.ok_or("give `job`")?;
-    let s = JobsStop::run(ctx(), JobIn { job }, &Quiet).map_err(err)?;
-    let resume = match s.kind.as_str() {
-        "hunt" => format!("hunt_start {{\"resume\": {job}}}"),
-        "ants" => format!("ants_start {{\"resume\": {job}}}"),
-        "evolve" => format!("evolve_start {{\"resume\": {job}}}"),
-        "explore" => format!("explore_start {{\"resume\": {job}}} (it continues from its archive)"),
-        "mover" => format!("mover_start {{\"resume\": {job}}}"),
-        "pile" => format!("pile_start {{\"resume\": {job}}}"),
-        _ => format!("`jetcarp jobs resume {job}`"),
-    };
+fn job_stop(c: &mut Call) -> Res {
+    let input: JobIn = schema::read(&input_schema::<JobIn>(), "job_stop", c.args.clone())?;
+    let job = input.job;
+    let s = JobsStop::run(ctx(), input, &Quiet).map_err(err)?;
     Ok(ToolOutput::json(&json!({
         "job": job,
         "kind": s.kind,
         "stopping": s.stopping,
-        "note": format!("It stops at its next checkpoint and stays resumable with {resume}."),
+        "status": s.status,
+        "note": if s.stopping {
+            format!("It stops at its next checkpoint and stays resumable with search_start {{\"resume\": {job}}}.")
+        } else {
+            format!("It was not running ({}).", s.status)
+        },
     })))
+}
+
+/// The strategies' names (for tests and the docs).
+pub fn strategies() -> Vec<&'static str> {
+    STRATEGIES.iter().map(|s| s.0).collect()
 }

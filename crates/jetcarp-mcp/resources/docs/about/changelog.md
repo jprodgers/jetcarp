@@ -1,0 +1,53 @@
+# Changelog
+
+All notable changes to JETCARP are listed here, newest first, in the style of
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Before version 1.0, a release may still
+change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
+that will declare them stable.
+
+## [0.4.0] – unreleased
+
+The first public release.
+
+### What JETCARP 0.4.0 does
+
+- **Tilings.** Squares, hexagons and triangles, all eleven Archimedean tilings, the 1,248 k-uniform
+  tilings up to k = 6, the 81 isohedral tile types, tiles you draw yourself, and the aperiodic
+  Penrose (kites and darts, and rhombs), hat and spectre tilings, built on exact patches.
+- **Automata.** Life and the Life-like rules, Generations, Larger than Life, elementary rules on
+  squares and hexagons, Langton's ant and the turmites, WireWorld, Greenberg–Hastings, the cyclic
+  and rock-paper-scissors rules, hodgepodge, sandpiles, Lenia and other continuous rules, JACA
+  (Jimmie Rodgers's annihilating two-sided Life), layered rules, Margolus block rules, rule tables
+  and von Neumann's 29-state automaton. Several can run at once, on shared or separate cell fields.
+- **The app.** A Quick Start menu of examples, an editor for worlds, tiles and unit cells, thirty
+  palettes and your own, pictures and animations, and screensaver mode.
+- **On the desktop.** A background host that runs scenes as a live wallpaper (Windows, macOS, and
+  GNOME through its own extension), on the GNOME lock screen, as the system's screen saver (Windows
+  and macOS), or as a still picture; see [Wallpapers](../guides/wallpapers.md).
+- **One program for every front end.** `jetcarp` opens the app, and its subcommands are the command
+  line, the background host (`jetcarp host`) and an MCP server for AI assistants (`jetcarp mcp`).
+  Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 74 named
+  operations, each with JSON Schemas for its input and output (`jetcarp api list`).
+- **Searches.** Nine search strategies (soup hunts on the plane and on bounded grids, a rule census,
+  ants and turmites, movers on aperiodic tilings, large sandpiles, collisions, an evolutionary glider
+  search, and an exploratory search over tilings, rule families and rules) run as resumable jobs
+  whose results don't depend on the thread count; see [Search methods](../research/search-methods.md).
+- **A verified pattern library.** Every catalogued pattern is verified exactly, named by a content
+  id that any program can recompute, and pinned to its tiling's geometry and its rule family's
+  meaning, so a change to either is caught; see [Library format](../reference/library-format.md).
+- **Packs.** Format 1.0 for sharing data: signed, content-addressed stores of Parquet tables and
+  canonical JSON that other tools read without JETCARP, checked hash by hash and id by id on import;
+  ratings go in only with each rater's consent. See [Packs](../guides/packs.md) and
+  [Pack format](../reference/pack-format.md).
+- **Reproducibility.** Every run is a scene that replays bit for bit to a recorded state hash, and
+  every picture JETCARP saves carries its scene; see [Reproducibility](../research/reproducibility.md).
+- **Installing.** Archives for Linux (x86_64 and ARM, glibc 2.28 or newer), Windows and macOS (Apple
+  silicon and Intel), installers that check every download, Python wheels for pipx, uv and pip, a
+  Homebrew tap, a Scoop bucket and crates.io, with a starter pack beside the program; see
+  [Installing JETCARP](../getting-started/installing.md).
+- **No network, no telemetry.** JETCARP makes no network connections; see `SECURITY.md`.
+- **This book**, with a page on the history and credits of every automaton and tiling.
+
+JETCARP grew out of CART, a private prototype Jimmie Rodgers built in early November 2026, and was
+reworked for release in a new repository with a fresh history; see
+[How JETCARP was made](how-made.md).

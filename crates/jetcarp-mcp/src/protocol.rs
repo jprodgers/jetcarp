@@ -10,6 +10,9 @@
 //! Every result carries `resultType: "complete"`. Tool failures the model can fix (bad arguments,
 //! rule errors) come back as tool results with `isError: true`; only malformed requests and
 //! unknown tools are JSON-RPC errors.
+//!
+//! The server offers tools and resources ([`crate::resources`]: the book's pages, references,
+//! schemas, and templates for jobs, patterns and Quick Start entries).
 
 use crate::tools::{self, ToolOutput};
 use jetcarp_api::world::Host;
@@ -25,6 +28,13 @@ pub const METHOD_NOT_FOUND: i64 = -32601;
 pub const INVALID_PARAMS: i64 = -32602;
 pub const INTERNAL_ERROR: i64 = -32603;
 pub const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
+/// `resources/read` of a resource that does not exist.
+pub const RESOURCE_NOT_FOUND: i64 = -32002;
+
+/// What this server offers: tools and resources (fixed lists, no subscriptions).
+pub fn capabilities() -> Value {
+    json!({"tools": {"listChanged": false}, "resources": {"listChanged": false, "subscribe": false}})
+}
 
 const META_VERSION: &str = "io.modelcontextprotocol/protocolVersion";
 const META_SERVER_INFO: &str = "io.modelcontextprotocol/serverInfo";
@@ -40,11 +50,13 @@ pub fn server_info() -> Value {
 }
 
 /// Shown to the model by clients that pass server instructions along.
-pub const INSTRUCTIONS: &str = "JETCARP runs cellular automata (Game of Life and many other rules) \
-on square, hexagon, triangle, Archimedean, and aperiodic (Spectre) tilings. Typical flow: \
-new_world (pick a tiling and rules) -> set_cells or random seeds -> step -> world_status / \
-read_cells / render_image. Call jetcarp_help for worked examples, list_rules for rule names and \
-notation, list_tilings for tiling ids.";
+pub const INSTRUCTIONS: &str = "JETCARP runs cellular automata (the Game of Life and many other rules) \
+on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, \
+and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) \
+-> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: \
+search_start, job_status, then library_query for the finds. Call help for worked examples, \
+reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources \
+(jetcarp://docs/...) and through help {\"page\": ...}.";
 
 pub fn response(id: &Value, result: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "result": result})
@@ -223,14 +235,14 @@ impl Server {
                 self.legacy_version = Some(v.to_string());
                 Ok(json!({
                     "protocolVersion": v,
-                    "capabilities": {"tools": {"listChanged": false}},
+                    "capabilities": capabilities(),
                     "serverInfo": server_info(),
                     "instructions": INSTRUCTIONS,
                 }))
             }
             "server/discover" => Ok(json!({
                 "supportedVersions": supported_versions(),
-                "capabilities": {"tools": {"listChanged": false}},
+                "capabilities": capabilities(),
                 "_meta": {META_SERVER_INFO: server_info()},
                 "instructions": INSTRUCTIONS,
                 "ttlMs": 3_600_000,
@@ -307,9 +319,22 @@ impl Server {
                     }
                 }
             }
+            "resources/list" => {
+                let mut r = crate::resources::list();
+                r["ttlMs"] = json!(3_600_000);
+                r["cacheScope"] = json!("public");
+                Ok(r)
+            }
+            "resources/templates/list" => Ok(crate::resources::templates()),
+            "resources/read" => {
+                let uri = params.get("uri").and_then(|u| u.as_str()).ok_or((
+                    INVALID_PARAMS,
+                    "resources/read needs params.uri".to_string(),
+                ))?;
+                // An unknown resource is an error the client can show (MCP's -32002).
+                crate::resources::read(uri).map_err(|e| (RESOURCE_NOT_FOUND, e))
+            }
             // Not offered (no capability declared), but answer politely if asked.
-            "resources/list" => Ok(json!({"resources": []})),
-            "resources/templates/list" => Ok(json!({"resourceTemplates": []})),
             "prompts/list" => Ok(json!({"prompts": []})),
             m => Err((METHOD_NOT_FOUND, format!("Method not found: {m}"))),
         }

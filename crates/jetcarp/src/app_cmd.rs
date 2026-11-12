@@ -47,7 +47,7 @@ pub enum AppCmd {
     /// The previous item of the screensaver's rotation.
     Previous,
     /// Call any MCP tool on the app's world: `jetcarp app call world_status` or
-    /// `jetcarp app call step '{"generations": 10}'`.
+    /// `jetcarp app call world_step '{"generations": 10}'`.
     Call {
         tool: String,
         /// Arguments as a JSON object (default `{}`).
@@ -497,8 +497,8 @@ mod tests {
             json!({"windows": ["800x600@0,0", "800x600@800,0"], "arrangement": "mirror"})
         );
         assert_eq!(
-            parse(&["call", "step", "{\"generations\": 3}"]),
-            ("step".into(), json!({"generations": 3}))
+            parse(&["call", "world_step", "{\"generations\": 3}"]),
+            ("world_step".into(), json!({"generations": 3}))
         );
         let mut v = vec!["jetcarp", "app", "display", "--span", "--mirror"];
         assert!(

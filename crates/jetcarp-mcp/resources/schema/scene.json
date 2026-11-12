@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jprodgers.github.io/jetcarp/reference/scene.schema.json",
+  "title": "JETCARP scene",
+  "description": "A JETCARP scene file (format 1): a tiling, the starting state of the random-number generator, the automata with their rules and seeds, and the log of commands since. The book's Scene file format reference describes every field. Fields JETCARP does not know are ignored when a scene is read, so this schema allows them.",
+  "type": "object",
+  "required": ["tiling"],
+  "properties": {
+    "jetcarp_version": {"type": "string", "description": "The JETCARP version that wrote the file."},
+    "format": {"type": "integer", "minimum": 1, "description": "The scene format version (1). A scene with a higher format than the running JETCARP knows is refused."},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "tiling": {"$ref": "#/definitions/tiling"},
+    "rng_state": {
+      "type": ["integer", "string"],
+      "description": "The starting state of the scene's SplitMix64 random-number generator, 0 to 2^64 - 1 (a string of decimal digits is accepted for values that JSON readers cannot hold exactly)."
+    },
+    "tables": {"type": "array", "items": {"type": "object"}, "description": "Rule tables that the scene's `Table <name>` rules use, beyond the built-in one."},
+    "cas": {"type": "array", "items": {"$ref": "#/definitions/ca"}, "description": "The automata, in the order they run."},
+    "palettes": {"type": "array", "items": {"$ref": "#/definitions/palette"}, "description": "Palettes of the scene's own."},
+    "script": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/script"}]},
+    "reseed": {"type": "array", "items": {"$ref": "#/definitions/reseed_policy"}, "description": "Automatic reseed policies that start with the scene."},
+    "commands": {"type": "array", "items": {"$ref": "#/definitions/command"}, "description": "The command log, replayed in order after the automata are added."},
+    "view": {"description": "The app's camera and display state; the engine ignores it."},
+    "record": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/record"}]}
+  },
+  "definitions": {
+    "tiling": {
+      "type": "object",
+      "required": ["family"],
+      "properties": {
+        "family": {"type": "string", "description": "The tiling's id (`jetcarp tilings`): square, hex, hex_flat, triangle, cairo, an Archimedean or drawn family, penrose-kd, penrose-rhomb, hat, spectre, an isohedral type such as ih28, or periodic."},
+        "params": {"type": ["object", "null"], "description": "The family's shape parameters, such as {\"catalog\": \"k3-011\"}."},
+        "edges": {"type": ["array", "null"], "description": "For tiles drawn with the tile editor: the shape of each edge."},
+        "size": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/size"}]},
+        "boundary": {"enum": ["dead", "wrap", "live"], "description": "What lies past the edge (default dead). Aperiodic patches are always dead."}
+      }
+    },
+    "size": {
+      "description": "Exactly w by h lattice unit cells, about this many cells, or an aperiodic patch's substitution level.",
+      "oneOf": [
+        {
+          "type": "object", "required": ["rect"], "additionalProperties": false,
+          "properties": {"rect": {"type": "object", "required": ["w", "h"], "properties": {"w": {"type": "integer", "minimum": 1}, "h": {"type": "integer", "minimum": 1}}}}
+        },
+        {"type": "object", "required": ["cells"], "additionalProperties": false, "properties": {"cells": {"type": "integer", "minimum": 1}}},
+        {"type": "object", "required": ["level"], "additionalProperties": false, "properties": {"level": {"type": "integer", "minimum": 0}}}
+      ]
+    },
+    "ca": {
+      "type": "object",
+      "required": ["rule"],
+      "properties": {
+        "rule": {"type": "string", "description": "The rule in JETCARP's notation (names such as Life are not read here)."},
+        "id": {"type": "integer", "minimum": 0},
+        "name": {"type": "string"},
+        "neighborhood": {"enum": ["touch", "edge"]},
+        "enabled": {"type": "boolean"},
+        "affects_others": {"type": "boolean"},
+        "steps_per_gen": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "palette": {"type": "string"},
+        "palette_neg": {"type": "string", "description": "JACA only: the palette of -1 cells."},
+        "glow": {"type": "boolean", "description": "JACA only: draw the fading glow of destroyed cells."},
+        "color_by": {"enum": ["auto", "age", "state", "row"]},
+        "seed": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/seed"}]},
+        "drop_per_gen": {"type": "integer", "minimum": 0, "description": "Sandpiles: grains dropped on the centre cell each generation."},
+        "agent_edge": {"enum": ["bounce", "fall_off"]}
+      }
+    },
+    "seed": {
+      "description": "What an automaton puts on its field when the world is built or reset: a word, or an object with one key.",
+      "oneOf": [
+        {"enum": ["empty", "center", "top_center", "random_states", "glider_pair", "wire_demo"]},
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "random": {"type": "object", "required": ["density"], "properties": {"density": {"type": "number", "minimum": 0, "maximum": 1}}},
+            "blob": {"type": "object", "required": ["radius", "density"], "properties": {"radius": {"type": "number"}, "density": {"type": "number"}}},
+            "top_random": {"type": "object", "required": ["density"], "properties": {"density": {"type": "number"}}},
+            "ants": {"type": "object", "required": ["count"], "properties": {"count": {"type": "integer", "minimum": 0}}},
+            "ant_at": {"type": "object", "required": ["cell", "heading"], "properties": {"cell": {"type": "integer", "minimum": 0}, "heading": {"type": "integer", "minimum": 0}}},
+            "pile": {"type": "object", "required": ["grains"], "properties": {"grains": {"type": "integer", "minimum": 0}}},
+            "signed": {"type": "object", "required": ["density", "negative"], "properties": {"density": {"type": "number"}, "negative": {"type": "number"}}},
+            "halves": {"type": "object", "required": ["density"], "properties": {"density": {"type": "number"}}},
+            "circuit": {"type": "object", "required": ["sites", "electrons"], "properties": {"sites": {"type": "integer"}, "electrons": {"type": "integer"}}},
+            "cells": {"type": "object", "required": ["cells"], "properties": {"cells": {"$ref": "#/definitions/cell_states"}}},
+            "gaussian": {"type": "object", "required": ["count", "radius", "peak"], "properties": {"count": {"type": "integer"}, "radius": {"type": "number"}, "peak": {"type": "number"}}},
+            "lenia": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}, "scale": {"type": "number"}}},
+            "pattern": {"type": "object", "required": ["shape"], "properties": {"shape": {}, "fill": {}}}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "cell_states": {
+      "type": "array",
+      "description": "[cell index, state] pairs.",
+      "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+    },
+    "colour": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 0, "maximum": 255}},
+    "palette": {
+      "type": "object",
+      "required": ["name", "stops"],
+      "properties": {
+        "name": {"type": "string"},
+        "stops": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/colour"}},
+        "background": {"$ref": "#/definitions/colour"},
+        "stage": {"$ref": "#/definitions/colour"}
+      }
+    },
+    "script": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "run": {"type": "array", "items": {"type": ["integer", "string"]}, "description": "The automata that run during the step, by id or name."},
+              "until": {"type": "object", "required": ["when"], "properties": {"when": {"enum": ["generations", "population_below", "population_above", "activity_below", "activity_above", "repeats", "done", "never"]}}},
+              "max_gens": {"type": ["integer", "null"], "minimum": 0}
+            }
+          }
+        },
+        "repeat": {"type": "boolean"}
+      }
+    },
+    "reseed_policy": {
+      "type": "object",
+      "properties": {
+        "mode": {"type": ["string", "object"], "description": "random, rain, blobs, or an object such as {\"kind\": \"rain\", \"drops\": 24}."},
+        "when": {"type": "object", "properties": {"kind": {"enum": ["settled", "every"]}}},
+        "cooldown": {"type": "integer", "minimum": 0},
+        "ca": {"type": ["integer", "null"]},
+        "enabled": {"type": "boolean"}
+      }
+    },
+    "record": {
+      "type": "object",
+      "required": ["generation", "hash"],
+      "properties": {
+        "generation": {"type": "integer", "minimum": 0},
+        "hash": {"type": "string", "pattern": "^[0-9a-f]{16}$", "description": "The world's state hash, 16 hexadecimal digits."},
+        "jetcarp_version": {"type": "string"},
+        "dead_boundary": {"type": "boolean"}
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["op"],
+      "description": "One command of the log; `op` names it.",
+      "oneOf": [
+        {"properties": {"op": {"const": "step"}, "gens": {"type": "integer", "minimum": 0}}, "required": ["gens"]},
+        {"properties": {"op": {"const": "jump"}, "gens": {"type": "integer", "minimum": 0}}, "required": ["gens"]},
+        {"properties": {"op": {"const": "add_ca"}, "ca": {"$ref": "#/definitions/ca"}}, "required": ["ca"]},
+        {"properties": {"op": {"const": "remove_ca"}, "id": {"type": "integer"}}, "required": ["id"]},
+        {"properties": {"op": {"const": "update_ca"}, "id": {"type": "integer"}, "change": {"type": "object"}}, "required": ["id", "change"]},
+        {"properties": {"op": {"const": "seed"}, "id": {"type": "integer"}, "seed": {"$ref": "#/definitions/seed"}}, "required": ["id", "seed"]},
+        {"properties": {"op": {"const": "clear"}, "id": {"type": "integer"}}, "required": ["id"]},
+        {"properties": {"op": {"const": "set_cells"}, "id": {"type": "integer"}, "cells": {"$ref": "#/definitions/cell_states"}}, "required": ["id", "cells"]},
+        {"properties": {"op": {"const": "paste_pattern"}, "id": {"type": "integer"}, "pattern": {"type": "object"}, "at": {}, "orientation": {"type": "integer", "minimum": 0}, "phase": {"type": "integer", "minimum": 0}}, "required": ["id", "pattern"]},
+        {"properties": {"op": {"const": "reseed"}, "ca": {"type": ["integer", "null"]}, "mode": {"type": ["string", "object"]}}, "required": ["mode"]},
+        {"properties": {"op": {"const": "set_reseed"}, "policies": {"type": "array", "items": {"$ref": "#/definitions/reseed_policy"}}}},
+        {"properties": {"op": {"const": "sandpile"}, "id": {"type": "integer"}, "action": {"oneOf": [{"enum": ["stabilize", "identity"]}, {"type": "object"}]}}, "required": ["id", "action"]},
+        {"properties": {"op": {"const": "add_table"}, "table": {"type": "object"}}, "required": ["table"]},
+        {"properties": {"op": {"const": "set_palette"}, "palette": {"$ref": "#/definitions/palette"}}, "required": ["palette"]},
+        {"properties": {"op": {"const": "set_script"}, "script": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/script"}]}}},
+        {"properties": {"op": {"const": "script_goto"}, "step": {"type": "integer", "minimum": 0}}, "required": ["step"]},
+        {"properties": {"op": {"const": "set_tiling"}, "tiling": {"$ref": "#/definitions/tiling"}}, "required": ["tiling"]},
+        {"properties": {"op": {"const": "set_rng_state"}, "state": {"type": ["integer", "string"]}}, "required": ["state"]},
+        {"properties": {"op": {"const": "reset"}}}
+      ]
+    }
+  }
+}

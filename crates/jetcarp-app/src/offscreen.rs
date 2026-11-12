@@ -414,9 +414,15 @@ mod tests {
             .find(|j| j.job == job)
             .expect("jobs.list lists it");
         let listed = (line.status.clone(), line.here);
-        let out =
-            jetcarp_mcp::job_tools::call("job_status", &serde_json::json!({ "job": job })).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&out.joined_text()).unwrap();
+        let out = jetcarp_mcp::tools::call(
+            &mut jetcarp_mcp::Session::new(),
+            "job_status",
+            &serde_json::json!({ "job": job }),
+        );
+        assert!(!out.is_error, "{}", out.joined_text());
+        // The summary, then the facts as JSON.
+        let facts = out.content.last().and_then(|c| c["text"].as_str()).unwrap();
+        let v: serde_json::Value = serde_json::from_str(facts).unwrap();
         let mcp = v["status"].as_str().unwrap_or_default().to_string();
         let bin =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release/jetcarp");

@@ -1,81 +1,46 @@
-//! MCP tools for catalog media and the website export: `media_render` renders frames, an
-//! animation (GIF or animated WebP), a poster, and a thumbnail and returns their paths (and,
-//! on request, the poster inline); `site_export` writes the incremental website export. Both are
-//! operations (`media.render`, `site.export`), with their options read from the tool's arguments
-//! as the scripts read them ([`MediaRenderIn::from_map`], [`SiteIn::from_map`]).
+//! `media_render`: frames, an animation (GIF or animated WebP), a poster and a thumbnail of
+//! library records (`media.render`), returning their paths and, on request, the poster inline.
 
-use crate::tools::{Res, ToolOutput, boolean, check_unknown, ctx, err, string, tool};
-use jetcarp_api::op::{self, Op, Quiet};
-use jetcarp_api::ops::media::{MediaRender, MediaRenderIn, SiteExport, SiteIn};
+use crate::schema::{self, object};
+use crate::tools::{Call, Res, Tool, ToolOutput, ctx, err};
+use jetcarp_api::op::{self, Op, input_schema};
+use jetcarp_api::ops::media::{MediaRender, MediaRenderIn};
 use serde_json::{Value, json};
 
-pub const NAMES: &[&str] = &["media_render", "site_export"];
-
-pub fn handles(name: &str) -> bool {
-    NAMES.contains(&name)
+pub(crate) fn tools() -> Vec<Tool> {
+    vec![Tool {
+        name: "media_render",
+        title: "Render animations and posters",
+        read_only: false,
+        destructive: false,
+        description: || {
+            "Renders media and returns the file paths: per-step PNG frames, an animation (a GIF for small ones, an animated WebP for large ones), a poster frame and a thumbnail, in one house style. Library records' media are stored once each by content in the library's media/ folder: a pattern is shown alone on an empty field for one seamless period (spaceships in a window that moves with them, guns with their stream); an ant highway as one seamless period in a window moving with the ant (mode seed: the run from step 0); a Quick Start entry from its seed. A `scene` (JSON) renders from its seed into the output folder. Up-to-date media are not rendered again. Give one of pattern, quickstart, ant, scene, or missing (everything whose media are missing or stale). `poster`: true also returns the first poster inline, to look at. Examples: {\"pattern\": \"glider\", \"poster\": true}, {\"ant\": \"ant-...\", \"mode\": \"seed\", \"gens\": 300}, {\"missing\": true, \"class\": [\"spaceship\"], \"limit\": 20}, {\"pattern\": \"glider\", \"palette\": \"Paper\"}.".into()
+        },
+        schema: || {
+            let mut p = schema::props(&schema::without(
+                input_schema::<MediaRenderIn>(),
+                &["threads"],
+            ));
+            p.insert(
+                "poster".into(),
+                json!({"type": "boolean", "description": "Also return the first target's poster inline (PNG)."}),
+            );
+            object(p, &[])
+        },
+        run: media_render,
+    }]
 }
 
-pub fn definitions() -> Vec<Value> {
-    vec![
-        tool(
-            "media_render",
-            "Render pattern media",
-            false,
-            "Renders media for the catalog and returns the file paths: per-step PNG frames, an animation (a GIF for small ones, an animated WebP for large ones such as whole soups), a poster frame, and a thumbnail, in one house style, stored once each by content in <catalog folder>/media/ab/<sha256>.<ext> (frames: a list of every frame's file). A pattern is shown alone on an empty field for one seamless period (spaceships in a window that moves with them, guns with their stream); a Quick Start entry is shown from its seed; an ant highway as one seamless period in a window moving with the ant (mode seed: the run from step 0, the only choice for other ant outcomes). Up-to-date media are not rendered again. Give one of pattern, quickstart, ant, or missing. Examples: {\"pattern\": \"glider\", \"poster\": true}, {\"quickstart\": \"sweep-1a2b\", \"gens\": 300}, {\"missing\": true, \"class\": \"spaceship\"}, {\"pattern\": \"glider\", \"palette\": \"Paper\"}.",
-            json!({"type": "object", "properties": {
-                "pattern": {"type": "string", "description": "A catalog pattern: id, unique id prefix, or name."},
-                "quickstart": {"type": "string", "description": "A Quick Start entry id."},
-                "ant": {"type": "string", "description": "An ant run id (ant-..., from library_list {\"kind\": \"ant\"})."},
-                "missing": {"type": "boolean", "description": "Every pattern and shown Quick Start entry whose media are missing or stale."},
-                "class": {"type": "string", "description": "With missing: only patterns of these classes, comma-separated (spaceship, oscillator, gun, ...)."},
-                "limit": {"type": "integer", "minimum": 0, "description": "With missing: at most this many targets (default no limit)."},
-                "mode": {"type": "string", "enum": ["auto", "alone", "seed"], "description": "auto (default): patterns alone, everything else from the seed."},
-                "format": {"type": "string", "enum": ["auto", "gif", "webp"], "description": "auto (default): GIF up to 320x320 pixels, 8 million pixels in all, and 256 colours; else WebP."},
-                "periods": {"type": "integer", "minimum": 1, "description": "Alone: full periods shown (default 1)."},
-                "gens": {"type": "integer", "minimum": 1, "description": "From the seed: generations (default 200; row rules one per row)."},
-                "every": {"type": "integer", "minimum": 1, "description": "From the seed: a frame every this many generations (default 1)."},
-                "frames": {"type": "boolean", "description": "Write the per-step PNG frames (default true)."},
-                "force": {"type": "boolean", "description": "Render even when up to date."},
-                "palette": {"type": "string", "description": "Colour the media with this built-in palette (its background, stage, and stops) instead of the house style: Ember, Tide, Prism, Ink, Mono, Aurora, Synthwave, Moss, Candy, Lava, Glacier, Phosphor, Koi, Desert, Thermal, Deep Sea, Paper, Blueprint, Neon, Autumn. Part of the render key: media stored in another palette render again."},
-                "poster": {"type": "boolean", "description": "Also return the first target's poster image inline (PNG)."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "site_export",
-            "Export the catalog for a website",
-            false,
-            "Writes the public part of the catalog to a folder for a static website: manifest.json (format version, export time, every item with its content hash and media links), patterns/<id>.json (the rule-free record, rule range, rules verified in, seen counts per rule, class, period, speed, name, tags, rating), quickstart/<id>.json, and media files (animation, poster, thumbnail; frames on request). Incremental: only new or changed files are written, and items no longer public are deleted. Public by default: patterns promoted or reviewed (never rejected), and the Quick Start entries that are promotions or came from packs (never hidden ones). Missing media are rendered first. Example: {\"to\": \"/home/me/site/data\", \"min_score\": 40}.",
-            json!({"type": "object", "properties": {
-                "to": {"type": "string", "description": "The export folder."},
-                "state": {"type": "string", "description": "Curation states exported, comma-separated (default promoted,reviewed)."},
-                "min_score": {"type": "number", "description": "Only patterns with at least this interest score."},
-                "min_rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "Only patterns rated at least this."},
-                "class": {"type": "string", "description": "Only these classes, comma-separated."},
-                "quickstart": {"type": "string", "description": "Quick Start sources exported, comma-separated: promotion, pack, atlas, builtin (default promotion,pack; none for none)."},
-                "frames": {"type": "boolean", "description": "Copy the per-step PNG frames too (default false)."},
-                "render": {"type": "boolean", "description": "Render missing media first (default true)."},
-                "palette": {"type": "string", "description": "Render missing media in this built-in palette instead of the house style."},
-            }, "required": ["to"], "additionalProperties": false}),
-        ),
-    ]
-}
-
-pub fn call(name: &str, args: &Value) -> Res {
-    match name {
-        "media_render" => render(args),
-        "site_export" => export(args),
-        _ => Err(format!("unknown tool {name}")),
-    }
-}
-
-fn render(args: &Value) -> Res {
-    let mut a = args.clone();
-    let poster = boolean(args, "poster")?;
-    if let Some(o) = a.as_object_mut() {
-        o.remove("poster");
-    }
-    let input = MediaRenderIn::from_map(&a)?;
-    let r = op::to_value(&MediaRender::run(ctx(), input, &Quiet).map_err(err)?);
+fn media_render(c: &mut Call) -> Res {
+    let mut a = c.args.clone();
+    let poster = match a.as_object_mut().and_then(|o| o.remove("poster")) {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => b,
+        Some(Value::String(s)) if s == "true" || s == "false" => s == "true",
+        Some(v) => return Err(format!("media_render: `poster` is true or false, not {v}")),
+    };
+    let input: MediaRenderIn = schema::read(&input_schema::<MediaRenderIn>(), "media_render", a)?;
+    let r = op::to_value(&MediaRender::run(ctx(), input, &c.callbacks()).map_err(err)?);
     let mut content =
         vec![json!({"type": "text", "text": serde_json::to_string_pretty(&r).unwrap_or_default()})];
     if poster && let Some(p) = r["done"][0]["files"]["poster"].as_str() {
@@ -90,26 +55,4 @@ fn render(args: &Value) -> Res {
         content,
         is_error: failed_all,
     })
-}
-
-fn export(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "to",
-            "state",
-            "min_score",
-            "min_rating",
-            "class",
-            "quickstart",
-            "frames",
-            "render",
-            "palette",
-        ],
-    )?;
-    let to = string(args, "to")?.ok_or("give `to`, the export folder")?;
-    let dir = std::path::absolute(to).map_err(|e| format!("bad path {to}: {e}"))?;
-    let input = SiteIn::from_map(args, &dir.display().to_string())?;
-    let r = SiteExport::run(ctx(), input, &Quiet).map_err(err)?;
-    Ok(ToolOutput::json(&op::to_value(&r)))
 }

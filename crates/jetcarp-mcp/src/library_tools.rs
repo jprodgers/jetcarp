@@ -1,209 +1,140 @@
-//! MCP tools for the pattern catalog (`jetcarp_store::library`): list, get, a bounded soup search,
-//! paste into the world, curation updates, promotion to the Quick Start, and the Quick Start
-//! entries ("My finds").
+//! The library tools: `library_query` (list or read patterns, ant runs and Quick Start entries,
+//! or the library's counts) and `library_curate` (change, hide, remove, add to the Quick Start,
+//! and the compounds pass).
 //!
-//! The catalog is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
-//! `<data>/library.sqlite`, shared with the app, scripts, and `jetcarp library`; the server opens
-//! it once. Listing, reading, curation, and promotion are the operations `library.*` and
-//! `quickstart.*`; the soup search and collisions are jobs run in the call (`search.start`),
-//! bounded by the server's limits (`Limits::INTERACTIVE`, which the operation checks).
+//! The library is `JETCARP_LIBRARY` (a folder or a `.sqlite` file), else
+//! `<data>/library.sqlite`, shared with the app, scripts and `jetcarp library`; the server opens
+//! it once.
 
-use crate::tools::{
-    Res, ToolOutput, boolean, check_unknown, ctx, err, given, int, string, tool, uint,
-};
-use jetcarp_api::Limits;
-use jetcarp_api::op::{self, Callbacks, Op, Quiet, Report, WorldOp};
+use crate::schema::{self, named, object, words};
+use crate::tools::{Call, Res, Tool, ToolOutput, ctx, err};
+use jetcarp_api::op::{self, NoInput, Op, Quiet, Report, input_schema};
 use jetcarp_api::ops::library::{
-    GetIn, LibraryGet, LibraryQuery, LibraryUpdate, QueryIn, UpdateIn,
+    GetIn, LibraryGet, LibraryInfoOp, LibraryQuery, LibraryRemove, LibraryUpdate, QueryIn,
+    RemoveIn, UpdateIn,
 };
 use jetcarp_api::ops::quickstart::{
-    AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartUpdate,
+    AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartGet, QuickstartList, QuickstartRemove,
+    QuickstartUpdate,
 };
-use jetcarp_api::ops::search::{BoundedIn, CollideIn, SearchStart, SearchStartIn, SearchStarted};
-use jetcarp_api::ops::world::{PasteIn, WorldPaste};
-use jetcarp_api::world::Host;
 use jetcarp_core::pattern::PatternRecord;
-use jetcarp_search::dashboard::digits;
-use jetcarp_search::jobs::search::SearchResult;
-use jetcarp_store::Library;
 use serde_json::{Value, json};
 
-pub const NAMES: &[&str] = &[
-    "library_list",
-    "library_get",
-    "library_search",
-    "paste_pattern",
-    "library_update",
-    "library_promote",
-    "library_collide",
-];
+/// The most records one listing returns.
+const MAX_LIST: u64 = 100;
 
-pub fn handles(name: &str) -> bool {
-    NAMES.contains(&name)
-}
-
-/// The catalog: the server's one connection to it.
-fn lib() -> Library {
-    ctx().library()
-}
-
-pub fn definitions() -> Vec<Value> {
+pub(crate) fn tools() -> Vec<Tool> {
     vec![
-        tool(
-            "library_list",
-            "List catalog records",
-            true,
-            "Lists records of the catalog, best first. `kind` picks what: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns; rule-free, with every rule verified in and the rule range), \"ant\" (ant and turmite runs: outcome highway, periodic, symmetric, bounded, or chaotic, with period, displacement, onset, and the outcome census per tiling), or \"quickstart\" (Quick Start entries: promotions under \"My finds\", entries from packs, and the atlas an explore search published; `source` picks one source, the built-in examples too). Ids work with library_get, library_update, library_promote, media_render. Filters are optional and per kind; at most 100 per call. Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"tiling\": \"hex\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\"}.",
-            json!({"type": "object", "properties": {
-                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What to list (default pattern)."},
-                "rule": {"type": "string", "description": "pattern: verified in a rule whose notation contains this; ant: this turn string or table (\"RL\", \"LLRR\")."},
-                "works_in": {"type": "string", "description": "pattern: runs in this rule (inside its rule range or verified there), e.g. \"B3678/S0235678\"."},
-                "order": {"type": "string", "enum": ["score", "seen", "rare", "newest", "updated", "cells", "period", "rating"], "description": "pattern: sort order (default score)."},
-                "sort": {"type": "string", "enum": ["score", "onset", "period", "speed", "rule"], "description": "ant: sort order (default score)."},
-                "offset": {"type": "integer", "minimum": 0, "description": "pattern: skip this many (paging)."},
-                "tiling": {"type": "string", "description": "Tiling family id (\"square\", \"hex\"), catalog id (\"k2-001\"), or name."},
-                "class": {"type": "string", "enum": ["still_life", "oscillator", "spaceship", "puffer", "gun", "mover"], "description": "pattern: only this class."},
-                "outcome": {"type": "string", "enum": ["highway", "periodic", "symmetric", "bounded", "chaotic"], "description": "ant: only this outcome."},
-                "state": {"type": "string", "enum": ["new", "reviewed", "promoted", "rejected"], "description": "pattern: only this curation state."},
-                "status": {"type": "string", "enum": ["shown", "hidden"], "description": "quickstart: only entries shown in the menu, or only hidden ones (default: both)."},
-                "source": {"type": "string", "enum": ["builtin", "pack", "atlas", "promotion", "all"], "description": "quickstart: only entries of this source (default: every source but builtin)."},
-                "job": {"type": "integer", "description": "ant: only records of this job."},
-                "min_period": {"type": "integer", "minimum": 1, "description": "pattern: periods of at least this."},
-                "min_score": {"type": "number", "description": "pattern: scores of at least this (0-100)."},
-                "tag": {"type": "string", "description": "pattern: only entries with this tag."},
-                "text": {"type": "string", "description": "pattern: part of the name or label."},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Default 20."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "library_get",
-            "Get one catalog record",
-            true,
-            "Returns one record by id: a pattern (the default), an ant run (ids ant-...: rule, tiling, outcome, period, displacement, onset, speed, the exact proof), or a Quick Start entry (find:<id>). A pattern record has: rule (the one it runs in by default), rules (every rule it was verified in), range (B/S and Generations: minimal and maximal rule it runs identically in, with bitmasks), sightings (copies seen per rule and search job), tiling, class, period, displacement (spaceships: lattice vector per period) and speed, cells, bounding box, the cells of every phase as `i,j,k,s` tuples (lattice column, row, tile type, state), verification (periods checked exactly), provenance (where and when it was found), seen count, score, rating, name, tags, notes, state. On square and hexagon grids it also draws the phases as text ('O' live, '.' empty; hexagon rows are offset by half a cell). `id` may be the full id, a unique prefix, or the pattern's name (\"glider\").",
-            json!({"type": "object", "properties": {
-                "id": {"type": "string", "description": "Pattern id, unique id prefix, or name; ant-..., or find:<id>."},
-                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What the id names (default: from the id's form)."},
-                "phases": {"type": "integer", "minimum": 1, "maximum": 16, "description": "How many phases to draw (default 1)."},
-                "record": {"type": "boolean", "description": "Include the full record JSON (default true)."},
-            }, "required": ["id"], "additionalProperties": false}),
-        ),
-        tool(
-            "library_search",
-            "Search soups for patterns",
-            false,
-            &format!(
-                "Runs random soups with the given rules on the given tilings, finds the still lifes, oscillators, and spaceships left at the end, verifies each exactly, and adds them to the catalog as one search job (store: false only reports). Bounded: at most {r} rules x {r} tilings, {s} soups in total, grids up to 128 x 128 unit cells, {g} generations, {w} cell updates; takes seconds to a minute. Returns per rule and tiling the soup outcomes, object counts by class, the distinct patterns (id, label, count, new or already known). Example: {{\"rules\": [\"B2/S34\"], \"tilings\": [\"hex\"], \"soups\": 16}}.",
-                r = Limits::INTERACTIVE.max_search_rules,
-                s = Limits::INTERACTIVE.max_search_soups,
-                g = digits(Limits::INTERACTIVE.max_search_gens),
-                w = billions(Limits::INTERACTIVE.max_search_work)
-            ),
-            json!({"type": "object", "properties": {
-                "rules": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Rule notations, e.g. [\"B3/S23\", \"B2/S34\"]. Life-like and Generations rules without B0."},
-                "tilings": {"type": ["array", "string"], "items": {"type": "string"}, "description": "Tiling ids: \"square\", \"hex\", \"triangle\", \"oct\", \"trihex\", catalog ids like \"k2-001\" (default [\"square\"])."},
-                "soups": {"type": "integer", "minimum": 1, "maximum": 64, "description": "Soups per rule and tiling (default 16)."},
-                "width": {"type": "integer", "minimum": 16, "maximum": 128, "description": "Grid width in unit cells (default 48)."},
-                "height": {"type": "integer", "minimum": 16, "maximum": 128, "description": "Grid height (default 48)."},
-                "gens": {"type": "integer", "minimum": 10, "maximum": Limits::INTERACTIVE.max_search_gens, "description": "Generations per soup (default 1000)."},
-                "density": {"type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Soup density (default 0.37)."},
-                "seed": {"type": ["integer", "string"], "minimum": 0, "description": "Soup s uses RNG state seed + s (default 1). Any whole number to 2^64 - 1; beyond 2^53 as a string of digits (\"17705299566207515059\")."},
-                "store": {"type": "boolean", "description": "Add what is found to the library (default true)."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "paste_pattern",
-            "Paste a library pattern",
-            false,
-            "Pastes a library pattern into a CA's field of the current world (through the PastePattern command, so it is logged and replayable). The world must use the pattern's tiling; the CA usually runs the pattern's rule. Place it with `x`, `y` (the pattern's top-left corner, same coordinates as set_cells), or `index` (a cell index), or at: \"center\" (default); on aperiodic patches use `index` or at: \"original\" and the paste is refused unless the tiles around that cell match the pattern's surroundings. `orientation` turns it (0 = as stored; 0-7 on squares, 0-11 on hexagons; library_get shows which way a spaceship then moves) and `phase` picks the phase. Example: {\"id\": \"glider\", \"x\": 10, \"y\": 10, \"orientation\": 1}.",
-            json!({"type": "object", "properties": {
-                "id": {"type": "string", "description": "Pattern id, unique prefix, or name."},
-                "ca": {"description": "Which CA's field (id or name; default the first CA).", "type": ["integer", "string"]},
-                "x": {"type": "integer", "description": "Column of the pattern's top-left corner (give with y)."},
-                "y": {"type": "integer", "description": "Row of the pattern's top-left corner."},
-                "index": {"type": "integer", "minimum": 0, "description": "Cell index for the corner (lattice) or the anchor tile (aperiodic patches)."},
-                "at": {"type": "string", "enum": ["center", "original"], "description": "\"center\" (default) or \"original\" (aperiodic: where it was found)."},
-                "orientation": {"type": "integer", "minimum": 0, "maximum": 11, "description": "Index into the tiling's symmetries (0 = as stored)."},
-                "phase": {"type": "integer", "minimum": 0, "description": "Which phase to paste (default 0)."},
-            }, "required": ["id"], "additionalProperties": false}),
-        ),
-        tool(
-            "library_update",
-            "Curate a catalog record",
-            false,
-            "Curates a record. Patterns (default): name, tags (replace with `tags`, or add_tags / remove_tags), notes or append_notes, rating 1-5 (0 clears), state (new, reviewed, promoted, rejected), discovered_by. Ants (ids ant-...): name, notes, rating 1-5, state. Quick Start entries (by handle: find:<id>, atlas:<...>, qs-<hex>, or a built-in id with `kind` quickstart): `decision` approve (shown in the menu) or reject (hidden from the menu, packs and the website). Mark LLM-written text as such in the notes. Examples: {\"id\": \"glider\", \"rating\": 4}, {\"id\": \"find:sweep-1a2b\", \"decision\": \"reject\"}.",
-            json!({"type": "object", "properties": {
-                "id": {"type": ["string", "integer"], "description": "Pattern id, prefix, or name; ant-...; a Quick Start handle (find:<id>, atlas:<...>, qs-<hex>)."},
-                "kind": {"type": "string", "enum": ["pattern", "ant", "quickstart"], "description": "What the id names (default: from the id's form)."},
-                "name": {"type": "string", "description": "New name (empty clears it)."},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: replace all tags."},
-                "add_tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: tags to add."},
-                "remove_tags": {"type": "array", "items": {"type": "string"}, "description": "pattern: tags to remove."},
-                "notes": {"type": "string", "description": "Replace the notes."},
-                "append_notes": {"type": "string", "description": "pattern: add a paragraph to the notes."},
-                "rating": {"type": "number", "minimum": 0, "maximum": 5, "description": "1 (dull) to 5 (remarkable); 0 clears (patterns)."},
-                "state": {"type": "string", "description": "pattern: new, reviewed, promoted, rejected; ant: free text."},
-                "discovered_by": {"type": "string", "enum": ["search", "script", "llm", "user"], "description": "pattern: who found it."},
-                "decision": {"type": "string", "enum": ["approve", "reject"], "description": "quickstart: approve (shown) or reject (hidden)."},
-            }, "required": ["id"], "additionalProperties": false}),
-        ),
-        tool(
-            "library_promote",
-            "Promote a pattern to Quick Start",
-            false,
-            "Adds an entry to the app's Quick Start under \"My finds\" (stored in the catalog; library_list {\"kind\": \"quickstart\"} lists them). An ant run (`id` ant-...): its build-up scene from step 0. A library pattern (`id`): a scene with the pattern centred on a suitable wrapped grid (spaceships get room to fly and wrap around); sets the pattern's state to promoted. Or one run of a sweep (`folder` and `run`, from a run_script sweep's output folder and its manifest): the run's tiling, rule, and start, so it replays as in the sweep; the run is also starred in the folder's favourites.json. Optional title and description (sweep runs: `description` is put before the generated one). Examples: {\"id\": \"47fc3f43\", \"title\": \"Trihex glider\"} or {\"folder\": \"/home/me/Pictures/JETCARP/2026-11-05_17-18-41_HexT3-sum\", \"run\": \"HexT3 sum 588\"}.",
-            json!({"type": "object", "properties": {
-                "id": {"type": "string", "description": "Pattern id, unique id prefix, or name (give this, or folder and run)."},
-                "folder": {"type": "string", "description": "A sweep output folder (the 'output folder' line of run_script)."},
-                "run": {"type": "string", "description": "With folder: the run's rule text (\"HexT3 sum 588\"), manifest index (\"#12\"), or series number (\"n=588\")."},
-                "title": {"type": "string", "description": "Quick Start title (default: the name, label, or rule)."},
-                "description": {"type": "string", "description": "Quick Start description (default: generated)."},
-            }, "additionalProperties": false}),
-        ),
-        tool(
-            "library_collide",
-            "Collide two patterns",
-            false,
-            &format!(
-                "Collides pattern `b` into pattern `a` at every offset in a range and every phase of b, in a rule both work in, and classes each run (both survive, both die, one survives, new objects, unsettled, explodes, overlap). New objects are verified and stored in the catalog (store: false only reports). Bounded: at most {p} placements and {g} generations. Example: {{\"a\": \"block\", \"b\": \"glider\", \"offsets\": 4}}.",
-                p = digits(Limits::INTERACTIVE.max_collide_runs),
-                g = digits(Limits::INTERACTIVE.max_collide_gens)
-            ),
-            json!({"type": "object", "properties": {
-                "a": {"type": "string", "description": "Pattern id, prefix, or name (the target)."},
-                "b": {"type": "string", "description": "Pattern id, prefix, or name (moved over the offsets)."},
-                "offsets": {"type": "integer", "minimum": 0, "maximum": 30, "description": "B's corner offsets in -n..n on both axes (default 6)."},
-                "dx": {"type": "array", "items": {"type": "integer"}, "description": "[lo, hi] instead of offsets for x."},
-                "dy": {"type": "array", "items": {"type": "integer"}, "description": "[lo, hi] instead of offsets for y."},
-                "phases": {"type": "array", "items": {"type": "integer"}, "description": "B's phases to try (default all)."},
-                "orientation_a": {"type": "integer", "minimum": 0, "maximum": 11, "description": "A's orientation (index into the tiling's symmetries)."},
-                "orientation_b": {"type": "integer", "minimum": 0, "maximum": 11, "description": "B's orientation."},
-                "gens": {"type": "integer", "minimum": 16, "maximum": Limits::INTERACTIVE.max_collide_gens, "description": "Generations per run (default 1024)."},
-                "rule": {"type": "string", "description": "The rule to run (both must work in it; default: A's or B's)."},
-                "store": {"type": "boolean", "description": "Store new objects (default true)."},
-            }, "required": ["a", "b"], "additionalProperties": false}),
-        ),
+        Tool {
+            name: "library_query",
+            title: "List or read library records",
+            read_only: true,
+            destructive: false,
+            description: || {
+                "Lists or reads the library: what searches found and what you and the user kept. `kind`: \"pattern\" (default: verified still lifes, oscillators, spaceships, guns, puffers, movers; rule-free, each with every rule it was verified in and the range of rules it runs identically in), \"ant\" (ant and turmite runs: highway, periodic, symmetric, bounded or chaotic, with period, displacement, onset, and the outcome census per tiling), \"quickstart\" (the app's Quick Start entries by handle: built-in examples, entries from packs, an explore search's atlas, and promotions), or \"summary\" (how many of each the library holds). Listings come best first, at most 100 a call (`limit`, default 20; page with `offset`); the filters are optional and say which kind they apply to. With `id`, one record in full: a pattern's rules and range, sightings, the cells of its phases (drawn as text on squares and hexagons; `phases` how many), which way it moves per paste orientation; an ant run's outcome and proof; a Quick Start entry with its scene. Ids: a pattern's hex id, a unique prefix, or a name (\"glider\"); ant-...; a Quick Start handle (find:..., atlas:..., life). Examples: {\"class\": \"spaceship\", \"tiling\": \"hex\"}, {\"works_in\": \"B36/S23\"}, {\"kind\": \"ant\", \"outcome\": \"highway\", \"sort\": \"onset\"}, {\"kind\": \"quickstart\", \"source\": \"builtin\"}, {\"id\": \"glider\", \"phases\": 4}. Next: world_new {\"pattern\": id} or world_edit {\"paste\": {\"id\": id}} to run one; library_curate to curate; media_render for pictures.".into()
+            },
+            schema: || {
+                let mut p = named(vec![(
+                    "kind",
+                    words(
+                        &["pattern", "ant", "quickstart", "summary"],
+                        "What to list or read (default pattern; with `id`, the id's form says).",
+                    ),
+                )]);
+                let q = schema::props(&input_schema::<QueryIn>());
+                for (k, v) in q {
+                    if k != "kind" && k != "count_only" {
+                        p.insert(k, v);
+                    }
+                }
+                let mut limit = p["limit"].clone();
+                limit["description"] =
+                    json!("At most this many records (default 20, at most 100).");
+                p.insert("limit".into(), limit);
+                let mut text = p["text"].clone();
+                text["description"] = json!(
+                    "Patterns whose name or label contains this; Quick Start entries whose title, rule or tiling contains it."
+                );
+                p.insert("text".into(), text);
+                let g = schema::props(&input_schema::<GetIn>());
+                p.insert(
+                    "id".into(),
+                    json!({"type": "string", "description": "Read this one record in full instead of listing: a pattern's id, unique prefix or name (\"glider\"); an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life)."}),
+                );
+                p.insert("phases".into(), g["phases"].clone());
+                let l = schema::props(&input_schema::<ListIn>());
+                for k in ["source", "hidden"] {
+                    let mut v = l[k].clone();
+                    let d = v["description"].as_str().unwrap_or("").to_string();
+                    v["description"] = json!(format!("Quick Start: {d}"));
+                    p.insert(k.into(), v);
+                }
+                object(p, &[])
+            },
+            run: library_query,
+        },
+        Tool {
+            name: "library_curate",
+            title: "Curate library records",
+            read_only: false,
+            destructive: true,
+            description: || {
+                "Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (patterns: name, tags or add_tags / remove_tags, notes or append_notes, rating 1-5 (0 clears), state new / reviewed / promoted / rejected, discovered_by; ant runs: name, notes, rating, state), e.g. {\"id\": \"glider\", \"changes\": {\"rating\": 4, \"append_notes\": \"LLM: a clean c/4 ship\"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good: a pattern with its rules, sightings and Quick Start entry, an ant run, or a Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under \"My finds\": {\"quickstart\": {\"pattern\": \"<id>\", \"title\": \"Trihex glider\"}}, or {\"ant\": \"ant-...\"}, {\"search_run\": <run id>, \"job\": <explore job>}, {\"folder\": \"<sweep folder>\", \"run\": \"#12\"} (a run of a run_script sweep), {\"scene\": \"<scene file>\"}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side, a pulsar with blinkers) and lists them with their parts: {\"compounds\": {}}; {\"compounds\": {\"apply\": true}} stores the parts in their place.".into()
+            },
+            schema: || {
+                let mut p = named(vec![
+                    (
+                        "id",
+                        json!({"type": "string", "description": "The record: a pattern's id, unique prefix or name; an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life)."}),
+                    ),
+                    (
+                        "kind",
+                        words(
+                            &["pattern", "ant", "quickstart"],
+                            "What `id` names (default: from its form).",
+                        ),
+                    ),
+                    (
+                        "changes",
+                        schema::without(
+                            schema::op(
+                                input_schema::<UpdateIn>(),
+                                Some(
+                                    "Patterns and ant runs: the changes (what is not given stays).",
+                                ),
+                            ),
+                            &["id", "kind"],
+                        ),
+                    ),
+                    (
+                        "hidden",
+                        json!({"type": "boolean", "description": "Quick Start entries: leave it out of the menu, packs and the website (true), or show it again (false)."}),
+                    ),
+                    (
+                        "remove",
+                        json!({"type": "boolean", "description": "Delete the record for good (true)."}),
+                    ),
+                    (
+                        "quickstart",
+                        schema::op(
+                            input_schema::<AddIn>(),
+                            Some(
+                                "Add an entry to the Quick Start under \"My finds\": one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`.",
+                            ),
+                        ),
+                    ),
+                ]);
+                if let Some(s) = crate::compounds::schema() {
+                    p.insert("compounds".into(), s);
+                }
+                object(p, &[])
+            },
+            run: library_curate,
+        },
     ]
 }
 
-pub fn call(
-    host: &mut dyn Host,
-    name: &str,
-    args: &Value,
-    progress: Option<crate::tools::ProgressFn>,
-    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-) -> Res {
-    match name {
-        "library_list" => list(args),
-        "library_get" => get(args),
-        "library_search" => search_tool(args, progress, cancel),
-        "library_collide" => collide_tool(args, progress),
-        "paste_pattern" => paste(host, args),
-        "library_update" => update(args),
-        "library_promote" => promote(args),
-        _ => Err(format!("unknown tool {name}")),
-    }
-}
-
+/// A pattern as listings show it.
 fn summary(r: &PatternRecord) -> Value {
     json!({
         "id": r.id, "label": r.label(), "name": r.name, "rule": r.rule, "rules": r.rules,
@@ -214,59 +145,7 @@ fn summary(r: &PatternRecord) -> Value {
     })
 }
 
-fn strings(v: Option<&Value>, key: &str) -> Result<Vec<String>, String> {
-    match v {
-        None | Some(Value::Null) => Ok(vec![]),
-        Some(Value::String(s)) => Ok(s
-            .split([',', ' ', ';'])
-            .map(str::trim)
-            .filter(|x| !x.is_empty())
-            .map(String::from)
-            .collect()),
-        Some(Value::Array(a)) => a
-            .iter()
-            .map(|x| {
-                x.as_str()
-                    .map(|s| s.trim().to_string())
-                    .ok_or_else(|| format!("`{key}` must be strings"))
-            })
-            .collect(),
-        Some(v) => Err(format!("`{key}` must be a list of strings, got {v}")),
-    }
-}
-
-/// The kind of record an id names: `kind` when given, else from the id's form.
-fn kind_of<'a>(args: &'a Value, id: &str) -> Result<&'a str, String> {
-    Ok(match string(args, "kind")? {
-        Some(k) => k,
-        None if id.starts_with("ant-") => "ant",
-        None if id.starts_with("find:") || id.starts_with("atlas:") || id.starts_with("qs-") => {
-            "quickstart"
-        }
-        None => "pattern",
-    })
-}
-
-fn without(args: &Value, keys: &[&str]) -> Value {
-    let mut v = args.clone();
-    if let Some(o) = v.as_object_mut() {
-        for k in keys {
-            o.remove(*k);
-        }
-    }
-    v
-}
-
-fn list(args: &Value) -> Res {
-    let rest = without(args, &["kind"]);
-    match string(args, "kind")?.unwrap_or("pattern") {
-        "pattern" => list_patterns(&rest),
-        "ant" => list_ants(&rest),
-        "quickstart" => quickstart_list(&rest),
-        k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
-    }
-}
-
+/// An ant run as listings show it.
 pub(crate) fn ant_json(r: &jetcarp_store::AntRow) -> Value {
     json!({
         "id": r.id, "rule": r.rule, "tiling": r.tiling_name, "start": r.start.label(),
@@ -276,99 +155,225 @@ pub(crate) fn ant_json(r: &jetcarp_store::AntRow) -> Value {
     })
 }
 
-fn text(args: &Value, key: &str) -> Result<Option<String>, String> {
-    Ok(string(args, key)?.map(String::from))
-}
-
-fn list_ants(args: &Value) -> Res {
-    check_unknown(args, &["outcome", "tiling", "rule", "job", "sort", "limit"])?;
-    let q = QueryIn {
-        kind: Some("ant".into()),
-        outcome: text(args, "outcome")?,
-        tiling: text(args, "tiling")?,
-        rule: text(args, "rule")?,
-        job: int(args, "job")?,
-        sort: text(args, "sort")?,
-        limit: Some(int(args, "limit")?.unwrap_or(20).clamp(1, 100) as usize),
-        ..Default::default()
-    };
-    let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
-    Ok(ToolOutput::json(&json!({
-        "catalog": out.catalog,
-        "census": out.census,
-        "shown": out.ants.len(),
-        "ants": out.ants.iter().map(ant_json).collect::<Vec<_>>(),
-    })))
-}
-
-fn list_patterns(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "rule",
-            "works_in",
-            "tiling",
-            "class",
-            "state",
-            "min_period",
-            "min_score",
-            "tag",
-            "text",
-            "order",
-            "offset",
-            "limit",
-        ],
-    )?;
-    let limit = int(args, "limit")?.unwrap_or(20).clamp(1, 100) as usize;
-    let q = QueryIn {
-        rule: text(args, "rule")?,
-        works_in: text(args, "works_in")?,
-        order: text(args, "order")?,
-        offset: int(args, "offset")?.map(|x| x.max(0) as usize),
-        tiling: text(args, "tiling")?,
-        class: text(args, "class")?,
-        state: text(args, "state")?,
-        min_period: int(args, "min_period")?.map(|x| x.max(1) as u64),
-        min_score: args.get("min_score").and_then(|v| v.as_f64()),
-        tag: text(args, "tag")?,
-        text: text(args, "text")?,
-        limit: Some(limit),
-        ..Default::default()
-    };
-    let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
-    let shown: Vec<Value> = out.patterns.iter().map(summary).collect();
-    Ok(ToolOutput::json(&json!({
-        "catalog": out.catalog,
-        "matching": out.matching,
-        "shown": shown.len(),
-        "patterns": shown,
-    })))
-}
-
-fn get(args: &Value) -> Res {
-    check_unknown(args, &["id", "kind", "phases", "record"])?;
-    let id = string(args, "id")?.ok_or("give the record's `id`")?;
-    let kind = kind_of(args, id)?;
+/// What an id names: `kind` when given, else from the id's form.
+fn kind_of(kind: Option<&str>, id: &str) -> String {
     match kind {
-        "pattern" | "ant" => {}
-        "quickstart" => {
-            let q = QuickstartGet::run(ctx(), IdIn { id: id.into() }, &Quiet).map_err(err)?;
-            return Ok(ToolOutput::json(&op::to_value(&q)));
+        Some(k) => k.to_string(),
+        None if id.starts_with("ant-") => "ant".into(),
+        None if id.starts_with("find:")
+            || id.starts_with("atlas:")
+            || id.starts_with("qs-")
+            || jetcarp_store::quickstart::unmade_builtin(&ctx().library(), id).is_some()
+            || (ctx().library().get(id).is_err() && ctx().library().get_quickstart(id).is_ok()) =>
+        {
+            "quickstart".into()
         }
-        k => return Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
+        None => "pattern".into(),
     }
-    let n = if kind == "pattern" {
-        int(args, "phases")?.unwrap_or(1).clamp(1, 16) as u64
-    } else {
-        1
+}
+
+fn given<'a>(a: &'a Value, keys: &[&'a str]) -> Vec<&'a str> {
+    keys.iter()
+        .copied()
+        .filter(|k| a.get(*k).is_some_and(|v| !v.is_null()))
+        .collect()
+}
+
+fn refuse(tool: &str, what: &str, keys: &[&str]) -> Res {
+    Err(format!(
+        "{tool}: `{}` do{} not apply to {what}",
+        keys.join("`, `"),
+        if keys.len() == 1 { "es" } else { "" }
+    ))
+}
+
+const PATTERN_FILTERS: &[&str] = &[
+    "rule",
+    "works_in",
+    "tiling",
+    "class",
+    "state",
+    "min_period",
+    "max_period",
+    "min_score",
+    "tag",
+    "text",
+    "discovered_by",
+    "neighborhood",
+    "order",
+    "offset",
+    "limit",
+];
+const ANT_FILTERS: &[&str] = &["outcome", "tiling", "rule", "job", "sort", "limit"];
+const QS_FILTERS: &[&str] = &["source", "hidden", "text", "offset", "limit"];
+
+fn library_query(c: &mut Call) -> Res {
+    let a = c.args;
+    let mut all: Vec<&str> = vec!["id", "phases"];
+    for k in PATTERN_FILTERS.iter().chain(ANT_FILTERS).chain(QS_FILTERS) {
+        if !all.contains(k) {
+            all.push(k);
+        }
+    }
+    let kind = a.get("kind").and_then(Value::as_str);
+    let limit = |d: u64| -> Result<usize, String> {
+        match a.get("limit") {
+            None | Some(Value::Null) => Ok(d as usize),
+            Some(v) => v
+                .as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+                .map(|n| n.clamp(1, MAX_LIST) as usize)
+                .ok_or_else(|| format!("library_query: `limit` is a whole number, not {v}")),
+        }
     };
-    let a = GetIn {
-        id: id.into(),
-        kind: Some(kind.into()),
-        phases: Some(n),
-        bare: false,
-    };
-    let v = LibraryGet::run(ctx(), a, &Quiet).map_err(err)?;
+    if kind == Some("summary") {
+        let extra = given(a, &all);
+        if !extra.is_empty() {
+            return refuse("library_query", "kind summary", &extra);
+        }
+        let i = LibraryInfoOp::run(ctx(), NoInput {}, &Quiet).map_err(err)?;
+        return Ok(ToolOutput::text(i.text()));
+    }
+    if let Some(id) = a.get("id").filter(|v| !v.is_null()) {
+        let id = match id {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.to_string(),
+            v => return Err(format!("library_query: `id` is text, not {v}")),
+        };
+        let extra: Vec<&str> = given(a, &all)
+            .into_iter()
+            .filter(|k| !["id", "phases"].contains(k))
+            .collect();
+        if !extra.is_empty() {
+            return refuse("library_query", "one record (`id`)", &extra);
+        }
+        return get(&id, kind, a);
+    }
+    match kind.unwrap_or("pattern") {
+        "pattern" => {
+            let extra: Vec<&str> = given(a, &all)
+                .into_iter()
+                .filter(|k| !PATTERN_FILTERS.contains(k))
+                .collect();
+            if !extra.is_empty() {
+                return refuse("library_query", "patterns", &extra);
+            }
+            let mut q: QueryIn = schema::read(
+                &input_schema::<QueryIn>(),
+                "library_query",
+                schema::pick(a, PATTERN_FILTERS),
+            )?;
+            q.kind = Some("pattern".into());
+            q.limit = Some(limit(20)?);
+            let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
+            let shown: Vec<Value> = out.patterns.iter().map(summary).collect();
+            Ok(ToolOutput::json(&json!({
+                "catalog": out.catalog,
+                "matching": out.matching,
+                "shown": shown.len(),
+                "patterns": shown,
+            })))
+        }
+        "ant" => {
+            let extra: Vec<&str> = given(a, &all)
+                .into_iter()
+                .filter(|k| !ANT_FILTERS.contains(k))
+                .collect();
+            if !extra.is_empty() {
+                return refuse("library_query", "ant runs", &extra);
+            }
+            let mut q: QueryIn = schema::read(
+                &input_schema::<QueryIn>(),
+                "library_query",
+                schema::pick(a, ANT_FILTERS),
+            )?;
+            q.kind = Some("ant".into());
+            q.limit = Some(limit(20)?);
+            let out = LibraryQuery::run(ctx(), q, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(&json!({
+                "catalog": out.catalog,
+                "census": out.census,
+                "shown": out.ants.len(),
+                "ants": out.ants.iter().map(ant_json).collect::<Vec<_>>(),
+            })))
+        }
+        "quickstart" => {
+            let extra: Vec<&str> = given(a, &all)
+                .into_iter()
+                .filter(|k| !QS_FILTERS.contains(k))
+                .collect();
+            if !extra.is_empty() {
+                return refuse("library_query", "Quick Start entries", &extra);
+            }
+            let l: ListIn = schema::read(
+                &input_schema::<ListIn>(),
+                "library_query",
+                schema::pick(a, &["source", "hidden"]),
+            )?;
+            let text = a
+                .get("text")
+                .and_then(Value::as_str)
+                .map(|t| t.to_lowercase());
+            let offset = a.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let n = limit(20)?;
+            let out = QuickstartList::run(ctx(), l, &Quiet).map_err(err)?;
+            let matching: Vec<&jetcarp_api::ops::quickstart::Entry> = out
+                .entries
+                .iter()
+                .rev()
+                .filter(|e| {
+                    text.as_ref().is_none_or(|t| {
+                        [&e.title, &e.rule, &e.grid, &e.id, &e.behaviour]
+                            .iter()
+                            .any(|s| s.to_lowercase().contains(t))
+                    })
+                })
+                .collect();
+            let shown: Vec<Value> = matching
+                .iter()
+                .skip(offset)
+                .take(n)
+                .map(|e| {
+                    json!({
+                        "id": e.id, "title": e.title, "rule": e.rule, "grid": e.grid,
+                        "behaviour": e.behaviour, "source": e.source, "made_from": e.target_kind,
+                        "hidden": e.hidden, "score": e.score,
+                    })
+                })
+                .collect();
+            Ok(ToolOutput::json(&json!({
+                "catalog": out.catalog,
+                "matching": matching.len(),
+                "shown": shown.len(),
+                "order": "newest first",
+                "entries": shown,
+                "next": "world_new {\"quickstart\": id} opens one; library_query {\"id\": id} shows its scene.",
+            })))
+        }
+        k => Err(format!(
+            "library_query: `kind` is pattern, ant, quickstart, or summary, not {k}"
+        )),
+    }
+}
+
+/// One record in full.
+fn get(id: &str, kind: Option<&str>, a: &Value) -> Res {
+    let kind = kind_of(kind, id);
+    if kind == "quickstart" {
+        if a.get("phases").is_some_and(|v| !v.is_null()) {
+            return refuse("library_query", "Quick Start entries", &["phases"]);
+        }
+        let q = QuickstartGet::run(ctx(), IdIn { id: id.into() }, &Quiet).map_err(err)?;
+        return Ok(ToolOutput::json(&op::to_value(&q)));
+    }
+    let mut g: GetIn = schema::read(
+        &input_schema::<GetIn>(),
+        "library_query",
+        json!({"id": id, "kind": kind, "phases": a.get("phases").cloned().unwrap_or(Value::Null)}),
+    )?;
+    let n = g.phases.unwrap_or(1).clamp(1, 16);
+    g.phases = Some(n);
+    let v = LibraryGet::run(ctx(), g, &Quiet).map_err(err)?;
     if let Some(r) = &v.ant {
         let mut out = ToolOutput::text(r.line());
         out.content.push(
@@ -416,382 +421,129 @@ fn get(args: &Value) -> Res {
         text.push_str(&p.text());
     }
     let mut out = ToolOutput::text(text);
-    if args.get("record").and_then(|v| v.as_bool()).unwrap_or(true) {
-        out.content
-            .push(json!({"type": "text", "text": r.to_json()}));
-    }
+    out.content
+        .push(json!({"type": "text", "text": r.to_json()}));
     Ok(out)
 }
 
-/// Progress and cancellation of a call, for an operation.
-fn callbacks(
-    progress: Option<crate::tools::ProgressFn>,
-    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-) -> Callbacks {
-    Callbacks {
-        on_report: progress.map(|f| {
-            std::sync::Arc::new(move |d: u64, t: Option<u64>, m: &str| {
-                f(d as f64, t.map(|t| t as f64), m.to_string())
-            }) as std::sync::Arc<dyn Fn(u64, Option<u64>, &str) + Send + Sync>
-        }),
-        cancel,
-    }
-}
-
-/// Run a search or collision here, as a job (`search.start`), until it ends or is cancelled.
-fn run_here(strategy: &str, spec: Value, p: &Callbacks) -> Result<SearchStarted, String> {
-    let a = SearchStartIn {
-        strategy: Some(strategy.into()),
-        spec,
-        ..Default::default()
-    };
-    SearchStart::run(ctx(), a, p).map_err(err)
-}
-
-fn collide_tool(args: &Value, progress: Option<crate::tools::ProgressFn>) -> Res {
-    check_unknown(
-        args,
-        &[
-            "a",
-            "b",
-            "offsets",
-            "dx",
-            "dy",
-            "phases",
-            "orientation_a",
-            "orientation_b",
-            "gens",
-            "rule",
-            "store",
-        ],
-    )?;
-    let l = lib();
-    let a = l.get(string(args, "a")?.ok_or("give pattern `a`")?)?;
-    let b = l.get(string(args, "b")?.ok_or("give pattern `b`")?)?;
-    // The bounds on one call (placements, generations) are the context's limits, checked by
-    // the operation.
-    let max_gens = ctx().limits.max_collide_gens;
-    let n = int(args, "offsets")?.unwrap_or(6).clamp(0, 30) as i32;
-    let range = |k: &str| -> Result<[i32; 2], String> {
-        match args.get(k) {
-            None | Some(Value::Null) => Ok([-n, n]),
-            Some(Value::Array(v)) if v.len() == 2 => Ok([
-                v[0].as_i64().ok_or(format!("`{k}` is [lo, hi]"))? as i32,
-                v[1].as_i64().ok_or(format!("`{k}` is [lo, hi]"))? as i32,
-            ]),
-            Some(_) => Err(format!("`{k}` is [lo, hi]")),
+fn library_curate(c: &mut Call) -> Res {
+    let a = c.args;
+    if let Some(which) = schema::one_of("library_curate", a, &["quickstart", "compounds"])? {
+        let extra = given(a, &["id", "kind", "changes", "hidden", "remove"]);
+        if !extra.is_empty() {
+            return refuse("library_curate", &format!("`{which}`"), &extra);
         }
-    };
-    let phases: Vec<u32> = match args.get("phases") {
-        Some(Value::Array(v)) => v
-            .iter()
-            .filter_map(|x| x.as_u64())
-            .map(|x| x as u32)
-            .collect(),
-        _ => vec![],
-    };
-    let (dx, dy) = (range("dx")?, range("dy")?);
-    let spec = CollideIn {
-        a: a.id,
-        b: b.id,
-        dx: Some(json!(dx)),
-        dy: Some(json!(dy)),
-        phases: Some(json!(phases)),
-        orientation_a: Some(int(args, "orientation_a")?.unwrap_or(0).max(0) as u32),
-        orientation_b: Some(int(args, "orientation_b")?.unwrap_or(0).max(0) as u32),
-        gens: Some((int(args, "gens")?.unwrap_or(1024).max(16) as u64).min(max_gens)),
-        rule: string(args, "rule")?.map(String::from),
-        store: Some(args.get("store").and_then(|v| v.as_bool()).unwrap_or(true)),
-        ..Default::default()
-    };
-    let out = run_here("collide", op::to_value(&spec), &callbacks(progress, None))?;
-    let r = out
-        .result
-        .ok_or_else(|| format!("collision {} did not finish ({})", out.job, out.status))?;
-    let rep = &r["report"];
-    let runs: Vec<Value> = rep["runs"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|x| x["outcome"] == "new_objects")
-        .take(40)
-        .map(|x| json!({"dx": x["dx"], "dy": x["dy"], "phase": x["phase"], "result": x["result"]}))
-        .collect();
-    Ok(ToolOutput::json(&json!({
-        "a": rep["a_label"], "b": rep["b_label"], "rule": rep["rule"], "tiling": rep["tiling"],
-        "outcomes": rep["counts"],
-        "products": r["products"],
-        "new_object_runs": runs,
-    })))
-}
-
-fn search_tool(
-    args: &Value,
-    progress: Option<crate::tools::ProgressFn>,
-    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-) -> Res {
-    check_unknown(
-        args,
-        &[
-            "rules", "tilings", "soups", "width", "height", "gens", "density", "seed", "store",
-        ],
-    )?;
-    let rules = strings(args.get("rules"), "rules")?;
-    if rules.is_empty() {
-        return Err("give the `rules`, e.g. [\"B3/S23\"]".into());
+        if which == "compounds" {
+            return crate::compounds::run(c, &a["compounds"]);
+        }
+        let input: AddIn = schema::read(
+            &input_schema::<AddIn>(),
+            "library_curate quickstart",
+            a["quickstart"].clone(),
+        )?;
+        let out = QuickstartAdd::run(ctx(), input, &Quiet).map_err(err)?;
+        return Ok(ToolOutput::text(format!(
+            "{}Open it with world_new {{\"quickstart\": \"{}\"}}.",
+            out.text(),
+            out.entry
+        )));
     }
-    let mut tl = strings(args.get("tilings"), "tilings")?;
-    if tl.is_empty() {
-        tl.push("square".into());
-    }
-    // The bounds on one call (rules, tilings, soups in all, generations, cell updates) are the
-    // context's limits, checked by the operation.
-    let max_gens = ctx().limits.max_search_gens;
-    let soups = int(args, "soups")?.unwrap_or(16).clamp(1, 64) as u32;
-    let w = int(args, "width")?.unwrap_or(48).clamp(16, 128) as u32;
-    let h = int(args, "height")?.unwrap_or(48).clamp(16, 128) as u32;
-    let gens = (int(args, "gens")?.unwrap_or(1000).max(10) as u64).min(max_gens);
-    let store = args
-        .get("store")
-        .map(|_| boolean(args, "store"))
-        .transpose()?
-        .unwrap_or(true);
-    let spec = BoundedIn {
-        rules: Some(json!(rules)),
-        tilings: Some(json!(tl.join(","))),
-        width: Some(w),
-        height: Some(h),
-        boundary: Some("wrap".into()),
-        soups: Some(soups),
-        gens: Some(gens),
-        density: Some(
-            args.get("density")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.37)
-                .clamp(0.0, 1.0),
-        ),
-        seed: Some(uint(args, "seed")?.unwrap_or(1)),
-        store: Some(store),
-        ..Default::default()
-    };
-    let out = run_here("search", op::to_value(&spec), &callbacks(progress, cancel))?;
-    let r: SearchResult = out
-        .result
-        .and_then(|r| serde_json::from_value(r).ok())
-        .ok_or_else(|| format!("search {} stopped before its end ({})", out.job, out.status))?;
-    let groups: Vec<Value> = r
-        .report
-        .groups
-        .iter()
-        .map(|g| {
-            json!({
-                "rule": g.rule, "tiling": g.tiling, "error": g.error,
-                "soups": {"settled": g.settled, "active": g.active, "exploded": g.exploded},
-                "objects_by_class": g.objects,
-                "distinct": g.found.len(),
-                "patterns": g.found.iter().take(25).map(|f| json!({
-                    "id": f.id, "label": f.label, "class": f.class, "period": f.period, "speed": f.speed,
-                    "cells": f.cells, "count": f.count, "verified": f.verified,
-                    "new": f.new,
-                })).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-    Ok(ToolOutput::json(&json!({
-        "stored": store,
-        "catalog": out.catalog,
-        "job": out.job,
-        "new_patterns": r.added.len(),
-        "known_patterns_in_new_rules": r.new_rules.iter().map(|(id, r)| json!({"id": id, "rule": r})).collect::<Vec<_>>(),
-        "groups": groups,
-        "next": "library_get an id to see it; paste_pattern to put it in a world; library_update to curate.",
-    })))
-}
-
-fn paste(host: &mut dyn Host, args: &Value) -> Res {
-    check_unknown(
-        args,
-        &["id", "ca", "x", "y", "index", "at", "orientation", "phase"],
-    )?;
-    let a = PasteIn {
-        id: string(args, "id")?
-            .ok_or("give the pattern `id`")?
-            .to_string(),
-        ca: given(args, "ca"),
-        x: int(args, "x")?,
-        y: int(args, "y")?,
-        index: int(args, "index")?,
-        at: string(args, "at")?.map(String::from),
-        orientation: int(args, "orientation")?,
-        phase: int(args, "phase")?,
-    };
-    let out = WorldPaste::run(crate::tools::ctx(), host, a, &Quiet).map_err(err)?;
-    Ok(ToolOutput::text(out.text()))
-}
-
-fn update(args: &Value) -> Res {
-    let id = match args.get("id") {
-        Some(Value::Number(n)) => n.to_string(),
+    let id = match a.get("id") {
         Some(Value::String(s)) => s.clone(),
-        _ => return Err("give the record's `id`".into()),
-    };
-    let rest = without(args, &["kind"]);
-    match kind_of(args, &id)? {
-        "pattern" => update_pattern(&rest),
-        "ant" => {
-            check_unknown(&rest, &["id", "name", "notes", "rating", "state"])?;
-            let a = UpdateIn {
-                id,
-                kind: Some("ant".into()),
-                name: text(&rest, "name")?,
-                notes: text(&rest, "notes")?,
-                rating: rest.get("rating").and_then(|v| v.as_f64()),
-                state: text(&rest, "state")?,
-                ..Default::default()
-            };
-            let r = LibraryUpdate::run(ctx(), a, &Quiet).map_err(err)?;
-            Ok(ToolOutput::json(
-                &r.ant.as_ref().map(ant_json).unwrap_or_default(),
-            ))
-        }
-        "quickstart" => {
-            check_unknown(&rest, &["id", "decision"])?;
-            let hidden = match string(&rest, "decision")? {
-                Some("approve") => false,
-                Some("reject") => true,
-                _ => return Err("give `decision`: approve or reject".into()),
-            };
-            let r = QuickstartUpdate::run(ctx(), HideIn { id, hidden }, &Quiet).map_err(err)?;
-            Ok(ToolOutput::json(&json!({"id": r.id, "hidden": r.hidden})))
-        }
-        k => Err(format!("`kind` is pattern, ant, or quickstart, not {k}")),
-    }
-}
-
-fn update_pattern(args: &Value) -> Res {
-    check_unknown(
-        args,
-        &[
-            "id",
-            "name",
-            "tags",
-            "add_tags",
-            "remove_tags",
-            "notes",
-            "append_notes",
-            "rating",
-            "state",
-            "discovered_by",
-        ],
-    )?;
-    let id = string(args, "id")?.ok_or("give the pattern `id`")?;
-    let a = UpdateIn {
-        id: id.into(),
-        kind: Some("pattern".into()),
-        name: text(args, "name")?,
-        tags: args
-            .get("tags")
-            .map(|v| strings(Some(v), "tags"))
-            .transpose()?,
-        add_tags: strings(args.get("add_tags"), "add_tags")?,
-        remove_tags: strings(args.get("remove_tags"), "remove_tags")?,
-        notes: text(args, "notes")?,
-        append_notes: text(args, "append_notes")?,
-        rating: int(args, "rating")?.map(|x| x.clamp(0, 255) as f64),
-        state: text(args, "state")?,
-        discovered_by: text(args, "discovered_by")?,
-    };
-    let r = LibraryUpdate::run(ctx(), a, &Quiet).map_err(err)?;
-    Ok(ToolOutput::json(
-        &r.pattern.as_ref().map(summary).unwrap_or_default(),
-    ))
-}
-
-/// Where a promoted entry shows up.
-const IN_THE_APP: &str = "It appears in the JETCARP app's Quick Start under \"My finds\" (the app refreshes when you return to the Quick Start).";
-
-fn promote(args: &Value) -> Res {
-    check_unknown(args, &["id", "folder", "run", "title", "description"])?;
-    if let Some(folder) = string(args, "folder")? {
-        if string(args, "id")?.is_some() {
+        Some(Value::Number(n)) => n.to_string(),
+        _ => {
             return Err(
-                "give `id` (a library pattern) or `folder` and `run` (a sweep run), not both"
+                "library_curate: give `id` with changes, hidden or remove; or `quickstart` to add an entry; or `compounds`"
                     .into(),
             );
         }
-        let run = string(args, "run")?
-            .ok_or("give `run`: the rule text, \"#index\", or \"n=number\" of a row in the folder's manifest")?;
-        let a = AddIn {
-            folder: Some(folder.into()),
-            run: Some(run.into()),
-            title: text(args, "title")?,
-            note: text(args, "description")?,
-            ..Default::default()
-        };
-        let p = QuickstartAdd::run(ctx(), a, &Quiet).map_err(err)?;
-        return Ok(ToolOutput::json(&json!({
-            "promoted": p.title,
-            "rule": p.rule,
-            "run": p.run,
-            "entry": p.entry,
-            "note": IN_THE_APP,
-        })));
-    }
-    let id = string(args, "id")?
-        .ok_or("give the pattern `id` (or `folder` and `run` for a sweep run)")?;
-    let ant = id.starts_with("ant-");
-    let a = AddIn {
-        pattern: (!ant).then(|| id.to_string()),
-        ant: ant.then(|| id.to_string()),
-        title: text(args, "title")?,
-        description: text(args, "description")?,
-        ..Default::default()
     };
-    let p = QuickstartAdd::run(ctx(), a, &Quiet).map_err(err)?;
-    Ok(ToolOutput::json(&json!({
-        "promoted": p.title,
-        "description": p.description,
-        "entry": p.entry,
-        "note": if ant {
-            "It appears in the JETCARP app's Quick Start under \"My finds\": the run from step 0."
+    let kind = kind_of(a.get("kind").and_then(Value::as_str), &id);
+    let remove = match a.get("remove") {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => false,
+        Some(Value::Bool(true)) => true,
+        Some(Value::String(s)) if s == "true" || s == "false" => s == "true",
+        Some(v) => {
+            return Err(format!(
+                "library_curate: `remove` is true or false, not {v}"
+            ));
+        }
+    };
+    let action = schema::one_of("library_curate", a, &["changes", "hidden"])?;
+    if remove {
+        if let Some(k) = action {
+            return Err(format!("library_curate: give `{k}` or `remove`, not both"));
+        }
+        let text = if kind == "quickstart" {
+            QuickstartRemove::run(ctx(), IdIn { id }, &Quiet)
+                .map_err(err)?
+                .text()
         } else {
-            IN_THE_APP
-        },
-    })))
-}
-
-fn quickstart_list(args: &Value) -> Res {
-    check_unknown(args, &["status", "source", "limit"])?;
-    let hidden = match text(args, "status")?.as_deref() {
-        None => None,
-        Some("shown") => Some(false),
-        Some("hidden") => Some(true),
-        Some(s) => return Err(format!("`status` is shown or hidden, not {s}")),
-    };
-    let source = text(args, "source")?;
-    let limit = int(args, "limit")?.unwrap_or(50).clamp(1, 200) as usize;
-    let out = QuickstartList::run(ctx(), ListIn { source, hidden }, &Quiet).map_err(err)?;
-    let shown: Vec<Value> = out
-        .entries
-        .iter()
-        .rev()
-        .take(limit)
-        .map(op::to_value)
-        .collect();
-    Ok(ToolOutput::json(&json!({
-        "catalog": out.catalog,
-        "entries": out.entries.len(),
-        "shown": shown.len(),
-        "newest_first": shown,
-    })))
-}
-
-/// `4 billion`, `1.5 billion`.
-fn billions(n: u64) -> String {
-    let b = n as f64 / 1e9;
-    if b.fract() == 0.0 {
-        format!("{b:.0} billion")
-    } else {
-        format!("{b} billion")
+            LibraryRemove::run(
+                ctx(),
+                RemoveIn {
+                    id,
+                    kind: Some(kind),
+                },
+                &Quiet,
+            )
+            .map_err(err)?
+            .text()
+        };
+        return Ok(ToolOutput::text(text));
+    }
+    match action {
+        Some("hidden") => {
+            if kind != "quickstart" {
+                return Err(format!(
+                    "library_curate: `hidden` is for Quick Start entries; '{id}' names a {kind} (patterns are hidden from the Quick Start through their entry, find:<id>; or set their state to rejected)"
+                ));
+            }
+            let hidden = match &a["hidden"] {
+                Value::Bool(b) => *b,
+                Value::String(s) if s == "true" || s == "false" => s == "true",
+                v => {
+                    return Err(format!(
+                        "library_curate: `hidden` is true or false, not {v}"
+                    ));
+                }
+            };
+            let r = QuickstartUpdate::run(ctx(), HideIn { id, hidden }, &Quiet).map_err(err)?;
+            Ok(ToolOutput::text(r.text()))
+        }
+        Some(_) => {
+            if kind == "quickstart" {
+                return Err(
+                    "library_curate: a Quick Start entry takes `hidden` or `remove`; curate the pattern or ant run it was made from with `changes`"
+                        .into(),
+                );
+            }
+            let mut ch = a["changes"].clone();
+            if let Value::String(s) = &ch
+                && let Ok(v) = serde_json::from_str::<Value>(s)
+            {
+                ch = v;
+            }
+            let Value::Object(mut o) = ch else {
+                return Err("library_curate: `changes` is an object".into());
+            };
+            o.insert("id".into(), json!(id));
+            o.insert("kind".into(), json!(kind));
+            let input: UpdateIn = schema::read(
+                &input_schema::<UpdateIn>(),
+                "library_curate changes",
+                Value::Object(o),
+            )?;
+            let r = LibraryUpdate::run(ctx(), input, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(&match (&r.pattern, &r.ant) {
+                (Some(p), _) => summary(p),
+                (_, Some(x)) => ant_json(x),
+                _ => Value::Null,
+            }))
+        }
+        None => Err(
+            "library_curate: with `id`, give `changes`, `hidden` (Quick Start entries) or `remove`"
+                .into(),
+        ),
     }
 }

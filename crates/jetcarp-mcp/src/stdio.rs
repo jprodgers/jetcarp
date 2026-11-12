@@ -17,7 +17,7 @@ fn use_app_definition() -> Value {
     json!({
         "name": "use_app",
         "title": "Attach to the JETCARP app",
-        "description": "Chooses which world the other tools act on. attach=true: the world in the JETCARP desktop app the user is watching (the user must switch on 'AI control' in the app's top bar first). attach=false: this server's own private world (the default unless the server was started with --app). Returns the attached world's status.",
+        "description": "Chooses which world the other tools act on. attach=true: the world in the JETCARP desktop app the user is watching, so they see every change as it happens (the user must first switch on 'AI control' in the app's top bar; the app then also offers app_display, its displays and screensaver). attach=false: this server's own private world (the default unless the server was started with --app). Returns the attached world's status.",
         "inputSchema": {"type": "object", "properties": {
             "attach": {"type": "boolean", "description": "true = act on the app's world, false = the private world. Default true."},
             "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "App port, if not the one the app recorded."},
@@ -31,7 +31,7 @@ fn host_control_definition() -> Value {
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, the separate program that keeps live scenes running without the app window. Returns its status: each screen's rotation, item, generation, and caption, memory use, and recent problems. Fails if the host is not running; `jetcarp host start` starts it.",
+        "description": "Controls the JETCARP background host, the separate program that keeps live scenes running as wallpapers or windows without the app. Returns its status: each screen's rotation, item, generation and caption, memory use, and recent problems. Fails if the host is not running; the user starts it with `jetcarp host start`. Examples: {}, {\"action\": \"next\"}, {\"action\": \"pause\"}, {\"action\": \"wallpaper\", \"on\": false}.",
         "inputSchema": {"type": "object", "properties": {
             "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "quit"], "description": "Default status. reload rereads host.json. wallpaper shows every screen as the desktop background (on GNOME this needs the extension) or back in a window; login sets whether the host starts at login; open_app opens the JETCARP app."},
             "on": {"type": "boolean", "description": "With wallpaper or login: on or off. Default on."},
