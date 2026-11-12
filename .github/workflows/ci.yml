@@ -64,6 +64,11 @@ jobs:
               exit 1
             fi
           done
+      - name: The generated reference pages match the program (MCP tools, command line)
+        if: runner.os == 'Linux'
+        run: |
+          python3 docs/tools/gen-mcp.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-cli.py --check --jetcarp target/release/jetcarp
 
   fmt:
     name: Formatting
