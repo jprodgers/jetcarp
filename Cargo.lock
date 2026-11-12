@@ -2395,11 +2395,13 @@ dependencies = [
  "jetcarp-pack",
  "jetcarp-search",
  "jetcarp-store",
+ "libc",
  "png",
  "rayon",
  "schemars",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

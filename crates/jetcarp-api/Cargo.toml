@@ -34,3 +34,11 @@ rayon.workspace = true
 # JSON Schemas for each operation's input and output (the op registry, `jetcarp api schema`,
 # and later the MCP tools' input schemas).
 schemars = "1.2.3"
+
+# Free disk space for the first-run setup's data folder choice (setup.status): statvfs on Unix,
+# GetDiskFreeSpaceExW on Windows. Both are bindings only, already in the dependency tree.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }

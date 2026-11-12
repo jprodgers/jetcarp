@@ -1125,3 +1125,126 @@ impl Op for QuickstartPublish {
         })
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// quickstart.build
+
+/// A Quick Start build: an explore search of so many minutes, then its atlas published into the
+/// Quick Start, as one job.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BuildIn {
+    /// Minutes the search runs in all, over every session, before its atlas is published (default 10).
+    #[serde(default)]
+    pub minutes: Option<f64>,
+    /// The search's settings (search.start's explore spec); default: every tiling and rule family, and a seed from the clock.
+    #[serde(default)]
+    pub search: super::search::ExploreIn,
+    /// Run the rules a GPU can run on the GPU when there is one (default true).
+    #[serde(default)]
+    pub gpu: Option<bool>,
+    /// Entries per category, family, and tiling (default 12).
+    #[serde(default)]
+    pub per_niche: Option<usize>,
+    /// Lowest confirmed score (default 1.25; contrast picks are exempt).
+    #[serde(default)]
+    pub min_score: Option<f64>,
+    /// Most entries (default 12,000).
+    #[serde(default)]
+    pub max_entries: Option<usize>,
+    /// The job's label (default "Quick Start build").
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Worker threads (default 0: all cores).
+    #[serde(default)]
+    pub threads: Option<usize>,
+    /// Run on a thread of this process and answer at once.
+    #[serde(default)]
+    pub background: bool,
+    /// Run in a process of its own (`jetcarp jobs resume JOB`) and answer at once.
+    #[serde(default)]
+    pub detach: bool,
+}
+
+/// The label of a Quick Start build's job.
+pub const BUILD_LABEL: &str = "Quick Start build";
+
+impl BuildIn {
+    /// The explore job it makes.
+    pub fn job_spec(&self) -> Result<jetcarp_search::jobs::JobSpec, ApiError> {
+        use jetcarp_search::jobs::explore::BuildSpec;
+        let minutes = self.minutes.unwrap_or(10.0);
+        if !(minutes > 0.0 && minutes.is_finite()) {
+            return Err(ApiError::invalid(format!(
+                "a Quick Start build needs minutes above 0, not {minutes}"
+            )));
+        }
+        let mut search = self.search.clone();
+        if search.seed.is_none() {
+            // Each build starts its random draws somewhere of its own, so two computers find
+            // different things.
+            search.seed = Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos() as u64)
+                    .unwrap_or(0),
+            );
+        }
+        let mut spec = search.spec()?;
+        spec.gpu = self.gpu.unwrap_or(true);
+        let mut b = BuildSpec::minutes(minutes);
+        if let Some(n) = self.per_niche {
+            b.per_niche = n;
+        }
+        if let Some(m) = self.min_score {
+            b.min_score = m;
+        }
+        if let Some(n) = self.max_entries {
+            b.max_entries = n;
+        }
+        spec.build = Some(b);
+        Ok(jetcarp_search::jobs::JobSpec {
+            strategy: "explore".into(),
+            spec: serde_json::to_value(&spec).map_err(|e| ApiError::engine(e.to_string()))?,
+            label: Some(
+                self.label
+                    .clone()
+                    .filter(|l| !l.trim().is_empty())
+                    .unwrap_or_else(|| BUILD_LABEL.into()),
+            ),
+            budget: Default::default(),
+        })
+    }
+}
+
+/// `quickstart.build`.
+pub struct QuickstartBuild;
+impl Op for QuickstartBuild {
+    const NAME: &'static str = "quickstart.build";
+    const SUMMARY: &'static str = "Build Quick Start entries of your own: an explore search of so many minutes (on the GPU when there is one), then its best runs published into the Quick Start as its atlas, as one job (stopped, it resumes where it was).";
+    const READ_ONLY: bool = false;
+    type In = BuildIn;
+    type Out = super::search::SearchStarted;
+    fn run(
+        cx: &Ctx,
+        a: BuildIn,
+        p: &dyn Progress,
+    ) -> Result<super::search::SearchStarted, ApiError> {
+        let t0 = std::time::Instant::now();
+        let lib = cx.library();
+        let js = a.job_spec()?;
+        let job = jetcarp_search::jobs::create(&lib, &js).map_err(ApiError::invalid)?;
+        let how = super::search::How {
+            threads: a.threads.unwrap_or(0),
+            gpu: a.gpu.unwrap_or(true),
+            budget: Default::default(),
+            background: a.background,
+            detach: a.detach,
+            files: Default::default(),
+        };
+        let mut out = super::search::run_job(cx, &lib, job, &how, p)?;
+        out.created = true;
+        out.seconds = t0.elapsed().as_secs_f64();
+        Ok(out)
+    }
+}

@@ -1432,7 +1432,8 @@ pub struct ExploreIn {
 const FAMILIES: &str = "families: life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider";
 
 impl ExploreIn {
-    fn spec(&self) -> Result<ExploreSpec, ApiError> {
+    /// The explore job's spec these settings make.
+    pub(crate) fn spec(&self) -> Result<ExploreSpec, ApiError> {
         use jetcarp_search::explore::job::Settings;
         use jetcarp_search::explore::store::fam_named;
         let d = Settings::default();
@@ -1460,6 +1461,7 @@ impl ExploreIn {
             max_rss_gb: self.max_rss_gb,
             uuid: String::new(),
             seal_rows: None,
+            build: None,
         })
     }
 }

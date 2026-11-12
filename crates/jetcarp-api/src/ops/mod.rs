@@ -8,7 +8,7 @@
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.objects`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
 //! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune` |
-//! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish` |
+//! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish`, `quickstart.build` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
 //! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
@@ -16,6 +16,7 @@
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
 //! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 //! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
+//! | [`setup`] | `setup.status`, `setup.set_data_dir`, `setup.apply` (the first-run setup; with the `pack` feature) |
 
 pub mod explore;
 pub mod files;
@@ -28,6 +29,8 @@ pub mod quickstart;
 pub mod reference;
 pub mod scene;
 pub mod search;
+#[cfg(feature = "pack")]
+pub mod setup;
 pub mod sheet;
 pub mod system;
 pub mod wallpaper;
@@ -81,6 +84,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<quickstart::QuickstartRemove>::NEW,
     &Plain::<quickstart::QuickstartCheck>::NEW,
     &Plain::<quickstart::QuickstartPublish>::NEW,
+    &Plain::<quickstart::QuickstartBuild>::NEW,
     &Plain::<media::MediaRender>::NEW,
     &Plain::<media::MediaListOp>::NEW,
     &Plain::<media::MediaExport>::NEW,
@@ -119,4 +123,10 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<pack::PackInfo>::NEW,
     #[cfg(feature = "pack")]
     &Plain::<pack::PackImport>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<setup::SetupStatusOp>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<setup::SetupSetDataDir>::NEW,
+    #[cfg(feature = "pack")]
+    &Plain::<setup::SetupApply>::NEW,
 ];

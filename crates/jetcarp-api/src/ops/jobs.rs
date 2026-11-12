@@ -38,6 +38,7 @@ pub fn noun(kind: &str) -> &str {
         "collide" => "collision",
         "evolve" => "evolve search",
         "explore" => "explore search",
+        "pack_import" => "pack import",
         k => k,
     }
 }

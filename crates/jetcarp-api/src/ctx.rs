@@ -335,6 +335,12 @@ pub struct Ctx {
     /// `<folder>/library.sqlite`). Set it before the first operation that reads the catalog
     /// ([`Ctx::with_library`]): the catalog is opened once.
     pub library: Option<PathBuf>,
+    /// Settings folder instead of `$JETCARP_CONFIG_DIR` or the system's (the first-run setup's
+    /// record and `paths.json` are read and written there; tests).
+    pub settings_dir: Option<PathBuf>,
+    /// The folder of packs that came with the program, instead of the one looked for
+    /// ([`jetcarp_core::paths::bundled_packs_dir`]; tests).
+    pub bundled_dir: Option<PathBuf>,
     /// The catalog, opened on first use and shared by every operation on this context (one
     /// SQLite connection instead of one per call).
     store: OnceLock<Library>,
@@ -357,12 +363,17 @@ impl Ctx {
     /// that names a library pattern finds it in the default library, as it always has.
     pub fn new() -> Ctx {
         jetcarp_store::install();
+        // Pack imports run as jobs (`pack_import`), which the runner finds by their kind.
+        #[cfg(feature = "pack")]
+        jetcarp_pack::install();
         Ctx {
             limits: Limits::NONE,
             fs: FsPolicy::open(),
             platform: Arc::new(Headless),
             out_root: None,
             library: None,
+            settings_dir: None,
+            bundled_dir: None,
             store: OnceLock::new(),
             session: Mutex::new(None),
             registry: jetcarp_search::jobs::registry(),
@@ -402,6 +413,19 @@ impl Ctx {
         cx.store = OnceLock::from(lib);
         cx
     }
+    /// Read and write settings in this folder instead of `$JETCARP_CONFIG_DIR` or the system's
+    /// (so also its `paths.json`, which chooses the data folder). Set it before the first
+    /// operation that reads the catalog.
+    pub fn with_settings_dir(mut self, dir: Option<PathBuf>) -> Ctx {
+        self.settings_dir = dir;
+        self.store = OnceLock::new();
+        self
+    }
+    /// Take the packs that came with the program from this folder instead.
+    pub fn with_bundled_packs(mut self, dir: Option<PathBuf>) -> Ctx {
+        self.bundled_dir = dir;
+        self
+    }
     /// Write outputs under this root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
     pub fn with_out_root(mut self, root: Option<PathBuf>) -> Ctx {
         self.out_root = root;
@@ -421,14 +445,31 @@ impl Ctx {
 
     /// The folders, as they are now.
     pub fn paths(&self) -> Paths {
+        let settings = self
+            .settings_dir
+            .clone()
+            .or_else(jetcarp_core::paths::config_dir);
         Paths {
-            settings: jetcarp_core::paths::config_dir(),
-            data: jetcarp_core::paths::data_dir(),
+            data: jetcarp_core::paths::data_dir_for(settings.as_deref()),
+            settings,
             output: self
                 .out_root
                 .clone()
                 .unwrap_or_else(jetcarp_core::paths::output_dir),
-            bundled_packs: jetcarp_core::paths::bundled_packs_dir(),
+            bundled_packs: self
+                .bundled_dir
+                .clone()
+                .or_else(jetcarp_core::paths::bundled_packs_dir),
+        }
+    }
+
+    /// The catalog's file as it would be opened now: `library`, else `$JETCARP_LIBRARY`, else
+    /// `<data>/library.sqlite` in the data folder as it is now (after a `paths.json` change too,
+    /// unlike [`library_path`](Self::library_path) once the catalog is open).
+    pub fn library_path_now(&self) -> PathBuf {
+        match &self.library {
+            Some(p) => Library::file_for(p.clone()),
+            None => Library::default_path_in(&self.paths().data),
         }
     }
 
@@ -441,10 +482,7 @@ impl Ctx {
     pub fn library_path(&self) -> PathBuf {
         match self.store.get() {
             Some(l) => l.path().to_path_buf(),
-            None => match &self.library {
-                Some(p) => Library::file_for(p.clone()),
-                None => Library::default_path(),
-            },
+            None => self.library_path_now(),
         }
     }
 
@@ -453,10 +491,7 @@ impl Ctx {
     /// first write.
     pub fn library(&self) -> Library {
         self.store
-            .get_or_init(|| match &self.library {
-                Some(p) => Library::open(p.clone()),
-                None => Library::open_default(),
-            })
+            .get_or_init(|| Library::open(self.library_path_now()))
             .clone()
     }
 
