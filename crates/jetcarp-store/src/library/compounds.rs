@@ -186,7 +186,7 @@ pub(super) fn split_in(
             tx.execute("DELETE FROM patterns WHERE id = ?1", [&s.compound])
                 .map_err(e)?;
             for sql in [
-                "DELETE FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1",
+                "DELETE FROM quickstart WHERE target_kind = 'pattern' AND target_id = ?1",
                 "DELETE FROM media WHERE target_kind = 'pattern' AND target_id = ?1",
             ] {
                 tx.execute(sql, [&s.compound]).map_err(e)?;
@@ -248,7 +248,7 @@ impl Library {
         self.read(false, |c| {
             let q: bool = c
                 .prepare_cached(
-                    "SELECT 1 FROM quickstart WHERE source_kind = 'pattern' AND source_id = ?1",
+                    "SELECT 1 FROM quickstart WHERE target_kind = 'pattern' AND target_id = ?1",
                 )
                 .map_err(e)?
                 .exists([id])
