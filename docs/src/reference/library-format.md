@@ -345,7 +345,9 @@ library made by an earlier build may hold some. `jetcarp library compounds` (the
     curation state other than `new`, a Quick Start entry or a rating row) is left for a person to
     decide. So is one with a rule where a part alone runs otherwise, since there it may be one object.
 - **Once only.** A record tagged `compound` is passed over, so running the pass again changes
-  nothing.
+  nothing. A part the pass stores whose id comes after its place is examined too, so a part that
+  comes apart further is split as well; the examined count can then exceed the patterns there were
+  at the start.
 
 ## Aliases
 

@@ -93,7 +93,10 @@ steps, trying the phases with the most atoms first:
 
 Every split made is the independence test itself, so the steps can miss a split but cannot split one
 object in two. Each part is then split again in its own phases, so the result is as fine as the steps
-can make it. On aperiodic patches the test runs on the patch, at the object's site.
+can make it. They can miss one where three or more parts interact only together (in rules where a
+cell is born from many neighbours, small still lifes that are each stable may be held apart only by a
+third object's cells), so a part can sometimes come apart further when it is examined again as a
+record of its own. On aperiodic patches the test runs on the patch, at the object's site.
 
 **What stays one object.**
 - A *tag-along*, a ship whose core runs inside it unperturbed while it tows a passenger that cannot
@@ -106,8 +109,8 @@ can make it. On aperiodic patches the test runs on the patch, at the object's si
   [Findings](findings.md). In some phases its halves lie too far apart to be grouped, and each is a
   ship alone. So the object finder and the hunt also run neighbouring objects that are periodic alone
   together: when running them together differs from the union of their runs and they are periodic
-  together, they are one object. The hunt does not cut an escaping ship away from a neighbour it
-  forms such an object with.
+  together (with any piece that dies alone within a few steps, which one of them shed), they are one
+  object. The hunt does not cut an escaping ship away from a neighbour it forms such an object with.
 - Cells that touch are one atom, so two still lifes that touch at a corner (the *ship-tie*) stay one
   object.
 
