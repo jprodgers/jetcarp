@@ -39,9 +39,10 @@ Every profile keeps the built-in examples in the Quick Start menu.
 rule family, on your GPU when you have one, for the minutes you choose. When the minutes are spent,
 it adds its best runs to the Quick Start as an atlas, picked per category, rule family and tiling
 (as `jetcarp quickstart publish` does). Each computer's build searches from a starting point of its
-own, so yours finds things no one else's has. The runs already under way finish first, so it can run
-a minute or so past its time. On a computer without a usable GPU it runs on the processor and finds
-less in the time.
+own, so yours finds things no one else's has. Runs already under way when the minutes are spent
+finish first (a sandpile's run on the processor can take most of a minute), so a build can end a
+minute or two past its time, and later on a busy computer. On a computer without a usable GPU it
+runs on the processor and finds less in the time.
 
 The window shows roughly how much disk space and time each profile takes on your computer. The
 estimate counts the packs and about 8 MB for each minute of the build.
@@ -119,20 +120,20 @@ you tick it:
 
 `jetcarp setup` does the same in a terminal. With no `--profile` it asks the questions there; with
 `--profile NAME --yes` it asks nothing, for scripts. Either way it says what it will do, then does
-it, with the jobs' progress below:
+it, with the jobs' progress on a line below. Here with a one-minute build:
 
 ```text
-$ jetcarp setup --profile explorer --yes
+$ jetcarp setup --profile explorer --yes --quickstart-minutes 1
 
 setting up JETCARP as Explorer:
   1. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
   2. import JETCARP starter pack (44 patterns, 8 Quick Start entries, 160.2 KB)
-  3. search for 10 minutes on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
+  3. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
 pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 pack import 1: JETCARP starter pack imported: 44 patterns new, 0 merged, 8 Quick Start entries, 0 ant runs (done)
-Quick Start build (explore 2): 2,914 atlas entries published (2,914 new, 0 updated, 0 removed); … (done)
+Quick Start build (explore 2): 615 atlas entries published (615 new, 0 updated, 0 removed); 15,424 runs (75/s), 4,875 elites in 2,725 niches, 180 confirmed, 15 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 ```
@@ -148,24 +149,28 @@ Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 | `--status` | Only show where things stand (below) |
 
 `jetcarp setup --status` shows whether setup has run and with which profile, the folders and the
-free space, the packs that came with JETCARP, whether the build can use a GPU, the library's counts,
-setup's jobs, and what each profile would take:
+free space, the packs that came with JETCARP, whether the build can use a GPU, the library's counts
+(its Quick Start entries by where they came from), setup's jobs, and what each profile would take
+here. After the setup above:
 
 ```text
 $ jetcarp setup --status
-setup: not run yet (`jetcarp setup`, or the app's setup window, runs it)
+setup: Explorer on 2026-11-12 07:27 UTC (JETCARP 0.4.0)
   settings: /home/ada/.config/jetcarp
-  data:     /home/ada/.local/share/jetcarp, 412.0 GB free
+  data:     /home/ada/.local/share/jetcarp, 7.4 TB free
   library:  /home/ada/.local/share/jetcarp/library.sqlite
   output:   /home/ada/Pictures/JETCARP
   bundled:  /home/ada/.local/lib/jetcarp/packs
 packs that came with JETCARP:
-  JETCARP starter pack (jetcarp-starter/jetcarp-starter): 44 patterns, 8 Quick Start entries, 160.2 KB; the starter pack
+  JETCARP starter pack (jetcarp-starter/jetcarp-starter): 44 patterns, 8 Quick Start entries, 160.2 KB; the starter pack, imported
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (a Quick Start build runs on it)
-library: 0 patterns, 0 ant runs, 0 jobs
+library: 44 patterns, 0 ant runs, 4 jobs; Quick Start entries: 364 built in, 8 from packs, 615 from searches
+setup's jobs:
+  pack import 1: JETCARP starter pack imported: 44 patterns new, 0 merged, 8 Quick Start entries, 0 ant runs (done)
+  Quick Start build (explore 2): 615 atlas entries published (615 new, 0 updated, 0 removed); … (done)
 profiles:
-  desktop-art  Desktop art: … (no extra disk space or time)
-  explorer     Explorer: … (about 80 MB and 11 minutes)
+  desktop-art  Desktop art: Moving pictures for your desktop: … (no extra disk space or time)
+  explorer     Explorer: The built-in examples and the starter pack's patterns, and a ten-minute search … (about 80 MB and 11 minutes)
   …
 ```
 
