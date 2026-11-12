@@ -37,6 +37,11 @@ are only the usual case. On Windows the data goes in the local application-data 
 roaming one, because search databases can be large. On macOS the settings and data folders would be
 the same, so the data goes in a `data` folder inside it.
 
+On Windows the output folder follows the Pictures folder wherever Windows keeps it. When OneDrive
+backs up Pictures it moves that folder into OneDrive, so the output goes to
+`%USERPROFILE%\OneDrive\Pictures\JETCARP` and OneDrive syncs it (large sandpiles and long sweeps
+included). `jetcarp paths` shows where it is; set `JETCARP_OUT` to keep the output out of OneDrive.
+
 If the system has no such folder, JETCARP falls back: without a settings folder, settings are simply
 not saved; without a data folder, it uses `jetcarp-data` in the current folder; without a Pictures
 folder, `~/Pictures/JETCARP`, and failing that `jetcarp-out` in the current folder. An override set
