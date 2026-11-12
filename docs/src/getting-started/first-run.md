@@ -39,13 +39,15 @@ Every profile keeps the built-in examples in the Quick Start menu.
 rule family, on your GPU when you have one, for the minutes you choose. When the minutes are spent,
 it adds its best runs to the Quick Start as an atlas, picked per category, rule family and tiling
 (as `jetcarp quickstart publish` does). Each computer's build searches from a starting point of its
-own, so yours finds things no one else's has. Runs already under way when the minutes are spent
-finish first (a sandpile's run on the processor can take most of a minute), so a build can end a
-minute or two past its time, and later on a busy computer. On a computer without a usable GPU it
-runs on the processor and finds less in the time.
+own, so yours finds things no one else's has. The search ends on time: when the minutes are spent,
+runs still going on the processor are given up, and the GPU's last batches are sized to end with
+them. Adding the atlas to the Quick Start then takes a few seconds more (up to a minute on a slow
+computer), because each entry's run is replayed to where it is most interesting. On a computer
+without a usable GPU it runs on the processor and finds less in the time.
 
 The window shows roughly how much disk space and time each profile takes on your computer. The
-estimate counts the packs and about 8 MB for each minute of the build.
+estimate counts the packs and about 8 MB for each minute of the build; its time is the build's
+minutes, half a minute to add its atlas, and the imports.
 
 ## What the window asks
 

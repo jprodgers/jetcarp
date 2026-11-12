@@ -894,15 +894,22 @@ pub fn packs_for(p: Profile, bundled: &[PackEntry]) -> Vec<&PackEntry> {
 
 /// About how much a setup adds and takes: packs of `pack_bytes` and a build of `minutes`.
 pub fn estimate(pack_bytes: u64, minutes: f64) -> (u64, f64) {
+    let minutes = minutes.max(0.0);
     let bytes = (pack_bytes as f64 * IMPORT_GROWTH) as u64
-        + (minutes.max(0.0) * BUILD_BYTES_PER_MINUTE as f64) as u64;
-    // An import reads about 50 MB a minute, and checks a sample of its patterns again.
+        + (minutes * BUILD_BYTES_PER_MINUTE as f64) as u64;
+    // An import reads about 50 MB a minute, and checks a sample of its patterns again (the
+    // 1.5 MB starter pack: about 6 s on a 32-thread desktop).
     let import_min = if pack_bytes > 0 {
-        (pack_bytes as f64 / 50e6).max(0.5) + 0.5
+        (pack_bytes as f64 / 50e6).max(0.25) + 0.25
     } else {
         0.0
     };
-    (bytes, minutes.max(0.0) + import_min)
+    // A build searches for its minutes, ending on time (`explore::job::Search::step`), then
+    // publishes its atlas, replaying each entry's run to where it is most interesting (about
+    // 10 s for a one-minute build and 17 s for a three-minute one on that desktop; longer on a
+    // slower processor).
+    let publish_min = if minutes > 0.0 { 0.5 } else { 0.0 };
+    (bytes, minutes + import_min + publish_min)
 }
 
 /// Bytes to two significant figures, for estimates (`80 MB`, `1.2 GB`).
