@@ -405,8 +405,9 @@ impl Report for UninstallReport {
             self.output.display()
         );
         s.push_str(
-            "\nTo remove the program itself, use what installed it: `pip uninstall jetcarp`, `pipx \
-             uninstall jetcarp`, `uv tool uninstall jetcarp`, `brew uninstall jetcarp`, `cargo \
+            "\nTo remove the program itself, use what installed it: the installer again with \
+             `--uninstall`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip \
+             uninstall jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo \
              uninstall jetcarp`, or delete its folder.\n",
         );
         if self.done

@@ -75,6 +75,16 @@ and reworked for release in a new repository with a fresh history.
   [Pack format](../reference/pack-format.md).
 - Continuous integration that builds and tests on Linux, Windows and macOS, and builds for macOS on
   Intel and Linux on ARM.
+- Releases: archives for Linux (x86_64 and ARM, for glibc 2.28 or newer), Windows and macOS (Apple
+  silicon and Intel) with a `SHA256SUMS` file, shell and PowerShell installers that check it,
+  Python wheels for pipx, uv and pip, a Homebrew tap and a Scoop bucket, and the notices of every
+  library in the program (`THIRD_PARTY_LICENSES.html`). See
+  [Installing JETCARP](../getting-started/installing.md).
+- A starter pack beside the program, found in one place that `jetcarp paths` and `jetcarp doctor`
+  show (`JETCARP_BUNDLED_PACKS` moves it); see
+  [The starter pack](../getting-started/installing.md#the-starter-pack).
+- `SECURITY.md`: how to report a security problem, and what JETCARP opens. It makes no network
+  connections and has no telemetry.
 - Licences: JETCARP's own code and data under the Unlicense or the MIT licence, notices for the work
   it contains, and citation metadata (`CITATION.cff`). See [Licence](licence.md) and
   [Citing JETCARP](citing.md).

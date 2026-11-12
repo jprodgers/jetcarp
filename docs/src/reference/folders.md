@@ -10,11 +10,18 @@ $ jetcarp paths
 settings: /home/ada/.config/jetcarp
 data:     /home/ada/.local/share/jetcarp
 output:   /home/ada/Pictures/JETCARP
+bundled:  /home/ada/.local/lib/jetcarp/packs
 ```
 
-`jetcarp paths --json` prints the same as JSON. `jetcarp doctor` adds the catalog file, how much data
-is in use and every `JETCARP_…` variable that is set, which makes it the thing to paste into a bug
-report.
+The last line is the folder of packs that came with the program, the starter pack, which JETCARP
+reads and never writes; it says `(no packs came with the program)` when there is none, as after
+`cargo install`. Where it is looked for is in
+[Installing JETCARP](../getting-started/installing.md#the-starter-pack).
+
+`jetcarp paths --json` prints the same as JSON (the last as `bundled_packs`, `null` when there is
+none). `jetcarp doctor` adds the catalog file, how much data is in use, the starter pack's size (or
+where it looked for one), and every `JETCARP_…` variable that is set, which makes it the thing to
+paste into a bug report.
 
 ## The three folders
 
@@ -95,6 +102,7 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
 | `JETCARP_ATLAS` | The atlas file the Quick Start menu reads, when set to a file that exists. Otherwise `<data>/explore/atlas.sqlite`, then an `atlas.sqlite` shipped beside the program |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
+| `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
 | `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |
 | `JETCARP_AI_CONTROL` | `1` or `on`: the app switches AI control on at launch, as its setting of the same name does |
 | `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default 1,536) |

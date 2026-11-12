@@ -18,7 +18,7 @@ Would undo (run again with --yes):
 Kept the data folder /home/ada/.local/share/jetcarp (2.1 GB); add --data to delete it.
 Your pictures and exports in /home/ada/Pictures/JETCARP are never deleted.
 
-To remove the program itself, use what installed it: `pip uninstall jetcarp`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `brew uninstall jetcarp`, `cargo uninstall jetcarp`, or delete its folder.
+To remove the program itself, use what installed it: the installer again with `--uninstall`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo uninstall jetcarp`, or delete its folder.
 ```
 
 `jetcarp uninstall --yes` does it, and reports each step as *done* or *FAILED* with the reason. The
@@ -79,19 +79,20 @@ folder, or run `jetcarp host gnome remove`, which does both.
 
 ## 3. Remove the program
 
-<div class="checked">
+Remove the program last: `jetcarp uninstall` needs it to undo the rest. Then use what installed it
+(see [Installing JETCARP](../getting-started/installing.md)):
 
-**Install methods come with the release packaging.** JETCARP 0.4.0's installers and packages (the
-installers on GitHub Releases, pip, pipx and uv, and Homebrew) are not built yet, and this section
-will say how to remove each when they are. The message `jetcarp uninstall` prints already names the
-expected commands: `pip uninstall jetcarp`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`,
-`brew uninstall jetcarp` and `cargo uninstall jetcarp`.
+| Installed with | Remove with |
+| --- | --- |
+| The shell installer | `curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.sh \| sh -s -- --uninstall`, or `sh jetcarp-installer.sh --uninstall`: it deletes `~/.local/lib/jetcarp` and the link `~/.local/bin/jetcarp` |
+| The PowerShell installer | the installer again with `-Uninstall`: it deletes `%LOCALAPPDATA%\Programs\jetcarp` and takes it off your user `PATH` |
+| pipx, uv, pip | `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall jetcarp` |
+| Homebrew | `brew uninstall jetcarp` (and `brew untap jprodgers/jetcarp`) |
+| Scoop | `scoop uninstall jetcarp` (and `scoop bucket rm jetcarp`) |
+| cargo | `cargo uninstall jetcarp` |
+| A release archive | delete the folder you unpacked |
 
-</div>
-
-If you built JETCARP from source, delete the folder you built it in; if you installed it with
-`cargo install --path crates/jetcarp`, `cargo uninstall jetcarp` removes it. On Windows, remove
-`jetcarpw.exe`, the windowless launcher, with `jetcarp.exe` if it is there; on macOS, remove
-`libjetcarp_saver.dylib` if it is beside the program.
-
-Remove the program last: `jetcarp uninstall` needs it to undo the rest.
+Each removes the program with the files that came with it (on Windows `jetcarpw.exe`, the
+windowless launcher; on macOS `libjetcarp_saver.dylib`; the starter pack) and nothing of yours: the
+settings, data and output folders stay until you delete them (step 1's `--settings` and `--data`,
+or by hand). If you built JETCARP from source, delete the folder you built it in.

@@ -9,8 +9,32 @@ once, on shared or separate cell fields. It has a graphical app, a command line,
 language, and a Model Context Protocol (MCP) server, plus tools that search for spaceships,
 oscillators and other patterns and keep verified catalogues of what they find.
 
-> **Status:** pre-release. Version 0.4.0 is being prepared. Installation instructions and full
-> documentation will be published with the release.
+> **Status:** pre-release. Version 0.4.0 is being prepared; the commands below work once it is
+> published.
+
+## Installing
+
+On Linux and macOS:
+
+```bash
+curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 | iex"
+```
+
+Or `pipx install jetcarp` (or `uv tool install jetcarp`); `brew tap jprodgers/jetcarp` then
+`brew install jetcarp`; `scoop bucket add jetcarp https://github.com/jprodgers/scoop-jetcarp` then
+`scoop install jetcarp`; or `cargo install jetcarp`. Every way, and what to know on each system, is
+in [Installing JETCARP](https://jprodgers.github.io/jetcarp/getting-started/installing.html).
+
+**No telemetry.** JETCARP makes no network connections: it does not check for updates, report
+crashes or collect statistics, and never sends anything anywhere. See
+[SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) for what it does open
+(local sockets only) and how to report a security problem.
 
 ## Building from source
 
@@ -23,20 +47,20 @@ cargo test --workspace --release
 
 ## Licence
 
-JETCARP is dual-licensed under the [Unlicense](UNLICENSE) and the [MIT licence](LICENSE-MIT); use
+JETCARP is dual-licensed under the [Unlicense](https://github.com/jprodgers/jetcarp/blob/main/UNLICENSE) and the [MIT licence](https://github.com/jprodgers/jetcarp/blob/main/LICENSE-MIT); use
 either. A few files derived from other people's work keep their own licences, listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](https://github.com/jprodgers/jetcarp/blob/main/THIRD_PARTY_NOTICES.md).
 
 ## Citing JETCARP
 
 If JETCARP helps your research, please cite it. GitHub's *Cite this repository* button reads
-[CITATION.cff](CITATION.cff). Each release will also have a DOI on Zenodo.
+[CITATION.cff](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff). Each release will also have a DOI on Zenodo.
 
 ## How JETCARP was made
 
 Jimmie Rodgers designed JETCARP, chose its research directions, and tested it on Linux, Windows
 and macOS. All of its code was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI
-coding tool; the [documentation](docs/src/about/how-made.md) describes who did what. Every simulation result JETCARP reports is checked by its own test suite or by exact
+coding tool; the [documentation](https://jprodgers.github.io/jetcarp/about/how-made.html) describes who did what. Every simulation result JETCARP reports is checked by its own test suite or by exact
 verification (for example, exact recurrence for spaceships), but please treat it as you would any
 research software: check the results that matter to you.
 
