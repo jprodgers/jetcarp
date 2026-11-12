@@ -246,7 +246,8 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
     // A new context: the data folder may have changed, and the library goes there.
     let cx = crate::platform::ctx();
     let done = SetupApply::run(&cx, input, &p);
-    p.finish();
+    // Each job's last line follows, so the progress line goes.
+    p.clear();
     let done = done?;
     if json {
         show(&done, true)?;

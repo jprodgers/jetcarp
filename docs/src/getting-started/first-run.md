@@ -91,7 +91,7 @@ import or build the button says **Finish**.
 **Setting up.** Each job with its progress. They run in the background, so **Continue in the
 background** closes the window and they carry on; **Tools → Hunts…** shows them too, and the new
 entries appear in the Quick Start as they arrive. A job that was cut off, because the app closed or
-the computer went to sleep, has a **Resume** button here and in the Hunts window. When everything is
+the computer restarted, has a **Resume** button here and in the Hunts window. When everything is
 done the button says **Close**.
 
 <img src="../images/getting-started/setup-7-progress.png" alt="Setting up for Explorer: the starter pack imported, and the Quick Start build running, with Continue in the background" width="600">

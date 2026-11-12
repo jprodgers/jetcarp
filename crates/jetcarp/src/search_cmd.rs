@@ -654,6 +654,16 @@ impl CliProgress {
         }
     }
 
+    /// Erase the line rewritten in place, if one is showing (what follows says the same).
+    pub(crate) fn clear(&self) {
+        let mut l = self.last.lock().unwrap();
+        if l.1 {
+            eprint!("\r\x1b[2K");
+            let _ = std::io::stderr().flush();
+            l.1 = false;
+        }
+    }
+
     /// End the line rewritten in place, if one is showing.
     pub(crate) fn finish(&self) {
         let mut l = self.last.lock().unwrap();
