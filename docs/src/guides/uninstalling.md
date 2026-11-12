@@ -47,7 +47,7 @@ Two options also delete JETCARP's folders:
 | Option | Deletes |
 | --- | --- |
 | `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures. A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be |
-| `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries of your own, the exploratory search's databases and the atlas. **This cannot be undone** |
+| `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases. **This cannot be undone** |
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you
 want to keep your pattern library, copy `library.sqlite` (and its `media` folder) out of the data

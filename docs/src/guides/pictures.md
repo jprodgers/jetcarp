@@ -82,8 +82,8 @@ $ jetcarp wallpaper life --monitors 2560x1440+0+0,1920x1080+2560+180 --split --g
 | `-o`, `--out` | A file or a folder (default: the `wallpapers` folder of the output folder) |
 
 `jetcarp --json quickstart` lists the built-in Quick Start entries with their ids (such as `life` or
-`langtons-ant`); entries of your own are `find:…`. To show a wallpaper that moves, see
-[Wallpapers, screensavers and the background host](wallpapers.md).
+`langtons-ant`); entries of your own are `find:…` and the atlas's `atlas:…`. To show a wallpaper that
+moves, see [Wallpapers, screensavers and the background host](wallpapers.md).
 
 ## Animations
 
@@ -102,7 +102,7 @@ thumb  llrr/thumb.png
   Quick Start entry's id or number (as `jetcarp quickstart` lists them) renders that entry's scene the
   same way, into `media/<id>` without `--out`. The other targets come from the
   [pattern library](pattern-library.md): `--pattern ID` (a catalogued pattern, shown alone),
-  `--quickstart find:ID` (one of the library's own Quick Start entries, under *My finds*), `--ant ID`
+  `--quickstart HANDLE` (one of the library's own Quick Start entries: `find:ID` under *My finds*, `atlas:…`, or a pack's `qs-…`), `--ant ID`
   (an ant run) and `--missing` (everything in the library whose media are missing or out of date,
   limited with `--class`, `--only-patterns`, `--only-quickstart` and `--limit`). Their media are kept
   in the library's `media` folder, each file once under the SHA-256 of its bytes (see

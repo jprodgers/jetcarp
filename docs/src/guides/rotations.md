@@ -45,8 +45,9 @@ The editor has:
 - **Settings for every item:** a cell size, a speed, a palette, whether periodic tilings are rebuilt to
   fill the screen, and *No reseeding*. These apply to every item that is not a stored profile.
 - **The items.** *Add profile*, *Add scene…*, *Add series* (one item per rule, for example every
-  Wolfram rule) or a Quick Start id typed into the box (such as `rule:B3/S23` or `langtons-ant`; press
-  Enter). Each item can be moved and removed, and has:
+  Wolfram rule) or a Quick Start entry's handle typed into the box (such as `rule:B3/S23`,
+  `langtons-ant`, an atlas entry's `atlas:…` or one of your own `find:…`; press Enter). Each item can
+  be moved and removed, and has:
   - **Ends (any of these)**, from *Add ending*: *After minutes*, *After generations*, *When settled* (the
     same test the [reseed policies](reseeding.md#automatic-policies) use, with an optional limit in
     generations), *On low activity* (under a share of cells changing, for a number of generations),

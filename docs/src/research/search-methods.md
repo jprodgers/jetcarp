@@ -271,7 +271,9 @@ measurements are stored, the score can be changed and recomputed without rerunni
 
 **How results are checked.** The elites are re-run on larger grids (64,000 cells for 4,096
 generations, three times each) to confirm that they were not flukes of a small grid, and the *atlas*
-that the Quick Start menu offers is chosen from the confirmed runs (`jetcarp quickstart publish`). Every stored run records its tiling, rule, starting pattern and random
+that the Quick Start menu offers is chosen from the confirmed runs (`jetcarp quickstart publish`, which
+writes it into the library's Quick Start entries; see
+[Quick Start entries](../reference/library-format.md#quick-start-entries)). Every stored run records its tiling, rule, starting pattern and random
 state, so it can be replayed exactly as a scene (`jetcarp jobs scene`), but the search as a whole
 depends on timing and is not reproducible run for run: a stopped search *continues* from its archive
 rather than resuming exactly, unlike the other jobs (see

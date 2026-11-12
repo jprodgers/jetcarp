@@ -97,6 +97,12 @@ and reworked for release in a new repository with a fresh history.
 - The Penrose rhomb construction and the GNOME extension's window hiding were rewritten clean-room
   after a provenance audit (see [How JETCARP was made](how-made.md#the-provenance-audit)).
 - The evolutionary glider search runs as a checkpointed job that can be resumed.
+- One Quick Start table: the built-in examples, entries from packs, the atlas that
+  `jetcarp quickstart publish` picks from an explore search, and the entries you add are all rows of
+  the library's `quickstart` table, each named by a handle (`life`, `atlas:…`, `find:…`). An entry is
+  hidden rather than given a status, and can be rated or hidden from its card in the app. The atlas
+  file `atlas.sqlite` and `JETCARP_ATLAS` are gone (see
+  [Quick Start entries](../reference/library-format.md#quick-start-entries)).
 - The Penrose JACA presets' descriptions now match what they show.
 
 ### Removed

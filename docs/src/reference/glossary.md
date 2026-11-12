@@ -24,7 +24,8 @@ same, named by its *vertex configuration*, such as 4.8.8. There are eleven, thre
 tilings. See [Regular and Archimedean tilings](../tilings/regular-archimedean.md).
 
 **Atlas.** The selection of confirmed, high-scoring runs from the [exploratory search](../research/search-methods.md#explore)
-that the Quick Start menu offers.
+that the Quick Start menu offers, written into the library by `jetcarp quickstart publish`; its entries are
+named `atlas:…`.
 
 ## B
 
@@ -209,7 +210,7 @@ behaviour space; the basis of `jetcarp search explore`.
 
 **Multi-state field.** A field whose cells hold a state number, for rules with more than two states.
 
-**My finds.** The Quick Start entries you add yourself, from patterns, runs and scenes.
+**My finds.** The Quick Start entries you add yourself, from patterns, runs and scenes, named `find:<id>`.
 
 ## N
 
@@ -266,7 +267,7 @@ scene or a Quick Start entry), and optionally its palette, colouring, reseeding,
 
 ## Q
 
-**Quick Start.** The app's menu of ready-to-run scenes: the built-in classics, the atlas and *My finds*.
+**Quick Start.** The app's menu of ready-to-run scenes: the built-in classics, entries from packs, the atlas and *My finds*, all in one table of the library, each named by a handle such as `life`, `atlas:…` or `find:…` (see [Quick Start entries](library-format.md#quick-start-entries)).
 
 ## R
 

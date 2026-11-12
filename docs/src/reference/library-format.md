@@ -349,20 +349,23 @@ commit `f3492e8` is the last that has it. What the import did:
 
 ## Tables
 
-`PRAGMA user_version` is the schema version, 2, and `PRAGMA application_id` marks the file as a
-JETCARP library. A library of schema 1 (made by development builds before the 0.4 release) is brought
-up to 2 the first time it is opened: its ratings gain `verdict` and `source`, and its media rows, which
-named files in per-record folders, are dropped, since media are always made again from their records.
+`PRAGMA user_version` is the schema version, 3, and `PRAGMA application_id` marks the file as a
+JETCARP library. A library of schema 1 or 2 (made by development builds before the 0.4 release) is
+brought up to 3 the first time it is opened. From schema 1, its ratings gain `verdict` and `source`,
+and its media rows, which named files in per-record folders, are dropped, since media are always made
+again from their records. From schema 2, its Quick Start rows become rows of the one Quick Start table
+(see [Quick Start entries](#quick-start-entries)): an entry under a pack id stays a pack's entry, every
+other one becomes one of your own, and those that were `candidate` or `rejected` are hidden.
 A library made by a newer JETCARP is refused with a message to update. Catalogs from before schema 1
 (CART's, or a JETCARP build before 0.4, called `catalog.sqlite`) are not opened or migrated: JETCARP 0.4
 starts a fresh library (see [Records from CART](#records-from-cart)). A library made before
 [rule-semantics versions](#rule-semantics-versions) (of either schema) gains them the first time it is
 opened: its patterns gain `family`, worked out from each one's rule, and `semantics`, version `1`. The
-schema number stays 2, since schema 2 gained them before the 0.4.0 release.
+schema number stayed 2 for them, since schema 2 gained them before the 0.4.0 release.
 
 | Table | One row per |
 | --- | --- |
-| `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, `builtin_version` |
+| `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, and `builtin_version`, the JETCARP whose built-in Quick Start entries the library holds |
 | `engine_pins` | tiling in use: its pin key (its identity key), the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
 | `rules` | rule as run: notation, neighbourhood, steps per generation, family, birth and survival masks |
 | `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, its rule's `family` and that family's `semantics` version, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
@@ -374,8 +377,8 @@ schema number stays 2, since schema 2 gained them before the 0.4.0 release.
 | `provenance` | event in a record's history (see above) |
 | `id_aliases` | old id of a record (see above) |
 | `ants` | ant or turmite run: content id, rule, tiling, pin, start, outcome, highway period and displacement, curation, `needs_reverify` |
-| `quickstart` | Quick Start entry: its scene, title, status, pin and `needs_reverify` |
-| `quickstart_usage` | how often the app opened a Quick Start entry (local only) |
+| `quickstart` | Quick Start entry from any source: its handle, source, scene, title, what the menu shows, `hidden`, pin and `needs_reverify` (see [Quick Start entries](#quick-start-entries)) |
+| `quickstart_usage` | how often the app opened a Quick Start entry, by its handle (local only) |
 | `ratings` | rating of a pattern, ant run, Quick Start entry or search run (see below) |
 | `media` | picture or animation rendered for a record: its kind and mode, the SHA-256 and extension of its file, its render key (see below) |
 | `pack_imports` | import of a [pack](pack-format.md) version: its manifest hash, feed, publisher, how its signature checked, the folder's name, when, the engine, and a report (JSON: counts, and the sample verified again) |
@@ -383,7 +386,50 @@ schema number stays 2, since schema 2 gained them before the 0.4.0 release.
 | `pack_revoked` | publisher key a pack's key statements revoked, and when it was seen: kept for good |
 
 The three `pack_` tables are made the first time a pack is imported, so a library that never
-imported one does not have them; the schema number stays 2.
+imported one does not have them; the schema number does not change.
+
+## Quick Start entries
+
+The app's Quick Start menu, the rotations and screensaver profiles that name an entry, and every
+command that opens one read one table, `quickstart`. An entry is a scene, with what the menu shows of
+it, and it comes from one of four sources:
+
+| Source | How it gets there | Handle |
+| --- | --- | --- |
+| `builtin` | the examples built into JETCARP: hand-made scenes, a working example of every named rule, the JACA presets and the tiling showcases. A JETCARP writes its own into the library when it opens one whose `meta.builtin_version` is another's | its built-in id: `life`, `langtons-ant`, `rule:B3/S23`, `jaca:…` |
+| `pack` | importing a [pack](pack-format.md); `source_ref` is the pack's manifest hash | its pack id, `qs-<hex>` |
+| `atlas` | `jetcarp quickstart publish`, which picks an explore search's confirmed best runs (see [Search methods](../research/search-methods.md#explore)); `source_ref` is the search's uuid. Publishing a search again replaces its entries | `atlas:<8 hex>-<run id>`, the first 8 hexadecimal digits of the search's uuid and the run's id |
+| `promotion` | the entries you add (`jetcarp library promote`, `promote-run` and `ants promote`, the app's library and results windows, `lib.promote` in scripts): a pattern, an ant run, a run of a sweep or of an explore search, or a scene file | `find:<id>` |
+
+- The **handle** is what the app, rotations, profiles and commands open an entry by, and what
+  `quickstart_usage` counts openings by. The **id** is what ratings, media and provenance name: a
+  built-in's or a pack entry's is its handle, an atlas entry's `atlas-<8 hex>-<run id>`, and a
+  promotion's that of what it was made from (a pattern's or ant's id, `sweep-<hash>`,
+  `run-<8 hex>-<run id>`, `scene-<hash>`).
+- `target_kind` and `target_id` say what an entry was made from: `pattern`, `ant`, `sweep_run`,
+  `search_run` (`<search uuid>:<run id>`) or `scene`. A rating given in the menu goes to the pattern
+  or ant run an entry was made from, and otherwise to the entry.
+- `hidden` leaves an entry out of the menu, of packs and of the website export. A hidden built-in stays
+  hidden when the next JETCARP writes its built-ins; one deleted comes back with them.
+- What the menu shows is kept with the entry, so the menu never reads a scene to list it: `category`
+  (*Gliders & ships*, *Oscillators*, *Classics*, *My finds*…), `grid_group`, `family`, `tiling_name`,
+  `tiling_key`, `rule`, `score`, `rank` (its order within its source) and `featured` (a hand-made
+  built-in scene).
+- An atlas entry also keeps `preview`, the scene on the smaller grid the run was found on, which its
+  card runs, and `mature`, that scene's cells at generation `mature_gen` (deflated), so the card starts
+  where the action is. Opening the entry loads `scene`, the run on the larger grid it was confirmed
+  on.
+- Every entry keeps its scene's pin (`pin_key`, `geometry_pin`), `needs_reverify`, `engine_version`,
+  `created` and `updated`. Re-verification checks every entry but the built-ins, which are the build's
+  own.
+
+A pack carries an entry's scene, title, description, rule and behaviour, but not its preview or score.
+An atlas entry's category travels as its behaviour, so after an import it keeps its place in the menu,
+and its card runs its scene made smaller, from the start. Built-in entries are never put in a pack:
+every JETCARP has them.
+
+The menu leaves out a built-in example of a named rule when an atlas entry has the same rule, unless
+the built-in is a hand-made scene, so that every named rule can be reached without showing it twice.
 
 ## Ratings of search runs
 

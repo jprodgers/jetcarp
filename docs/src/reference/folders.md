@@ -28,7 +28,7 @@ paste into a bug report.
 | Folder | Holds | Override | Linux | macOS | Windows |
 | --- | --- | --- | --- | --- | --- |
 | Settings | App and background-host settings, screensaver profiles, rotations | `JETCARP_CONFIG_DIR` | `~/.config/jetcarp` | `~/Library/Application Support/jetcarp` | `%APPDATA%\jetcarp` |
-| Data | The pattern catalog and its media, search databases, the Quick Start atlas | `JETCARP_DATA_DIR` | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
+| Data | The pattern catalog with its media and Quick Start entries, search databases | `JETCARP_DATA_DIR` | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
 | Output | Pictures, script runs, sweeps, sandpiles, wallpapers | `JETCARP_OUT` | `~/Pictures/JETCARP` | `~/Pictures/JETCARP` | your Pictures folder, `\JETCARP` |
 
 The defaults are the operating system's own folders. On Linux they follow the XDG settings
@@ -55,8 +55,9 @@ the defaults.
 **Data.**
 
 - `library.sqlite`, the pattern library: every verified pattern with the rules it works in and where
-  it was seen, the jobs and their checkpoints, census results, the Quick Start entries under *My
-  finds*, ratings, and ant and turmite runs, each with its provenance and geometry pin (see
+  it was seen, the jobs and their checkpoints, census results, every Quick Start entry (the
+  built-in examples, entries from packs, the atlas and your own), ratings, and ant and turmite runs,
+  each with its provenance and geometry pin (see
   [Library format](library-format.md)). Beside it, SQLite's own `-wal` and `-shm` files, a
   `library.sqlite-jobs/` folder of lock files (one per job, so two programs never run the same job),
   and `media/`, the frames, animations and thumbnails rendered for the library's records, each file
@@ -69,9 +70,9 @@ the defaults.
   `searches/<uuid>/` holds the search's runs as Parquet files (`runs/part-000001.parquet`, a million
   runs each), a `manifest.json`, and its working database `search.sqlite` (its saved state and its
   newest runs); see [Search runs](search-runs.md). Reviews of a search's runs are kept in the
-  library, so deleting a search folder keeps them. And `explore/atlas.sqlite`, the atlas that the
-  Quick Start menu reads, written by `jetcarp quickstart publish` (see
-  [Search methods](../research/search-methods.md#explore)).
+  library, so deleting a search folder keeps them, and so is the atlas that
+  `jetcarp quickstart publish` picks from a search (see
+  [Quick Start entries](library-format.md#quick-start-entries)).
 
 **Output.** Everything JETCARP makes for you to look at: pictures, the folders of script runs and
 sweeps (each with a `manifest.json`, and `favourites.json` for the runs you star), `piles/` for large
@@ -100,7 +101,6 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_OUT` | The output folder |
 | `JETCARP_LIBRARY` | The pattern catalog: a `.sqlite` file, or a folder that holds (or will hold) `library.sqlite`. Default `<data>/library.sqlite`. Commands that use the catalog also take `--library` |
 | `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
-| `JETCARP_ATLAS` | The atlas file the Quick Start menu reads, when set to a file that exists. Otherwise `<data>/explore/atlas.sqlite`, then an `atlas.sqlite` shipped beside the program |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
 | `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
 | `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |

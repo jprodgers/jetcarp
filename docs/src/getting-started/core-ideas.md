@@ -92,11 +92,12 @@ More: [Scenes: saving, sharing, reproducing](../guides/scenes.md), the
 ## Quick Start
 
 *Quick Start* is the menu of ready-made scenes that the app opens with, each shown as a live preview.
-It brings together three sources: the *classics* built into JETCARP (hand-made scenes and a working
-example of every named rule, each on the grid it is usually shown on), the *atlas* of runs picked by
-JETCARP's exploratory search, when one is installed, and *My finds*, the entries you add yourself
-from patterns, runs and scenes. It is the quickest way to see what JETCARP can do, and an entry, once
-open, is a scene like any other: move it to another tiling, change its rule, save it.
+Its entries come from four sources, all kept in the pattern library: the *classics* built into JETCARP
+(hand-made scenes and a working example of every named rule, each on the grid it is usually shown
+on), entries from the *packs* you import, the *atlas* of runs picked from an exploratory search, and
+*My finds*, the entries you add yourself from patterns, runs and scenes. It is the quickest way to see
+what JETCARP can do, and an entry, once open, is a scene like any other: move it to another tiling,
+change its rule, save it. Right-click a card to rate it or hide it.
 
 More: [A tour of the app](tour.md) and [Building your own Quick Start](../tutorials/building-quick-start.md).
 
