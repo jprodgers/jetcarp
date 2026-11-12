@@ -1025,10 +1025,10 @@ And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/getting-started/first-run`: First run and setup
 - `jetcarp://docs/getting-started/tour`: A tour of the app
 - `jetcarp://docs/getting-started/core-ideas`: Core ideas: tilings, cell fields, rules, scenes
-- `jetcarp://docs/tutorials/first-wallpaper`: Your first live wallpaper
-- `jetcarp://docs/tutorials/life-on-a-new-tiling`: Life on a new tiling
+- `jetcarp://docs/tutorials/first-wallpaper`: 1. Your first live wallpaper
+- `jetcarp://docs/tutorials/life-on-a-new-tiling`: 2. Life on a new tiling
 - `jetcarp://docs/tutorials/hunting-spaceships`: 3. Hunting for spaceships
-- `jetcarp://docs/tutorials/building-quick-start`: Building your own Quick Start
+- `jetcarp://docs/tutorials/building-quick-start`: 4. Building your own Quick Start
 - `jetcarp://docs/tutorials/scripting-a-sweep`: 5. Scripting a rule sweep
 - `jetcarp://docs/tutorials/mcp`: 6. Driving JETCARP from an AI assistant (MCP)
 - `jetcarp://docs/guides/scenes`: Scenes: saving, sharing, reproducing
