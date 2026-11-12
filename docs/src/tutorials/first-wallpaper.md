@@ -15,7 +15,7 @@ which machines.
 ## 1. Pick an entry
 
 On the Quick Start screen, type `penrose` in the search box and click *Brian's Brain on Penrose
-rhombs*. Brian's Brain is a rule with three states (firing, refractory and off) that never settles,
+rhombs*. Brian's Brain is a rule with three states (firing, refractory and off) that keeps moving,
 which suits a wallpaper, and here it runs on the aperiodic Penrose tiling of thin and thick rhombs.
 
 ## 2. Change its palette
@@ -69,8 +69,8 @@ menu bar (macOS) or GNOME's top bar, has *Next*, *Previous*, *Paused* and *Quit*
 
 *Show what is running* adds a caption naming the rule and the tiling. The host pauses by itself
 while the computer runs on battery, while the processor is busy (during a long search, say), and
-while its wallpaper is hidden behind windows. The guide's [background host](../guides/wallpapers.md#the-background-host)
-section has every setting.
+while its wallpaper is hidden behind windows. The guide's
+[background host](../guides/wallpapers.md#the-background-host) section has every setting.
 
 ## 5. The same from the command line
 
@@ -145,9 +145,9 @@ $ jetcarp wallpaper penrose-rhomb-brain --palette Aurora --gens 200
 
 It runs the entry 200 generations and draws it at 3840 × 2160, filling the picture (`--fit contain`
 shows the whole round patch instead). `--size QHD` or `--size 2560x1440` sets another size, and
-`--monitors` makes one picture spanning several monitors (with `--split`, one for each). Set the file as your background in your
-system's settings. In the app, *File → Export wallpaper…* does the same for the world you have open
-(see [Pictures and animations](../guides/pictures.md#desktop-wallpapers)).
+`--monitors` makes one picture spanning several monitors (with `--split`, one for each). Set the
+file as your background in your system's settings. In the app, *File → Export wallpaper…* does the
+same for the world you have open (see [Pictures and animations](../guides/pictures.md#desktop-wallpapers)).
 
 ## 7. The screen saver
 
