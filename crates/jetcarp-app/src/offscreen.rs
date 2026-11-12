@@ -3,18 +3,26 @@
 //! holds back frames, a machine with no display). The `#[ignore]`d tests below draw the
 //! Sandpile, Ants, and HashLife windows in chosen palettes and write PNGs to
 //! `JETCARP_OFFSCREEN_OUT` (run with `cargo test -p jetcarp-app offscreen -- --ignored`).
+//! [`Offscreen::render_state`] hands the whole app the same device and renderer, so it draws its
+//! grid there too (`app/shots.rs`).
 
 use eframe::egui;
 use egui_wgpu::wgpu;
+use std::sync::Arc;
 
 /// A headless egui context and renderer of a fixed size.
 pub struct Offscreen {
+    instance: wgpu::Instance,
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    renderer: egui_wgpu::Renderer,
+    renderer: Arc<egui::mutex::RwLock<egui_wgpu::Renderer>>,
     pub ctx: egui::Context,
     size: [u32; 2],
     time: f64,
+    /// The last frame's widgets with a text, and where they are (with AccessKit enabled on
+    /// `ctx`), for clicking them by name.
+    pub widgets: Vec<(String, egui::Rect)>,
 }
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -33,13 +41,35 @@ impl Offscreen {
         let ctx = egui::Context::default();
         ctx.set_visuals(egui::Visuals::dark());
         Some(Offscreen {
+            instance,
+            adapter,
             device,
             queue,
-            renderer,
+            renderer: Arc::new(egui::mutex::RwLock::new(renderer)),
             ctx,
             size: [width, height],
             time: 0.0,
+            widgets: vec![],
         })
+    }
+
+    /// The device, queue and renderer as eframe hands them to an app (its paint callbacks draw
+    /// into this renderer's frames).
+    pub fn render_state(&self) -> egui_wgpu::RenderState {
+        egui_wgpu::RenderState {
+            adapter: self.adapter.clone(),
+            available_adapters: vec![self.adapter.clone()],
+            instance: self.instance.clone(),
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            target_format: FORMAT,
+            renderer: self.renderer.clone(),
+        }
+    }
+
+    /// The picture's size in pixels.
+    pub fn size(&self) -> [u32; 2] {
+        self.size
     }
 
     /// Run one frame of `ui` (`dt` seconds after the last) and return its pixels (RGBA).
@@ -66,12 +96,27 @@ impl Offscreen {
             ..Default::default()
         };
         let mut out = self.ctx.run_pass(input, |ctx| ui(ctx));
+        if let Some(u) = out.platform_output.accesskit_update.take() {
+            self.widgets = u
+                .nodes
+                .iter()
+                .filter_map(|(_, n)| {
+                    let text = n.label().or(n.value())?.to_string();
+                    let b = n.bounds()?;
+                    let r = egui::Rect::from_min_max(
+                        egui::pos2(b.x0 as f32, b.y0 as f32),
+                        egui::pos2(b.x1 as f32, b.y1 as f32),
+                    );
+                    Some((text, r))
+                })
+                .collect();
+        }
         let ppp = out.pixels_per_point;
         let prims = self.ctx.tessellate(out.shapes, ppp);
+        let mut renderer = self.renderer.write();
         for (id, ds) in &out.textures_delta.set {
             for d in ds {
-                self.renderer
-                    .update_texture(&self.device, &self.queue, *id, d);
+                renderer.update_texture(&self.device, &self.queue, *id, d);
             }
         }
         let tex = self.device.create_texture(&wgpu::TextureDescriptor {
@@ -94,9 +139,7 @@ impl Offscreen {
             pixels_per_point: ppp,
         };
         let mut enc = self.device.create_command_encoder(&Default::default());
-        let extra = self
-            .renderer
-            .update_buffers(&self.device, &self.queue, &mut enc, &prims, &sd);
+        let extra = renderer.update_buffers(&self.device, &self.queue, &mut enc, &prims, &sd);
         {
             let bg = self.ctx.global_style().visuals.panel_fill;
             let c = |v: u8| v as f64 / 255.0;
@@ -121,8 +164,7 @@ impl Offscreen {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            self.renderer
-                .render(&mut pass.forget_lifetime(), &prims, &sd);
+            renderer.render(&mut pass.forget_lifetime(), &prims, &sd);
         }
         let row = (w * 4).div_ceil(256) * 256;
         let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -157,10 +199,20 @@ impl Offscreen {
         }
         buf.unmap();
         for id in &out.textures_delta.free {
-            self.renderer.free_texture(id);
+            renderer.free_texture(id);
         }
         out.textures_delta.clear();
         px
+    }
+
+    /// Where the last frame drew a widget whose text is `text` (else one whose text starts with
+    /// it): the lowest on screen when there are several, as a menu's item is below its button.
+    pub fn find(&self, text: &str) -> Option<egui::Rect> {
+        let lowest = |it: &mut dyn Iterator<Item = &(String, egui::Rect)>| {
+            it.map(|w| w.1).max_by(|a, b| a.min.y.total_cmp(&b.min.y))
+        };
+        lowest(&mut self.widgets.iter().filter(|w| w.0 == text))
+            .or_else(|| lowest(&mut self.widgets.iter().filter(|w| w.0.starts_with(text))))
     }
 
     /// Write pixels from [`frame`](Self::frame) to a PNG.
@@ -169,6 +221,31 @@ impl Offscreen {
             width: self.size[0],
             height: self.size[1],
             rgba: px.to_vec(),
+        };
+        jetcarp_core::render::write_png(path, &img, &[])
+    }
+
+    /// Write a part of the pixels (a rectangle in pixels, clipped to the picture) to a PNG.
+    pub fn save_part(
+        &self,
+        px: &[u8],
+        part: egui::Rect,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let [w, h] = self.size;
+        let x0 = (part.min.x.max(0.0) as u32).min(w - 1);
+        let y0 = (part.min.y.max(0.0) as u32).min(h - 1);
+        let x1 = (part.max.x.ceil().max(0.0) as u32).clamp(x0 + 1, w);
+        let y1 = (part.max.y.ceil().max(0.0) as u32).clamp(y0 + 1, h);
+        let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+        for y in y0..y1 {
+            let row = (y * w * 4) as usize;
+            rgba.extend_from_slice(&px[row + (x0 * 4) as usize..row + (x1 * 4) as usize]);
+        }
+        let img = jetcarp_core::render::Image {
+            width: x1 - x0,
+            height: y1 - y0,
+            rgba,
         };
         jetcarp_core::render::write_png(path, &img, &[])
     }

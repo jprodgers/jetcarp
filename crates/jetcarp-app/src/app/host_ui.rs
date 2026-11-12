@@ -73,6 +73,13 @@ pub(super) fn caption_ui(ui: &mut egui::Ui, c: &mut CaptionSettings) -> bool {
 }
 
 impl HostPanel {
+    /// The GNOME extension's state as shown, without asking GNOME (the book's pictures, drawn
+    /// where no GNOME session can be reached).
+    #[cfg(test)]
+    pub(super) fn test_extension(&mut self, s: ExtensionState) {
+        self.extension = Some(s);
+    }
+
     fn ask(&mut self, args: Value, now: f64) {
         let (tx, rx) = channel();
         self.asked = now;

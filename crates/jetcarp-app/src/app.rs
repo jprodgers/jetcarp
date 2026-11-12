@@ -40,6 +40,8 @@ mod screensaver;
 mod sequence_ui;
 mod settings;
 mod shell;
+#[cfg(test)]
+mod shots;
 mod start_screen;
 mod tiling_ui;
 mod tools;
