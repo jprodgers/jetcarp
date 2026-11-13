@@ -501,8 +501,11 @@ fn the_doctor_notes_a_chosen_data_folder_that_is_gone() {
     jetcarp_core::paths::set_chosen_data_dir(&s.settings(), Some(&gone)).unwrap();
     let cx = Ctx::new().with_settings_dir(Some(s.settings()));
     let c = jetcarp_api::call(&cx, "system.doctor", json!({}), &Quiet).unwrap();
-    assert!(c.text.contains("no longer exists"), "{}", c.text);
-    assert_eq!(c.value["folders"]["data_chosen_missing"], true);
+    // JETCARP_DATA_DIR (set by CI on macOS and Windows) wins over paths.json: then the chosen
+    // folder is not the data folder, and there is nothing to note.
+    let env_set = std::env::var_os("JETCARP_DATA_DIR").is_some_and(|v| !v.is_empty());
+    assert_eq!(c.text.contains("no longer exists"), !env_set, "{}", c.text);
+    assert_eq!(c.value["folders"]["data_chosen_missing"], !env_set);
     std::fs::create_dir_all(&gone).unwrap();
     let c = jetcarp_api::call(&cx, "system.doctor", json!({}), &Quiet).unwrap();
     assert!(!c.text.contains("no longer exists"), "{}", c.text);
