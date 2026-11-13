@@ -1,13 +1,14 @@
 # Findings
 
-This page collects what JETCARP's searches have found and what the checks of November 2026 made of
-it. It is the data behind the claims on [What is new in JETCARP](contributions.md): every result was
-run again on the release engine (JETCARP 0.4.0), every spaceship was compared with the ships of
-simpler tilings, and the list was cut down wherever a check failed. A census of Life itself on the
-Archimedean, 2-uniform and 3-uniform tilings went through the same checks; its results are in
-[their own section](#life-on-the-archimedean-and-k-uniform-tilings). The ConwayLife.com forums have not
-been searched yet, so a candidate here is a candidate, not a discovery; we will ask the community when
-the results are posted there. Corrections are welcome as issues.
+This page collects what JETCARP's searches have found and what the checks of November 2026 made of it.
+It is the data behind the claims on [What is new in JETCARP](contributions.md): every result was run
+again on the release engine (JETCARP 0.4.0), every spaceship was compared with the ships of simpler
+tilings, and the list was cut down wherever a check failed. A census of Life itself on the Archimedean,
+2-uniform and 3-uniform tilings went through the same checks; its results are in [their own
+section](#life-on-the-archimedean-and-k-uniform-tilings). The ConwayLife.com forums, where hobbyists
+report most new patterns, could be searched only through a mirror and only for a few terms (see [How we
+searched](contributions.md#how-we-searched)), so a candidate here is a candidate, not a discovery; we
+will ask the community when the results are posted there. Corrections are welcome as issues.
 
 ## Re-verification on the release engine
 
@@ -1291,7 +1292,7 @@ census did not look for.
 | k2-004 | 50,000 | none |  |  |
 | k2-005 | 50,000 | none |  |  |
 | k2-006 | 50,000 | none |  |  |
-| k2-007 | 50,000 | 5,773 | 3 | 1 known, 1 flagged, 1 compound |
+| k2-007 | 50,000 | 5,773 | 4 | 1 known, 1 flagged, 1 derivative, 1 compound |
 | k2-008 | 50,000 | none |  |  |
 | k2-009 | 50,000 | none |  |  |
 | k2-010 | 50,000 | none |  |  |
@@ -1343,7 +1344,7 @@ census did not look for.
 | k3-036 | 50,000 | none |  |  |
 | k3-037 | 50,000 | none |  |  |
 | k3-038 | 50,000 | none |  |  |
-| k3-039 | 50,000 | 47,294 | 13 | 1 flagged, 2 derivative, 8 compound; 2 listed on 3.6.3.6 |
+| k3-039 | 50,000 | 47,294 | 14 | 1 flagged, 3 derivative, 8 compound; 2 listed on 3.6.3.6 |
 | k3-040 | 50,000 | 3,675 | 3 | 1 single, 1 flagged, 1 compound |
 | k3-041 | 50,000 | 150 | 1 | 1 single |
 | k3-042 | 50,000 | none |  |  |
@@ -1368,8 +1369,9 @@ census did not look for.
 | k3-061 | 50,000 | 34,070 | 17 | 1 flagged, 1 derivative, 15 compound |
 
 *Ships seen* counts every ship the census met, so a soup that sent out three gliders counts three.
-*Distinct objects* counts the objects among them after the checks below; *of which listed here*
-counts those listed on this tiling, since an object that also runs on a simpler tiling is listed
+*Distinct objects* counts the objects among them after the checks below, with the two bound pairs that
+the census's rerun added (see [below](#the-census-run-again-on-the-release-engine)); *of which listed
+here* counts those listed on this tiling, since an object that also runs on a simpler tiling is listed
 there.
 
 ### How the census ships were checked
@@ -1406,9 +1408,10 @@ candidates above:
 | --- | --- |
 | Spaceship records in the census | 198 |
 | Records added from the 500,000-soup hunt on k2-007 | 1 |
-| Distinct objects (records congruent to one another merged) | 185 |
+| Records added from the census run again on the release engine (below) | 2 |
+| Distinct objects (records congruent to one another merged) | 187 |
 | Compounds: two or more smaller ships flying together | 124 |
-| Derivatives: a smaller ship with a passenger, or a bound pair | 15 |
+| Derivatives: a smaller ship with a passenger, or a bound pair | 17 |
 | Known objects, credited below | 8 |
 | Ships of a simpler tiling | 0 |
 | Single ships, flagged | 12 |
@@ -1427,24 +1430,45 @@ run Life on that tiling. We know of no one who has run Life on a 3-uniform tilin
 tiling other than k2-007; other rules have been run on k2-001, where the census found no Life ship (see
 [What is new in JETCARP](contributions.md#4-spaceships-on-non-square-tilings)).
 
-Most census records are not new objects. JETCARP's object finder stores ships that fly side by side
-as one, so the census lists 124 **compounds**, nearly all pairs (and a few triples) of the commonest
-ship of their tiling: 40 of the period-31 ship of k3-044, 29 of Guttesen's glider g on 3.6.3.6 and in
-kagome corridors, 15 of the period-22 ship of k3-061, 14 of the snub-square glider, 10 of the period-30
-ship of k3-059, 7 of the period-20 ship of k3-039 (three of them with a glider g), and a few more,
-among them two pairs of Conway's glider and two of the probable EricG ship. The 15 **derivatives** are 14
-bound pairs (five of them made of the snub-square glider) and one large k3-055 ship that carries a
-smaller k3-055 ship unchanged and drags debris behind it. Six single ships contain a perturbed phase of
-a smaller ship without being built from it, as Life's own heavyweight spaceship contains a phase of the
-lightweight one: the period-24 ship on 3.3.4.3.4 (Guttesen's glider), the period-20 ship of k3-039
-(glider g), the k3-010 ship `25c5dc4a` (the lightweight spaceship, which runs unchanged in the strips
-of squares of k3-010), and three ships of k3-002 and k3-011 that each contain a phase of a smaller ship
-of their own tiling.
+Most census records are not new objects. JETCARP's object finder stores ships that fly side by side as
+one, so the census lists 124 **compounds**, nearly all pairs (and a few triples) of the commonest ship
+of their tiling: 40 of the period-31 ship of k3-044, 29 of Guttesen's glider g on 3.6.3.6 and in kagome
+corridors, 15 of the period-22 ship of k3-061, 14 of the snub-square glider, 10 of the period-30 ship
+of k3-059, 7 of the period-20 ship of k3-039 (three of them with a glider g), and a few more, among
+them two pairs of Conway's glider and two of the probable EricG ship. The 17 **derivatives** are 16
+bound pairs (five of them made of the snub-square glider, and two that only the rerun below kept
+together) and one large k3-055 ship that carries a smaller k3-055 ship unchanged and drags debris
+behind it. Six single ships contain a perturbed phase of a smaller ship without being built from it, as
+Life's own heavyweight spaceship contains a phase of the lightweight one: the period-24 ship on
+3.3.4.3.4 (Guttesen's glider), the period-20 ship of k3-039 (glider g), the k3-010 ship `25c5dc4a` (the
+lightweight spaceship, which runs unchanged in the strips of squares of k3-010), and three ships of
+k3-002 and k3-011 that each contain a phase of a smaller ship of their own tiling.
 
 The large ships of k3-055 deserve a caution. The census found 14 of them, all moving at c/4, with
 periods of 20, 32 and 64 and up to 169 cells, each seen in only 1 to 185 soups. No test splits them
 into independent parts, and only one of them carries a smaller one unchanged, so 13 are listed as
 single ships; but they look alike, and a closer look may well find that they share a common engine.
+
+### The census run again on the release engine
+
+The census was run once more, with the same settings and seed, on JETCARP 0.4.0-rc.3, whose engine is
+the release's (`jetcarp search hunt --rules B3/S23 --tilings archimedean,kuniform:2,kuniform:3 --soups
+50000 --seed 1`). It met the same soups: on each of the 92 tilings the same numbers settled, died,
+exploded and ran out of generations as in the first run, and it found spaceships on the same 28
+tilings. It found all 26 single ships with no flag, each the same number of times in the same number of
+soups, and all 12 flagged ones. The release engine counts each ship of a pair flying side by side,
+which the first run stored as one compound record, so the commonest ships were met in a few more soups:
+the period-31 ship of k3-044 in 42,194 soups rather than 42,183, and Guttesen's glider g in 43,757 on
+3.6.3.6 rather than 43,743.
+
+It also found two objects that the first run had recorded as two ships each: two copies of the k2-007
+ship `fabe952b` (`9d7138ba`, period 20, 13–29 cells) and two copies of the k3-039 ship `020ec7b7`
+(`7a2a23a1`, period 20, 17–40 cells), each met once, in a soup that ran the full 20,000 generations.
+JETCARP's object finder names each as one ship at every phase (its test for parts that fly
+independently never separates the copies), and with a tighter grouping (`jetcarp objects --merge 1
+--no-split`) it sees the two copies: they interact, so they are bound pairs, counted with the
+derivatives above. These two were checked only with the object finder, not with the congruence and
+placement checks; as bound pairs of a known and a flagged ship, they are not candidates.
 
 ### The Life objects
 
