@@ -408,7 +408,28 @@ fn atlas_titles_name_what_they_can() {
     assert_eq!(qs::atlas_title("Ant RRL", "Growth", "Agents"), "Ant RRL");
     assert_eq!(
         qs::atlas_title("B2/S13/C7", "Turbulence", "Generations"),
-        "Turbulent Generations"
+        "Turbulent B2/S13/C7"
+    );
+    assert_eq!(
+        qs::atlas_title("JACA +B3/S23 -B37/S23", "Battles", "JACA"),
+        "Battle JACA +B3/S23 -B37/S23"
+    );
+    assert_eq!(
+        qs::atlas_title("HexW3 5033", "Fractals & rows", "Hexagonal elementary"),
+        "Fractal HexW3 5033"
+    );
+    // A long notation gives way to the family; a one-rule family keeps its name.
+    assert_eq!(
+        qs::atlas_title(
+            "R5,C0,M1,S34..58,B34..45,NM",
+            "Turbulence",
+            "Larger than Life"
+        ),
+        "Turbulent Larger than Life"
+    );
+    assert_eq!(
+        qs::atlas_title("WireWorld", "Oscillators", "WireWorld"),
+        "WireWorld"
     );
     assert_eq!(qs::atlas_title("B3/S23", "Turbulence", "Life-like"), "Life");
 }
