@@ -9,8 +9,8 @@ once, on shared or separate cell fields. It has a graphical app, a command line,
 language, and a Model Context Protocol (MCP) server, plus tools that search for spaceships,
 oscillators and other patterns and keep verified catalogues of what they find.
 
-> **Status:** pre-release. Version 0.4.0 is being prepared; the commands below work once it is
-> published.
+> **Status:** 0.4.0 is the first public release. Before 1.0, a release may still change the scene
+> format, the command line, the scripting API and the MCP tools.
 
 ## Installing
 

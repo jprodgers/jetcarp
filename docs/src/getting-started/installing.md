@@ -17,15 +17,6 @@ Release builds are made for Linux on x86_64 and ARM (aarch64), Windows on x86_64
 Apple silicon and Intel. Linux on ARM and Intel Macs are built by the same release workflow but have
 not been tried by hand. On anything else, [cargo](#with-cargo) builds JETCARP from source.
 
-<div class="checked">
-
-**Before JETCARP's repository is public.** The commands on this page are written as they will be
-for the 0.4.0 release. The release files, PyPI, crates.io, the Homebrew tap and the Scoop bucket
-appear with it; until then the links here do not work. Release candidates such as `0.4.0-rc.1` are
-published on GitHub only, for testing; see [Release candidates](#release-candidates).
-
-</div>
-
 ## The installers
 
 On Linux and macOS, in a terminal:
