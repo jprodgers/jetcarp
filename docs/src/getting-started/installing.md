@@ -216,7 +216,7 @@ Everything profile. The starter pack itself is the pack whose feed or folder has
 name, such as the feed `jetcarp-starter`; when no pack in the folder is named so, setup counts every
 one of them as the starter pack. Everything imports every pack in the folder.
 
-In 0.4.0 the folder holds one pack, `jetcarp-starter` (version 2026.11, CC0-1.0, signed by Jimmie
+In the 0.4 releases the folder holds one pack, `jetcarp-starter` (version 2026.11, CC0-1.0, signed by Jimmie
 Rodgers, about 1.5 MB): 79 Quick Start entries that Jimmie Rodgers picked, with the records they
 show.
 

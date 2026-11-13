@@ -57,9 +57,8 @@ either. A few files derived from other people's work keep their own licences, li
 ## Citing JETCARP
 
 If JETCARP helps your research, please cite it. GitHub's *Cite this repository* button reads
-[CITATION.cff](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff). Each release is archived on Zenodo with a DOI:
-[10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766) for version 0.4.0, and
-[10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765) for every version (it resolves to the newest).
+[CITATION.cff](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff). Every release is archived on Zenodo under
+[10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765), which resolves to the newest.
 
 ## How JETCARP was made
 

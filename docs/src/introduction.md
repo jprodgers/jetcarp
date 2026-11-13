@@ -10,8 +10,8 @@ graphical app, a command line, a scripting language and a Model Context Protocol
 assistants, and it comes with tools that search for spaceships, oscillators and other patterns and
 keep verified catalogues of what they find.
 
-This is version 0.4.0, the first public release; the [changelog](about/changelog.md) lists what it
-does, and [How JETCARP was made](about/how-made.md) tells where it came from.
+JETCARP 0.4 is the first public release; the [changelog](about/changelog.md) lists what each
+release does, and [How JETCARP was made](about/how-made.md) tells where it came from.
 
 ## Who it is for
 

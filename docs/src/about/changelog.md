@@ -5,7 +5,7 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
-## [Unreleased]
+## [0.4.1] – 2026-11-13
 
 ### Fixed
 
@@ -42,6 +42,9 @@ that will declare them stable.
 - **More atlas titles tell entries apart.** A JACA entry is titled by its rules up to 40 characters
   (*Battle JACA +B14/S124 -B12/S345 blast 1*, not a plain *Battle JACA*), and a Priority entry by its
   number of states (*Oscillating Priority 6*). Entries from earlier builds keep their titles.
+- **One DOI to cite.** The citing page, the README and `CITATION.cff` give Zenodo's DOI for every
+  version, [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765), which resolves to the
+  newest release, and ask for the version you ran.
 
 ## [0.4.0] – 2026-11-13
 

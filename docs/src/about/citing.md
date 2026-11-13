@@ -4,27 +4,26 @@ If JETCARP helps your research, please cite it. The citation metadata is in
 [`CITATION.cff`](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff) in the repository, which
 GitHub's *Cite this repository* button reads.
 
-Each release is archived on Zenodo with its own DOI:
-
-- **Version 0.4.0:** [10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766). Cite this
-  one for results made with 0.4.0.
-- **Every version:** [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765), which always
-  resolves to the newest release. `CITATION.cff` gives this one, since a release's own DOI is
-  created only when the release is published.
+Every release is archived on Zenodo under one DOI, [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765), which
+always resolves to the newest release; Zenodo's page for it lists every version. In a citation,
+give the version you ran (`jetcarp --version` prints it), since a rule or tiling can change
+between releases before 1.0.
 
 ## The software
 
 > Rodgers, J. (2026). *JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program*
-> (Version 0.4.0) [Computer software]. Zenodo. <https://doi.org/10.5281/zenodo.24191766>
+> (Version 0.4.1) [Computer software]. Zenodo. <https://doi.org/10.5281/zenodo.24191765>
+
+with the version you ran in place of 0.4.1.
 
 | Field | Value |
 | --- | --- |
 | Title | JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program |
 | Author | Jimmie Rodgers, Independent, ORCID [0009-0003-8775-6483](https://orcid.org/0009-0003-8775-6483) |
-| Version | 0.4.0 |
+| Version | the one you ran (`jetcarp --version`) |
 | Licence | Unlicense OR MIT |
 | Repository | <https://github.com/jprodgers/jetcarp> |
-| DOI | [10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766) (version 0.4.0); [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765) (every version) |
+| DOI | [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765) (every version; resolves to the newest) |
 
 In BibTeX (the `@software` entry type needs biblatex; with a classic BibTeX style, use `@misc` with
 the same fields):
@@ -33,11 +32,11 @@ the same fields):
 @software{rodgers2026jetcarp,
   author  = {Rodgers, Jimmie},
   title   = {{JETCARP}: Jimmie's Euclidean Tilings and Cellular Automata Research Program},
-  version = {0.4.0},
+  version = {0.4.1},   % the version you ran
   year    = {2026},
   url     = {https://github.com/jprodgers/jetcarp},
   license = {Unlicense OR MIT},
-  doi     = {10.5281/zenodo.24191766}
+  doi     = {10.5281/zenodo.24191765}
 }
 ```
 
