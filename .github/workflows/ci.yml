@@ -117,6 +117,31 @@ jobs:
           python3 packaging/package.py notes --out /tmp/notes.md
           python3 packaging/package.py installers --out /tmp/installers
 
+  packages:
+    # crates.io builds each crate on its own, with only the features its dependents ask for; in
+    # the workspace every crate gets the union of them, which hid a break in jetcarp-api built
+    # without `pack` (as jetcarp-script asks for it) until a publish dry run.
+    name: The crates package and build on their own (crates.io dry run)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      - name: The feature sets other crates use
+        run: |
+          cargo check -p jetcarp-api --no-default-features
+          cargo check -p jetcarp-api --no-default-features --features ops
+          cargo check -p jetcarp-script --no-default-features
+          cargo check -p jetcarp-display --no-default-features
+      - name: cargo publish --dry-run (every crate, as the release publishes them)
+        run: cargo publish --workspace --locked --dry-run
+
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.
     name: Build (${{ matrix.name }})

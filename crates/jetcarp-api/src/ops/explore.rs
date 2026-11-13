@@ -742,7 +742,7 @@ impl Op for SearchReview {
         let rater = a
             .rater
             .clone()
-            .or_else(crate::ops::pack::publisher_name)
+            .or_else(publisher_name)
             .unwrap_or_else(|| "user".into());
         let mut out = Reviewed {
             job: row.id,
@@ -1143,4 +1143,15 @@ impl Op for SearchClips {
             clips,
         })
     }
+}
+
+/// The pack publisher's name, the default rater (none in a build without packs).
+#[cfg(feature = "pack")]
+fn publisher_name() -> Option<String> {
+    crate::ops::pack::publisher_name()
+}
+
+#[cfg(not(feature = "pack"))]
+fn publisher_name() -> Option<String> {
+    None
 }
