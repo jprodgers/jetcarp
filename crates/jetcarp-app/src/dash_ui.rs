@@ -1187,6 +1187,10 @@ impl DashWindow {
                             }
                             r.on_hover_text(&j.title);
                             match j.fraction() {
+                                // A pack's job: nothing ran here, so no count.
+                                _ if j.imported_from.is_some() => {
+                                    ui.label("imported");
+                                }
                                 Some(f) => {
                                     ui.add(
                                         egui::ProgressBar::new(f as f32).desired_width(160.0).text(

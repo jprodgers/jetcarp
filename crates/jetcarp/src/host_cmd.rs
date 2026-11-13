@@ -610,7 +610,7 @@ pub fn run(a: HostArgs) -> Result<()> {
                     }
                     if saver::BAKED {
                         println!(
-                            "written to {}; choose JETCARP in {} (opening). Install again after changing its rotation",
+                            "written to {}; choose JETCARP in {} (opening; if it was open already, quit and reopen it to see JETCARP). Install again after changing its rotation",
                             path.display(),
                             jetcarp_display::macsaver::settings_place()
                         );

@@ -24,8 +24,10 @@ $ claude mcp add jetcarp -- jetcarp mcp
 That adds JETCARP to the project you are in; add `--scope user` before `jetcarp` to have it in
 every project. `claude mcp list` shows it, and in a session `/mcp` shows its tools.
 
-**Claude Desktop.** Open *Settings → Developer → Edit Config*, add JETCARP to the
-`claude_desktop_config.json` it opens, and restart Claude Desktop:
+**Claude Desktop.** Add JETCARP to its `claude_desktop_config.json` and restart Claude Desktop. The
+file is in Claude's settings folder (`~/Library/Application Support/Claude/` on macOS,
+`%APPDATA%\Claude\` on Windows); older versions open it from *Settings → Developer → Edit Config*,
+and newer ones list the servers it starts under *Settings → Customize*:
 
 ```json
 {
@@ -43,6 +45,10 @@ prints it (on Windows, `where jetcarp`).
 
 To check the connection, ask the assistant *"What can the JETCARP tools do?"* A good assistant
 calls `help` first: it explains how the tools fit together, with worked examples.
+
+If it answers without calling a JETCARP tool (asked to "run Brian's Brain", Claude Desktop once
+wrote a simulation of its own instead), say so in the request: *"Use the JETCARP tools to …"*, and
+check that JETCARP is switched on in the chat's tools menu.
 
 ## 2. A world, a run and a picture
 
