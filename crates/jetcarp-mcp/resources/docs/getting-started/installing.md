@@ -8,7 +8,7 @@ same program. Pick the one that suits the tools you already use:
 | --- | --- | --- | --- |
 | [The installers](#the-installers) | Linux, macOS, Windows | yes | running the installer again |
 | [pipx, uv or pip](#with-pipx-uv-or-pip) | Linux, macOS, Windows | yes | `pipx upgrade jetcarp`, `uv tool upgrade jetcarp` |
-| [Homebrew](#with-homebrew) | macOS, Linux | yes | `brew upgrade jetcarp` |
+| [Homebrew](#with-homebrew) | macOS, Linux | yes | `brew update`, then `brew upgrade jetcarp` |
 | [Scoop](#with-scoop) | Windows | yes | `scoop update jetcarp` |
 | [A release archive](#from-a-release-archive) | Linux, macOS, Windows | yes | downloading the next one |
 | [cargo](#with-cargo) | anywhere Rust runs | no | `cargo install jetcarp` again |
@@ -97,6 +97,10 @@ brew install jetcarp
 
 `brew install jprodgers/jetcarp/jetcarp` does both in one line. The formula installs the release
 archive; nothing is compiled. The starter pack is in `$(brew --prefix)/share/jetcarp/packs`.
+
+To upgrade, run `brew update` before `brew upgrade jetcarp`. Homebrew looks at taps again only
+once a day on its own, so for a day after you last used it, `brew upgrade` alone can miss a new
+release.
 
 ## With Scoop
 
