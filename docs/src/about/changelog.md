@@ -5,7 +5,7 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
-## [0.4.0] – unreleased
+## [0.4.0] – 2026-11-13
 
 The first public release.
 

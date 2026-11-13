@@ -2366,7 +2366,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jetcarp"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2388,7 +2388,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-api"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "jetcarp-core",
@@ -2406,7 +2406,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-app"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2434,7 +2434,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-core"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "dirs",
  "flate2",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-display"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "ab_glyph",
  "bytemuck",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-gpu"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "bytemuck",
  "jetcarp-core",
@@ -2484,7 +2484,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-host"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "clap",
  "jetcarp-core",
@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-mcp"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "dirs",
  "getrandom 0.3.4",
@@ -2518,7 +2518,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-pack"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -2539,7 +2539,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-saver"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "jetcarp-core",
  "jetcarp-display",
@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-script"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "dirs",
  "jetcarp-api",
@@ -2571,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-search"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "flate2",
@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "jetcarp-store"
-version = "0.4.0-rc.3"
+version = "0.4.0"
 dependencies = [
  "flate2",
  "jetcarp-core",
