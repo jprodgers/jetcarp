@@ -822,6 +822,8 @@ pub struct DashWindow {
     /// Palette of the finds' animations and of *Render media* (`None`: the house style; saved
     /// in the settings).
     pub palette: Option<String>,
+    /// Imported packs' feed names, by manifest (read once each from the library).
+    pack_names: HashMap<String, String>,
 }
 
 impl Default for DashWindow {
@@ -844,11 +846,32 @@ impl Default for DashWindow {
             messages: vec![],
             pending_select: None,
             palette: None,
+            pack_names: HashMap::new(),
         }
     }
 }
 
 impl DashWindow {
+    /// An imported pack's feed name (`jetcarp-starter`), from its manifest; the manifest itself
+    /// when the library has no record of the import.
+    fn pack_name(&mut self, manifest: &str) -> String {
+        if let Some(n) = self.pack_names.get(manifest) {
+            return n.clone();
+        }
+        let n = Library::open(&self.path)
+            .pack_imports()
+            .ok()
+            .and_then(|v| {
+                v.into_iter()
+                    .find(|r| r.manifest == manifest || manifest.ends_with(r.manifest.as_str()))
+            })
+            .map(|r| r.feed)
+            .filter(|f| !f.is_empty())
+            .unwrap_or_else(|| manifest.to_string());
+        self.pack_names.insert(manifest.to_string(), n.clone());
+        n
+    }
+
     fn send(&mut self, c: Cmd) {
         if self.tx.is_none() {
             let (tx, rx) = channel();
@@ -1179,13 +1202,18 @@ impl DashWindow {
                             ui.label(&j.kind_label);
                             let (txt, col) = status_label(j);
                             ui.colored_label(col, txt);
-                            let r = ui.add(
-                                egui::Label::new(truncate(&j.title, 60)).sense(Sense::click()),
-                            );
+                            // A pack's hunt may name no rules of its own.
+                            let title = if j.title.is_empty() && j.imported_from.is_some() {
+                                "from a pack".to_string()
+                            } else {
+                                j.title.clone()
+                            };
+                            let r = ui
+                                .add(egui::Label::new(truncate(&title, 60)).sense(Sense::click()));
                             if r.clicked() {
                                 pick = Some(j.id);
                             }
-                            r.on_hover_text(&j.title);
+                            r.on_hover_text(&title);
                             match j.fraction() {
                                 // A pack's job: nothing ran here, so no count.
                                 _ if j.imported_from.is_some() => {
@@ -1212,6 +1240,7 @@ impl DashWindow {
                                 "–".into()
                             });
                             ui.label(match j.eta_s {
+                                _ if j.imported_from.is_some() => "–".into(),
                                 Some(e) => format!(
                                     "{} run, {} left",
                                     dashboard::duration(j.elapsed_s),
@@ -1288,9 +1317,10 @@ impl DashWindow {
             ui.colored_label(Color32::LIGHT_RED, e);
         }
         if let Some(pack) = &j.imported_from {
+            let name = self.pack_name(pack);
             ui.label(
                 RichText::new(format!(
-                    "Imported from pack {pack}: its finds came with the pack, and nothing ran here."
+                    "Imported from pack {name}: its finds came with the pack, and nothing ran here."
                 ))
                 .weak(),
             );

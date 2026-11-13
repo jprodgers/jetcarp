@@ -99,6 +99,9 @@ impl JetcarpApp {
         if !saver {
             self.menu_bar(ui, now);
         }
+        // New Quick Start entries (a build's atlas, a pack, a promotion from the command line or
+        // MCP) show without leaving the screen; this checks about once a second.
+        self.menu.refresh_if_changed();
         let sim = self.screen == Screen::Sim;
         if self.shell.status_bar && !saver && (sim || self.message.is_some()) {
             self.status_bar(ui);
