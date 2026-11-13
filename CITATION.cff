@@ -22,6 +22,14 @@ date-released: "2026-11-13"
 license:
   - Unlicense
   - MIT
+doi: 10.5281/zenodo.24191765
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24191765
+    description: "Every version of JETCARP on Zenodo; resolves to the newest release."
+  - type: doi
+    value: 10.5281/zenodo.24191766
+    description: "JETCARP 0.4.0 on Zenodo."
 repository-code: "https://github.com/jprodgers/jetcarp"
 keywords:
   - cellular automata

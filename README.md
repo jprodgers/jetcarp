@@ -2,6 +2,8 @@
 
 **Jimmie's Euclidean Tilings and Cellular Automata Research Program**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24191765.svg)](https://doi.org/10.5281/zenodo.24191765)
+
 JETCARP runs cellular automata on almost any tiling of the plane: squares and hexagons, all eleven
 Archimedean tilings, the 1,248 k-uniform tilings up to k = 6, 81 isohedral tile types, tiles you
 draw yourself, and the aperiodic Penrose, hat and spectre tilings. Several automata can run at
@@ -55,7 +57,9 @@ either. A few files derived from other people's work keep their own licences, li
 ## Citing JETCARP
 
 If JETCARP helps your research, please cite it. GitHub's *Cite this repository* button reads
-[CITATION.cff](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff). Each release will also have a DOI on Zenodo.
+[CITATION.cff](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff). Each release is archived on Zenodo with a DOI:
+[10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766) for version 0.4.0, and
+[10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765) for every version (it resolves to the newest).
 
 ## How JETCARP was made
 

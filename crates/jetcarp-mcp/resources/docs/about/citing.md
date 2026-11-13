@@ -4,18 +4,18 @@ If JETCARP helps your research, please cite it. The citation metadata is in
 [`CITATION.cff`](https://github.com/jprodgers/jetcarp/blob/main/CITATION.cff) in the repository, which
 GitHub's *Cite this repository* button reads.
 
-<div class="checked">
+Each release is archived on Zenodo with its own DOI:
 
-**DOI pending.** Each release will be archived on Zenodo with a DOI. The DOI for version 0.4.0 does
-not exist yet; it will be added here and to `CITATION.cff` when the release is archived. Until then,
-cite the version and the repository.
-
-</div>
+- **Version 0.4.0:** [10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766). Cite this
+  one for results made with 0.4.0.
+- **Every version:** [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765), which always
+  resolves to the newest release. `CITATION.cff` gives this one, since a release's own DOI is
+  created only when the release is published.
 
 ## The software
 
 > Rodgers, J. (2026). *JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program*
-> (Version 0.4.0) [Computer software]. <https://github.com/jprodgers/jetcarp>
+> (Version 0.4.0) [Computer software]. Zenodo. <https://doi.org/10.5281/zenodo.24191766>
 
 | Field | Value |
 | --- | --- |
@@ -24,7 +24,7 @@ cite the version and the repository.
 | Version | 0.4.0 |
 | Licence | Unlicense OR MIT |
 | Repository | <https://github.com/jprodgers/jetcarp> |
-| DOI | pending (see above) |
+| DOI | [10.5281/zenodo.24191766](https://doi.org/10.5281/zenodo.24191766) (version 0.4.0); [10.5281/zenodo.24191765](https://doi.org/10.5281/zenodo.24191765) (every version) |
 
 In BibTeX (the `@software` entry type needs biblatex; with a classic BibTeX style, use `@misc` with
 the same fields):
@@ -37,7 +37,7 @@ the same fields):
   year    = {2026},
   url     = {https://github.com/jprodgers/jetcarp},
   license = {Unlicense OR MIT},
-  note    = {Zenodo DOI pending}
+  doi     = {10.5281/zenodo.24191766}
 }
 ```
 
