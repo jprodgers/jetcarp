@@ -207,8 +207,8 @@ its code, is one hexagon, two squares and two triangles, as in the 2-uniform til
 [3.4<sup>2</sup>.6; 3.6.3.6], and posted a period-20 spaceship found by Martin Büttner. The page does
 not name the tiling, and its rule is stated only in a comment copied from an earlier answer, but the
 challenge asked for Life. A JETCARP hunt of 500,000 Life soups on each of the two tilings of that type
-found no ship on k2-006 and, on k2-007, a period-20 spaceship of 8 cells moving one lattice step per
-period (c/20) in about one soup in nine, so Büttner's tiling was very likely k2-007 and Büttner's ship very
+found no ship on k2-006 and, on k2-007, a period-20 spaceship of 6 to 20 cells moving one lattice step
+per period (c/20) in about one soup in nine, so Büttner's tiling was very likely k2-007 and Büttner's ship very
 likely this one. It is the earliest spaceship on a k-uniform tiling (k of 2 or more) that we know of.
 JETCARP's claimed ships on k2-006 and k2-007 are of other periods and run in other rules.
 
@@ -234,7 +234,7 @@ have not been reported before; 13 of them are large ships of k3-055 that may sha
 Twelve more passed the same checks but are flagged: ten are so common on their tiling that anyone who
 ran Life there would see them at once, although we know of no one who has, and two lie on tilings
 where others have run Life (3.3.4.3.4 and k2-007). Everything else the census found is a known ship,
-two or more smaller ships flying together, or a smaller ship with a passenger.
+two or more smaller ships flying together, a smaller ship with a passenger, or a bound pair.
 
 **Not claimed.**
 
@@ -323,10 +323,14 @@ the snub square tiling 3.3.4.3.4. Both are credited to
   and 3-uniform tilings went through the same checks: the confirmation runs, the compound and
   derivative tests (with a second, larger search for a smaller ship inside each single one),
   congruence with every other record and with the candidates above, and placement on all 181
-  tilings in Life.
-- **Not yet searched.** The ConwayLife.com forums, where hobbyists report most new patterns, refuse
-  automated reading, so our prior-art search could not cover them. We will ask the community when the
-  results are posted there.
+  tilings in Life. The whole census was then run again on the release engine with the same seed: it
+  met the same soups and found the same 26 unflagged and 12 flagged single ships, and two more bound
+  pairs of ships already listed (see
+  [Findings](findings.md#the-census-run-again-on-the-release-engine)).
+- **Searched only in part.** The ConwayLife.com forums, where hobbyists report most new patterns,
+  refuse automated reading, so our prior-art search could read them only through a mirror and only for
+  a few terms (see [How we searched](#how-we-searched)). We will ask the community when the results are
+  posted there.
 
 </div>
 
