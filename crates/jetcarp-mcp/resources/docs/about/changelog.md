@@ -16,6 +16,20 @@ that will declare them stable.
 - **The AI control window opens on the Quick Start.** It showed only with a world open, so from
   the Quick Start, *Tools → AI control…* ticked in the menu but showed nothing, and AI control could
   not be switched on there. ([#1](https://github.com/jprodgers/jetcarp/issues/1))
+- **A newer version of a pack replaces its Quick Start entries.** Importing one kept every entry
+  the earlier version had brought, so a library that had a release candidate's starter pack showed
+  both versions' entries, some of them twice. Entries the new version no longer has now leave the
+  Quick Start, unless you hid or rated them. To tidy a library that already has both, import the
+  starter pack again: `jetcarp pack import <folder>/jetcarp-starter`, where `jetcarp paths` names the
+  folder as *bundled*.
+- **Packs that came with a Homebrew or Scoop install are named by the link that stays.** `jetcarp
+  paths` and the setup's import job named Homebrew's `Cellar/jetcarp/<version>` and Scoop's
+  `apps\jetcarp\<version>`, folders the next upgrade deletes. They now name
+  `/opt/homebrew/share/jetcarp/packs` and `apps\jetcarp\current\packs`.
+- **`jetcarp jobs status` on a hunt that came with a pack** printed a hunt's empty counters ("0
+  soups … status , 0 s run"). It now says the hunt was imported, as the Hunts window does, and
+  names the pack rather than its `sha256:` hash, here and in `jobs list`. Packs imported from now
+  on are named by their title (*JETCARP starter pack*) there and in the Hunts window.
 
 ## [0.4.0] – 2026-11-13
 

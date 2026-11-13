@@ -11,7 +11,7 @@
 //! an explore search continues from its saved archive, and the status says which.
 
 use super::library::catalog_err;
-use super::search::{FilesIn, How, SearchStarted, line_of, run_job};
+use super::search::{FilesIn, How, SearchStarted, imported_line, line_of, run_job};
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
@@ -430,6 +430,37 @@ pub(crate) fn list(cx: &Ctx, a: &ListIn) -> Result<JobList, ApiError> {
     })
 }
 
+/// An imported pack's name, from the library's record of the import: its title, else its feed
+/// (`jetcarp-starter`). None when the library has no record of it.
+pub(crate) fn pack_name(lib: &Library, manifest: &str) -> Option<String> {
+    let r = lib
+        .pack_imports()
+        .ok()?
+        .into_iter()
+        .rev()
+        .find(|r| r.manifest == manifest || manifest.ends_with(r.manifest.as_str()))?;
+    let title = r.report.get("title").and_then(Value::as_str).unwrap_or("");
+    [title, r.feed.as_str()]
+        .into_iter()
+        .find(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// [`line_of`], with a pack's job naming its pack ([`pack_name`]) rather than its manifest.
+pub(crate) fn job_line(
+    lib: &Library,
+    k: &dyn jobs::StrategyKind,
+    row: &JobRow,
+    progress: &Value,
+) -> String {
+    let name = row
+        .spec
+        .get("imported_from")
+        .and_then(Value::as_str)
+        .and_then(|m| pack_name(lib, m));
+    imported_line(row, name.as_deref()).unwrap_or_else(|| line_of(k, row, progress))
+}
+
 fn line_for(cx: &Ctx, lib: &Library, r: &JobRow, now: i64) -> JobLine {
     let k = jobs::kind(&r.kind);
     let (progress, here) = live_progress(cx, lib, r);
@@ -449,7 +480,7 @@ fn line_for(cx: &Ctx, lib: &Library, r: &JobRow, now: i64) -> JobLine {
         status: s.status.clone(),
         label: r.label().map(String::from),
         title: s.title.clone(),
-        line: line_of(k, r, &progress),
+        line: job_line(lib, k, r, &progress),
         done: s.done,
         total: s.total,
         unit: s.unit.clone(),
@@ -579,7 +610,14 @@ pub struct JobView {
 
 impl Report for JobView {
     fn text(&self) -> String {
-        let mut s = progress_text(&self.kind, &self.progress, &self.line);
+        // A pack's job never ran here: its line says so, and it has no counters to show.
+        let imported = self.kind != jobs::explore::KIND_NAME
+            && self.spec.get("imported_from").is_some_and(Value::is_string);
+        let mut s = if imported {
+            format!("{}\n", self.line)
+        } else {
+            progress_text(&self.kind, &self.progress, &self.line)
+        };
         if self.resumable
             && !self.here
             && (matches!(self.status.as_str(), "paused" | "failed") || self.stale)
@@ -712,7 +750,7 @@ pub(crate) fn view(
         finished: row.finished.clone(),
         error: s.error,
         spec: row.spec.clone(),
-        line: line_of(k, &row, &progress),
+        line: job_line(lib, k, &row, &progress),
         progress,
         finds,
         waited_s: None,

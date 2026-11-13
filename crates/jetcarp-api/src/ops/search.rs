@@ -2166,17 +2166,26 @@ pub(crate) fn run_job(
     Ok(out)
 }
 
+/// The line of a job a pack's sightings named, with the pack called `name` (its manifest when
+/// none is given). Nothing ran here, so its counters say nothing; None for any other job (an
+/// imported explore search has a progress of its own, rebuilt from its runs).
+pub(crate) fn imported_line(row: &JobRow, name: Option<&str>) -> Option<String> {
+    let manifest = row.spec.get("imported_from").and_then(|v| v.as_str())?;
+    if row.kind == jobs::explore::KIND_NAME {
+        return None;
+    }
+    Some(format!(
+        "{} {}: imported from pack {} (its finds came with the pack; nothing ran here)",
+        row.kind,
+        row.id,
+        name.unwrap_or(manifest)
+    ))
+}
+
 /// The progress line of a job's progress (its kind's own, else one from its summary).
 pub(crate) fn line_of(k: &dyn jobs::StrategyKind, row: &JobRow, progress: &Value) -> String {
-    // A job a pack's sightings named: nothing ran here, so its counters say nothing (an
-    // imported explore search has a progress of its own, rebuilt from its runs).
-    if let Some(pack) = row.spec.get("imported_from").and_then(|v| v.as_str())
-        && row.kind != jobs::explore::KIND_NAME
-    {
-        return format!(
-            "{} {}: imported from pack {pack} (its finds came with the pack; nothing ran here)",
-            row.kind, row.id
-        );
+    if let Some(l) = imported_line(row, None) {
+        return l;
     }
     let l = k.line(progress);
     if !l.is_empty() {

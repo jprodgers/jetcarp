@@ -492,6 +492,31 @@ fn a_quick_start_build_stops_and_carries_on_to_its_end() {
     }
 }
 
+/// A job a pack's sightings named never ran here: `jobs status` says so and names the pack (its
+/// title), rather than printing a hunt's empty counters or the manifest's hash.
+#[test]
+fn a_packs_job_says_it_came_with_the_pack() {
+    let s = Scratch::new("pack-job");
+    let cx = s.ctx();
+    let path = s.dir.join("bundled/jetcarp-starter").display().to_string();
+    jetcarp_api::call_json(&cx, "pack.import", json!({"path": path, "verify": "none"})).unwrap();
+    let list = jetcarp_api::call_json(&cx, "jobs.status", json!({})).unwrap();
+    let job = list["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|j| j["line"].as_str().unwrap().contains("imported from pack"))
+        .unwrap_or_else(|| panic!("no job from the pack: {list}"));
+    let line = job["line"].as_str().unwrap();
+    assert!(!line.contains("sha256:"), "{line}");
+    let id = job["job"].as_i64().unwrap();
+    let c = jetcarp_api::call(&cx, "jobs.status", json!({"job": id}), &Quiet).unwrap();
+    assert!(c.text.contains("imported from pack"), "{}", c.text);
+    assert!(!c.text.contains("sha256:"), "{}", c.text);
+    assert!(!c.text.contains("0 soups"), "{}", c.text);
+    assert!(!c.text.contains("status ,"), "{}", c.text);
+}
+
 #[test]
 fn a_pack_import_job_reports_and_runs_again_harmlessly() {
     let s = Scratch::new("import-job");

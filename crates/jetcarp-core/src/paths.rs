@@ -174,10 +174,35 @@ pub fn output_dir() -> PathBuf {
 /// (`~/.local/lib/jetcarp`, `%LOCALAPPDATA%\Programs\jetcarp`) has no `share` beside it.
 /// `<program folder>` is the running program's folder with symbolic links resolved, so a link on
 /// the `PATH` (pipx, uv, Homebrew, winget, the shell installer) leads back to the folder the
-/// program really lives in.
+/// program really lives in. The folder found is then named as it is beside the program as it was
+/// started, when that is the same folder ([`stable_name`]): Homebrew's
+/// `/opt/homebrew/share/jetcarp/packs` rather than `Cellar/jetcarp/0.4.0/...`.
 pub fn bundled_packs_dir() -> Option<PathBuf> {
     let env = std::env::var_os(BUNDLED_PACKS_ENV);
-    bundled_packs_from(env.as_deref(), program_path().as_deref())
+    let found = bundled_packs_from(env.as_deref(), program_path().as_deref())?;
+    if env.is_some_and(|v| !v.is_empty()) {
+        return Some(found);
+    }
+    Some(stable_name(found, std::env::current_exe().ok().as_deref()))
+}
+
+/// `found`, a folder beside the program with links resolved, by its name beside `launched` (the
+/// program's path as it was started, links not resolved) when that resolves to the same folder:
+/// Homebrew's `/opt/homebrew/share/jetcarp/packs` for `Cellar/jetcarp/0.4.0/share/jetcarp/packs`,
+/// Scoop's `apps\jetcarp\current\packs` for `apps\jetcarp\0.4.0\packs`. A package manager's
+/// upgrade deletes the versioned folder and keeps the link, so what records the path (a pack
+/// import's job) can still find it. macOS and Windows give the path as started; Linux gives it
+/// resolved, so there `found` stays.
+pub fn stable_name(found: PathBuf, launched: Option<&Path>) -> PathBuf {
+    let Ok(real) = std::fs::canonicalize(&found) else {
+        return found;
+    };
+    for p in bundled_packs_places(None, launched) {
+        if p != found && std::fs::canonicalize(&p).is_ok_and(|c| c == real) {
+            return p;
+        }
+    }
+    found
 }
 
 /// The places [`bundled_packs_dir`] looks, in order: `$JETCARP_BUNDLED_PACKS` alone when set,

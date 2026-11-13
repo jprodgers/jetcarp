@@ -123,8 +123,13 @@ pub fn line(p: &PackImportProgress) -> String {
     if let Some(r) = &p.report {
         let n = |k: &str| r.get(k).and_then(Value::as_u64).unwrap_or(0);
         let q = n("quickstart");
+        let gone = match n("superseded") {
+            0 => String::new(),
+            1 => " (1 from an earlier version removed)".into(),
+            g => format!(" ({g} from earlier versions removed)"),
+        };
         return format!(
-            "pack import {}: {name} imported: {} patterns new, {} merged, {q} Quick Start {}, {} ant runs",
+            "pack import {}: {name} imported: {} patterns new, {} merged, {q} Quick Start {}{gone}, {} ant runs",
             p.job,
             n("patterns_added"),
             n("patterns_merged"),

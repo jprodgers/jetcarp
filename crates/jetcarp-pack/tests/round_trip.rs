@@ -270,6 +270,109 @@ fn quick_start_entries_go_by_their_pack_ids() {
     assert_eq!(v2.manifest.retracts[0].target, tg);
 }
 
+/// A Life scene named `name` in rule `rule`, as a Quick Start entry `handle`.
+fn entry(handle: &str, name: &str, rule: &str) -> jetcarp_store::QuickStartRow {
+    let mut scene = jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+        "square",
+        32,
+        32,
+        jetcarp_core::Boundary::Wrap,
+    ));
+    scene.name = name.into();
+    scene.cas.push(jetcarp_core::CaSpec::new(rule));
+    jetcarp_store::QuickStartRow::for_scene(handle, "scene", scene)
+}
+
+/// The titles of a library's pack entries, sorted.
+fn pack_titles(lib: &Library) -> Vec<String> {
+    let mut t: Vec<String> = lib
+        .quickstart(&[jetcarp_store::QsSource::Pack])
+        .unwrap()
+        .into_iter()
+        .map(|q| q.title)
+        .collect();
+    t.sort();
+    t
+}
+
+/// A pack's newer version replaces the Quick Start entries its earlier versions brought in, even
+/// when it is published afresh rather than on top of them (as the starter pack is for each
+/// release): those it no longer has go, unless the user hid or rated them. Another publisher's
+/// pack of the same name leaves them alone, and a dry run only counts them.
+#[test]
+fn a_newer_version_of_a_pack_replaces_its_quick_start_entries() {
+    let dir = temp("qs-supersede");
+    let publ = Library::open(dir.join("publisher"));
+    for (h, n, r) in [
+        ("a", "Kept", "B3/S23"),
+        ("b", "Dropped", "B36/S23"),
+        ("r", "Rated", "B2/S"),
+        ("x", "Hidden", "B3678/S34678"),
+    ] {
+        publ.put_quickstart(&entry(h, n, r)).unwrap();
+    }
+    let p = publisher(5, "Test Publisher");
+    let mut book = book(&[]);
+    run(&publ, &p, &mut book, &options("starter", &dir.join("v1")));
+    // The next version: published afresh, without three of them and with a new one.
+    for h in ["b", "r", "x"] {
+        publ.remove_quickstart(h).unwrap();
+    }
+    publ.put_quickstart(&entry("c", "Added", "B34/S34"))
+        .unwrap();
+    run(&publ, &p, &mut book, &options("starter", &dir.join("v2")));
+    // The same feed name from someone else.
+    let other = Library::open(dir.join("other"));
+    other.put_quickstart(&entry("o", "Other", "B1/S1")).unwrap();
+    run(
+        &other,
+        &publisher(6, "Someone Else"),
+        &mut book,
+        &options("starter", &dir.join("o")),
+    );
+
+    let opts = |store: &str, dry_run: bool| import::Options {
+        path: dir.join(store),
+        verify: VerifyMode::None,
+        dry_run,
+        ..Default::default()
+    };
+    let lib = Library::open(dir.join("lib"));
+    let r = import::import(&lib, &opts("v1", false), &|_| {}).unwrap();
+    assert_eq!((r.quickstart, r.superseded), (4, 0));
+    let rated = lib
+        .quickstart(&[jetcarp_store::QsSource::Pack])
+        .unwrap()
+        .into_iter()
+        .find(|q| q.title == "Rated")
+        .unwrap();
+    lib.rate("quickstart", &rated.id, "user", 5.0, "").unwrap();
+    let hidden = lib
+        .quickstart(&[jetcarp_store::QsSource::Pack])
+        .unwrap()
+        .into_iter()
+        .find(|q| q.title == "Hidden")
+        .unwrap();
+    lib.set_quickstart_hidden(&hidden.id, true).unwrap();
+    let r = import::import(&lib, &opts("o", false), &|_| {}).unwrap();
+    assert_eq!((r.quickstart, r.superseded), (1, 0), "another publisher's");
+
+    let r = import::import(&lib, &opts("v2", true), &|_| {}).unwrap();
+    assert_eq!(r.superseded, 1, "a dry run counts");
+    assert_eq!(pack_titles(&lib).len(), 5, "and removes nothing");
+
+    let r = import::import(&lib, &opts("v2", false), &|_| {}).unwrap();
+    assert_eq!((r.quickstart, r.superseded), (1, 1));
+    assert_eq!(
+        pack_titles(&lib),
+        ["Added", "Hidden", "Kept", "Other", "Rated"],
+        "Dropped went; the hidden and the rated stay"
+    );
+    // Importing it again changes nothing.
+    let r = import::import(&lib, &opts("v2", false), &|_| {}).unwrap();
+    assert_eq!((r.quickstart, r.superseded), (0, 0));
+}
+
 /// Every time in a pack is an RFC 3339 UTC time with whole seconds: a rater book holding a bare
 /// consent date publishes its midnight, and a version's time that is not one is refused.
 #[test]

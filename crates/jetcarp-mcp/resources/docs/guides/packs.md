@@ -86,7 +86,10 @@ What happens to each kind of record:
   `--sample N` changes the sample size, and `--verify-seconds S` caps the time (600 by default).
 - **Search runs** become a paused explore job, so `jetcarp jobs status`, `jobs runs` and the atlas
   work on them as on a search you ran yourself, and `jetcarp jobs resume` continues it.
-- **Quick Start entries** appear in the Quick Start menu.
+- **Quick Start entries** appear in the Quick Start menu. A newer version of a pack you imported
+  before (the same feed, from the same publisher) replaces that pack's entries: those the new version
+  no longer has leave the Quick Start, unless you hid or rated them, and the report says how many
+  went. Importing the newer version of the starter pack again tidies a library that kept both.
 - **Ratings** are kept under each rater's name, as the pack gives it.
 - **Retractions.** A publisher can withdraw a record in a later version. Importing that version flags
   the record as retracted, with the reason, and never deletes your copy: `jetcarp library show`

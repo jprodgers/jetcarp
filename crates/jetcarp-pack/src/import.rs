@@ -106,6 +106,9 @@ pub struct Imported {
     pub flagged: u64,
     pub ants: u64,
     pub quickstart: u64,
+    /// Quick Start entries an earlier version of this pack (same feed and publisher) brought in
+    /// and this one does not have, removed (counted, not removed, on a dry run).
+    pub superseded: u64,
     pub sightings: u64,
     pub ratings: u64,
     pub aliases: u64,
@@ -672,6 +675,20 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     if !opts.dry_run && !qs.is_empty() {
         out.quickstart = lib.import_quickstart(&qs)?;
     }
+    // A pack's newer version replaces the entries its earlier versions brought in, as an atlas
+    // published again replaces its own: those it no longer has go, unless the user hid or rated
+    // them. Earlier versions are the library's imports of the same feed by the same publisher;
+    // a version carries its parents' rows, so it lists every entry the pack still offers.
+    let earlier: Vec<String> = lib
+        .pack_imports()?
+        .into_iter()
+        .filter(|r| r.feed == m.feed && r.publisher == m.publisher && r.manifest != h)
+        .map(|r| r.manifest)
+        .collect();
+    let keep: HashSet<String> = qs.iter().map(|(r, _, _)| r.id.clone()).collect();
+    out.superseded = lib
+        .supersede_pack_quickstart(&earlier, &keep, !opts.dry_run)?
+        .len() as u64;
 
     // Aliases (none for a retracted record).
     let mut aliases = vec![];
@@ -855,12 +872,14 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             imported: now.clone(),
             engine_version: jetcarp_core::VERSION.into(),
             report: json!({
+                "title": m.title,
                 "publisher_name": out.publisher_name,
                 "patterns_added": out.patterns_added,
                 "patterns_merged": out.patterns_merged,
                 "flagged": out.flagged,
                 "ants": out.ants,
                 "quickstart": out.quickstart,
+                "superseded": out.superseded,
                 "sightings": out.sightings,
                 "ratings": out.ratings,
                 "media": out.media,

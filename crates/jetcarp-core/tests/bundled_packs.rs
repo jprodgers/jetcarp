@@ -1,6 +1,6 @@
 //! Where the packs that came with the program are looked for (`paths::bundled_packs_from`).
 
-use jetcarp_core::paths::{bundled_packs_from, plain_path};
+use jetcarp_core::paths::{bundled_packs_from, plain_path, stable_name};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
@@ -76,6 +76,46 @@ fn share_is_looked_at_only_beside_a_bin_folder() {
             d.join("venv/share/jetcarp/packs"),
             d.join("venv/Scripts/packs")
         ]
+    );
+}
+
+/// Homebrew's layout: the program and the packs live in `Cellar/jetcarp/<version>`, which an
+/// upgrade deletes; `bin/jetcarp` and `share/jetcarp` beside the Cellar are links that stay. The
+/// packs are found through the resolved program and named through the links. Scoop's `current`
+/// junction is the same case on Windows.
+#[cfg(unix)]
+#[test]
+fn the_packs_are_named_through_the_links_that_survive_an_upgrade() {
+    use std::os::unix::fs::symlink;
+    let d = scratch("homebrew");
+    let keg = d.join("Cellar/jetcarp/0.4.0");
+    std::fs::create_dir_all(keg.join("bin")).unwrap();
+    std::fs::create_dir_all(keg.join("share/jetcarp/packs")).unwrap();
+    std::fs::write(keg.join("bin/jetcarp"), b"").unwrap();
+    symlink(keg.join("bin/jetcarp"), d.join("bin/jetcarp")).unwrap();
+    std::fs::create_dir_all(d.join("share")).unwrap();
+    symlink(keg.join("share/jetcarp"), d.join("share/jetcarp")).unwrap();
+
+    let real = std::fs::canonicalize(keg.join("bin/jetcarp")).unwrap();
+    let found = bundled_packs_from(None, Some(&real)).unwrap();
+    assert!(
+        found.starts_with(std::fs::canonicalize(&keg).unwrap()),
+        "{found:?}"
+    );
+    // Started through the link (as macOS reports it): the link's name.
+    assert_eq!(
+        stable_name(found.clone(), Some(&d.join("bin/jetcarp"))),
+        d.join("share/jetcarp/packs")
+    );
+    // Started from the keg itself, or with no path: as found.
+    assert_eq!(stable_name(found.clone(), Some(&real)), found);
+    assert_eq!(stable_name(found.clone(), None), found);
+    // A folder that only looks right, but is another one (a data folder's `packs`), is not used.
+    let other = scratch("homebrew-other");
+    std::fs::create_dir_all(other.join("share/jetcarp/packs")).unwrap();
+    assert_eq!(
+        stable_name(found.clone(), Some(&other.join("bin/jetcarp"))),
+        found
     );
 }
 

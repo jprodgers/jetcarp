@@ -852,8 +852,9 @@ impl Default for DashWindow {
 }
 
 impl DashWindow {
-    /// An imported pack's feed name (`jetcarp-starter`), from its manifest; the manifest itself
-    /// when the library has no record of the import.
+    /// An imported pack's name, from the library's record of the import: its title (*JETCARP
+    /// starter pack*), else its feed (`jetcarp-starter`); the manifest itself when the library
+    /// has no record of it.
     fn pack_name(&mut self, manifest: &str) -> String {
         if let Some(n) = self.pack_names.get(manifest) {
             return n.clone();
@@ -865,8 +866,13 @@ impl DashWindow {
                 v.into_iter()
                     .find(|r| r.manifest == manifest || manifest.ends_with(r.manifest.as_str()))
             })
-            .map(|r| r.feed)
-            .filter(|f| !f.is_empty())
+            .and_then(|r| {
+                let title = r.report.get("title").and_then(|t| t.as_str()).unwrap_or("");
+                [title, r.feed.as_str()]
+                    .into_iter()
+                    .find(|s| !s.is_empty())
+                    .map(String::from)
+            })
             .unwrap_or_else(|| manifest.to_string());
         self.pack_names.insert(manifest.to_string(), n.clone());
         n

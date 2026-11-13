@@ -744,6 +744,51 @@ impl Library {
         Ok(n)
     }
 
+    /// The Quick Start entries that earlier versions of a pack brought in (`manifests`: the
+    /// feed's other versions) and its new version does not have (`keep`: the new version's
+    /// entries, by the library's ids). An entry the user hid or rated stays, as a hidden one does
+    /// when an atlas is published again. With `remove` they are deleted (their media rows and
+    /// history too); either way their ids are returned.
+    pub fn supersede_pack_quickstart(
+        &self,
+        manifests: &[String],
+        keep: &HashSet<String>,
+        remove: bool,
+    ) -> Result<Vec<String>, String> {
+        if manifests.is_empty() {
+            return Ok(vec![]);
+        }
+        let find = |c: &Connection| -> Result<Vec<String>, String> {
+            let mut st = c
+                .prepare_cached(
+                    "SELECT q.id FROM quickstart q WHERE q.source = 'pack' AND q.source_ref = ?1
+                     AND q.hidden = 0 AND NOT EXISTS (SELECT 1 FROM ratings r
+                        WHERE r.target_kind = 'quickstart' AND r.target_id = q.id
+                        AND r.rater = 'user')
+                     ORDER BY q.id",
+                )
+                .map_err(e)?;
+            let mut out = vec![];
+            for m in manifests {
+                for id in st.query_map([m], |r| r.get::<_, String>(0)).map_err(e)? {
+                    let id = id.map_err(e)?;
+                    if !keep.contains(&id) {
+                        out.push(id);
+                    }
+                }
+            }
+            Ok(out)
+        };
+        if !remove {
+            return self.read(vec![], |c| find(c));
+        }
+        self.write(|tx| {
+            let gone = find(tx)?;
+            super::quickstart::delete_in(tx, &gone)?;
+            Ok(gone)
+        })
+    }
+
     /// Media rows whose files are in the library's media folder already (a row the library has
     /// for the same target, kind and mode is kept).
     pub fn import_media(&self, rows: &[PackMedia]) -> Result<u64, String> {

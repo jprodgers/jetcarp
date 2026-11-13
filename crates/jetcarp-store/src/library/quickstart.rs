@@ -428,7 +428,7 @@ pub(super) fn quickstart_in(
 
 /// Delete rows and their media rows and provenance (the media files stay until
 /// `jetcarp media gc`).
-fn delete_in(tx: &Transaction, ids: &[String]) -> Result<(), String> {
+pub(super) fn delete_in(tx: &Transaction, ids: &[String]) -> Result<(), String> {
     for id in ids {
         tx.execute("DELETE FROM quickstart WHERE id = ?1", [id])
             .map_err(e)?;

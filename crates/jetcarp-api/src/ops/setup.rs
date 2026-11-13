@@ -848,7 +848,7 @@ pub fn setup_job(cx: &Ctx, lib: &Library, job: i64) -> Option<SetupJob> {
         stale: !here && sum.as_ref().is_some_and(|s| s.stale),
         done: sum.as_ref().map(|s| s.done).unwrap_or(0),
         fraction,
-        line: super::search::line_of(k, &row, &progress),
+        line: super::jobs::job_line(lib, k, &row, &progress),
     })
 }
 

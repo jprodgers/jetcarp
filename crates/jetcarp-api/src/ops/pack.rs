@@ -767,6 +767,13 @@ impl Report for ImportOut {
                 r["searches"].as_array().map(|a| a.len()).unwrap_or(0),
                 r["retracted"]
             );
+            if let Some(g) = r["superseded"].as_u64().filter(|g| *g > 0) {
+                let _ = writeln!(
+                    s,
+                    "  {} from earlier versions of this pack removed from the Quick Start",
+                    crate::out::count(g, "entry", "entries")
+                );
+            }
             let smp = &r["sample"];
             let _ = writeln!(
                 s,
