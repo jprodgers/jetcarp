@@ -9,7 +9,7 @@
   "size": {
    "rect": {
     "w": 64,
-    "h": 8
+    "h": 16
    }
   },
   "boundary": "wrap"
