@@ -1,6 +1,6 @@
 {
  "name": "Life spaceship 6dd55e69 on square grid",
- "description": "A period-4 spaceship in Conway's Life (B3/S23) on the square grid, with touching neighbours, 9 to 12 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 512 rules from B3/S23 to B3468/S2378. It also runs in Life, unchanged, on k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph. This is the lightweight spaceship (LWSS), credited to found by John Conway in 1970.",
+ "description": "A period-4 spaceship in Conway's Life (B3/S23) on the square grid, with touching neighbours, 9 to 12 cells, moving two lattice steps every 4 generations (c/2). It runs the same way in the 32 rules from B3/S23 to B3468/S2378. It also runs in Life, unchanged, on k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph. This is the lightweight spaceship (LWSS), credited to found by John Conway in 1970.",
  "tiling": {
   "family": "square",
   "size": {

@@ -1456,52 +1456,52 @@ its card.
 
 | | id | tiling (also runs on) | p | d per period | cells | rules in range | seen (soups) | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [`77364004`](#life-77364004) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 11–15 | `B3/S23` (512) | 45 (45) | known: the middleweight spaceship (MWSS); contains a phase of the LWSS |
-| 2 | [`5a080db3`](#life-5a080db3) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−1, −1) | 5 | `B3/S23` (512) | 95,041 (29,732) | known: Conway's glider |
-| 3 | [`6dd55e69`](#life-6dd55e69) | square (k3-010, 25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 9–12 | `B3/S23` (512) | 135 (133) | known: the lightweight spaceship (LWSS) |
-| 4 | [`1376072e`](#life-1376072e) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 13–18 | `B3/S23` (512) | 11 (11) | known: the heavyweight spaceship (HWSS); contains a phase of the MWSS and the LWSS |
-| 5 | [`47fc3f43`](#life-47fc3f43) | 3.6.3.6 (k3-030, k3-032, k3-039) | 4 | (1, 0) | 4–5 | `B3/S23` (8,192) | 245,860 (114,606) | known: Guttesen's kagome glider g |
-| 6 | [`232055ff`](#life-232055ff) | 3.3.3.4.4 (k3-013, k3-019) | 2 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 13,595 (13,052) | known: EricG's 3.3.3.4.4 ship |
-| 7 | [`c574f8e3`](#life-c574f8e3) | 3.3.4.3.4 | 8 | (0, −2) | 8–15 | `B3/S23` (8,192) | 118,271 (43,179) | known: Guttesen's snub-square glider |
-| 8 | [`fabe952b`](#life-fabe952b) | k2-007 | 20 | (1, 0) | 6–20 | `B3/S23` (8,192) | 5,772 (5,537) | known: Büttner's period-20 ship |
-| 9 | [`0e3664c5`](#life-0e3664c5) | k2-003 | 13 | (−2, 0) | 12–44 | `B3/S23` (2,048) | 13 (13) | single |
-| 10 | [`d02b5ce8`](#life-d02b5ce8) | k2-012 | 3 | (−1, 0) | 10–14 | `B3/S23` (32,768) | 1 (1) | single |
-| 11 | [`ca75ccd6`](#life-ca75ccd6) | k3-002 | 3 | (−1, 0) | 14–16 | `B3/S23` (1,024) | 10 (10) | single; contains a phase of `f3d41f14` |
-| 12 | [`25c5dc4a`](#life-25c5dc4a) | k3-010 | 4 | (−2, 0) | 11–15 | `B3/S23` (2,048) | 2 (2) | single; contains a phase of the LWSS |
-| 13 | [`41eb5c62`](#life-41eb5c62) | k3-010 | 38 | (4, 0) | 8–24 | `B3/S23` (2,048) | 23 (23) | single |
-| 14 | [`8488e7e9`](#life-8488e7e9) | k3-011 | 4 | (1, 0) | 11–15 | `B3/S23` (8,192) | 8 (8) | single; contains a phase of [`d997330c`](#life-d997330c) |
+| 1 | [`77364004`](#life-77364004) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 11–15 | `B3/S23` (16) | 45 (45) | known: the middleweight spaceship (MWSS); contains a phase of the LWSS |
+| 2 | [`5a080db3`](#life-5a080db3) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−1, −1) | 5 | `B3/S23` (256) | 95,041 (29,732) | known: Conway's glider |
+| 3 | [`6dd55e69`](#life-6dd55e69) | square (k3-010, 25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 9–12 | `B3/S23` (32) | 135 (133) | known: the lightweight spaceship (LWSS) |
+| 4 | [`1376072e`](#life-1376072e) | square (25 isohedral and drawn tilings with the square grid's neighbour graph) | 4 | (−2, 0) | 13–18 | `B3/S23` (8) | 11 (11) | known: the heavyweight spaceship (HWSS); contains a phase of the MWSS and the LWSS |
+| 5 | [`47fc3f43`](#life-47fc3f43) | 3.6.3.6 (k3-030, k3-032, k3-039) | 4 | (1, 0) | 4–5 | `B3/S23` (131,072) | 245,860 (114,606) | known: Guttesen's kagome glider g |
+| 6 | [`232055ff`](#life-232055ff) | 3.3.3.4.4 (k3-013, k3-019) | 2 | (−1, 0) | 8–12 | `B3/S23` (16,384) | 13,595 (13,052) | known: EricG's 3.3.3.4.4 ship |
+| 7 | [`c574f8e3`](#life-c574f8e3) | 3.3.4.3.4 | 8 | (0, −2) | 8–15 | `B3/S23` (512) | 118,271 (43,179) | known: Guttesen's snub-square glider |
+| 8 | [`fabe952b`](#life-fabe952b) | k2-007 | 20 | (1, 0) | 6–20 | `B3/S23` (512) | 5,772 (5,537) | known: Büttner's period-20 ship |
+| 9 | [`0e3664c5`](#life-0e3664c5) | k2-003 | 13 | (−2, 0) | 12–44 | `B3/S23` (32) | 13 (13) | single |
+| 10 | [`d02b5ce8`](#life-d02b5ce8) | k2-012 | 3 | (−1, 0) | 10–14 | `B3/S23` (131,072) | 1 (1) | single |
+| 11 | [`ca75ccd6`](#life-ca75ccd6) | k3-002 | 3 | (−1, 0) | 14–16 | `B3/S23` (64) | 10 (10) | single; contains a phase of `f3d41f14` |
+| 12 | [`25c5dc4a`](#life-25c5dc4a) | k3-010 | 4 | (−2, 0) | 11–15 | `B3/S23` (256) | 2 (2) | single; contains a phase of the LWSS |
+| 13 | [`41eb5c62`](#life-41eb5c62) | k3-010 | 38 | (4, 0) | 8–24 | `B3/S23` (64) | 23 (23) | single |
+| 14 | [`8488e7e9`](#life-8488e7e9) | k3-011 | 4 | (1, 0) | 11–15 | `B3/S23` (4,096) | 8 (8) | single; contains a phase of [`d997330c`](#life-d997330c) |
 | 15 | [`d997330c`](#life-d997330c) | k3-011 | 4 | (−1, 0) | 8–12 | `B3/S23` (8,192) | 9 (9) | single |
-| 16 | [`4f66f17e`](#life-4f66f17e) | k3-011 | 4 | (−1, 0) | 11–18 | `B3/S23` (8,192) | 1 (1) | single; contains a phase of [`8488e7e9`](#life-8488e7e9) and [`d997330c`](#life-d997330c) |
-| 17 | [`f87a9ed1`](#life-f87a9ed1) | k3-011 | 9 | (−1, 0) | 9–16 | `B3/S23` (8,192) | 8 (8) | single |
-| 18 | [`b6a6a47a`](#life-b6a6a47a) | k3-040 | 8 | (2, 0) | 8–12 | `B3/S23` (32,768) | 13 (13) | single |
-| 19 | [`148310e3`](#life-148310e3) | k3-041 | 4 | (1, 0) | 12–19 | `B3/S23` (32,768) | 150 (150) | single |
-| 20 | [`f6567467`](#life-f6567467) | k3-044 | 8 | (1, 0) | 8–18 | `B3/S23` (131,072) | 5 (5) | single |
-| 21 | [`139723e0`](#life-139723e0) | k3-055 | 20 | (5, 0) | 35–57 | `B3/S23` (8,192) | 185 (185) | single |
-| 22 | [`65acb120`](#life-65acb120) | k3-055 | 32 | (8, 0) | 17–65 | `B3/S23` (8,192) | 21 (21) | single |
-| 23 | [`5f371c4c`](#life-5f371c4c) | k3-055 | 32 | (−8, 0) | 28–66 | `B3/S23` (8,192) | 1 (1) | single |
-| 24 | [`5912456d`](#life-5912456d) | k3-055 | 32 | (−8, 0) | 73–121 | `B3/S23` (8,192) | 1 (1) | single |
-| 25 | [`fbad7fbf`](#life-fbad7fbf) | k3-055 | 32 | (8, 0) | 53–105 | `B3/S23` (8,192) | 7 (7) | single |
-| 26 | [`ad91d936`](#life-ad91d936) | k3-055 | 32 | (8, 0) | 54–94 | `B3/S23` (8,192) | 1 (1) | single |
-| 27 | [`8130b388`](#life-8130b388) | k3-055 | 32 | (−8, 0) | 52–96 | `B3/S23` (8,192) | 8 (8) | single |
-| 28 | [`b86bd684`](#life-b86bd684) | k3-055 | 32 | (8, 0) | 39–73 | `B3/S23` (8,192) | 3 (3) | single |
-| 29 | [`50ecb3d5`](#life-50ecb3d5) | k3-055 | 32 | (8, 0) | 38–104 | `B3/S23` (8,192) | 4 (4) | single |
-| 30 | [`d878334e`](#life-d878334e) | k3-055 | 64 | (16, 0) | 63–148 | `B3/S23` (8,192) | 6 (6) | single |
-| 31 | [`92b7544a`](#life-92b7544a) | k3-055 | 64 | (16, 0) | 75–149 | `B3/S23` (8,192) | 5 (5) | single |
-| 32 | [`126db117`](#life-126db117) | k3-055 | 64 | (16, 0) | 28–84 | `B3/S23` (8,192) | 15 (15) | single |
-| 33 | [`1ccdebc8`](#life-1ccdebc8) | k3-055 | 64 | (16, 0) | 103–169 | `B3/S23` (8,192) | 4 (4) | single |
-| 34 | [`f2841d4c`](#life-f2841d4c) | k3-057 | 12 | (0, −1) | 13–24 | `B3/S23` (8,192) | 57 (57) | single |
-| 35 | [`a5e9ba80`](#life-a5e9ba80) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (8,192) | 3 (3) | flagged; contains a phase of Guttesen's snub-square glider |
-| 36 | [`f89d8f11`](#life-f89d8f11) | k2-003 (k3-010, k3-016) | 16 | (5, 0) | 8–16 | `B3/S23` (2,048) | 1,295 (1,292) | flagged |
-| 37 | [`55db03c8`](#life-55db03c8) | k2-007 | 5 | (0, −1) | 16–22 | `B3/S23` (8,192) | 1 (1) | flagged |
-| 38 | [`c1d7a48e`](#life-c1d7a48e) | k2-011 (k3-002) | 3 | (1, 0) | 9–11 | `B3/S23` (8,192) | 882 (878) | flagged |
+| 16 | [`4f66f17e`](#life-4f66f17e) | k3-011 | 4 | (−1, 0) | 11–18 | `B3/S23` (1,024) | 1 (1) | single; contains a phase of [`8488e7e9`](#life-8488e7e9) and [`d997330c`](#life-d997330c) |
+| 17 | [`f87a9ed1`](#life-f87a9ed1) | k3-011 | 9 | (−1, 0) | 9–16 | `B3/S23` (512) | 8 (8) | single |
+| 18 | [`b6a6a47a`](#life-b6a6a47a) | k3-040 | 8 | (2, 0) | 8–12 | `B3/S23` (65,536) | 13 (13) | single |
+| 19 | [`148310e3`](#life-148310e3) | k3-041 | 4 | (1, 0) | 12–19 | `B3/S23` (16,384) | 150 (150) | single |
+| 20 | [`f6567467`](#life-f6567467) | k3-044 | 8 | (1, 0) | 8–18 | `B3/S23` (524,288) | 5 (5) | single |
+| 21 | [`139723e0`](#life-139723e0) | k3-055 | 20 | (5, 0) | 35–57 | `B3/S23` (64) | 185 (185) | single |
+| 22 | [`65acb120`](#life-65acb120) | k3-055 | 32 | (8, 0) | 17–65 | `B3/S23` (32) | 21 (21) | single |
+| 23 | [`5f371c4c`](#life-5f371c4c) | k3-055 | 32 | (−8, 0) | 28–66 | `B3/S23` (32) | 1 (1) | single |
+| 24 | [`5912456d`](#life-5912456d) | k3-055 | 32 | (−8, 0) | 73–121 | `B3/S23` (32) | 1 (1) | single |
+| 25 | [`fbad7fbf`](#life-fbad7fbf) | k3-055 | 32 | (8, 0) | 53–105 | `B3/S23` (32) | 7 (7) | single |
+| 26 | [`ad91d936`](#life-ad91d936) | k3-055 | 32 | (8, 0) | 54–94 | `B3/S23` (32) | 1 (1) | single |
+| 27 | [`8130b388`](#life-8130b388) | k3-055 | 32 | (−8, 0) | 52–96 | `B3/S23` (64) | 8 (8) | single |
+| 28 | [`b86bd684`](#life-b86bd684) | k3-055 | 32 | (8, 0) | 39–73 | `B3/S23` (16) | 3 (3) | single |
+| 29 | [`50ecb3d5`](#life-50ecb3d5) | k3-055 | 32 | (8, 0) | 38–104 | `B3/S23` (64) | 4 (4) | single |
+| 30 | [`d878334e`](#life-d878334e) | k3-055 | 64 | (16, 0) | 63–148 | `B3/S23` (16) | 6 (6) | single |
+| 31 | [`92b7544a`](#life-92b7544a) | k3-055 | 64 | (16, 0) | 75–149 | `B3/S23` (32) | 5 (5) | single |
+| 32 | [`126db117`](#life-126db117) | k3-055 | 64 | (16, 0) | 28–84 | `B3/S23` (16) | 15 (15) | single |
+| 33 | [`1ccdebc8`](#life-1ccdebc8) | k3-055 | 64 | (16, 0) | 103–169 | `B3/S23` (32) | 4 (4) | single |
+| 34 | [`f2841d4c`](#life-f2841d4c) | k3-057 | 12 | (0, −1) | 13–24 | `B3/S23` (256) | 57 (57) | single |
+| 35 | [`a5e9ba80`](#life-a5e9ba80) | 3.3.4.3.4 | 24 | (0, 6) | 17–50 | `B3/S23` (128) | 3 (3) | flagged; contains a phase of Guttesen's snub-square glider |
+| 36 | [`f89d8f11`](#life-f89d8f11) | k2-003 (k3-010, k3-016) | 16 | (5, 0) | 8–16 | `B3/S23` (256) | 1,295 (1,292) | flagged |
+| 37 | [`55db03c8`](#life-55db03c8) | k2-007 | 5 | (0, −1) | 16–22 | `B3/S23` (4,096) | 1 (1) | flagged |
+| 38 | [`c1d7a48e`](#life-c1d7a48e) | k2-011 (k3-002) | 3 | (1, 0) | 9–11 | `B3/S23` (32,768) | 882 (878) | flagged |
 | 39 | [`16bc37c9`](#life-16bc37c9) | k2-017 (k3-053) | 4 | (−1, 0) | 6–9 | `B3/S23` (8,192) | 138,656 (77,024) | flagged |
-| 40 | [`020ec7b7`](#life-020ec7b7) | k3-039 | 20 | (−5, 0) | 7–21 | `B3/S23` (8,192) | 22,100 (17,978) | flagged; contains a phase of glider g |
-| 41 | [`dab6fb01`](#life-dab6fb01) | k3-040 | 24 | (4, 0) | 7–23 | `B3/S23` (32,768) | 3,661 (3,567) | flagged |
-| 42 | [`e1fcfa73`](#life-e1fcfa73) | k3-044 | 31 | (−2, 0) | 3–18 | `B3/S23` (131,072) | 88,492 (42,183) | flagged |
-| 43 | [`3792824d`](#life-3792824d) | k3-045 (k3-046) | 11 | (−2, 0) | 8–16 | `B3/S23` (131,072) | 11,435 (10,811) | flagged |
-| 44 | [`1e6832e3`](#life-1e6832e3) | k3-057 | 8 | (1, 0) | 9–14 | `B3/S23` (8,192) | 6,553 (6,141) | flagged |
-| 45 | [`93a72ebd`](#life-93a72ebd) | k3-059 | 30 | (1, 1) | 7–23 | `B3/S23` (524,288) | 81,611 (41,207) | flagged |
-| 46 | [`58e6d5fc`](#life-58e6d5fc) | k3-061 | 22 | (1, 1) | 5–10 | `B3/S23` (524,288) | 34,039 (25,346) | flagged |
+| 40 | [`020ec7b7`](#life-020ec7b7) | k3-039 | 20 | (−5, 0) | 7–21 | `B3/S23` (4,096) | 22,100 (17,978) | flagged; contains a phase of glider g |
+| 41 | [`dab6fb01`](#life-dab6fb01) | k3-040 | 24 | (4, 0) | 7–23 | `B3/S23` (16,384) | 3,661 (3,567) | flagged |
+| 42 | [`e1fcfa73`](#life-e1fcfa73) | k3-044 | 31 | (−2, 0) | 3–18 | `B3/S23` (65,536) | 88,492 (42,183) | flagged |
+| 43 | [`3792824d`](#life-3792824d) | k3-045 (k3-046) | 11 | (−2, 0) | 8–16 | `B3/S23` (65,536) | 11,435 (10,811) | flagged |
+| 44 | [`1e6832e3`](#life-1e6832e3) | k3-057 | 8 | (1, 0) | 9–14 | `B3/S23` (1,024) | 6,553 (6,141) | flagged |
+| 45 | [`93a72ebd`](#life-93a72ebd) | k3-059 | 30 | (1, 1) | 7–23 | `B3/S23` (2,097,152) | 81,611 (41,207) | flagged |
+| 46 | [`58e6d5fc`](#life-58e6d5fc) | k3-061 | 22 | (1, 1) | 5–10 | `B3/S23` (16,777,216) | 34,039 (25,346) | flagged |
 
 ### Gallery of the Life objects
 
@@ -1527,7 +1527,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>11–15</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S238</code> (512 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S238</code> (16 rules)</dd>
 <dt>Seen</dt><dd>45 times, in 45 soups</dd>
 <dt>Verdict</dt><dd><b>Known</b>: the middleweight spaceship (MWSS) (found by John Conway in 1970). Contains a perturbed phase of the LWSS.</dd>
 </dl>
@@ -1543,7 +1543,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving (−1, −1) per period</dd>
 <dt>Cells</dt><dd>5</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3678/S0235678</code> (512 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3678/S0235678</code> (256 rules)</dd>
 <dt>Seen</dt><dd>95,041 times, in 29,732 soups</dd>
 <dt>Verdict</dt><dd><b>Known</b>: Conway's glider (found by Richard Guy in 1970).</dd>
 </dl>
@@ -1559,7 +1559,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>square (shown); also, unchanged, k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>9–12</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S2378</code> (512 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S2378</code> (32 rules)</dd>
 <dt>Seen</dt><dd>128 times, in 126 soups on square; 7 times, in 7 soups on k3-010</dd>
 <dt>Verdict</dt><dd><b>Known</b>: the lightweight spaceship (LWSS) (found by John Conway in 1970).</dd>
 </dl>
@@ -1575,7 +1575,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>square (shown); also, unchanged, 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>13–18</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S23</code> (512 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S23</code> (8 rules)</dd>
 <dt>Seen</dt><dd>11 times, in 11 soups</dd>
 <dt>Verdict</dt><dd><b>Known</b>: the heavyweight spaceship (HWSS) (found by John Conway in 1970). Contains a perturbed phase of the MWSS and the LWSS.</dd>
 </dl>
@@ -1591,7 +1591,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>3.6.3.6 (shown); also, unchanged, k3-030, k3-032 and k3-039</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>4–5</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,6,7,8,9,10,11,12/S1,2,3,5,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,6,7,8,9,10,11,12/S1,2,3,5,6,7,8,9,10,11,12</code> (131,072 rules)</dd>
 <dt>Seen</dt><dd>149,642 times, in 43,743 soups on 3.6.3.6; 35,634 times, in 25,780 soups on k3-030; 35,417 times, in 25,058 soups on k3-032; 25,167 times, in 20,025 soups on k3-039</dd>
 <dt>Verdict</dt><dd><b>Known</b>: Guttesen's kagome glider g (Guttesen 2026).</dd>
 </dl>
@@ -1607,7 +1607,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>3.3.3.4.4 (shown); also, unchanged, k3-013 and k3-019</dd>
 <dt>Period</dt><dd>2, moving one lattice step per period (c/2)</dd>
 <dt>Cells</dt><dd>8–12</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,7,9,10,11,12/S1,2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,5,7,9,10,11,12/S1,2,3,6,7,8,9,10,11,12</code> (16,384 rules)</dd>
 <dt>Seen</dt><dd>4,604 times, in 4,416 soups on 3.3.3.4.4; 4,247 times, in 4,066 soups on k3-013; 4,744 times, in 4,570 soups on k3-019</dd>
 <dt>Verdict</dt><dd><b>Known</b>: probably EricG's 3.3.3.4.4 ship (EricG 2013).</dd>
 </dl>
@@ -1623,7 +1623,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>8–15</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,10,11,12/S2,3,9,10,11,12</code> (512 rules)</dd>
 <dt>Seen</dt><dd>118,271 times, in 43,179 soups</dd>
 <dt>Verdict</dt><dd><b>Known</b>: Guttesen's snub-square glider (Guttesen 2026).</dd>
 </dl>
@@ -1639,7 +1639,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>k2-007</dd>
 <dt>Period</dt><dd>20, moving one lattice step per period (c/20)</dd>
 <dt>Cells</dt><dd>6–20</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,8,9,10,11,12</code> (512 rules)</dd>
 <dt>Seen</dt><dd>5,772 times, in 5,537 soups</dd>
 <dt>Verdict</dt><dd><b>Known</b>: very likely Büttner's period-20 ship (Martin Büttner, Code Golf 2014).</dd>
 </dl>
@@ -1662,7 +1662,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k2-003</dd>
 <dt>Period</dt><dd>13, moving 2 lattice steps per period (2c/13)</dd>
 <dt>Cells</dt><dd>12–44</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,9,10</code> (2,048 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,9,10</code> (32 rules)</dd>
 <dt>Seen</dt><dd>13 times, in 13 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1678,7 +1678,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k2-012</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
 <dt>Cells</dt><dd>10–14</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12,13,14/S0,2,3,6,7,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12,13,14/S0,2,3,6,7,8,9,10,11,12,13,14</code> (131,072 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1694,7 +1694,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-002</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
 <dt>Cells</dt><dd>14–16</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3789/S23789</code> (1,024 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3789/S23789</code> (64 rules)</dd>
 <dt>Seen</dt><dd>10 times, in 10 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <code>f3d41f14</code>.</dd>
 </dl>
@@ -1710,7 +1710,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-010</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>11–15</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10/S2,3,8,9,10</code> (2,048 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10/S2,3,8,9,10</code> (256 rules)</dd>
 <dt>Seen</dt><dd>2 times, in 2 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of the LWSS.</dd>
 </dl>
@@ -1726,7 +1726,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-010</dd>
 <dt>Period</dt><dd>38, moving 4 lattice steps per period (2c/19)</dd>
 <dt>Cells</dt><dd>8–24</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,8,9,10</code> (2,048 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10/S2,3,8,9,10</code> (64 rules)</dd>
 <dt>Seen</dt><dd>23 times, in 23 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1742,7 +1742,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>11–15</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,4,6,8,9,10,11,12/S2,3,8,9,10,11,12</code> (4,096 rules)</dd>
 <dt>Seen</dt><dd>8 times, in 8 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-d997330c"><code>d997330c</code></a>.</dd>
 </dl>
@@ -1774,7 +1774,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>11–18</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,9,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,8,9,10,11,12/S2,3,9,10,11,12</code> (1,024 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. Contains a perturbed phase of <a href="#life-8488e7e9"><code>8488e7e9</code></a> and <a href="#life-d997330c"><code>d997330c</code></a>.</dd>
 </dl>
@@ -1790,7 +1790,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-011</dd>
 <dt>Period</dt><dd>9, moving one lattice step per period (c/9)</dd>
 <dt>Cells</dt><dd>9–16</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,8,9,10,11,12</code> (512 rules)</dd>
 <dt>Seen</dt><dd>8 times, in 8 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1806,7 +1806,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-040</dd>
 <dt>Period</dt><dd>8, moving 2 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>8–12</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,6,7,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,6,7,8,9,10,11,12,13,14</code> (65,536 rules)</dd>
 <dt>Seen</dt><dd>13 times, in 13 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1822,7 +1822,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-041</dd>
 <dt>Period</dt><dd>4, moving one lattice step per period (c/4)</dd>
 <dt>Cells</dt><dd>12–19</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (16,384 rules)</dd>
 <dt>Seen</dt><dd>150 times, in 150 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1838,7 +1838,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-044</dd>
 <dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
 <dt>Cells</dt><dd>8–18</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,6,7,8,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,6,7,8,9,10,11,12,13,14,15,16</code> (524,288 rules)</dd>
 <dt>Seen</dt><dd>5 times, in 5 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -1854,7 +1854,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>35–57</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,10,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,10,11,12/S2,3,10,11,12</code> (64 rules)</dd>
 <dt>Seen</dt><dd>185 times, in 185 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1870,7 +1870,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>17–65</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>21 times, in 21 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1886,7 +1886,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>28–66</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1902,7 +1902,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>73–121</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1918,7 +1918,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>53–105</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>7 times, in 7 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1934,7 +1934,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>54–94</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1950,7 +1950,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>52–96</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (64 rules)</dd>
 <dt>Seen</dt><dd>8 times, in 8 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1966,7 +1966,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>39–73</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,12/S2,3,10,11,12</code> (16 rules)</dd>
 <dt>Seen</dt><dd>3 times, in 3 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1982,7 +1982,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>32, moving 8 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>38–104</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,9,10,11,12</code> (64 rules)</dd>
 <dt>Seen</dt><dd>4 times, in 4 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -1998,7 +1998,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>63–148</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (16 rules)</dd>
 <dt>Seen</dt><dd>6 times, in 6 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -2014,7 +2014,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>75–149</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>5 times, in 5 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -2030,7 +2030,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>28–84</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,11,12</code> (16 rules)</dd>
 <dt>Seen</dt><dd>15 times, in 15 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -2046,7 +2046,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-055</dd>
 <dt>Period</dt><dd>64, moving 16 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>103–169</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,11,12/S2,3,10,11,12</code> (32 rules)</dd>
 <dt>Seen</dt><dd>4 times, in 4 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag. One of the large k3-055 ships that may share a common engine (see above).</dd>
 </dl>
@@ -2062,7 +2062,7 @@ Single ships that carry no flag. To our knowledge, none of them has been reporte
 <dt>Tiling</dt><dd>k3-057</dd>
 <dt>Period</dt><dd>12, moving one lattice step per period (c/12)</dd>
 <dt>Cells</dt><dd>13–24</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12/S2,3,9,10,11,12</code> (256 rules)</dd>
 <dt>Seen</dt><dd>57 times, in 57 soups</dd>
 <dt>Verdict</dt><dd><b>Single ship</b>, no flag.</dd>
 </dl>
@@ -2086,7 +2086,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>3.3.4.3.4</dd>
 <dt>Period</dt><dd>24, moving 6 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>17–50</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,10,11,12/S2,3,10,11,12</code> (128 rules)</dd>
 <dt>Seen</dt><dd>3 times, in 3 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: EricG 2013 and Guttesen 2026 ran Life on 3.3.4.3.4. Contains a perturbed phase of Guttesen's snub-square glider.</dd>
 </dl>
@@ -2102,7 +2102,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k2-003 (shown); also, unchanged, k3-010 and k3-016</dd>
 <dt>Period</dt><dd>16, moving 5 lattice steps per period (5c/16)</dd>
 <dt>Cells</dt><dd>8–16</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10/S2,3,7,8,9,10</code> (2,048 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10/S2,3,7,8,9,10</code> (256 rules)</dd>
 <dt>Seen</dt><dd>564 times, in 563 soups on k2-003; 352 times, in 352 soups on k3-010; 379 times, in 377 soups on k3-016</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 1.1% of the census soups on k2-003.</dd>
 </dl>
@@ -2118,7 +2118,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k2-007</dd>
 <dt>Period</dt><dd>5, moving one lattice step per period (c/5)</dd>
 <dt>Cells</dt><dd>16–22</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (4,096 rules)</dd>
 <dt>Seen</dt><dd>1 time, in 1 soup</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: Büttner and Kevin L (Code Golf 2014) very likely ran Life on k2-007.</dd>
 </dl>
@@ -2134,7 +2134,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k2-011 (shown); also, unchanged, k3-002</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
 <dt>Cells</dt><dd>9–11</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,7,8,9,10,11,12/S2,3,5,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,7,8,9,10,11,12/S2,3,5,6,7,8,9,10,11,12</code> (32,768 rules)</dd>
 <dt>Seen</dt><dd>332 times, in 329 soups on k2-011; 550 times, in 549 soups on k3-002</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 1.1% of the census soups on k3-002 (where it runs in a corridor; 0.66% on k2-011).</dd>
 </dl>
@@ -2166,7 +2166,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-039</dd>
 <dt>Period</dt><dd>20, moving 5 lattice steps per period (c/4)</dd>
 <dt>Cells</dt><dd>7–21</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,9,10,11,12/S2,3,6,7,8,9,10,11,12</code> (4,096 rules)</dd>
 <dt>Seen</dt><dd>22,100 times, in 17,978 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 36.0% of the census soups on k3-039. Contains a perturbed phase of glider g.</dd>
 </dl>
@@ -2182,7 +2182,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-040</dd>
 <dt>Period</dt><dd>24, moving 4 lattice steps per period (c/6)</dd>
 <dt>Cells</dt><dd>7–23</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (32,768 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14/S2,3,8,9,10,11,12,13,14</code> (16,384 rules)</dd>
 <dt>Seen</dt><dd>3,661 times, in 3,567 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 7.1% of the census soups on k3-040.</dd>
 </dl>
@@ -2198,7 +2198,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-044</dd>
 <dt>Period</dt><dd>31, moving 2 lattice steps per period (2c/31)</dd>
 <dt>Cells</dt><dd>3–18</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (65,536 rules)</dd>
 <dt>Seen</dt><dd>88,492 times, in 42,183 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 84.4% of the census soups on k3-044.</dd>
 </dl>
@@ -2214,7 +2214,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-045 (shown); also, unchanged, k3-046</dd>
 <dt>Period</dt><dd>11, moving 2 lattice steps per period (2c/11)</dd>
 <dt>Cells</dt><dd>8–16</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (131,072 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,9,10,11,12,13,14,15,16/S2,3,9,10,11,12,13,14,15,16</code> (65,536 rules)</dd>
 <dt>Seen</dt><dd>7,642 times, in 7,138 soups on k3-045; 3,793 times, in 3,673 soups on k3-046</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 14.3% of the census soups on k3-045.</dd>
 </dl>
@@ -2230,7 +2230,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-057</dd>
 <dt>Period</dt><dd>8, moving one lattice step per period (c/8)</dd>
 <dt>Cells</dt><dd>9–14</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,10,11,12/S2,3,7,8,9,10,11,12</code> (8,192 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,10,11,12/S2,3,7,8,9,10,11,12</code> (1,024 rules)</dd>
 <dt>Seen</dt><dd>6,553 times, in 6,141 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 12.3% of the census soups on k3-057.</dd>
 </dl>
@@ -2246,7 +2246,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-059</dd>
 <dt>Period</dt><dd>30, moving (1, 1) per period</dd>
 <dt>Cells</dt><dd>7–23</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14,15,16,17,18/S2,3,9,10,11,12,13,14,15,16,17,18</code> (524,288 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,8,9,10,11,12,13,14,15,16,17,18/S2,3,9,10,11,12,13,14,15,16,17,18</code> (2,097,152 rules)</dd>
 <dt>Seen</dt><dd>81,611 times, in 41,207 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 82.4% of the census soups on k3-059.</dd>
 </dl>
@@ -2262,7 +2262,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k3-061</dd>
 <dt>Period</dt><dd>22, moving (1, 1) per period</dd>
 <dt>Cells</dt><dd>5–10</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10,11,12,13,14,15,16,17,18/S2,3,7,8,9,10,11,12,13,14,15,16,17,18</code> (524,288 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,7,8,9,10,11,12,13,14,15,16,17,18/S2,3,7,8,9,10,11,12,13,14,15,16,17,18</code> (16,777,216 rules)</dd>
 <dt>Seen</dt><dd>34,039 times, in 25,346 soups</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 50.7% of the census soups on k3-061.</dd>
 </dl>
