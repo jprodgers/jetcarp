@@ -21,7 +21,7 @@ pub fn read_scene(cx: &Ctx, scene: Option<&Value>, path: Option<&str>) -> Result
             .map_err(|e| ApiError::invalid(format!("scene JSON: {e}"))),
         (None, Some(p)) => {
             let file = cx.fs.readable(p)?;
-            let text = std::fs::read_to_string(&file).map_err(|e| {
+            let bytes = std::fs::read(&file).map_err(|e| {
                 let kind = if e.kind() == std::io::ErrorKind::NotFound {
                     ErrorKind::NotFound
                 } else {
@@ -29,6 +29,19 @@ pub fn read_scene(cx: &Ctx, scene: Option<&Value>, path: Option<&str>) -> Result
                 };
                 ApiError::new(kind, format!("could not read {p}: {e}"))
             })?;
+            // A picture JETCARP exported carries its scene.
+            let text = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                jetcarp_core::render::png_scene(&bytes)
+                    .map_err(ApiError::invalid)?
+                    .ok_or_else(|| {
+                        ApiError::invalid(format!(
+                            "{p} is a PNG without a JETCARP scene in it (only pictures JETCARP wrote carry one)"
+                        ))
+                    })?
+            } else {
+                String::from_utf8(bytes)
+                    .map_err(|_| ApiError::invalid(format!("{p} is neither a scene nor a PNG")))?
+            };
             Scene::from_json(&text).kind(ErrorKind::Invalid)
         }
         (None, None) => Err(ApiError::invalid("give `scene` (JSON) or `path`")),

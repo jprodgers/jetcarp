@@ -610,3 +610,36 @@ fn rule30_then_life_then_ants() {
     let again = World::from_scene(&w.to_scene()).unwrap();
     assert_eq!(again.state_hash(), w.state_hash());
 }
+
+// A picture JETCARP writes carries its scene, which reads back and replays to the same state.
+#[test]
+fn a_png_carries_its_scene() {
+    let mut w = World::new(square(40, 30, Boundary::Wrap), 1).unwrap();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B3/S23"),
+    })
+    .unwrap();
+    w.apply(Command::Step { gens: 12 }).unwrap();
+    let img = render::render(
+        &w,
+        &render::RenderOptions {
+            max_side: 120,
+            ..Default::default()
+        },
+    );
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("png-scene");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("life.png");
+    render::write_png(&path, &img, &render::png_metadata(&w)).unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let json = render::png_scene(&bytes).unwrap().expect("a scene chunk");
+    let again = World::from_scene(&Scene::from_json(&json).unwrap()).unwrap();
+    assert_eq!(again.state_hash(), w.state_hash());
+    // A PNG without one says so; bytes that aren't a PNG are an error.
+    render::write_png(&path, &img, &[]).unwrap();
+    assert_eq!(
+        render::png_scene(&std::fs::read(&path).unwrap()).unwrap(),
+        None
+    );
+    assert!(render::png_scene(b"not a png").is_err());
+}

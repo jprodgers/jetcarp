@@ -38,7 +38,7 @@ Commands:
   run         Load a scene, run it, and report generation, hash, and populations
   wallpaper   Desktop wallpapers: a scene or Quick Start entry at a monitor's size, a span of monitors, or one image per monitor cut so they line up
   palettes    List the palettes with their background colours
-  verify      Check that a saved scene still replays to its recorded hash
+  verify      Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which carries its scene)
   sheet       Contact sheet: one thumbnail per elementary rule, labelled with its number
   objects     Find still lifes, oscillators, and spaceships in a scene after running it
   library     Pattern library: list, show, curate, paste, promote to Quick Start; its ant runs and movers
@@ -162,7 +162,7 @@ Options:
 ### `jetcarp verify`
 
 ```text
-Check that a saved scene still replays to its recorded hash
+Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which carries its scene)
 
 Usage: jetcarp verify [OPTIONS] <SCENE>
 

@@ -80,6 +80,10 @@ If they differ it says so and exits with status 1:
 Error: MISMATCH: recorded gen 100 hash 1adf6e3234b7f198, replayed gen 100 hash 1adf6e3234b7f199
 ```
 
+It takes a picture JETCARP wrote too (`--png`, the app's exports, wallpapers): each carries its scene,
+and `jetcarp verify picture.png` replays that. So do `jetcarp run` and the other commands that read a
+scene file.
+
 A scene with no record, such as one written by hand, cannot be verified (*scene has no recorded
 hash*); run it with `jetcarp run --save` to record one. For a check inside a script or a test, use
 `jetcarp run scene.json --gens N --expect HASH`, which fails with *hash mismatch: expected …, got …*

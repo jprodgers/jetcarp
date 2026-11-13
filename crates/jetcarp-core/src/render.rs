@@ -1391,6 +1391,25 @@ pub fn write_png(
 }
 
 /// Metadata saved with every exported image: version, generation, hash, boundary flag, scene.
+/// The scene JSON a picture JETCARP wrote carries (its `jetcarp:scene` text chunk), from the
+/// PNG's bytes: `Ok(None)` when it has none.
+pub fn png_scene(bytes: &[u8]) -> Result<Option<String>, String> {
+    let dec = png::Decoder::new(std::io::Cursor::new(bytes));
+    let reader = dec.read_info().map_err(|e| format!("PNG: {e}"))?;
+    let info = reader.info();
+    for t in &info.utf8_text {
+        if t.keyword == "jetcarp:scene" {
+            return t.get_text().map(Some).map_err(|e| format!("PNG: {e}"));
+        }
+    }
+    for t in &info.uncompressed_latin1_text {
+        if t.keyword == "jetcarp:scene" {
+            return Ok(Some(t.text.clone()));
+        }
+    }
+    Ok(None)
+}
+
 pub fn png_metadata(world: &World) -> Vec<(&'static str, String)> {
     let r = world.record();
     vec![

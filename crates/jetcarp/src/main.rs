@@ -89,7 +89,8 @@ enum Cmd {
     Wallpaper(Box<wallpaper_cmd::WallpaperArgs>),
     /// List the palettes with their background colours.
     Palettes,
-    /// Check that a saved scene still replays to its recorded hash.
+    /// Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which
+    /// carries its scene).
     Verify { scene: PathBuf },
     /// Contact sheet: one thumbnail per elementary rule, labelled with its number.
     Sheet {
