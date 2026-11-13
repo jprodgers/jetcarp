@@ -28,7 +28,7 @@ The first public release.
   line, the background host (`jetcarp host`) and an MCP server for AI assistants (`jetcarp mcp`).
   Rhai scripts run worlds and parallel rule sweeps. All of them call one layer of 79 named
   operations, each with JSON Schemas for its input and output (`jetcarp api list`).
-- **AI assistants.** `jetcarp mcp` gives an assistant such as Claude Code or Claude Desktop 18 tools
+- **AI assistants.** `jetcarp mcp` gives an assistant such as Claude Code or Claude Desktop 21 tools
   over those operations (worlds, scripts, the library, searches, media and packs), the app's
   displays when it drives the app, and this book as resources, within folder and time limits; see
   [Driving JETCARP from an AI assistant](../tutorials/mcp.md).
