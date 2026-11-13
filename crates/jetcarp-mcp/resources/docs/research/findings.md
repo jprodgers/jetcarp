@@ -1583,7 +1583,7 @@ ship that is very likely Büttner's on k2-007.
 <dt>Tiling</dt><dd>square (shown); also, unchanged, k3-010 and 25 isohedral and drawn tilings with the square grid's neighbour graph</dd>
 <dt>Period</dt><dd>4, moving 2 lattice steps per period (c/2)</dd>
 <dt>Cells</dt><dd>9–12</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S2378</code> (32 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3468/S2378</code> (32 rules) on the square grid; <code>B3/S23</code> to <code>B3,4,6,8,9,10/S2,3,7,8,9,10</code> (512 rules) on k3-010</dd>
 <dt>Seen</dt><dd>128 times, in 126 soups on square; 7 times, in 7 soups on k3-010</dd>
 <dt>Verdict</dt><dd><b>Known</b>: the lightweight spaceship (LWSS) (found by John Conway in 1970).</dd>
 </dl>
@@ -2158,7 +2158,7 @@ have run Life. We found no earlier report of any of them.
 <dt>Tiling</dt><dd>k2-011 (shown); also, unchanged, k3-002</dd>
 <dt>Period</dt><dd>3, moving one lattice step per period (c/3)</dd>
 <dt>Cells</dt><dd>9–11</dd>
-<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,7,8,9,10,11,12/S2,3,5,6,7,8,9,10,11,12</code> (32,768 rules)</dd>
+<dt>Rules</dt><dd><code>B3/S23</code> to <code>B3,6,7,8,9,10,11,12/S2,3,5,6,7,8,9,10,11,12</code> (32,768 rules) on k2-011; <code>B3/S23</code> to <code>B36789/S2356789</code> (512 rules) on k3-002</dd>
 <dt>Seen</dt><dd>332 times, in 329 soups on k2-011; 550 times, in 549 soups on k3-002</dd>
 <dt>Verdict</dt><dd><b>Flagged</b>: common: in 1.1% of the census soups on k3-002 (where it runs in a corridor; 0.66% on k2-011).</dd>
 </dl>
