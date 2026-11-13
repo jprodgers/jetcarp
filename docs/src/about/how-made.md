@@ -133,7 +133,9 @@ claim was made:
   statements about which ships run in Life rested on what CART happened to search.
 - **Duplicates.** Two ships had each been catalogued twice, at positions with different neighbours
   around them; and importing an old record could give the same pattern several ids, one per phase. The
-  duplicates were merged in the claims, and a fix to the ids is planned.
+  duplicates were merged in the claims, and every pattern now has one content id, made from its
+  canonical form, whatever the phase or orientation it was found in (see
+  [Records from CART](../reference/library-format.md#records-from-cart)).
 - **Smaller slips**, among them tests that wrote into the user's real Pictures folder (fixed), and
   the speed labels such as "c/4 diagonal" in catalogue names, which used the square grid's words and
   were wrong on tilings whose lattice has 60° angles. New records now name a ship's direction in its
