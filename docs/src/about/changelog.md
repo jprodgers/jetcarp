@@ -5,6 +5,18 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
+## [Unreleased]
+
+### Fixed
+
+- **Popping a window out could crash the app.** The ↗ button in a tool window's title bar, or
+  *Own window* for a pane, closed the whole app when the window held a table (the AI control
+  window with AI control on, among others). Popped-out windows now draw as the main window does.
+  ([#1](https://github.com/jprodgers/jetcarp/issues/1))
+- **The AI control window opens on the Quick Start.** It showed only with a world open, so from
+  the Quick Start, *Tools → AI control…* ticked in the menu but showed nothing, and AI control could
+  not be switched on there. ([#1](https://github.com/jprodgers/jetcarp/issues/1))
+
 ## [0.4.0] – 2026-11-13
 
 The first public release.

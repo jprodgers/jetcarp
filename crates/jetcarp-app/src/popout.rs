@@ -97,31 +97,37 @@ pub fn viewport_id(key: &str) -> ViewportId {
 /// Show a window in an OS window of its own, now (an immediate viewport). The contents get the
 /// viewport's whole area. Returns what `add` returned, and true when the user closed the window.
 /// This is the building block for anything shown in another OS window (wave 2's outputs too).
+///
+/// `add` can run more than once in a frame, as the main window's code can: egui runs a viewport
+/// again in the same frame when a widget asks it to (a grid shown for the first time does). What
+/// the last run returned counts, so act on clicks inside `add` rather than through what it
+/// returns; a close seen by any run counts.
 pub fn os_window<R>(
     ctx: &egui::Context,
     key: &str,
     builder: ViewportBuilder,
-    add: impl FnOnce(&mut Ui, ViewportClass) -> R,
+    mut add: impl FnMut(&mut Ui, ViewportClass) -> R,
 ) -> (R, bool, Option<[f32; 2]>) {
-    let mut add = Some(add);
-    ctx.show_viewport_immediate(viewport_id(key), builder, |ui, class| {
-        let closed = ui.input(|i| i.viewport().close_requested());
+    let mut closed = false;
+    let (r, size) = ctx.show_viewport_immediate(viewport_id(key), builder, |ui, class| {
+        closed |= ui.input(|i| i.viewport().close_requested());
         // Inner size in points (`ViewportInfo::inner_rect` needs a window position, which
         // Wayland does not give).
         let r = ui.ctx().content_rect();
         let size = (class != ViewportClass::EmbeddedWindow).then(|| [r.width(), r.height()]);
-        let r = (add.take().expect("viewport callback runs once"))(ui, class);
-        (r, closed, size)
-    })
+        (add(ui, class), size)
+    });
+    (r, closed, size)
 }
 
-/// Show one window, floating or popped out (per `state`). Nothing when `open` is false.
+/// Show one window, floating or popped out (per `state`). Nothing when `open` is false. Popped
+/// out, `add` can run more than once in a frame (see [`os_window`]).
 pub fn show<R>(
     ctx: &egui::Context,
     spec: Spec<'_>,
     state: &mut WinState,
     open: &mut bool,
-    add: impl FnOnce(&mut Ui) -> R,
+    mut add: impl FnMut(&mut Ui) -> R,
 ) -> (Option<R>, Vec<Chrome>) {
     let mut events = vec![];
     if !*open {
@@ -135,8 +141,9 @@ pub fn show<R>(
             .with_inner_size(size)
             .with_min_inner_size([220.0, 120.0]);
         let dockable = spec.dockable;
+        // A button pressed in any run counts (the contents can run twice in a frame).
+        let mut ev = None;
         let (r, closed, size) = os_window(ctx, spec.key, builder, |ui, _class| {
-            let mut ev = None;
             egui::Panel::top(Id::unique(("popout-chrome", spec.key)))
                 .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(6, 2)))
                 .show(ui, |ui| {
@@ -161,10 +168,8 @@ pub fn show<R>(
                         });
                     });
                 });
-            let r = egui::CentralPanel::default().show(ui, add).inner;
-            (r, ev)
+            egui::CentralPanel::default().show(ui, &mut add).inner
         });
-        let (r, ev) = r;
         if let Some(now) = size
             && now[0] > 50.0
             && now[1] > 50.0
@@ -303,12 +308,12 @@ pub fn set_popped(ctx: &egui::Context, key: &str, popped: bool) {
 }
 
 /// A tool window: floating or popped out, its state kept in the registry. Returns what `add`
-/// returned when shown.
+/// returned when shown. Popped out, `add` can run more than once in a frame (see [`os_window`]).
 pub fn tool_window<R>(
     ctx: &egui::Context,
     spec: Spec<'_>,
     open: &mut bool,
-    add: impl FnOnce(&mut Ui) -> R,
+    add: impl FnMut(&mut Ui) -> R,
 ) -> Option<R> {
     if !*open {
         return None;
@@ -342,5 +347,50 @@ mod tests {
         assert!(!is_popped(&ctx, "library"));
         set_registry(&ctx, back);
         assert!(is_popped(&ctx, "library"));
+    }
+
+    /// A popped-out window's contents can run twice in one frame: eframe draws an immediate
+    /// viewport with `Context::run_ui`, which runs it again when a widget asks for a discard (a
+    /// grid shown for the first time does). Issue #1: the AI control window, popped out while
+    /// its grid showed, crashed the app ("viewport callback runs once").
+    #[test]
+    fn a_popped_out_window_survives_a_second_pass() {
+        // An immediate-viewport renderer as eframe's does it, without a window.
+        egui::Context::set_immediate_viewport_renderer(|ctx, mut vp| {
+            let input = egui::RawInput {
+                viewport_id: vp.ids.this,
+                viewports: std::iter::once((vp.ids.this, Default::default())).collect(),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| (vp.viewport_ui_cb)(ui))
+                .textures_delta
+                .clear();
+        });
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        let mut state = WinState {
+            popped: true,
+            ..Default::default()
+        };
+        let mut open = true;
+        let mut runs = 0;
+        let mut shown = None;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let spec = Spec::new("pass-test", "Pass test");
+            let (r, _) = show(ui.ctx(), spec, &mut state, &mut open, |ui| {
+                runs += 1;
+                egui::Grid::new("grid").show(ui, |ui| {
+                    ui.label("Address");
+                    ui.label("127.0.0.1:47811");
+                    ui.end_row();
+                });
+                7
+            });
+            shown = r;
+        });
+        out.textures_delta.clear();
+        assert_eq!(shown, Some(7));
+        assert!(runs >= 2, "the new grid asked for a second pass ({runs})");
+        assert!(state.popped && open);
     }
 }

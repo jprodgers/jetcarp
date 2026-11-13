@@ -352,6 +352,26 @@ fn shots_tour() {
     h.escape();
 }
 
+/// Not a picture: the AI control window opens on the Quick Start, with no world open, and its
+/// checkbox opens the endpoint (issue #1: the window was drawn only with a world open, so the menu
+/// item ticked a window that never showed).
+#[test]
+#[ignore]
+fn ai_control_window_on_the_quick_start() {
+    let Some(mut h) = Harness::new(1200, 800) else {
+        return;
+    };
+    assert!(h.app.screen == Screen::Start);
+    h.action(menu::Action::Tool(menu::ToolWin::AiControl));
+    h.run(1.0, 0.05, |_| false);
+    h.click("Allow AI control (127.0.0.1 only)");
+    assert!(h.app.ai_port().is_some(), "the endpoint opened");
+    h.find("Address");
+    h.click("Allow AI control (127.0.0.1 only)");
+    assert!(h.app.ai_port().is_none(), "and closed again");
+    assert!(h.app.screen == Screen::Start);
+}
+
 /// Tutorial 1 (`tutorials/first-wallpaper.md`): a Quick Start entry opened, its palette list
 /// open in the CAs pane; then the Screensaver pane, with the world saved as a profile and the
 /// Background host section open (its rotation is the host settings', *My wallpaper* in the book's
