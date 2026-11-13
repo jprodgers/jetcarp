@@ -1,0 +1,87 @@
+# Writes a release's Homebrew formula and Scoop manifest to the tap and the bucket.
+#
+# It runs when a release (not a release candidate) is published, for each of the two whose
+# repository variable is 'true' (UPDATE_HOMEBREW, UPDATE_SCOOP); the manifests point at the
+# release's files, so they are written only once those files are public. Run it by hand with a
+# release's tag to write both again (if a run failed, say); when nothing changed it commits
+# nothing.
+#
+# Each job pushes with a deploy key of its own: an SSH key that may write to that one repository
+# and does not expire. The public half is a deploy key of jprodgers/homebrew-jetcarp or
+# jprodgers/scoop-jetcarp; the private half is the secret DEPLOY_KEY in the environment
+# `homebrew` or `scoop`. packaging/package-repo-keys.sh sets both up (and switches the updates
+# on); run it again to replace the keys.
+name: Homebrew and Scoop
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.4.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  homebrew:
+    name: Homebrew tap
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-') &&
+      vars.UPDATE_HOMEBREW == 'true')
+    runs-on: ubuntu-24.04
+    environment: homebrew
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jprodgers/homebrew-jetcarp
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          path: tap
+      - name: The formula, from packaging/homebrew/jetcarp.rb and the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          packaging/update-manifest-repo.sh homebrew manifests tap
+          git -C tap push
+
+  scoop:
+    name: Scoop bucket
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-') &&
+      vars.UPDATE_SCOOP == 'true')
+    runs-on: ubuntu-24.04
+    environment: scoop
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jprodgers/scoop-jetcarp
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          path: bucket
+      - name: The manifest, from packaging/scoop/jetcarp.json and the release's checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
+          git -C bucket config user.name "github-actions[bot]"
+          git -C bucket config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          packaging/update-manifest-repo.sh scoop manifests bucket
+          git -C bucket push

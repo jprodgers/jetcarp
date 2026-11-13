@@ -11,11 +11,10 @@
 #   repository variable PUBLISH_TESTPYPI is 'true'.
 # - A release (v0.4.0) becomes a draft GitHub release, created last, after every target has built
 #   and the tests have passed. Publishing the draft by hand, once it has been checked, runs this
-#   workflow again (`release: published`), and that run publishes to PyPI, crates.io, the
-#   Homebrew tap and the Scoop bucket: each only when its repository variable is 'true'
-#   (PUBLISH_PYPI, PUBLISH_CRATES, UPDATE_HOMEBREW, UPDATE_SCOOP), so all are off until switched
-#   on. The tap's and the bucket's manifests point at the release's files, so they are written
-#   only once those files are public.
+#   workflow again (`release: published`), and that run publishes to PyPI and crates.io, each
+#   only when its repository variable is 'true' (PUBLISH_PYPI, PUBLISH_CRATES). The same event
+#   runs package-repos.yml, which writes the Homebrew tap and the Scoop bucket (UPDATE_HOMEBREW,
+#   UPDATE_SCOOP). crates.yml, run by hand, finishes a crates.io publish that stopped part way.
 # - workflow_dispatch is a dry run: give it the version in Cargo.toml. It runs every check, builds
 #   every target and leaves the files as the run's artifacts; it publishes nothing.
 # - A pull request that touches the packaging runs the same dry run, without the tests (CI runs
@@ -29,9 +28,7 @@
 #   https://test.pypi.org/manage/account/publishing/, environment `testpypi`.
 # - crates.io: the secret CARGO_REGISTRY_TOKEN in the environment `crates-io` (a token that may
 #   publish new crates; once the crates exist, crates.io's trusted publishing can replace it).
-# - Homebrew and Scoop: the repositories jprodgers/homebrew-jetcarp and jprodgers/scoop-jetcarp,
-#   and a fine-grained token with read and write access to their contents, as the secret
-#   PACKAGE_REPOS_TOKEN in the environments `homebrew` and `scoop`.
+# - Homebrew and Scoop: see package-repos.yml (a deploy key for each repository).
 # - Windows signing (SignPath Foundation): see the build job; off until SIGNPATH_ORGANIZATION_ID
 #   is set.
 name: Release
@@ -421,55 +418,3 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --workspace --locked
-
-  homebrew:
-    name: Homebrew tap
-    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.UPDATE_HOMEBREW == 'true'
-    runs-on: ubuntu-24.04
-    environment: homebrew
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - uses: actions/checkout@v7
-        with:
-          repository: jprodgers/homebrew-jetcarp
-          token: ${{ secrets.PACKAGE_REPOS_TOKEN }}
-          path: tap
-      - name: The formula, from packaging/homebrew/jetcarp.rb and the release's checksums
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
-          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
-          git -C tap config user.name "github-actions[bot]"
-          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          packaging/update-manifest-repo.sh homebrew manifests tap
-          git -C tap push
-
-  scoop:
-    name: Scoop bucket
-    if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.UPDATE_SCOOP == 'true'
-    runs-on: ubuntu-24.04
-    environment: scoop
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - uses: actions/checkout@v7
-        with:
-          repository: jprodgers/scoop-jetcarp
-          token: ${{ secrets.PACKAGE_REPOS_TOKEN }}
-          path: bucket
-      - name: The manifest, from packaging/scoop/jetcarp.json and the release's checksums
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
-          python3 packaging/package.py manifests --sums SHA256SUMS --out manifests
-          git -C bucket config user.name "github-actions[bot]"
-          git -C bucket config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          packaging/update-manifest-repo.sh scoop manifests bucket
-          git -C bucket push

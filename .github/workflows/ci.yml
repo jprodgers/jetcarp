@@ -108,7 +108,7 @@ jobs:
         run: ./actionlint -color
       - name: shellcheck (the installers as POSIX sh, as they run under `curl | sh`)
         run: |
-          shellcheck packaging/build.sh packaging/notices.sh packaging/update-manifest-repo.sh
+          shellcheck packaging/build.sh packaging/notices.sh packaging/update-manifest-repo.sh packaging/package-repo-keys.sh
           shellcheck -s sh packaging/install.sh
           shellcheck -s dash packaging/install.sh
       - name: The packaging script's own checks
