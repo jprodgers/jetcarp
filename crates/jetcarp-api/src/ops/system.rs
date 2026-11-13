@@ -145,6 +145,9 @@ pub struct DoctorFolders {
     pub bundled_packs_bytes: Option<u64>,
     /// Where the program looked for them, in order (`$JETCARP_BUNDLED_PACKS` alone when set).
     pub bundled_packs_searched: Vec<PathBuf>,
+    /// The data folder is the one chosen in setup (`paths.json`), and it does not exist: moved
+    /// or deleted since, so JETCARP starts an empty library there when it next needs one.
+    pub data_chosen_missing: bool,
 }
 
 /// What JETCARP sees on this machine.
@@ -215,7 +218,16 @@ impl Report for DoctorReport {
                 "not created yet".into()
             }
         );
-        let _ = writeln!(s, "  data in use: {}\n", human_bytes(f.data_size_bytes));
+        let _ = writeln!(s, "  data in use: {}", human_bytes(f.data_size_bytes));
+        if f.data_chosen_missing {
+            let _ = writeln!(
+                s,
+                "  note: the data folder was chosen in setup (paths.json) and no longer exists. If you \
+                 moved it, `jetcarp setup --data-dir DIR` names its new place; otherwise JETCARP \
+                 starts an empty library there."
+            );
+        }
+        s.push('\n');
         s.push_str("Graphics adapters (* = used by the GPU simulation)\n");
         if self.gpu.is_empty() {
             s.push_str("  none found: simulation runs on the CPU\n");
@@ -279,6 +291,9 @@ impl Op for SystemDoctor {
         let paths = cx.paths();
         let library = cx.library_path();
         let library_exists = library.exists();
+        let data_chosen_missing = !paths.data.exists()
+            && jetcarp_core::paths::data_dir_source(paths.settings.as_deref()).1
+                == jetcarp_core::paths::DataSource::Chosen;
         let bundled_packs_bytes = paths
             .bundled_packs
             .as_ref()
@@ -306,6 +321,7 @@ impl Op for SystemDoctor {
                 bundled_packs: paths.bundled_packs,
                 bundled_packs_bytes,
                 bundled_packs_searched: jetcarp_core::paths::bundled_packs_candidates(),
+                data_chosen_missing,
             },
             gpu: cx.platform.gpu_adapters(),
             desktop: cx.platform.desktop(),

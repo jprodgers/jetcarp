@@ -492,6 +492,22 @@ fn a_quick_start_build_stops_and_carries_on_to_its_end() {
     }
 }
 
+/// A data folder chosen in setup that was deleted since: the doctor says so (it said only "not
+/// created yet").
+#[test]
+fn the_doctor_notes_a_chosen_data_folder_that_is_gone() {
+    let s = Scratch::new("gone-data");
+    let gone = s.dir.join("moved-away");
+    jetcarp_core::paths::set_chosen_data_dir(&s.settings(), Some(&gone)).unwrap();
+    let cx = Ctx::new().with_settings_dir(Some(s.settings()));
+    let c = jetcarp_api::call(&cx, "system.doctor", json!({}), &Quiet).unwrap();
+    assert!(c.text.contains("no longer exists"), "{}", c.text);
+    assert_eq!(c.value["folders"]["data_chosen_missing"], true);
+    std::fs::create_dir_all(&gone).unwrap();
+    let c = jetcarp_api::call(&cx, "system.doctor", json!({}), &Quiet).unwrap();
+    assert!(!c.text.contains("no longer exists"), "{}", c.text);
+}
+
 /// A job a pack's sightings named never ran here: `jobs status` says so and names the pack (its
 /// title), rather than printing a hunt's empty counters or the manifest's hash.
 #[test]

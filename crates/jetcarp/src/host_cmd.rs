@@ -616,7 +616,9 @@ pub fn run(a: HostArgs) -> Result<()> {
                         );
                     } else {
                         println!(
-                            "copied to {}; Screen Saver Settings is opening",
+                            "copied to {}; Screen Saver Settings is opening, with JETCARP chosen \
+                             (Windows chooses it as the dialog opens, so Cancel keeps it; \
+                             `jetcarp host saver remove` takes it out again)",
                             path.display()
                         );
                     }

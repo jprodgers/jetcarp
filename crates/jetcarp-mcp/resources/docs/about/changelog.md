@@ -30,6 +30,12 @@ that will declare them stable.
   soups … status , 0 s run"). It now says the hunt was imported, as the Hunts window does, and
   names the pack rather than its `sha256:` hash, here and in `jobs list`. Packs imported from now
   on are named by their title (*JETCARP starter pack*) there and in the Hunts window.
+- **Windows lists the screen saver as JETCARP,** not "Jetcarp": the programs now carry the name
+  Windows reads for that list. `jetcarp host saver install` also says that Windows chooses JETCARP
+  as Screen Saver Settings opens, so Cancel there keeps it chosen.
+- **`jetcarp doctor` notes a data folder that is gone.** When the folder chosen in setup
+  (`paths.json`) was moved or deleted, it said only "not created yet"; it now says so and how to
+  name the new place.
 
 ### Changed
 

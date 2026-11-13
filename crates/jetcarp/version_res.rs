@@ -8,7 +8,8 @@
 //! resource's data is a `VS_VERSIONINFO` tree: each node is its length, its value's length, its
 //! type (0 binary, 1 text), its key in UTF-16, then its value and its children, each aligned to
 //! four bytes. See Microsoft's documentation of `RESOURCEHEADER`, `VS_VERSIONINFO`,
-//! `VS_FIXEDFILEINFO`, `StringFileInfo` and `VarFileInfo`.
+//! `VS_FIXEDFILEINFO`, `StringFileInfo` and `VarFileInfo`. A string table (string 1, the product
+//! name) follows, for the screen saver list.
 
 /// What the resource says.
 pub struct VersionInfo<'a> {
@@ -164,14 +165,46 @@ fn entry(out: &mut Vec<u8>, kind: u16, name: u16, flags: u16, language: u16, dat
     align4(out);
 }
 
-/// A `.res` file holding the version resource (`RT_VERSION`, number 1).
+/// The string table block that holds string 1: block 1 holds strings 0 to 15, each its length in
+/// UTF-16 units and then its text, with no terminator; the others are empty.
+pub fn string_block_1(text: &str) -> Vec<u8> {
+    let mut b = vec![];
+    for i in 0..16 {
+        if i == 1 {
+            let u: Vec<u16> = text.encode_utf16().collect();
+            put16(&mut b, u.len() as u16);
+            for c in u {
+                put16(&mut b, c);
+            }
+        } else {
+            put16(&mut b, 0);
+        }
+    }
+    b
+}
+
+/// A `.res` file holding the version resource (`RT_VERSION`, number 1) and string 1 of the
+/// string table (`RT_STRING`, block 1), the product's name: Windows lists a screen saver by its
+/// string 1, and `JETCARP.scr` is a copy of `jetcarpw.exe` (without it, the list says
+/// "Jetcarp", from the file's name).
 pub fn res_file(v: &VersionInfo) -> Vec<u8> {
+    const RT_STRING: u16 = 6;
     const RT_VERSION: u16 = 16;
-    // MOVEABLE | PURE, as the resource compiler marks a version resource.
+    // MOVEABLE | PURE, as the resource compiler marks a version resource; a string table is
+    // DISCARDABLE as well.
     const FLAGS: u16 = 0x0030;
+    const STRING_FLAGS: u16 = 0x1030;
     let mut out = vec![];
     // The empty first entry that marks a 32-bit resource file.
     entry(&mut out, 0, 0, 0, 0, &[]);
     entry(&mut out, RT_VERSION, 1, FLAGS, LANGUAGE, &version_info(v));
+    entry(
+        &mut out,
+        RT_STRING,
+        1,
+        STRING_FLAGS,
+        LANGUAGE,
+        &string_block_1(v.product),
+    );
     out
 }
