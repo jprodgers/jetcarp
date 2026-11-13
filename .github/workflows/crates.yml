@@ -1,0 +1,98 @@
+# Publishes a release's crates to crates.io, picking up where a publish left off.
+#
+# The release workflow publishes every crate with one `cargo publish --workspace`, which suits
+# new versions of crates that already exist (crates.io takes 30 at once, then one a minute).
+# New crates are limited to 5 at once and then one every 10 minutes, and cargo stops at the
+# first refusal; run again, it stops at once because some crates are already published. This
+# workflow skips what crates.io already has, waits until crates.io takes the next crate, and
+# carries on until every crate is up. Run it by hand with the release's tag; running it again
+# is safe.
+name: crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.4.0"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the crates crates.io doesn't have yet
+    runs-on: ubuntu-24.04
+    environment: crates-io
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux libraries (the window and display crates build against them)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      - name: Publish, waiting out crates.io's limits
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -uo pipefail
+          ua="jetcarp release workflow (github.com/jprodgers/jetcarp)"
+          crates=$(cargo metadata --no-deps --format-version 1 --locked | python3 -c '
+          import json, sys
+          for p in json.load(sys.stdin)["packages"]:
+              if p.get("publish") != []:
+                  print(p["name"], p["version"])
+          ')
+          verify=""
+          for round in $(seq 1 40); do
+            exclude=()
+            left=()
+            while read -r name version; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -A "$ua" \
+                "https://crates.io/api/v1/crates/$name/$version")
+              case "$code" in
+                200) exclude+=(--exclude "$name") ;;
+                404) left+=("$name") ;;
+                *) echo "::error::crates.io answered $code for $name $version"; exit 1 ;;
+              esac
+            done <<< "$crates"
+            if [ "${#left[@]}" -eq 0 ]; then
+              echo "Every crate is on crates.io."
+              exit 0
+            fi
+            echo "Round $round: ${#left[@]} to publish: ${left[*]}"
+            if cargo publish --workspace --locked $verify "${exclude[@]}" 2>&1 | tee publish.log; then
+              continue
+            fi
+            if grep -q -E 'status 429|Too Many Requests' publish.log; then
+              # Uploads begin only after every crate has been verified, so later rounds needn't
+              # verify the same sources again.
+              verify=--no-verify
+              when=$(grep -o -E 'try again after [^.]*GMT' publish.log | tail -n 1 | sed 's/^try again after //')
+              wait=610
+              if [ -n "$when" ] && t=$(date -d "$when" +%s 2>/dev/null); then
+                wait=$(( t - $(date +%s) + 20 ))
+              fi
+              [ "$wait" -lt 30 ] && wait=30
+              [ "$wait" -gt 1800 ] && wait=1800
+              echo "::notice::crates.io takes new crates at its own pace; waiting ${wait} s"
+              sleep "$wait"
+            elif grep -q -E 'already exists on|no matching package named|timeout while waiting for published' publish.log; then
+              echo "crates.io's index is catching up; checking again in a minute"
+              sleep 60
+            else
+              echo "::error::cargo publish failed for a reason other than crates.io's limits"
+              exit 1
+            fi
+          done
+          echo "::error::crates still unpublished after 40 rounds"
+          exit 1

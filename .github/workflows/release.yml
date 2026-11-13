@@ -409,6 +409,14 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: Linux libraries (crates.io's verification builds the window and display crates)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      # New versions of existing crates go up 30 at once. New crates go up 5 at once and then
+      # one every 10 minutes, and cargo stops at the first refusal: crates.yml finishes the job.
       - name: Publish every crate but jetcarp-saver, in dependency order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
