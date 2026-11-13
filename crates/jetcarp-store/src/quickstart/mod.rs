@@ -404,9 +404,17 @@ pub fn atlas_title(rule: &str, category: &str, family: &str) -> String {
         return rule.to_string();
     }
     let mood = category_mood(category);
+    // A rule table (Priority) has no short notation; its number of states tells some apart
+    // (`Oscillating Priority 6`).
+    let rule = match rule.split_once(':') {
+        Some((head, _)) if head.starts_with("Priority ") => head,
+        _ => rule,
+    };
     // A short notation tells entries of one family apart (`Battle JACA +B3/S23 -B36/S23`,
-    // `Fractal HexW3 5033`); a long one (Larger than Life, Hodgepodge) gives way to the family.
-    if rule.len() <= 26 && rule != family {
+    // `Fractal HexW3 5033`); a long one (Larger than Life) gives way to the family. JACA's two
+    // rules and blast still read as a name at 40 characters.
+    let limit = if rule.starts_with("JACA ") { 40 } else { 26 };
+    if rule.len() <= limit && rule != family {
         return if mood.is_empty() {
             rule.to_string()
         } else {

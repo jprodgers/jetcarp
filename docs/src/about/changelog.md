@@ -31,6 +31,12 @@ that will declare them stable.
   names the pack rather than its `sha256:` hash, here and in `jobs list`. Packs imported from now
   on are named by their title (*JETCARP starter pack*) there and in the Hunts window.
 
+### Changed
+
+- **More atlas titles tell entries apart.** A JACA entry is titled by its rules up to 40 characters
+  (*Battle JACA +B14/S124 -B12/S345 blast 1*, not a plain *Battle JACA*), and a Priority entry by its
+  number of states (*Oscillating Priority 6*). Entries from earlier builds keep their titles.
+
 ## [0.4.0] – 2026-11-13
 
 The first public release.

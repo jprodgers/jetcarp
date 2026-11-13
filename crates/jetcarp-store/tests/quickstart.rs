@@ -418,6 +418,19 @@ fn atlas_titles_name_what_they_can() {
         qs::atlas_title("HexW3 5033", "Fractals & rows", "Hexagonal elementary"),
         "Fractal HexW3 5033"
     );
+    // JACA's notations run longer and still name the entry; a rule table names its states.
+    assert_eq!(
+        qs::atlas_title("JACA +B14/S124 -B12/S345 blast 1", "Battles", "JACA"),
+        "Battle JACA +B14/S124 -B12/S345 blast 1"
+    );
+    assert_eq!(
+        qs::atlas_title(
+            "Priority 6: *|n4>=3->5; 2|always->4; 0|always->4",
+            "Oscillators",
+            "Priority"
+        ),
+        "Oscillating Priority 6"
+    );
     // A long notation gives way to the family; a one-rule family keeps its name.
     assert_eq!(
         qs::atlas_title(
