@@ -1,7 +1,7 @@
 # What is new in JETCARP
 
-> **Draft.** This page is a first draft of JETCARP's contributions, written for the v0.4.0 release
-> and the paper that will follow. Each claim below is limited to what our prior-art search supports.
+> **Status, v0.4.0 (November 2026).** This page is a first draft of JETCARP's contributions,
+> written for the v0.4.0 release and the paper that will follow. Each claim below is limited to what our prior-art search supports.
 > The spaceship claims have been through the checks described in [How we checked](#how-we-checked),
 > but not yet past the ConwayLife community, whom we will ask; see *Checks still to do* at the end.
 > If you know of earlier work that we have missed, please open an issue. We will correct the page and
