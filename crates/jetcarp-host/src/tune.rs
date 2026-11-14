@@ -20,6 +20,8 @@ use jetcarp_display::stage::{self, Lookup, Stage};
 use jetcarp_display::tuning::{
     Measure, SceneLimits, TRIAL_SECONDS, TuneEvent, candidates, coarsest_px, fits, search,
 };
+use jetcarp_gpu::GpuSim;
+use jetcarp_gpu::select::Mode;
 use jetcarp_mcp::link::host_call;
 use serde_json::{Value, json};
 use std::io::Write;
@@ -459,10 +461,19 @@ impl Drop for Hold {
     }
 }
 
-/// Whether a trial's world steps on the GPU: the scene asks for it, and the host's GPU can run
-/// it. The tuner decides here and nowhere else, so the GPU policy can decide here too.
-fn steps_on_gpu(profile: &Profile, sim: &SimBackend, _world: &World) -> bool {
-    profile.gpu && sim.available()
+/// Whether a trial's world steps on the GPU, as the host would step it: the scene allows it, the
+/// host's GPU can run it, and the GPU policy says so (automatic: when the GPU is worth it for a
+/// world of this size, [`GpuSim::worth`]). A trial left on the processor is held to the
+/// processor limit like any other.
+fn steps_on_gpu(profile: &Profile, sim: &SimBackend, world: &World) -> bool {
+    let paced = profile.speed > 0.0;
+    profile.gpu
+        && sim.available()
+        && match sim.mode {
+            Mode::Off => false,
+            Mode::On => true,
+            Mode::Auto => GpuSim::worth(world, paced),
+        }
 }
 
 /// GPU timestamps around a frame's step and its drawing.

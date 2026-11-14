@@ -69,11 +69,6 @@ impl SharedGpu {
         SharedGpu::on_with(choice.adapter, optional)
     }
 
-    /// A device on this adapter.
-    pub fn on(adapter: wgpu::Adapter) -> Option<SharedGpu> {
-        SharedGpu::on_with(adapter, wgpu::Features::empty())
-    }
-
     /// A device on this adapter, with those of `optional` it has.
     fn on_with(adapter: wgpu::Adapter, optional: wgpu::Features) -> Option<SharedGpu> {
         let mut desc = device_descriptor(&adapter);
@@ -772,14 +767,24 @@ impl Core {
         self.build_screens()
     }
 
-    /// Reads the settings file again.
+    /// Reads the settings file again, and the shared GPU setting.
     pub fn reload(&mut self) -> Result<(), String> {
         let (settings, warning) = HostSettings::load();
         if let Some(w) = warning {
             self.note(w);
         }
+        let gpu_was = self.settings.gpu;
         self.settings = settings;
         let built = self.build_screens();
+        // The GPU setting may have changed in the app (automatic, on or off).
+        let mode = select::Policy::load().mode;
+        for i in 0..self.screens.len() {
+            if self.settings.gpu != gpu_was {
+                self.screens[i].sim = self.new_sim();
+            } else if self.screens[i].sim.available() {
+                self.screens[i].sim.mode = mode;
+            }
+        }
         self.settle_still();
         built
     }
