@@ -103,7 +103,7 @@ fn spec_schema(_: &mut SchemaGenerator) -> Schema {
 }
 
 /// Items given as a list of text, or as one text separated by any of `seps`.
-fn texts(v: Option<&Value>, key: &str, seps: &[char]) -> Result<Vec<String>, ApiError> {
+pub(crate) fn texts(v: Option<&Value>, key: &str, seps: &[char]) -> Result<Vec<String>, ApiError> {
     Ok(match v {
         None | Some(Value::Null) => vec![],
         Some(Value::String(s)) => s
@@ -1489,6 +1489,10 @@ pub struct ExploreIn {
     /// Stop (paused, resumable) when the process uses more memory than this many GB.
     #[serde(default)]
     pub max_rss_gb: Option<f64>,
+    /// Score runs with a fitted score model (a file's path, or the model) instead of the built-in score; the job keeps it.
+    #[serde(default)]
+    #[schemars(with = "Option<Value>")]
+    pub score: Option<Value>,
 }
 
 /// The rule families, for hints.
@@ -1522,6 +1526,7 @@ impl ExploreIn {
                 seed: self.seed.unwrap_or(d.seed),
                 tilings,
                 families,
+                score: None,
             },
             gpu: self.gpu.unwrap_or(false),
             max_rss_gb: self.max_rss_gb,
@@ -1621,7 +1626,15 @@ fn build(
         "pile" => return read_spec::<PileIn>(kind, spec)?.build(cx, lib, p),
         "collide" => to_json(&read_spec::<CollideIn>(kind, spec)?.spec(lib)?)?,
         "evolve" => to_json(&read_spec::<EvolveIn>(kind, spec)?.spec(cx)?)?,
-        "explore" => to_json(&read_spec::<ExploreIn>(kind, spec)?.spec()?)?,
+        "explore" => {
+            let e = read_spec::<ExploreIn>(kind, spec)?;
+            let mut s = e.spec()?;
+            s.search.score = match &e.score {
+                Some(v) => super::explore::load_model(cx, v)?,
+                None => None,
+            };
+            to_json(&s)?
+        }
         k => return Err(invalid(format!("no strategy '{k}'"))),
     }))
 }

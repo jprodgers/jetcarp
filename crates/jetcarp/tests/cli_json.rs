@@ -449,6 +449,91 @@ fn search_and_jobs_commands_as_json() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// An explore job's runs out with their measures: as text, CSV on standard output or in a file,
+/// and JSON; a refit without reviews is refused.
+#[test]
+fn explore_runs_with_measures_as_csv_and_json() {
+    let dir = out_root().join(format!("cli-explore-runs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = dir.join("lib");
+    let l = lib.to_str().unwrap();
+    let e = json_of(&[
+        "search",
+        "explore",
+        "--library",
+        l,
+        "--families",
+        "jaca",
+        "--tilings",
+        "square,hex",
+        "--screen-cells",
+        "400",
+        "--screen-gens",
+        "64",
+        "--confirm-cells",
+        "400",
+        "--confirm-gens",
+        "64",
+        "--limit",
+        "40",
+        "--threads",
+        "2",
+        "--quiet",
+        "--json",
+    ]);
+    let job = e["job"].to_string();
+    let o = jetcarp(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "0",
+        "--measures",
+        "sign_pos,sign_lost",
+        "--format",
+        "csv",
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let text = String::from_utf8(o.stdout).unwrap();
+    let mut lines = text.lines();
+    let head = lines.next().unwrap();
+    assert!(head.starts_with("id,stage,parent,family,"), "{head}");
+    assert!(head.ends_with(",score,sign_pos,sign_lost"), "{head}");
+    let n = lines.count();
+    assert!(n >= 40, "{n} runs");
+    let out = dir.join("runs.csv");
+    let w = json_of(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "0",
+        "--out",
+        out.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(w["written"].as_u64(), Some(n as u64));
+    assert_eq!(std::fs::read_to_string(&out).unwrap().lines().count(), n + 1);
+    let j = json_of(&[
+        "jobs", "--library", l, "runs", &job, "--limit", "3", "--measures", "all", "--format",
+        "json",
+    ]);
+    assert_eq!(j["runs"].as_array().unwrap().len(), 3);
+    assert!(j["runs"][0]["measures"]["sign_sorted"].is_number(), "{j}");
+    let o = jetcarp(&["jobs", "--library", l, "runs", &job, "--measures", "all"]);
+    let text = String::from_utf8(o.stdout).unwrap();
+    assert!(text.lines().next().unwrap().contains("sign_trade"), "{text}");
+    let o = jetcarp(&["jobs", "--library", l, "refit", &job]);
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("reviewed runs"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 // `jetcarp pack`: a key, a publish of a small library, a check and an import, through the
 // program, with the tests' own settings folder (the key is made there, never in ~/.ssh).
 #[test]

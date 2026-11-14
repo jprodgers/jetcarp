@@ -580,6 +580,10 @@ pub struct ExploreArgs {
     /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
     max_rss_gb: Option<f64>,
+    /// Score runs with this fitted score model (`jetcarp jobs refit --out` writes one) instead
+    /// of the built-in score; the job keeps a copy, so resuming it keeps the model.
+    #[arg(long)]
+    score: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
@@ -791,6 +795,9 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         seed: Some(a.seed),
         gpu: Some(a.gpu),
         max_rss_gb: a.max_rss_gb,
+        score: a
+            .score
+            .map(|p| Value::String(p.display().to_string())),
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
     i.gpu = a.gpu;

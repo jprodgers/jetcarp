@@ -151,7 +151,7 @@ pub fn parts(tool: &str) -> Vec<&'static str> {
         }
         "world_read" => vec!["cell"],
         "pack" => crate::pack_tools::ACTIONS.to_vec(),
-        "search_runs" => vec!["sheet", "scene", "try", "review"],
+        "search_runs" => vec!["sheet", "scene", "try", "review", "refit", "rescore"],
         "world_edit" => vec!["cells", "paste", "reseed"],
         "world_render" => vec!["wallpaper"],
         "library_curate" => vec!["changes", "quickstart", "compounds"],

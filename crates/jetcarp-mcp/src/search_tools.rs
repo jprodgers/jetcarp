@@ -1,20 +1,21 @@
-//! `search_runs`: an explore search's stored runs (`search.runs`), a contact sheet of them
-//! (`search.sheet`), one run's scene (`search.run_scene`), one configuration of your own tried now
-//! (`search.try`), and a verdict on a run (`search.review`). A search is named by its `job`
-//! (default: the newest explore job).
+//! `search_runs`: an explore search's stored runs (`search.runs`, or every run to a CSV file), a
+//! contact sheet of them (`search.sheet`), one run's scene (`search.run_scene`), one configuration
+//! of your own tried now (`search.try`), a verdict on a run (`search.review`), a score model fitted
+//! to the verdicts (`search.refit`), and every score recomputed by one (`search.rescore`). A search
+//! is named by its `job` (default: the newest explore job).
 
 use crate::schema::{self, object};
 use crate::tools::{Call, Res, Tool, ToolOutput, ctx, err};
 use jetcarp_api::op::{self, Op, Quiet, input_schema};
 use jetcarp_api::ops::explore::{
-    ReviewIn, RunIn, RunsIn, SearchReview, SearchRunScene, SearchRuns, SearchSheet, SearchTry,
-    SheetIn, TryIn,
+    RefitIn, RescoreIn, ReviewIn, RunIn, RunsIn, SearchRefit, SearchRescore, SearchReview,
+    SearchRunScene, SearchRuns, SearchSheet, SearchTry, SheetIn, TryIn,
 };
 use serde_json::{Value, json};
 
 const MAX_ROWS: usize = 200;
 const MAX_SHEET: usize = 36;
-const ACTIONS: &[&str] = &["sheet", "scene", "try", "review"];
+const ACTIONS: &[&str] = &["sheet", "scene", "try", "review", "refit", "rescore"];
 
 pub(crate) fn tools() -> Vec<Tool> {
     vec![Tool {
@@ -23,7 +24,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: false,
         destructive: false,
         description: || {
-            "Reads an explore search's stored runs (search_start {\"explore\": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family, tiling, fate, min_score, min_movers, stage or reviewed. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({\"sheet\": {\"ids\": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({\"scene\": {\"run\": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({\"try\": {\"tiling\": \"hex\", \"rule\": \"B2/S34\", \"seed\": \"random:0.3\"}}); or `review`, your verdict on a run ({\"review\": {\"run\": 12, \"verdict\": \"keep\", \"note\": \"slow gliders\"}}), which feeds what is published and the score. The sealed runs are also Parquet files (runs/part-*.parquet in the search's folder) for DuckDB, Polars or pyarrow.".into()
+            "Reads an explore search's stored runs (`job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), or to a CSV file. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({\"sheet\": {\"ids\": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({\"scene\": {\"run\": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({\"try\": {\"tiling\": \"hex\", \"rule\": \"B2/S34\", \"seed\": \"random:0.3\"}}); `review`, your verdict on a run ({\"review\": {\"run\": 12, \"verdict\": \"keep\"}}), which feeds what is published and the score; `refit` fits a score model to them, `rescore` applies it. Sealed runs are also Parquet files (runs/part-*.parquet).".into()
         },
         schema: || {
             let mut p = schema::props(&input_schema::<RunsIn>());
@@ -32,6 +33,8 @@ pub(crate) fn tools() -> Vec<Tool> {
                 "Most runs to return (default 40, at most {MAX_ROWS})."
             ));
             p.insert("limit".into(), limit);
+            // Exports in parts are for the command line; `csv` with limit 0 writes every run.
+            p.remove("since");
             p.insert(
                 "sheet".into(),
                 schema::without(
@@ -66,6 +69,26 @@ pub(crate) fn tools() -> Vec<Tool> {
                     &["job", "from", "rater"],
                 ),
             );
+            p.insert(
+                "refit".into(),
+                schema::without(
+                    schema::op(
+                        input_schema::<RefitIn>(),
+                        Some("Fit a score model."),
+                    ),
+                    &["replay", "gpu"],
+                ),
+            );
+            p.insert(
+                "rescore".into(),
+                schema::without(
+                    schema::op(
+                        input_schema::<RescoreIn>(),
+                        Some("Rescore a stopped job."),
+                    ),
+                    &["job", "gpu"],
+                ),
+            );
             object(p, &[])
         },
         run: search_runs,
@@ -90,8 +113,19 @@ fn search_runs(c: &mut Call) -> Res {
     let a = c.args;
     let Some(which) = schema::one_of("search_runs", a, ACTIONS)? else {
         let mut q: RunsIn = schema::read(&input_schema::<RunsIn>(), "search_runs", a.clone())?;
-        q.limit = Some(q.limit.unwrap_or(40).clamp(1, MAX_ROWS));
+        if q.csv.is_none() {
+            q.limit = Some(match q.limit {
+                None => 40,
+                Some(0) => MAX_ROWS,
+                Some(n) => n.min(MAX_ROWS),
+            });
+        }
         let r = SearchRuns::run(ctx(), q, &Quiet).map_err(err)?;
+        if let Some(f) = &r.csv {
+            return Ok(ToolOutput::json(
+                &json!({"job": r.job, "csv": f, "runs": r.written, "measures": r.measures}),
+            ));
+        }
         return Ok(ToolOutput::json(
             &json!({"job": r.job, "runs": op::to_value(&r.runs)}),
         ));
@@ -172,6 +206,31 @@ fn search_runs(c: &mut Call) -> Res {
                 serde_json::to_string_pretty(&facts).unwrap_or_default(),
                 &out.png,
             ))
+        }
+        "refit" => {
+            let mut v = part(a, "refit", false)?;
+            if let Some(j) = a.get("job").filter(|j| !j.is_null())
+                && v.get("jobs").is_none_or(|x| x.is_null())
+            {
+                v["jobs"] = json!([j]);
+            }
+            let r: RefitIn = schema::read(&input_schema::<RefitIn>(), "search_runs refit", v)?;
+            let out = SearchRefit::run(ctx(), r, &Quiet).map_err(err)?;
+            let mut v = op::to_value(&out);
+            if out.saved.is_some() {
+                // The file holds the model; the answer stays short.
+                v["model"] = json!(format!("written to {}", out.saved.clone().unwrap_or_default()));
+            }
+            Ok(ToolOutput::json(&v))
+        }
+        "rescore" => {
+            let r: RescoreIn = schema::read(
+                &input_schema::<RescoreIn>(),
+                "search_runs rescore",
+                part(a, "rescore", true)?,
+            )?;
+            let out = SearchRescore::run(ctx(), r, &Quiet).map_err(err)?;
+            Ok(ToolOutput::json(&op::to_value(&out)))
         }
         _ => {
             let mut v = part(a, "review", true)?;

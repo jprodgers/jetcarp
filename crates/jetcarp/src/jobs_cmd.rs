@@ -1,15 +1,16 @@
 //! `jetcarp jobs`: the catalog's jobs, whatever started them: `list`, `status`, `wait`, `stop`,
 //! `resume`, `report`, `remove` (the operations `jobs.*`); and an explore job's run records:
-//! `runs`, `sheet`, `scene`, `review`, `clips`, `rescore`, `seal` (`search.runs`, `search.sheet`,
-//! `search.run_scene`, `search.review`, `search.clips`, `search.rescore`, `search.seal`).
+//! `runs`, `sheet`, `scene`, `review`, `clips`, `refit`, `rescore`, `seal` (`search.runs`,
+//! `search.sheet`, `search.run_scene`, `search.review`, `search.clips`, `search.refit`,
+//! `search.rescore`, `search.seal`).
 
 use crate::search_cmd::CliProgress;
 use crate::show;
 use anyhow::{Context, Result};
 use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::explore::{
-    ClipsIn, RescoreIn, ReviewIn, RunIn, RunsIn, SealIn, SearchClips, SearchRescore, SearchReview,
-    SearchRunScene, SearchRuns, SearchSeal, SearchSheet, SheetIn,
+    ClipsIn, RefitIn, RescoreIn, ReviewIn, RunIn, RunsIn, SealIn, SearchClips, SearchRefit,
+    SearchRescore, SearchReview, SearchRunScene, SearchRuns, SearchSeal, SearchSheet, SheetIn,
 };
 use jetcarp_api::ops::jobs::{
     JobIn, JobsList, JobsRemove, JobsReport, JobsResume, JobsStatus, JobsStop, JobsWait, ListIn,
@@ -170,10 +171,27 @@ enum JobsCmd {
     /// Animated clips of a stratified sample of an explore job's runs (or chosen runs), with a
     /// manifest, for rating by eye.
     Clips(Box<ClipsArgs>),
+    /// Fit a score model to the keep, maybe and drop reviews of explore jobs' runs (JOB...
+    /// default: the newest explore job), and report how well it ranks runs held out of the fit.
+    Refit(Box<RefitArgs>),
     /// Recompute every stored score of a stopped explore job from its stored measures (after
-    /// the score changes), and rebuild its archive. Sealed segments are not rewritten: their new
-    /// scores go in a sidecar per segment (`scores-<n>/` in the search folder).
-    Rescore { job: Option<i64> },
+    /// the score changes, or by a fitted model), and rebuild its archive. Sealed segments are not
+    /// rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search
+    /// folder).
+    Rescore {
+        job: Option<i64>,
+        /// Score with this fitted model (`jetcarp jobs refit --out` writes one); the job keeps
+        /// it, so the search goes on with it. `builtin` goes back to the built-in score.
+        #[arg(long)]
+        score: Option<String>,
+        /// First replay the runs that lack measures the score reads (JACA runs stored before
+        /// sign measures), caching what they measure. Slow for a large search.
+        #[arg(long)]
+        replay: bool,
+        /// Replay on the GPU, when there is one.
+        #[arg(long)]
+        gpu: bool,
+    },
     /// Seal a stopped explore job's newest runs (those not yet in a Parquet segment), so its
     /// folder holds every run in Parquet; a search seals every million runs by itself.
     Seal { job: Option<i64> },
@@ -204,11 +222,47 @@ struct RunsArgs {
     /// These runs (comma separated) instead of the filters.
     #[arg(long, value_delimiter = ',')]
     ids: Option<Vec<i64>>,
-    /// score (default), newest, or id.
+    /// score (default), newest, or id (the default with --since).
     #[arg(long)]
     order: Option<String>,
+    /// Most runs (0: every run).
     #[arg(long, default_value_t = 40)]
     limit: usize,
+    /// Also show these measures: all, or names, comma separated (settle, density_late,
+    /// activity_late, smooth, sign_balance, sign_sorted, sign_trade, sign_lost, ...).
+    #[arg(long)]
+    measures: Option<String>,
+    /// text (default), csv, or json.
+    #[arg(long, default_value = "text")]
+    format: String,
+    /// Only runs with a larger id than this, in id order (to export a search in parts).
+    #[arg(long)]
+    since: Option<i64>,
+    /// Write the runs here as CSV instead of printing them.
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
+#[derive(clap::Args)]
+struct RefitArgs {
+    /// The explore jobs whose runs' reviews to learn (default: the newest explore job).
+    jobs: Vec<i64>,
+    /// Only this rater's reviews (default: every rater's).
+    #[arg(long)]
+    rater: Option<String>,
+    /// Fit to this family's runs only; the model then scores only that family.
+    #[arg(long)]
+    family: Option<String>,
+    /// Write the model here (JSON), for `search explore --score` and `jobs rescore --score`.
+    #[arg(long)]
+    out: Option<PathBuf>,
+    /// Do not replay reviewed runs that lack measures (JACA runs stored before sign measures);
+    /// they count at the mean.
+    #[arg(long)]
+    no_replay: bool,
+    /// Replay on the GPU, when there is one.
+    #[arg(long)]
+    gpu: bool,
 }
 
 #[derive(clap::Args)]
@@ -408,8 +462,21 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 ids: r.ids,
                 order: r.order,
                 limit: Some(r.limit),
+                measures: r.measures.map(serde_json::Value::String),
+                since: r.since,
+                csv: r.out.map(|p| p.display().to_string()),
             };
-            show(&SearchRuns::run(&cx, a, &Quiet)?, json)
+            match r.format.as_str() {
+                "csv" if a.csv.is_none() => {
+                    let out = std::io::stdout();
+                    let mut w = std::io::BufWriter::new(out.lock());
+                    jetcarp_api::ops::explore::runs_csv(&cx, &a, &mut w)?;
+                    Ok(())
+                }
+                "text" | "csv" => show(&SearchRuns::run(&cx, a, &Quiet)?, json),
+                "json" => show(&SearchRuns::run(&cx, a, &Quiet)?, true),
+                f => anyhow::bail!("--format is text, csv, or json, not {f}"),
+            }
         }
         JobsCmd::Sheet(a) => {
             let a = *a;
@@ -469,9 +536,35 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
             p.finish();
             show(&r?, json)
         }
-        JobsCmd::Rescore { job } => {
+        JobsCmd::Refit(a) => {
+            let a = *a;
+            let i = RefitIn {
+                jobs: (!a.jobs.is_empty()).then_some(a.jobs),
+                rater: a.rater,
+                family: a.family,
+                out: a.out.map(|p| p.display().to_string()),
+                replay: Some(!a.no_replay),
+                gpu: Some(a.gpu),
+            };
             let p = CliProgress::new(false);
-            let r = SearchRescore::run(&cx, RescoreIn { job }, &p);
+            let r = SearchRefit::run(&cx, i, &p);
+            p.finish();
+            show(&r?, json)
+        }
+        JobsCmd::Rescore {
+            job,
+            score,
+            replay,
+            gpu,
+        } => {
+            let p = CliProgress::new(false);
+            let i = RescoreIn {
+                job,
+                score: score.map(serde_json::Value::String),
+                replay: Some(replay),
+                gpu: Some(gpu),
+            };
+            let r = SearchRescore::run(&cx, i, &p);
             p.finish();
             show(&r?, json)
         }
