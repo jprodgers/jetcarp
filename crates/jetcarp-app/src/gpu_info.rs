@@ -4,7 +4,7 @@
 
 use jetcarp_api::Platform;
 use jetcarp_api::ctx::{
-    GpuAdapter, GpuChoice, GpuMode, GpuPolicy, GpuSelfTest, GpuStepper, GpuSteps,
+    GpuAdapter, GpuChoice, GpuMode, GpuPolicy, GpuProgram, GpuSelfTest, GpuStepper, GpuSteps,
 };
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
@@ -78,6 +78,9 @@ impl Platform for GpuOnly {
     fn gpu_mode(&self) -> GpuMode {
         mode()
     }
+    fn gpu_forced(&self) -> Option<GpuMode> {
+        forced()
+    }
     fn gpu_worth(&self, w: &World, paced: bool) -> bool {
         GpuSim::worth(w, paced)
     }
@@ -122,6 +125,22 @@ pub fn mode() -> GpuMode {
     mode_of(select::Policy::load().mode)
 }
 
+/// The mode `JETCARP_GPU` sets, over a command's own request.
+pub fn forced() -> Option<GpuMode> {
+    select::env_mode().map(mode_of)
+}
+
+/// What a program whose own choice is `own` does under the policy `p`.
+pub fn program(p: &select::Policy, name: &'static str, own: select::Own) -> GpuProgram {
+    let q = p.clone().with_own(own, name);
+    GpuProgram {
+        name: name.into(),
+        choice: own.name().into(),
+        mode: mode_of(q.mode),
+        from: q.origin(),
+    }
+}
+
 fn mode_of(m: Mode) -> GpuMode {
     match m {
         Mode::Off => GpuMode::Off,
@@ -130,10 +149,22 @@ fn mode_of(m: Mode) -> GpuMode {
     }
 }
 
-/// The policy and each purpose's adapter, with the self-test (run now if it has not been).
+/// The policy and each purpose's adapter, with the self-test (run now if it has not been), and
+/// what the app and the desktop background each do with their own choices.
 pub fn policy() -> GpuPolicy {
     let (p, choices) = select::report();
+    let programs = [
+        (crate::simgpu::OWNER, crate::app::saved_gpu_choice()),
+        (
+            jetcarp_display::host_settings::OWNER,
+            jetcarp_display::host_settings::HostSettings::load().0.gpu,
+        ),
+    ]
+    .into_iter()
+    .map(|(name, own)| program(&p, name, own))
+    .collect();
     GpuPolicy {
+        programs,
         mode: mode_of(p.mode),
         adapter: p.want.text(),
         source: p.source.name().into(),
@@ -157,5 +188,34 @@ pub fn policy() -> GpuPolicy {
                 problem: c.problem,
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jetcarp_gpu::select::{Own, Policy};
+
+    #[test]
+    fn each_program_says_what_it_does_and_why() {
+        let shared = Policy::from_setting(&Setting {
+            gpu: Mode::On,
+            gpu_adapter: None,
+        });
+        let follow = program(&shared, "the app", Own::Follow);
+        assert_eq!(
+            (follow.choice.as_str(), follow.mode, follow.from.as_str()),
+            ("follow", GpuMode::On, "the setting in gpu.json")
+        );
+        let off = program(&shared, "the desktop background", Own::Off);
+        assert_eq!(
+            (off.mode, off.from.as_str()),
+            (GpuMode::Off, "the desktop background's own setting")
+        );
+        let env = program(&Policy::from_env("auto"), "the app", Own::Off);
+        assert_eq!(
+            (env.mode, env.from.as_str()),
+            (GpuMode::Auto, "JETCARP_GPU=auto")
+        );
     }
 }

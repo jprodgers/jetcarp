@@ -74,6 +74,10 @@ impl Platform for Machine {
         jetcarp_app::gpu_info::mode()
     }
 
+    fn gpu_forced(&self) -> Option<GpuMode> {
+        jetcarp_app::gpu_info::forced()
+    }
+
     fn gpu_worth(&self, w: &World, paced: bool) -> bool {
         jetcarp_gpu::GpuSim::worth(w, paced)
     }

@@ -3,7 +3,9 @@
 mod common;
 
 use common::{fails, keys, scratch};
-use jetcarp_api::ctx::{GpuChoice, GpuMode, GpuPolicy, GpuSelfTest, Platform, UndoStep};
+use jetcarp_api::ctx::{
+    GpuChoice, GpuMode, GpuPolicy, GpuProgram, GpuSelfTest, Platform, UndoStep,
+};
 use jetcarp_api::op::{NoInput, Op, Quiet, Report, to_value};
 use jetcarp_api::ops::files::{FilesIn, FilesList, FilesOut};
 use jetcarp_api::ops::reference::*;
@@ -228,6 +230,20 @@ impl Platform for GpuFake {
                     ..Default::default()
                 },
             ],
+            programs: vec![
+                GpuProgram {
+                    name: "the app".into(),
+                    choice: "follow".into(),
+                    mode: GpuMode::Auto,
+                    from: "JETCARP_GPU=UHD".into(),
+                },
+                GpuProgram {
+                    name: "the desktop background".into(),
+                    choice: "off".into(),
+                    mode: GpuMode::Off,
+                    from: "the desktop background's own setting".into(),
+                },
+            ],
         })
     }
 }
@@ -244,6 +260,8 @@ fn the_doctor_says_which_adapter_each_purpose_uses_and_why() {
         "      limits: 16 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers\n",
         "      self-test: passed (80 ms, kept from before): 27 world rules and 33 explore batches matched the CPU\n      the GPU simulation uses it\n",
         "  compute: none\n      why: JETCARP_GPU=UHD\n      the GPU simulation does not use it: no usable adapter\n",
+        "  the app: auto, from JETCARP_GPU=UHD (its own choice: follow)\n",
+        "  the desktop background: off, from the desktop background's own setting (its own choice: off)\n",
     ] {
         assert!(t.contains(want), "{want:?} in\n{t}");
     }
@@ -251,6 +269,12 @@ fn the_doctor_says_which_adapter_each_purpose_uses_and_why() {
     assert_eq!(v["gpu_policy"]["mode"], "auto");
     assert_eq!(v["gpu_policy"]["choices"][0]["self_test"]["passed"], true);
     assert_eq!(v["gpu_policy"]["choices"][1]["purpose"], "compute");
+    assert_eq!(
+        v["gpu_policy"]["programs"][1]["name"],
+        "the desktop background"
+    );
+    assert_eq!(v["gpu_policy"]["programs"][1]["mode"], "off");
+    assert_eq!(v["gpu_policy"]["programs"][0]["choice"], "follow");
 }
 
 /// A platform whose undo steps count their runs; the second one fails.

@@ -302,6 +302,18 @@ fn gpu_policy_text(p: &GpuPolicy) -> String {
     if let Some(n) = &p.note {
         let _ = writeln!(s, "  note: {n}");
     }
+    for g in &p.programs {
+        let mode = match g.mode {
+            crate::ctx::GpuMode::Off => "off",
+            crate::ctx::GpuMode::Auto => "auto",
+            crate::ctx::GpuMode::On => "on",
+        };
+        let _ = writeln!(
+            s,
+            "  {}: {mode}, from {} (its own choice: {})",
+            g.name, g.from, g.choice
+        );
+    }
     for c in &p.choices {
         match &c.adapter {
             Some(a) => {

@@ -7,7 +7,10 @@
 //! - **The policy** ([`Policy::load`]): `JETCARP_GPU` when it is set, else the saved setting in the
 //!   settings folder's `gpu.json` ([`Setting`]), else automatic. It says whether to use the GPU
 //!   (`off`, `auto`, `on`) and which adapter (`software`, `integrated`, `discrete`, or part of an
-//!   adapter's name).
+//!   adapter's name). The app and the background host each have a choice of their own ([`Own`]:
+//!   follow the shared setting, on, or off), which [`Policy::load_for`] puts between the variable
+//!   and the shared setting. In all, first to last: `JETCARP_GPU`, a command's own `--gpu` or
+//!   `--cpu` ([`Policy::uses`]), the program's own choice, the shared setting, automatic.
 //! - **The purpose** ([`Purpose`]): computing prefers the fastest adapter; a display prefers the one
 //!   driving the screen, so a laptop's discrete GPU can sleep under a wallpaper.
 //! - **Decent** ([`requirements`]): a discrete or integrated GPU with compute shaders, at least
@@ -134,6 +137,8 @@ impl Want {
 pub enum Source {
     /// `JETCARP_GPU`.
     Env,
+    /// A program's own choice ([`Own`]): the app's or the background host's.
+    Own,
     /// The settings folder's `gpu.json`.
     Setting,
     /// Neither: automatic.
@@ -144,10 +149,71 @@ impl Source {
     pub fn name(self) -> &'static str {
         match self {
             Source::Env => "env",
+            Source::Own => "own",
             Source::Setting => "setting",
             Source::Default => "auto",
         }
     }
+}
+
+/// A program's own GPU choice, over the shared setting: the app's (in `app.json`) and the
+/// background host's (in `host.json`). Following is the default, so one setting serves both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Own {
+    /// Whatever the shared setting says.
+    #[default]
+    Follow,
+    /// Step on the GPU whenever the rules allow, whatever the shared setting says.
+    On,
+    /// Step on the processor, whatever the shared setting says.
+    Off,
+}
+
+impl Own {
+    pub const ALL: [Own; 3] = [Own::Follow, Own::On, Own::Off];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Own::Follow => "follow",
+            Own::On => "on",
+            Own::Off => "off",
+        }
+    }
+
+    /// `follow`, `on`, `off` (also `auto`, meaning follow, and `true` and `false`).
+    pub fn parse(s: &str) -> Option<Own> {
+        Some(match s.trim().to_ascii_lowercase().as_str() {
+            "follow" | "auto" | "shared" | "" => Own::Follow,
+            "on" | "true" | "1" | "yes" | "gpu" => Own::On,
+            "off" | "false" | "0" | "no" | "cpu" => Own::Off,
+            _ => return None,
+        })
+    }
+
+    /// Reads a stored choice, and the booleans files before it held (`true`: follow, the setting
+    /// it then meant; `false`: off).
+    pub fn deserialize_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Own, D::Error> {
+        use serde::de::Error;
+        match serde_json::Value::deserialize(d)? {
+            serde_json::Value::Bool(true) => Ok(Own::Follow),
+            serde_json::Value::Bool(false) => Ok(Own::Off),
+            serde_json::Value::String(t) => {
+                Own::parse(&t).ok_or_else(|| D::Error::custom(format!("gpu: {t:?}")))
+            }
+            serde_json::Value::Null => Ok(Own::Follow),
+            other => Err(D::Error::custom(format!("gpu: {other}"))),
+        }
+    }
+}
+
+/// The mode `JETCARP_GPU` sets, when it names one (`off`, `auto`, `on` and their synonyms; an
+/// adapter's name leaves the mode to the rest).
+pub fn env_mode() -> Option<Mode> {
+    std::env::var(ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .and_then(|v| Mode::parse(&v))
 }
 
 /// What a caller does, from the policy and its own request (`--gpu`, `--cpu`).
@@ -169,6 +235,8 @@ pub struct Policy {
     pub env: Option<String>,
     /// A setting file that could not be read (the policy is then automatic).
     pub note: Option<String>,
+    /// With [`Source::Own`]: whose choice it is (`the app`, `the desktop background`).
+    pub owner: Option<&'static str>,
 }
 
 impl Default for Policy {
@@ -179,6 +247,7 @@ impl Default for Policy {
             source: Source::Default,
             env: None,
             note: None,
+            owner: None,
         }
     }
 }
@@ -212,7 +281,39 @@ impl Policy {
             source: Source::Env,
             env: Some(value.trim().to_string()),
             note: None,
+            owner: None,
         }
+    }
+
+    /// The policy for a program whose own choice is `own` ([`Own`]), called `owner` in reports:
+    /// `JETCARP_GPU` when it names a mode, else that choice, else the shared setting, else
+    /// automatic. The adapter is always the variable's or the shared setting's.
+    pub fn load_for(own: Own, owner: &'static str) -> Policy {
+        Policy::load().with_own(own, owner)
+    }
+
+    /// This policy (the variable's or the shared setting's) under a program's own choice.
+    pub fn with_own(self, own: Own, owner: &'static str) -> Policy {
+        if self.env_sets_mode() {
+            return self;
+        }
+        let mode = match own {
+            Own::Follow => return self,
+            Own::On => Mode::On,
+            Own::Off => Mode::Off,
+        };
+        Policy {
+            mode,
+            source: Source::Own,
+            owner: Some(owner),
+            env: None,
+            ..self
+        }
+    }
+
+    /// Whether `JETCARP_GPU` set this policy's mode (and not just an adapter).
+    pub fn env_sets_mode(&self) -> bool {
+        self.source == Source::Env && self.env.as_deref().and_then(Mode::parse).is_some()
     }
 
     pub fn from_setting(s: &Setting) -> Policy {
@@ -226,12 +327,14 @@ impl Policy {
             source: Source::Setting,
             env: None,
             note: None,
+            owner: None,
         }
     }
 
     /// What to do, given a command's own request: `Some(true)` (`--gpu`) and `Some(false)`
-    /// (`--cpu`) win over the policy.
+    /// (`--cpu`) win over the policy, unless `JETCARP_GPU` set its mode.
     pub fn uses(&self, asked: Option<bool>) -> Use {
+        let asked = asked.filter(|_| !self.env_sets_mode());
         match (asked, self.mode) {
             (Some(true), _) | (None, Mode::On) => Use::Always,
             (Some(false), _) | (None, Mode::Off) => Use::Never,
@@ -244,6 +347,7 @@ impl Policy {
     pub fn origin(&self) -> String {
         match self.source {
             Source::Env => format!("{ENV}={}", self.env.as_deref().unwrap_or("")),
+            Source::Own => format!("{}'s own setting", self.owner.unwrap_or("the program")),
             Source::Setting => format!("the setting in {SETTING_FILE}"),
             Source::Default => "automatic".into(),
         }
@@ -1038,6 +1142,129 @@ mod tests {
         assert_eq!(p(Mode::Auto).uses(Some(false)), Use::Never);
         assert_eq!(p(Mode::On).uses(None), Use::Always);
         assert_eq!(p(Mode::On).uses(Some(false)), Use::Never);
+    }
+
+    /// First to last: JETCARP_GPU (when it names a mode), a command's --gpu or --cpu, the
+    /// program's own choice, the shared setting, automatic.
+    #[test]
+    fn the_variable_then_the_command_then_the_own_choice_then_the_shared_setting() {
+        use Use::*;
+        let shared = |m: Option<Mode>| match m {
+            Some(m) => Policy::from_setting(&Setting {
+                gpu: m,
+                gpu_adapter: Some("UHD".into()),
+            }),
+            None => Policy::default(),
+        };
+        let env = |v: Option<&str>, m: Option<Mode>| match v {
+            Some(v) => Policy::from_env(v),
+            None => shared(m),
+        };
+        // (variable, command, own, shared) -> what is done, and where the mode came from.
+        type Case<'a> = (
+            Option<&'a str>,
+            Option<bool>,
+            Own,
+            Option<Mode>,
+            Use,
+            Source,
+        );
+        let cases: [Case; 14] = [
+            (None, None, Own::Follow, None, Auto, Source::Default),
+            (
+                None,
+                None,
+                Own::Follow,
+                Some(Mode::Off),
+                Never,
+                Source::Setting,
+            ),
+            (
+                None,
+                None,
+                Own::Follow,
+                Some(Mode::On),
+                Always,
+                Source::Setting,
+            ),
+            (None, None, Own::On, Some(Mode::Off), Always, Source::Own),
+            (None, None, Own::Off, Some(Mode::On), Never, Source::Own),
+            (None, None, Own::Off, None, Never, Source::Own),
+            (
+                None,
+                Some(true),
+                Own::Off,
+                Some(Mode::Off),
+                Always,
+                Source::Own,
+            ),
+            (
+                None,
+                Some(false),
+                Own::On,
+                Some(Mode::On),
+                Never,
+                Source::Own,
+            ),
+            (
+                Some("off"),
+                None,
+                Own::On,
+                Some(Mode::On),
+                Never,
+                Source::Env,
+            ),
+            (
+                Some("on"),
+                None,
+                Own::Off,
+                Some(Mode::Off),
+                Always,
+                Source::Env,
+            ),
+            (Some("off"), Some(true), Own::On, None, Never, Source::Env),
+            (Some("auto"), Some(false), Own::Off, None, Auto, Source::Env),
+            // An adapter's name leaves the mode to the rest.
+            (Some("UHD"), None, Own::Off, None, Never, Source::Own),
+            (
+                Some("software"),
+                Some(true),
+                Own::Follow,
+                None,
+                Always,
+                Source::Env,
+            ),
+        ];
+        for (v, asked, own, m, want, source) in cases {
+            let p = env(v, m).with_own(own, "the app");
+            assert_eq!(
+                (p.uses(asked), p.source),
+                (want, source),
+                "{v:?} {asked:?} {own:?} {m:?}"
+            );
+        }
+        // The adapter stays the shared setting's, and reports say whose choice it was.
+        let p = shared(Some(Mode::Auto)).with_own(Own::Off, "the desktop background");
+        assert_eq!(p.want, Want::Named("UHD".into()));
+        assert_eq!(p.origin(), "the desktop background's own setting");
+        assert_eq!(
+            p.describe(),
+            "off, the adapter named UHD (the desktop background's own setting)"
+        );
+        // Stored choices, and the booleans of older files.
+        #[derive(Deserialize)]
+        struct S {
+            #[serde(deserialize_with = "Own::deserialize_lenient")]
+            gpu: Own,
+        }
+        let own = |j: &str| serde_json::from_str::<S>(j).map(|s| s.gpu);
+        assert_eq!(own(r#"{"gpu": true}"#).unwrap(), Own::Follow);
+        assert_eq!(own(r#"{"gpu": false}"#).unwrap(), Own::Off);
+        assert_eq!(own(r#"{"gpu": "on"}"#).unwrap(), Own::On);
+        assert_eq!(own(r#"{"gpu": "follow"}"#).unwrap(), Own::Follow);
+        assert!(own(r#"{"gpu": "sometimes"}"#).is_err());
+        assert_eq!(serde_json::to_string(&Own::Off).unwrap(), r#""off""#);
+        assert_eq!(Own::parse("auto"), Some(Own::Follow));
     }
 
     #[test]

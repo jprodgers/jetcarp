@@ -1553,6 +1553,7 @@ impl ExploreIn {
 /// `auto` says (whether the work is large enough to gain).
 pub(crate) fn job_gpu(cx: &Ctx, run: Option<bool>, saved: Option<bool>, auto: bool) -> bool {
     run.or(saved)
+        .filter(|_| cx.platform.gpu_forced().is_none())
         .unwrap_or_else(|| match cx.platform.gpu_mode() {
             GpuMode::Off => false,
             GpuMode::On => true,

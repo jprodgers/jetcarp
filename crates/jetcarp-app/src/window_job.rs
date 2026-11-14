@@ -49,6 +49,9 @@ impl Platform for AppPlatform {
     fn gpu_mode(&self) -> jetcarp_api::ctx::GpuMode {
         crate::gpu_info::mode()
     }
+    fn gpu_forced(&self) -> Option<jetcarp_api::ctx::GpuMode> {
+        crate::gpu_info::forced()
+    }
     fn gpu_worth(&self, w: &jetcarp_core::World, paced: bool) -> bool {
         jetcarp_gpu::GpuSim::worth(w, paced)
     }

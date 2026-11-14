@@ -283,6 +283,21 @@ pub struct GpuPolicy {
     pub note: Option<String>,
     /// One per purpose.
     pub choices: Vec<GpuChoice>,
+    /// What the app and the background host each do, with their own choices.
+    pub programs: Vec<GpuProgram>,
+}
+
+/// What one program with a GPU choice of its own does: the app, or the background host.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuProgram {
+    /// `the app` or `the desktop background`.
+    pub name: String,
+    /// Its own choice: `follow` (the shared setting), `on` or `off`.
+    pub choice: String,
+    /// What it does: off, auto or on.
+    pub mode: GpuMode,
+    /// Where that came from: `JETCARP_GPU=…`, its own setting, `gpu.json`, or automatic.
+    pub from: String,
 }
 
 /// How JETCARP is set up on the desktop.
@@ -340,6 +355,11 @@ pub trait Platform: Send + Sync {
     fn gpu_mode(&self) -> GpuMode {
         GpuMode::Off
     }
+    /// The mode `JETCARP_GPU` sets, which comes before a command's own `--gpu` or `--cpu` (None:
+    /// the variable is not set, or names only an adapter).
+    fn gpu_forced(&self) -> Option<GpuMode> {
+        None
+    }
     /// Is this world large enough to gain from the GPU (`jetcarp_gpu::GpuSim::worth`)? `paced`:
     /// stepped at a set speed, as opposed to as fast as possible.
     fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
@@ -391,8 +411,9 @@ impl Platform for Headless {}
 
 /// Whether a world steps on the GPU: the command's own request (`Some(true)` for `--gpu`,
 /// `Some(false)` for `--cpu`), else the platform's GPU policy (automatic: when the world is
-/// large enough to gain at full speed).
+/// large enough to gain at full speed). A mode set by `JETCARP_GPU` comes before the request.
 pub fn wants_gpu(platform: &dyn Platform, asked: Option<bool>, w: &World) -> bool {
+    let asked = asked.filter(|_| platform.gpu_forced().is_none());
     match asked {
         Some(b) => b,
         None => match platform.gpu_mode() {
@@ -406,6 +427,7 @@ pub fn wants_gpu(platform: &dyn Platform, asked: Option<bool>, w: &World) -> boo
 /// [`wants_gpu`] for a run of `gens` generations: automatic also takes the run's total work into
 /// account, so a long run of a mid-sized world goes to the GPU.
 pub fn wants_gpu_for(platform: &dyn Platform, asked: Option<bool>, w: &World, gens: u64) -> bool {
+    let asked = asked.filter(|_| platform.gpu_forced().is_none());
     match (asked, platform.gpu_mode()) {
         (None, GpuMode::Auto) => platform.gpu_worth_run(w, gens),
         _ => wants_gpu(platform, asked, w),
@@ -660,5 +682,54 @@ impl Ctx {
             *g = Some(Session::new());
         }
         g
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A platform whose policy is `mode`, with `JETCARP_GPU` setting `forced`.
+    struct P(GpuMode, Option<GpuMode>);
+
+    impl Platform for P {
+        fn gpu_mode(&self) -> GpuMode {
+            self.1.unwrap_or(self.0)
+        }
+        fn gpu_forced(&self) -> Option<GpuMode> {
+            self.1
+        }
+        fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn a_command_s_request_wins_unless_the_variable_set_a_mode() {
+        let w = World::from_scene(&jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+            "square",
+            8,
+            8,
+            jetcarp_core::Boundary::Wrap,
+        )))
+        .unwrap();
+        assert!(wants_gpu(&P(GpuMode::Off, None), Some(true), &w));
+        assert!(!wants_gpu(&P(GpuMode::On, None), Some(false), &w));
+        assert!(!wants_gpu(
+            &P(GpuMode::On, Some(GpuMode::Off)),
+            Some(true),
+            &w
+        ));
+        assert!(wants_gpu(
+            &P(GpuMode::Off, Some(GpuMode::On)),
+            Some(false),
+            &w
+        ));
+        assert!(wants_gpu_for(
+            &P(GpuMode::Off, Some(GpuMode::Auto)),
+            Some(false),
+            &w,
+            10
+        ));
     }
 }
