@@ -5,7 +5,9 @@ use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSett
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
-use jetcarp_display::tuning::{TuneChild, TuneEvent, TuneRequest};
+use jetcarp_display::tuning::{Pick, RUNG_SECONDS, TuneEvent, TuneRequest};
+
+mod sweep;
 use jetcarp_gpu::select;
 use jetcarp_mcp::link::{HOST_ENDPOINT, HOST_TOOL, Listener, Pending};
 use serde_json::{Value, json};
@@ -143,12 +145,13 @@ pub struct Core {
     pub monitor_hz: Vec<Option<f32>>,
     /// When a tuner last renewed its `tuning` hold.
     tuning_at: Option<f64>,
-    /// A tuner this host started (for `tune`, or because the monitors changed).
-    tuner: Option<TuneChild>,
-    /// It was started because the monitors changed.
-    tuner_auto: bool,
-    /// How the last tuner this host started ended, for `status`.
-    tuner_last: Option<Value>,
+    /// A sweep this host is making on the real screen (for `tune`, or because the monitors
+    /// changed).
+    sweep: Option<sweep::HostSweep>,
+    /// What the last sweep reported, for `tune_events`.
+    sweep_events: Vec<TuneEvent>,
+    /// How the last sweep ended, for `status`.
+    sweep_last: Option<Value>,
     /// Since when the tuned screens' sizes have differed from their tuning.
     retune_since: Option<f64>,
     /// The sizes the host last tuned again for by itself, so it tries each arrangement once.
@@ -332,9 +335,9 @@ impl Core {
             quit_at: None,
             monitor_hz: vec![],
             tuning_at: None,
-            tuner: None,
-            tuner_auto: false,
-            tuner_last: None,
+            sweep: None,
+            sweep_events: vec![],
+            sweep_last: None,
             retune_since: None,
             retune_tried: None,
         };
@@ -481,8 +484,14 @@ impl Core {
 
     fn apply_pause(&mut self) {
         let paused = self.user_paused || self.held();
-        for s in &mut self.screens {
-            s.stage.set_paused(paused);
+        // A sweep runs its screen whatever else holds it, and pauses the others, so the host's
+        // load is the swept scene's.
+        let swept = self.sweep.as_ref().and_then(|s| s.screen());
+        for (i, s) in self.screens.iter_mut().enumerate() {
+            s.stage.set_paused(match swept {
+                Some(k) => i != k,
+                None => paused,
+            });
         }
     }
 
@@ -645,7 +654,8 @@ impl Core {
             self.set_local_hold("tuning", false);
             self.note("the tuner stopped answering; carrying on");
         }
-        self.watch_tuner();
+        self.sweep_step();
+        self.watch_retune();
         let count = self.screens.len().max(1) as f32;
         let budget = Duration::from_secs_f32(STEP_SHARE / self.settings.fps.max(1.0) / count);
         let mut notes = vec![];
@@ -901,21 +911,41 @@ impl Core {
                 self.set_local_hold("tuning", on);
                 return Ok(json!({"ok": true}));
             }
-            "tune" if a.get("on").and_then(Value::as_bool) == Some(false) => self.stop_tuner()?,
+            "tune" if a.get("on").and_then(Value::as_bool) == Some(false) => {
+                self.stop_sweep("stopped")?
+            }
             "tune" => {
                 let num = |k: &str| a.get(k).and_then(Value::as_f64).map(|x| x as f32);
-                self.start_tuner(
+                let pick = match a.get("pick") {
+                    Some(Value::String(t)) => Some(Pick::parse(t)?),
+                    Some(Value::Number(n)) => Some(Pick::parse(&n.to_string())?),
+                    _ => None,
+                };
+                let seconds = a
+                    .get("seconds")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(RUNG_SECONDS);
+                self.start_sweep(
                     TuneRequest {
                         cpu_percent: num("cpu_limit"),
                         gpu_percent: num("gpu_limit"),
                         fps: num("fps"),
                         screen,
+                        pick,
+                        dry_run: a.get("dry_run").and_then(Value::as_bool).unwrap_or(false),
                         auto: false,
                     },
-                    false,
+                    seconds,
                 )?;
             }
-            "tune_stop" => self.stop_tuner()?,
+            "tune_stop" => self.stop_sweep("stopped")?,
+            "tune_events" => {
+                let since = a.get("since").and_then(Value::as_u64).unwrap_or(0) as usize;
+                return Ok(json!({
+                    "events": self.sweep_events.get(since..).unwrap_or(&[]),
+                    "running": self.sweep.is_some(),
+                }));
+            }
             "scene" => {
                 let i = screen.unwrap_or(0);
                 let s = self
@@ -972,55 +1002,13 @@ impl Core {
         p.reply(reply);
     }
 
-    /// Starts a tuner of its own (`jetcarp host tune --json`), whose progress `status` shows.
-    fn start_tuner(&mut self, req: TuneRequest, auto: bool) -> Result<(), String> {
-        if self.tuner.as_ref().is_some_and(|t| !t.finished()) {
-            return Err("a tune is already running".into());
-        }
-        self.tuner = Some(TuneChild::spawn(&req)?);
-        self.tuner_auto = auto;
-        self.tuner_last = None;
-        Ok(())
-    }
-
-    fn stop_tuner(&mut self) -> Result<(), String> {
-        let Some(t) = &mut self.tuner else {
-            return Err("no tune is running here".into());
-        };
-        t.stop();
-        self.tuner = None;
-        self.tuning_at = None;
-        self.set_local_hold("tuning", false);
-        self.tuner_last = Some(json!({"outcome": "stopped"}));
-        self.note("tuning stopped; the sizes found so far were not saved");
-        Ok(())
-    }
-
-    /// Follows its own tuner, and starts one when the monitors have changed under tuned screens.
-    fn watch_tuner(&mut self) {
-        if let Some(t) = &mut self.tuner {
-            t.poll();
-            if let Some(outcome) = t.outcome() {
-                let scenes = t.scenes().len();
-                let auto = self.tuner_auto;
-                self.tuner = None;
-                self.tuner_last = Some(match &outcome {
-                    Ok(()) => json!({"outcome": "done", "scenes": scenes, "auto": auto}),
-                    Err(e) => json!({"outcome": "failed", "error": e, "auto": auto}),
-                });
-                match outcome {
-                    Ok(()) => {
-                        self.note(format!("tuned {scenes} scene(s) for this computer"));
-                        if let Err(e) = self.reload() {
-                            self.note(e);
-                        }
-                    }
-                    Err(e) => self.note(format!("tuning failed: {e}")),
-                }
-            }
-            return;
-        }
-        if !self.is_host || !self.settings.tune.auto || self.shell() != Shell::Alive {
+    /// Sweeps again when the monitors have changed under tuned screens.
+    fn watch_retune(&mut self) {
+        if self.sweep.is_some()
+            || !self.is_host
+            || !self.settings.tune.auto
+            || self.shell() != Shell::Alive
+        {
             self.retune_since = None;
             return;
         }
@@ -1049,33 +1037,33 @@ impl Core {
             auto: true,
             ..Default::default()
         };
-        match self.start_tuner(req, true) {
-            Ok(()) => self.note("the monitors changed; tuning the desktop background again"),
-            Err(e) => self.note(format!("could not tune again for the new monitors: {e}")),
+        match self.start_sweep(req, RUNG_SECONDS) {
+            Ok(()) => {
+                self.note("the monitors changed; sweeping the desktop background's sizes again")
+            }
+            Err(e) => self.note(format!("could not sweep again for the new monitors: {e}")),
         }
     }
 
-    /// What `status` says of tuning: one running (here or elsewhere), and how the last one ended.
+    /// What `status` says of tuning: a sweep here (or a tuner elsewhere holding the host), and how
+    /// the last one ended.
     fn tuning_status(&self) -> Value {
         let mut v = json!({
-            "running": self.tuner.is_some() || self.tuning_at.is_some(),
-            "here": self.tuner.is_some(),
-            "auto": self.tuner.is_some() && self.tuner_auto,
+            "running": self.sweep.is_some() || self.tuning_at.is_some(),
+            "here": self.sweep.is_some(),
+            "auto": self.sweep.as_ref().is_some_and(|s| s.auto()),
         });
-        if let Some(t) = &self.tuner {
-            v["progress"] = json!(t.progress());
-            v["trial"] = json!(t.counts());
-            v["scenes"] = json!(
-                t.scenes()
-                    .into_iter()
-                    .map(|(screen, r)| json!({"screen": screen, "result": r}))
-                    .collect::<Vec<_>>()
+        if let Some(sw) = &self.sweep {
+            v["sweep"] = sw.progress();
+            v["progress"] = json!(
+                self.sweep_events
+                    .iter()
+                    .rev()
+                    .find(|e| matches!(e, TuneEvent::Rung { .. }))
+                    .map(TuneEvent::describe)
             );
-            if let Some(TuneEvent::Start { scenes, .. }) = t.events.first() {
-                v["of"] = json!(scenes);
-            }
         }
-        if let Some(last) = &self.tuner_last {
+        if let Some(last) = &self.sweep_last {
             v["last"] = last.clone();
         }
         v

@@ -940,6 +940,17 @@ impl ApplicationHandler for App {
                     w.request_redraw();
                 }
             }
+            // A sweep measures each frame's work, and where the system does not count the
+            // host's GPU time, how long the GPU took over the frame's last submission.
+            self.core.frame_done(now.elapsed().as_secs_f64());
+            if let (Some(acc), Some(g)) = (self.core.sweep_gpu_meter(), &self.gpu) {
+                let t = Instant::now();
+                g.queue.on_submitted_work_done(move || {
+                    if let Ok(mut a) = acc.lock() {
+                        *a += t.elapsed().as_secs_f64();
+                    }
+                });
+            }
             self.next_frame = now + self.core.frame_time();
         }
         el.set_control_flow(ControlFlow::WaitUntil(self.next_frame));

@@ -97,6 +97,7 @@ fn run_headless(mut core: core::Core, seconds: Option<f64>) -> ! {
         let frame = core.frame_time();
         let t0 = Instant::now();
         core.tick();
+        core.frame_done(t0.elapsed().as_secs_f64());
         if let Some(rest) = frame.checked_sub(t0.elapsed()) {
             std::thread::sleep(rest.min(Duration::from_millis(250)));
         }

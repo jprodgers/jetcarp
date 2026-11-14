@@ -1,45 +1,51 @@
-//! `jetcarp host tune`: *Fit to this computer*. Runs each scene of the desktop background's
-//! rotations offscreen, at its screen's size, the way the host runs it (the same stage, stepping
-//! and drawing, at the host's frame rate), measures JETCARP's own load, and keeps for each scene
-//! the smallest cell size that stays within the user's limits ([`tuning::search`]). The rules,
-//! palettes and colouring stay as they are; only the number of cells changes.
+//! `jetcarp host tune`: *Fit to this computer*. A sweep through the sizes each scene of the desktop
+//! background can show at ([`jetcarp_display::tuning`]): each size shown for a couple of seconds,
+//! measured, and pictured, then a size chosen for each scene (the recommended one unless `--pick`
+//! says otherwise, or someone chose before).
 //!
-//! It runs in a process of its own, so the processor time it measures is its own. A running host
-//! pauses meanwhile (the `tuning` hold, renewed every few seconds, so a tuner that crashes lets
-//! go by itself) and reads the sizes once they are saved.
+//! With the background host running, the host runs the sweep on the real screen and this command
+//! follows it. With no host running (or `--offscreen`), the sweep runs here, off screen, at each
+//! screen's size, the way the host runs a scene (the same stage, stepping and drawing, at the
+//! host's frame rate); it runs in a process of its own, so the processor time it measures is its
+//! own.
 
 use crate::core::{STEP_SHARE, SharedGpu, load_rotation};
 use crate::power::ProcessMeter;
-use jetcarp_core::World;
-use jetcarp_display::host_settings::{GpuTiming, HostSettings, Place, TunedScene, Tuning};
+use jetcarp_core::render::Image;
+use jetcarp_core::{SizeSpec, World};
+use jetcarp_display::host_settings::{
+    GpuTiming, HostSettings, Place, Size, TuneLimits, TunedScene, Tuning, crops_dir,
+};
 use jetcarp_display::painter::Painter;
 use jetcarp_display::profiles::{self, Profile};
 use jetcarp_display::rotation::{Rotation, Slot};
 use jetcarp_display::simgpu::{SimBackend, SimStatus};
 use jetcarp_display::stage::{self, Lookup, Stage};
 use jetcarp_display::tuning::{
-    Measure, SceneLimits, TRIAL_SECONDS, TuneEvent, candidates, coarsest_px, fits, search,
+    self, Measure, Pick, RUNG_SECONDS, SWEEP_MAX_CELLS, SceneLimits, SceneSweep, TuneEvent,
+    TuneRequest, crop_name, crop_size, lattice_ladder, patch_ladder, tuned_scene, warmup,
 };
 use jetcarp_gpu::GpuSim;
 use jetcarp_gpu::select::Mode;
 use jetcarp_mcp::link::host_call;
 use serde_json::{Value, json};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Scenes tuned per screen; the rest keep their own sizes.
-const MAX_SCENES: usize = 40;
-/// Seconds run before measuring: uploads, first colouring, shaders.
-const WARMUP: f64 = 1.0;
+/// Scenes swept per screen; the rest keep their own sizes.
+pub(crate) const MAX_SCENES: usize = 40;
 /// A world that takes longer than this to build is given up on.
-const BUILD_LIMIT: f64 = 60.0;
+pub(crate) const BUILD_LIMIT: f64 = 60.0;
 /// How often the host's `tuning` hold is renewed. The host lets go after 30 s without.
 const HOLD_EVERY: f64 = 5.0;
 /// The canvas when nothing says what the screen's is.
 const FALLBACK_CANVAS: [f64; 2] = [1920.0, 1080.0];
 /// The offscreen target's format: plain, as the host's surfaces are.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// How often a running host's sweep is asked for news.
+const FOLLOW_EVERY: Duration = Duration::from_millis(300);
 
 /// `jetcarp host tune` options.
 #[derive(clap::Args, Debug, Clone, Default)]
@@ -58,16 +64,30 @@ pub struct TuneArgs {
     /// Only this screen (counted from 0). Default: every screen on the desktop.
     #[arg(long)]
     pub screen: Option<usize>,
+    /// Which size each scene is left at: recommended (the finest within the limits; the default),
+    /// finest (the finest shown), own (the scene's own), or a cell size in pixels. Without it, a
+    /// size chosen before is kept while it is still within the limits.
+    #[arg(long, value_name = "WHICH")]
+    pub pick: Option<String>,
+    /// Save each size's picture here as a PNG (they are kept beside the host's settings too).
+    #[arg(long, value_name = "DIR")]
+    pub crops: Option<PathBuf>,
     /// The screen's size in pixels, as WxH, when no host is running to say (default: the size it
     /// was tuned for before, else its monitor's).
     #[arg(long, value_parser = crate::parse_canvas)]
     pub canvas: Option<[f64; 2]>,
-    /// Seconds each trial measures.
-    #[arg(long, default_value_t = TRIAL_SECONDS)]
+    /// Seconds each size shows for (the last three quarters are measured).
+    #[arg(long, default_value_t = RUNG_SECONDS)]
     pub trial_seconds: f64,
     /// Measure and report, but save nothing.
     #[arg(long)]
     pub dry_run: bool,
+    /// Stop the sweep a running host is making (the scenes already done stay saved).
+    #[arg(long)]
+    pub stop: bool,
+    /// Sweep here, off screen, even with the host running.
+    #[arg(long, hide = true)]
+    pub offscreen: bool,
     /// Started by the host because the monitors changed.
     #[arg(long, hide = true)]
     pub auto: bool,
@@ -85,7 +105,7 @@ impl Out {
         } else {
             e.describe()
         };
-        // Whoever started it may have gone; the tune carries on and saves what it finds.
+        // Whoever started it may have gone; the sweep carries on and saves what it finds.
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{line}");
         let _ = out.flush();
@@ -96,7 +116,7 @@ impl Out {
     }
 }
 
-/// One screen to tune.
+/// One screen to sweep.
 struct Job {
     screen: usize,
     rotation: String,
@@ -106,17 +126,109 @@ struct Job {
     slots: Vec<Slot>,
 }
 
-/// Runs the tune, reporting as it goes. `json`: JSON lines on stdout.
+/// Runs the sweep, reporting as it goes. `json`: JSON lines on stdout.
 pub fn run(args: TuneArgs, json: bool) -> Result<(), String> {
     let out = Out { json };
-    let r = tune(&args, &out);
+    let r = if args.stop {
+        host_call(&json!({"action": "tune", "on": false})).map(|_| println!("stopped"))
+    } else if !args.offscreen && host_call(&json!({"action": "status"})).is_ok() {
+        follow_host(&args, &out)
+    } else {
+        tune(&args, &out)
+    };
     if let (Err(e), true) = (&r, json) {
         out.event(&TuneEvent::Failed { error: e.clone() });
     }
     r
 }
 
-/// Only one tune at a time: the app's, the host's and the command line's would measure each other.
+/// The request the options make.
+fn request(args: &TuneArgs) -> Result<TuneRequest, String> {
+    use jetcarp_display::host_settings::TuneLimits as L;
+    limit(args.cpu_limit, L::CPU_RANGE, "the processor limit")?;
+    limit(args.gpu_limit, L::GPU_RANGE, "the GPU limit")?;
+    limit(args.fps, L::FPS_RANGE, "the frame rate")?;
+    if !(0.5..=60.0).contains(&args.trial_seconds) {
+        return Err("each size shows for 0.5 to 60 seconds".into());
+    }
+    Ok(TuneRequest {
+        cpu_percent: args.cpu_limit,
+        gpu_percent: args.gpu_limit,
+        fps: args.fps,
+        screen: args.screen,
+        pick: args.pick.as_deref().map(Pick::parse).transpose()?,
+        dry_run: args.dry_run,
+        auto: args.auto,
+    })
+}
+
+/// Asks the running host to sweep on the real screen, and reports its news until it is done.
+fn follow_host(args: &TuneArgs, out: &Out) -> Result<(), String> {
+    let req = request(args)?;
+    let mut ask = json!({"action": "tune", "seconds": args.trial_seconds, "dry_run": req.dry_run});
+    for (k, v) in [
+        ("cpu_limit", req.cpu_percent),
+        ("gpu_limit", req.gpu_percent),
+        ("fps", req.fps),
+    ] {
+        if let Some(v) = v {
+            ask[k] = json!(v);
+        }
+    }
+    if let Some(s) = req.screen {
+        ask["screen"] = json!(s);
+    }
+    if let Some(p) = req.pick {
+        ask["pick"] = json!(p.word());
+    }
+    host_call(&ask)?;
+    let mut seen = 0;
+    let mut crops = vec![];
+    loop {
+        std::thread::sleep(FOLLOW_EVERY);
+        let v = host_call(&json!({"action": "tune_events", "since": seen}))?;
+        let events: Vec<TuneEvent> =
+            serde_json::from_value(v["events"].clone()).map_err(|e| e.to_string())?;
+        seen += events.len();
+        let mut end = None;
+        for e in events {
+            if let TuneEvent::Measured { rung, .. } = &e
+                && let Some(c) = &rung.crop
+            {
+                crops.push(c.clone());
+            }
+            out.event(&e);
+            match e {
+                TuneEvent::Done { .. } => end = Some(Ok(())),
+                TuneEvent::Failed { error } => end = Some(Err(error)),
+                _ => {}
+            }
+        }
+        if let Some(r) = end {
+            copy_crops(&crops, args.crops.as_deref())?;
+            return r;
+        }
+        if v["running"] == false {
+            return Err("the host's sweep ended without saying how".into());
+        }
+    }
+}
+
+/// Copies the named pictures from beside the host's settings into `dir`.
+fn copy_crops(names: &[String], dir: Option<&Path>) -> Result<(), String> {
+    let (Some(dir), Some(from)) = (dir, crops_dir()) else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for n in names {
+        let to = dir.join(n);
+        std::fs::copy(from.join(n), &to).map_err(|e| format!("{}: {e}", to.display()))?;
+    }
+    Ok(())
+}
+
+/// Only one sweep at a time: the app's, the host's and the command line's would measure each
+/// other.
 fn lock() -> Result<std::fs::File, String> {
     let path = jetcarp_mcp::link::runtime_file("tune.lock").ok_or("no runtime folder")?;
     let dir = path.parent().expect("a folder");
@@ -129,7 +241,7 @@ fn lock() -> Result<std::fs::File, String> {
         .map_err(|e| format!("{}: {e}", path.display()))?;
     match f.try_lock() {
         Ok(()) => Ok(f),
-        Err(std::fs::TryLockError::WouldBlock) => Err("a tune is already running".into()),
+        Err(std::fs::TryLockError::WouldBlock) => Err("a sweep is already running".into()),
         Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
     }
 }
@@ -145,27 +257,183 @@ fn limit(x: Option<f32>, range: std::ops::RangeInclusive<f32>, what: &str) -> Re
     }
 }
 
-fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
-    use jetcarp_display::host_settings::TuneLimits as L;
-    limit(args.cpu_limit, L::CPU_RANGE, "the processor limit")?;
-    limit(args.gpu_limit, L::GPU_RANGE, "the GPU limit")?;
-    limit(args.fps, L::FPS_RANGE, "the frame rate")?;
-    if !(0.5..=60.0).contains(&args.trial_seconds) {
-        return Err("trials are 0.5 to 60 seconds".into());
+/// What a sweep needs to know of one scene: its own size, whether it is a placed pattern, and the
+/// sizes to show.
+pub(crate) struct ScenePlan {
+    pub label: String,
+    pub tiling: String,
+    /// Its own cell size, in physical pixels.
+    pub design: f32,
+    pub placed: bool,
+    pub sweep: SceneSweep,
+    pub note: Option<String>,
+}
+
+/// The plan for `slot` on a canvas of `canvas` physical pixels at `scale` pixels per point, its
+/// sizes holding at most `max_cells` cells.
+pub(crate) fn scene_plan(
+    slot: &Slot,
+    lookup: &Lookup,
+    canvas: [f64; 2],
+    scale: f64,
+    max_cells: u64,
+) -> ScenePlan {
+    let design = stage::cell_pixels(slot.profile.cell_px, scale);
+    let (p, scene, _) = profiles::resolve(&slot.profile, &**lookup);
+    let own = Size::px(design);
+    let (sizes, note) = if !profiles::is_lattice(&scene) {
+        // Its own size (as the scene shows it, at its own level), and each other level fitted to
+        // the screen.
+        let own_level = match scene.tiling.size {
+            Some(SizeSpec::Level(l)) => Some(l),
+            _ => Some(jetcarp_core::aperiodic::default_level(&scene.tiling.family)),
+        };
+        let mut v = patch_ladder(&scene.tiling.family, canvas, None, max_cells);
+        v.retain(|s| s.level != own_level);
+        v.push(own);
+        v.sort_by(|a, b| a.px.total_cmp(&b.px));
+        (v, None)
+    } else if p.refill {
+        (lattice_ladder(canvas, design, max_cells), None)
+    } else {
+        (
+            vec![own],
+            Some("not rebuilt to fill the screen, so its cell count is the scene's own".into()),
+        )
+    };
+    ScenePlan {
+        label: slot.label.clone(),
+        tiling: scene.tiling.family.clone(),
+        design,
+        placed: tuning::is_placed(&scene),
+        sweep: SceneSweep::new(sizes, own),
+        note,
     }
+}
+
+/// A tuning that shows the scene labelled `label` (its own size `design`) at `size` on a
+/// `canvas` at `scale`: what a sweep gives a stage for each size. None for the scene's own size.
+pub(crate) fn showing(
+    rotation: &str,
+    canvas: [f64; 2],
+    scale: f64,
+    label: &str,
+    design: f32,
+    size: Size,
+) -> Option<Tuning> {
+    if size.level.is_none() && (size.px - design).abs() < 1e-3 {
+        return None;
+    }
+    Some(Tuning {
+        rotation: rotation.to_string(),
+        canvas: [canvas[0].round() as u32, canvas[1].round() as u32],
+        scale,
+        scenes: vec![TunedScene {
+            scene: label.to_string(),
+            design_px: design,
+            cell_px: size.px,
+            level: size.level,
+            ..Default::default()
+        }],
+        ..Default::default()
+    })
+}
+
+/// The most cells a sweep's sizes hold: the sweep's limit, the host's, and the GPU's buffers'.
+pub(crate) fn max_cells(settings: &HostSettings, gpu: Option<&SharedGpu>) -> u64 {
+    let gpu = gpu.map_or(u64::MAX, |g| {
+        let l = g.device.limits();
+        l.max_storage_buffer_binding_size.min(l.max_buffer_size) / 4
+    });
+    SWEEP_MAX_CELLS.min(settings.max_cells).min(gpu)
+}
+
+/// Saves a size's picture beside the host's settings (and in `extra`), and says its file's name.
+pub(crate) fn save_crop(name: &str, image: &Image, extra: Option<&Path>) -> Option<String> {
+    let png = jetcarp_core::media::encode::png(image).ok()?;
+    let mut saved = false;
+    for dir in [crops_dir(), extra.map(Path::to_path_buf)]
+        .into_iter()
+        .flatten()
+    {
+        if std::fs::create_dir_all(&dir).is_ok() && std::fs::write(dir.join(name), &png).is_ok() {
+            saved = true;
+        }
+    }
+    saved.then(|| name.to_string())
+}
+
+/// Saves one scene's result into `host.json`, read afresh (the settings may have changed while the
+/// sweep ran), for screen `screen` while it still runs `rotation`. Returns the file.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn save_scene(
+    screen: usize,
+    rotation: &str,
+    canvas: [f64; 2],
+    scale: f64,
+    limits: TuneLimits,
+    fps: f32,
+    result: &TunedScene,
+) -> Result<String, String> {
+    let (mut fresh, _) = HostSettings::load();
+    fresh.tune = TuneLimits {
+        auto: fresh.tune.auto,
+        ..limits
+    };
+    if let Some(s) = fresh.screens.get_mut(screen)
+        && s.rotation == rotation
+    {
+        let canvas = [canvas[0].round() as u32, canvas[1].round() as u32];
+        let t = s.tuning.get_or_insert_with(Tuning::default);
+        if t.rotation != rotation || t.canvas != canvas {
+            // Found for another rotation or screen size: start again for this one, but keep the
+            // choices made, for the sweep to keep while they fit.
+            t.scenes.retain(|x| x.chosen);
+        }
+        t.rotation = rotation.to_string();
+        t.canvas = canvas;
+        t.scale = scale;
+        t.limits = limits;
+        t.fps = fps;
+        t.scenes.retain(|x| x.scene != result.scene);
+        t.scenes.push(result.clone());
+    }
+    fresh.save()?;
+    Ok(jetcarp_display::host_settings::config_dir()
+        .map(|d| d.join("host.json").display().to_string())
+        .unwrap_or_default())
+}
+
+/// The scene called `label` as tuned before on screen `screen`, if it was.
+pub(crate) fn tuned_before(
+    settings: &HostSettings,
+    screen: usize,
+    rotation: &str,
+    label: &str,
+) -> Option<TunedScene> {
+    settings
+        .tuning_for(screen, rotation)?
+        .scenes
+        .iter()
+        .find(|s| s.scene == label)
+        .cloned()
+}
+
+fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
+    let req = request(args)?;
     let _lock = lock()?;
     let (mut settings, warning) = HostSettings::load();
     if let Some(w) = warning {
         out.warn(&w);
     }
-    if let Some(x) = args.cpu_limit {
+    if let Some(x) = req.cpu_percent {
         settings.tune.cpu_percent = x;
     }
-    if let Some(x) = args.gpu_limit {
+    if let Some(x) = req.gpu_percent {
         settings.tune.gpu_percent = x;
     }
-    if args.fps.is_some() {
-        settings.tune.fps = args.fps;
+    if req.fps.is_some() {
+        settings.tune.fps = req.fps;
     }
     if crate::power::on_battery() == Some(true) {
         if args.auto {
@@ -188,108 +456,89 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
         gpu: gpu.as_ref().map(|g| g.adapter.get_info().name),
     });
     let mut hold = Hold::start(status.is_some());
+    let most = max_cells(&settings, gpu.as_ref());
     let mut rig = Rig::new(gpu, &settings, jobs.len());
-    let mut found: Vec<(usize, Tuning)> = vec![];
     let mut number = 0;
+    let mut saved = None;
     for job in &jobs {
         let fps = limits.target_fps(job.refresh, settings.fps);
         let scene_limits = SceneLimits::of(&limits, fps, jobs.len());
-        let mut scenes = vec![];
-        for slot in &job.slots {
+        for (k, slot) in job.slots.iter().enumerate() {
             number += 1;
-            let design = stage::cell_pixels(slot.profile.cell_px, job.scale);
-            let fixed = !rig.resizable(&slot.profile);
-            let sizes = if fixed {
-                vec![design]
-            } else {
-                candidates(design, coarsest_px(job.canvas, design))
-            };
-            let result = search(&sizes, &scene_limits, |px| {
+            let mut plan = scene_plan(slot, &rig.lookup, job.canvas, job.scale, most);
+            let mut failed = None;
+            let mut rung = 0;
+            while let Some(size) = plan.sweep.next_size() {
+                rung += 1;
                 hold.renew();
-                out.event(&TuneEvent::Trial {
+                out.event(&TuneEvent::Rung {
                     screen: job.screen,
                     number,
                     of: total,
                     scene: slot.label.clone(),
-                    cell_px: px,
+                    size,
+                    rung,
+                    rungs: plan.sweep.planned(),
                 });
-                let m = rig.trial(job, slot, px, design, args.trial_seconds, &mut || {
+                let tried = rig.trial(job, slot, &plan, size, args.trial_seconds, &mut || {
                     hold.renew()
-                })?;
+                });
+                let (m, shown_px, image) = match tried {
+                    Ok(t) => t,
+                    Err(e) => {
+                        failed = Some(e);
+                        break;
+                    }
+                };
+                let r = plan.sweep.record(size, shown_px, &m, &scene_limits).clone();
+                let name = crop_name(job.screen, &slot.label, &r.size);
+                let crop = image.and_then(|i| save_crop(&name, &i, args.crops.as_deref()));
+                if let Some(last) = plan.sweep.rungs.last_mut() {
+                    last.crop = crop;
+                }
                 out.event(&TuneEvent::Measured {
                     screen: job.screen,
                     scene: slot.label.clone(),
-                    cell_px: px,
-                    measure: m,
-                    over: fits(&m, &scene_limits).err(),
+                    rung: plan.sweep.rungs.last().cloned().unwrap_or(r),
                 });
-                Ok(m)
-            });
-            let t = match result {
-                Ok(f) => {
-                    let mut t = f.tuned(&slot.label, design);
-                    if fixed {
-                        let why = "its size is set by the scene (an aperiodic patch, or not rebuilt to fill the screen), so it runs as it is";
-                        t.note = Some(match t.note {
-                            Some(n) => format!("{n}; {why}"),
-                            None => why.to_string(),
-                        });
-                    }
-                    t
-                }
-                // A scene that cannot be shown is left at its own size.
-                Err(e) => TunedScene {
-                    scene: slot.label.clone(),
-                    design_px: design,
-                    cell_px: design,
-                    note: Some(e),
-                    ..Default::default()
-                },
-            };
+            }
+            let before = tuned_before(&settings, job.screen, &job.rotation, &slot.label);
+            let mut t = tuned_scene(
+                &plan.label,
+                &plan.tiling,
+                plan.design,
+                plan.placed,
+                &plan.sweep,
+                rig.gpu_timing(),
+                req.pick,
+                before.as_ref(),
+            );
+            let notes: Vec<String> = [plan.note.clone(), failed, t.note.clone()]
+                .into_iter()
+                .flatten()
+                .collect();
+            t.note = (!notes.is_empty()).then(|| notes.join("; "));
             out.event(&TuneEvent::Scene {
                 screen: job.screen,
                 result: t.clone(),
             });
-            scenes.push(t);
-        }
-        found.push((
-            job.screen,
-            Tuning {
-                rotation: job.rotation.clone(),
-                canvas: [job.canvas[0].round() as u32, job.canvas[1].round() as u32],
-                scale: job.scale,
-                limits,
-                fps,
-                scenes,
-            },
-        ));
-    }
-    let saved = if args.dry_run {
-        None
-    } else {
-        // Read again: the settings may have changed while it ran.
-        let (mut fresh, _) = HostSettings::load();
-        fresh.tune = jetcarp_display::host_settings::TuneLimits {
-            auto: fresh.tune.auto,
-            ..limits
-        };
-        for (i, t) in found {
-            if let Some(s) = fresh.screens.get_mut(i)
-                && s.rotation == t.rotation
-            {
-                s.tuning = Some(t);
+            if !req.dry_run {
+                saved = Some(save_scene(
+                    job.screen,
+                    &job.rotation,
+                    job.canvas,
+                    job.scale,
+                    limits,
+                    fps,
+                    &t,
+                )?);
             }
+            let _ = k;
         }
-        fresh.save()?;
-        if status.is_some() {
-            let _ = host_call(&json!({"action": "reload"}));
-        }
-        Some(
-            jetcarp_display::host_settings::config_dir()
-                .map(|d| d.join("host.json").display().to_string())
-                .unwrap_or_default(),
-        )
-    };
+    }
+    if saved.is_some() && status.is_some() {
+        let _ = host_call(&json!({"action": "reload"}));
+    }
     drop(hold);
     out.event(&TuneEvent::Done {
         saved,
@@ -299,7 +548,7 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
     Ok(())
 }
 
-/// The screens to tune, each with its size and its rotation's scenes.
+/// The screens to sweep, each with its size and its rotation's scenes.
 fn plan(
     settings: &HostSettings,
     args: &TuneArgs,
@@ -469,7 +718,7 @@ impl Drop for Hold {
 /// host's GPU can run it, and the GPU policy says so (automatic: when the GPU is worth it for a
 /// world of this size, [`GpuSim::worth`]). A trial left on the processor is held to the
 /// processor limit like any other.
-fn steps_on_gpu(profile: &Profile, sim: &SimBackend, world: &World) -> bool {
+pub(crate) fn steps_on_gpu(profile: &Profile, sim: &SimBackend, world: &World) -> bool {
     let paced = profile.speed > 0.0;
     profile.gpu
         && sim.available()
@@ -616,24 +865,18 @@ impl Rig {
         }
     }
 
-    /// Whether the scene's cell count follows its cell size: a periodic tiling rebuilt to fill
-    /// the screen.
-    fn resizable(&self, p: &Profile) -> bool {
-        let (p, scene, _) = profiles::resolve(p, &*self.lookup);
-        p.refill && profiles::is_lattice(&scene)
-    }
-
-    /// Runs `slot` at `px` pixels a cell (its own size is `design`) for `seconds`, as the host
-    /// would, and measures it. `renew` is called while a big world builds.
+    /// Shows `slot` at `size` for `seconds`, as the host would, and measures the last three
+    /// quarters of them. Returns what it measured, the size its cells showed at, and a picture of
+    /// the middle of the last frame. `renew` is called while a big world builds.
     fn trial(
         &mut self,
         job: &Job,
         slot: &Slot,
-        px: f32,
-        design: f32,
+        plan: &ScenePlan,
+        size: Size,
         seconds: f64,
         renew: &mut dyn FnMut(),
-    ) -> Result<Measure, String> {
+    ) -> Result<(Measure, f32, Option<Image>), String> {
         let mut slot = slot.clone();
         slot.end.clear();
         slot.schedule = None;
@@ -651,20 +894,14 @@ impl Rig {
             self.settings.max_cells,
         )?;
         stage.resize(job.canvas, job.scale, 0.0);
-        if px > design {
-            stage.set_tuned(Some(Tuning {
-                rotation: job.rotation.clone(),
-                canvas: [job.canvas[0].round() as u32, job.canvas[1].round() as u32],
-                scale: job.scale,
-                scenes: vec![TunedScene {
-                    scene: slot.label.clone(),
-                    design_px: design,
-                    cell_px: px,
-                    ..Default::default()
-                }],
-                ..Default::default()
-            }));
-        }
+        stage.set_tuned(showing(
+            &job.rotation,
+            job.canvas,
+            job.scale,
+            &plan.label,
+            plan.design,
+            size,
+        ));
         let fps = self.settings.fps.max(1.0) as f64;
         let interval = Duration::from_secs_f64(1.0 / fps);
         let budget = Duration::from_secs_f64(STEP_SHARE as f64 / fps / self.screens.max(1) as f64);
@@ -707,7 +944,7 @@ impl Rig {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                 view_formats: &[],
             });
             let view = tex.create_view(&Default::default());
@@ -782,7 +1019,8 @@ impl Rig {
         };
         let k0 = crate::power::process_gpu_time();
         let warm = Instant::now();
-        while warm.elapsed().as_secs_f64() < WARMUP {
+        let warm_for = warmup(seconds);
+        while warm.elapsed().as_secs_f64() < warm_for {
             frame(&mut stage, &mut self.sim, self.clock);
         }
         if self.clock == Clock::Undecided {
@@ -801,7 +1039,7 @@ impl Rig {
         let counted0 = crate::power::process_gpu_time();
         let m0 = Instant::now();
         let (mut times, mut gpu_total) = (vec![], 0.0);
-        while m0.elapsed().as_secs_f64() < seconds {
+        while m0.elapsed().as_secs_f64() < seconds - warm_for {
             let (t, g) = frame(&mut stage, &mut self.sim, clock);
             times.push(t);
             gpu_total += g;
@@ -813,7 +1051,22 @@ impl Rig {
         {
             gpu_total = b.saturating_sub(a).as_secs_f64();
         }
+        let image = match (&self.gpu, &draw) {
+            (Some(g), Some((_, tex, _))) => {
+                let size = crop_size(job.canvas);
+                jetcarp_display::crop::read(
+                    &g.device,
+                    &g.queue,
+                    tex,
+                    jetcarp_display::crop::middle(canvas, size),
+                    size,
+                )
+            }
+            _ => None,
+        };
         drop(draw);
+        let shown_px = stage.status().cell_px;
+        let frames = times.len() as f64;
         let gens_done = stage
             .world()
             .map_or(0, |w| w.generation)
@@ -821,19 +1074,21 @@ impl Rig {
         let speed = slot.profile.speed as f64;
         let on_gpu = matches!(self.sim.status(), SimStatus::Gpu(_));
         let gpu_timing = self.gpu_timing();
-        Ok(Measure {
+        let m = Measure {
             cpu,
             gpu: self
                 .gpu
                 .as_ref()
                 .map(|_| (gpu_total / wall).clamp(0.0, 1.0)),
             p95: p95(&mut times),
+            fps: frames / wall.max(1e-9),
             gens_wanted: (speed > 0.0).then_some(speed * wall),
             gens_done,
             on_gpu,
             gpu_timing,
             cells,
-        })
+        };
+        Ok((m, shown_px, image))
     }
 }
 
