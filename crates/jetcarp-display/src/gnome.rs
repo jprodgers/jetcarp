@@ -81,7 +81,7 @@ fn parse_state(reply: &str) -> Option<f64> {
     rest.split('>').next()?.trim().parse().ok()
 }
 
-/// GNOME 50's meaning for the state numbers (`ExtensionState` in `extensionUtils.js`).
+/// GNOME 50's and 51's meaning for the state numbers (`ExtensionState` in `extensionUtils.js`).
 fn state_word(n: f64) -> &'static str {
     match n as i32 {
         2 => "it is switched off",

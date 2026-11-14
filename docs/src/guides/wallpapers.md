@@ -22,7 +22,7 @@ setup, see [Your first live wallpaper](../tutorials/first-wallpaper.md).
 | --- | --- | --- | --- | --- |
 | Screensaver mode in the app | Yes | Yes | Yes | Yes |
 | Background host in a window | Yes | Yes | Yes | Yes |
-| Live desktop background | With JETCARP's GNOME extension (GNOME Shell 50) | No: the host shows a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space |
+| Live desktop background | With JETCARP's GNOME extension (GNOME Shell 50 or 51) | No: the host shows a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space |
 | Live lock screen | Yes, through the extension | No | No | No |
 | In the system's screen saver list | No (use the lock screen instead) | No | Yes (`JETCARP.scr`) | Yes (`JETCARP.saver`) |
 | Menu for the host | In the top bar, from the extension | None | In the notification area | In the menu bar |
@@ -177,7 +177,7 @@ other screen claims, and `jetcarp host wallpaper off` turns the screens back int
 
 **GNOME** needs JETCARP's GNOME Shell extension, *JETCARP live desktop*, which shows the host's
 windows as the background of the desktop, the overview and the lock screen, and adds the top-bar menu.
-It supports GNOME Shell 50.
+It supports GNOME Shell 50 and 51.
 
 ```text
 jetcarp host gnome install    # copy it into place and switch it on; log out and back in once

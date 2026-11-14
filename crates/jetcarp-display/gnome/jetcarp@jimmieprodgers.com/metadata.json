@@ -2,6 +2,6 @@
   "uuid": "jetcarp@jimmieprodgers.com",
   "name": "JETCARP live desktop",
   "description": "Shows the JETCARP background host's live cellular automata as the desktop and lock-screen background, with a top-bar menu to control it.",
-  "shell-version": ["50"],
+  "shell-version": ["50", "51"],
   "session-modes": ["user", "unlock-dialog"]
 }

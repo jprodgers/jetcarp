@@ -353,6 +353,12 @@ export default class JetcarpDesktop extends Extension {
         // before its title arrives, so every window is watched for title changes, not just checked
         // once when it is created. The method overrides further down still apply, both for the
         // places this flag does not reach and for Mutter versions without it.
+        //
+        // Mutter refuses to minimize a skip-taskbar window (meta_window_recalc_features(), Mutter
+        // 49 and 50), and the flag makes a window skip-taskbar. So a host window gets the flag only
+        // once _settleWindows() has minimized it, and gives it up if it is unminimized, so that it
+        // can be minimized again. Flagged first, the window was never minimized: it stayed up as
+        // a fullscreen window, and GNOME counted the desktop as covered by a fullscreen app.
         this._undoWindowList = null;
         const windowProto = Meta.Window.prototype;
         if (typeof windowProto.hide_from_window_list === 'function' &&
@@ -362,12 +368,12 @@ export default class JetcarpDesktop extends Extension {
             const watched = new Map(); // window -> its signal handler ids
 
             const sync = win => {
-                const host = isHostWindow(win);
+                const host = isHostWindow(win) && win.minimized;
                 if (host && !flagged.has(win)) {
                     win.hide_from_window_list();
                     flagged.add(win);
                 } else if (!host && flagged.has(win)) {
-                    // The tag was removed again: give the window back.
+                    // Unminimized, or the tag was removed again: give the window back.
                     win.show_in_window_list();
                     flagged.delete(win);
                 }
@@ -383,6 +389,7 @@ export default class JetcarpDesktop extends Extension {
                     return;
                 watched.set(win, [
                     win.connect('notify::title', () => sync(win)),
+                    win.connect('notify::minimized', () => sync(win)),
                     win.connect('unmanaged', () => forget(win)),
                 ]);
                 sync(win);
@@ -636,13 +643,16 @@ export default class JetcarpDesktop extends Extension {
         this._holds.dark = active && (tag.lock === 'off' || black === true);
     }
 
-    // The host need not draw for a monitor a fullscreen app covers.
+    // The host need not draw for a monitor a fullscreen app covers. A host window is fullscreen
+    // itself, so until it is minimized GNOME counts its monitor as covered: nothing is held then.
     _syncCovered(renderers) {
         const display = global.display;
         const monitors = renderers.some(a => tagOf(a.meta_window).all)
             ? [...Array(display.get_n_monitors()).keys()]
             : renderers.map(a => a.meta_window.get_monitor());
-        this._holds.covered = Main.sessionMode.currentMode === 'user' && monitors.length > 0 &&
+        const settled = renderers.every(a => a.meta_window.minimized);
+        this._holds.covered = Main.sessionMode.currentMode === 'user' && settled &&
+            monitors.length > 0 &&
             monitors.every(m => m >= 0 && display.get_monitor_in_fullscreen(m));
     }
 

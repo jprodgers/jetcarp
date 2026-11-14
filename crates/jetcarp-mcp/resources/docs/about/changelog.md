@@ -5,6 +5,21 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
+## [Unreleased]
+
+### Fixed
+
+- **The live desktop works on GNOME 51 (Fedora 45).** The GNOME extension claimed only GNOME
+  Shell 50, so GNOME 51 would not load it and the host waited for it with nothing on the desktop.
+  ([#2](https://github.com/jprodgers/jetcarp/issues/2))
+- **The GNOME live desktop stood still on the desktop and ran only behind other windows.** The
+  extension took the host's window out of the window lists before hiding it, and GNOME will not
+  minimize a window that is out of the window lists. The window stayed up, full screen, so GNOME
+  counted the desktop as covered by a full screen app and the host paused whenever the desktop
+  showed. The window is now hidden first. ([#2](https://github.com/jprodgers/jetcarp/issues/2))
+
+  For both, run `jetcarp host gnome install` after upgrading, then log out and back in once.
+
 ## [0.4.1] – 2026-11-13
 
 ### Fixed
