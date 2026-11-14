@@ -190,6 +190,11 @@ jetcarp host gnome status     # "The GNOME extension is running."
 jetcarp host gnome remove
 ```
 
+Upgrading JETCARP upgrades the extension: the host, when it starts, and any `jetcarp host` command
+bring an installed extension up to the program's version, and leave it switched off if you switched it
+off. GNOME reads extensions at login, so log out and back in once after upgrading; until then
+`jetcarp host gnome status` says that GNOME is still running the older version.
+
 The *Background host* section shows the same status, with an *Install* button. Without the extension
 the host shows a plain window and says why, so nothing is left covering the desktop. The extension
 only places copies of the host's picture in GNOME's background; it takes no part in unlocking, and if

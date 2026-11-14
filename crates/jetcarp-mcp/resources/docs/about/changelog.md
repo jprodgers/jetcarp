@@ -18,7 +18,22 @@ that will declare them stable.
   counted the desktop as covered by a full screen app and the host paused whenever the desktop
   showed. The window is now hidden first. ([#2](https://github.com/jprodgers/jetcarp/issues/2))
 
-  For both, run `jetcarp host gnome install` after upgrading, then log out and back in once.
+  For both, log out and back in once after upgrading (see below).
+- **A CPU-only explore search never confirmed its elites, and ran only about a quarter of the
+  candidates it made.** The search works in steps of 2 seconds, and a round of runs on the
+  processor nearly always outlasts one; the step's deadline was checked inside the round, so the
+  candidates not yet started were dropped and the confirmation every fourth round never came.
+  Searches of families that run only on the processor (JACA, and every family on a computer without
+  a GPU) now confirm their best runs on bigger grids, and run every candidate. A round under way now
+  runs to its end; a stop still takes effect within moments.
+  ([#3](https://github.com/jprodgers/jetcarp/issues/3))
+
+### Changed
+
+- **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
+  `jetcarp host` command bring an installed extension up to the program's version (an extension you
+  have switched off stays off). GNOME loads the new files at the next login, so log out and back in
+  once after upgrading; until then `jetcarp host gnome status` says that an older version is running.
 
 ## [0.4.1] – 2026-11-13
 

@@ -147,6 +147,21 @@ pub fn run_scr(args: &[String]) {
     }
 }
 
+/// Brings an installed GNOME extension up to this version's files, so an upgrade of JETCARP
+/// upgrades its extension too (GNOME Shell loads them at the next login).
+fn refresh_gnome_extension() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    match jetcarp_display::gnome::refresh() {
+        Ok(true) => say!(
+            "jetcarp-host: updated the GNOME extension to this version's; GNOME loads it at the next login"
+        ),
+        Ok(false) => {}
+        Err(e) => say!("jetcarp-host: could not update the GNOME extension: {e}"),
+    }
+}
+
 /// Runs the host until it is told to quit (or `--seconds` pass), then ends the process.
 pub fn run(args: HostArgs) -> ! {
     if args.saver {
@@ -164,6 +179,7 @@ pub fn run(args: HostArgs) -> ! {
         // The GNOME menu and the screen saver start the host with this command.
         let _ = jetcarp_display::autostart::record_host_program(&cmd);
     }
+    refresh_gnome_extension();
     let mut core = match core::Core::new(args.rotation, args.headless.then_some(args.canvas)) {
         Ok(c) => c,
         Err(e) => {

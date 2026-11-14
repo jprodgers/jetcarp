@@ -360,6 +360,24 @@ fn gone_soon() -> bool {
 
 pub fn run(a: HostArgs) -> Result<()> {
     let j = a.json;
+    // After an upgrade the host still running is the old program until it restarts; any host
+    // command brings an installed GNOME extension up to this version's files meanwhile, so the
+    // next login loads it (the host does the same when it starts).
+    if cfg!(target_os = "linux")
+        && !matches!(
+            a.cmd,
+            HostCmd::Serve(_)
+                | HostCmd::Gnome {
+                    action: GnomeAction::Install | GnomeAction::Remove
+                }
+        )
+        && let Ok(true) = gnome::refresh()
+    {
+        eprintln!(
+            "updated the GNOME extension to JETCARP {}'s; log out and back in once to load it",
+            env!("CARGO_PKG_VERSION")
+        );
+    }
     match a.cmd {
         HostCmd::Serve(args) => jetcarp_host::run(args),
         HostCmd::Scr { args } => {
