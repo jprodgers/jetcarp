@@ -2184,16 +2184,19 @@ mod tests {
     /// never run and the confirmation every fourth round never came.
     #[test]
     fn a_cpu_search_confirms_its_elites_when_rounds_outlast_their_steps() {
-        let s = Search::new(quick(400), Saved::default()).unwrap();
+        // Runs of 3,000 generations take milliseconds each, so a round of them outlasts its 2 ms
+        // step, as rounds outlast the driver's 2 s steps. A step on a slow machine may end before
+        // a round starts at all, so it steps until a confirmation comes (or a minute passes).
+        let s = Search::new(quick(3000), Saved::default()).unwrap();
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(2)
             .build()
             .unwrap();
         let stop = AtomicBool::new(false);
-        // Steps of a millisecond: every round outlasts its step, as the driver's steps go.
-        for _ in 0..12 {
+        let t0 = Instant::now();
+        while s.confirmed() == 0 && t0.elapsed() < Duration::from_secs(60) {
             let lim = StepLimits {
-                until: Instant::now() + Duration::from_millis(1),
+                until: Instant::now() + Duration::from_millis(2),
                 end: None,
                 stop: &stop,
                 max_screened: None,

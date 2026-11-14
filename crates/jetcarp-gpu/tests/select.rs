@@ -3,6 +3,19 @@
 
 use jetcarp_gpu::select::{self, Policy, Purpose, Want};
 
+/// Windows' software renderer, which the GPU simulation never uses.
+fn is_warp(info: &wgpu::AdapterInfo) -> bool {
+    info.name.contains("Microsoft Basic Render Driver")
+}
+
+/// A software adapter the GPU simulation would use when asked (not WARP).
+fn usable_software(all: &[wgpu::Adapter]) -> bool {
+    all.iter().any(|a| {
+        let i = a.get_info();
+        i.device_type == wgpu::DeviceType::Cpu && !is_warp(&i)
+    })
+}
+
 fn adapters() -> Vec<wgpu::Adapter> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -30,12 +43,16 @@ fn the_compute_choice_passes_the_self_test() {
     );
     assert!(t.passed, "{}", t.note);
     assert!(c.usable.is_ok());
-    if policy.want == Want::Software {
+    if policy.want == Want::Software && usable_software(&adapters()) {
         assert_eq!(
             c.info.device_type,
             wgpu::DeviceType::Cpu,
             "asked for software"
         );
+    } else if policy.want == Want::Software {
+        // No software adapter it would use (macOS has none; Windows has only WARP): the best
+        // adapter there is, saying so.
+        assert!(c.why.contains("no software adapter"), "{}", c.why);
     } else {
         assert_ne!(
             c.info.device_type,
@@ -81,6 +98,16 @@ fn software_adapters_need_asking_for() {
     let auto = select::pick_from(&all, &Policy::from_env("auto"), Purpose::Compute, None);
     if let Ok(c) = &auto {
         assert_ne!(c.info.device_type, wgpu::DeviceType::Cpu);
+    }
+    if !usable_software(&all) {
+        // Windows' WARP only (as on CI's Windows runners): never used, even when asked, and the
+        // refusal says why when there is no hardware adapter either.
+        if let Err(e) =
+            select::pick_from(&all, &Policy::from_env("software"), Purpose::Compute, None)
+        {
+            assert!(e.contains("WARP"), "{e}");
+        }
+        return;
     }
     let c = select::pick_from(&all, &Policy::from_env("software"), Purpose::Compute, None)
         .expect("a software adapter when asked for");

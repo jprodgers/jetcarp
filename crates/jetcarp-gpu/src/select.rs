@@ -554,8 +554,18 @@ pub fn pick_from(
         return Ok(choice);
     }
     let reason = if refused.is_empty() {
-        "no hardware graphics adapter (software ones are used only with JETCARP_GPU=software)"
-            .to_string()
+        if matches!(policy.want, Want::Software) {
+            if all.iter().any(|a| is_warp(&a.get_info())) {
+                "no hardware graphics adapter, and the only software one is Windows' WARP, which \
+                 the GPU simulation never uses"
+                    .to_string()
+            } else {
+                "no graphics adapter the GPU simulation can use".to_string()
+            }
+        } else {
+            "no hardware graphics adapter (software ones are used only with JETCARP_GPU=software)"
+                .to_string()
+        }
     } else {
         refused.join("; ")
     };
