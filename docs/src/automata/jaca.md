@@ -113,7 +113,9 @@ written with commas, as in other B/S rules.
 
 JACA uses only neighbour counts and neighbourhood steps, so it runs on every tiling (see
 [How JETCARP generalises automata](generalising.md)); the blast radius is measured in steps of the
-automaton's own neighbourhood. It runs on the CPU; there is no GPU or HashLife version yet.
+automaton's own neighbourhood. In the app and in scripts a JACA world runs on the CPU (there is no GPU
+or HashLife version of one yet); the explore search runs JACA on the GPU, in its batches, when it
+is given one (`--gpu`).
 
 ### Seeds, colours and counts
 

@@ -23,10 +23,14 @@ that will declare them stable.
   candidates it made.** The search works in steps of 2 seconds, and a round of runs on the
   processor nearly always outlasts one; the step's deadline was checked inside the round, so the
   candidates not yet started were dropped and the confirmation every fourth round never came.
-  Searches of families that run only on the processor (JACA, and every family on a computer without
-  a GPU) now confirm their best runs on bigger grids, and run every candidate. A round under way now
+  Searches run without a GPU (every family on a computer without one, or a search started without
+  `--gpu`), and the families that only ever run on the processor (turmites, layered and elementary
+  rules among them), now confirm their best runs on bigger grids, and run every candidate. A round under way now
   runs to its end; a stop still takes effect within moments.
   ([#3](https://github.com/jprodgers/jetcarp/issues/3))
+- **The JACA page said JACA runs only on the CPU.** That is true of a JACA world in the app and in
+  scripts, but the explore search runs JACA on the GPU, in its batches, when given one; the page now
+  says so. ([#9](https://github.com/jprodgers/jetcarp/issues/9))
 - **A stale example script is gone.** `explore-supervise.sh`, beside the example scripts in the
   scripting crate's source, called `jetcarp explore run`, a command of JETCARP's predecessor, so it
   failed at once. An explore search stops on time by itself and carries on from its archive after a
