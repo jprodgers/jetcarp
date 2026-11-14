@@ -498,6 +498,96 @@ fn margolus_rules() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Larger than Life
+
+const LTL: &[&str] = &[
+    "R5,C2,S33-57,B34-45",
+    "R2,C2,S5-9,B7-8",
+    "R3,C2,S2,B3,N+",
+    "R1,C2,S0,B1,NN",
+    "R4,C2,S40-80,B41-80",
+    "R2,C5,S4-8,B5-6",
+    "R10,C255,S1-2,B3",
+    "R3,C2,S0-4,B0-2",
+];
+
+#[test]
+fn ltl_on_lattices() {
+    let Some(mut sim) = gpu() else { return };
+    for &(fam, w, h) in &[
+        ("square", 48, 40),
+        ("hex", 30, 24),
+        ("triangle", 24, 20),
+        ("cairo", 14, 12),
+    ] {
+        for b in BOUNDARIES {
+            for &rule in LTL {
+                let sc = scene(
+                    TilingSpec::rect(fam, w, h, b),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.45 })],
+                );
+                let what = format!("{rule} on {fam} {b:?}");
+                if rule.ends_with("N+") && fam != "square" {
+                    // The cross needs the square grid.
+                    assert!(World::from_scene(&sc).is_err(), "{what}");
+                    continue;
+                }
+                compare_gpu(&mut sim, &sc, &[1, 2, 13, 60], &what);
+            }
+        }
+    }
+    // A reach wider than the torus wraps onto itself.
+    let sc = scene(
+        TilingSpec::rect("square", 12, 9, Boundary::Wrap),
+        vec![ca(
+            "R10,C2,S100-200,B120-180",
+            None,
+            SeedSpec::Random { density: 0.5 },
+        )],
+    );
+    compare_gpu(&mut sim, &sc, &[1, 20, 80], "R10 on a small torus");
+}
+
+#[test]
+fn ltl_on_patches() {
+    let Some(mut sim) = gpu() else { return };
+    for rule in [
+        "R2,C2,S5-9,B7-8",
+        "R3,C2,S8-20,B10-14,NN",
+        "R2,C4,S3-9,B4-8",
+    ] {
+        let t = TilingSpec::new("spectre").with_size(SizeSpec::Level(4));
+        let sc = scene(t, vec![ca(rule, None, SeedSpec::Random { density: 0.45 })]);
+        compare_gpu(
+            &mut sim,
+            &sc,
+            &[1, 5, 40, 150],
+            &format!("{rule} on spectre"),
+        );
+    }
+    // Two LtL CAs with different reaches, and a script between them.
+    let mut sc = scene(
+        TilingSpec::rect("square", 50, 40, Boundary::Wrap),
+        vec![
+            ca(
+                "R5,C2,S33-57,B34-45",
+                None,
+                SeedSpec::Random { density: 0.45 },
+            ),
+            ca("R2,C3,S5-9,B7-8", None, SeedSpec::Random { density: 0.4 }).private(),
+        ],
+    );
+    sc.script = Some(script(
+        vec![
+            (vec![1], Trigger::Generations { n: 30 }, None),
+            (vec![1, 2], Trigger::Repeats { max_period: 10 }, Some(70)),
+        ],
+        true,
+    ));
+    compare_gpu(&mut sim, &sc, &[1, 9, 64, 300], "two LtL CAs in a script");
+}
+
+// ---------------------------------------------------------------------------------------------
 // Quick Start
 
 /// Every Quick Start entry of these families, at preview size, on the GPU like the CPU.
@@ -507,6 +597,7 @@ fn quick_start_entries() {
     let ours = |r: &Rule| match r {
         Rule::Jaca(_) | Rule::Margolus(_) => true,
         Rule::LifeLike { birth, .. } => birth & 1 == 1,
+        Rule::Ltl(_) => true,
         _ => false,
     };
     let mut counts = std::collections::BTreeMap::<String, (u32, u32)>::new();

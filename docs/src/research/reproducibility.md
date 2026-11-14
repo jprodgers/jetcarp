@@ -112,6 +112,7 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   (which must fall back to the CPU, never run differently).
 - **More families** (`families.rs`): JACA (with blast radii 0 to 64, its glow and its counts),
   B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
+  Larger than Life on lattices and patches,
   on lattices and patches with every edge, through scripts, reseeds and period detection, and
   every Quick Start entry of these families. Everything the state hash covers must agree, and so
   must JACA's glow and counts.

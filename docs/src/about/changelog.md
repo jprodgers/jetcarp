@@ -62,6 +62,9 @@ that will declare them stable.
   AMD Radeon 8060S a 1-million-cell JACA world runs about 48 times as fast as on 32 CPU threads.
 - **B0 Life-like rules and Margolus blocks run on the GPU,** in the app and the background host,
   with the CPU's results. Both depend on the step count's parity, which the GPU now keeps.
+- **Larger than Life runs on the GPU,** on lattices and on aperiodic patches, in the app and the
+  background host, with the CPU's results. A range-5 rule on a million cells runs about 40 times as
+  fast.
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in

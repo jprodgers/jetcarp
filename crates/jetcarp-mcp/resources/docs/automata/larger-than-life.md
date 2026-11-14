@@ -101,6 +101,10 @@ touch neighbours" and von Neumann means "within `r` steps over edge neighbours".
 these definitions give exactly the box and the diamond, and range 1 is checked to equal Life. The
 cross shape has no such reading and stays on the square grid.
 
+Larger than Life runs on the GPU in the app and in the background host, with exactly the CPU's
+result, on lattices and on aperiodic patches. On a patch each tile keeps its own list of the tiles
+in reach; a patch whose lists would pass 67 million entries in all runs on the CPU.
+
 Neighbourhood sizes change with the tiling, so a rule's thresholds usually need adjusting when it
 moves. On the hat, below, Bosco's thresholds are scaled down by a quarter, and bug-like hollow
 blobs appear on an aperiodic tiling.

@@ -6,6 +6,7 @@
 //!   hodgepodge, the Spectre glider, and priority tables (`jetcarp search evolve`)
 //! - JACA, with its annihilation glow and counts
 //! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
+//! - Larger than Life, its reach in an aux buffer
 //!
 //! Results are bit-identical to the CPU steppers in `jetcarp-core`: everything the state hash
 //! covers, and JACA's glow and counts. The engine keeps every piece of bookkeeping (see
@@ -23,11 +24,13 @@
 //!   [`GpuSim::check`]; the caller runs those worlds on the CPU.
 
 use jetcarp_core::jaca::JacaRule;
+use jetcarp_core::ltl::{Hood, Reach};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::world::{ExternalPlan, GenMetrics, Halt};
 use jetcarp_core::{Storage, Topology, World};
 use rayon::prelude::*;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 pub mod pile;
@@ -53,11 +56,14 @@ const MAX_ACT_HALTS: usize = 4;
 const STAT_BASE: usize = CTRL_HEADER + 4 * MAX_BATCH as usize;
 /// "No statistics slot" in [`Params::stat`].
 const NONE: u32 = u32::MAX;
+/// Entries a patch's Larger than Life reach may have (one word each on the GPU): 256 MB.
+const REACH_CAP: usize = 1 << 26;
 
 // Rule codes, as in sim.wgsl.
 const R_JACA: u32 = 7;
 const R_B0: u32 = 8;
 const R_MARGOLUS: u32 = 9;
+const R_LTL: u32 = 10;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -145,6 +151,21 @@ const FLAG_COMPARE: u32 = 1;
 const FLAG_POP: u32 = 2;
 const FLAG_CHANGES: u32 = 4;
 
+/// Larger than Life's birth and survival tables as bitsets of equal length, long enough for
+/// counts up to `max` (the most cells any cell reaches; counts past the CPU's tables are false).
+fn ltl_table(l: &jetcarp_core::ltl::LtlRule, max: u32) -> Vec<u32> {
+    let words = (max as usize + 1).div_ceil(32);
+    let mut out = Vec::with_capacity(2 * words);
+    for v in [&l.birth, &l.survive] {
+        out.extend((0..words).map(|w| {
+            (0..32).fold(0u32, |a, b| {
+                a | (v.get(w * 32 + b).copied().unwrap_or(false) as u32) << b
+            })
+        }));
+    }
+    out
+}
+
 /// Shader dispatches one step of this rule takes: JACA with a blast radius runs a contact pass and
 /// one pass per neighbourhood step of the blast before the step itself.
 fn passes(p: &Params) -> usize {
@@ -220,6 +241,8 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
                 p.table[0][k / 4] |= (b as u32) << (8 * (k % 4));
             }
         }
+        // The reach and tables go to the aux buffer (see `GpuSim::prepare_aux`).
+        Rule::Ltl(ref l) => (p.rule, p.states) = (R_LTL, l.states as u32),
         _ => return Err(()),
     }
     Ok(p)
@@ -262,6 +285,28 @@ struct GpuField {
     glow_owner: Option<u32>,
 }
 
+/// One section of the aux buffer.
+#[derive(Clone, PartialEq)]
+enum AuxKey {
+    /// A Larger than Life reach: neighbourhood (0 Moore, 1 von Neumann, 2 cross) and range.
+    Reach(u8, u8),
+    /// Larger than Life birth and survival bits.
+    Table(Vec<u32>),
+}
+
+/// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
+struct ReachSec {
+    words: Vec<u32>,
+    max: u32,
+}
+
+/// Reaches built for one topology (held weakly, so a world's old tiling is freed), by
+/// (neighbourhood, range).
+type ReachCache = Option<(
+    Weak<Topology>,
+    HashMap<(u8, u8), Result<Arc<ReachSec>, String>>,
+)>;
+
 struct Resident {
     topo: Arc<Topology>,
     bind0: wgpu::BindGroup,
@@ -269,9 +314,12 @@ struct Resident {
     gx: u32,
     fields: Vec<Option<GpuField>>,
     rev: u64,
-    /// The aux buffer, bound as group 2: room for JACA's blast zone (`zone_words`: 2n when a
-    /// blast runs).
+    /// The aux buffer, bound as group 2: the sections in `aux_keys` (at `aux_at`), `aux_len`
+    /// words in all, then room for JACA's blast zone (`zone_words`: 2n when a blast runs).
     aux: wgpu::Buffer,
+    aux_keys: Vec<AuxKey>,
+    aux_at: Vec<u32>,
+    aux_len: u32,
     zone_words: usize,
     bind2: wgpu::BindGroup,
 }
@@ -291,6 +339,7 @@ pub struct GpuSim {
     control: wgpu::ComputePipeline,
     contact: wgpu::ComputePipeline,
     dilate: wgpu::ComputePipeline,
+    reaches: Mutex<ReachCache>,
     /// Applies reseed edits to a resident field (`edit.wgsl`).
     edit: wgpu::ComputePipeline,
     layout_e: wgpu::BindGroupLayout,
@@ -479,6 +528,7 @@ impl GpuSim {
             control,
             contact,
             dilate,
+            reaches: Mutex::new(None),
             edit,
             layout_e,
             params,
@@ -541,6 +591,10 @@ impl GpuSim {
                 Rule::Margolus(_) if world.topo.rows().is_none() => {
                     return Err("Margolus rules on this tiling run on the CPU".into());
                 }
+                Rule::Ltl(ref l) => {
+                    self.reach(&world.topo, l.hood, l.range)
+                        .map_err(|e| format!("{}: {e}", cpu_only()))?;
+                }
                 _ => {}
             }
             subs[ca.field] += ca.steps_per_gen as usize;
@@ -573,26 +627,113 @@ impl GpuSim {
         Ok(())
     }
 
-    /// Make the aux buffer big enough for JACA's blast zone (two halves of n words).
+    /// A Larger than Life reach for the shader, built once per topology: on a lattice, per tile
+    /// type a (start, count) pair, then the offsets as (di, dj, type); on a patch, a CSR (n + 1
+    /// offsets, then the cells), at most [`REACH_CAP`] cells.
+    fn reach(&self, topo: &Arc<Topology>, hood: Hood, r: u8) -> Result<Arc<ReachSec>, String> {
+        let mut cache = self.reaches.lock().unwrap_or_else(|e| e.into_inner());
+        let same =
+            |(t, _): &(Weak<Topology>, _)| t.upgrade().is_some_and(|t| Arc::ptr_eq(&t, topo));
+        if !cache.as_ref().is_some_and(same) {
+            *cache = Some((Arc::downgrade(topo), HashMap::new()));
+        }
+        let map = &mut cache.as_mut().unwrap().1;
+        let key = (hood as u8, r);
+        map.entry(key)
+            .or_insert_with(|| {
+                let words_max = match jetcarp_core::ltl::reach(topo, hood, r)? {
+                    Reach::Lattice(per) => {
+                        let mut w = Vec::new();
+                        let mut start = 0u32;
+                        for list in &per {
+                            w.extend_from_slice(&[start, list.len() as u32]);
+                            start += list.len() as u32;
+                        }
+                        for o in per.iter().flatten() {
+                            w.extend_from_slice(&[o.di as u32, o.dj as u32, o.k]);
+                        }
+                        let max = per.iter().map(|l| l.len()).max().unwrap_or(0) as u32;
+                        (w, max)
+                    }
+                    Reach::Explicit(csr) => {
+                        if csr.nb.len() > REACH_CAP.min(self.max_cells) {
+                            return Err(format!(
+                                "its reach on this patch has {} entries, more than the GPU takes ({})",
+                                csr.nb.len(),
+                                REACH_CAP.min(self.max_cells)
+                            ));
+                        }
+                        let max = csr.off.windows(2).map(|w| w[1] - w[0]).max().unwrap_or(0);
+                        let mut w = csr.off;
+                        w.extend_from_slice(&csr.nb);
+                        (w, max)
+                    }
+                };
+                Ok(Arc::new(ReachSec {
+                    words: words_max.0,
+                    max: words_max.1,
+                }))
+            })
+            .clone()
+    }
+
+    /// Make the aux buffer hold the sections the enabled CAs need (see [`AuxKey`]), with room
+    /// after them for JACA's blast zone.
     fn prepare_aux(&mut self, world: &World) -> Result<(), String> {
         let n = world.topo.len();
-        let blast = world
-            .cas
-            .iter()
-            .any(|c| c.enabled && matches!(c.rule, Rule::Jaca(ref j) if j.blast > 0));
+        let mut keys: Vec<AuxKey> = Vec::new();
+        let mut blast = false;
+        for ca in world.cas.iter().filter(|c| c.enabled) {
+            let mut add = |k: AuxKey| {
+                if !keys.contains(&k) {
+                    keys.push(k);
+                }
+            };
+            match ca.rule {
+                Rule::Ltl(ref l) => {
+                    let sec = self.reach(&world.topo, l.hood, l.range)?;
+                    add(AuxKey::Reach(l.hood as u8, l.range));
+                    add(AuxKey::Table(ltl_table(l, sec.max)));
+                }
+                Rule::Jaca(ref j) if j.blast > 0 => blast = true,
+                _ => {}
+            }
+        }
         let zone_words = if blast { 2 * n } else { 0 };
-        if self.res.as_ref().unwrap().zone_words >= zone_words {
+        let res = self.res.as_ref().unwrap();
+        if res.aux_keys == keys && res.zone_words >= zone_words {
             return Ok(());
         }
-        if zone_words > self.max_cells {
-            return Err("JACA's blast zone exceeds this GPU's buffer limit".into());
+        let mut words: Vec<u32> = Vec::new();
+        let mut at = Vec::new();
+        for k in &keys {
+            at.push(words.len() as u32);
+            match k {
+                AuxKey::Reach(h, r) => {
+                    let hood = [Hood::Moore, Hood::VonNeumann, Hood::Cross][*h as usize];
+                    let sec = self.reach(&world.topo, hood, *r)?;
+                    words.extend_from_slice(&sec.words);
+                }
+                AuxKey::Table(t) => words.extend_from_slice(t),
+            }
+        }
+        let total = words.len() + zone_words;
+        if total > self.max_cells {
+            return Err(
+                "the rules' neighbourhood tables and JACA's blast zone exceed this GPU's buffer limit"
+                    .into(),
+            );
         }
         let aux = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("jetcarp-gpu aux"),
-            size: (zone_words.max(4) * 4) as u64,
-            usage: wgpu::BufferUsages::STORAGE,
+            size: (total.max(4) * 4) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        if !words.is_empty() {
+            self.queue
+                .write_buffer(&aux, 0, bytemuck::cast_slice(&words));
+        }
         let bind2 = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("jetcarp-gpu aux"),
             layout: &self.layout2,
@@ -600,6 +741,9 @@ impl GpuSim {
         });
         let res = self.res.as_mut().unwrap();
         (res.aux, res.bind2) = (aux, bind2);
+        res.aux_keys = keys;
+        res.aux_at = at;
+        res.aux_len = words.len() as u32;
         res.zone_words = zone_words;
         Ok(())
     }
@@ -795,6 +939,9 @@ impl GpuSim {
             fields: Vec::new(),
             rev: world.revision(),
             aux,
+            aux_keys: Vec::new(),
+            aux_at: Vec::new(),
+            aux_len: 0,
             zone_words: 0,
             bind2,
         });
@@ -914,12 +1061,26 @@ impl GpuSim {
         let ca = &world.cas[ci];
         let mut p = rule_params(&ca.rule).unwrap();
         p.nb = ca.nb as u32;
+        let res = self.res.as_ref().unwrap();
+        let at = |k: &AuxKey| {
+            res.aux_keys
+                .iter()
+                .position(|x| x == k)
+                .map_or(NONE, |i| res.aux_at[i])
+        };
         match ca.rule {
             Rule::Margolus(_) => {
                 // Blocks wrap across the seam only on an axis of even length.
                 if let Some(g) = world.topo.rows() {
                     p.gg = (g.wrap && g.w % 2 == 0) as u32 | ((g.wrap && g.h % 2 == 0) as u32) << 1;
                 }
+            }
+            Rule::Ltl(ref l) => {
+                let sec = self.reach(&world.topo, l.hood, l.range).unwrap();
+                let table = ltl_table(l, sec.max);
+                p.k1 = at(&AuxKey::Reach(l.hood as u8, l.range));
+                p.k2 = at(&AuxKey::Table(table.clone()));
+                p.gg = (table.len() / 2) as u32;
             }
             _ => {}
         }
@@ -1026,7 +1187,7 @@ impl GpuSim {
                         if p.thresh > 0 {
                             // Contact cells into the zone's first half, then one pass per blast
                             // step, alternating halves; the step reads the half written last.
-                            let (z0, half) = (0, n as u32);
+                            let (z0, half) = (res.aux_len, n as u32);
                             let pass = |op, zin, zout| Params {
                                 op,
                                 rule: R_JACA,

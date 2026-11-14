@@ -203,7 +203,7 @@ fn commit_age(old: u32, v: u32, age: u32) -> u32 {
   return 1u;
 }
 
-// Ages for Life-like and Generations rules.
+// Ages for Life-like, Generations and Larger than Life rules.
 fn bs_age(s: u32, v: u32, age: u32) -> u32 {
   if (v == 1u) {
     if (s == 1u) { return min(age + 1u, 65000u); }
@@ -216,6 +216,42 @@ fn bs_age(s: u32, v: u32, age: u32) -> u32 {
 // B0: the low d + 1 bits of m, reversed.
 fn rev_mask(m: u32, d: u32) -> u32 {
   return reverseBits(m) >> (31u - d);
+}
+
+// Larger than Life: state-1 cells within reach of cell i (aux at p.k1), past a dead edge one
+// each with live edges.
+fn ltl_count(i: u32) -> u32 {
+  var c = 0u;
+  let r = p.k1;
+  if (topo[6] != 0) {
+    let lo = aux[r + i];
+    let hi = aux[r + i + 1u];
+    let at = r + u32(topo[0]) + 1u;
+    for (var e = lo; e < hi; e = e + 1u) {
+      c += u32((src[aux[at + e]] & 0xffu) == 1u);
+    }
+    return c;
+  }
+  let nt = u32(topo[3]);
+  let w = u32(topo[1]);
+  let k = i % nt;
+  let cc = i / nt;
+  let j = i32(cc / w);
+  let base = i32(cc % w) + topo[topo[9] + j];
+  let start = aux[r + 2u * k];
+  let cnt = aux[r + 2u * k + 1u];
+  let list = r + 2u * nt;
+  let live = u32(topo[7] != 0);
+  for (var o = 0u; o < cnt; o = o + 1u) {
+    let e = list + (start + o) * 3u;
+    let x = resolve(base + bitcast<i32>(aux[e]), j + bitcast<i32>(aux[e + 1u]), bitcast<i32>(aux[e + 2u]));
+    if (x >= 0) {
+      c += u32((src[u32(x)] & 0xffu) == 1u);
+    } else {
+      c += live;
+    }
+  }
+  return c;
 }
 
 // Margolus: x on an axis of n cells, wrapped when `wrap`; -1 past the edge.
@@ -449,6 +485,25 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
           v = (entry >> me) & 1u;
         }
         na = commit_age(s, v, age);
+      }
+      // Larger than Life: the reach at aux[k1..], birth bits at aux[k2..] and survival bits
+      // gg words later.
+      case 10u: {
+        if (s > 1u) {
+          if (s + 1u < p.states) { v = s + 1u; }
+        } else {
+          let c = ltl_count(i);
+          let off = p.k2 + select(0u, p.gg, s == 1u);
+          let bit = (aux[off + (c >> 5u)] >> (c & 31u)) & 1u;
+          if (s == 0u) {
+            v = bit;
+          } else if (bit == 1u) {
+            v = 1u;
+          } else if (p.states > 2u) {
+            v = 2u;
+          }
+        }
+        na = bs_age(s, v, age);
       }
       default: {}
     }
