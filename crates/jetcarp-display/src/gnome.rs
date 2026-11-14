@@ -338,12 +338,19 @@ mod tests {
         // An older version's files (as 0.4.1 left them: other metadata, other script).
         let d = tmp.join(UUID);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("metadata.json"), r#"{"uuid": "jetcarp@jimmieprodgers.com", "shell-version": ["50"]}"#).unwrap();
+        std::fs::write(
+            d.join("metadata.json"),
+            r#"{"uuid": "jetcarp@jimmieprodgers.com", "shell-version": ["50"]}"#,
+        )
+        .unwrap();
         std::fs::write(d.join("extension.js"), "// old").unwrap();
         assert!(stale_in(&tmp));
         assert_eq!(refresh_in(&tmp), Ok(true));
         for (name, text) in FILES {
-            assert_eq!(std::fs::read_to_string(d.join(name)).unwrap(), file_text(name, text));
+            assert_eq!(
+                std::fs::read_to_string(d.join(name)).unwrap(),
+                file_text(name, text)
+            );
         }
         // Now current: left alone.
         assert!(!stale_in(&tmp));

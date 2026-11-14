@@ -1191,6 +1191,10 @@ mod progress_line_tests {
         );
         assert!(line.contains("82,445 distinct, 75,657 new"), "{line}");
         p.groups.truncate(1);
-        assert!(p.line().starts_with("hunt 21: 100/100 soups, "), "{}", p.line());
+        assert!(
+            p.line().starts_with("hunt 21: 100/100 soups, "),
+            "{}",
+            p.line()
+        );
     }
 }

@@ -29,8 +29,8 @@ use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
 use jetcarp_search::explore::Db;
 use jetcarp_search::explore::archive::{Eval, ScoreModel};
-use jetcarp_search::explore::breed::Parent;
 use jetcarp_search::explore::atlas;
+use jetcarp_search::explore::breed::Parent;
 use jetcarp_search::explore::job::{tiling_groups, try_one};
 use jetcarp_search::explore::reviews;
 use jetcarp_search::explore::runs::{RunFilter, Runs};
@@ -1247,7 +1247,10 @@ pub(crate) fn parents_from(
         "parents_reviewed",
         &[',', ' ', ';'],
     )?;
-    if let Some(v) = want.iter().find(|v| !reviews::VERDICTS.contains(&v.as_str())) {
+    if let Some(v) = want
+        .iter()
+        .find(|v| !reviews::VERDICTS.contains(&v.as_str()))
+    {
         return Err(invalid(format!(
             "parents_reviewed takes keep, maybe and drop, not {v}"
         )));

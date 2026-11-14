@@ -1578,10 +1578,14 @@ impl World {
             enabled: spec.enabled,
             affects_others: affects,
             steps_per_gen: spec.steps_per_gen.clamp(1, 100_000),
-            palette: spec
-                .palette
-                .clone()
-                .unwrap_or_else(|| if is_jaca { DEFAULT_PALETTE_JACA } else { "Ember" }.into()),
+            palette: spec.palette.clone().unwrap_or_else(|| {
+                if is_jaca {
+                    DEFAULT_PALETTE_JACA
+                } else {
+                    "Ember"
+                }
+                .into()
+            }),
             palette_neg: spec
                 .palette_neg
                 .clone()

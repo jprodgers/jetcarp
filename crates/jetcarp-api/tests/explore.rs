@@ -716,7 +716,11 @@ fn measures_out_a_refit_and_its_score() {
     };
     let both = parents(json!({}));
     assert_eq!(both.len(), 60);
-    assert!(both[..30].iter().all(|p| p["why"] == "keep" && p["job"] == job));
+    assert!(
+        both[..30]
+            .iter()
+            .all(|p| p["why"] == "keep" && p["job"] == job)
+    );
     let keeps = parents(json!({"parents_reviewed": "keep"}));
     assert_eq!(keeps.len(), 30);
     let drops = parents(json!({"parents_reviewed": "drop"}));

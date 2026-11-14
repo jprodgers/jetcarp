@@ -600,7 +600,10 @@ fn older_half_contrast(pos: &str, neg: &str) -> f64 {
     let q = Palette::builtin(neg).unwrap_or_else(|| panic!("no palette {neg}"));
     (5..=10)
         .map(|i| {
-            let (a, b) = (lab(ramp(&p, i as f64 / 10.0)), lab(ramp(&q, i as f64 / 10.0)));
+            let (a, b) = (
+                lab(ramp(&p, i as f64 / 10.0)),
+                lab(ramp(&q, i as f64 / 10.0)),
+            );
             ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
         })
         .fold(f64::INFINITY, f64::min)
@@ -612,7 +615,10 @@ fn older_half_contrast(pos: &str, neg: &str) -> f64 {
 #[test]
 fn jaca_palette_pairs_keep_the_signs_apart_as_cells_age() {
     use jetcarp_core::world::{DEFAULT_PALETTE_JACA, DEFAULT_PALETTE_NEG};
-    assert!(older_half_contrast("Tide", "Ember") < 20.0, "the check sees the old bug");
+    assert!(
+        older_half_contrast("Tide", "Ember") < 20.0,
+        "the check sees the old bug"
+    );
     let d = older_half_contrast(DEFAULT_PALETTE_JACA, DEFAULT_PALETTE_NEG);
     assert!(d >= 20.0, "default pair only {d:.1} apart");
     let ca = World::new(TilingSpec::rect("square", 8, 8, Boundary::Wrap), 1)
