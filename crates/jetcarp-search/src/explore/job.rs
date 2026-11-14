@@ -904,7 +904,7 @@ impl Search {
                 let mut rng = *self.rng_cpu.lock().unwrap();
                 pool.install(|| {
                     while go() {
-                        self.cpu_round(&mut rng, &cpu_fams, &go, lim);
+                        self.cpu_round(&mut rng, &cpu_fams, lim);
                     }
                 });
                 *self.rng_cpu.lock().unwrap() = rng;
@@ -1362,14 +1362,12 @@ impl Search {
     }
 
     /// One CPU round: a tiling and families chosen, candidates made and run on the pool (the
-    /// caller's) while `go` says so, and every fourth round a confirmation of elites.
-    fn cpu_round(
-        &self,
-        rng: &mut Rng,
-        fams: &[(Fam, f64)],
-        go: &(dyn Fn() -> bool + Sync),
-        lim: &StepLimits<'_>,
-    ) {
+    /// caller's), and every fourth round a confirmation of elites. A round under way runs to its
+    /// end, as [`StepLimits::until`] says: the step's deadline only keeps the next round from
+    /// starting, and only a stop or the run's end ([`StepLimits::cut`]) gives up its candidates
+    /// and its confirmation. (A round of runs on the processor nearly always outlasts the 2 s
+    /// step, so checking the deadline here left most candidates unrun and never confirmed.)
+    fn cpu_round(&self, rng: &mut Rng, fams: &[(Fam, f64)], lim: &StepLimits<'_>) {
         let round = self.cpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
         let threads = rayon::current_num_threads().max(1);
         // Families that run on any tiling, and the ones tied to a native grid (when it is one
@@ -1420,7 +1418,7 @@ impl Search {
         let rows: Vec<RunOut> = cands
             .into_par_iter()
             .filter_map(|(c, kind)| {
-                if !go() {
+                if lim.cut() {
                     return None;
                 }
                 match self.cpu_eval(&grid, c, kind, None, 1, lim) {
@@ -1430,8 +1428,8 @@ impl Search {
             })
             .collect();
         self.publish(rows, 1);
-        if round.is_multiple_of(4) && go() {
-            self.cpu_confirm(fams, threads, go, lim);
+        if round.is_multiple_of(4) && !lim.cut() {
+            self.cpu_confirm(fams, threads, lim);
         }
     }
 
@@ -1553,27 +1551,23 @@ impl Search {
         }))
     }
 
-    fn cpu_confirm(
-        &self,
-        fams: &[(Fam, f64)],
-        threads: usize,
-        go: &(dyn Fn() -> bool + Sync),
-        lim: &StepLimits<'_>,
-    ) {
+    /// Confirm up to twice `threads` unconfirmed elites of these families on the confirmation
+    /// grid, each with all its seeds.
+    fn cpu_confirm(&self, fams: &[(Fam, f64)], threads: usize, lim: &StepLimits<'_>) {
         let pending = self.archive.lock().unwrap().unconfirmed(4096);
         let picked: Vec<(i64, Eval)> = pending
             .into_iter()
             .filter(|(_, e)| fams.iter().any(|(f, _)| *f == e.cand.fam))
             .take(threads * 2)
             .collect();
-        // An elite is confirmed with all its seeds, or (once `go` says stop, or a run of it is
-        // given up) not at all. One is not started on a thread waiting inside another run (it
+        // An elite is confirmed with all its seeds, or (at a stop or the run's end, or when a run
+        // of it is given up) not at all. One is not started on a thread waiting inside another run (it
         // stays for a later round): its seeds would hold that run past its cap, by up to three
         // runs of their own.
         let done: Vec<(i64, Vec<RunOut>)> = picked
             .par_iter()
             .filter_map(|(id, e)| {
-                if !go() || InRun::now() {
+                if lim.cut() || InRun::now() {
                     return None;
                 }
                 let grid = self.grid(&e.cand.tiling, self.set.confirm_cells).ok()?;
@@ -1781,6 +1775,37 @@ mod tests {
         assert!(d.rows.is_empty(), "{} rows", d.rows.len());
         assert_eq!((s.screened(), s.capped()), (0, 0));
         assert!(s.given_up() > 0);
+    }
+
+    /// A search on the processor alone confirms its elites, and runs every candidate of a round,
+    /// even when each round outlasts its step (as rounds of the 2 s steps of a job nearly always
+    /// do). Issue #3: the step's deadline was checked inside the round, so most candidates were
+    /// never run and the confirmation every fourth round never came.
+    #[test]
+    fn a_cpu_search_confirms_its_elites_when_rounds_outlast_their_steps() {
+        let s = Search::new(quick(400), Saved::default()).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        // Steps of a millisecond: every round outlasts its step, as the driver's steps go.
+        for _ in 0..12 {
+            let lim = StepLimits {
+                until: Instant::now() + Duration::from_millis(1),
+                end: None,
+                stop: &stop,
+                max_screened: None,
+            };
+            assert!(s.step(&pool, None, &lim).is_none());
+        }
+        assert!(s.confirmed() > 0, "no confirmation runs");
+        assert!(s.confirmed_elites() > 0, "no elite confirmed");
+        // Every candidate made was run: the screening runs and the confirmation runs account
+        // for the identities tried (a run that fails to start is the only gap).
+        let tried = s.seen();
+        let ran = s.screened() + s.confirmed();
+        assert!(ran * 100 >= tried * 95, "{ran} runs of {tried} candidates");
     }
 
     /// What a run on the processor costs, by family, on one thread (as each runs in a CPU
