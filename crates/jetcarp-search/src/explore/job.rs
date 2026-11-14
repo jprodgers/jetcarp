@@ -10,13 +10,16 @@
 //! was. It is not deterministic: the GPU and CPU rounds share the archive as they run, so two
 //! searches with the same settings try different candidates.
 
-use crate::explore::archive::{self, Archive, Eval};
+use crate::explore::archive::{self, Archive, Eval, ScoreModel};
 use crate::explore::store::{Delta, FamStat, RunOut, Saved};
 use jetcarp_core::explore::batch::{
-    Backend, BatchJob, BatchWorld, GIVEN_UP, WorldTrace, trace_world, trace_world_while,
+    Backend, BatchJob, BatchWorld, GIVEN_UP, WorldTrace, field_bytes, trace_world,
+    trace_world_keeping,
 };
 use jetcarp_core::explore::cand::Cand;
-use jetcarp_core::explore::features::{Fate, Features, frames_for, measure_run};
+use jetcarp_core::explore::features::{
+    Fate, Features, frames_for, frames_with_trade, measure_run, measure_signs, trade_gen,
+};
 use jetcarp_core::explore::seeds::seed_for;
 use jetcarp_core::explore::space::{self, Fam, Grid, TilingChoice, sample_ltl, sample_rule};
 use jetcarp_core::ltl::Hood;
@@ -153,6 +156,10 @@ pub struct Settings {
     /// Only these rule families; empty: all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub families: Vec<Fam>,
+    /// A fitted score model (`jetcarp jobs refit`) to score runs with, in place of the built-in
+    /// score (for its family only, when it was fitted to one); none: the built-in score.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub score: Option<ScoreModel>,
 }
 
 impl Default for Settings {
@@ -167,6 +174,7 @@ impl Default for Settings {
             seed: 0,
             tilings: vec![],
             families: vec![],
+            score: None,
         }
     }
 }
@@ -198,6 +206,9 @@ impl Settings {
         let (g, c, ltl) = families(&self.families, true);
         if g.is_empty() && c.is_empty() && !ltl {
             return Err("no rule family to search".into());
+        }
+        if let Some(m) = &self.score {
+            m.check()?;
         }
         Ok(())
     }
@@ -1106,12 +1117,18 @@ impl Search {
         if worlds.is_empty() {
             return Ok(true);
         }
+        // A JACA run also needs its frame at the three-quarter mark.
+        let frames_at = if good.iter().any(|(c, ..)| c.fam == Fam::Jaca) {
+            frames_with_trade(gens, WINDOW)
+        } else {
+            frames_for(gens, WINDOW)
+        };
         let job = BatchJob {
             topo: grid.topo.clone(),
             nb,
             worlds,
             gens,
-            frames_at: frames_for(gens, WINDOW),
+            frames_at,
         };
         let t1 = Instant::now();
         let traces = match be.run_until(&job, &|| lim.cut()) {
@@ -1144,7 +1161,7 @@ impl Search {
             .zip(traces.into_par_iter())
             .filter_map(|((c, kind, parent), t)| {
                 let (fate, feat, score, bin) =
-                    catch_unwind(AssertUnwindSafe(|| evaluate(grid, &c, &t)))
+                    catch_unwind(AssertUnwindSafe(|| self.evaluate(grid, &c, &t)))
                         .map_err(|_| self.panics.fetch_add(1, Ordering::Relaxed))
                         .ok()?;
                 Some(RunOut {
@@ -1478,7 +1495,8 @@ impl Search {
                 }
             }
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
-            let (t, reached) = trace_world_while(&mut world, c.gens, window, &mut |_| {
+            let keep = (c.fam == Fam::Jaca).then(|| trade_gen(c.gens));
+            let (mut t, reached) = trace_world_keeping(&mut world, c.gens, window, keep, &mut |_| {
                 if slow > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(slow));
                 }
@@ -1496,8 +1514,25 @@ impl Search {
             if cut == Some("given up") {
                 return Some(None);
             }
+            if keep.is_some() && reached < c.gens {
+                // Cut short: the frame at three quarters of the generations it reached, from a
+                // replay of its start.
+                let wnd = frames_for(reached, window).len();
+                if t.frames.len() > wnd {
+                    t.frames.remove(0);
+                }
+                if frames_with_trade(reached, window).len() > wnd {
+                    match trade_frame(grid, &c, trade_gen(reached), lim) {
+                        Some(f) => t.frames.insert(0, f),
+                        None => {
+                            cut = Some("given up");
+                            return Some(None);
+                        }
+                    }
+                }
+            }
             c.gens = reached;
-            Some(Some(evaluate(grid, &c, &t)))
+            Some(Some(self.evaluate(grid, &c, &t)))
         }));
         let secs = t_eval.elapsed().as_secs_f64();
         // How long past the run's end this one went on (it is given up at its next generation).
@@ -1641,21 +1676,80 @@ fn prepare(grid: &Grid, c: &Cand) -> Result<World, String> {
     Ok(w)
 }
 
-fn evaluate(grid: &Grid, c: &Cand, t: &WorldTrace) -> (Fate, Features, f32, u32) {
+/// A run's frame at generation `at`, from a replay of its start (`None` when it is given up at a
+/// stop or the run's end, or does not run).
+fn trade_frame(grid: &Grid, c: &Cand, at: u32, lim: &StepLimits<'_>) -> Option<Vec<u8>> {
+    let mut world = prepare(grid, c).ok()?;
+    for _ in 0..at {
+        if lim.cut() {
+            return None;
+        }
+        world.step();
+    }
+    Some(field_bytes(world.fields.first()?))
+}
+
+/// Measure a run from its trace: its fate and measures (with JACA's sign measures), its score
+/// (by `model` when one applies, else the built-in score), and its behaviour bin.
+pub fn evaluate_with(
+    grid: &Grid,
+    c: &Cand,
+    t: &WorldTrace,
+    model: Option<&ScoreModel>,
+) -> (Fate, Features, f32, u32) {
     let window = if c.fam.is_rows() { 1 } else { WINDOW };
-    let (fate, f) = measure_run(grid, t, c.gens, window);
-    let score = archive::score(fate, &f, c.gens, c.fam);
+    let (fate, mut f) = measure_run(grid, t, c.gens, window);
+    if c.fam == Fam::Jaca {
+        f.signs = measure_signs(grid, t, c.gens, window, c.nb);
+    }
+    let score = archive::score_with(model, fate, &f, c.gens, c.fam);
     let bin = archive::behaviour_bin(fate, &f, c.gens);
     (fate, f, score, bin)
 }
 
-/// Run one candidate on the CPU now and measure it.
+impl Search {
+    fn evaluate(&self, grid: &Grid, c: &Cand, t: &WorldTrace) -> (Fate, Features, f32, u32) {
+        evaluate_with(grid, c, t, self.set.score.as_ref())
+    }
+}
+
+/// The frames a run of this candidate asks for.
+pub fn frames_of(c: &Cand) -> Vec<u32> {
+    if c.fam.is_rows() {
+        frames_for(c.gens, 1)
+    } else if c.fam == Fam::Jaca {
+        frames_with_trade(c.gens, WINDOW)
+    } else {
+        frames_for(c.gens, WINDOW)
+    }
+}
+
+/// Run a candidate again on its grid (built for its tiling and cells) and measure it, with the
+/// built-in score: a stored run replays to its stored measures.
+pub fn replay_on(grid: &Grid, c: &Cand) -> Result<Eval, String> {
+    let mut world = prepare(grid, c)?;
+    let t = trace_world(&mut world, c.gens, &frames_of(c))?;
+    let (fate, feat, score, bin) = evaluate_with(grid, c, &t, None);
+    Ok(Eval {
+        cand: c.clone(),
+        fate,
+        feat,
+        score,
+        bin,
+    })
+}
+
+/// Run one candidate on the CPU now and measure it (with the built-in score).
 pub fn try_one(c: Cand) -> Result<Eval, String> {
+    try_one_with(c, None)
+}
+
+/// [`try_one`], scored by `model` when one applies.
+pub fn try_one_with(c: Cand, model: Option<&ScoreModel>) -> Result<Eval, String> {
     let grid = Grid::build(&c.tiling, c.cells)?;
     let mut world = prepare(&grid, &c)?;
-    let window = if c.fam.is_rows() { 1 } else { WINDOW };
-    let t = trace_world(&mut world, c.gens, &frames_for(c.gens, window))?;
-    let (fate, feat, score, bin) = evaluate(&grid, &c, &t);
+    let t = trace_world(&mut world, c.gens, &frames_of(&c))?;
+    let (fate, feat, score, bin) = evaluate_with(&grid, &c, &t, model);
     Ok(Eval {
         cand: c,
         fate,
@@ -1742,6 +1836,58 @@ mod tests {
         assert!(!capped.is_empty());
         for r in capped.iter().take(4) {
             let ev = try_one(r.ev.cand.clone()).unwrap();
+            assert_eq!(
+                (ev.fate, ev.feat, ev.score, ev.bin),
+                (r.ev.fate, r.ev.feat, r.ev.score, r.ev.bin),
+                "run {} ({} generations)",
+                r.id,
+                r.ev.cand.gens
+            );
+        }
+    }
+
+    /// JACA runs carry their sign measures, a capped one too (its three-quarter frame replayed),
+    /// and replay to the same measures from their candidates.
+    #[test]
+    fn jaca_runs_have_sign_measures_and_replay_to_them() {
+        let set = Settings {
+            families: vec![Fam::Jaca],
+            ..quick(400)
+        };
+        let mut s = Search::new(set, Saved::default()).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let lim = StepLimits {
+            until: Instant::now() + Duration::from_millis(300),
+            end: None,
+            stop: &stop,
+            max_screened: Some(40),
+        };
+        assert!(s.step(&pool, None, &lim).is_none());
+        let full = s.take_delta().rows;
+        assert!(!full.is_empty());
+        assert!(full.iter().all(|r| r.ev.feat.signs.is_some()));
+        s.cpu_caps = (Duration::from_millis(2), Duration::from_millis(2));
+        s.set.screen_gens = 200_000;
+        let lim = StepLimits {
+            until: Instant::now() + Duration::from_millis(300),
+            max_screened: None,
+            ..lim
+        };
+        assert!(s.step(&pool, None, &lim).is_none());
+        let capped: Vec<RunOut> = s
+            .take_delta()
+            .rows
+            .into_iter()
+            .filter(|r| r.ev.cand.gens < 200_000)
+            .collect();
+        assert!(!capped.is_empty());
+        for r in full.iter().take(3).chain(capped.iter().take(3)) {
+            let ev = try_one(r.ev.cand.clone()).unwrap();
+            assert!(ev.feat.signs.is_some());
             assert_eq!(
                 (ev.fate, ev.feat, ev.score, ev.bin),
                 (r.ev.fate, r.ev.feat, r.ev.score, r.ev.bin),

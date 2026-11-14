@@ -9,12 +9,16 @@
 //!   its working database ([`store`], `searches/<uuid>/search.sqlite` beside the library, with
 //!   the search's state, so a stopped search carries on without reading its runs again).
 //! - [`reviews`]: verdicts on runs, kept as ratings in the library.
+//! - [`model`]: score models fitted to those verdicts, used in place of the built-in score;
+//!   [`remeasure`]: older runs replayed for the measures they lack, cached.
 //! - [`sheet`], [`atlas`]: contact sheets, clips for rating, and the atlas: the Quick Start rows
 //!   picked from a search's runs.
 
 pub mod archive;
 pub mod atlas;
 pub mod job;
+pub mod model;
+pub mod remeasure;
 pub mod reviews;
 pub mod runs;
 pub mod segments;

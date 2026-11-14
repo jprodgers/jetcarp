@@ -34,12 +34,13 @@
 //! (`scores-<n>/`, `n` counting rescores), and readers take each segment's scores from the newest
 //! sidecar that has it.
 
-use crate::explore::archive::{self, Archive, Eval};
+use crate::explore::archive::{self, Archive, Eval, ScoreModel};
 use crate::explore::segments::{
     self as seg, ALL, Batch, Cols, RunRec, Segment, SegmentWriter, Written, col, cols,
 };
 use crate::explore::sheet::RunRow;
 use crate::explore::store::{self, FamStat, put_archive};
+use jetcarp_core::explore::features::SignMeasures;
 use jetcarp_core::explore::space::Fam;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
@@ -114,7 +115,9 @@ pub struct Manifest {
     pub kind: String,
     /// The JETCARP that last wrote this manifest.
     pub engine_version: String,
-    /// The segments' and sidecars' schemas ([`seg::RUN_SCHEMA`], [`seg::SCORE_SCHEMA`]).
+    /// The segments' and sidecars' schemas ([`seg::RUN_SCHEMA`], [`seg::SCORE_SCHEMA`]): the
+    /// newest segment's (each segment names its own in its metadata; a search sealed before
+    /// schema 2 and continued after holds both).
     pub run_schema: String,
     pub score_schema: String,
     pub created: String,
@@ -854,6 +857,8 @@ impl Runs {
             engine_version: jetcarp_core::VERSION.into(),
         };
         self.manifest.segments.push(entry.clone());
+        // Its newest segment's schema (older segments keep theirs: readers take both).
+        self.manifest.run_schema = seg::RUN_SCHEMA.into();
         self.manifest.write(&self.dir)?;
         Ok(entry)
     }
@@ -1383,7 +1388,30 @@ impl Runs {
         group_of: &dyn Fn(&str) -> u8,
         progress: &dyn Fn(u64) -> bool,
     ) -> Result<Rescored, String> {
+        self.rescore_with(None, &HashMap::new(), group_of, progress)
+    }
+
+    /// [`rescore`](Self::rescore) by a fitted score model where one applies (`None`: the built-in
+    /// score), with sign measures for runs stored without them (`signs`, by id: replayed and
+    /// cached, [`crate::explore::remeasure`]). The archive's niches take each run's behaviour bin
+    /// from its measures again (the stored bins stay as they are).
+    pub fn rescore_with(
+        &mut self,
+        model: Option<&ScoreModel>,
+        signs: &HashMap<i64, SignMeasures>,
+        group_of: &dyn Fn(&str) -> u8,
+        progress: &dyn Fn(u64) -> bool,
+    ) -> Result<Rescored, String> {
         self.need_write()?;
+        let rescore = |id: i64, ev: &mut Eval| -> f32 {
+            if ev.feat.signs.is_none()
+                && let Some(s) = signs.get(&id)
+            {
+                ev.feat.signs = Some(*s);
+            }
+            ev.bin = archive::behaviour_bin(ev.fate, &ev.feat, ev.cand.gens);
+            archive::score_with(model, ev.fate, &ev.feat, ev.cand.gens, ev.cand.fam)
+        };
         let mut out = Rescored::default();
         let mut arch = Archive::default();
         let mut fams: HashMap<Fam, FamStat> = HashMap::new();
@@ -1426,7 +1454,7 @@ impl Runs {
                 let Some(mut ev) = store::eval_of(r) else {
                     continue;
                 };
-                let new = archive::score(ev.fate, &ev.feat, ev.cand.gens, ev.cand.fam);
+                let new = rescore(r.id, &mut ev);
                 if new != ev.score {
                     changed = true;
                     out.changed += 1;
@@ -1455,7 +1483,7 @@ impl Runs {
                 let Some(mut ev) = store::eval_of(&rec) else {
                     continue;
                 };
-                let new = archive::score(ev.fate, &ev.feat, ev.cand.gens, ev.cand.fam);
+                let new = rescore(rec.id, &mut ev);
                 if new != ev.score {
                     loose.push((rec.id, new as f64));
                     out.changed += 1;

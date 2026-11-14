@@ -832,7 +832,7 @@ fn fake_search(dir: &Path, uuid: &str) {
         search: uuid.into(),
         kind: "explore".into(),
         engine_version: "golden".into(),
-        run_schema: "jetcarp-explore-runs 1".into(),
+        run_schema: jetcarp_search::explore::segments::RUN_SCHEMA.into(),
         score_schema: "jetcarp-explore-scores 1".into(),
         created: FIXED.into(),
         updated: FIXED.into(),

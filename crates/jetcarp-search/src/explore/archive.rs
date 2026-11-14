@@ -1,5 +1,6 @@
 //! Interest scores, behaviour bins and the archive of the best run found in each niche.
 
+pub use crate::explore::model::ScoreModel;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features};
 use jetcarp_core::explore::space::Fam;
@@ -31,19 +32,14 @@ fn tri(x: f32, lo: f32, peak: f32, hi: f32) -> f32 {
 /// How interesting a run looks; about 0 to 3, higher is better. The stored features allow
 /// rescoring without rerunning, so this function can change between searches.
 pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
-    let life = (1.0 + f.settle as f32).log2() / (1.0 + gens as f32).log2();
     if fam.is_rows() {
         // Rows and layers are judged as a picture.
         let pic = tri(f.bits, 0.05, 0.75, 1.9) + 0.5 * tri(f.smooth, 0.1, 0.45, 0.95);
         let bal = tri(f.density, 0.04, 0.4, 0.9);
         return pic + 0.5 * bal + 0.3 * tri(f.size_entropy, 0.2, 2.0, 5.0);
     }
-    match fate {
-        Fate::Died => return 0.25 * life,
-        Fate::Froze | Fate::Cycle if life < 0.3 => {
-            return 0.1 + 0.6 * life + 0.3 * tri(f.smooth, 0.05, 0.4, 0.95);
-        }
-        _ => {}
+    if let Some(s) = gated(fate, f, gens) {
+        return s;
     }
     let mut s = taste(fate, f, gens, fam);
     // What the fit can't see, from looking at its top picks. Like-shuffled noise:
@@ -58,7 +54,44 @@ pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
     if fam == Fam::ForestFire {
         s *= 0.75;
     }
-    s
+    jaca_gate(f, fam, s)
+}
+
+/// What a JACA run whose sign was lost in the first half keeps of its score: it is a plain
+/// Life-like run under another name (more than half the best-scoring runs of a JACA-only search,
+/// every one dropped by eye).
+pub const JACA_LOST_EARLY: f32 = 0.3;
+
+/// A score with the JACA rule applied: [`JACA_LOST_EARLY`] of it for a JACA run that lost a sign
+/// in the first half.
+pub fn jaca_gate(f: &Features, fam: Fam, s: f32) -> f32 {
+    if fam == Fam::Jaca && f.signs.is_some_and(|x| x.lost_early()) {
+        s * JACA_LOST_EARLY
+    } else {
+        s
+    }
+}
+
+/// The score of a run under a fitted score model ([`ScoreModel`]) when there is one that applies
+/// to its family, else the built-in [`score`].
+pub fn score_with(model: Option<&ScoreModel>, fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
+    match model {
+        Some(m) if m.applies(fam) => m.score(fate, f, gens, fam),
+        _ => score(fate, f, gens, fam),
+    }
+}
+
+/// The runs a score treats apart before its fitted core: those that died, and those that froze
+/// or cycled early. `None` for the rest.
+pub(crate) fn gated(fate: Fate, f: &Features, gens: u32) -> Option<f32> {
+    let life = (1.0 + f.settle as f32).log2() / (1.0 + gens as f32).log2();
+    match fate {
+        Fate::Died => Some(0.25 * life),
+        Fate::Froze | Fate::Cycle if life < 0.3 => {
+            Some(0.1 + 0.6 * life + 0.3 * tri(f.smooth, 0.05, 0.4, 0.95))
+        }
+        _ => None,
+    }
 }
 
 /// How much people liked runs like this one, 0 to 3: a logistic fit to 829 field-rule clips rated
@@ -129,7 +162,22 @@ fn bucket(x: f32, edges: &[f32]) -> u32 {
     edges.iter().take_while(|&&e| x >= e).count() as u32
 }
 
-/// The coarse behaviour class of a run (packed into an integer).
+/// A JACA run's sign state, for its niche: 0 both signs kept (or not measured), 1 a sign lost in
+/// the second half, 2 lost in the first half.
+fn sign_state(f: &Features) -> u32 {
+    match f.signs {
+        Some(s) if s.lost_early() => 2,
+        Some(s) if s.lost < 1.0 => 1,
+        _ => 0,
+    }
+}
+
+/// Bins below this are the behaviour of [`behaviour_bin`] without the sign state.
+const SIGN_STEP: u32 = 5 * 5 * 5 * 5 * 2 * 5;
+
+/// The coarse behaviour class of a run (packed into an integer). A JACA run's sign state (both
+/// signs kept, one lost late, one lost early) is part of it, so runs that lost a sign do not
+/// compete with battles for a niche; runs without sign measures read as both kept.
 pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
     let fate_bin = match fate {
         Fate::Died => 0,
@@ -154,7 +202,8 @@ pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
         4
     };
     let mover = (f.movers > 0) as u32;
-    fate_bin * 5 * 5 * 5 * 5 * 2
+    sign_state(f) * SIGN_STEP
+        + fate_bin * 5 * 5 * 5 * 5 * 2
         + trans * 5 * 5 * 5 * 2
         + dens * 5 * 5 * 2
         + act * 5 * 2

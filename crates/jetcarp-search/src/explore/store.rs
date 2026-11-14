@@ -4,7 +4,7 @@
 //!
 //! | Table | What |
 //! | --- | --- |
-//! | `runs` | the runs not yet sealed, one row each: candidate, fate, score, behaviour bin, features (80-byte blob of 20 `f32`); `stage` 1 screened, 2 confirmed on a bigger grid (`parent` the screened run) |
+//! | `runs` | the runs not yet sealed, one row each: candidate, fate, score, behaviour bin, features (96-byte blob of 24 `f32`, [`feat_blob`]; 80 bytes for runs stored before JACA's sign measures); `stage` 1 screened, 2 confirmed on a bigger grid (`parent` the screened run) |
 //! | `elites` | the archive: each elite run's id, tiling group (its niche is its family, that group, and its bin), and the candidate and measures the search needs of it (the columns of `runs` it reads), so loading never reads the runs |
 //! | `confirmed` | elites confirmed on bigger grids |
 //! | `coverage` | screened runs per tiling, family, and seed kind (where the search tries next) |
@@ -23,7 +23,7 @@
 use crate::explore::archive::{Archive, Eval};
 use crate::explore::segments::RunRec;
 use jetcarp_core::explore::cand::Cand;
-use jetcarp_core::explore::features::{Fate, Features};
+use jetcarp_core::explore::features::{Fate, Features, SignMeasures};
 use jetcarp_core::explore::space::{ALL_FAMS, Fam};
 use jetcarp_core::topology::Nb;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
@@ -70,8 +70,11 @@ pub fn fate_parse(s: &str) -> Fate {
     }
 }
 
-/// The features as stored: 20 little-endian `f32`.
+/// The features as stored: 24 little-endian `f32`, the last four JACA's sign measures (balance,
+/// sorted, trade, lost; NaN for other families). Runs stored before them have 20.
 pub fn feat_blob(f: &Features) -> Vec<u8> {
+    let s = f.signs;
+    let sign = |g: fn(&SignMeasures) -> f32| s.as_ref().map_or(f32::NAN, g);
     let v = [
         f.settle as f32,
         f.period as f32,
@@ -93,8 +96,24 @@ pub fn feat_blob(f: &Features) -> Vec<u8> {
         f.travel,
         f.movers as f32,
         f.mover_speed,
+        sign(|x| x.balance),
+        sign(|x| x.sorted),
+        sign(|x| x.trade),
+        sign(|x| x.lost),
     ];
     v.iter().flat_map(|x| x.to_le_bytes()).collect()
+}
+
+/// Sign measures from their four values (none when any is missing or NaN).
+pub fn signs_of(v: [Option<f32>; 4]) -> Option<SignMeasures> {
+    let [b, s, t, l] = v;
+    let ok = |x: Option<f32>| x.filter(|x| x.is_finite());
+    Some(SignMeasures {
+        balance: ok(b)?,
+        sorted: ok(s)?,
+        trade: ok(t)?,
+        lost: ok(l)?,
+    })
 }
 
 /// Inverse of [`feat_blob`].
@@ -125,6 +144,7 @@ pub fn feat_from_blob(b: &[u8]) -> Features {
         travel: g(17),
         movers: g(18) as u32,
         mover_speed: g(19),
+        signs: signs_of([20, 21, 22, 23].map(|i| (b.len() >= (i + 1) * 4).then(|| g(i)))),
     }
 }
 
