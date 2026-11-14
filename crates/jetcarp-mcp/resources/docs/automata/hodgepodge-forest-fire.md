@@ -105,15 +105,17 @@ States are 0 to `n` for the hodgepodge machine (so `n` + 1 states) and 0 (empty)
 
 The forest fire is random, but JETCARP's random numbers are a fixed function of the scene's seed,
 the generation and the cell, so a scene replays to exactly the same state every time, on any number
-of threads. The hodgepodge machine is deterministic.
+of threads, on the CPU or the GPU. The GPU makes the same 64-bit random numbers and compares them
+with the probabilities as whole numbers, so it agrees with the CPU to the bit. The hodgepodge
+machine is deterministic.
 
 ### On any tiling
 
 Both rules count neighbours in particular states, so they run on any neighbour graph with touch or
-edge neighbours (see [How JETCARP generalises automata](generalising.md)). The hodgepodge machine can
-also be stepped on the GPU on lattice tilings. On tilings where tiles have different numbers of
-neighbours, the hodgepodge machine's averages and the forest's spreading vary from tile to tile, but
-the spirals and fires still appear.
+edge neighbours (see [How JETCARP generalises automata](generalising.md)). Both can also be stepped
+on the GPU, in the app and in the background host, on lattices and aperiodic patches. On tilings
+where tiles have different numbers of neighbours, the hodgepodge machine's averages and the
+forest's spreading vary from tile to tile, but the spirals and fires still appear.
 
 ## What is new here
 

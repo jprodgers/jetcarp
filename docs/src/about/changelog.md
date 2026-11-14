@@ -65,6 +65,9 @@ that will declare them stable.
 - **Larger than Life runs on the GPU,** on lattices and on aperiodic patches, in the app and the
   background host, with the CPU's results. A range-5 rule on a million cells runs about 40 times as
   fast.
+- **The forest fire runs on the GPU,** in the app and the background host. The GPU makes the CPU's
+  64-bit random numbers and compares them with the probabilities as whole numbers, so every fire
+  starts on the same tree at the same generation.
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in

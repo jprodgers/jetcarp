@@ -588,6 +588,63 @@ fn ltl_on_patches() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Forest fire
+
+#[test]
+fn forest_fire() {
+    let Some(mut sim) = gpu() else { return };
+    let rules = [
+        "ForestFire 0.01/0.0001",
+        "ForestFire 0.05/0.001",
+        "ForestFire 0/0",
+        "ForestFire 1/1",
+        "ForestFire 1/0",
+        "ForestFire 0/1",
+        "ForestFire 0.3/0.000000001",
+    ];
+    for &(fam, w, h) in LATTICES {
+        for b in BOUNDARIES {
+            for rule in rules {
+                let sc = scene(
+                    TilingSpec::rect(fam, w, h, b),
+                    vec![ca(rule, None, SeedSpec::RandomStates)],
+                );
+                compare_gpu(&mut sim, &sc, CHUNKS, &format!("{rule} on {fam} {b:?}"));
+            }
+        }
+    }
+    let t = TilingSpec::new("spectre").with_size(SizeSpec::Level(3));
+    let sc = scene(
+        t,
+        vec![ca(
+            "ForestFire 0.02/0.001",
+            Some(Nb::Edge),
+            SeedSpec::RandomStates,
+        )],
+    );
+    compare_gpu(&mut sim, &sc, &[1, 5, 40, 150], "forest fire on spectre");
+    // Step counts past 2^32 feed the noise as 64-bit numbers.
+    for ticks in [(1u64 << 32) - 3, (1 << 32) + 5, u64::MAX / 3] {
+        let sc = scene(
+            TilingSpec::rect("square", 40, 30, Boundary::Wrap),
+            vec![ca("ForestFire 0.05/0.001", None, SeedSpec::RandomStates).steps(2)],
+        );
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.cas[0].ticks = ticks;
+        gw.cas[0].ticks = ticks;
+        let (_, on_cpu) = compare_worlds(
+            &mut sim,
+            &mut cpu,
+            &mut gw,
+            &[1, 2, 13, 60],
+            &format!("forest fire from tick {ticks}"),
+        );
+        assert_eq!(on_cpu, 0);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Quick Start
 
 /// Every Quick Start entry of these families, at preview size, on the GPU like the CPU.
@@ -598,6 +655,7 @@ fn quick_start_entries() {
         Rule::Jaca(_) | Rule::Margolus(_) => true,
         Rule::LifeLike { birth, .. } => birth & 1 == 1,
         Rule::Ltl(_) => true,
+        Rule::ForestFire { .. } => true,
         _ => false,
     };
     let mut counts = std::collections::BTreeMap::<String, (u32, u32)>::new();

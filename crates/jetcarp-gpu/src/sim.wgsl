@@ -12,6 +12,7 @@ struct Params {
   zout: u32, halt_repeat: u32, compare: u32, stat: u32,
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
   // Margolus: the block table, one byte per entry, in table[0].
+  // Forest fire: the noise key and the two thresholds.
   table: array<vec4<u32>, 11>,
 };
 
@@ -216,6 +217,47 @@ fn bs_age(s: u32, v: u32, age: u32) -> u32 {
 // B0: the low d + 1 bits of m, reversed.
 fn rev_mask(m: u32, d: u32) -> u32 {
   return reverseBits(m) >> (31u - d);
+}
+
+// 64-bit integers as (low, high) pairs, for forest fire's SplitMix64 noise (step.rs `noise01`).
+fn mul_wide(a: u32, b: u32) -> vec2<u32> {
+  let a0 = a & 0xffffu;
+  let a1 = a >> 16u;
+  let b0 = b & 0xffffu;
+  let b1 = b >> 16u;
+  let p00 = a0 * b0;
+  let p01 = a0 * b1;
+  let p10 = a1 * b0;
+  let p11 = a1 * b1;
+  let mid = p01 + p10;
+  let mid_carry = select(0u, 0x10000u, mid < p01);
+  let lo = p00 + (mid << 16u);
+  let carry = select(0u, 1u, lo < p00);
+  return vec2<u32>(lo, p11 + (mid >> 16u) + mid_carry + carry);
+}
+
+fn mul64(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
+  let w = mul_wide(a.x, b.x);
+  return vec2<u32>(w.x, w.y + a.x * b.y + a.y * b.x);
+}
+
+// a >> k for 0 < k < 32.
+fn shr64(a: vec2<u32>, k: u32) -> vec2<u32> {
+  return vec2<u32>((a.x >> k) | (a.y << (32u - k)), a.y >> k);
+}
+
+// The top 53 bits of SplitMix64's output for this step's key (seed ^ tick * golden, from the
+// CPU) and cell i.
+fn noise53(key: vec2<u32>, i: u32) -> vec2<u32> {
+  var z = key ^ mul64(vec2<u32>(i, 0u), vec2<u32>(0xD192ED03u, 0xD1B54A32u));
+  z = mul64(z ^ shr64(z, 30u), vec2<u32>(0x1CE4E5B9u, 0xBF58476Du));
+  z = mul64(z ^ shr64(z, 27u), vec2<u32>(0x133111EBu, 0x94D049BBu));
+  z = z ^ shr64(z, 31u);
+  return shr64(z, 11u);
+}
+
+fn below64(x: vec2<u32>, t: vec2<u32>) -> bool {
+  return x.y < t.y || (x.y == t.y && x.x < t.x);
 }
 
 // Larger than Life: state-1 cells within reach of cell i (aux at p.k1), past a dead edge one
@@ -504,6 +546,21 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
           }
         }
         na = bs_age(s, v, age);
+      }
+      // Forest fire (step.rs `step_forest`): table[0] = (key low, key high, growth threshold
+      // low, high), table[1].xy = the lightning threshold; a cell grows or is struck when the
+      // top 53 bits of its noise are below the threshold.
+      case 11u: {
+        let key = p.table[0].xy;
+        if (s == 2u) {
+          v = 0u;
+        } else if (s == 1u) {
+          let burning = gather(i, 2u, 2u, &deg).x > 0u;
+          if (burning || below64(noise53(key, i), p.table[1].xy)) { v = 2u; } else { v = 1u; }
+        } else {
+          v = select(0u, 1u, below64(noise53(key, i), p.table[0].zw));
+        }
+        na = commit_age(s, v, age);
       }
       default: {}
     }

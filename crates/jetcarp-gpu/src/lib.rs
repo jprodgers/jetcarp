@@ -7,6 +7,7 @@
 //! - JACA, with its annihilation glow and counts
 //! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
 //! - Larger than Life, its reach in an aux buffer
+//! - forest fire, with the CPU's 64-bit random numbers
 //!
 //! Results are bit-identical to the CPU steppers in `jetcarp-core`: everything the state hash
 //! covers, and JACA's glow and counts. The engine keeps every piece of bookkeeping (see
@@ -64,6 +65,7 @@ const R_JACA: u32 = 7;
 const R_B0: u32 = 8;
 const R_MARGOLUS: u32 = 9;
 const R_LTL: u32 = 10;
+const R_FOREST: u32 = 11;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -92,6 +94,7 @@ struct Params {
     stat: u32,
     /// Priority rules: the packed rows (see [`priority_words`]), `k1` words.
     /// Margolus: the block table in `table[0]`.
+    /// Forest fire: the noise key and thresholds (see [`forest_threshold`]).
     table: [[u32; 4]; 11],
 }
 
@@ -150,6 +153,25 @@ enum Op {
 const FLAG_COMPARE: u32 = 1;
 const FLAG_POP: u32 = 2;
 const FLAG_CHANGES: u32 = 4;
+
+/// Forest fire: the CPU's test `noise01(..) < p`, where the noise is `x / 2^53` for a 53-bit
+/// integer `x`, holds exactly when `x < ceil(p * 2^53)` (the product is exact in f64). The
+/// threshold as (low, high) words, so the GPU compares integers only.
+fn forest_threshold(p: f64) -> [u32; 2] {
+    let t: u64 = if p.is_nan() || p <= 0.0 {
+        0
+    } else if p >= 1.0 {
+        1 << 53
+    } else {
+        (p * (1u64 << 53) as f64).ceil() as u64
+    };
+    [t as u32, (t >> 32) as u32]
+}
+
+/// The step's noise key: the part of the CPU's `noise01` that does not depend on the cell.
+fn forest_key(seed: u64, tick: u64) -> u64 {
+    seed ^ tick.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
 
 /// Larger than Life's birth and survival tables as bitsets of equal length, long enough for
 /// counts up to `max` (the most cells any cell reaches; counts past the CPU's tables are false).
@@ -243,6 +265,12 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
         }
         // The reach and tables go to the aux buffer (see `GpuSim::prepare_aux`).
         Rule::Ltl(ref l) => (p.rule, p.states) = (R_LTL, l.states as u32),
+        Rule::ForestFire { p: grow, f: strike } => {
+            p.rule = R_FOREST;
+            let (g, s) = (forest_threshold(grow), forest_threshold(strike));
+            (p.table[0][2], p.table[0][3]) = (g[0], g[1]);
+            (p.table[1][0], p.table[1][1]) = (s[0], s[1]);
+        }
         _ => return Err(()),
     }
     Ok(p)
@@ -1181,6 +1209,10 @@ impl GpuSim {
                     // B0: the 1-based step number's parity, and whether it is the first step.
                     R_B0 => p.k1 = ((ticks + 1) & 1) as u32 | ((ticks == 0) as u32) << 1,
                     R_MARGOLUS => p.k2 = (ticks & 1) as u32,
+                    R_FOREST => {
+                        let key = forest_key(ca.noise, ticks + 1);
+                        (p.table[0][0], p.table[0][1]) = (key as u32, (key >> 32) as u32);
+                    }
                     R_JACA => {
                         p.stat = stats.len() as u32;
                         stats.push((g, ei));
@@ -1644,4 +1676,43 @@ fn adapter_list() -> Vec<AdapterReport> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The integer threshold decides exactly as the CPU's `x / 2^53 < p` in f64, right at the
+    /// boundary, for probabilities of every size.
+    #[test]
+    fn forest_threshold_is_exact() {
+        let two53 = (1u64 << 53) as f64;
+        let mut ps = vec![
+            0.0, 1.0, 0.5, 0.25, 1e-300, 1e-17, 1e-9, 0.01, 0.0001, 0.3, 0.999999,
+        ];
+        ps.extend([
+            1.0 / two53,
+            3.0 / two53,
+            1.0 - 1.0 / two53,
+            f64::MIN_POSITIVE,
+        ]);
+        let mut x = 0x2545_f491_4f6c_dd1du64;
+        for _ in 0..2000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            ps.push((x >> 11) as f64 / two53);
+            ps.push(((x >> 11) as f64 / two53).powi(5));
+        }
+        for p in ps {
+            let [lo, hi] = forest_threshold(p);
+            let t = lo as u64 | (hi as u64) << 32;
+            for x in t.saturating_sub(2)..(t + 2).min(1 << 53) {
+                assert_eq!(x < t, (x as f64) / two53 < p, "p = {p:e}, x = {x}");
+            }
+        }
+        assert_eq!(forest_threshold(f64::NAN), [0, 0]);
+        assert_eq!(forest_threshold(-1.0), [0, 0]);
+        assert_eq!(forest_threshold(2.0), [0, 1 << 21]);
+    }
 }
