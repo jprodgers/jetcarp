@@ -4,6 +4,7 @@
 
 use crate::caption::{self, Place};
 use crate::gpu::{Geometry, TileDraw};
+use crate::host_settings::Tuning;
 use crate::profiles::{self, Profile};
 use crate::reseed_presets::blobs_mode;
 use crate::rotation::{Action, Clock, Observation, Player, Rotation, Slot};
@@ -46,6 +47,8 @@ struct Built {
     note: Option<String>,
     /// The rotation's slot it was built for.
     slot: usize,
+    /// The cell size came from a tuning, not the scene.
+    tuned: bool,
 }
 
 struct Show {
@@ -58,6 +61,10 @@ struct Show {
     zoom: f64,
     speed: f32,
     gpu: bool,
+    /// The cell size it was built at, in physical pixels.
+    cell_px: f32,
+    /// That size came from a tuning, not the scene.
+    tuned: bool,
     /// Where this item's settle watches start in the world's reseed policies.
     watch_from: usize,
     /// The player knows this item is running.
@@ -78,6 +85,15 @@ pub struct StageStatus {
     pub paused: bool,
     pub building: bool,
     pub canvas: [f64; 2],
+    /// Physical pixels per point.
+    pub scale: f64,
+    /// The cell size the world shown was built at, in physical pixels (0 before it is built).
+    pub cell_px: f32,
+    /// That size came from *Fit to this computer*, not the scene.
+    pub tuned: bool,
+    /// The grid's width and height in cells, where the tiling has them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid: Option<[u32; 2]>,
     pub seconds_left: Option<f64>,
     pub caption: Vec<String>,
 }
@@ -104,6 +120,8 @@ pub struct Stage {
     epoch: u64,
     failures: usize,
     notes: Vec<String>,
+    /// Cell sizes chosen for this computer, by scene.
+    tuned: Option<Tuning>,
 }
 
 /// About how many cells `scene` will have (None: cannot tell before building it).
@@ -158,11 +176,49 @@ impl Stage {
             epoch: 1,
             failures: 0,
             notes: vec![],
+            tuned: None,
         })
+    }
+
+    /// Cell sizes chosen for this computer, by scene (None: each scene's own). The item showing is
+    /// built again when its size changes.
+    pub fn set_tuned(&mut self, tuned: Option<Tuning>) {
+        if tuned == self.tuned {
+            return;
+        }
+        let before = self.current_cell_px();
+        self.tuned = tuned;
+        if before != self.current_cell_px() && (self.show.is_some() || self.building.is_some()) {
+            self.load_pending = true;
+        }
+    }
+
+    /// The cell size, in pixels, the current item is built at, and whether a tuning chose it.
+    fn current_cell_px(&self) -> Option<(f32, bool)> {
+        let slot = self.player.current()?;
+        Some(self.cell_px_for(&slot.label, &slot.profile))
+    }
+
+    /// The cell size, in pixels, for an item: its profile's on this screen, or a tuning's.
+    fn cell_px_for(&self, label: &str, profile: &Profile) -> (f32, bool) {
+        let design = cell_pixels(profile.cell_px, self.scale);
+        match self
+            .tuned
+            .as_ref()
+            .and_then(|t| t.cell_px_for(label, design, self.canvas))
+        {
+            Some(px) => (px, true),
+            None => (design, false),
+        }
     }
 
     pub fn rotation(&self) -> &str {
         &self.rotation
+    }
+
+    /// The canvas its worlds are built for, in physical pixels.
+    pub fn canvas(&self) -> [f64; 2] {
+        self.canvas
     }
 
     pub fn paused(&self) -> bool {
@@ -181,6 +237,20 @@ impl Stage {
 
     pub fn world(&self) -> Option<&World> {
         self.show.as_ref().map(|s| &s.world)
+    }
+
+    /// Whether the world shown steps on the GPU where it can (the scene's choice, until the
+    /// tuner decides for a trial).
+    pub fn set_world_gpu(&mut self, on: bool) {
+        if let Some(s) = &mut self.show {
+            s.gpu = on;
+        }
+    }
+
+    /// The world shown as a scene: what it was built from, its grid's size included, so the
+    /// picture can be made again.
+    pub fn scene(&self) -> Option<Scene> {
+        self.show.as_ref().map(|s| s.world.to_scene())
     }
 
     /// Problems since the last call.
@@ -263,7 +333,8 @@ impl Stage {
         };
         let (mut profile, scene, note) = profiles::resolve(&slot.profile, &*self.lookup);
         // In pixels from here on.
-        profile.cell_px = cell_pixels(profile.cell_px, self.scale);
+        let (px, tuned) = self.cell_px_for(&slot.label, &profile);
+        profile.cell_px = px;
         let canvas = self.canvas;
         let scene = profiles::apply_profile(&profile, scene, Some(canvas));
         if let Some(n) = estimate_cells(&scene)
@@ -290,6 +361,7 @@ impl Stage {
                         profile,
                         note,
                         slot: index,
+                        tuned,
                     }
                 });
                 let _ = tx.send(built);
@@ -310,6 +382,7 @@ impl Stage {
             profile,
             note,
             slot,
+            tuned,
         } = b;
         if let Some(n) = note {
             self.notes.push(n);
@@ -335,6 +408,8 @@ impl Stage {
             zoom,
             speed: profile.speed,
             gpu: profile.gpu,
+            cell_px: profile.cell_px,
+            tuned,
             watch_from: 0,
             announced: false,
             since: now,
@@ -549,11 +624,15 @@ impl Stage {
     /// What the stage is doing. Just after a skip the old item's world is still on screen while
     /// the new one is built: the numbers are then the new item's (nothing yet), not the old one's.
     pub fn status(&self) -> StageStatus {
-        let w = self
+        let shown = self
             .show
             .as_ref()
-            .filter(|s| s.slot == self.player.current_index())
-            .map(|s| &s.world);
+            .filter(|s| s.slot == self.player.current_index());
+        let w = shown.map(|s| &s.world);
+        let grid = w.and_then(|w| match w.topo.spec.size {
+            Some(SizeSpec::Rect { w, h }) => Some([w, h]),
+            _ => None,
+        });
         StageStatus {
             rotation: self.rotation.clone(),
             label: self
@@ -568,6 +647,10 @@ impl Stage {
             paused: self.paused,
             building: self.building.is_some() || self.load_pending,
             canvas: self.canvas,
+            scale: self.scale,
+            cell_px: shown.map_or(0.0, |s| s.cell_px),
+            tuned: shown.is_some_and(|s| s.tuned),
+            grid,
             seconds_left: self.player.seconds_left(self.play_time),
             caption: w
                 .map(|w| caption::lines(w, Some(self.place()), true))
