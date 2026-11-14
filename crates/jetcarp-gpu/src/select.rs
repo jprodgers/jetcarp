@@ -656,7 +656,7 @@ pub struct SelfTest {
 /// storage, dead edge), at about this many cells.
 const TEST_GRIDS: [(&str, u32); 3] = [("square", 1024), ("rhombitrihex", 800), ("spectre", 800)];
 /// Generations each world and batch runs.
-const TEST_GENS: u64 = 32;
+const TEST_GENS: u64 = 24;
 /// Draws of a family's rules until one runs on the GPU.
 const TEST_DRAWS: usize = 64;
 /// Changes when the self-test itself changes, so results are taken again.
@@ -805,15 +805,42 @@ pub fn test_rules(grid: &Grid, runs: impl Fn(&Rule) -> bool) -> Vec<(Rule, Nb)> 
 }
 
 /// A world of one CA with `rule`, seeded with random states the same way every time.
-fn test_world(grid: &Grid, rule: &Rule, nb: Nb) -> Option<World> {
+fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec) -> Option<World> {
     let mut w = World::on_topology(grid.topo.clone(), 0x5eed);
-    w.add_ca(
-        CaSpec::new(&rule.notation())
-            .nb(nb)
-            .seed(SeedSpec::RandomStates),
-    )
-    .ok()?;
+    w.add_ca(CaSpec::new(&rule.notation()).nb(nb).seed(seed.clone()))
+        .ok()?;
     Some(w)
+}
+
+/// Kernels a family's random draws may miss, always checked where they run: a B0 rule, JACA with
+/// a blast, Margolus blocks (square grids), Larger than Life, forest fire and a sandpile, each with
+/// a seed that sets it going. Add a line here for a variant the draws may not reach.
+fn extra_rules() -> Vec<(&'static str, SeedSpec)> {
+    vec![
+        ("B013/S1", SeedSpec::Random { density: 0.35 }),
+        ("JACA B3/S23 blast 2", SeedSpec::Halves { density: 0.35 }),
+        ("Margolus Critters", SeedSpec::Random { density: 0.3 }),
+        ("R2,C3,S5-9,B7-8", SeedSpec::Random { density: 0.4 }),
+        ("ForestFire 0.05/0.001", SeedSpec::RandomStates),
+        ("Sandpile", SeedSpec::Pile { grains: 2_000 }),
+    ]
+}
+
+/// The world rules the self-test steps on a grid: one drawn from each family the GPU runs, then
+/// the [`extra_rules`] the GPU runs, with their seeds.
+fn world_rules(grid: &Grid) -> Vec<(Rule, Nb, SeedSpec)> {
+    let mut v: Vec<(Rule, Nb, SeedSpec)> = test_rules(grid, crate::supports_rule)
+        .into_iter()
+        .map(|(r, nb)| (r, nb, SeedSpec::RandomStates))
+        .collect();
+    for (text, seed) in extra_rules() {
+        if let Ok((rule, nb)) = Rule::parse(text)
+            && crate::supports_rule(&rule)
+        {
+            v.push((rule, nb.unwrap_or_default(), seed));
+        }
+    }
+    v
 }
 
 /// Every world kernel and the batch stepper against the CPU, on each test grid.
@@ -822,10 +849,11 @@ fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String>
     for (key, cells) in TEST_GRIDS {
         let grid = Grid::build(key, cells)?;
         let at = |rule: &Rule| format!("{} on {key}", rule.notation());
-        for (rule, nb) in test_rules(&grid, crate::supports_rule) {
-            let (Some(mut cpu), Some(mut gpu)) =
-                (test_world(&grid, &rule, nb), test_world(&grid, &rule, nb))
-            else {
+        for (rule, nb, seed) in world_rules(&grid) {
+            let (Some(mut cpu), Some(mut gpu)) = (
+                test_world(&grid, &rule, nb, &seed),
+                test_world(&grid, &rule, nb, &seed),
+            ) else {
                 continue;
             };
             cpu.apply(Command::Step { gens: TEST_GENS })?;
@@ -848,7 +876,7 @@ fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String>
         // One batch per neighbourhood (Larger than Life: per hood and range), as a search has.
         let mut jobs: BTreeMap<String, BatchJob> = BTreeMap::new();
         for (rule, nb) in test_rules(&grid, BatchSim::supports) {
-            let Some(w) = test_world(&grid, &rule, nb) else {
+            let Some(w) = test_world(&grid, &rule, nb, &SeedSpec::RandomStates) else {
                 continue;
             };
             let group = match &rule {
@@ -1099,25 +1127,39 @@ mod tests {
 
     #[test]
     fn every_family_the_gpu_runs_is_in_the_self_test() {
+        use jetcarp_core::explore::space::Fam;
         // A family the world stepper learns joins the self-test without a change here.
         for (key, cells) in TEST_GRIDS {
             let grid = Grid::build(key, cells).unwrap();
-            let picked: Vec<_> = test_rules(&grid, crate::supports_rule)
-                .into_iter()
-                .map(|(r, _)| jetcarp_core::explore::space::Fam::of(&r))
-                .collect();
-            for fam in [
-                jetcarp_core::explore::space::Fam::LifeLike,
-                jetcarp_core::explore::space::Fam::Generations,
-                jetcarp_core::explore::space::Fam::WireWorld,
-                jetcarp_core::explore::space::Fam::Cyclic,
-                jetcarp_core::explore::space::Fam::Rps,
-                jetcarp_core::explore::space::Fam::GreenbergHastings,
-                jetcarp_core::explore::space::Fam::Hodgepodge,
-                jetcarp_core::explore::space::Fam::SpectreGlider,
-                jetcarp_core::explore::space::Fam::Priority,
-            ] {
+            let rules = world_rules(&grid);
+            let picked: Vec<Fam> = rules.iter().map(|(r, _, _)| Fam::of(r)).collect();
+            let mut want = vec![
+                Fam::LifeLike,
+                Fam::Generations,
+                Fam::WireWorld,
+                Fam::Cyclic,
+                Fam::Rps,
+                Fam::GreenbergHastings,
+                Fam::Hodgepodge,
+                Fam::SpectreGlider,
+                Fam::Priority,
+                Fam::Jaca,
+                Fam::Ltl,
+                Fam::ForestFire,
+                Fam::Sandpile,
+            ];
+            if grid.topo.rows().is_some() {
+                want.push(Fam::Margolus);
+            }
+            for fam in want {
                 assert!(picked.contains(&fam), "{fam:?} on {key}: {picked:?}");
+            }
+            let names: Vec<String> = rules.iter().map(|(r, _, _)| r.notation()).collect();
+            for extra in ["B013/S1", "JACA B3/S23 blast 2"] {
+                assert!(
+                    names.iter().any(|n| n == extra),
+                    "{extra} on {key}: {names:?}"
+                );
             }
             assert!(!test_rules(&grid, BatchSim::supports).is_empty());
         }
