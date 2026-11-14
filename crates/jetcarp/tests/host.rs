@@ -459,3 +459,146 @@ fn the_login_entry_starts_the_host_for_the_desktop_and_comes_off() {
     assert!(!entry.exists(), "the old entry is removed too");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A screen tuned for this computer builds a tuned scene at the size found, and the scene it shows
+/// (`scene`) records that grid, so it replays as shown; a scene the tuning does not name keeps its
+/// own size. A tuner's hold pauses the screens until it lets go.
+#[test]
+fn a_tuned_size_is_applied_and_recorded() {
+    let dir = home("tuned");
+    let settings = json!({"screens": [{"rotation": "Wolfram series", "tuning": {
+        "rotation": "Wolfram series", "canvas": [160, 120], "scale": 1.0,
+        "scenes": [{"scene": "W0", "design_px": 4.0, "cell_px": 8.0, "cells": 300,
+                    "fits": true}]}}]});
+    std::fs::write(dir.join("config/jetcarp/host.json"), settings.to_string()).unwrap();
+    let child = spawn(&dir, &[]);
+    let h = Host { child, home: dir };
+    let v = h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(0),
+        "the tuned scene to run",
+    );
+    let s = Host::stage(&v);
+    assert_eq!(
+        (s["label"].as_str(), s["caption"][0].as_str()),
+        (Some("W0"), Some("Rule 0"))
+    );
+    assert_eq!(s["cell_px"], 8.0, "{s}");
+    assert_eq!(s["tuned"], true);
+    assert_eq!(s["grid"], json!([20, 15]));
+    assert_eq!(s["cells"], 300);
+    // The scene it shows, as `jetcarp host scene` saves it, builds the same grid.
+    let shown = h.call(json!({"action": "scene"})).unwrap();
+    assert_eq!(shown["tuned"], true);
+    let scene: jetcarp_core::Scene = serde_json::from_value(shown["scene"].clone()).unwrap();
+    let w = jetcarp_core::World::from_scene(&scene).unwrap();
+    assert_eq!(w.topo.len(), 300);
+    // W1 (Rule 1) was not tuned: its own 4 px.
+    h.call(json!({"action": "next"})).unwrap();
+    let v = h.wait(
+        |v| Host::stage(v)["caption"][0] == "Rule 1" && Host::stage(v)["cells"].as_u64() > Some(0),
+        "the next rule",
+    );
+    let s = Host::stage(&v);
+    assert_eq!(
+        (s["cell_px"].as_f64(), s["tuned"].as_bool()),
+        (Some(4.0), Some(false))
+    );
+    assert_eq!(s["grid"], json!([40, 30]));
+    // A tuner holds the screens, and lets go.
+    let reply = h.call(json!({"action": "tuning", "on": true})).unwrap();
+    assert_eq!(reply["ok"], true);
+    let v = h.wait(|v| Host::stage(v)["paused"] == true, "the tuning hold");
+    assert!(v["held"].to_string().contains("tuning"), "{v}");
+    assert!(
+        v["paused_why"]
+            .to_string()
+            .contains("tuning the desktop background"),
+        "{v}"
+    );
+    assert_eq!(v["tuning"]["running"], true);
+    h.call(json!({"action": "tuning", "on": false})).unwrap();
+    let v = h.wait(|v| Host::stage(v)["paused"] == false, "it to carry on");
+    assert_eq!(v["tuning"]["running"], false);
+}
+
+/// `jetcarp host tune` with no host running: each scene of the wallpaper's rotation is tried at the
+/// size given, the progress comes as JSON lines, and a size for each scene is saved with the
+/// rotation and canvas it was found for.
+#[test]
+fn host_tune_saves_a_size_for_each_scene() {
+    let dir = home("tune");
+    let rotation = json!({"name": "Two rules",
+        "items": [{"source": {"kind": "series", "rules": "B3/S23,B36/S23"}}]});
+    std::fs::write(
+        dir.join("config/jetcarp/rotations/two.json"),
+        rotation.to_string(),
+    )
+    .unwrap();
+    let settings = json!({"screens": [{"rotation": "Two rules", "place": "wallpaper"}]});
+    std::fs::write(dir.join("config/jetcarp/host.json"), settings.to_string()).unwrap();
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args([
+        "host",
+        "tune",
+        "--json",
+        "--canvas",
+        "160x120",
+        "--trial-seconds",
+        "0.5",
+        "--cpu-limit",
+        "50",
+    ])
+    .stdin(Stdio::null());
+    with_env(&mut c, &dir);
+    let out = c.output().unwrap();
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(out.status.success(), "{stdout}\n{stderr}");
+    let events: Vec<Value> = stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("{e}: {l}")))
+        .collect();
+    assert_eq!(events[0]["event"], "start", "{stdout}");
+    assert_eq!(events[0]["scenes"], 2);
+    let scenes = events.iter().filter(|e| e["event"] == "scene").count();
+    assert_eq!(scenes, 2, "{stdout}");
+    let last = events.last().unwrap();
+    assert_eq!(last["event"], "done", "{stdout}");
+    assert!(
+        last["saved"]
+            .as_str()
+            .is_some_and(|p| p.ends_with("host.json"))
+    );
+    let saved: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("config/jetcarp/host.json")).unwrap(),
+    )
+    .unwrap();
+    let t = &saved["screens"][0]["tuning"];
+    assert_eq!(t["rotation"], "Two rules");
+    assert_eq!(t["canvas"], json!([160, 120]));
+    assert_eq!(
+        saved["tune"]["cpu_percent"], 50.0,
+        "the limit given is saved"
+    );
+    let names: Vec<&str> = t["scenes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["scene"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["B3/S23", "B36/S23"]);
+    // 160 x 120 is too small to coarsen a 4 px scene (the coarsest keeps 60 cells across), so each
+    // keeps its own size, measured once.
+    for s in t["scenes"].as_array().unwrap() {
+        assert_eq!(
+            (s["design_px"].as_f64(), s["cell_px"].as_f64()),
+            (Some(4.0), Some(4.0))
+        );
+        assert_eq!(s["cells"], 1200);
+    }
+    let trials = events.iter().filter(|e| e["event"] == "trial").count();
+    assert_eq!(trials, 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
