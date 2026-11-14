@@ -437,8 +437,9 @@ fn shots_wallpaper() {
     h.shot("wallpaper-desktop-pane");
 }
 
-/// The Desktop background pane once tuned (`guides/wallpapers.md`): settings with a tuning for
-/// three scenes of the first screen's rotation, on an empty world, so it needs no library.
+/// The Desktop background pane once tuned: settings with a tuning for three scenes of the first
+/// screen's rotation (what `jetcarp host tune --cpu-limit 1 --gpu-limit 3` found for them at
+/// 2560 x 1440 on the Radeon 8060S machine), on an empty world, so it needs no library.
 #[test]
 #[ignore]
 fn shots_desktop_pane_tuned() {
@@ -450,6 +451,11 @@ fn shots_desktop_pane_tuned() {
     };
     let mut s = HostSettings::default();
     s.screens[0].place = Place::Wallpaper;
+    s.tune = TuneLimits {
+        cpu_percent: 1.0,
+        gpu_percent: 3.0,
+        ..TuneLimits::default()
+    };
     let scene = |name: &str, design: f32, px: f32, cpu: f32, gpu: f32, ms: f32| TunedScene {
         scene: name.into(),
         design_px: design,
@@ -467,19 +473,19 @@ fn shots_desktop_pane_tuned() {
         rotation: s.screens[0].rotation.clone(),
         canvas: [2560, 1440],
         scale: 1.0,
-        limits: TuneLimits::default(),
+        limits: s.tune,
         fps: 30.0,
         scenes: vec![
-            scene("profile Life", 3.0, 3.0, 1.8, 2.8, 4.2),
+            scene("profile Life", 3.0, 4.0, 0.7, 2.0, 4.9),
             scene(
                 "Quick Start rule:ForestFire 0.01/0.0001",
                 2.0,
-                3.0,
-                1.9,
-                3.9,
-                5.1,
+                4.0,
+                0.8,
+                2.1,
+                5.4,
             ),
-            scene("profile Hodgepodge", 3.0, 3.0, 2.2, 2.7, 5.8),
+            scene("profile Hodgepodge", 3.0, 6.0, 0.4, 2.3, 4.5),
         ],
     });
     s.save().unwrap();

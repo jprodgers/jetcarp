@@ -220,10 +220,11 @@ of cells. It never makes a scene's cells smaller than the scene's own size.
 $ jetcarp host tune --cpu-limit 1 --gpu-limit 3
 tuning 7 scenes on 1 screen for 30 frames a second, on AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0, scene 1 of 7: profile Life at 3 px
-  3 px, 409,440 cells: processor 1.8%, GPU 2.8%, frames 4.2 ms (95th percentile), stepped on the GPU — over: processor 1.8% (over 0.8%: the 1.0% limit, less 20%), GPU 2.8% (over 2.4%: the 3.0% limit, less 20%)
+  3 px, 409,440 cells: processor 1.1%, GPU 2.8%, frames 5.9 ms (95th percentile), stepped on the GPU — over: processor 1.1% (over 0.8%: the 1.0% limit, less 20%), GPU 2.8% (over 2.4%: the 3.0% limit, less 20%)
 screen 0, scene 1 of 7: profile Life at 24 px
+  24 px, 6,360 cells: processor 0.1%, GPU 1.0%, frames 3.0 ms (95th percentile), stepped on the processor — fits
 ...
-screen 0: profile Life: 12 px (its own: 3 px), 25,560 cells; processor 0.8%, GPU 1.7%, frames 3.5 ms
+screen 0: profile Life: 4 px (its own: 3 px), 230,400 cells; processor 0.7%, GPU 2.0%, frames 4.9 ms
 ...
 tuned 7 scene(s) (GPU time from the system's count of JETCARP's GPU time); saved to ~/.config/jetcarp/host.json
 ```
