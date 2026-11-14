@@ -883,6 +883,12 @@ fn run_gone(lib: &Library, v: &JobView, now: i64) -> bool {
     quiet && jobs::lock_held(lib, v.job) == Some(false)
 }
 
+/// A job no longer marked running whose run still holds it: asked to stop, it lets go at its
+/// next checkpoint. (A run in this process holds the job's lease the same way.)
+fn stopping(lib: &Library, v: &JobView) -> bool {
+    v.status != "running" && jobs::lock_held(lib, v.job) == Some(true)
+}
+
 /// `jobs.wait`.
 pub struct JobsWait;
 impl Op for JobsWait {
@@ -898,12 +904,15 @@ impl Op for JobsWait {
         loop {
             let v = view(cx, &lib, a.job, None)?;
             let waited = t0.elapsed().as_secs_f64();
+            let out_of_time = p.cancelled() || timeout.is_some_and(|t| waited >= t);
             let ended = match v.status.as_str() {
                 "running" if run_gone(&lib, &v, dashboard::now_seconds()) => Some("gone"),
-                "running" if p.cancelled() || timeout.is_some_and(|t| waited >= t) => {
-                    Some("timeout")
-                }
+                "running" if out_of_time => Some("timeout"),
                 "running" => None,
+                // A stop marks the job paused at once (that is how its process hears of it), but
+                // the run lets go only at its next checkpoint: until no process holds the job, it
+                // is still stopping, and `jobs resume` would be refused.
+                _ if stopping(&lib, &v) => out_of_time.then_some("timeout"),
                 "done" => Some("done"),
                 "failed" => Some("failed"),
                 _ => Some("paused"),
@@ -1661,6 +1670,49 @@ mod tests {
         assert!(!run_gone(&lib, &v, now + 120), "its lock is held");
         drop(lease);
         assert!(run_gone(&lib, &v, now + 120), "let go without finishing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A stop marks the job paused at once, but `jobs.wait` waits until its run lets go of it
+    /// (found on the 0.4.2 release candidate: `jobs stop` then `jobs wait` returned at once, and
+    /// the `jobs resume` after it was refused because the run still held the job).
+    #[test]
+    fn wait_after_a_stop_waits_until_the_run_lets_go() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-api-stopwait-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cx = Ctx::new().with_library(Some(dir.join("lib")));
+        let lib = cx.library();
+        let js = jobs::JobSpec {
+            strategy: "hunt".into(),
+            spec: serde_json::json!(jetcarp_search::hunt::HuntSpec::default()),
+            label: None,
+            budget: Default::default(),
+        };
+        let job = jobs::create(&lib, &js).unwrap();
+        lib.update_job(job, Some(JobStatus::Running), None, None)
+            .unwrap();
+        let lease = jobs::Lease::acquire(&lib, job).unwrap();
+        jobs::request_stop(&lib, job).unwrap();
+        let wait = |t: f64| {
+            JobsWait::run(
+                &cx,
+                WaitIn {
+                    job,
+                    timeout_s: Some(t),
+                },
+                &crate::op::Quiet,
+            )
+            .unwrap()
+        };
+        let w = wait(0.6);
+        assert_eq!(
+            (w.status.as_str(), w.ended.as_str()),
+            ("paused", "timeout"),
+            "still held"
+        );
+        drop(lease);
+        let w = wait(5.0);
+        assert_eq!(w.ended, "paused", "let go");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
