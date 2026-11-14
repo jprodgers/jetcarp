@@ -641,6 +641,10 @@ impl App {
         }
         let names: Vec<String> = geometry.iter().map(|g| g.0.clone()).collect();
         let renamed = names != self.core.monitors;
+        self.core.monitor_hz = el
+            .available_monitors()
+            .map(|m| m.refresh_rate_millihertz().map(|h| h as f32 / 1000.0))
+            .collect();
         self.core.monitor_rects = geometry
             .iter()
             .map(|g| Rect::new(g.1.0, g.1.1, g.2.0, g.2.1))

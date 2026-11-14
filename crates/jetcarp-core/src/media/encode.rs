@@ -268,8 +268,17 @@ pub fn webp(frames: &[&Image], delay_ms: u32, background: [u8; 4]) -> Result<Vec
 
 /// A PNG: indexed when the image has at most 256 colours, else RGBA.
 pub fn png(img: &Image) -> Result<Vec<u8>, String> {
+    png_with_text(img, &[])
+}
+
+/// The same, with text chunks (such as [`crate::render::png_metadata`]'s scene JSON).
+pub fn png_with_text(img: &Image, text: &[(&str, String)]) -> Result<Vec<u8>, String> {
     let mut buf = Vec::new();
     let mut enc = png::Encoder::new(&mut buf, img.width, img.height);
+    for (k, v) in text {
+        enc.add_itxt_chunk(k.to_string(), v.clone())
+            .map_err(|e| e.to_string())?;
+    }
     enc.set_depth(png::BitDepth::Eight);
     enc.set_compression(png::Compression::Balanced);
     enc.set_filter(png::Filter::Adaptive);

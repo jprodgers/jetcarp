@@ -5,6 +5,7 @@ use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSett
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
+use jetcarp_display::tuning::{TuneChild, TuneEvent, TuneRequest};
 use jetcarp_gpu::select;
 use jetcarp_mcp::link::{HOST_ENDPOINT, HOST_TOOL, Listener, Pending};
 use serde_json::{Value, json};
@@ -17,7 +18,7 @@ const DEFAULT_CANVAS: [f64; 2] = [1280.0, 720.0];
 /// Frames per second while everything is paused.
 const PAUSED_FPS: f32 = 5.0;
 /// Share of a frame spent stepping; the rest is for drawing.
-const STEP_SHARE: f32 = 0.6;
+pub(crate) const STEP_SHARE: f32 = 0.6;
 const MEMORY_CHECK: f64 = 2.0;
 /// How often the battery and the processor load are looked at.
 const POWER_CHECK: f64 = 5.0;
@@ -29,6 +30,10 @@ const EXTENSION_WAIT: f64 = 20.0;
 const EXTENSION_SILENCE: f64 = 10.0;
 /// Longest a quitting host waits for its answers to be written back.
 const QUIT_GRACE: f64 = 1.0;
+/// A tuner that has not renewed its hold for this long has gone: the screens carry on.
+const TUNING_SILENCE: f64 = 30.0;
+/// The monitors must stay as they are this long before the host tunes again for them.
+const RETUNE_SETTLE: f64 = 15.0;
 
 /// Whether wallpapers can be shown, as far as the host knows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -53,16 +58,27 @@ impl SharedGpu {
     /// A device with no surface, on the adapter the GPU policy chooses for a display (None when
     /// the machine has no GPU).
     pub fn headless() -> Option<SharedGpu> {
+        SharedGpu::headless_with(wgpu::Features::empty())
+    }
+
+    /// The same, with those of `optional` the adapter has (the tuner's timestamp queries).
+    pub fn headless_with(optional: wgpu::Features) -> Option<SharedGpu> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let choice = select::pick(&instance, select::Purpose::Display, None).ok()?;
-        SharedGpu::on(choice.adapter)
+        SharedGpu::on_with(choice.adapter, optional)
     }
 
     /// A device on this adapter.
     pub fn on(adapter: wgpu::Adapter) -> Option<SharedGpu> {
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&device_descriptor(&adapter))).ok()?;
+        SharedGpu::on_with(adapter, wgpu::Features::empty())
+    }
+
+    /// A device on this adapter, with those of `optional` it has.
+    fn on_with(adapter: wgpu::Adapter, optional: wgpu::Features) -> Option<SharedGpu> {
+        let mut desc = device_descriptor(&adapter);
+        desc.required_features |= adapter.features() & optional;
+        let (device, queue) = pollster::block_on(adapter.request_device(&desc)).ok()?;
         Some(SharedGpu {
             adapter,
             device,
@@ -128,6 +144,40 @@ pub struct Core {
     /// Asked to quit; the host ends once [`Core::finished`] says so.
     pub quit: bool,
     quit_at: Option<f64>,
+    /// Each monitor's refresh rate, in the OS's order (None: not known).
+    pub monitor_hz: Vec<Option<f32>>,
+    /// When a tuner last renewed its `tuning` hold.
+    tuning_at: Option<f64>,
+    /// A tuner this host started (for `tune`, or because the monitors changed).
+    tuner: Option<TuneChild>,
+    /// It was started because the monitors changed.
+    tuner_auto: bool,
+    /// How the last tuner this host started ended, for `status`.
+    tuner_last: Option<Value>,
+    /// Since when the tuned screens' sizes have differed from their tuning.
+    retune_since: Option<f64>,
+    /// The sizes the host last tuned again for by itself, so it tries each arrangement once.
+    retune_tried: Option<Vec<(usize, [u32; 2])>>,
+}
+
+/// The tuned desktop background screens whose canvas is not the one their tuning was found for,
+/// with the canvas each has now: what a tune by itself would be for. `screens` gives each running
+/// screen's place, canvas, and whether it shows.
+pub fn retune_wanted(
+    settings: &HostSettings,
+    screens: &[(Place, [f64; 2], bool)],
+) -> Vec<(usize, [u32; 2])> {
+    screens
+        .iter()
+        .enumerate()
+        .filter(|(_, (place, _, shown))| *place == Place::Wallpaper && *shown)
+        .filter_map(|(i, &(_, canvas, _))| {
+            let s = settings.screens.get(i)?;
+            let t = s.tuning.as_ref().filter(|t| t.rotation == s.rotation)?;
+            (!t.fits_canvas(canvas))
+                .then(|| (i, [canvas[0].round() as u32, canvas[1].round() as u32]))
+        })
+        .collect()
 }
 
 /// The wallpaper screen monitor `i` of `count` showed: the one placed on it, else one across every
@@ -169,6 +219,7 @@ pub fn pause_reasons<'a>(
             "battery" => "on battery".to_string(),
             "busy" => "the processor is busy".into(),
             "covered" => "held by the desktop: windows cover it".into(),
+            "tuning" => "tuning the desktop background for this computer".into(),
             "dark" => "held by the desktop: the screen is locked or off".into(),
             other => format!("held by the desktop ({other})"),
         };
@@ -284,6 +335,13 @@ impl Core {
             login: false,
             quit: false,
             quit_at: None,
+            monitor_hz: vec![],
+            tuning_at: None,
+            tuner: None,
+            tuner_auto: false,
+            tuner_last: None,
+            retune_since: None,
+            retune_tried: None,
         };
         if let Some(w) = warning {
             core.note(w);
@@ -355,16 +413,21 @@ impl Core {
                 self.settings.screens[i].monitor,
                 self.settings.screens[i].place,
             );
+            let tuned = self.settings.tuning_for(i, &want).cloned();
             let kept = old.get_mut(i).and_then(Option::take);
             if let Some(mut s) = kept.filter(|s| s.stage.rotation() == want) {
                 s.monitor = monitor;
                 s.place = place;
+                s.stage.set_tuned(tuned);
                 out.push(s);
                 continue;
             }
             match self.new_stage(&want, self.canvas) {
-                Ok(stage) => out.push(Screen {
-                    stage,
+                Ok(mut stage) => out.push(Screen {
+                    stage: {
+                        stage.set_tuned(tuned);
+                        stage
+                    },
                     sim: self.new_sim(),
                     monitor,
                     place,
@@ -584,6 +647,12 @@ impl Core {
             self.still_at = now;
             self.refresh_still();
         }
+        if self.tuning_at.is_some_and(|t| now - t > TUNING_SILENCE) {
+            self.tuning_at = None;
+            self.set_local_hold("tuning", false);
+            self.note("the tuner stopped answering; carrying on");
+        }
+        self.watch_tuner();
         let count = self.screens.len().max(1) as f32;
         let budget = Duration::from_secs_f32(STEP_SHARE / self.settings.fps.max(1.0) / count);
         let mut notes = vec![];
@@ -654,8 +723,11 @@ impl Core {
             "extension": self.shell() == Shell::Alive,
             "lock_screen": self.settings.lock_screen.word(),
             "monitors": self.monitors,
+            "monitor_hz": self.monitor_hz,
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
             "fps": self.settings.fps,
+            "tune": self.settings.tune,
+            "tuning": self.tuning_status(),
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
             "rotations": rotation_names(),
@@ -742,7 +814,7 @@ impl Core {
             };
             let still = Still {
                 monitor: Some(r),
-                png: jetcarp_core::media::encode::png(&image)?,
+                png: still_png(s, &image)?,
             };
             // The primary monitor's first, for a system with one picture.
             if i == primary {
@@ -755,7 +827,7 @@ impl Core {
             let image = first.stage.still().ok_or(none)?;
             stills.push(Still {
                 monitor: None,
-                png: jetcarp_core::media::encode::png(&image)?,
+                png: still_png(first, &image)?,
             });
         }
         desktop_picture::show_each(&stills)
@@ -825,6 +897,43 @@ impl Core {
                 self.set_wallpaper(on)?;
             }
             "open_app" => self.open_app()?,
+            "tuning" => {
+                let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
+                self.tuning_at = on.then(|| self.now());
+                self.set_local_hold("tuning", on);
+                return Ok(json!({"ok": true}));
+            }
+            "tune" => {
+                let num = |k: &str| a.get(k).and_then(Value::as_f64).map(|x| x as f32);
+                self.start_tuner(
+                    TuneRequest {
+                        cpu_percent: num("cpu_limit"),
+                        gpu_percent: num("gpu_limit"),
+                        fps: num("fps"),
+                        screen,
+                        auto: false,
+                    },
+                    false,
+                )?;
+            }
+            "tune_stop" => self.stop_tuner()?,
+            "scene" => {
+                let i = screen.unwrap_or(0);
+                let s = self
+                    .screens
+                    .get(i)
+                    .ok_or_else(|| format!("there is no screen {i}"))?;
+                let scene = s.stage.scene().ok_or("nothing is showing yet")?;
+                let st = s.stage.status();
+                return Ok(json!({
+                    "screen": i,
+                    "label": st.label,
+                    "cell_px": st.cell_px,
+                    "tuned": st.tuned,
+                    "grid": st.grid,
+                    "scene": serde_json::to_value(&scene).map_err(|e| e.to_string())?,
+                }));
+            }
             "login" => {
                 let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
                 self.set_login(on)?;
@@ -864,6 +973,115 @@ impl Core {
         p.reply(reply);
     }
 
+    /// Starts a tuner of its own (`jetcarp host tune --json`), whose progress `status` shows.
+    fn start_tuner(&mut self, req: TuneRequest, auto: bool) -> Result<(), String> {
+        if self.tuner.as_ref().is_some_and(|t| !t.finished()) {
+            return Err("a tune is already running".into());
+        }
+        self.tuner = Some(TuneChild::spawn(&req)?);
+        self.tuner_auto = auto;
+        self.tuner_last = None;
+        Ok(())
+    }
+
+    fn stop_tuner(&mut self) -> Result<(), String> {
+        let Some(t) = &mut self.tuner else {
+            return Err("no tune is running here".into());
+        };
+        t.stop();
+        self.tuner = None;
+        self.tuning_at = None;
+        self.set_local_hold("tuning", false);
+        self.tuner_last = Some(json!({"outcome": "stopped"}));
+        self.note("tuning stopped; the sizes found so far were not saved");
+        Ok(())
+    }
+
+    /// Follows its own tuner, and starts one when the monitors have changed under tuned screens.
+    fn watch_tuner(&mut self) {
+        if let Some(t) = &mut self.tuner {
+            t.poll();
+            if let Some(outcome) = t.outcome() {
+                let scenes = t.scenes().len();
+                let auto = self.tuner_auto;
+                self.tuner = None;
+                self.tuner_last = Some(match &outcome {
+                    Ok(()) => json!({"outcome": "done", "scenes": scenes, "auto": auto}),
+                    Err(e) => json!({"outcome": "failed", "error": e, "auto": auto}),
+                });
+                match outcome {
+                    Ok(()) => {
+                        self.note(format!("tuned {scenes} scene(s) for this computer"));
+                        if let Err(e) = self.reload() {
+                            self.note(e);
+                        }
+                    }
+                    Err(e) => self.note(format!("tuning failed: {e}")),
+                }
+            }
+            return;
+        }
+        if !self.is_host || !self.settings.tune.auto || self.shell() != Shell::Alive {
+            self.retune_since = None;
+            return;
+        }
+        let screens: Vec<_> = self
+            .screens
+            .iter()
+            .map(|s| (s.place, s.stage.canvas(), !self.hidden(s)))
+            .collect();
+        let want = retune_wanted(&self.settings, &screens);
+        let now = self.now();
+        if want.is_empty() || self.retune_tried.as_ref() == Some(&want) {
+            self.retune_since = None;
+            return;
+        }
+        let since = *self.retune_since.get_or_insert(now);
+        let waiting = self.user_paused
+            || self.local_holds.contains("battery")
+            || self.local_holds.contains("busy")
+            || self.tuning_at.is_some();
+        if now - since < RETUNE_SETTLE || waiting {
+            return;
+        }
+        self.retune_since = None;
+        self.retune_tried = Some(want);
+        let req = TuneRequest {
+            auto: true,
+            ..Default::default()
+        };
+        match self.start_tuner(req, true) {
+            Ok(()) => self.note("the monitors changed; tuning the desktop background again"),
+            Err(e) => self.note(format!("could not tune again for the new monitors: {e}")),
+        }
+    }
+
+    /// What `status` says of tuning: one running (here or elsewhere), and how the last one ended.
+    fn tuning_status(&self) -> Value {
+        let mut v = json!({
+            "running": self.tuner.is_some() || self.tuning_at.is_some(),
+            "here": self.tuner.is_some(),
+            "auto": self.tuner.is_some() && self.tuner_auto,
+        });
+        if let Some(t) = &self.tuner {
+            v["progress"] = json!(t.progress());
+            v["trial"] = json!(t.counts());
+            v["scenes"] = json!(
+                t.scenes()
+                    .into_iter()
+                    .map(|(screen, r)| json!({"screen": screen, "result": r}))
+                    .collect::<Vec<_>>()
+            );
+            if let Some(TuneEvent::Start { scenes, .. }) = t.events.first() {
+                v["of"] = json!(scenes);
+            }
+        }
+        if let Some(last) = &self.tuner_last {
+            v["last"] = last.clone();
+        }
+        v
+    }
+
     /// A screen's surfaces changed size (physical pixels) or scale (pixels per point).
     pub fn resize_screen(&mut self, i: usize, canvas: [f64; 2], scale: f64) {
         let now = self.now();
@@ -875,6 +1093,17 @@ impl Core {
             s.stage.resize(canvas, scale, now);
         }
     }
+}
+
+/// A still picture's PNG, with the scene it shows (its grid's size included) inside, as every
+/// picture JETCARP writes has, so the desktop's picture can be opened and run again.
+fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>, String> {
+    let meta = s
+        .stage
+        .world()
+        .map(jetcarp_core::render::png_metadata)
+        .unwrap_or_default();
+    jetcarp_core::media::encode::png_with_text(image, &meta)
 }
 
 #[cfg(test)]
