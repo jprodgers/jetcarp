@@ -84,10 +84,8 @@ enum JobsCmd {
         /// Worker threads (default: all cores; an explore search leaves two free).
         #[arg(long)]
         threads: Option<usize>,
-        /// Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU
-        /// batch stepper, when there is one.
-        #[arg(long)]
-        gpu: bool,
+        #[command(flatten)]
+        gpu: crate::platform::GpuFlags,
         /// Stop at the next checkpoint after this many minutes.
         #[arg(long)]
         minutes: Option<f64>,
@@ -188,9 +186,8 @@ enum JobsCmd {
         /// sign measures), caching what they measure. Slow for a large search.
         #[arg(long)]
         replay: bool,
-        /// Replay on the GPU, when there is one.
-        #[arg(long)]
-        gpu: bool,
+        #[command(flatten)]
+        gpu: crate::platform::GpuFlags,
     },
     /// Seal a stopped explore job's newest runs (those not yet in a Parquet segment), so its
     /// folder holds every run in Parquet; a search seals every million runs by itself.
@@ -260,9 +257,8 @@ struct RefitArgs {
     /// they count at the mean.
     #[arg(long)]
     no_replay: bool,
-    /// Replay on the GPU, when there is one.
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
 }
 
 #[derive(clap::Args)]
@@ -408,7 +404,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 job,
                 budget: crate::search_cmd::budget(minutes, until, limit),
                 threads,
-                gpu,
+                gpu: gpu.asked(),
                 background: false,
                 detach,
                 files: FilesIn {
@@ -544,7 +540,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 family: a.family,
                 out: a.out.map(|p| p.display().to_string()),
                 replay: Some(!a.no_replay),
-                gpu: Some(a.gpu),
+                gpu: a.gpu.asked(),
             };
             let p = CliProgress::new(false);
             let r = SearchRefit::run(&cx, i, &p);
@@ -562,7 +558,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 job,
                 score: score.map(serde_json::Value::String),
                 replay: Some(replay),
-                gpu: Some(gpu),
+                gpu: gpu.asked(),
             };
             let r = SearchRescore::run(&cx, i, &p);
             p.finish();

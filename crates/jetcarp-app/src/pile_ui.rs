@@ -338,7 +338,13 @@ impl PileWindow {
                 "px": self.px,
                 "palette": self.palette,
                 "reverse": self.reverse,
-                "gpu": self.gpu && !pile::is_patch(&tiling),
+                // Ticked: as JETCARP's GPU setting says (automatic: from 100,000 grains on
+                // periodic tilings); unticked: the CPU only.
+                "gpu": if self.gpu && !pile::is_patch(&tiling) {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::Value::Bool(false)
+                },
             }),
             ..Default::default()
         };
@@ -455,7 +461,11 @@ impl PileWindow {
                         ui.add(egui::Slider::new(&mut self.px, 0.5..=8.0).text("px per cell"));
                         ui.end_row();
                         ui.label("");
-                        ui.checkbox(&mut self.gpu, "Topple on the GPU (periodic tilings)");
+                        ui.checkbox(&mut self.gpu, "Topple on the GPU (periodic tilings)")
+                            .on_hover_text(
+                                "As JETCARP's GPU setting says (automatic: piles of 100,000 \
+                                 grains or more); unticked, on the CPU only. The pile is the same.",
+                            );
                         ui.end_row();
                     });
                 });

@@ -102,7 +102,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                 );
                 let mut gpu = start["gpu"].clone();
                 gpu["description"] = json!(
-                    "Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true."
+                    "Use the GPU (true) or only the CPU (false); results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic)."
                 );
                 p.insert("gpu".into(), gpu);
                 p.insert(
@@ -259,7 +259,7 @@ fn search_start(c: &mut Call) -> Res {
         None => (None, Value::Null),
     };
     let explore = which == Some("explore");
-    let gpu = rest.get("gpu").and_then(Value::as_bool).unwrap_or(explore);
+    let gpu = rest.get("gpu").and_then(Value::as_bool);
     let cx = ctx();
     let detach = rest
         .get("detach")

@@ -1184,7 +1184,7 @@ pub struct RescoreIn {
     /// First replay runs stored without measures the score reads (older JACA runs), caching them; slow for a large search.
     #[serde(default)]
     pub replay: Option<bool>,
-    /// Replay on the GPU, when there is one.
+    /// Replay on the GPU (true) or the CPU (false). Default: as JETCARP's GPU setting says (automatic: the GPU when there is a usable one).
     #[serde(default)]
     pub gpu: Option<bool>,
 }
@@ -1197,9 +1197,10 @@ fn gpu_of(be: &mut Option<Box<dyn Backend>>) -> Option<&mut dyn Backend> {
     }
 }
 
-/// The GPU batch stepper for replays, when asked for and there is one (a note when there is none).
+/// The GPU batch stepper for replays, when asked for (or the GPU setting says so) and there is
+/// one (a note when there is none).
 fn replay_backend(cx: &Ctx, gpu: Option<bool>, p: &dyn Progress) -> Option<Box<dyn Backend>> {
-    if !gpu.unwrap_or(false) {
+    if !super::search::job_gpu(cx, gpu, None, true) {
         return None;
     }
     match cx.platform.explore_backend() {
@@ -1537,7 +1538,7 @@ pub struct RefitIn {
     /// Replay reviewed runs stored without measures the fit reads (older JACA runs), caching them (default true).
     #[serde(default)]
     pub replay: Option<bool>,
-    /// Replay on the GPU, when there is one.
+    /// Replay on the GPU (true) or the CPU (false). Default: as JETCARP's GPU setting says (automatic: the GPU when there is a usable one).
     #[serde(default)]
     pub gpu: Option<bool>,
 }

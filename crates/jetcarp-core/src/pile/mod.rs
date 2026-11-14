@@ -247,6 +247,10 @@ pub trait Toppler {
     fn stabilize(&mut self, board: &mut LatticeBoard, ctl: &mut Ctl) -> Result<StabStats, String>;
 }
 
+/// Under the automatic GPU setting, a pile of at least this many grains topples on the GPU
+/// (periodic tilings); smaller ones topple on the CPU.
+pub const GPU_PILE_GRAINS: u64 = 100_000;
+
 /// Makes a GPU toppler. Hosts with a GPU (the CLI, the app) register one at start-up with
 /// [`set_gpu_factory`], so scripts can ask for `gpu: true` without depending on `jetcarp-gpu`.
 pub type TopplerFactory = fn() -> Result<Box<dyn Toppler>, String>;

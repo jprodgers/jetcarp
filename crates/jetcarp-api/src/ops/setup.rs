@@ -1174,10 +1174,6 @@ impl Op for SetupStatusOp {
 // ---------------------------------------------------------------------------------------------
 // setup.apply
 
-fn default_true() -> bool {
-    true
-}
-
 /// `setup.apply`'s input.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -1197,9 +1193,10 @@ pub struct ApplyIn {
     /// default: the profile's (the starter pack, every one, or none).
     #[serde(default)]
     pub bundled: Option<Vec<String>>,
-    /// The Quick Start build uses the GPU when there is one (default true).
-    #[serde(default = "default_true")]
-    pub gpu: bool,
+    /// The Quick Start build uses the GPU (true) or only the CPU (false). Default: as JETCARP's
+    /// GPU setting says (automatic: the GPU when there is a usable one).
+    #[serde(default)]
+    pub gpu: Option<bool>,
     /// The Quick Start build's search settings (default: every tiling and rule family).
     #[serde(default)]
     pub search: Option<ExploreIn>,
@@ -1284,7 +1281,13 @@ struct Planned {
     pack: Option<String>,
 }
 
-fn plan_build(minutes: f64, a: &ApplyIn, gpu: &GpuStatus) -> Result<Option<Planned>, ApiError> {
+/// `wants`: the build uses the GPU when there is one (its request, else the GPU setting).
+fn plan_build(
+    minutes: f64,
+    a: &ApplyIn,
+    gpu: &GpuStatus,
+    wants: bool,
+) -> Result<Option<Planned>, ApiError> {
     if minutes <= 0.0 {
         return Ok(None);
     }
@@ -1294,11 +1297,11 @@ fn plan_build(minutes: f64, a: &ApplyIn, gpu: &GpuStatus) -> Result<Option<Plann
     let input = super::quickstart::BuildIn {
         minutes: Some(minutes),
         search: a.search.clone().unwrap_or_default(),
-        gpu: Some(a.gpu),
+        gpu: a.gpu,
         ..Default::default()
     };
     let spec = input.job_spec()?;
-    let on = if a.gpu && gpu.usable {
+    let on = if wants && gpu.usable {
         format!("on the GPU ({})", gpu.name)
     } else {
         "on the CPU".into()
@@ -1466,7 +1469,8 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
     } else {
         GpuStatus::default()
     };
-    if let Some(b) = plan_build(minutes, &a, &gpu)? {
+    let wants = super::search::job_gpu(cx, a.gpu, None, true);
+    if let Some(b) = plan_build(minutes, &a, &gpu, wants)? {
         planned.push(b);
     }
     let settings = paths.settings.clone();
@@ -1563,7 +1567,7 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         };
         out.record = Some(write_record(s, &r)?.display().to_string());
     }
-    let how = |gpu: bool| How {
+    let how = |gpu: Option<bool>| How {
         threads: a.threads.unwrap_or(0),
         gpu,
         budget: BudgetIn::default().budget(),
@@ -1572,8 +1576,13 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         files: FilesIn::default(),
     };
     for (job, kind) in &made {
-        let r: Result<SearchStarted, ApiError> =
-            run_job(cx, &lib, *job, &how(*kind == "explore" && a.gpu), p);
+        let r: Result<SearchStarted, ApiError> = run_job(
+            cx,
+            &lib,
+            *job,
+            &how(a.gpu.filter(|_| *kind == "explore")),
+            p,
+        );
         if let Err(e) = r {
             // One failed job does not stop the others; its status says why.
             out.notes.push(format!("job {job}: {e}"));

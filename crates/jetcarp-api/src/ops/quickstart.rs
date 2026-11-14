@@ -1140,7 +1140,7 @@ pub struct BuildIn {
     /// The search's settings (search.start's explore spec); default: every tiling and rule family, and a seed from the clock.
     #[serde(default)]
     pub search: super::search::ExploreIn,
-    /// Run the rules a GPU can run on the GPU when there is one (default true).
+    /// Run the rules a GPU can run on the GPU (true) or everything on the CPU (false). Default: as JETCARP's GPU setting says (automatic: the GPU when there is a usable one).
     #[serde(default)]
     pub gpu: Option<bool>,
     /// Entries per category, family, and tiling (default 12).
@@ -1191,7 +1191,8 @@ impl BuildIn {
             );
         }
         let mut spec = search.spec()?;
-        spec.gpu = self.gpu.unwrap_or(true);
+        spec.gpu = self.gpu == Some(true);
+        spec.cpu = self.gpu == Some(false);
         let mut b = BuildSpec::minutes(minutes);
         if let Some(n) = self.per_niche {
             b.per_niche = n;
@@ -1236,7 +1237,7 @@ impl Op for QuickstartBuild {
         let job = jetcarp_search::jobs::create(&lib, &js).map_err(ApiError::invalid)?;
         let how = super::search::How {
             threads: a.threads.unwrap_or(0),
-            gpu: a.gpu.unwrap_or(true),
+            gpu: a.gpu,
             budget: Default::default(),
             background: a.background,
             detach: a.detach,

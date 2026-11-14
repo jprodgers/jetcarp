@@ -163,9 +163,8 @@ pub struct HuntArgs {
     /// Store every new object as a full record (the policy before wave 4).
     #[arg(long)]
     store_all: bool,
-    /// Run the start of each soup on the GPU (many soups per dispatch; results are identical).
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
     /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
     max_rss_gb: Option<f64>,
@@ -433,9 +432,8 @@ pub struct PileArgs {
     /// Skip the full-size pile.png.
     #[arg(long)]
     no_png: bool,
-    /// Topple on the GPU (periodic tilings).
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
 }
 
 #[derive(clap::Args)]
@@ -573,10 +571,8 @@ pub struct ExploreArgs {
     batch: usize,
     #[arg(long, default_value_t = 0)]
     seed: u64,
-    /// Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the
-    /// job); without one, or without this, the CPU runs everything.
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
     /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
     max_rss_gb: Option<f64>,
@@ -800,14 +796,14 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         confirm_seeds: Some(a.confirm_seeds),
         batch: Some(a.batch),
         seed: Some(a.seed),
-        gpu: Some(a.gpu),
+        gpu: a.gpu.asked(),
         max_rss_gb: a.max_rss_gb,
         score: a.score.map(|p| Value::String(p.display().to_string())),
         parents_from: a.parents_from,
         parents_reviewed: a.reviewed,
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 
@@ -861,7 +857,7 @@ fn hunt(a: HuntArgs, json: bool) -> Result<()> {
         max_rss_gb: a.max_rss_gb,
     };
     let mut i = start_in("hunt", spec(&s), &a.job)?;
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 
@@ -1048,7 +1044,7 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         reverse: a.reverse.then_some(true),
         preview: a.preview,
         png: a.no_png.then_some(false),
-        gpu: Some(a.gpu),
+        gpu: a.gpu.asked(),
         ..Default::default()
     };
     match folder {
@@ -1071,7 +1067,7 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         detach: a.job.detach,
         ..Default::default()
     };
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 

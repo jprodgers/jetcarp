@@ -64,6 +64,7 @@ fn pile_export_and_jobs_keep_the_palette() {
         preview_side: 32,
         png: true,
         gpu: false,
+        cpu: false,
         extra: serde_json::Value::Null,
     };
     let job = pilejob::start(&lib, &spec).unwrap();

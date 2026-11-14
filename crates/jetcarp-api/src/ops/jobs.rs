@@ -1021,9 +1021,9 @@ pub struct ResumeIn {
     /// Worker threads (default 0: all cores, and all but two for an explore search).
     #[serde(default)]
     pub threads: Option<usize>,
-    /// Hunts: the GPU soup batches; piles: GPU toppling; explore: the GPU batch stepper, when there is one.
+    /// Use the GPU (true) or only the CPU (false) for this run: hunts' soup batches, piles' toppling, explore's batch stepper. Default: the job's own choice, else JETCARP's GPU setting (automatic: on the GPU when there is a usable one; piles from 100,000 grains).
     #[serde(default)]
-    pub gpu: bool,
+    pub gpu: Option<bool>,
     /// Run on a thread of this process and answer at once.
     #[serde(default)]
     pub background: bool,

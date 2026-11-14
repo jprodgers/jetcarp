@@ -19,6 +19,101 @@ fn start(cx: &Ctx, input: Value) -> Value {
     call_json(cx, "search.start", input).unwrap()
 }
 
+/// A machine whose GPU setting says `mode` and that has no usable GPU.
+struct NoGpu(jetcarp_api::ctx::GpuMode);
+
+impl jetcarp_api::Platform for NoGpu {
+    fn gpu_mode(&self) -> jetcarp_api::ctx::GpuMode {
+        self.0
+    }
+    fn soup_batcher(
+        &self,
+    ) -> Result<std::sync::Arc<dyn jetcarp_core::hunt::soup::SoupBatcher>, String> {
+        Err("no adapter here".into())
+    }
+    fn explore_backend(&self) -> Result<Box<dyn jetcarp_core::explore::batch::Backend>, String> {
+        Err("no adapter here".into())
+    }
+}
+
+/// The lines a run logs.
+#[derive(Default)]
+struct Lines(std::sync::Mutex<Vec<String>>);
+
+impl jetcarp_api::op::Progress for Lines {
+    fn log(&self, line: &str) {
+        self.0.lock().unwrap().push(line.to_string());
+    }
+}
+
+impl Lines {
+    fn with(&self, part: &str) -> usize {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.contains(part))
+            .count()
+    }
+}
+
+/// #10: a hunt or a pile asked for the GPU runs on the CPU, with one note, when there is no
+/// usable GPU (it used to fail). Without asking, the GPU setting decides: automatic tries the
+/// GPU for every hunt and for piles of 100,000 grains or more; off never does.
+#[test]
+fn hunts_and_piles_fall_back_to_the_cpu_with_one_note() {
+    use jetcarp_api::ctx::GpuMode;
+    let dir = scratch("jobs-no-gpu");
+    let run = |mode: GpuMode, input: Value| {
+        let cx = ctx(&dir).with_platform(std::sync::Arc::new(NoGpu(mode)));
+        let lines = Lines::default();
+        let c = jetcarp_api::call(&cx, "search.start", input, &lines).unwrap();
+        (c.value, lines)
+    };
+    let hunt = |gpu: Value| {
+        json!({"strategy": "hunt", "spec": {"rules": "B3/S23", "soups": 30, "seed": 5},
+               "threads": 2, "gpu": gpu})
+    };
+    let (h, lines) = run(GpuMode::Off, hunt(json!(true)));
+    assert_eq!(h["status"], "done", "{h}");
+    assert_eq!(
+        lines.with("no GPU (no adapter here): the hunt runs on the CPU"),
+        1
+    );
+    let (cpu, lines) = run(GpuMode::On, hunt(json!(false)));
+    assert_eq!(lines.with("no GPU"), 0, "--cpu does not look for one");
+    assert_eq!(cpu["progress"]["objects"], h["progress"]["objects"]);
+    let (_, lines) = run(GpuMode::Auto, hunt(Value::Null));
+    assert_eq!(
+        lines.with("no GPU"),
+        1,
+        "automatic tries the GPU for a hunt"
+    );
+    let (_, lines) = run(GpuMode::Off, hunt(Value::Null));
+    assert_eq!(lines.with("no GPU"), 0, "off does not");
+    // Piles: no GPU toppler is registered in this test program.
+    let pile = |grains: u64, gpu: Value| {
+        json!({"strategy": "pile", "spec": {"tiling": "square", "grains": grains, "preview": 0,
+               "png": false, "gpu": gpu}})
+    };
+    let (p, lines) = run(GpuMode::Off, pile(3000, json!(true)));
+    assert_eq!(p["status"], "done", "{p}");
+    assert_eq!(lines.with("the pile topples on the CPU"), 1);
+    let (_, lines) = run(GpuMode::Auto, pile(3000, Value::Null));
+    assert_eq!(
+        lines.with("topples on the CPU"),
+        0,
+        "a small pile stays on the CPU"
+    );
+    let (_, lines) = run(GpuMode::Auto, pile(100_000, Value::Null));
+    assert_eq!(
+        lines.with("topples on the CPU"),
+        1,
+        "a large one tries the GPU"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn hunts_run_to_their_budget_resume_and_report() {
     let dir = scratch("jobs-hunt");

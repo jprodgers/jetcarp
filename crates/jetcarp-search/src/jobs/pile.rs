@@ -145,16 +145,22 @@ impl Strategy for PileRunOn {
     }
 }
 
-/// A pile run as the kind builds it: toppling on the GPU when the job asks for it and the host
-/// registered a GPU toppler (`jetcarp_core::pile::gpu_toppler`), else on the CPU. The toppler is
-/// made on the run's thread, and the run is [`PileRunOn`]'s steps.
+/// A pile run as the kind builds it: toppling on the GPU when `gpu` (or, when that is not
+/// given, the job) asks for it and the host registered a GPU toppler
+/// (`jetcarp_core::pile::gpu_toppler`), else on the CPU. The toppler is made on the run's
+/// thread, and the run is [`PileRunOn`]'s steps.
 #[derive(Clone, Default)]
-pub struct PileRun;
+pub struct PileRun {
+    /// Topple on the GPU (when the tiling is periodic); None: as the job's spec asks.
+    pub gpu: Option<bool>,
+}
 
 impl Strategy for PileRun {
     fn run(&mut self, cx: &RunCx<'_>) -> Result<Value, String> {
         let spec: Option<PileJobSpec> = serde_json::from_value(cx.row.spec.clone()).ok();
-        let gpu = spec.is_some_and(|s| s.gpu && !jetcarp_core::pile::is_patch(&s.pile.tiling));
+        let gpu = spec.is_some_and(|s| {
+            self.gpu.unwrap_or(s.gpu) && !jetcarp_core::pile::is_patch(&s.pile.tiling)
+        });
         let t = if gpu {
             jetcarp_core::pile::gpu_toppler().and_then(|r| r.ok())
         } else {

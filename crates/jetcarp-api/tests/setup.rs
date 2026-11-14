@@ -78,7 +78,7 @@ fn apply_in(profile: &str) -> ApplyIn {
         search: Some(tiny_search()),
         verify: Some("none".into()),
         threads: Some(2),
-        gpu: true,
+        gpu: Some(true),
         ..Default::default()
     }
 }
@@ -443,7 +443,15 @@ fn a_quick_start_build_stops_and_carries_on_to_its_end() {
     let js = b.job_spec().unwrap();
     assert_eq!(js.label.as_deref(), Some(setup::BUILD_LABEL));
     assert_eq!(js.spec["build"]["minutes"], 0.04);
-    assert_eq!(js.spec["gpu"], true);
+    // Neither asked for: JETCARP's GPU setting decides at each run.
+    assert_eq!(js.spec["gpu"], false);
+    assert!(js.spec.get("cpu").is_none(), "{}", js.spec);
+    let cpu = BuildIn {
+        gpu: Some(false),
+        search: tiny_search(),
+        ..Default::default()
+    };
+    assert_eq!(cpu.job_spec().unwrap().spec["cpu"], true);
     let job = jobs::create(&lib, &js).unwrap();
     // Stopped by an item budget after a few runs: paused, its minutes not yet spent.
     let o = RunOptions {

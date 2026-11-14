@@ -581,7 +581,7 @@ fn run() -> Result<()> {
                     families: families.map(serde_json::Value::String),
                     ..Default::default()
                 },
-                gpu: Some(!no_gpu),
+                gpu: no_gpu.then_some(false),
                 threads,
                 detach,
                 ..Default::default()

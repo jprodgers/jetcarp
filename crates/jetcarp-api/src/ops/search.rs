@@ -34,7 +34,7 @@
 use super::jobs::{noun, progress_text, summary_of};
 use super::library::catalog_err;
 use crate::args;
-use crate::ctx::Ctx;
+use crate::ctx::{Ctx, GpuMode};
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
 use jetcarp_core::census::{self, CensusReport, CensusSpec, RunClass};
@@ -1005,7 +1005,9 @@ pub struct PileIn {
     /// Write the full-size pile.png (default true).
     #[serde(default)]
     pub png: Option<bool>,
-    /// Topple on the GPU when there is one (periodic tilings).
+    /// Topple on the GPU (true) or only on the CPU (false), in this and later runs (periodic
+    /// tilings). Default: as JETCARP's GPU setting says at each run (automatic: on the GPU from
+    /// 100,000 grains).
     #[serde(default)]
     pub gpu: Option<bool>,
 }
@@ -1132,7 +1134,8 @@ impl PileIn {
             folder,
             preview_side: self.preview.unwrap_or(1024),
             png: self.png.unwrap_or(true),
-            gpu: self.gpu.unwrap_or(false),
+            gpu: self.gpu == Some(true),
+            cpu: self.gpu == Some(false),
             extra: json!({
                 "tiling_id": id,
                 "started": crate::out::now_rfc3339(),
@@ -1483,7 +1486,7 @@ pub struct ExploreIn {
     )]
     #[schemars(schema_with = "crate::op::uint_opt_schema")]
     pub seed: Option<u64>,
-    /// Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything).
+    /// Run the rules a GPU can run on the GPU (true) or everything on the CPU (false), in this and later runs. Default: as JETCARP's GPU setting says at each run (automatic: on the GPU when there is a usable one).
     #[serde(default)]
     pub gpu: Option<bool>,
     /// Stop (paused, resumable) when the process uses more memory than this many GB.
@@ -1535,7 +1538,8 @@ impl ExploreIn {
                 score: None,
                 parents: vec![],
             },
-            gpu: self.gpu.unwrap_or(false),
+            gpu: self.gpu == Some(true),
+            cpu: self.gpu == Some(false),
             max_rss_gb: self.max_rss_gb,
             uuid: String::new(),
             seal_rows: None,
@@ -1544,17 +1548,38 @@ impl ExploreIn {
     }
 }
 
-/// An explore run with the platform's GPU backend when the job or the run asks for one (and a
-/// note, logged, when there is none: it runs on the CPU only).
+/// Whether a job's run uses the GPU: the run's own request (`--gpu`, `--cpu`), else the job's
+/// (saved when it was made), else JETCARP's GPU setting: `on` yes, `off` no, and automatic as
+/// `auto` says (whether the work is large enough to gain).
+pub(crate) fn job_gpu(cx: &Ctx, run: Option<bool>, saved: Option<bool>, auto: bool) -> bool {
+    run.or(saved)
+        .unwrap_or_else(|| match cx.platform.gpu_mode() {
+            GpuMode::Off => false,
+            GpuMode::On => true,
+            GpuMode::Auto => auto,
+        })
+}
+
+/// A saved spec's request: `gpu` true, `cpu` true, or neither.
+fn saved_gpu(gpu: bool, cpu: bool) -> Option<bool> {
+    match (gpu, cpu) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    }
+}
+
+/// An explore run with the platform's GPU backend when the run, the job or the GPU setting asks
+/// for one (and a note, logged, when there is none: it runs on the CPU only).
 pub(crate) fn explore_run(
     cx: &Ctx,
     row: &JobRow,
-    gpu: bool,
+    gpu: Option<bool>,
     p: &dyn Progress,
 ) -> Result<ExploreRun, ApiError> {
     let spec: ExploreSpec = serde_json::from_value(row.spec.clone())
         .map_err(|e| ApiError::engine(format!("job {}: {e}", row.id)))?;
-    if !(spec.gpu || gpu) || row.status == JobStatus::Done {
+    if !job_gpu(cx, gpu, saved_gpu(spec.gpu, spec.cpu), true) || row.status == JobStatus::Done {
         return Ok(ExploreRun::default());
     }
     Ok(match cx.platform.explore_backend() {
@@ -1731,9 +1756,9 @@ pub struct SearchStartIn {
     /// Worker threads (default 0: all cores, and all but two for an explore search; results do not depend on them).
     #[serde(default)]
     pub threads: Option<usize>,
-    /// Hunts: run the start of each soup on the GPU (results are identical). Piles: topple on the GPU (periodic tilings). Explore: run the rules a GPU can run on it, when there is one.
+    /// Use the GPU (true) or only the CPU (false) for this run: hunts run the start of each soup on the GPU, piles topple there (periodic tilings), explore searches run the rules a GPU can run there. Results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic: hunts and explore searches on the GPU when there is a usable one, piles from 100,000 grains); without a usable GPU it all runs on the CPU, with a note.
     #[serde(default)]
-    pub gpu: bool,
+    pub gpu: Option<bool>,
     /// Run on a thread of this process and answer at once (jobs.status follows it, jobs.stop stops it).
     #[serde(default)]
     pub background: bool,
@@ -1995,7 +2020,8 @@ fn within_limits(cx: &Ctx, lib: &Library, kind: &str, spec: &Value) -> Result<()
 /// How to run a job.
 pub(crate) struct How {
     pub threads: usize,
-    pub gpu: bool,
+    /// The run's own request (`--gpu`, `--cpu`); None: the job's, else the GPU setting.
+    pub gpu: Option<bool>,
     pub budget: Budget,
     pub background: bool,
     pub detach: bool,
@@ -2054,34 +2080,48 @@ fn strategy_here(
             (Box::new(s), Slot::Evolve(slot))
         }
         "explore" => (Box::new(explore_run(cx, row, how.gpu, p)?), Slot::None),
-        "pile" => {
-            let js: PileJobSpec = serde_json::from_value(row.spec.clone()).map_err(spec_err)?;
-            let toppler = if (js.gpu || how.gpu) && row.status != JobStatus::Done {
-                if pile::is_patch(&js.pile.tiling) {
-                    p.log("aperiodic patches topple on the CPU");
-                    None
-                } else {
-                    match pile::gpu_toppler() {
-                        Some(t) => {
-                            let t = t.map_err(|e| ApiError::engine(format!("GPU: {e}")))?;
-                            p.log(&format!("GPU: {}", t.name()));
-                            Some(t)
-                        }
-                        None => {
-                            return Err(ApiError::engine(
-                                "this program has no GPU toppler".to_string(),
-                            ));
-                        }
-                    }
-                }
-            } else {
-                None
-            };
-            (Box::new(PileRunOn::new(toppler)), Slot::None)
-        }
+        "pile" => (
+            Box::new(PileRunOn::new(pile_toppler(cx, row, how, p)?)),
+            Slot::None,
+        ),
         _ => {
             let s = k.build(row).map_err(ApiError::engine)?;
             (s, Slot::None)
+        }
+    })
+}
+
+/// A pile run's GPU toppler, when the run, the job or the GPU setting asks for one (automatic:
+/// from [`pile::GPU_PILE_GRAINS`] grains) and the tiling is periodic. Without a usable GPU the
+/// pile topples on the CPU, with a note: the same pile either way.
+fn pile_toppler(
+    cx: &Ctx,
+    row: &JobRow,
+    how: &How,
+    p: &dyn Progress,
+) -> Result<Option<Box<dyn pile::Toppler>>, ApiError> {
+    let js: PileJobSpec = serde_json::from_value(row.spec.clone())
+        .map_err(|e| ApiError::engine(format!("job {}: {e}", row.id)))?;
+    let big = js.pile.grains >= pile::GPU_PILE_GRAINS;
+    if row.status == JobStatus::Done || !job_gpu(cx, how.gpu, saved_gpu(js.gpu, js.cpu), big) {
+        return Ok(None);
+    }
+    if pile::is_patch(&js.pile.tiling) {
+        p.log("aperiodic patches topple on the CPU");
+        return Ok(None);
+    }
+    Ok(match pile::gpu_toppler() {
+        Some(Ok(t)) => {
+            p.log(&format!("GPU: {}", t.name()));
+            Some(t)
+        }
+        Some(Err(e)) => {
+            p.log(&format!("no GPU ({e}): the pile topples on the CPU"));
+            None
+        }
+        None => {
+            p.log("this program has no GPU toppler: the pile topples on the CPU");
+            None
         }
     })
 }
@@ -2093,13 +2133,18 @@ fn run_options(
     how: &How,
     p: &dyn Progress,
 ) -> Result<RunOptions, ApiError> {
-    let gpu = if how.gpu && row.kind == "hunt" {
-        let g = cx
-            .platform
-            .soup_batcher()
-            .map_err(|e| ApiError::engine(format!("gpu: {e}")))?;
-        p.log(&format!("GPU: {}", g.name()));
-        Some(g)
+    let gpu = if row.kind == "hunt" && job_gpu(cx, how.gpu, None, true) {
+        // Without a usable GPU the hunt runs on the CPU, with the same finds.
+        match cx.platform.soup_batcher() {
+            Ok(g) => {
+                p.log(&format!("GPU: {}", g.name()));
+                Some(g)
+            }
+            Err(e) => {
+                p.log(&format!("no GPU ({e}): the hunt runs on the CPU"));
+                None
+            }
+        }
     } else {
         None
     };
@@ -2168,8 +2213,10 @@ pub(crate) fn run_job(
         if how.threads > 0 {
             args.extend(["--threads".to_string(), how.threads.to_string()]);
         }
-        if how.gpu {
-            args.push("--gpu".into());
+        match how.gpu {
+            Some(true) => args.push("--gpu".into()),
+            Some(false) => args.push("--cpu".into()),
+            None => {}
         }
         if let Some(m) = how.budget.minutes {
             args.extend(["--minutes".to_string(), m.to_string()]);
@@ -2202,9 +2249,13 @@ pub(crate) fn run_job(
     if how.background {
         // A catalog handle of its own, so the run's writes never wait on the caller's reads.
         let own = Library::open(lib.path());
-        // An explore run takes the platform's GPU backend with it.
+        // An explore run takes the platform's GPU backend with it, a pile its toppler.
         let s: Option<Box<dyn Strategy + Send>> = match row.kind.as_str() {
             "explore" => Some(Box::new(explore_run(cx, &row, how.gpu, p)?)),
+            // The toppler is made again on the run's thread (it stays there).
+            "pile" => Some(Box::new(jetcarp_search::jobs::pile::PileRun {
+                gpu: Some(pile_toppler(cx, &row, how, p)?.is_some()),
+            })),
             _ => None,
         };
         cx.registry()

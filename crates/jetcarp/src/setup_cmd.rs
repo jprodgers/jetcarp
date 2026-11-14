@@ -213,7 +213,7 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
         data_dir,
         quickstart_minutes: minutes,
         packs,
-        gpu: !a.no_gpu,
+        gpu: a.no_gpu.then_some(false),
         threads: a.threads,
         search: (a.build_tilings.is_some() || a.build_families.is_some()).then(|| {
             jetcarp_api::ops::search::ExploreIn {

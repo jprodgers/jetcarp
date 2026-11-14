@@ -271,6 +271,7 @@ fn ants_pile_mover_and_evolve_jobs_have_their_own_kinds() {
         preview_side: 64,
         png: false,
         gpu: false,
+        cpu: false,
         extra: serde_json::Value::Null,
     };
     let pj = pilejob::start(&lib, &pspec).unwrap();

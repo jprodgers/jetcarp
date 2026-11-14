@@ -1574,7 +1574,7 @@ impl Op for LibraryReverify {
         };
         let how = super::search::How {
             threads: a.threads,
-            gpu: false,
+            gpu: None,
             budget,
             background: false,
             detach: false,
@@ -1745,7 +1745,7 @@ impl Op for LibraryCompounds {
         };
         let how = super::search::How {
             threads: a.threads,
-            gpu: false,
+            gpu: None,
             budget,
             background: false,
             detach: false,
