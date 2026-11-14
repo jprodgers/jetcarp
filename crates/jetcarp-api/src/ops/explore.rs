@@ -111,7 +111,7 @@ pub struct RunLine {
     /// The Quick Start category it would go in.
     pub category: String,
     /// The measures asked for (`measures`), by name: null where a run has none (JACA's sign
-    /// measures for other families, or for runs stored before them).
+    /// measures for other families, or for runs stored before them and not replayed since).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measures: Option<BTreeMap<String, Option<f64>>>,
 }
@@ -493,7 +493,9 @@ pub fn runs_csv(cx: &Ctx, a: &RunsIn, w: &mut dyn std::io::Write) -> Result<(i64
     let mut n = 0u64;
     let most = a.most() as u64;
     for chunk in ids.chunks(CSV_CHUNK) {
-        for r in c.rows(chunk).map_err(ApiError::engine)? {
+        let mut rows = c.rows(chunk).map_err(ApiError::engine)?;
+        with_replays(&path, &mut rows)?;
+        for r in rows {
             if n >= most {
                 break;
             }
@@ -506,6 +508,35 @@ pub fn runs_csv(cx: &Ctx, a: &RunsIn, w: &mut dyn std::io::Write) -> Result<(i64
     }
     w.flush().map_err(io)?;
     Ok((row.id, n))
+}
+
+/// Runs stored without sign measures take them from the search folder's cache of replays, when
+/// they were replayed (`search.refit`, `search.rescore` with `replay`).
+fn with_replays(db: &std::path::Path, rows: &mut [RunRow]) -> Result<(), ApiError> {
+    let Some(dir) = db.parent().filter(|d| d.join(remeasure::FILE).is_file()) else {
+        return Ok(());
+    };
+    let lacking: Vec<i64> = rows
+        .iter()
+        .filter(|r| r.cand.fam == Fam::Jaca && feat_from_blob(&r.feats).signs.is_none())
+        .map(|r| r.id)
+        .collect();
+    if lacking.is_empty() {
+        return Ok(());
+    }
+    let have = remeasure::Remeasured::open(dir)
+        .and_then(|c| c.get(&lacking))
+        .map_err(ApiError::engine)?;
+    for r in rows.iter_mut() {
+        if let Some(signs) = have.get(&r.id).and_then(|f| f.signs) {
+            let mut f = feat_from_blob(&r.feats);
+            if f.signs.is_none() {
+                f.signs = Some(signs);
+                r.feats = store::feat_blob(&f);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The runs a filter names, in order, at most `limit` (`reviewed` read from the library).
@@ -552,6 +583,7 @@ impl Op for SearchRuns {
             limit
         };
         let mut rs = find(&lib, &c, &a.filter()?, fetch)?;
+        with_replays(&path, &mut rs)?;
         if let Some(m) = a.min_movers {
             rs.retain(|r| feat_from_blob(&r.feats).movers >= m);
         }
