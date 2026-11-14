@@ -1114,7 +1114,46 @@ fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>,
 
 #[cfg(test)]
 mod tests {
-    use super::pause_reasons;
+    use super::{pause_reasons, retune_wanted};
+    use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
+
+    #[test]
+    fn a_tuned_desktop_screen_of_another_size_wants_tuning_again() {
+        let tuned = |rotation: &str| Tuning {
+            rotation: rotation.into(),
+            canvas: [2560, 1440],
+            ..Default::default()
+        };
+        let screen = |rotation: &str, t: Option<Tuning>| ScreenSettings {
+            rotation: rotation.into(),
+            place: Place::Wallpaper,
+            tuning: t,
+            ..Default::default()
+        };
+        let mut s = HostSettings {
+            screens: vec![
+                screen("a", Some(tuned("a"))),
+                screen("b", Some(tuned("old"))),
+                screen("c", None),
+            ],
+            ..Default::default()
+        };
+        let wall = |w: f64, h: f64| (Place::Wallpaper, [w, h], true);
+        // The size it was tuned for: nothing to do.
+        let same = [wall(2560.0, 1440.0); 3];
+        assert!(retune_wanted(&s, &same).is_empty());
+        // A new monitor: only the screen tuned for its rotation wants it.
+        let moved = [wall(1920.0, 1080.0); 3];
+        assert_eq!(retune_wanted(&s, &moved), [(0, [1920, 1080])]);
+        // Not while it is in a window, or not shown.
+        let window = [(Place::Window, [1920.0, 1080.0], true)];
+        assert!(retune_wanted(&s, &window).is_empty());
+        let hidden = [(Place::Wallpaper, [1920.0, 1080.0], false)];
+        assert!(retune_wanted(&s, &hidden).is_empty());
+        // Never tuned: never by itself.
+        s.screens.iter_mut().for_each(|x| x.tuning = None);
+        assert!(retune_wanted(&s, &moved).is_empty());
+    }
 
     #[test]
     fn status_says_why_it_is_paused() {
