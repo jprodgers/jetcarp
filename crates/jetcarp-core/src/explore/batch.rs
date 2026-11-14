@@ -215,7 +215,10 @@ pub fn trace_world(world: &mut World, gens: u32, frames_at: &[u32]) -> Result<Wo
     for t in 1..=gens {
         world.step();
         let s = field_bytes(&world.fields[0]);
-        tr.push(&s, s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32);
+        tr.push(
+            &s,
+            s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32,
+        );
         prev.copy_from_slice(&s);
         if frames_at.get(next_frame) == Some(&t) {
             tr.frames.push(prev.clone());
@@ -266,7 +269,10 @@ pub fn trace_world_keeping(
     for t in 1..=gens {
         world.step();
         let s = field_bytes(&world.fields[0]);
-        tr.push(&s, s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32);
+        tr.push(
+            &s,
+            s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32,
+        );
         prev.copy_from_slice(&s);
         if keep == Some(t) {
             kept = Some(s.clone());

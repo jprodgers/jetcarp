@@ -6,12 +6,12 @@
 
 use crate::explore::archive::Eval;
 use crate::explore::job::{WINDOW, batch_world, evaluate_with, replay_on};
-use jetcarp_core::explore::batch::{Backend, BatchJob, BatchWorld};
-use jetcarp_core::explore::features::{frames_for, frames_with_trade};
-use jetcarp_core::topology::Nb;
 use crate::explore::store::{feat_blob, feat_from_blob};
+use jetcarp_core::explore::batch::{Backend, BatchJob, BatchWorld};
 use jetcarp_core::explore::features::Features;
+use jetcarp_core::explore::features::{frames_for, frames_with_trade};
 use jetcarp_core::explore::space::{Fam, Grid};
+use jetcarp_core::topology::Nb;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use std::collections::HashMap;
@@ -89,7 +89,10 @@ impl Remeasured {
             .prepare("SELECT id, feats FROM measures")
             .map_err(e)?;
         st.query_map([], |r| {
-            Ok((r.get::<_, i64>(0)?, feat_from_blob(&r.get::<_, Vec<u8>>(1)?)))
+            Ok((
+                r.get::<_, i64>(0)?,
+                feat_from_blob(&r.get::<_, Vec<u8>>(1)?),
+            ))
         })
         .map_err(e)?
         .collect::<Result<_, _>>()
@@ -108,8 +111,14 @@ impl Remeasured {
                 .map_err(e)?;
             let ts = crate::explore::store::now();
             for (id, f, d) in rows {
-                st.execute(params![id, feat_blob(f), *d as i64, jetcarp_core::VERSION, ts])
-                    .map_err(e)?;
+                st.execute(params![
+                    id,
+                    feat_blob(f),
+                    *d as i64,
+                    jetcarp_core::VERSION,
+                    ts
+                ])
+                .map_err(e)?;
             }
         }
         tx.commit().map_err(e)
@@ -166,7 +175,8 @@ pub fn fill(
         // By grid, so a part's runs share their grids.
         todo.sort_by(|a, b| {
             let (x, y) = (&a.1.cand, &b.1.cand);
-            (&x.tiling, x.cells, x.nb as u8, x.gens, a.0).cmp(&(&y.tiling, y.cells, y.nb as u8, y.gens, b.0))
+            (&x.tiling, x.cells, x.nb as u8, x.gens, a.0)
+                .cmp(&(&y.tiling, y.cells, y.nb as u8, y.gens, b.0))
         });
         let total = todo.len() as u64;
         let done = AtomicU64::new(0);
@@ -230,11 +240,7 @@ pub fn fill(
 const PART: usize = 8192;
 
 /// Replay runs on the current thread pool, grouped by grid so each grid is built once.
-fn replay_cpu(
-    runs: Vec<(i64, Eval)>,
-    stop: &AtomicBool,
-    tick: &(dyn Fn() + Sync),
-) -> Replayed {
+fn replay_cpu(runs: Vec<(i64, Eval)>, stop: &AtomicBool, tick: &(dyn Fn() + Sync)) -> Replayed {
     let mut groups: HashMap<(String, u32), Vec<(i64, Eval)>> = HashMap::new();
     for (id, ev) in runs {
         groups
@@ -303,13 +309,16 @@ fn replay_gpu(
             out.extend(list.iter().map(|(id, _)| (*id, None)));
             continue;
         };
-        let per = (be.max_cells() / grid.topo.len().next_multiple_of(256).max(1)).clamp(1, GPU_BATCH);
+        let per =
+            (be.max_cells() / grid.topo.len().next_multiple_of(256).max(1)).clamp(1, GPU_BATCH);
         for part in list.chunks(per) {
             if stop.load(Ordering::Relaxed) {
                 return Ok(out);
             }
-            let worlds: Vec<Option<BatchWorld>> =
-                part.par_iter().map(|(_, ev)| batch_world(&grid, &ev.cand)).collect();
+            let worlds: Vec<Option<BatchWorld>> = part
+                .par_iter()
+                .map(|(_, ev)| batch_world(&grid, &ev.cand))
+                .collect();
             let (mut ok, mut bw) = (Vec::new(), Vec::new());
             for ((id, ev), w) in part.iter().zip(worlds) {
                 match w {
@@ -427,7 +436,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mut be = jetcarp_core::explore::batch::CpuBatch;
         let f = fill(&dir, &mut batched, true, Some(&mut be), &|_, _| true).unwrap();
-        assert_eq!((f.replayed as usize, f.differ, f.failed), (rows.len(), 0, 0));
+        assert_eq!(
+            (f.replayed as usize, f.differ, f.failed),
+            (rows.len(), 0, 0)
+        );
         for (id, ev) in &batched {
             assert_eq!(ev.feat, truth[id], "run {id} in a batch");
         }

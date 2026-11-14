@@ -518,16 +518,31 @@ fn explore_runs_with_measures_as_csv_and_json() {
         "--json",
     ]);
     assert_eq!(w["written"].as_u64(), Some(n as u64));
-    assert_eq!(std::fs::read_to_string(&out).unwrap().lines().count(), n + 1);
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap().lines().count(),
+        n + 1
+    );
     let j = json_of(&[
-        "jobs", "--library", l, "runs", &job, "--limit", "3", "--measures", "all", "--format",
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "3",
+        "--measures",
+        "all",
+        "--format",
         "json",
     ]);
     assert_eq!(j["runs"].as_array().unwrap().len(), 3);
     assert!(j["runs"][0]["measures"]["sign_sorted"].is_number(), "{j}");
     let o = jetcarp(&["jobs", "--library", l, "runs", &job, "--measures", "all"]);
     let text = String::from_utf8(o.stdout).unwrap();
-    assert!(text.lines().next().unwrap().contains("sign_trade"), "{text}");
+    assert!(
+        text.lines().next().unwrap().contains("sign_trade"),
+        "{text}"
+    );
     let o = jetcarp(&["jobs", "--library", l, "refit", &job]);
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("reviewed runs"));

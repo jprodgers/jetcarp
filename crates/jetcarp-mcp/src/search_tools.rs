@@ -72,20 +72,14 @@ pub(crate) fn tools() -> Vec<Tool> {
             p.insert(
                 "refit".into(),
                 schema::without(
-                    schema::op(
-                        input_schema::<RefitIn>(),
-                        Some("Fit a score model."),
-                    ),
+                    schema::op(input_schema::<RefitIn>(), Some("Fit a score model.")),
                     &["replay", "gpu"],
                 ),
             );
             p.insert(
                 "rescore".into(),
                 schema::without(
-                    schema::op(
-                        input_schema::<RescoreIn>(),
-                        Some("Rescore a stopped job."),
-                    ),
+                    schema::op(input_schema::<RescoreIn>(), Some("Rescore a stopped job.")),
                     &["job", "gpu"],
                 ),
             );
@@ -219,7 +213,10 @@ fn search_runs(c: &mut Call) -> Res {
             let mut v = op::to_value(&out);
             if out.saved.is_some() {
                 // The file holds the model; the answer stays short.
-                v["model"] = json!(format!("written to {}", out.saved.clone().unwrap_or_default()));
+                v["model"] = json!(format!(
+                    "written to {}",
+                    out.saved.clone().unwrap_or_default()
+                ));
             }
             Ok(ToolOutput::json(&v))
         }

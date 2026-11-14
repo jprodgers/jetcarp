@@ -793,8 +793,7 @@ impl BatchSim {
         self.upload_init(job, stride)?;
 
         let dev = &self.device;
-        let cap_gens =
-            MAX_CHUNK_GENS.min((TRACE_BUDGET / (nw as u64 * TRACE_ENTRY)).max(1) as u32);
+        let cap_gens = MAX_CHUNK_GENS.min((TRACE_BUDGET / (nw as u64 * TRACE_ENTRY)).max(1) as u32);
         let trace_bytes = cap_gens as u64 * nw as u64 * TRACE_ENTRY;
         self.trace.ensure(dev, trace_bytes);
         self.trace_read.ensure(dev, trace_bytes);

@@ -190,9 +190,7 @@ pub struct ScoreModel {
 
 /// One term of a run: `None` when the run cannot give it.
 fn term(name: &str, fate: Fate, f: &Features, gens: u32, fam: Fam) -> Option<f64> {
-    let fin = |x: f32| -> f64 {
-        if x.is_finite() { x as f64 } else { 0.0 }
-    };
+    let fin = |x: f32| -> f64 { if x.is_finite() { x as f64 } else { 0.0 } };
     let x = match name {
         "settle_frac" => f.settle as f64 / gens.max(1) as f64,
         "density_late" => fin(f.density_late),
@@ -261,8 +259,7 @@ impl ScoreModel {
 
     /// Read a model file.
     pub fn load(path: &std::path::Path) -> Result<ScoreModel, String> {
-        let text =
-            std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         Self::from_json(&text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
@@ -275,7 +272,10 @@ impl ScoreModel {
             ));
         }
         if self.kind != KIND {
-            return Err(format!("a score model of kind '{}', not '{KIND}'", self.kind));
+            return Err(format!(
+                "a score model of kind '{}', not '{KIND}'",
+                self.kind
+            ));
         }
         if self.features.len() != self.weights.len()
             || (!self.fill.is_empty() && self.fill.len() != self.features.len())
@@ -284,7 +284,9 @@ impl ScoreModel {
             return Err("a score model's features, weights, fill and sd differ in length".into());
         }
         if let Some(t) = self.features.iter().find(|t| !known_term(t)) {
-            return Err(format!("a score model term this JETCARP does not know: '{t}'"));
+            return Err(format!(
+                "a score model term this JETCARP does not know: '{t}'"
+            ));
         }
         if let Some(f) = &self.family
             && crate::explore::store::fam_named(f).is_none()
@@ -532,7 +534,11 @@ pub fn fit(runs: &[Rated], opt: &FitOptions) -> Result<ScoreModel, String> {
             reps += 1;
         }
     }
-    m.metrics.auc = if reps > 0 { sum / reps as f64 } else { f64::NAN };
+    m.metrics.auc = if reps > 0 {
+        sum / reps as f64
+    } else {
+        f64::NAN
+    };
     m.metrics.folds = FOLDS as u32;
     m.metrics.repeats = REPEATS as u32;
     let fams: std::collections::BTreeSet<&str> = runs.iter().map(|r| r.fam.name()).collect();
@@ -734,7 +740,10 @@ mod tests {
         // A run that lost a sign early is gated low; a sorted battle scores high.
         let battle = m.score(Fate::Running, &jaca(1.0, 0.9, 0.1), 1024, Fam::Jaca);
         let lost = m.score(Fate::Running, &jaca(0.2, 0.9, 0.1), 1024, Fam::Jaca);
-        assert!(battle > 1.5 && lost < 0.9 && battle <= 3.0, "{battle} {lost}");
+        assert!(
+            battle > 1.5 && lost < 0.9 && battle <= 3.0,
+            "{battle} {lost}"
+        );
         // A run without sign measures takes the fill: its JACA terms add nothing.
         let mut f = jaca(1.0, 0.9, 0.1);
         f.signs = None;
@@ -852,7 +861,11 @@ mod tests {
             let a = rng.next_f64() * 2.0 - 1.0;
             let b = rng.next_f64() * 2.0 - 1.0;
             z.push(vec![a, b]);
-            y.push(if a + 0.1 * (rng.next_f64() - 0.5) > 0.0 { 1.0 } else { 0.0 });
+            y.push(if a + 0.1 * (rng.next_f64() - 0.5) > 0.0 {
+                1.0
+            } else {
+                0.0
+            });
         }
         let (w, _) = logistic(&z, &y, &[1.0, 1.0]);
         assert!(w[0] > 5.0 && w[1].abs() < 1.0, "{w:?}");
