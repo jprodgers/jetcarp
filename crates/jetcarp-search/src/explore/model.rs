@@ -10,10 +10,15 @@
 //! built-in score's penalties) and turned back to raw units after it.
 //!
 //! **Scoring** keeps the built-in score's scale and its gates: a run that died scores
-//! `0.25 x life`, one that froze or cycled early `0.1 + 0.6 x life + ...`, and a JACA run that
-//! lost a sign in the first half keeps [`JACA_LOST_EARLY`](crate::explore::archive::JACA_LOST_EARLY)
-//! of its score; the rest score `scale / (1 + exp(-linear))`, `scale` 3 as the built-in score, so
-//! niches and the atlas's thresholds behave. Row rules (Wolfram, layers) keep the built-in score.
+//! `0.25 x life`, one that froze or cycled early `0.1 + 0.6 x life + ...`; the rest score
+//! `scale / (1 + exp(-linear))`, `scale` 3 as the built-in score, so niches and the atlas's
+//! thresholds behave; and then a JACA run that lost a sign keeps
+//! [`JACA_LOST_SIGN`](crate::explore::archive::JACA_LOST_SIGN) of its score, a rule rather than
+//! something the fit has to learn. Row rules (Wolfram, layers) keep the built-in score.
+//!
+//! **No extrapolation.** The model records each term's range over the runs it was fitted to (from
+//! their 1st to their 99th percentile, [`RANGE`]), and a run's terms are clamped to it before the
+//! linear part, so a run far beyond anything rated scores as the rated runs nearest it would.
 //!
 //! **The file** is JSON ([`ScoreModel`], format [`MODEL_FORMAT`]): terms, weights, intercept,
 //! what it was fitted on and how well it did. Its numbers read as JSON numbers or as decimal
@@ -42,6 +47,8 @@ const STEPS: usize = 60;
 /// Folds and repeats of the held-out AUC.
 pub const FOLDS: usize = 5;
 pub const REPEATS: usize = 8;
+/// The percentiles of a term over the runs fitted that bound it when a run is scored.
+pub const RANGE: (f64, f64) = (0.01, 0.99);
 /// Reviewed runs needed for a fit, with at least this many keeps and drops each.
 pub const MIN_RUNS: usize = 20;
 pub const MIN_EACH: usize = 5;
@@ -176,6 +183,13 @@ pub struct ScoreModel {
     /// standard deviation, comparable across terms).
     #[serde(default, deserialize_with = "de_vec")]
     pub sd: Vec<f64>,
+    /// Each term's range over the runs fitted, its 1st and 99th percentiles ([`RANGE`]; JACA's
+    /// terms over the JACA runs): a run's term is clamped to it before the linear part (none: no
+    /// clamping). A JACA term of another family's run stays 0.
+    #[serde(default, deserialize_with = "de_vec")]
+    pub lo: Vec<f64>,
+    #[serde(default, deserialize_with = "de_vec")]
+    pub hi: Vec<f64>,
     /// The output: `scale / (1 + exp(-linear))`.
     #[serde(deserialize_with = "de_f64")]
     pub scale: f64,
@@ -277,11 +291,18 @@ impl ScoreModel {
                 self.kind
             ));
         }
-        if self.features.len() != self.weights.len()
-            || (!self.fill.is_empty() && self.fill.len() != self.features.len())
-            || (!self.sd.is_empty() && self.sd.len() != self.features.len())
+        let n = self.features.len();
+        let fits = |v: &Vec<f64>| v.is_empty() || v.len() == n;
+        if self.weights.len() != n
+            || !fits(&self.fill)
+            || !fits(&self.sd)
+            || !fits(&self.lo)
+            || !fits(&self.hi)
+            || self.lo.len() != self.hi.len()
         {
-            return Err("a score model's features, weights, fill and sd differ in length".into());
+            return Err(
+                "a score model's features, weights, fill, sd, lo and hi differ in length".into(),
+            );
         }
         if let Some(t) = self.features.iter().find(|t| !known_term(t)) {
             return Err(format!(
@@ -308,12 +329,19 @@ impl ScoreModel {
                 .is_none_or(|f| crate::explore::store::fam_named(f) == Some(fam))
     }
 
-    /// Its linear part for a run.
+    /// Its linear part for a run: each term clamped to its range over the runs fitted.
     pub fn linear(&self, fate: Fate, f: &Features, gens: u32, fam: Fam) -> f64 {
         let mut z = self.intercept;
         for (i, (t, w)) in self.features.iter().zip(&self.weights).enumerate() {
-            let x = term(t, fate, f, gens, fam)
+            let mut x = term(t, fate, f, gens, fam)
                 .unwrap_or_else(|| self.fill.get(i).copied().unwrap_or(0.0));
+            let other = t.starts_with("jaca:") && fam != Fam::Jaca;
+            if let (Some(&lo), Some(&hi)) = (self.lo.get(i), self.hi.get(i))
+                && !other
+                && lo <= hi
+            {
+                x = x.clamp(lo, hi);
+            }
             z += w * x;
         }
         z
@@ -582,8 +610,10 @@ fn fit_once(runs: &[Rated], opt: &FitOptions) -> ScoreModel {
     // Means and spreads: the measures over every run; JACA's over the JACA runs that have them.
     let mut mu = vec![0.0; nj];
     let mut sd = vec![1.0; nj];
+    let mut lo = vec![0.0; p];
+    let mut hi = vec![1.0; p];
     for k in 0..nj {
-        let vals: Vec<f64> = runs
+        let mut vals: Vec<f64> = runs
             .iter()
             .zip(&raw)
             .filter(|(r, _)| k < nb || r.fam == Fam::Jaca)
@@ -596,6 +626,10 @@ fn fit_once(runs: &[Rated], opt: &FitOptions) -> ScoreModel {
         let v = vals.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / vals.len() as f64;
         mu[k] = m;
         sd[k] = v.sqrt() + 1e-9;
+        vals.sort_by(|a, b| a.total_cmp(b));
+        let at = |q: f64| vals[((vals.len() - 1) as f64 * q).round() as usize];
+        lo[k] = at(RANGE.0);
+        hi[k] = at(RANGE.1);
     }
     let z: Vec<Vec<f64>> = runs
         .iter()
@@ -655,6 +689,8 @@ fn fit_once(runs: &[Rated], opt: &FitOptions) -> ScoreModel {
         intercept,
         fill,
         sd: sds,
+        lo,
+        hi,
         scale: SCALE,
         fitted_on: FittedOn::default(),
         metrics: Metrics::default(),
@@ -789,6 +825,58 @@ mod tests {
         assert!(bad.check().is_err());
     }
 
+    /// A run beyond every rated run scores as the nearest rated runs would: its terms are
+    /// clamped to their range over the fit.
+    #[test]
+    fn no_extrapolation_beyond_the_rated_runs() {
+        let mut rng = Rng::new(13);
+        let runs: Vec<Rated> = (0..80)
+            .map(|i| {
+                let act = 0.05 + 0.2 * rng.next_f64() as f32;
+                Rated {
+                    fate: Fate::Running,
+                    feat: jaca(1.0, 0.5, act),
+                    gens: 1024,
+                    fam: Fam::Jaca,
+                    verdict: if act < 0.12 || i % 7 == 0 {
+                        "keep"
+                    } else {
+                        "drop"
+                    }
+                    .into(),
+                }
+            })
+            .collect();
+        let m = fit(&runs, &FitOptions::default()).unwrap();
+        let k = m
+            .features
+            .iter()
+            .position(|t| t == "sqrt_activity_late")
+            .unwrap();
+        assert!(
+            m.lo[k] < m.hi[k] && m.lo[k] >= 0.05f64.sqrt() - 1e-6,
+            "{} {}",
+            m.lo[k],
+            m.hi[k]
+        );
+        let at = |act: f32| m.linear(Fate::Running, &jaca(1.0, 0.5, act), 1024, Fam::Jaca);
+        // Quieter than any rated run: no further gain than the quietest rated one.
+        let lo2 = (m.lo[k] * m.lo[k]) as f32;
+        assert_eq!(at(0.0), at(lo2 * 0.5));
+        assert!((at(0.0) - at(lo2)).abs() < 1e-9);
+        // An old model file without ranges does not clamp.
+        let open = ScoreModel {
+            lo: vec![],
+            hi: vec![],
+            ..m.clone()
+        };
+        assert!(open.check().is_ok());
+        assert_ne!(
+            open.linear(Fate::Running, &jaca(1.0, 0.5, 0.0), 1024, Fam::Jaca),
+            at(0.0)
+        );
+    }
+
     /// Several families: a term each, and JACA's sign terms touch only JACA runs.
     #[test]
     fn family_terms_and_jaca_terms_apart() {
@@ -836,13 +924,16 @@ mod tests {
     /// niche of its own; runs without sign measures keep their old bins.
     #[test]
     fn builtin_score_and_bins_see_a_lost_sign() {
-        use crate::explore::archive::{JACA_LOST_EARLY, behaviour_bin, score};
+        use crate::explore::archive::{JACA_LOST_SIGN, behaviour_bin, score};
         let kept = jaca(1.0, 0.8, 0.1);
         let early = jaca(0.2, 0.8, 0.1);
         let late = jaca(0.8, 0.8, 0.1);
         let s = score(Fate::Running, &kept, 1024, Fam::Jaca);
+        // A sign lost early or late: the same rule (the measures are the same otherwise).
         let e = score(Fate::Running, &early, 1024, Fam::Jaca);
-        assert!((e - s * JACA_LOST_EARLY).abs() < 1e-6, "{s} {e}");
+        let l = score(Fate::Running, &late, 1024, Fam::Jaca);
+        assert!((e - s * JACA_LOST_SIGN).abs() < 1e-6, "{s} {e}");
+        assert!((l - s * JACA_LOST_SIGN).abs() < 1e-6, "{s} {l}");
         let mut none = kept;
         none.signs = None;
         let b = |f: &Features| behaviour_bin(Fate::Running, f, 1024);

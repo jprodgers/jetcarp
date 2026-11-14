@@ -63,8 +63,9 @@ that will declare them stable.
   or `--rules-file` that cannot run stops the job from starting, and the error names each bad rule
   by its line in the file. A hunt used to start anyway and report the rule once per tiling, with no
   soups run. ([#5](https://github.com/jprodgers/jetcarp/issues/5))
-- **A JACA run that lost a sign early scores low and has a niche of its own.** The built-in score
-  keeps 0.3 of such a run's score, and a JACA run's niche now includes whether both signs held, so
+- **A JACA run that lost a sign scores low and has a niche of its own.** A JACA run whose sign
+  fell below 1% of live cells, at any point in the run, keeps 0.3 of its score, under the built-in
+  score and fitted models alike, and a JACA run's niche now includes whether both signs held, so
   runs that turned into plain Life-like runs stop competing with battles for a place.
 - **Run segments are schema 2** (`jetcarp-explore-runs 2`), with the sign columns. Segments of
   schema 1, from earlier searches and packs, still read, as runs without sign measures, and

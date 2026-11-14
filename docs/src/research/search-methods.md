@@ -371,7 +371,10 @@ eye. So a JACA run also records five sign measures:
 - `sign_lost`: when a sign first fell below 1% of live cells, as a fraction of the run (1 if
   never).
 
-The built-in score keeps 0.3 of the score of a JACA run that lost a sign in the first half. Runs
+A JACA run that lost a sign, at any point in the run, keeps 0.3 of its score. From the moment one
+sign is gone it is a plain Life-like run, and Jimmie Rodgers dropped 7 of the 9 rated runs that lost
+a sign after half way, as well as every one that lost it sooner. The rule is applied after the score,
+the built-in one or a fitted model, not learnt. Runs
 measured before JETCARP 0.4.2 have no sign measures; `jetcarp jobs refit` and `jetcarp jobs rescore
 --replay` run them again from their candidates to measure them, since runs replay exactly, and keep
 what they measure in the search folder (`remeasured.sqlite`).
@@ -412,15 +415,17 @@ maybe as 0.45. The fit reports its AUC of keep against drop on runs held out of 
 eight shuffles), and the terms that pull hardest. `--out` writes the model as a JSON file (format
 `jetcarp-score-model 1`) that records what it was fitted on: the jobs, raters, counts, date and
 AUC. A model scores on the built-in score's scale, 0 to 3, and keeps its gates (runs that died, or
-froze or cycled early, and JACA runs that lost a sign early, score low), so niches and the atlas's
-thresholds behave. `jetcarp search explore --score FILE` searches with a model, and `jetcarp jobs
+froze or cycled early, score low, and the rule for a lost sign applies after it), so niches and the
+atlas's thresholds behave. A model does not extrapolate: it records each measure's range over the
+runs it was fitted to, from their 1st to their 99th percentile, and clamps a run's measures to it
+before scoring, so a run beyond anything rated scores as the nearest rated runs would. `jetcarp search explore --score FILE` searches with a model, and `jetcarp jobs
 rescore JOB --score FILE` applies one to a job's stored runs. Either way the job keeps a copy in its
 spec, so a resumed search goes on with it. A model fitted with `--family` scores only that family;
 the others keep the built-in score, and row rules always do.
 
 Fitted to Jimmie Rodgers's 227 ratings of runs of a JACA-only search (48 keep, 98 maybe, 81 drop),
-a JACA model reached a held-out AUC of 0.90, against 0.74 for the score the runs were stored with
-and 0.76 for the built-in score with the rule for a lost sign. Its two strongest terms were sign
+a JACA model reached a held-out AUC of 0.90 with the rule for a lost sign, against 0.74 for the
+score the runs were stored with and 0.77 for the built-in score with the rule. Its two strongest terms were sign
 measures: sorted territories pull up, and territory that changes hands late pulls down. With maybe left out of the fit, the held-out AUC was 0.89.
 
 **How results are checked.** The elites are re-run on larger grids (64,000 cells for 4,096

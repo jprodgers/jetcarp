@@ -57,16 +57,17 @@ pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
     jaca_gate(f, fam, s)
 }
 
-/// What a JACA run whose sign was lost in the first half keeps of its score: it is a plain
-/// Life-like run under another name (more than half the best-scoring runs of a JACA-only search,
-/// every one dropped by eye).
-pub const JACA_LOST_EARLY: f32 = 0.3;
+/// What a JACA run that lost a sign keeps of its score, whenever in the run the sign fell below
+/// 1% of live cells: from there on it is a plain Life-like run under another name. In a JACA-only
+/// search, more than half the best-scoring runs lost a sign in the first half and every one was
+/// dropped by eye, as were 7 of the 9 rated runs that lost one later.
+pub const JACA_LOST_SIGN: f32 = 0.3;
 
-/// A score with the JACA rule applied: [`JACA_LOST_EARLY`] of it for a JACA run that lost a sign
-/// in the first half.
+/// A score with the JACA rule applied, after the built-in score or a fitted model:
+/// [`JACA_LOST_SIGN`] of it for a JACA run that lost a sign (`sign_lost` below 1).
 pub fn jaca_gate(f: &Features, fam: Fam, s: f32) -> f32 {
-    if fam == Fam::Jaca && f.signs.is_some_and(|x| x.lost_early()) {
-        s * JACA_LOST_EARLY
+    if fam == Fam::Jaca && f.signs.is_some_and(|x| x.lost < 1.0) {
+        s * JACA_LOST_SIGN
     } else {
         s
     }
@@ -482,6 +483,9 @@ mod tests {
         let odd = |e: &Eval| e.bin % 2 == 1;
         assert!((0..500).all(|_| a.sample_parent(&mut rng, None, &odd).unwrap().0 % 2 == 1));
         assert!(a.sample_parent(&mut rng, None, &|_| false).is_none());
-        assert!(a.sample_parent(&mut rng, Some(Fam::Jaca), &|_| true).is_none());
+        assert!(
+            a.sample_parent(&mut rng, Some(Fam::Jaca), &|_| true)
+                .is_none()
+        );
     }
 }

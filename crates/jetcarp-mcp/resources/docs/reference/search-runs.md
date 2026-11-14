@@ -208,7 +208,8 @@ ones; 0 when the run replayed exactly), `engine_version` and `ts`. The segments 
 | `intercept` | the constant term |
 | `fill` | what each term counts as for a run that cannot give it: a JACA term's mean over the fit, for a JACA run without sign measures |
 | `sd` | each term's standard deviation over the runs fitted: weight times `sd` is a term's pull per standard deviation |
-| `scale` | 3: a run scores `scale / (1 + exp(-(intercept + sum of weight x term)))`, with the built-in score's gates |
+| `lo`, `hi` | each term's range over the runs fitted, its 1st and 99th percentiles (JACA's terms over the JACA runs): a run's terms are clamped to it before the weighted sum, so the model does not extrapolate (a JACA term of another family's run stays 0; a file without them is not clamped) |
+| `scale` | 3: a run scores `scale / (1 + exp(-(intercept + sum of weight x term)))`, with the built-in score's gates, and a JACA run that lost a sign keeps 0.3 of it |
 | `fitted_on` | `jobs`, `searches` (uuids), `raters`, `families`, the reviews per verdict (`keep`, `maybe`, `drop`; a rater's latest verdict on a run), `runs`, `replayed`, `maybe_as` (0.5), `ridge` (8), `family_ridge` (5), `created` (UTC) and `engine_version` |
 | `metrics` | `auc` (keep against drop on runs held out of the fit; `folds` 5, `repeats` 8), `auc_fitted` (on the runs fitted) and `auc_builtin` (the built-in score's on the same runs) |
 | `name` | who rated what, for people |

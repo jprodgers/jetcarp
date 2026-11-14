@@ -2360,7 +2360,10 @@ mod tests {
             *n.entry(format!("{w:?}").leak()).or_default() += 1;
         }
         assert_eq!(n["Random"], 300);
-        assert_eq!((n["Mutate"], n["Transplant"], n["Balance"]), (200, 150, 150));
+        assert_eq!(
+            (n["Mutate"], n["Transplant"], n["Balance"]),
+            (200, 150, 150)
+        );
         assert_eq!((n["Seed"], n["Cover"]), (100, 100));
         assert!(!n.contains_key("Named"));
         assert_eq!(way(Fam::LifeLike, 0.39), Way::Random);
@@ -2436,7 +2439,10 @@ mod tests {
             }
         }
         // Scaled transplants are JACA pairs too, never a parent's pair unchanged.
-        for r in rows.iter().filter(|r| r.ev.cand.origin == "transplant-scaled") {
+        for r in rows
+            .iter()
+            .filter(|r| r.ev.cand.origin == "transplant-scaled")
+        {
             assert!(r.ev.cand.rule.starts_with("JACA"), "{}", r.ev.cand.rule);
             assert!(!rules.contains(r.ev.cand.rule.as_str()) || r.ev.cand.tiling != "square");
         }
