@@ -420,9 +420,8 @@ the others keep the built-in score, and row rules always do.
 
 Fitted to Jimmie Rodgers's 227 ratings of runs of a JACA-only search (48 keep, 98 maybe, 81 drop),
 a JACA model reached a held-out AUC of 0.90, against 0.74 for the score the runs were stored with
-and 0.76 for the built-in score with the rule for a lost sign. Its strongest terms were sign
-measures: territory that changes hands late pulls down, and sorted territories, a sign kept to the
-end and a balanced board pull up. With maybe left out of the fit, the held-out AUC was 0.89.
+and 0.76 for the built-in score with the rule for a lost sign. Its two strongest terms were sign
+measures: sorted territories pull up, and territory that changes hands late pulls down. With maybe left out of the fit, the held-out AUC was 0.89.
 
 **How results are checked.** The elites are re-run on larger grids (64,000 cells for 4,096
 generations, three times each) to confirm that they were not flukes of a small grid, and the *atlas*
