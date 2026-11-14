@@ -18,6 +18,13 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// Runs, by id.
+type Runs = Vec<(i64, Eval)>;
+/// Replays by run: the measures, and whether they differ from the stored ones (None: failed).
+type Replayed = Vec<(i64, Option<(Features, bool)>)>;
+/// What runs share to go in one GPU batch: tiling, cells, neighbourhood, generations.
+type Batched = (String, u32, Nb, u32);
+
 /// The cache's file name in a search folder.
 pub const FILE: &str = "remeasured.sqlite";
 
@@ -176,14 +183,14 @@ pub fn fill(
             if stop.load(Ordering::Relaxed) {
                 break;
             }
-            let (on_gpu, on_cpu): (Vec<(i64, Eval)>, Vec<(i64, Eval)>) = match &gpu {
+            let (on_gpu, on_cpu): (Runs, Runs) = match &gpu {
                 Some(be) => part
                     .iter()
                     .cloned()
                     .partition(|(_, ev)| ev.cand.rule().is_some_and(|r| be.supports(&r))),
                 None => (vec![], part.to_vec()),
             };
-            let mut got: Vec<(i64, Option<(Features, bool)>)> = Vec::new();
+            let mut got: Replayed = Vec::new();
             if let Some(be) = gpu.as_deref_mut() {
                 got.extend(replay_gpu(be, on_gpu, &stop, &tick)?);
             }
@@ -227,7 +234,7 @@ fn replay_cpu(
     runs: Vec<(i64, Eval)>,
     stop: &AtomicBool,
     tick: &(dyn Fn() + Sync),
-) -> Vec<(i64, Option<(Features, bool)>)> {
+) -> Replayed {
     let mut groups: HashMap<(String, u32), Vec<(i64, Eval)>> = HashMap::new();
     for (id, ev) in runs {
         groups
@@ -277,8 +284,8 @@ fn replay_gpu(
     runs: Vec<(i64, Eval)>,
     stop: &AtomicBool,
     tick: &(dyn Fn() + Sync),
-) -> Result<Vec<(i64, Option<(Features, bool)>)>, String> {
-    let mut groups: HashMap<(String, u32, Nb, u32), Vec<(i64, Eval)>> = HashMap::new();
+) -> Result<Replayed, String> {
+    let mut groups: HashMap<Batched, Runs> = HashMap::new();
     for (id, ev) in runs {
         let c = &ev.cand;
         groups
@@ -329,7 +336,7 @@ fn replay_gpu(
                 },
             };
             let traces = be.run(&job)?;
-            let got: Vec<(i64, Option<(Features, bool)>)> = ok
+            let got: Replayed = ok
                 .par_iter()
                 .zip(traces.par_iter())
                 .map(|((id, ev), t)| {
