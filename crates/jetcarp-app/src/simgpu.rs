@@ -12,12 +12,20 @@ pub fn backend(cc: &eframe::CreationContext<'_>) -> SimBackend {
     }
 }
 
-/// Sets the GPU simulation to off, automatic or on, and saves it as the shared setting
-/// (`gpu.json` in the settings folder) unless this is a screenshot run without a settings folder
-/// of its own. `JETCARP_GPU`, when set, still overrides the saved setting at the next start.
-pub fn set_mode(sim: &mut SimBackend, mode: jetcarp_gpu::select::Mode) -> Result<(), String> {
+/// Who the app's own GPU choice belongs to, in reports.
+pub const OWNER: &str = "the app";
+
+/// The policy the app's world steps by: `JETCARP_GPU`, else the app's own choice, else the shared
+/// setting.
+pub fn app_policy(own: jetcarp_gpu::select::Own) -> jetcarp_gpu::select::Policy {
+    jetcarp_gpu::select::Policy::load_for(own, OWNER)
+}
+
+/// Saves the shared GPU setting (`gpu.json` in the settings folder: automatic, on or off, which
+/// the app, the host, the command line and the screen savers follow unless they have a choice of
+/// their own), unless this is a screenshot run without a settings folder of its own.
+pub fn save_shared(mode: jetcarp_gpu::select::Mode) -> Result<(), String> {
     use jetcarp_gpu::select::Setting;
-    sim.mode = mode;
     if std::env::var_os("JETCARP_CONFIG_DIR").is_none()
         && std::env::var_os("JETCARP_SCREENSHOT").is_some()
     {
@@ -28,13 +36,32 @@ pub fn set_mode(sim: &mut SimBackend, mode: jetcarp_gpu::select::Mode) -> Result
     s.save().map(|_| ())
 }
 
-/// The next of automatic, on, off (the GPU simulation action).
-pub fn next_mode(m: jetcarp_gpu::select::Mode) -> jetcarp_gpu::select::Mode {
+/// The shared setting's mode now (automatic when it is not saved).
+pub fn shared_mode() -> jetcarp_gpu::select::Mode {
+    jetcarp_gpu::select::Setting::load()
+        .ok()
+        .flatten()
+        .map(|s| s.gpu)
+        .unwrap_or_default()
+}
+
+/// The next of follow, on, off (the GPU simulation action).
+pub fn next_choice(o: jetcarp_gpu::select::Own) -> jetcarp_gpu::select::Own {
+    use jetcarp_gpu::select::Own;
+    match o {
+        Own::Follow => Own::On,
+        Own::On => Own::Off,
+        Own::Off => Own::Follow,
+    }
+}
+
+/// `Automatic`, `On`, `Off`.
+pub fn mode_label(m: jetcarp_gpu::select::Mode) -> &'static str {
     use jetcarp_gpu::select::Mode;
     match m {
-        Mode::Auto => Mode::On,
-        Mode::On => Mode::Off,
-        Mode::Off => Mode::Auto,
+        Mode::Auto => "Automatic",
+        Mode::On => "On",
+        Mode::Off => "Off",
     }
 }
 

@@ -17,7 +17,7 @@ use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings, TuneLimits, TunedScene,
 };
 use jetcarp_display::tuning::{self, TuneChild, TuneRequest};
-use jetcarp_gpu::select::{self, Mode};
+use jetcarp_gpu::select::{self, Mode, Own};
 use jetcarp_mcp::link::host_call;
 use serde_json::{Value, json};
 use std::sync::mpsc::{Receiver, channel};
@@ -292,7 +292,8 @@ impl JetcarpApp {
         );
         let rotations = self.rotation_store().names();
         let monitors = self.host_monitor_names();
-        let mut gpu_mode = self.sim.mode;
+        let shared_was = crate::simgpu::shared_mode();
+        let mut shared = shared_was;
         let h = &mut self.display.host;
         h.poll(now);
         h.poll_tune();
@@ -523,17 +524,47 @@ impl JetcarpApp {
         });
         ui.horizontal_wrapped(|ui| {
             ui.label("GPU simulation");
-            let label = |m: Mode| match m {
-                Mode::Auto => "Automatic",
-                Mode::On => "On",
-                Mode::Off => "Off",
-            };
+            let label = crate::simgpu::mode_label;
             egui::ComboBox::from_id_salt("host-gpu")
-                .selected_text(if settings.gpu {
-                    label(gpu_mode)
-                } else {
-                    "Off (this host only)"
+                .selected_text(match settings.gpu {
+                    Own::Follow => format!("Follow the shared setting ({})", label(shared)),
+                    Own::On => "On".into(),
+                    Own::Off => "Off".into(),
                 })
+                .show_ui(ui, |ui| {
+                    for (o, text, tip) in [
+                        (
+                            Own::Follow,
+                            format!("Follow the shared setting ({})", label(shared)),
+                            "Whatever the shared setting below says",
+                        ),
+                        (
+                            Own::On,
+                            "On".into(),
+                            "Every world the GPU can run steps there, whatever the shared setting says",
+                        ),
+                        (
+                            Own::Off,
+                            "Off".into(),
+                            "Every world steps on the processor, whatever the shared setting says",
+                        ),
+                    ] {
+                        changed |= ui
+                            .selectable_value(&mut settings.gpu, o, text)
+                            .on_hover_text(tip)
+                            .changed();
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "The desktop background's own choice. The results are the processor's to the \
+                     bit either way",
+                );
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Shared setting").small());
+            egui::ComboBox::from_id_salt("host-gpu-shared")
+                .selected_text(crate::simgpu::mode_label(shared))
                 .show_ui(ui, |ui| {
                     for (m, tip) in [
                         (
@@ -543,25 +574,18 @@ impl JetcarpApp {
                         (Mode::On, "Every world the GPU can run steps there"),
                         (Mode::Off, "Every world steps on the processor"),
                     ] {
-                        if ui
-                            .selectable_label(settings.gpu && gpu_mode == m, label(m))
-                            .on_hover_text(tip)
-                            .clicked()
-                        {
-                            gpu_mode = m;
-                            if !settings.gpu {
-                                settings.gpu = true;
-                                changed = true;
-                            }
-                        }
+                        ui.selectable_value(&mut shared, m, crate::simgpu::mode_label(m))
+                            .on_hover_text(tip);
                     }
-                })
-                .response
-                .on_hover_text(
-                    "JETCARP's GPU setting, shared with the app (Run → GPU simulation), the \
-                     command line and the screen savers. The results are the processor's to the \
-                     bit either way",
-                );
+                });
+            ui.label(
+                RichText::new(
+                    "for the app, the desktop background, the command line and the screen savers, \
+                     unless they have a choice of their own (JETCARP_GPU comes first)",
+                )
+                .small()
+                .weak(),
+            );
         });
         egui::CollapsingHeader::new("Caption")
             .id_salt("host-caption")
@@ -676,8 +700,8 @@ impl JetcarpApp {
         if edit_rotations {
             self.shell.layout.show_pane("screensaver");
         }
-        if gpu_mode != self.sim.mode {
-            self.set_gpu_mode(gpu_mode);
+        if shared != shared_was {
+            self.set_shared_gpu(shared);
             // The host reads the shared setting again.
             self.display.host.reload_at = Some(now + RELOAD_AFTER);
         }

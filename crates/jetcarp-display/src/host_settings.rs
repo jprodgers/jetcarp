@@ -2,6 +2,8 @@
 //! place they live. The app and the CLI write it, then tell a running host to read it again.
 
 use crate::caption::CaptionSettings;
+pub use jetcarp_gpu::select::Own;
+use jetcarp_gpu::select::Policy;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -257,9 +259,11 @@ pub struct HostSettings {
     pub screens: Vec<ScreenSettings>,
     /// Frames per second, at most.
     pub fps: f32,
-    /// Step on the GPU as JETCARP's GPU setting says (`gpu.json`, or `JETCARP_GPU`: automatic
-    /// by default). False: never, whatever that setting says.
-    pub gpu: bool,
+    /// The desktop background's own GPU choice: follow JETCARP's shared setting (`gpu.json`,
+    /// automatic by default), or on, or off whatever it says. `JETCARP_GPU` comes first. Older
+    /// files' `true` reads as follow and `false` as off.
+    #[serde(deserialize_with = "Own::deserialize_lenient")]
+    pub gpu: Own,
     pub caption: CaptionSettings,
     /// Abandon an item when the host passes this much memory.
     pub max_memory_mb: u64,
@@ -288,7 +292,7 @@ impl Default for HostSettings {
         HostSettings {
             screens: vec![ScreenSettings::default()],
             fps: 30.0,
-            gpu: true,
+            gpu: Own::Follow,
             caption: CaptionSettings::default(),
             max_memory_mb: 6144,
             max_cells: 64_000_000,
@@ -304,6 +308,9 @@ impl Default for HostSettings {
 }
 
 pub const MAX_AWAKE_MINUTES: u32 = 24 * 60;
+
+/// Who the host's own GPU choice belongs to, in reports.
+pub const OWNER: &str = "the desktop background";
 
 /// JETCARP's settings folder (`JETCARP_CONFIG_DIR` overrides it, as it does for the app).
 pub fn config_dir() -> Option<PathBuf> {
@@ -360,6 +367,12 @@ impl HostSettings {
             .tuning
             .as_ref()
             .filter(|t| t.rotation == rotation)
+    }
+
+    /// The GPU policy the desktop background follows: `JETCARP_GPU`, else its own choice, else the
+    /// shared setting.
+    pub fn gpu_policy(&self) -> Policy {
+        Policy::load_for(self.gpu, OWNER)
     }
 
     /// Whether any screen has been tuned.
@@ -431,6 +444,21 @@ mod tests {
         assert_eq!(s.screens[0].rotation, "My wallpaper");
         assert!(s.still_picture);
         assert_eq!(s.tune, TuneLimits::default());
+        assert_eq!(
+            s.gpu,
+            Own::Follow,
+            "0.4.1's true follows the shared setting"
+        );
+        let off: HostSettings =
+            serde_json::from_str(&OLD.replace(r#""gpu": true"#, r#""gpu": false"#)).unwrap();
+        assert_eq!(off.gpu, Own::Off, "and false is off");
+        let on: HostSettings = serde_json::from_str(r#"{"gpu": "on"}"#).unwrap();
+        assert_eq!(on.gpu, Own::On);
+        assert!(
+            serde_json::to_string(&on)
+                .unwrap()
+                .contains(r#""gpu":"on""#)
+        );
         assert!(!s.tuned() && s.screens[0].tuning.is_none());
         // Untuned screens write no `tuning`, so a file read back by 0.4.1 looks as it did.
         let text = serde_json::to_string(&s).unwrap();

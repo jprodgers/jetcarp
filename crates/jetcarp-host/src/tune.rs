@@ -580,10 +580,12 @@ struct Rig {
 impl Rig {
     fn new(gpu: Option<SharedGpu>, settings: &HostSettings, screens: usize) -> Rig {
         let sim = match &gpu {
-            Some(g) if settings.gpu => {
-                SimBackend::from_device(&g.adapter, g.device.clone(), g.queue.clone())
-            }
-            Some(_) => SimBackend::unavailable("GPU stepping is off in the host's settings".into()),
+            Some(g) => SimBackend::from_device_with(
+                &g.adapter,
+                g.device.clone(),
+                g.queue.clone(),
+                settings.gpu_policy(),
+            ),
             None => SimBackend::unavailable("no GPU".into()),
         };
         let timer = gpu.as_ref().and_then(Timer::new);

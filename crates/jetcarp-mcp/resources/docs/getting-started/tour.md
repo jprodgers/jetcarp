@@ -63,9 +63,9 @@ one.) The world opens running, with the grid on the right and the panes on the l
 - **Run and pause** with Space, or by clicking *▶ running* in the menu bar. *Run → Step* (S or →)
   goes one generation and pauses. *Run → Speed* sets the generations per second (1 to 240),
   *Max speed* runs as fast as the computer can, and *GPU simulation* chooses where the world steps:
-  *Automatic* (the default) puts worlds of 16,000 cells or more on the graphics card, *On* every
-  world it can run, *Off* none. The results are exactly the same, and the choice is the
-  [GPU setting](../guides/gpu.md) that all of JETCARP shares. *Run → Jump* leaps far ahead with HashLife, for the rules it can
+  *Follow the shared setting* (the default: the [GPU setting](../guides/gpu.md) all of JETCARP
+  shares, which is automatic and puts worlds of 16,000 cells or more on the graphics card), *On*
+  every world it can run, *Off* none. The results are exactly the same. *Run → Jump* leaps far ahead with HashLife, for the rules it can
   run (see [HashLife and very long runs](../guides/hashlife.md)).
 - **The menu bar's right end** shows the scene's name, whether it is running, the generation, the
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)

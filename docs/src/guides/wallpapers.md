@@ -171,9 +171,9 @@ under `held`.
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
 16,000 cells, as the [GPU setting](gpu.md) says. *GPU simulation* in the *Desktop background* pane is
-that same setting (*Automatic*, *On* or *Off*), shared with the app's *Run* menu. Setting `gpu` to
-`false` in `host.json` keeps the host on the processor whatever that setting says (the pane then
-shows *Off (this host only)*). The host's log names the adapter it took.
+the host's own choice: *Follow the shared setting* (the default), *On* or *Off*, whatever the shared
+setting says. *Shared setting*, under it, is the one the app, the command line and the screen savers
+follow too (*Automatic*, *On* or *Off*). The host's log names the adapter it took.
 
 On Windows and macOS the host has an icon in the notification area or the menu bar, and on GNOME the
 extension adds one to the top bar. Its menu names what is showing and has *Next*, *Previous*,
@@ -194,9 +194,9 @@ about the host. The *Display* and *Screensaver* panes link to it.
   edited in the *Screensaver* pane, which the link beside them opens.
 - **The desktop:** *Leave a still picture when it stops*, and on GNOME *On the lock screen*, how long
   the screen stays lit while locked, and the extension's state with an *Install* button.
-- **How it runs:** *Frames per second*, *GPU simulation* (the shared [GPU setting](gpu.md)), the
-  *Caption*, *Pause on battery*, *Pause while the processor is busier than* a share, and *Start at
-  login*.
+- **How it runs:** *Frames per second*, *GPU simulation* (the host's own choice) and the *Shared
+  setting* it can follow (see [The GPU](gpu.md#the-setting)), the *Caption*, *Pause on battery*,
+  *Pause while the processor is busier than* a share, and *Start at login*.
 - **Performance:** the GPU it uses, the limits, and *Fit to this computer…* (see below).
 
 The settings are the host's own `host.json`, as before; the pane writes them and tells a running host.

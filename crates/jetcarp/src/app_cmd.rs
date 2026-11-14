@@ -70,7 +70,8 @@ impl OnOff {
 /// GPU simulation: automatic, on or off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum GpuMode {
-    Auto,
+    /// JETCARP's shared GPU setting.
+    Follow,
     On,
     Off,
 }
@@ -78,7 +79,7 @@ pub enum GpuMode {
 impl GpuMode {
     fn name(self) -> &'static str {
         match self {
-            GpuMode::Auto => "auto",
+            GpuMode::Follow => "follow",
             GpuMode::On => "on",
             GpuMode::Off => "off",
         }
@@ -132,8 +133,8 @@ pub struct DisplayArgs {
     pub panes_hidden: Option<OnOff>,
     #[arg(long)]
     pub status_bar: Option<OnOff>,
-    /// GPU simulation: auto (large worlds step on the GPU), on (every world the rules allow) or
-    /// off. Saved as JETCARP's GPU setting.
+    /// The app's own GPU choice: follow (JETCARP's shared setting, automatic unless changed), on
+    /// (every world the rules allow) or off (saved).
     #[arg(long)]
     pub gpu: Option<GpuMode>,
     /// Show each monitor's index on it for three seconds.
@@ -320,10 +321,12 @@ pub fn summary(s: &Value) -> String {
         },
         s["speed"],
         if s["max_speed"] == true { " (max)" } else { "" },
-        // The mode's name; an older app gives true or false.
-        match &s["gpu"] {
-            Value::String(m) => m.as_str(),
-            b => onoff(b),
+        // The mode's name, and the app's own choice when it follows the shared setting; an older
+        // app gives true or false.
+        match (&s["gpu"], s["gpu_choice"].as_str()) {
+            (Value::String(m), Some("follow")) => format!("{m} (the shared setting)"),
+            (Value::String(m), _) => m.clone(),
+            (b, _) => onoff(b).to_string(),
         }
     ));
     let ss = &s["screensaver"];

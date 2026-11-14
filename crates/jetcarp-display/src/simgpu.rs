@@ -56,7 +56,17 @@ impl SimBackend {
         device: wgpu::Device,
         queue: wgpu::Queue,
     ) -> SimBackend {
-        let policy = Policy::load();
+        SimBackend::from_device_with(adapter, device, queue, Policy::load())
+    }
+
+    /// The same under this policy (a program's own choice over the shared setting:
+    /// [`Policy::load_for`]).
+    pub fn from_device_with(
+        adapter: &wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        policy: Policy,
+    ) -> SimBackend {
         let info = adapter.get_info();
         // The quick checks now; the self-test when a world first needs the GPU.
         match select::requirements(

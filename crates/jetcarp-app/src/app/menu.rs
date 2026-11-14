@@ -318,7 +318,9 @@ impl Action {
                 "Hide the menu bar; it shows when the pointer touches the top edge or Alt is held"
             }
             HidePanes => "Let the grid fill the window (Tab shows the panes again)",
-            GpuSim => "Automatic, on, off: step on the GPU; results are identical to the CPU",
+            GpuSim => {
+                "Follow the shared setting, on, off: step on the GPU; results are identical to the CPU"
+            }
             TileJson => "Load a tile from the prototype's JSON (in the Tiling pane)",
             SeedAll => "Apply each CA's own seed",
             RandomAll => "Add random live cells (30%) to every CA that takes them",
@@ -724,10 +726,17 @@ impl JetcarpApp {
     }
 
     /// Do an action (from the menu or a shortcut).
-    /// GPU simulation off, automatic or on, saved as the setting every part of JETCARP shares.
-    pub(super) fn set_gpu_mode(&mut self, m: jetcarp_gpu::select::Mode) {
-        if let Err(e) = crate::simgpu::set_mode(&mut self.sim, m) {
-            self.message = Some((format!("GPU setting not saved: {e}"), true));
+    /// The app's own GPU choice: follow the shared setting, on or off (saved in app.json).
+    pub(super) fn set_gpu_choice(&mut self, own: jetcarp_gpu::select::Own) {
+        self.shell.gpu = own;
+        self.sim.mode = crate::simgpu::app_policy(own).mode;
+    }
+
+    /// The shared GPU setting every part of JETCARP follows unless it has a choice of its own.
+    pub(super) fn set_shared_gpu(&mut self, m: jetcarp_gpu::select::Mode) {
+        match crate::simgpu::save_shared(m) {
+            Ok(()) => self.sim.mode = crate::simgpu::app_policy(self.shell.gpu).mode,
+            Err(e) => self.message = Some((format!("GPU setting not saved: {e}"), true)),
         }
     }
 
@@ -790,7 +799,7 @@ impl JetcarpApp {
                 self.exec(Command::Step { gens: 1 });
             }
             MaxSpeed => self.max_speed = !self.max_speed,
-            GpuSim => self.set_gpu_mode(crate::simgpu::next_mode(self.sim.mode)),
+            GpuSim => self.set_gpu_choice(crate::simgpu::next_choice(self.shell.gpu)),
             TileJson | Pane(_) | AddByNotation => {
                 let id = match a {
                     TileJson => "tiling",
@@ -1017,20 +1026,30 @@ impl JetcarpApp {
                 });
             }
             Custom::Gpu => {
-                use jetcarp_gpu::select::Mode;
+                use jetcarp_gpu::select::Own;
                 let hint = self.sim.hint();
+                let shared = crate::simgpu::mode_label(crate::simgpu::shared_mode());
                 ui.add_enabled_ui(self.sim.available(), |ui| {
                     ui.menu_button("GPU simulation", |ui| {
-                        for (m, label) in [
-                            (Mode::Auto, "Automatic"),
-                            (Mode::On, "On"),
-                            (Mode::Off, "Off"),
+                        for (o, label) in [
+                            (Own::Follow, format!("Follow the shared setting ({shared})")),
+                            (Own::On, "On".into()),
+                            (Own::Off, "Off".into()),
                         ] {
-                            if ui.radio(self.sim.mode == m, label).clicked() {
-                                self.set_gpu_mode(m);
+                            if ui.radio(self.shell.gpu == o, label).clicked() {
+                                self.set_gpu_choice(o);
                                 ui.close();
                             }
                         }
+                        ui.label(
+                            RichText::new(
+                                "The shared setting is in the Desktop background pane; the app, \
+                                 the background host and the command line follow it unless they \
+                                 have a choice of their own.",
+                            )
+                            .small()
+                            .weak(),
+                        );
                     })
                     .response
                     .on_hover_text(hint);

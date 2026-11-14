@@ -29,8 +29,8 @@ from timings on a Radeon 8060S; `examples/bench.rs` in `jetcarp-gpu` measures th
 
 ## The setting
 
-The setting lives in `gpu.json` in the [settings folder](../reference/folders.md), and the app, the
-background host, the command line and the MCP server all read it:
+The shared setting lives in `gpu.json` in the [settings folder](../reference/folders.md), and the
+app, the background host, the command line and the MCP server all read it:
 
 ```json
 {"gpu": "auto", "gpu_adapter": "UHD"}
@@ -40,21 +40,36 @@ background host, the command line and the MCP server all read it:
 - `gpu_adapter`, which is optional, picks the adapter: `integrated`, `discrete`, `software`, or part
   of an adapter's name.
 
-The app's *Run → GPU simulation* menu (*Automatic*, *On*, *Off*) writes it, and so do
-`jetcarp app display --gpu auto|on|off` and the MCP `app_display` tool.
+*Shared setting* under *GPU simulation* in the *Desktop background* pane writes it.
 
-`JETCARP_GPU` overrides the file while it is set. It takes `off`, `auto` or `on` (or `0` and `1`), or
-which adapter to use automatically: `integrated`, `discrete`, `software`, or part of a name. On a
-laptop with an Intel UHD and an RTX 3050, `JETCARP_GPU=UHD` uses the Intel one.
+**The app and the background host each have a choice of their own,** over the shared setting:
+*Follow the shared setting* (the default), *On* or *Off*. So one setting serves both, and either can
+be set apart, for example the GPU on for the wallpaper and off for the app. The app's is *Run → GPU
+simulation* (`gpu` in `app.json`; also `jetcarp app display --gpu follow|on|off` and the MCP
+`app_display` tool); the host's is *GPU simulation* in the *Desktop background* pane (`gpu` in
+`host.json`, which older files held as `true`, now read as follow, or `false`, now off).
 
-A command's own choice wins over both: `--gpu` uses the GPU, `--cpu` only the processor (`jetcarp
-run`, `jetcarp wallpaper`, `jetcarp search hunt|explore`, `jetcarp pile`, `jetcarp jobs resume`,
-`jetcarp jobs refit` and `rescore`). The operations take the same as `gpu: true` or `false`; left
-out, the setting decides. An explore search or a pile made with `--gpu` or `--cpu` keeps that choice
-for its later runs.
+`JETCARP_GPU` overrides all of it while it is set. It takes `off`, `auto` or `on` (or `0` and `1`),
+or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of a name. On a
+laptop with an Intel UHD and an RTX 3050, `JETCARP_GPU=UHD` uses the Intel one (and leaves on or off
+to the rest).
 
-The background host has a *GPU simulation* setting of its own (`gpu` in `host.json`). Off, the host
-never steps on the GPU; on, which is the default, it follows the shared setting.
+A command's own choice comes next: `--gpu` uses the GPU, `--cpu` only the processor (`jetcarp run`,
+`jetcarp wallpaper`, `jetcarp search hunt|explore`, `jetcarp pile`, `jetcarp jobs resume`, `jetcarp
+jobs refit` and `rescore`). The operations take the same as `gpu: true` or `false`; left out, the
+setting decides. An explore search or a pile made with `--gpu` or `--cpu` keeps that choice for its
+later runs.
+
+In all, first to last: `JETCARP_GPU` (when it names off, auto or on), a command's `--gpu` or `--cpu`,
+the app's or host's own choice, the shared setting, and automatic. An adapter that failed its
+self-test is never used. `jetcarp doctor` says what the app and the host each do, and why:
+
+```text
+GPU: auto (automatic)
+  setting: /home/ada/.config/jetcarp/gpu.json (not saved)
+  the app: auto, from automatic (its own choice: follow)
+  the desktop background: off, from the desktop background's own setting (its own choice: off)
+```
 
 ## Which adapter
 

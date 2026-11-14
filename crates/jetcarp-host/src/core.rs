@@ -363,12 +363,15 @@ impl Core {
         self.started.elapsed().as_secs_f64()
     }
 
+    /// A simulator on the shared device, stepping as the desktop background's GPU choice says.
     fn new_sim(&self) -> SimBackend {
         match &self.gpu {
-            Some(g) if self.settings.gpu => {
-                SimBackend::from_device(&g.adapter, g.device.clone(), g.queue.clone())
-            }
-            Some(_) => SimBackend::unavailable("GPU stepping is off in the host's settings".into()),
+            Some(g) => SimBackend::from_device_with(
+                &g.adapter,
+                g.device.clone(),
+                g.queue.clone(),
+                self.settings.gpu_policy(),
+            ),
             None => SimBackend::unavailable("no GPU".into()),
         }
     }
@@ -447,15 +450,10 @@ impl Core {
         match &gpu {
             None => self.note("no GPU found; running on the CPU"),
             Some(g) => {
-                let policy = select::Policy::load();
                 self.note(format!(
                     "GPU: {}; GPU simulation {}",
                     jetcarp_gpu::describe(&g.adapter.get_info()),
-                    if self.settings.gpu {
-                        policy.describe()
-                    } else {
-                        "off in the host's settings".into()
-                    }
+                    self.settings.gpu_policy().describe()
                 ));
             }
         }
@@ -773,17 +771,12 @@ impl Core {
         if let Some(w) = warning {
             self.note(w);
         }
-        let gpu_was = self.settings.gpu;
         self.settings = settings;
         let built = self.build_screens();
-        // The GPU setting may have changed in the app (automatic, on or off).
-        let mode = select::Policy::load().mode;
-        for i in 0..self.screens.len() {
-            if self.settings.gpu != gpu_was {
-                self.screens[i].sim = self.new_sim();
-            } else if self.screens[i].sim.available() {
-                self.screens[i].sim.mode = mode;
-            }
+        // The GPU choice may have changed: its own, or the shared setting it follows.
+        let mode = self.settings.gpu_policy().mode;
+        for s in &mut self.screens {
+            s.sim.mode = mode;
         }
         self.settle_still();
         built

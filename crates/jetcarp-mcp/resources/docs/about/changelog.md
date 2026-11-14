@@ -79,9 +79,9 @@ that will declare them stable.
 - **The desktop background has its own pane.** *View → Desktop background settings…* (linked from
   the *Display* and *Screensaver* panes) holds everything about the background host that was in the
   *Screensaver* pane's *Background host* section, and more: each screen's rotation and monitor,
-  *Add a screen*, the lock screen, the still picture, the frame rate, *GPU simulation* (the shared
-  setting: Automatic, On, Off), the caption, the pauses, start at login, GNOME's extension, and the
-  new *Performance* group. The *Screensaver* pane keeps the screensaver's own settings, its profiles
+  *Add a screen*, the lock screen, the still picture, the frame rate, *GPU simulation* (see
+  below), the caption, the pauses, start at login, GNOME's extension, and the new *Performance*
+  group. The *Screensaver* pane keeps the screensaver's own settings, its profiles
   and rotations (which the desktop background shares), and the system screen saver's rotation.
   `host.json` and `app.json` are unchanged.
 - **The still picture the host leaves carries its scene,** as every picture JETCARP writes does, so
@@ -138,9 +138,15 @@ that will declare them stable.
 - **Displays use the adapter driving the screen.** The app, the host, the lock screen and the screen
   savers prefer it (the integrated GPU on a laptop with two), so a wallpaper does not keep a
   discrete GPU awake; searches and runs use the fastest adapter.
-- **The app's *Run → GPU simulation* is *Automatic*, *On* or *Off*,** and is saved. So is
-  `jetcarp app display --gpu auto|on|off` (MCP `app_display {gpu}`), which reports the mode. The
-  host's own `gpu` setting now means "follow the GPU setting" unless it is off.
+- **One GPU setting, shared, with a choice of their own for the app and the host.** The shared
+  setting (`gpu.json`: Automatic, On, Off) is *Shared setting* in the *Desktop background* pane.
+  The app's *Run → GPU simulation* and the pane's *GPU simulation* each offer *Follow the shared
+  setting* (the default), *On* or *Off*, saved in `app.json` and `host.json`; so do
+  `jetcarp app display --gpu follow|on|off` and MCP `app_display {gpu}`. A `host.json` from before
+  reads `true` as follow and `false` as off. First to last: `JETCARP_GPU` (when it names a mode, it
+  now comes before a command's `--gpu` or `--cpu`), the command's own choice, the app's or host's
+  own, the shared setting, automatic. `jetcarp doctor` says what the app and the host each do, and
+  where that came from.
 - **A wallpaper on the GPU costs the processor far less.** Reading a small world back from the GPU
   woke every worker thread each frame, about 4 ms of processor time; worlds under a million cells now
   do it on one thread, about 0.04 ms.
