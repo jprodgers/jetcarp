@@ -1,19 +1,24 @@
-// JETCARP GPU stepper. One invocation per cell; each cell is a u32: state in bits 0-7, age in 16-31.
-// Every rule here mirrors jetcarp-core's step.rs exactly (integer arithmetic only), so results are
+// JETCARP GPU stepper. One invocation per cell; each cell is a u32: state in bits 0-7, JACA's
+// annihilation glow in bits 8-15 (display only; rules other than JACA pass it through), age in
+// bits 16-31. A sandpile cell is its grain count, the whole word.
+// Every rule here mirrors jetcarp-core exactly (integer arithmetic only), so results are
 // bit-identical to the CPU.
 
 struct Params {
   op: u32, rule: u32, nb: u32, states: u32,
   birth: u32, survive: u32, thresh: u32, k1: u32,
   k2: u32, gg: u32, flags: u32, gen: u32,
-  pop_mode: u32, pop_n: u32, act_mode: u32, act_limit: u32,
-  act_for: u32, halt_repeat: u32, compare: u32, pad: u32,
+  pop_mode: u32, pop_n: u32, act_mode: u32, zin: u32,
+  zout: u32, halt_repeat: u32, compare: u32, stat: u32,
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
+  // Margolus: the block table, one byte per entry, in table[0].
+  // Forest fire: the noise key and the two thresholds.
   table: array<vec4<u32>, 11>,
 };
 
 // Header (halted, halt generation, one streak per activity halt, padding), then per generation
-// of the batch: population, changed cells, snapshot mismatch, unused.
+// of the batch: population (low word), changed cells, snapshot mismatch, population (high word).
+// After MAX_BATCH generations, four words per statistics slot (see STAT_BASE).
 struct Ctrl {
   halted: atomic<u32>,
   halt_gen: atomic<u32>,
@@ -33,13 +38,26 @@ struct Ctrl {
 @group(1) @binding(0) var<storage, read> src: array<u32>;
 @group(1) @binding(1) var<storage, read_write> dst: array<u32>;
 @group(1) @binding(2) var<storage, read_write> snap: array<u32>;
+// Per-rule data (see `prepare_aux` in lib.rs), then JACA's blast zone (two halves of n words,
+// in and out), at offsets given in the parameters. One buffer, as devices may allow only eight
+// storage buffers per shader stage.
+@group(2) @binding(0) var<storage, read_write> aux: array<u32>;
 
 var<workgroup> wg_halt: u32;
 var<workgroup> wg_pop: atomic<u32>;
+var<workgroup> wg_pop_hi: atomic<u32>;
 var<workgroup> wg_chg: atomic<u32>;
 var<workgroup> wg_mis: atomic<u32>;
+// Statistics: JACA (contacts, destroyed, cancelled births); sandpiles (grains lost, low and high).
+var<workgroup> wg_s0: atomic<u32>;
+var<workgroup> wg_s1: atomic<u32>;
+var<workgroup> wg_s2: atomic<u32>;
 
 const WG: u32 = 256u;
+// Where the statistics slots start in ctrl.m: after 4 words for each of MAX_BATCH generations.
+const STAT_BASE: u32 = 4096u;
+const NONE: u32 = 0xffffffffu;
+const R_SANDPILE: u32 = 12u;
 
 // Lattice coordinates (unsheared i, row j, type k) to a cell index, honouring wrap; -1 past a dead edge.
 fn resolve(i0: i32, j0: i32, k: i32) -> i32 {
@@ -140,6 +158,46 @@ fn counts(i: u32, c: ptr<function, array<u32, 8>>) {
   }
 }
 
+// The neighbour slots of a cell (p.nb): a CSR range on explicit storage; on a lattice, the
+// cell's position and its type's range of offsets.
+struct Hood { lo: u32, cnt: u32, base: i32, j: i32 };
+
+fn hood(i: u32) -> Hood {
+  var h: Hood;
+  if (topo[6] != 0) {
+    let row = p.nb * (u32(topo[0]) + 1u) + i;
+    h.lo = csr_off[row];
+    h.cnt = csr_off[row + 1u] - h.lo;
+    return h;
+  }
+  let nt = u32(topo[3]);
+  let w = u32(topo[1]);
+  let c = i / nt;
+  h.j = i32(c / w);
+  h.base = i32(c % w) + topo[topo[9] + h.j];
+  let t = topo[10] + i32((p.nb * nt + i % nt) * 2u);
+  h.lo = u32(topo[t]);
+  h.cnt = u32(topo[t + 1]);
+  return h;
+}
+
+// Slot o of a hood: the neighbour's index, or -1 past a dead edge.
+fn nbr(h: Hood, o: u32) -> i32 {
+  if (topo[6] != 0) { return i32(csr_nb[h.lo + o]); }
+  let e = topo[11] + i32(h.lo + o) * 3;
+  return resolve(h.base + topo[e], h.j + topo[e + 1], topo[e + 2]);
+}
+
+// Neighbour slots of any cell (`Topology::degree`).
+fn degree(j: u32) -> u32 {
+  if (topo[6] != 0) {
+    let row = p.nb * (u32(topo[0]) + 1u) + j;
+    return csr_off[row + 1u] - csr_off[row];
+  }
+  let nt = u32(topo[3]);
+  return u32(topo[topo[10] + i32((p.nb * nt + j % nt) * 2u) + 1]);
+}
+
 fn table_word(w: u32) -> u32 {
   return p.table[w / 4u][w % 4u];
 }
@@ -158,6 +216,131 @@ fn commit_age(old: u32, v: u32, age: u32) -> u32 {
   return 1u;
 }
 
+// Ages for Life-like, Generations and Larger than Life rules.
+fn bs_age(s: u32, v: u32, age: u32) -> u32 {
+  if (v == 1u) {
+    if (s == 1u) { return min(age + 1u, 65000u); }
+    return 1u;
+  }
+  if (v != 0u) { return age; }
+  return 0u;
+}
+
+// B0: the low d + 1 bits of m, reversed.
+fn rev_mask(m: u32, d: u32) -> u32 {
+  return reverseBits(m) >> (31u - d);
+}
+
+// 64-bit integers as (low, high) pairs, for forest fire's SplitMix64 noise (step.rs `noise01`).
+fn mul_wide(a: u32, b: u32) -> vec2<u32> {
+  let a0 = a & 0xffffu;
+  let a1 = a >> 16u;
+  let b0 = b & 0xffffu;
+  let b1 = b >> 16u;
+  let p00 = a0 * b0;
+  let p01 = a0 * b1;
+  let p10 = a1 * b0;
+  let p11 = a1 * b1;
+  let mid = p01 + p10;
+  let mid_carry = select(0u, 0x10000u, mid < p01);
+  let lo = p00 + (mid << 16u);
+  let carry = select(0u, 1u, lo < p00);
+  return vec2<u32>(lo, p11 + (mid >> 16u) + mid_carry + carry);
+}
+
+fn mul64(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
+  let w = mul_wide(a.x, b.x);
+  return vec2<u32>(w.x, w.y + a.x * b.y + a.y * b.x);
+}
+
+// a >> k for 0 < k < 32.
+fn shr64(a: vec2<u32>, k: u32) -> vec2<u32> {
+  return vec2<u32>((a.x >> k) | (a.y << (32u - k)), a.y >> k);
+}
+
+// The top 53 bits of SplitMix64's output for this step's key (seed ^ tick * golden, from the
+// CPU) and cell i.
+fn noise53(key: vec2<u32>, i: u32) -> vec2<u32> {
+  var z = key ^ mul64(vec2<u32>(i, 0u), vec2<u32>(0xD192ED03u, 0xD1B54A32u));
+  z = mul64(z ^ shr64(z, 30u), vec2<u32>(0x1CE4E5B9u, 0xBF58476Du));
+  z = mul64(z ^ shr64(z, 27u), vec2<u32>(0x133111EBu, 0x94D049BBu));
+  z = z ^ shr64(z, 31u);
+  return shr64(z, 11u);
+}
+
+fn below64(x: vec2<u32>, t: vec2<u32>) -> bool {
+  return x.y < t.y || (x.y == t.y && x.x < t.x);
+}
+
+// Sandpiles: a cell's grains, with this generation's drop on the centre cell (saturating).
+fn grains(j: u32) -> u32 {
+  let h = src[j];
+  if (p.k1 != 0u && j == p.k2) {
+    return select(h + p.k1, 0xffffffffu, h > 0xffffffffu - p.k1);
+  }
+  return h;
+}
+
+// Sandpiles on a patch: open boundary cells (a bit set in aux at p.gg) take every grain.
+fn is_open(j: u32) -> bool {
+  if (p.gg == NONE) { return false; }
+  return ((aux[p.gg + (j >> 5u)] >> (j & 31u)) & 1u) != 0u;
+}
+
+fn fires(j: u32) -> u32 {
+  if (is_open(j)) { return 0u; }
+  let d = degree(j);
+  if (d == 0u) { return 0u; }
+  return grains(j) / d;
+}
+
+// Larger than Life: state-1 cells within reach of cell i (aux at p.k1), past a dead edge one
+// each with live edges.
+fn ltl_count(i: u32) -> u32 {
+  var c = 0u;
+  let r = p.k1;
+  if (topo[6] != 0) {
+    let lo = aux[r + i];
+    let hi = aux[r + i + 1u];
+    let at = r + u32(topo[0]) + 1u;
+    for (var e = lo; e < hi; e = e + 1u) {
+      c += u32((src[aux[at + e]] & 0xffu) == 1u);
+    }
+    return c;
+  }
+  let nt = u32(topo[3]);
+  let w = u32(topo[1]);
+  let k = i % nt;
+  let cc = i / nt;
+  let j = i32(cc / w);
+  let base = i32(cc % w) + topo[topo[9] + j];
+  let start = aux[r + 2u * k];
+  let cnt = aux[r + 2u * k + 1u];
+  let list = r + 2u * nt;
+  let live = u32(topo[7] != 0);
+  for (var o = 0u; o < cnt; o = o + 1u) {
+    let e = list + (start + o) * 3u;
+    let x = resolve(base + bitcast<i32>(aux[e]), j + bitcast<i32>(aux[e + 1u]), bitcast<i32>(aux[e + 2u]));
+    if (x >= 0) {
+      c += u32((src[u32(x)] & 0xffu) == 1u);
+    } else {
+      c += live;
+    }
+  }
+  return c;
+}
+
+// Margolus: x on an axis of n cells, wrapped when `wrap`; -1 past the edge.
+fn block_fix(x: i32, n: i32, wrap: bool) -> i32 {
+  if (wrap) {
+    if (x < 0) { return x + n; }
+    if (x >= n) { return x - n; }
+    return x;
+  }
+  if (x < 0 || x >= n) { return -1; }
+  return x;
+}
+
 @compute @workgroup_size(256)
 fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
   if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
@@ -168,9 +351,15 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
     let old = src[i];
     let s = old & 0xffu;
     let age = old >> 16u;
+    var glow = old & 0xff00u;
     var v = 0u;
     var na = 0u;
     var deg = 0u;
+    // The cell's new word, and the value that counts for population, changes and repeats:
+    // its state, or a sandpile's grains.
+    var word = 0u;
+    var val = 0u;
+    var was = s;
     switch p.rule {
       // Life-like and Generations: only state-1 neighbours count; live edges add missing slots.
       case 0u: {
@@ -186,13 +375,7 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         } else {
           v = 0u;
         }
-        if (v == 1u) {
-          if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
-        } else if (v != 0u) {
-          na = age;
-        } else {
-          na = 0u;
-        }
+        na = bs_age(s, v, age);
       }
       // WireWorld: ages are left as they are.
       case 1u: {
@@ -236,6 +419,19 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         v = min(v, p.states);
         na = commit_age(s, v, age);
       }
+      // Edmond's Spectre glider rule.
+      case 5u: {
+        let g = gather(i, 1u, 3u, &deg);
+        let c1 = g.x;
+        let c3 = g.y;
+        let c2 = (g.z - c1 - 3u * c3) / 2u;
+        let c0 = g.w - c1 - c2 - c3;
+        if (s == 0u && c0 >= 3u && c1 >= 1u) { v = 3u; }
+        else if (s == 3u && c3 >= 3u) { v = 0u; }
+        else if (s == 3u && c1 >= 1u) { v = 1u; }
+        else { v = 0u; }
+        na = select(0u, 1u, v != 0u);
+      }
       // Priority table: the first row whose own state matches and whose conditions all hold
       // gives the next state, else 0 (evolve/priority.rs). Ages: 1 when non-zero.
       case 6u: {
@@ -262,47 +458,307 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         }
         na = select(0u, 1u, v != 0u);
       }
-      // Edmond's Spectre glider rule.
-      default: {
-        let g = gather(i, 1u, 3u, &deg);
-        let c1 = g.x;
-        let c3 = g.y;
-        let c2 = (g.z - c1 - 3u * c3) / 2u;
-        let c0 = g.w - c1 - c2 - c3;
-        if (s == 0u && c0 >= 3u && c1 >= 1u) { v = 3u; }
-        else if (s == 3u && c3 >= 3u) { v = 0u; }
-        else if (s == 3u && c1 >= 1u) { v = 1u; }
-        else { v = 0u; }
-        na = select(0u, 1u, v != 0u);
+      // JACA (jaca.rs): birth/survive = the positive rule, k1/k2 = the negative rule, thresh =
+      // blast radius. With no blast the zone is the contact cells, found here; otherwise the
+      // contact and dilate passes leave it in aux[zin..]. A destroyed cell glows 255, and the
+      // glow halves each step.
+      case 7u: {
+        let h = hood(i);
+        var cp = 0u;
+        var cn = 0u;
+        var present = 0u;
+        for (var o = 0u; o < h.cnt; o = o + 1u) {
+          let x = nbr(h, o);
+          if (x >= 0) {
+            let t = src[u32(x)] & 0xffu;
+            cp += u32(t == 1u);
+            cn += u32(t == 2u);
+            present += 1u;
+          }
+        }
+        var z = false;
+        if (p.thresh == 0u) {
+          if (s == 1u) { z = cn > 0u; } else if (s != 0u) { z = cp > 0u; }
+          if (z) { atomicAdd(&wg_s0, 1u); }
+        } else {
+          z = aux[p.zin + i] != 0u;
+        }
+        if (z) {
+          atomicAdd(&wg_s1, 1u);
+          glow = 0xff00u;
+        } else {
+          glow = (glow >> 1u) & 0xff00u;
+          if (topo[7] != 0) {
+            cp += h.cnt - present;
+            cn += h.cnt - present;
+          }
+          let sp = min(cp, 31u);
+          let sn = min(cn, 31u);
+          if (s == 1u) {
+            v = (p.survive >> sp) & 1u;
+          } else if (s == 2u) {
+            v = ((p.k2 >> sn) & 1u) * 2u;
+          } else {
+            let bp = ((p.birth >> sp) & 1u) == 1u;
+            let bn = ((p.k1 >> sn) & 1u) == 1u;
+            if (bp && !bn) { v = 1u; }
+            else if (bn && !bp) { v = 2u; }
+            else if (bp && bn) { atomicAdd(&wg_s2, 1u); }
+          }
+        }
+        na = commit_age(s, v, age);
       }
+      // B0 Life-like rules (step.rs `step_b0`): masks per degree, from the step number's parity
+      // (k1 bit 0: odd) and whether it is the CA's first step (k1 bit 1).
+      case 8u: {
+        let c = gather(i, 1u, 1u, &deg).x;
+        let d = min(deg, 31u);
+        let full = select((2u << d) - 1u, 0xffffffffu, d >= 31u);
+        var bm = 0u;
+        var sm = 0u;
+        if (((p.survive >> d) & 1u) == 1u) {
+          if ((p.k1 & 2u) != 0u) {
+            bm = ~p.birth & full;
+            sm = ~p.survive & full;
+          } else {
+            bm = rev_mask(~p.survive & full, d);
+            sm = rev_mask(~p.birth & full, d);
+          }
+        } else if ((p.k1 & 1u) != 0u) {
+          bm = ~p.birth & full;
+          sm = ~p.survive & full;
+        } else {
+          bm = rev_mask(p.survive & full, d);
+          sm = rev_mask(p.birth & full, d);
+        }
+        if (s == 0u) { v = (bm >> c) & 1u; } else { v = (sm >> c) & 1u; }
+        if (v == 1u) {
+          if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+        }
+      }
+      // Margolus blocks on the square grid (step.rs `step_margolus`): blocks start at even
+      // coordinates plus the phase (k2); gg bit 0 wraps x, bit 1 wraps y. A block that would
+      // cross an edge keeps its cells.
+      case 9u: {
+        let w = topo[1];
+        let hh = topo[2];
+        let u = i32(i % u32(w));
+        let j = i32(i / u32(w));
+        let ph = i32(p.k2);
+        let bx = ph + 2 * ((u - ph) >> 1u);
+        let by = ph + 2 * ((j - ph) >> 1u);
+        let wx = (p.gg & 1u) != 0u;
+        let wy = (p.gg & 2u) != 0u;
+        let x0 = block_fix(bx, w, wx);
+        let x1 = block_fix(bx + 1, w, wx);
+        let y0 = block_fix(by, hh, wy);
+        let y1 = block_fix(by + 1, hh, wy);
+        if (x0 < 0 || x1 < 0 || y0 < 0 || y1 < 0) {
+          v = s;
+        } else {
+          var code = 0u;
+          code |= u32((src[u32(y0 * w + x0)] & 0xffu) != 0u);
+          code |= u32((src[u32(y0 * w + x1)] & 0xffu) != 0u) << 1u;
+          code |= u32((src[u32(y1 * w + x0)] & 0xffu) != 0u) << 2u;
+          code |= u32((src[u32(y1 * w + x1)] & 0xffu) != 0u) << 3u;
+          let me = u32((u - bx) + 2 * (j - by));
+          let entry = (p.table[0][code / 4u] >> ((code % 4u) * 8u)) & 0xffu;
+          v = (entry >> me) & 1u;
+        }
+        na = commit_age(s, v, age);
+      }
+      // Larger than Life: the reach at aux[k1..], birth bits at aux[k2..] and survival bits
+      // gg words later.
+      case 10u: {
+        if (s > 1u) {
+          if (s + 1u < p.states) { v = s + 1u; }
+        } else {
+          let c = ltl_count(i);
+          let off = p.k2 + select(0u, p.gg, s == 1u);
+          let bit = (aux[off + (c >> 5u)] >> (c & 31u)) & 1u;
+          if (s == 0u) {
+            v = bit;
+          } else if (bit == 1u) {
+            v = 1u;
+          } else if (p.states > 2u) {
+            v = 2u;
+          }
+        }
+        na = bs_age(s, v, age);
+      }
+      // Forest fire (step.rs `step_forest`): table[0] = (key low, key high, growth threshold
+      // low, high), table[1].xy = the lightning threshold; a cell grows or is struck when the
+      // top 53 bits of its noise are below the threshold.
+      case 11u: {
+        let key = p.table[0].xy;
+        if (s == 2u) {
+          v = 0u;
+        } else if (s == 1u) {
+          let burning = gather(i, 2u, 2u, &deg).x > 0u;
+          if (burning || below64(noise53(key, i), p.table[1].xy)) { v = 2u; } else { v = 1u; }
+        } else {
+          v = select(0u, 1u, below64(noise53(key, i), p.table[0].zw));
+        }
+        na = commit_age(s, v, age);
+      }
+      // Sandpile (step.rs `step_sandpile`): one synchronous toppling sweep. k1 = grains dropped
+      // on the centre cell (k2) this step; grains past a dead edge or into an open cell are lost.
+      case 12u: {
+        let hi = grains(i);
+        var lost = 0u;
+        if (is_open(i)) {
+          word = 0u;
+          lost = hi;
+        } else {
+          let h = hood(i);
+          let d = h.cnt;
+          let t = fires(i);
+          var inc = 0u;
+          var kept = 0u;
+          for (var o = 0u; o < h.cnt; o = o + 1u) {
+            let x = nbr(h, o);
+            if (x >= 0) {
+              inc += fires(u32(x));
+              kept += u32(!is_open(u32(x)));
+            }
+          }
+          word = hi - t * d + inc;
+          lost = t * (d - kept);
+        }
+        if (lost != 0u) {
+          let o = atomicAdd(&wg_s0, lost);
+          if (o + lost < o) { atomicAdd(&wg_s1, 1u); }
+        }
+        val = word;
+        was = old;
+      }
+      default: {}
     }
-    dst[i] = v | (na << 16u);
+    if (p.rule != R_SANDPILE) {
+      word = v | glow | (na << 16u);
+      val = v;
+    }
+    dst[i] = word;
     if ((p.flags & 1u) != 0u) {
-      let sb = (snap[i >> 2u] >> ((i & 3u) * 8u)) & 0xffu;
-      if (sb != v) { atomicStore(&wg_mis, 1u); }
+      var sb = 0u;
+      if (p.rule == R_SANDPILE) {
+        sb = snap[i];
+      } else {
+        sb = (snap[i >> 2u] >> ((i & 3u) * 8u)) & 0xffu;
+      }
+      if (sb != val) { atomicStore(&wg_mis, 1u); }
     }
-    if ((p.flags & 2u) != 0u && v != 0u) { atomicAdd(&wg_pop, 1u); }
-    if ((p.flags & 4u) != 0u && v != s) { atomicAdd(&wg_chg, 1u); }
+    if ((p.flags & 2u) != 0u && val != 0u) {
+      // Sandpiles count grains, which can pass 2^32: carry into the high word.
+      let x = select(1u, val, p.rule == R_SANDPILE);
+      let o = atomicAdd(&wg_pop, x);
+      if (o + x < o) { atomicAdd(&wg_pop_hi, 1u); }
+    }
+    if ((p.flags & 4u) != 0u && val != was) { atomicAdd(&wg_chg, 1u); }
   }
-  if (p.flags != 0u) {
+  if (p.flags != 0u || p.stat != NONE) {
     workgroupBarrier();
     if (li == 0u) {
       let slot = 4u * p.gen;
       let pc = atomicLoad(&wg_pop);
-      if (pc != 0u) { atomicAdd(&ctrl.m[slot], pc); }
+      if (pc != 0u) {
+        let o = atomicAdd(&ctrl.m[slot], pc);
+        if (o + pc < o) { atomicAdd(&ctrl.m[slot + 3u], 1u); }
+      }
+      let ph = atomicLoad(&wg_pop_hi);
+      if (ph != 0u) { atomicAdd(&ctrl.m[slot + 3u], ph); }
       let cc = atomicLoad(&wg_chg);
       if (cc != 0u) { atomicAdd(&ctrl.m[slot + 1u], cc); }
       if (atomicLoad(&wg_mis) != 0u) { atomicOr(&ctrl.m[slot + 2u], 1u); }
+      if (p.stat != NONE) {
+        let at = STAT_BASE + 4u * p.stat;
+        let s0 = atomicLoad(&wg_s0);
+        let s1 = atomicLoad(&wg_s1);
+        let s2 = atomicLoad(&wg_s2);
+        if (p.rule == R_SANDPILE) {
+          // Grains lost, as a 64-bit sum.
+          if (s0 != 0u) {
+            let o = atomicAdd(&ctrl.m[at], s0);
+            if (o + s0 < o) { atomicAdd(&ctrl.m[at + 1u], 1u); }
+          }
+          if (s1 != 0u) { atomicAdd(&ctrl.m[at + 1u], s1); }
+        } else {
+          if (s0 != 0u) { atomicAdd(&ctrl.m[at], s0); }
+          if (s1 != 0u) { atomicAdd(&ctrl.m[at + 1u], s1); }
+          if (s2 != 0u) { atomicAdd(&ctrl.m[at + 2u], s2); }
+        }
+      }
     }
   }
 }
 
-// Period-watch snapshot: the states of four cells per word, as bytes.
+// JACA with a blast radius, part 1: live cells touching the opposite sign, into the zone,
+// counted in the step's statistics slot. The zone is aux[zout..].
+@compute @workgroup_size(256)
+fn contact(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
+  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
+  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }
+  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;
+  let n = u32(topo[0]);
+  if (i < n) {
+    let s = src[i] & 0xffu;
+    var hit = 0u;
+    if (s != 0u) {
+      let other = select(1u, 2u, s == 1u);
+      let h = hood(i);
+      for (var o = 0u; o < h.cnt; o = o + 1u) {
+        let x = nbr(h, o);
+        if (x >= 0 && (src[u32(x)] & 0xffu) == other) {
+          hit = 1u;
+          break;
+        }
+      }
+    }
+    aux[p.zout + i] = hit;
+    if (hit != 0u) { atomicAdd(&wg_s0, 1u); }
+  }
+  workgroupBarrier();
+  if (li == 0u) {
+    let c = atomicLoad(&wg_s0);
+    if (c != 0u) { atomicAdd(&ctrl.m[STAT_BASE + 4u * p.stat], c); }
+  }
+}
+
+// JACA with a blast radius, part 2: grow the zone by one neighbourhood step, aux[zin..] into
+// aux[zout..].
+@compute @workgroup_size(256)
+fn dilate(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
+  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
+  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }
+  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;
+  let n = u32(topo[0]);
+  if (i < n) {
+    var hit = aux[p.zin + i];
+    if (hit == 0u) {
+      let h = hood(i);
+      for (var o = 0u; o < h.cnt; o = o + 1u) {
+        let x = nbr(h, o);
+        if (x >= 0 && aux[p.zin + u32(x)] != 0u) {
+          hit = 1u;
+          break;
+        }
+      }
+    }
+    aux[p.zout + i] = hit;
+  }
+}
+
+// Period-watch snapshot: the states of four cells per word, as bytes; a sandpile's grain counts
+// whole (p.rule = 1, one word per cell).
 @compute @workgroup_size(256)
 fn pack(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
   if (atomicLoad(&ctrl.halted) != 0u) { return; }
   let wi = (wg.y * u32(topo[8]) + wg.x) * WG + li;
   let n = u32(topo[0]);
+  if (p.rule == 1u) {
+    if (wi < n) { snap[wi] = src[wi]; }
+    return;
+  }
   let base = wi * 4u;
   if (base < n) {
     var x = 0u;
@@ -313,20 +769,26 @@ fn pack(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
   }
 }
 
+// a <= b for 64-bit (low, high) pairs.
+fn le64(a: vec2<u32>, b: vec2<u32>) -> bool {
+  return a.y < b.y || (a.y == b.y && a.x <= b.x);
+}
+
 // After each generation: stop the batch when the engine must look (a script trigger or a
-// reseed policy may fire). Control parameters: pop_mode bit 1 = stop when population <= pop_n,
-// bit 2 = stop when population >= thresh; act_mode = number of activity halts, each in
-// table[k] = (1 below / 2 at least, limit, generations in a row, unused) with its own streak.
+// reseed policy may fire). Control parameters: pop_mode bit 1 = stop when population <=
+// (pop_n, k1), bit 2 = stop when population >= (thresh, k2), as (low, high) words; act_mode =
+// number of activity halts, each in table[k] = (1 below / 2 at least, limit, generations in a
+// row, unused) with its own streak.
 @compute @workgroup_size(1)
 fn control() {
   if (atomicLoad(&ctrl.halted) != 0u) { return; }
   let slot = 4u * p.gen;
-  let pop = atomicLoad(&ctrl.m[slot]);
+  let pop = vec2<u32>(atomicLoad(&ctrl.m[slot]), atomicLoad(&ctrl.m[slot + 3u]));
   let chg = atomicLoad(&ctrl.m[slot + 1u]);
   let mis = atomicLoad(&ctrl.m[slot + 2u]);
   var halt = p.halt_repeat != 0u && p.compare != 0u && mis == 0u;
-  if ((p.pop_mode & 1u) != 0u && pop <= p.pop_n) { halt = true; }
-  if ((p.pop_mode & 2u) != 0u && pop >= p.thresh) { halt = true; }
+  if ((p.pop_mode & 1u) != 0u && le64(pop, vec2<u32>(p.pop_n, p.k1))) { halt = true; }
+  if ((p.pop_mode & 2u) != 0u && le64(vec2<u32>(p.thresh, p.k2), pop)) { halt = true; }
   for (var k = 0u; k < min(p.act_mode, 4u); k = k + 1u) {
     let a = p.table[k];
     var ok = chg >= a.y;

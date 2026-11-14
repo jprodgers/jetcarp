@@ -102,6 +102,59 @@ fn run_and_verify_as_json() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `jetcarp run` steps a large world on the GPU by default (the GPU setting is automatic) and
+/// on the CPU with `--cpu`: the same hash either way, which `--expect` checks.
+#[test]
+fn run_gives_one_hash_on_the_cpu_and_by_default() {
+    use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, TilingSpec};
+    let dir = out_root().join(format!("cli-gpu-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let scene = dir.join("big.json");
+    // 400 x 400 cells of Life: 1.28M neighbour reads a generation, over the automatic threshold.
+    let mut sc = Scene::new(TilingSpec::rect("square", 400, 400, Boundary::Wrap));
+    sc.rng_state = 9;
+    sc.cas
+        .push(CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.35 }));
+    std::fs::write(&scene, sc.to_json()).unwrap();
+    let s = scene.to_str().unwrap();
+    let cpu = json_of(&["run", s, "--gens", "60", "--cpu", "--json"]);
+    let hash = cpu["hash"].as_str().unwrap().to_string();
+    assert!(cpu["backend"].as_str().unwrap().starts_with("cpu"), "{cpu}");
+    let auto = json_of(&["run", s, "--gens", "60", "--expect", &hash, "--json"]);
+    assert_eq!(auto["hash"], hash.as_str());
+    // On the GPU when one is usable here (CI: JETCARP_GPU=software); on the CPU, with a note, when
+    // there is none.
+    let b = auto["backend"].as_str().unwrap();
+    assert!(b.starts_with("gpu (") || b.contains("no GPU"), "{b}");
+    let gpu = json_of(&[
+        "run", s, "--gens", "60", "--gpu", "--expect", &hash, "--json",
+    ]);
+    assert_eq!(gpu["hash"], hash.as_str());
+    // A setting of off keeps it on the CPU; --gpu still wins.
+    let off = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+        .args(["run", s, "--gens", "60", "--expect", &hash, "--json"])
+        .env("JETCARP_OUT", out_root())
+        .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+        .env(
+            "JETCARP_CONFIG_DIR",
+            test_dir("JETCARP_CONFIG_DIR", "config"),
+        )
+        .env("JETCARP_GPU", "off")
+        .output()
+        .unwrap();
+    assert!(off.status.success());
+    let off: Value = serde_json::from_slice(&off.stdout).unwrap();
+    assert!(off["backend"].as_str().unwrap().starts_with("cpu"), "{off}");
+    // --gpu and --cpu together make no sense.
+    assert!(
+        !jetcarp(&["run", s, "--gens", "1", "--gpu", "--cpu"])
+            .status
+            .success()
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn api_lists_describes_and_calls_operations() {
     let ops = json_of(&["api", "list"]);
@@ -446,6 +499,106 @@ fn search_and_jobs_commands_as_json() {
     ] {
         assert!(!jetcarp(old).status.success(), "{old:?}");
     }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// An explore job's runs out with their measures: as text, CSV on standard output or in a file,
+/// and JSON; a refit without reviews is refused.
+#[test]
+fn explore_runs_with_measures_as_csv_and_json() {
+    let dir = out_root().join(format!("cli-explore-runs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = dir.join("lib");
+    let l = lib.to_str().unwrap();
+    let e = json_of(&[
+        "search",
+        "explore",
+        "--library",
+        l,
+        "--families",
+        "jaca",
+        "--tilings",
+        "square,hex",
+        "--screen-cells",
+        "400",
+        "--screen-gens",
+        "64",
+        "--confirm-cells",
+        "400",
+        "--confirm-gens",
+        "64",
+        "--limit",
+        "40",
+        "--threads",
+        "2",
+        "--quiet",
+        "--json",
+    ]);
+    let job = e["job"].to_string();
+    let o = jetcarp(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "0",
+        "--measures",
+        "sign_pos,sign_lost",
+        "--format",
+        "csv",
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let text = String::from_utf8(o.stdout).unwrap();
+    let mut lines = text.lines();
+    let head = lines.next().unwrap();
+    assert!(head.starts_with("id,stage,parent,family,"), "{head}");
+    assert!(head.ends_with(",score,sign_pos,sign_lost"), "{head}");
+    let n = lines.count();
+    assert!(n >= 40, "{n} runs");
+    let out = dir.join("runs.csv");
+    let w = json_of(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "0",
+        "--out",
+        out.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(w["written"].as_u64(), Some(n as u64));
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap().lines().count(),
+        n + 1
+    );
+    let j = json_of(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "3",
+        "--measures",
+        "all",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(j["runs"].as_array().unwrap().len(), 3);
+    assert!(j["runs"][0]["measures"]["sign_sorted"].is_number(), "{j}");
+    let o = jetcarp(&["jobs", "--library", l, "runs", &job, "--measures", "all"]);
+    let text = String::from_utf8(o.stdout).unwrap();
+    assert!(
+        text.lines().next().unwrap().contains("sign_trade"),
+        "{text}"
+    );
+    let o = jetcarp(&["jobs", "--library", l, "refit", &job]);
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("reviewed runs"));
     let _ = std::fs::remove_dir_all(dir);
 }
 

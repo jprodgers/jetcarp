@@ -35,6 +35,7 @@
 - [HashLife and very long runs](guides/hashlife.md)
 - [Aperiodic patches and following movers](guides/aperiodic-patches.md)
 - [Website export](guides/website-export.md)
+- [The GPU](guides/gpu.md)
 - [Uninstalling](guides/uninstalling.md)
 
 # Cellular automata

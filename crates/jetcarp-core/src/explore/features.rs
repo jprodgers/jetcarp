@@ -67,6 +67,38 @@ pub struct Features {
     pub movers: u32,
     /// Mean speed of the movers, in tiles per generation.
     pub mover_speed: f32,
+    /// A JACA run's sign measures ([`measure_signs`]); none for other families, and for runs
+    /// measured before JETCARP 0.4.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signs: Option<SignMeasures>,
+}
+
+/// How a JACA run's two signs (states 1 and 2) shared the board ([`measure_signs`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SignMeasures {
+    /// The positive sign's (state 1's) share of live cells, as a mean over the last quarter (0
+    /// to 1): which side is ahead.
+    pub pos: f32,
+    /// The smaller sign's share of live cells, as a mean over the last quarter (0 to 0.5).
+    pub balance: f32,
+    /// How well the signs sort into territories at the end: the same-sign fraction among
+    /// neighbour pairs of live cells (over the CA's neighbourhood), relative to what shuffled
+    /// signs would give (0 mixed, 1 fully sorted; 0 when one sign is all that is left, with no
+    /// territories to sort, and with no live pairs).
+    pub sorted: f32,
+    /// How much territory changes hands late: of the cells live both at the three-quarter mark
+    /// ([`trade_gen`]) and at the end, the fraction whose sign differs (0 when there are none).
+    pub trade: f32,
+    /// When a sign first fell below 1% of live cells, as a fraction of the run (1 if never).
+    pub lost: f32,
+}
+
+impl SignMeasures {
+    /// Was a sign lost (fell below 1% of live cells) in the first half of the run? Such a run is
+    /// a plain Life-like run under another name.
+    pub fn lost_early(&self) -> bool {
+        self.lost < 0.5
+    }
 }
 
 impl Features {
@@ -507,4 +539,122 @@ pub fn frames_for(gens: u32, window: usize) -> Vec<u32> {
     let w = window as u32;
     let start = gens.saturating_sub(w - 1);
     (start..=gens).collect()
+}
+
+/// The generation whose frame [`SignMeasures::trade`] compares with the last: three quarters
+/// through a run of `gens` generations.
+pub fn trade_gen(gens: u32) -> u32 {
+    (gens as u64 * 3 / 4) as u32
+}
+
+/// The frame generations a JACA run asks for: [`frames_for`], and before them the frame at
+/// [`trade_gen`] when the window does not hold it.
+pub fn frames_with_trade(gens: u32, window: usize) -> Vec<u32> {
+    let mut v = frames_for(gens, window);
+    let t = trade_gen(gens);
+    if v.first().is_none_or(|&f| t < f) {
+        v.insert(0, t);
+    }
+    v
+}
+
+/// The sign measures of a JACA run (states 1 and 2 its signs), from its trace's `neg` series and
+/// its frames, requested with [`frames_with_trade`] (`window` as there). `nb` is the CA's
+/// neighbourhood. `None` when the trace has no `neg` series.
+pub fn measure_signs(
+    g: &Grid,
+    t: &WorldTrace,
+    gens: u32,
+    window: usize,
+    nb: Nb,
+) -> Option<SignMeasures> {
+    if t.neg.len() != t.pop.len() || t.pop.is_empty() || t.frames.is_empty() {
+        return None;
+    }
+    let minor = |i: usize| -> Option<f32> {
+        let p = t.pop[i];
+        let m = t.neg[i].min(p);
+        (p > 0).then(|| m.min(p - m) as f32 / p as f32)
+    };
+    let last = t.pop.len() - 1;
+    let q = last / 4;
+    let mean = |v: Vec<f32>| -> f32 {
+        if v.is_empty() {
+            0.0
+        } else {
+            v.iter().sum::<f32>() / v.len() as f32
+        }
+    };
+    let balance = mean((last - q..=last).filter_map(minor).collect());
+    let ahead = mean(
+        (last - q..=last)
+            .filter(|&i| t.pop[i] > 0)
+            .map(|i| (t.pop[i] - t.neg[i].min(t.pop[i])) as f32 / t.pop[i] as f32)
+            .collect(),
+    );
+    let lost = (0..=last)
+        .find(|&i| minor(i).is_some_and(|x| x < 0.01))
+        .map_or(1.0, |i| i as f32 / last.max(1) as f32);
+    let end = t.frames.last().unwrap();
+    // Territories: same-sign neighbour pairs of live cells against shuffled signs.
+    let csr = g.csr(nb);
+    let (mut same, mut pairs, mut pos, mut neg) = (0u64, 0u64, 0u64, 0u64);
+    for (i, &s) in end.iter().enumerate() {
+        if s == 0 {
+            continue;
+        }
+        if s == 2 {
+            neg += 1;
+        } else {
+            pos += 1;
+        }
+        for &x in &csr.nb[csr.off[i] as usize..csr.off[i + 1] as usize] {
+            let o = end[x as usize];
+            if o != 0 {
+                pairs += 1;
+                same += (o == s) as u64;
+            }
+        }
+    }
+    let sorted = if pairs == 0 {
+        0.0
+    } else {
+        let fp = pos as f64 / (pos + neg) as f64;
+        let expect = fp * fp + (1.0 - fp) * (1.0 - fp);
+        // One sign nearly all that is left: no territories.
+        if expect >= 0.999 {
+            0.0
+        } else {
+            (((same as f64 / pairs as f64) - expect) / (1.0 - expect)).clamp(0.0, 1.0) as f32
+        }
+    };
+    // The frame at the three-quarter mark: before the window's frames, or in the window.
+    let wnd = frames_for(gens, window);
+    let n = t.frames.len();
+    let at = trade_gen(gens);
+    let then = if n > wnd.len() {
+        &t.frames[n - wnd.len() - 1]
+    } else {
+        let k = (at.saturating_sub(wnd[0]) as usize).min(wnd.len() - 1);
+        &t.frames[(n + k).saturating_sub(wnd.len()).min(n - 1)]
+    };
+    let (mut both, mut flip) = (0u64, 0u64);
+    for (a, b) in then.iter().zip(end) {
+        if *a != 0 && *b != 0 {
+            both += 1;
+            flip += (a != b) as u64;
+        }
+    }
+    let trade = if both > 0 {
+        flip as f32 / both as f32
+    } else {
+        0.0
+    };
+    Some(SignMeasures {
+        pos: ahead,
+        balance,
+        sorted,
+        trade,
+        lost,
+    })
 }

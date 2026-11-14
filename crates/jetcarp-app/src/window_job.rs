@@ -21,7 +21,7 @@ use jetcarp_store::Library;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What the app tells the operations about the machine: the GPU soup hunter for hunts, made
@@ -32,29 +32,31 @@ pub struct AppPlatform;
 impl Platform for AppPlatform {
     /// The graphics adapters (the setup wizard says whether a Quick Start build has a GPU).
     fn gpu_adapters(&self) -> Vec<jetcarp_api::ctx::GpuAdapter> {
-        jetcarp_gpu::adapter_reports()
-            .into_iter()
-            .map(|g| jetcarp_api::ctx::GpuAdapter {
-                name: g.name,
-                backend: g.backend,
-                kind: g.kind,
-                driver: g.driver,
-                chosen: g.chosen,
-                problem: g.problem,
-            })
-            .collect()
+        crate::gpu_info::adapters()
+    }
+    fn gpu_policy(&self) -> Option<jetcarp_api::ctx::GpuPolicy> {
+        Some(crate::gpu_info::policy())
     }
     fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
         jetcarp_gpu::batch::BatchSim::headless().map(|g| Box::new(g) as Box<dyn Backend>)
     }
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
-        static HUNTER: OnceLock<Result<Arc<dyn SoupBatcher>, String>> = OnceLock::new();
-        HUNTER
-            .get_or_init(|| {
-                jetcarp_gpu::hunt::GpuHunter::headless()
-                    .map(|g| Arc::new(g) as Arc<dyn SoupBatcher>)
-            })
-            .clone()
+        crate::gpu_info::soup_batcher()
+    }
+    fn gpu_stepper(&self) -> Result<Box<dyn jetcarp_api::ctx::GpuStepper>, String> {
+        crate::gpu_info::stepper()
+    }
+    fn gpu_mode(&self) -> jetcarp_api::ctx::GpuMode {
+        crate::gpu_info::mode()
+    }
+    fn gpu_forced(&self) -> Option<jetcarp_api::ctx::GpuMode> {
+        crate::gpu_info::forced()
+    }
+    fn gpu_worth(&self, w: &jetcarp_core::World, paced: bool) -> bool {
+        jetcarp_gpu::GpuSim::worth(w, paced)
+    }
+    fn gpu_worth_run(&self, w: &jetcarp_core::World, gens: u64) -> bool {
+        jetcarp_gpu::GpuSim::worth_run(w, gens)
     }
 }
 

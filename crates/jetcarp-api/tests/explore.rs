@@ -417,3 +417,321 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
         vec![("drop".into(), 1), ("keep".into(), 1), ("maybe".into(), 1)]
     );
 }
+
+#[test]
+fn a_clips_rating_page_saves_ratings_that_reviews_read_back() {
+    let dir = scratch("explore-rating-page");
+    let cx = ctx(&dir);
+    let r = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "explore", "spec": small(), "budget": {"items": 200}, "threads": 2}),
+    )
+    .unwrap();
+    let job = r["job"].as_i64().unwrap();
+    let out = dir.join("round-1");
+    let c = call_json(
+        &cx,
+        "search.clips",
+        json!({"job": job, "out": out.display().to_string(), "sample": 4, "px": 32,
+               "frames": 3, "page": true}),
+    )
+    .unwrap();
+    // The page: offline, with the manifest's clips and the search's uuid embedded.
+    let page = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert_eq!(c["page"], out.join("index.html").display().to_string());
+    assert!(!page.contains("http://") && !page.contains("https://"));
+    assert!(!page.contains("__"), "a slot was left unfilled");
+    let clips = c["clips"].as_array().unwrap();
+    let uuid = cx.library().job(job).unwrap().uuid;
+    assert!(page.contains(&format!("\"search\":\"{uuid}\"")));
+    assert!(page.contains("\"round\":\"round-1\""));
+    for x in clips {
+        assert!(page.contains(&format!("\"file\":\"{}\"", x["file"].as_str().unwrap())));
+    }
+    // A ratings file as the page saves it: verdicts, a star alone, and a run of another search.
+    let ids: Vec<i64> = clips.iter().map(|x| x["id"].as_i64().unwrap()).collect();
+    let file = dir.join("ratings-round-1.json");
+    let ratings = json!({
+        "format": "jetcarp-ratings 1", "job": job, "search": uuid, "round": "round-1",
+        "rater": "Ada", "note": "fronts are best",
+        "ratings": [
+            {"run": ids[0], "verdict": "keep", "star": true, "ts": 1794662868264_i64},
+            {"run": ids[1], "verdict": "drop", "star": false, "ts": 1794662868300_i64},
+            {"run": ids[2], "verdict": null, "star": true, "ts": 1794662868400_i64},
+            {"run": 999_999, "verdict": "maybe", "star": false, "ts": 1794662868500_i64},
+        ],
+    });
+    std::fs::write(&file, ratings.to_string()).unwrap();
+    let from = file.display().to_string();
+    let rv = call_json(&cx, "search.review", json!({"job": job, "from": from})).unwrap();
+    assert_eq!(
+        (
+            &rv["recorded"],
+            &rv["stars"],
+            &rv["unknown_runs"],
+            &rv["rater"],
+            &rv["note"]
+        ),
+        (
+            &json!(2),
+            &json!(2),
+            &json!(1),
+            &json!("Ada"),
+            &json!("fronts are best")
+        ),
+        "{rv}"
+    );
+    assert_eq!(rv["counts"], json!([["drop", 1], ["keep", 1]]), "{rv}");
+    assert_eq!(rv["starred"], 2, "{rv}");
+    // Stars are not verdicts: the reviewed runs are the two with one.
+    let v = call_json(&cx, "search.runs", json!({"job": job, "reviewed": "any"})).unwrap();
+    assert_eq!(v["runs"].as_array().unwrap().len(), 2, "{v}");
+    let stars = cx.library().run_stars(&uuid).unwrap();
+    assert_eq!(stars.len(), 2);
+    assert!(
+        stars
+            .iter()
+            .all(|s| s.rater == "Ada" && s.source == "ratings:round-1")
+    );
+    // Read again: nothing new. With another rater: recorded for that rater.
+    let rv = call_json(&cx, "search.review", json!({"job": job, "from": from})).unwrap();
+    assert_eq!(
+        (&rv["recorded"], &rv["already"]),
+        (&json!(0), &json!(4)),
+        "{rv}"
+    );
+    let rv = call_json(
+        &cx,
+        "search.review",
+        json!({"job": job, "from": from, "rater": "Bob"}),
+    )
+    .unwrap();
+    assert_eq!(
+        (&rv["recorded"], &rv["stars"], &rv["rater"]),
+        (&json!(2), &json!(2), &json!("Bob"))
+    );
+    // Another search's ratings, or another kind of file, are refused.
+    let mut other = ratings.clone();
+    other["search"] = json!("00000000-0000-0000-0000-000000000000");
+    std::fs::write(&file, other.to_string()).unwrap();
+    fails(
+        call_json(&cx, "search.review", json!({"job": job, "from": from})),
+        ErrorKind::Invalid,
+    );
+    std::fs::write(&file, r#"{"format": "something else"}"#).unwrap();
+    fails(
+        call_json(&cx, "search.review", json!({"job": job, "from": from})),
+        ErrorKind::Invalid,
+    );
+}
+
+/// A JACA search's runs carry their sign measures; every measure comes out on request, in a
+/// list or a CSV file, every run or the runs after an id; reviews fit a score model, which a
+/// rescore applies (the job then keeps it) and a new search takes.
+#[test]
+fn measures_out_a_refit_and_its_score() {
+    let dir = scratch("explore-refit");
+    let cx = ctx(&dir);
+    let spec = json!({
+        "tilings": "square, hex", "families": ["jaca"], "screen_cells": 600,
+        "screen_gens": 96, "confirm_cells": 900, "confirm_gens": 96, "confirm_seeds": 1,
+        "seed": 7,
+    });
+    let r = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "explore", "spec": spec, "budget": {"items": 160}, "threads": 2}),
+    )
+    .unwrap();
+    let job = r["job"].as_i64().unwrap();
+    let v = call_json(
+        &cx,
+        "search.runs",
+        json!({"job": job, "limit": 0, "measures": "all", "order": "id"}),
+    )
+    .unwrap();
+    let runs = v["runs"].as_array().unwrap().clone();
+    assert!(runs.len() >= 100, "{} runs", runs.len());
+    assert_eq!(v["measures"].as_array().unwrap().len(), 26);
+    for x in &runs {
+        let m = &x["measures"];
+        for k in [
+            "sign_pos",
+            "sign_balance",
+            "sign_sorted",
+            "sign_trade",
+            "sign_lost",
+        ] {
+            assert!(m[k].is_number(), "{k}: {x}");
+        }
+        let (pos, bal) = (
+            m["sign_pos"].as_f64().unwrap(),
+            m["sign_balance"].as_f64().unwrap(),
+        );
+        assert!(
+            (0.0..=1.0).contains(&pos) && (0.0..=0.5).contains(&bal),
+            "{m}"
+        );
+    }
+    fails(
+        call_json(
+            &cx,
+            "search.runs",
+            json!({"job": job, "measures": "colour"}),
+        ),
+        ErrorKind::Invalid,
+    );
+    // A CSV file: every run after an id, with the measures asked for.
+    let after = runs[9]["id"].as_i64().unwrap();
+    let c = call_json(
+        &cx,
+        "search.runs",
+        json!({"job": job, "limit": 0, "since": after,
+               "csv": dir.join("after.csv").display().to_string(),
+               "measures": "sign_lost,density_late"}),
+    )
+    .unwrap();
+    assert_eq!(c["written"].as_u64(), Some(runs.len() as u64 - 10), "{c}");
+    let text = std::fs::read_to_string(c["csv"].as_str().unwrap()).unwrap();
+    let mut lines = text.lines();
+    assert!(
+        lines
+            .next()
+            .unwrap()
+            .ends_with(",score,sign_lost,density_late")
+    );
+    let first = lines.next().unwrap();
+    assert!(
+        first.starts_with(&format!("{},", runs[10]["id"])),
+        "{first}"
+    );
+    assert_eq!(lines.count() + 1, runs.len() - 10);
+    // Reviews: runs that kept both signs and sorted them well kept, lost ones dropped.
+    let measure = |x: &Value, k: &str| x["measures"][k].as_f64().unwrap();
+    let mut picks: Vec<&Value> = runs.iter().take(90).collect();
+    picks.sort_by(|a, b| {
+        let key = |x: &Value| measure(x, "sign_lost") + measure(x, "sign_sorted");
+        key(b).total_cmp(&key(a))
+    });
+    for (i, x) in picks.iter().enumerate() {
+        let verdict = ["keep", "maybe", "drop"][i * 3 / picks.len()];
+        call_json(
+            &cx,
+            "search.review",
+            json!({"job": job, "run": x["id"], "verdict": verdict, "rater": "tester"}),
+        )
+        .unwrap();
+    }
+    let f = call_json(
+        &cx,
+        "search.refit",
+        json!({"jobs": [job], "family": "jaca", "rater": "tester",
+               "out": dir.join("taste.json").display().to_string()}),
+    )
+    .unwrap();
+    assert_eq!(
+        (f["keep"].as_u64(), f["drop"].as_u64()),
+        (Some(30), Some(30)),
+        "{f}"
+    );
+    assert_eq!(f["replayed"], 0, "new runs have their sign measures: {f}");
+    let auc = f["auc"].as_f64().unwrap();
+    assert!(auc > 0.6 && auc <= 1.0, "{f}");
+    assert!(!f["strongest"].as_array().unwrap().is_empty());
+    let model_path = f["saved"].as_str().unwrap().to_string();
+    let model: Value =
+        serde_json::from_str(&std::fs::read_to_string(&model_path).unwrap()).unwrap();
+    assert_eq!(model["format"], "jetcarp-score-model 1");
+    assert_eq!(model["family"], "jaca");
+    assert_eq!(model["fitted_on"]["jobs"], json!([job]));
+    assert_eq!(model["fitted_on"]["raters"], json!(["tester"]));
+    // Too few reviews of another rater: refused.
+    fails(
+        call_json(
+            &cx,
+            "search.refit",
+            json!({"jobs": [job], "rater": "nobody"}),
+        ),
+        ErrorKind::Invalid,
+    );
+    // Rescored by the model: the job keeps it; back to the built-in score drops it.
+    let rs = call_json(
+        &cx,
+        "search.rescore",
+        json!({"job": job, "score": model_path}),
+    )
+    .unwrap();
+    assert!(rs["score"].as_str().unwrap().contains("tester"), "{rs}");
+    assert!(rs["changed"].as_u64().unwrap() > 0, "{rs}");
+    assert_eq!(cx.library().job(job).unwrap().spec["score"], model);
+    let top = call_json(&cx, "search.runs", json!({"job": job, "limit": 1})).unwrap();
+    assert!(top["runs"][0]["score"].as_f64().unwrap() <= 3.0);
+    let again = call_json(&cx, "search.rescore", json!({"job": job})).unwrap();
+    assert_eq!(again["changed"], 0, "the job's own model: {again}");
+    let back = call_json(
+        &cx,
+        "search.rescore",
+        json!({"job": job, "score": "builtin"}),
+    )
+    .unwrap();
+    assert_eq!(back["score"], "the built-in score");
+    assert!(cx.library().job(job).unwrap().spec.get("score").is_none());
+    // A new search with the model: its spec holds it.
+    let mut spec2 = spec.clone();
+    spec2["score"] = json!(model_path);
+    let r2 = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "explore", "spec": spec2, "budget": {"items": 20}, "threads": 2}),
+    )
+    .unwrap();
+    let j2 = r2["job"].as_i64().unwrap();
+    assert_eq!(cx.library().job(j2).unwrap().spec["score"], model);
+    spec2["score"] = json!({"format": "jetcarp-score-model 9"});
+    fails(
+        call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore", "spec": spec2, "budget": {"items": 20}}),
+        ),
+        ErrorKind::Invalid,
+    );
+    // Parents from the first job: its keeps and maybes by default, or the verdicts asked for.
+    let parents = |extra: Value| -> Vec<Value> {
+        let mut sp = spec.clone();
+        sp["parents_from"] = json!(job);
+        for (k, v) in extra.as_object().unwrap() {
+            sp[k] = v.clone();
+        }
+        let r = call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore", "spec": sp, "budget": {"items": 10}, "threads": 2}),
+        )
+        .unwrap();
+        let j = r["job"].as_i64().unwrap();
+        let spec = cx.library().job(j).unwrap().spec;
+        spec["parents"].as_array().cloned().unwrap_or_default()
+    };
+    let both = parents(json!({}));
+    assert_eq!(both.len(), 60);
+    assert!(
+        both[..30]
+            .iter()
+            .all(|p| p["why"] == "keep" && p["job"] == job)
+    );
+    let keeps = parents(json!({"parents_reviewed": "keep"}));
+    assert_eq!(keeps.len(), 30);
+    let drops = parents(json!({"parents_reviewed": "drop"}));
+    assert!(drops.len() == 30 && drops.iter().all(|p| p["why"] == "drop"));
+    fails(
+        call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore",
+                   "spec": {"families": ["jaca"], "parents_from": job, "parents_reviewed": "fine"}}),
+        ),
+        ErrorKind::Invalid,
+    );
+}

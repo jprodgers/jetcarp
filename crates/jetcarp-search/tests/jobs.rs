@@ -828,6 +828,7 @@ fn pile_jobs_stopped_part_way_and_resumed_equal_uninterrupted() {
         preview_side: 32,
         png: true,
         gpu: false,
+        cpu: false,
         extra: serde_json::Value::Null,
     };
     let ja = pilejob::start(&lib, &spec("whole")).unwrap();

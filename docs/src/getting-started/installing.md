@@ -173,7 +173,8 @@ RHEL, Rocky and AlmaLinux 8, and anything newer. They are not built for musl sys
 Alpine, where [cargo](#with-cargo) works instead.
 
 The command line needs nothing beyond glibc. The app, the background host and the GPU simulation
-load these libraries when they start, which a desktop system already has:
+load these libraries when they start, which a desktop system already has (without a usable GPU,
+JETCARP runs on the processor; see [The GPU](../guides/gpu.md)):
 
 - a Vulkan driver (`libvulkan.so.1` with Mesa's or your graphics card's driver), or failing that
   OpenGL ES through EGL (`libEGL.so.1`);

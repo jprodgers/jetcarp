@@ -73,7 +73,7 @@ settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 113 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 116 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}.
 
@@ -554,18 +554,22 @@ Example:
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
 | `explore.confirm_seeds` | integer | Seeds an elite is confirmed with (default 3). |
 | `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
-| `explore.gpu` | boolean | Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything). |
+| `explore.gpu` | boolean | Run the rules a GPU can run on the GPU (true) or everything on the CPU (false), in this and later runs. Default: as JETCARP's GPU setting says at each run (automatic: on the GPU when there is a usable one). |
 | `explore.max_rss_gb` | number | Stop (paused, resumable) when the process uses more memory than this many GB. |
+| `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
+| `explore.parents_reviewed` | string | With parents_from: the verdicts whose runs to take, keep, maybe or drop, separated by commas (default keep,maybe). |
+| `explore.score` | any | Score runs with a fitted score model (a file's path, or the model) instead of the built-in score; the job keeps it. |
 | `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
 | `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
-| `gpu` | boolean | Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true. |
+| `gpu` | boolean | Use the GPU (true) or only the CPU (false); results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic). |
 | `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |
 | `hunt.density` | number | Soup density (default 0.5). |
 | `hunt.gens` | integer | Generations before a soup that has not settled is censused as it is (default 20,000). |
 | `hunt.margin` | integer | Empty margin around the soup before escaping ships are cut (default 0: automatic). |
 | `hunt.max_period` | integer | Longest period looked for (default 64). |
+| `hunt.max_rss_gb` | number | Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does). |
 | `hunt.nb` | string | Neighbourhood for every rule: touch or edge (default: the notation decides). |
 | `hunt.pop_cap` | integer | Live cells above which a soup counts as exploded (default 0: automatic). |
 | `hunt.rules` | array or string | Rules (B/S and Generations without B0; a `V` suffix means edge neighbours): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
@@ -595,7 +599,7 @@ Example:
 | `pile` | object | One large sandpile: N grains dropped on one cell of an unbounded grid. It is built by doubling, with pictures in its folder under the output folder. Settings: `jetcarp://schema/search_start/pile`. |
 | `pile.centre` | string | cell (default), vertex, or edge: where the grains go. |
 | `pile.folder` | string | The pile's own folder: carried on from where it stopped when it holds a step file (the job whose folder it is, or a new job for it), else the new pile is built there. A finished pile given picture options (palette, reverse, px, margin, preview, png) is exported again in them. |
-| `pile.gpu` | boolean | Topple on the GPU when there is one (periodic tilings). |
+| `pile.gpu` | boolean | Topple on the GPU (true) or only on the CPU (false), in this and later runs (periodic tilings). Default: as JETCARP's GPU setting says at each run (automatic: on the GPU from 100,000 grains). |
 | `pile.grains` | integer or string | Grains: 1000000, "1e7", "2^30" (up to 2^64 - 1; default 10,000). |
 | `pile.level` | integer | Aperiodic tilings: patch level (default: the smallest that should hold the pile). |
 | `pile.margin` | number | Empty cells around the pile in the image (default 4). |
@@ -615,6 +619,7 @@ Example:
 | `search.gens` | integer | Generations per soup (default 2000). |
 | `search.height` | integer | Grid height in unit cells. |
 | `search.max_period` | integer | Longest period looked for (default 64). |
+| `search.max_rss_gb` | number | Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does). |
 | `search.nb` | string | Neighbourhood for every rule: touch or edge (default: per rule; a V suffix means edge). |
 | `search.rules` | array or string | Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
 | `search.rules_file` | string | A file of more rules, one per line (`#` comments). |
@@ -696,18 +701,28 @@ Example:
 
 ### `search_runs`
 
-**An explore search's runs.** Reads an explore search's stored runs (search_start {"explore": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family, tiling, fate, min_score, min_movers, stage or reviewed. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({"scene": {"run": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); or `review`, your verdict on a run ({"review": {"run": 12, "verdict": "keep", "note": "slow gliders"}}), which feeds what is published and the score. The sealed runs are also Parquet files (runs/part-*.parquet in the search's folder) for DuckDB, Polars or pyarrow.
+**An explore search's runs.** Reads an explore search's stored runs (`job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), or to a CSV file. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({"scene": {"run": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); `review`, your verdict on a run ({"review": {"run": 12, "verdict": "keep"}}), which feeds what is published and the score; `refit` fits a score model to them, `rescore` applies it. Sealed runs are also Parquet files (runs/part-*.parquet).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
+| `csv` | string | Write them to this CSV file (limit 0: all). |
 | `family` | string | Only this rule family (life_like, generations, ltl, jaca, cyclic, ...). |
 | `fate` | string | Only runs that ended this way: died, froze, cycle, running. |
 | `ids` | array of integer | These runs, instead of the filters. |
 | `job` | integer | The explore job (default: the newest). |
 | `limit` | integer | Most runs to return (default 40, at most 200). |
+| `measures` | any | Measures to add: all, or names. |
 | `min_movers` | integer | Only runs with at least this many moving objects. |
 | `min_score` | number | Only runs with at least this score. |
 | `order` | string | score (default, best first), newest, or id. |
+| `refit` | object | Fit a score model. Settings: `jetcarp://schema/search_runs/refit`. |
+| `refit.family` | string | Fit to this family's runs only; the model then scores only that family. |
+| `refit.jobs` | array of integer | The explore jobs whose reviews to learn (default: the newest). |
+| `refit.out` | string | Write the model here (JSON), for a search's or a rescore's `score`. |
+| `refit.rater` | string | Only this rater's reviews (default: every rater's). |
+| `rescore` | object | Rescore a stopped job. Settings: `jetcarp://schema/search_runs/rescore`. |
+| `rescore.replay` | boolean | First replay runs stored without measures the score reads (older JACA runs), caching them; slow for a large search. |
+| `rescore.score` | any | Score with this fitted model (a file's path, or the model); the job keeps it. `builtin`: back to the built-in score. Default: the job's score. |
 | `review` | object | Record a verdict on a run. Settings: `jetcarp://schema/search_runs/review`. |
 | `review.note` | string | What was seen, in a sentence. |
 | `review.run` | integer | The run reviewed. |
@@ -923,16 +938,20 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Controls the JETCARP background host, the separate program that keeps live scenes running as wallpapers or windows without the app. Returns its status: each screen's rotation, item, generation and caption, memory use, and recent problems. Fails if the host is not running; the user starts it with `jetcarp host start`. Examples: {}, {"action": "next"}, {"action": "pause"}, {"action": "wallpaper", "on": false}.
+**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it).
 
 *`jetcarp mcp` (stdio) only.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"quit"` | Default status. wallpaper puts every screen on the desktop background (GNOME: with the extension) or back in a window; login sets whether the host starts at login; open_app opens the app; reload rereads host.json. |
-| `name` | string | With action rotation: the rotation to run (saved). |
-| `on` | boolean | With wallpaper or login: on or off. Default on. |
-| `screen` | integer | With next, previous, or rotation: which screen, counted from 0. Default: every screen for next and previous, the first for rotation. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene. |
+| `cpu_limit` | number |  |
+| `fps` | number |  |
+| `gpu_limit` | number |  |
+| `name` | string | With rotation: the one to run (saved). |
+| `on` | boolean | With wallpaper, login or tune: on or off. Default on. |
+| `pick` | string or number |  |
+| `screen` | integer | Counted from 0. Default: every screen for next, previous and tune, else the first. |
 
 Example:
 
@@ -958,7 +977,7 @@ Example:
 | `delete_rotation` | string | Delete a rotation of yours by name (a built-in's edited copy reverts to the built-in). |
 | `fullscreen` | boolean | Shorthand: true is mode fullscreen, false is mode window. |
 | `fullscreen_monitor` | integer or null | Monitor index for full screen; null: the monitor the window is on. |
-| `gpu` | boolean | Step on the GPU where the rules allow it (results are identical). |
+| `gpu` | `"follow"`, `"on"`, `"off"`, `true`, `false` | The app's own GPU choice: follow JETCARP's shared setting, on or off (saved). |
 | `hide_preview` | boolean | With outputs on, draw no grid in the main window (saves GPU work). |
 | `identify` | boolean | true: show each monitor's index full screen on it for three seconds. |
 | `keep_awake` | boolean | Keep the computer awake (no blanking, locking or suspend) while the app is open. |
@@ -1005,18 +1024,18 @@ Resources are what a client can read without calling a tool. Clients that do not
 | `jetcarp://schema/scene.json` | application/schema+json | Scene file JSON Schema: The JSON Schema of a JETCARP scene file (world_status {"scene": true} returns one). |
 | `jetcarp://schema/pack.json` | application/schema+json | Pack manifest JSON Schema: The JSON Schema of a pack version's manifest (pack.json in an export). |
 
-The settings of 30 tool arguments, which `tools/list` only summarises (each argument names its resource, and its settings are listed with the tool above); `help {"schema": "search_start/hunt"}` returns the same JSON Schema:
+The settings of 32 tool arguments, which `tools/list` only summarises (each argument names its resource, and its settings are listed with the tool above); `help {"schema": "search_start/hunt"}` returns the same JSON Schema:
 
 - `world_read`: `cell` (`jetcarp://schema/world_read/<argument>`)
 - `world_edit`: `cells`, `paste`, `reseed` (`jetcarp://schema/world_edit/<argument>`)
 - `world_render`: `wallpaper` (`jetcarp://schema/world_render/<argument>`)
 - `library_curate`: `changes`, `quickstart`, `compounds` (`jetcarp://schema/library_curate/<argument>`)
 - `search_start`: `hunt`, `search`, `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, `explore`, `budget` (`jetcarp://schema/search_start/<argument>`)
-- `search_runs`: `sheet`, `scene`, `try`, `review` (`jetcarp://schema/search_runs/<argument>`)
+- `search_runs`: `sheet`, `scene`, `try`, `review`, `refit`, `rescore` (`jetcarp://schema/search_runs/<argument>`)
 - `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
 - `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
-And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
+And the 78 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
 
 <details><summary>The book's pages</summary>
 
@@ -1046,6 +1065,7 @@ And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/guides/hashlife`: HashLife and very long runs
 - `jetcarp://docs/guides/aperiodic-patches`: Aperiodic patches and following movers
 - `jetcarp://docs/guides/website-export`: Website export
+- `jetcarp://docs/guides/gpu`: The GPU
 - `jetcarp://docs/guides/uninstalling`: Uninstalling
 - `jetcarp://docs/automata/generalising`: How JETCARP generalises automata to any tiling
 - `jetcarp://docs/automata/life-like`: Life-like rules

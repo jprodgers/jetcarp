@@ -222,6 +222,84 @@ pub struct GpuAdapter {
     pub problem: Option<String>,
 }
 
+/// Whether to use the GPU when a command leaves it to the policy (`JETCARP_GPU`, else the saved
+/// setting in the settings folder's `gpu.json`, else automatic).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum GpuMode {
+    /// Never, unless a command asks (`--gpu`).
+    Off,
+    /// When a decent GPU is present and the work is large enough to gain from it.
+    #[default]
+    Auto,
+    /// Whenever a decent GPU is present.
+    On,
+}
+
+/// The GPU self-test on one adapter: GPU against CPU hashes for every world kernel and the
+/// explore batch stepper.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuSelfTest {
+    pub passed: bool,
+    /// What matched, or what did not.
+    pub note: String,
+    /// How long it took when it ran, in milliseconds.
+    pub millis: u64,
+    /// The result was kept from an earlier run (`gpu-checks.json` in the settings folder).
+    pub cached: bool,
+}
+
+/// The adapter one purpose uses, as `jetcarp doctor` shows it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuChoice {
+    /// `display` (windows, wallpapers, screen savers) or `compute` (runs, searches, scripts).
+    pub purpose: String,
+    /// The adapter, with its driver and backend (none: no adapter at all).
+    pub adapter: Option<String>,
+    /// discrete, integrated, virtual, software, other.
+    pub kind: String,
+    /// How it was chosen.
+    pub why: String,
+    /// Its limits that matter to the simulation.
+    pub limits: String,
+    pub self_test: Option<GpuSelfTest>,
+    /// Why the GPU simulation does not use it, if it does not.
+    pub problem: Option<String>,
+}
+
+/// The GPU policy and what it chose, for `jetcarp doctor`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuPolicy {
+    pub mode: GpuMode,
+    /// The adapter asked for: software, integrated, discrete, or part of a name.
+    pub adapter: Option<String>,
+    /// Where the policy came from: `env` (`JETCARP_GPU`), `setting` (`gpu.json`), `auto`.
+    pub source: String,
+    /// The policy in words.
+    pub summary: String,
+    /// The saved setting's file.
+    pub setting_file: Option<PathBuf>,
+    /// A setting file that could not be read.
+    pub note: Option<String>,
+    /// One per purpose.
+    pub choices: Vec<GpuChoice>,
+    /// What the app and the background host each do, with their own choices.
+    pub programs: Vec<GpuProgram>,
+}
+
+/// What one program with a GPU choice of its own does: the app, or the background host.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuProgram {
+    /// `the app` or `the desktop background`.
+    pub name: String,
+    /// Its own choice: `follow` (the shared setting), `on` or `off`.
+    pub choice: String,
+    /// What it does: off, auto or on.
+    pub mode: GpuMode,
+    /// Where that came from: `JETCARP_GPU=…`, its own setting, `gpu.json`, or automatic.
+    pub from: String,
+}
+
 /// How JETCARP is set up on the desktop.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
 pub struct Desktop {
@@ -269,6 +347,29 @@ pub trait Platform: Send + Sync {
     fn gpu_stepper(&self) -> Result<Box<dyn GpuStepper>, String> {
         Err("this program was built without the GPU simulator".into())
     }
+    /// The GPU policy and each purpose's adapter, with the self-test (`jetcarp doctor`).
+    fn gpu_policy(&self) -> Option<GpuPolicy> {
+        None
+    }
+    /// Whether to use the GPU when a command leaves it to the policy (none here: off).
+    fn gpu_mode(&self) -> GpuMode {
+        GpuMode::Off
+    }
+    /// The mode `JETCARP_GPU` sets, which comes before a command's own `--gpu` or `--cpu` (None:
+    /// the variable is not set, or names only an adapter).
+    fn gpu_forced(&self) -> Option<GpuMode> {
+        None
+    }
+    /// Is this world large enough to gain from the GPU (`jetcarp_gpu::GpuSim::worth`)? `paced`:
+    /// stepped at a set speed, as opposed to as fast as possible.
+    fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
+        false
+    }
+    /// [`Platform::gpu_worth`] for an unpaced run of `gens` generations, whose total work can make
+    /// the GPU worth opening (`jetcarp_gpu::GpuSim::worth_run`).
+    fn gpu_worth_run(&self, w: &World, _gens: u64) -> bool {
+        self.gpu_worth(w, false)
+    }
     /// The desktop integration's state.
     fn desktop(&self) -> Desktop {
         Desktop::default()
@@ -307,6 +408,83 @@ pub trait Platform: Send + Sync {
 /// No GPU, no desktop integration.
 pub struct Headless;
 impl Platform for Headless {}
+
+/// Whether a world steps on the GPU: the command's own request (`Some(true)` for `--gpu`,
+/// `Some(false)` for `--cpu`), else the platform's GPU policy (automatic: when the world is
+/// large enough to gain at full speed). A mode set by `JETCARP_GPU` comes before the request.
+pub fn wants_gpu(platform: &dyn Platform, asked: Option<bool>, w: &World) -> bool {
+    let asked = asked.filter(|_| platform.gpu_forced().is_none());
+    match asked {
+        Some(b) => b,
+        None => match platform.gpu_mode() {
+            GpuMode::Off => false,
+            GpuMode::On => true,
+            GpuMode::Auto => platform.gpu_worth(w, false),
+        },
+    }
+}
+
+/// [`wants_gpu`] for a run of `gens` generations: automatic also takes the run's total work into
+/// account, so a long run of a mid-sized world goes to the GPU.
+pub fn wants_gpu_for(platform: &dyn Platform, asked: Option<bool>, w: &World, gens: u64) -> bool {
+    let asked = asked.filter(|_| platform.gpu_forced().is_none());
+    match (asked, platform.gpu_mode()) {
+        (None, GpuMode::Auto) => platform.gpu_worth_run(w, gens),
+        _ => wants_gpu(platform, asked, w),
+    }
+}
+
+/// Step `gens` generations as [`wants_gpu`] says: on the GPU where the rules allow it, on the
+/// CPU otherwise and whenever there is no GPU to be had. The result is the same either way;
+/// the answer says where the generations ran (`RunSummary::backend`).
+pub fn step_world(
+    platform: &dyn Platform,
+    w: &mut World,
+    gens: u64,
+    asked: Option<bool>,
+) -> Result<String, String> {
+    let cpu = format!("cpu ({} threads)", rayon::current_num_threads());
+    if gens > 0 && wants_gpu_for(platform, asked, w, gens) {
+        match platform.gpu_stepper() {
+            Ok(mut sim) => {
+                let m = sim.step_mixed(w, gens)?;
+                return Ok(match m.fallback {
+                    None => format!("gpu ({})", sim.name()),
+                    Some(why) => format!(
+                        "gpu ({}); {} of {gens} generations on the {cpu}: {why}",
+                        sim.name(),
+                        m.cpu_gens
+                    ),
+                });
+            }
+            Err(e) => {
+                w.apply(jetcarp_core::Command::Step { gens })?;
+                return Ok(format!("{cpu}; no GPU: {e}"));
+            }
+        }
+    }
+    if gens > 0 {
+        w.apply(jetcarp_core::Command::Step { gens })?;
+    }
+    Ok(cpu)
+}
+
+static GPU_PLATFORM: std::sync::OnceLock<Arc<dyn Platform>> = std::sync::OnceLock::new();
+
+/// Register the program's GPU (the `jetcarp` program and the app do at start, with a platform
+/// that has only the GPU parts), for code that has no platform of its own: scripts' world steps
+/// and sweeps, and the operations scripts call. First call wins.
+pub fn set_gpu_platform(p: Arc<dyn Platform>) {
+    let _ = GPU_PLATFORM.set(p);
+}
+
+/// The registered GPU platform ([`set_gpu_platform`]), else [`Headless`].
+pub fn gpu_platform() -> Arc<dyn Platform> {
+    GPU_PLATFORM
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(Headless))
+}
 
 /// JETCARP's folders.
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
@@ -504,5 +682,54 @@ impl Ctx {
             *g = Some(Session::new());
         }
         g
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A platform whose policy is `mode`, with `JETCARP_GPU` setting `forced`.
+    struct P(GpuMode, Option<GpuMode>);
+
+    impl Platform for P {
+        fn gpu_mode(&self) -> GpuMode {
+            self.1.unwrap_or(self.0)
+        }
+        fn gpu_forced(&self) -> Option<GpuMode> {
+            self.1
+        }
+        fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn a_command_s_request_wins_unless_the_variable_set_a_mode() {
+        let w = World::from_scene(&jetcarp_core::Scene::new(jetcarp_core::TilingSpec::rect(
+            "square",
+            8,
+            8,
+            jetcarp_core::Boundary::Wrap,
+        )))
+        .unwrap();
+        assert!(wants_gpu(&P(GpuMode::Off, None), Some(true), &w));
+        assert!(!wants_gpu(&P(GpuMode::On, None), Some(false), &w));
+        assert!(!wants_gpu(
+            &P(GpuMode::On, Some(GpuMode::Off)),
+            Some(true),
+            &w
+        ));
+        assert!(wants_gpu(
+            &P(GpuMode::Off, Some(GpuMode::On)),
+            Some(false),
+            &w
+        ));
+        assert!(wants_gpu_for(
+            &P(GpuMode::Off, Some(GpuMode::Auto)),
+            Some(false),
+            &w,
+            10
+        ));
     }
 }

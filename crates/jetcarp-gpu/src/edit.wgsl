@@ -1,8 +1,8 @@
 // Reseed edits on a resident field (jetcarp-core's `reseed::Edits`): one word per cell,
 // `cell | op << 28`, each cell at most once. Ops: 0 birth (a dead cell becomes live), 1 kill,
 // 2 live, 3 flip. Live is state 1, age 1 (state 2 when bit 31 is set: a -1 cell of a JACA
-// field); dead is state 0, age 0. Cells are u32s with the state
-// in bits 0-7 and the age in bits 16-31, as in sim.wgsl.
+// field); dead is state 0, age 0. Cells are u32s with the state in bits 0-7, JACA's glow in
+// bits 8-15 (kept: reseeds do not touch it) and the age in bits 16-31, as in sim.wgsl.
 
 // Header: edit count, workgroups per dispatch row; then the edit words.
 @group(0) @binding(0) var<storage, read> edits: array<u32>;
@@ -28,5 +28,5 @@ fn edit(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
     live = s == 0u;
   }
   let st = select(1u, 2u, (e & 0x80000000u) != 0u);
-  field[c] = select(0u, st | (1u << 16u), live);
+  field[c] = (field[c] & 0xff00u) | select(0u, st | (1u << 16u), live);
 }

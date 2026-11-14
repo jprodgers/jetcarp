@@ -153,7 +153,8 @@ Options:
       --save <SAVE>              Save the resulting scene (with its generation and hash recorded)
       --threads <THREADS>        Worker threads (default: all cores). The hash must not depend on this
       --expect <EXPECT>          Fail unless the final hash equals this
-      --gpu                      Step the --gens generations on the GPU where the rules allow it (results are identical)
+      --gpu                      Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                      Use only the CPU, whatever the GPU setting says
       --reseed <RESEED>          Install automatic reseed policies before running: one policy or a list, as JSON (the book's "Reseeding" guide), e.g. '{"mode":{"kind":"blobs"},"when":{"kind":"settled"},"cooldown":200}'
       --reseed-now <RESEED_NOW>  Reseed once before running, with a mode as JSON, e.g. '{"kind":"rain","drops":40}'
   -h, --help                     Print help
@@ -345,7 +346,11 @@ Options:
       --store-all
           Store every new object as a full record (the policy before wave 4)
       --gpu
-          Run the start of each soup on the GPU (many soups per dispatch; results are identical)
+          Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu
+          Use only the CPU, whatever the GPU setting says
+      --max-rss-gb <MAX_RSS_GB>
+          Stop (paused, resumable) if the process uses more memory than this many GB
   -h, --help
           Print help
 ```
@@ -383,6 +388,7 @@ Options:
       --json-out <JSON_OUT>        Write the full report as JSON
       --no-store                   Report only; do not add to the library
       --top <TOP>                  Rows per group in the printed report [default: 12]
+      --max-rss-gb <MAX_RSS_GB>    Stop (paused, resumable) if the process uses more memory than this many GB
   -h, --help                       Print help
 ```
 
@@ -530,7 +536,8 @@ Options:
       --reverse            Run the palette the other way (height 1 at its last stop)
       --preview <PREVIEW>  Longest side of preview.png (default 1024; 0 = none)
       --no-png             Skip the full-size pile.png
-      --gpu                Topple on the GPU (periodic tilings)
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -638,8 +645,12 @@ Options:
       --confirm-seeds <CONFIRM_SEEDS>  Seeds an elite is confirmed with [default: 3]
       --batch <BATCH>                  Most worlds in a GPU batch [default: 1024]
       --seed <SEED>                    [default: 0]
-      --gpu                            Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the job); without one, or without this, the CPU runs everything
+      --gpu                            Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                            Use only the CPU, whatever the GPU setting says
       --max-rss-gb <MAX_RSS_GB>        Stop (paused, resumable) if the process uses more memory than this many GB
+      --score <SCORE>                  Score runs with this fitted score model (`jetcarp jobs refit --out` writes one) instead of the built-in score; the job keeps a copy, so resuming it keeps the model
+      --parents-from <PARENTS_FROM>    Take parents from this explore job: the JACA rules of its reviewed runs (or its best runs), transplanted to other tilings and tuned for balance early in this search
+      --reviewed <REVIEWED>            With --parents-from: the verdicts whose runs to take (default keep,maybe)
   -h, --help                           Print help
 ```
 
@@ -675,6 +686,7 @@ Usage: jetcarp jobs [OPTIONS] <COMMAND>
 Commands:
   list     The jobs, newest first: id, kind, status, started, progress
   status   One job's progress (no JOB: the list), live when it runs in this process
+  wait     Wait until a job stops running, in any process. The exit status says how it ended: 0 done, 3 paused (stopped, out of budget, or past its memory cap), 4 failed, 5 still running at --timeout, 6 gone (marked running, but its process crashed or was killed)
   stop     Ask a running job (in any process) to stop at its next checkpoint; it stays resumable
   resume   Carry on a stopped, paused, or cut-off job from its last checkpoint
   report   A Markdown report of what a job (or every job with a label prefix) searched, for how long, and what it found
@@ -682,9 +694,10 @@ Commands:
   runs     An explore job's stored runs, best first (JOB default: the newest explore job)
   sheet    A contact sheet of an explore job's runs at several moments, labelled
   scene    An explore job's run as a scene that replays it (printed, or saved with --save)
-  review   Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings in a folder of rating files (`<run id>.json`, as the clip-rating page saves them)
+  review   Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings that the clip-rating page saved (`jobs clips --page`)
   clips    Animated clips of a stratified sample of an explore job's runs (or chosen runs), with a manifest, for rating by eye
-  rescore  Recompute every stored score of a stopped explore job from its stored measures (after the score changes), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
+  refit    Fit a score model to the keep, maybe and drop reviews of explore jobs' runs (JOB... default: the newest explore job), and report how well it ranks runs held out of the fit
+  rescore  Recompute every stored score of a stopped explore job from its stored measures (after the score changes, or by a fitted model), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
   seal     Seal a stopped explore job's newest runs (those not yet in a Parquet segment), so its folder holds every run in Parquet; a search seals every million runs by itself
   help     Print this message or the help of the given subcommand(s)
 
@@ -735,6 +748,24 @@ Options:
   -h, --help               Print help
 ```
 
+#### `jetcarp jobs wait`
+
+```text
+Wait until a job stops running, in any process. The exit status says how it ended: 0 done, 3 paused (stopped, out of budget, or past its memory cap), 4 failed, 5 still running at --timeout, 6 gone (marked running, but its process crashed or was killed)
+
+Usage: jetcarp jobs wait [OPTIONS] <JOB>
+
+Arguments:
+  <JOB>  
+
+Options:
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --timeout <TIMEOUT>  Give up after this many seconds
+      --quiet              No progress on stderr
+  -h, --help               Print help
+```
+
 #### `jetcarp jobs stop`
 
 ```text
@@ -765,7 +796,8 @@ Options:
       --json                 Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --threads <THREADS>    Worker threads (default: all cores; an explore search leaves two free)
-      --gpu                  Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU batch stepper, when there is one
+      --gpu                  Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                  Use only the CPU, whatever the GPU setting says
       --minutes <MINUTES>    Stop at the next checkpoint after this many minutes
       --until <UNTIL>        Stop at the next checkpoint after this Unix time (seconds since 1970)
       --limit <LIMIT>        Stop after this many units in this session
@@ -834,8 +866,12 @@ Options:
       --stage <STAGE>            1 screened (default), 2 confirmation runs
       --reviewed <REVIEWED>      Only reviewed runs: any, keep, maybe, or drop
       --ids <IDS>                These runs (comma separated) instead of the filters
-      --order <ORDER>            score (default), newest, or id
-      --limit <LIMIT>            [default: 40]
+      --order <ORDER>            score (default), newest, or id (the default with --since)
+      --limit <LIMIT>            Most runs (0: every run) [default: 40]
+      --measures <MEASURES>      Also show these measures: all, or names, comma separated (settle, density_late, activity_late, smooth, sign_balance, sign_sorted, sign_trade, sign_lost, ...)
+      --format <FORMAT>          text (default), csv, or json [default: text]
+      --since <SINCE>            Only runs with a larger id than this, in id order (to export a search in parts)
+      --out <OUT>                Write the runs here as CSV instead of printing them
   -h, --help                     Print help
 ```
 
@@ -883,7 +919,7 @@ Options:
 #### `jetcarp jobs review`
 
 ```text
-Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings in a folder of rating files (`<run id>.json`, as the clip-rating page saves them)
+Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings that the clip-rating page saved (`jobs clips --page`)
 
 Usage: jetcarp jobs review [OPTIONS] <JOB> [RUN] [VERDICT]
 
@@ -896,8 +932,8 @@ Options:
       --json               Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --note <NOTE>        What was seen, in a sentence
-      --rater <RATER>      Who judged (default: the publisher's name when `jetcarp pack key --name` set one, else user)
-      --from <FROM>        Instead of one run: a folder of rating files (`<run id>.json`), as the clip-rating page saves them; ratings already recorded from it are skipped
+      --rater <RATER>      Who judged; with --from, instead of the name the ratings file gives (default: the file's name, else the publisher's name when `jetcarp pack key --name` set one, else user)
+      --from <FROM>        Instead of one run: the ratings file the clip-rating page saved (its verdicts become reviews, its stars stars), or a folder of rating files (`<run id>.json`); ratings already recorded from it are skipped
   -h, --help               Print help
 ```
 
@@ -920,13 +956,36 @@ Options:
       --px <PX>            [default: 150]
       --frames <FRAMES>    [default: 28]
       --ids <IDS>          Render these runs instead of a sample: a file of one `id[ bucket]` per line
+      --page               Also write index.html, a page for rating the clips by eye: Keep, Maybe, Drop and a star per clip, with the keyboard too. It works offline; its Save ratings button downloads a file for `jetcarp jobs review JOB --from FILE`
+  -h, --help               Print help
+```
+
+#### `jetcarp jobs refit`
+
+```text
+Fit a score model to the keep, maybe and drop reviews of explore jobs' runs (JOB... default: the newest explore job), and report how well it ranks runs held out of the fit
+
+Usage: jetcarp jobs refit [OPTIONS] [JOBS]...
+
+Arguments:
+  [JOBS]...  The explore jobs whose runs' reviews to learn (default: the newest explore job)
+
+Options:
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --rater <RATER>      Only this rater's reviews (default: every rater's)
+      --family <FAMILY>    Fit to this family's runs only; the model then scores only that family
+      --out <OUT>          Write the model here (JSON), for `search explore --score` and `jobs rescore --score`
+      --no-replay          Do not replay reviewed runs that lack measures (JACA runs stored before sign measures); they count at the mean
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
 #### `jetcarp jobs rescore`
 
 ```text
-Recompute every stored score of a stopped explore job from its stored measures (after the score changes), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
+Recompute every stored score of a stopped explore job from its stored measures (after the score changes, or by a fitted model), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
 
 Usage: jetcarp jobs rescore [OPTIONS] [JOB]
 
@@ -936,6 +995,10 @@ Arguments:
 Options:
       --json               Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --score <SCORE>      Score with this fitted model (`jetcarp jobs refit --out` writes one); the job keeps it, so the search goes on with it. `builtin` goes back to the built-in score
+      --replay             First replay the runs that lack measures the score reads (JACA runs stored before sign measures), caching what they measure. Slow for a large search
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -985,7 +1048,8 @@ Options:
       --reverse            Run the palette the other way (height 1 at its last stop)
       --preview <PREVIEW>  Longest side of preview.png (default 1024; 0 = none)
       --no-png             Skip the full-size pile.png
-      --gpu                Topple on the GPU (periodic tilings)
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -1004,6 +1068,7 @@ Commands:
   list         List patterns (highest interest score first), optionally filtered
   show         Show one pattern: its record, and a text drawing on square and hexagon grids
   paste        Make a scene from several library patterns placed on one grid
+  soup         Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
   promote      Add a Quick Start entry ("My finds"): a library pattern (ID, which is marked promoted), a run of an explore search (--search-run), or a scene file (--scene)
   promote-run  Promote one run of a sweep folder to the Quick Start ("My finds"): its tiling, CAs, and start, so it replays as in the sweep. The run is also marked a favourite in the folder
   render       Draw a pattern's phases (PNG), or print them as text
@@ -1090,6 +1155,25 @@ Options:
       --png <PNG>            Also write a PNG of the scene after this many generations
       --gens <GENS>          [default: 0]
   -h, --help                 Print help
+```
+
+#### `jetcarp library soup`
+
+```text
+Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
+
+Usage: jetcarp library soup [OPTIONS] <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --best <BEST>        The N soups of the find's hunt that made the most copies of it (then the most spaceships). Needs the hunt's seed: the record's (finds from 0.4.2 on) or its job's
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --soups <SOUPS>      With --best: how many of the hunt's soups to run again, from soup 0 (default: as many as the hunt ran, at most 10,000)
+      --save <SAVE>        Write the scene here; with --best, the best soup's, and the others beside it as NAME-2.json, NAME-3.json, ...
+  -h, --help               Print help
 ```
 
 #### `jetcarp library promote`
@@ -2014,7 +2098,8 @@ Options:
       --fresh                Build a fresh grid of the scene's tiling sized to fill the image at --cell-px (the scene's CAs and seeds, without its edits). An aperiodic tiling gets the substitution level nearest that
       --cell-px <CELL_PX>    Tile size in pixels for --fresh and --fit repeat [default: 4]
       --gens <GENS>          Generations to run before rendering [default: 0]
-      --gpu                  Step on the GPU where the rules allow it (results are identical)
+      --gpu                  Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                  Use only the CPU, whatever the GPU setting says
       --palette <PALETTE>    Colour every CA with this palette (`jetcarp palettes` lists them), or with hex colours like `#4fc3ff` or `#103050-#4fc3ff`
       --monitors <MONITORS>  Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout), for a span image
       --split                With --monitors: write one image per monitor instead of the whole span
@@ -2141,50 +2226,83 @@ Usage: jetcarp app display [OPTIONS]
 Options:
       --mode <MODE>
           window, fullscreen, or outputs
+
       --fullscreen <FULLSCREEN>
-          The main window full screen (on) or windowed (off) [possible values: on, off]
+          The main window full screen (on) or windowed (off)
+          
+          [possible values: on, off]
+
       --fullscreen-monitor <FULLSCREEN_MONITOR>
           Monitor for full screen (index from `jetcarp app status`)
+
       --monitors <MONITORS>
           Output monitors by index, comma separated (sets mode outputs)
+
       --windows <WINDOWS>
           Outputs as plain windows: WxH@X,Y separated by ';' (trying a span on one monitor)
+
       --span
           One canvas across the outputs
+
       --mirror
           The same view on each output
+
       --units <UNITS>
           Canvas units: pixels or logical
+
       --hide-preview <HIDE_PREVIEW>
-          Draw no grid in the main window while outputs are on [possible values: on, off]
+          Draw no grid in the main window while outputs are on
+          
+          [possible values: on, off]
+
       --cell-px <CELL_PX>
           Cell size in physical pixels (1 to 64)
+
       --port <PORT>
           App port (default: the one the app recorded when AI control was switched on)
+
       --refill
           Rebuild the tiling to fill the canvas at the cell size
+
       --pixel-zoom
           Zoom so a cell edge is the cell size in pixels
+
       --token <TOKEN>
           App token (default: the recorded one)
+
       --json
           Print the app's reply as JSON
+
       --keep-awake <KEEP_AWAKE>
           [possible values: on, off]
+
       --menu-autohide <MENU_AUTOHIDE>
           [possible values: on, off]
+
       --panes-hidden <PANES_HIDDEN>
-          Hide (on) or show (off) every pane [possible values: on, off]
+          Hide (on) or show (off) every pane
+          
+          [possible values: on, off]
+
       --status-bar <STATUS_BAR>
           [possible values: on, off]
+
       --gpu <GPU>
-          GPU simulation [possible values: on, off]
+          The app's own GPU choice: follow (JETCARP's shared setting, automatic unless changed), on (every world the rules allow) or off (saved)
+
+          Possible values:
+          - follow: JETCARP's shared GPU setting
+          - on
+          - off
+
       --identify
           Show each monitor's index on it for three seconds
+
       --saver <SAVER>
           Screensaver settings as JSON (see the app_display tool's `saver`), e.g. '{"source": "rotation", "rotation": "Wolfram series"}'
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp app play`
@@ -2305,6 +2423,8 @@ Commands:
   lock       What a wallpaper does on the GNOME lock screen (saved)
   gnome      The GNOME Shell extension behind wallpapers and the top-bar menu
   saver      The screen saver (Windows and macOS)
+  tune       Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
+  scene      The scene a screen shows now, its grid's size included, as a scene file that replays it
   help       Print this message or the help of the given subcommand(s)
 
 Options:
@@ -2607,6 +2727,42 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+```
+
+#### `jetcarp host tune`
+
+```text
+Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
+
+Usage: jetcarp host tune [OPTIONS]
+
+Options:
+      --cpu-limit <PERCENT>            JETCARP's processor time, in percent of the whole machine, every core counted (saved; default 10)
+      --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent (saved; default 25)
+      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the host's frame rate)
+      --screen <SCREEN>                Only this screen (counted from 0). Default: every screen on the desktop
+      --pick <WHICH>                   Which size each scene is left at: recommended (the finest within the limits; the default), finest (the finest shown), own (the scene's own), or a cell size in pixels. Without it, a size chosen before is kept while it is still within the limits
+      --crops <DIR>                    Save each size's picture here as a PNG (they are kept beside the host's settings too)
+      --canvas <CANVAS>                The screen's size in pixels, as WxH, when no host is running to say (default: the size it was tuned for before, else its monitor's)
+      --trial-seconds <TRIAL_SECONDS>  Seconds each size shows for (the last three quarters are measured) [default: 2]
+      --dry-run                        Measure and report, but save nothing
+      --stop                           Stop the sweep a running host is making (the scenes already done stay saved)
+      --json                           Print the host's reply as JSON
+  -h, --help                           Print help
+```
+
+#### `jetcarp host scene`
+
+```text
+The scene a screen shows now, its grid's size included, as a scene file that replays it
+
+Usage: jetcarp host scene [OPTIONS]
+
+Options:
+      --screen <SCREEN>  
+      --save <SAVE>      Write it to this file (default: print it)
+      --json             Print the host's reply as JSON
+  -h, --help             Print help
 ```
 
 ### `jetcarp mcp`

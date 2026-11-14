@@ -19,6 +19,101 @@ fn start(cx: &Ctx, input: Value) -> Value {
     call_json(cx, "search.start", input).unwrap()
 }
 
+/// A machine whose GPU setting says `mode` and that has no usable GPU.
+struct NoGpu(jetcarp_api::ctx::GpuMode);
+
+impl jetcarp_api::Platform for NoGpu {
+    fn gpu_mode(&self) -> jetcarp_api::ctx::GpuMode {
+        self.0
+    }
+    fn soup_batcher(
+        &self,
+    ) -> Result<std::sync::Arc<dyn jetcarp_core::hunt::soup::SoupBatcher>, String> {
+        Err("no adapter here".into())
+    }
+    fn explore_backend(&self) -> Result<Box<dyn jetcarp_core::explore::batch::Backend>, String> {
+        Err("no adapter here".into())
+    }
+}
+
+/// The lines a run logs.
+#[derive(Default)]
+struct Lines(std::sync::Mutex<Vec<String>>);
+
+impl jetcarp_api::op::Progress for Lines {
+    fn log(&self, line: &str) {
+        self.0.lock().unwrap().push(line.to_string());
+    }
+}
+
+impl Lines {
+    fn with(&self, part: &str) -> usize {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.contains(part))
+            .count()
+    }
+}
+
+/// #10: a hunt or a pile asked for the GPU runs on the CPU, with one note, when there is no
+/// usable GPU (it used to fail). Without asking, the GPU setting decides: automatic tries the
+/// GPU for every hunt and for piles of 100,000 grains or more; off never does.
+#[test]
+fn hunts_and_piles_fall_back_to_the_cpu_with_one_note() {
+    use jetcarp_api::ctx::GpuMode;
+    let dir = scratch("jobs-no-gpu");
+    let run = |mode: GpuMode, input: Value| {
+        let cx = ctx(&dir).with_platform(std::sync::Arc::new(NoGpu(mode)));
+        let lines = Lines::default();
+        let c = jetcarp_api::call(&cx, "search.start", input, &lines).unwrap();
+        (c.value, lines)
+    };
+    let hunt = |gpu: Value| {
+        json!({"strategy": "hunt", "spec": {"rules": "B3/S23", "soups": 30, "seed": 5},
+               "threads": 2, "gpu": gpu})
+    };
+    let (h, lines) = run(GpuMode::Off, hunt(json!(true)));
+    assert_eq!(h["status"], "done", "{h}");
+    assert_eq!(
+        lines.with("no GPU (no adapter here): the hunt runs on the CPU"),
+        1
+    );
+    let (cpu, lines) = run(GpuMode::On, hunt(json!(false)));
+    assert_eq!(lines.with("no GPU"), 0, "--cpu does not look for one");
+    assert_eq!(cpu["progress"]["objects"], h["progress"]["objects"]);
+    let (_, lines) = run(GpuMode::Auto, hunt(Value::Null));
+    assert_eq!(
+        lines.with("no GPU"),
+        1,
+        "automatic tries the GPU for a hunt"
+    );
+    let (_, lines) = run(GpuMode::Off, hunt(Value::Null));
+    assert_eq!(lines.with("no GPU"), 0, "off does not");
+    // Piles: no GPU toppler is registered in this test program.
+    let pile = |grains: u64, gpu: Value| {
+        json!({"strategy": "pile", "spec": {"tiling": "square", "grains": grains, "preview": 0,
+               "png": false, "gpu": gpu}})
+    };
+    let (p, lines) = run(GpuMode::Off, pile(3000, json!(true)));
+    assert_eq!(p["status"], "done", "{p}");
+    assert_eq!(lines.with("the pile topples on the CPU"), 1);
+    let (_, lines) = run(GpuMode::Auto, pile(3000, Value::Null));
+    assert_eq!(
+        lines.with("topples on the CPU"),
+        0,
+        "a small pile stays on the CPU"
+    );
+    let (_, lines) = run(GpuMode::Auto, pile(100_000, Value::Null));
+    assert_eq!(
+        lines.with("topples on the CPU"),
+        1,
+        "a large one tries the GPU"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn hunts_run_to_their_budget_resume_and_report() {
     let dir = scratch("jobs-hunt");
@@ -462,5 +557,128 @@ fn ants_piles_evolve_searches_and_movers_run_as_jobs() {
             .as_str()
             .unwrap()
             .contains("## Evolutionary searches")
+    );
+}
+
+#[test]
+fn bad_rules_refuse_a_hunt_bounded_search_or_census_before_it_starts() {
+    let dir = scratch("jobs-bad-rules");
+    let cx = ctx(&dir);
+    let file = dir.join("rules.txt");
+    std::fs::write(
+        &file,
+        "# a list with typos\nB3/S23\nB47/S13568V/4\nB36/S2x3 ; B2/S\n\nB0/S8\nB3/S23V4/C3\n",
+    )
+    .unwrap();
+    let file = file.display().to_string();
+    for (strategy, bad) in [
+        // The hunter and the object finder refuse B0 rules; a census runs them.
+        ("hunt", vec!["line 4 of", "line 6 of", "line 7 of"]),
+        ("bounded", vec!["line 4 of", "line 6 of", "line 7 of"]),
+        ("census", vec!["line 4 of", "line 7 of"]),
+    ] {
+        let e = fails(
+            call_json(
+                &cx,
+                "search.start",
+                json!({"strategy": strategy, "spec": {"rules": "B3/S23 B3/S2y",
+                       "rules_file": file}}),
+            ),
+            ErrorKind::Invalid,
+        );
+        let m = e.message;
+        assert!(m.contains("rule 2 of `rules`: B3/S2y"), "{strategy}: {m}");
+        for b in &bad {
+            assert!(m.contains(b), "{strategy}: {b}: {m}");
+        }
+        assert!(
+            m.contains(&format!("{} rules cannot run", bad.len() + 1)),
+            "{m}"
+        );
+        // The V before the state count is read (#5); the stray one says where it goes.
+        assert!(!m.contains("line 3 of"), "{m}");
+        assert!(m.contains("B3/S234/C3V"), "{m}");
+    }
+    // No job was made.
+    let l = call_json(&cx, "jobs.list", json!({})).unwrap();
+    assert_eq!(l["jobs"].as_array().unwrap().len(), 0, "{l}");
+}
+
+#[test]
+fn hunts_and_bounded_searches_pause_past_their_memory_cap() {
+    let dir = scratch("jobs-memory");
+    let cx = ctx(&dir);
+    for (strategy, spec) in [
+        ("hunt", json!({"soups": 50, "max_rss_gb": 0.0001})),
+        (
+            "bounded",
+            json!({"soups": 4, "size": [16, 16], "max_rss_gb": 0.0001}),
+        ),
+    ] {
+        let r = start(&cx, json!({"strategy": strategy, "spec": spec}));
+        assert_eq!(r["status"], "paused", "{strategy}: {r}");
+        let note = r["progress"]["note"].as_str().unwrap_or_default();
+        assert!(
+            note.contains("over the cap of 0.0001 GB"),
+            "{strategy}: {r}"
+        );
+        // The cap is the job's: it holds on resume, and the job stays resumable.
+        let job = r["job"].as_i64().unwrap();
+        let v = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+        assert_eq!(v["spec"]["max_rss_gb"], json!(0.0001), "{v}");
+        let again = call_json(&cx, "jobs.resume", json!({"job": job})).unwrap();
+        assert_eq!(again["status"], "paused", "{again}");
+        // A cap that is not above 0 is refused.
+        let mut bad = spec.clone();
+        bad["max_rss_gb"] = json!(0);
+        fails(
+            call_json(
+                &cx,
+                "search.start",
+                json!({"strategy": strategy, "spec": bad}),
+            ),
+            ErrorKind::Invalid,
+        );
+    }
+}
+
+#[test]
+fn waits_end_with_how_the_job_ended() {
+    let dir = scratch("jobs-wait");
+    let cx = ctx(&dir);
+    let wait = |input: Value| call_json(&cx, "jobs.wait", input).unwrap();
+    let done = start(&cx, json!({"strategy": "hunt", "spec": {"soups": 20}}));
+    let w = wait(json!({"job": done["job"]}));
+    assert_eq!(
+        (&w["ended"], &w["status"]),
+        (&json!("done"), &json!("done")),
+        "{w}"
+    );
+    let paused = start(
+        &cx,
+        json!({"strategy": "hunt", "spec": {"soups": 200}, "budget": {"items": 10}}),
+    );
+    let w = wait(json!({"job": paused["job"]}));
+    assert_eq!(w["ended"], "paused", "{w}");
+    assert!(w["line"].as_str().unwrap().contains("10/200"), "{w}");
+    // A run in the background: still running at the timeout, then paused once stopped.
+    let r = start(
+        &cx,
+        json!({"strategy": "hunt", "spec": {"soups": 0}, "threads": 2, "background": true}),
+    );
+    let job = r["job"].clone();
+    let w = wait(json!({"job": job, "timeout_s": 0.3}));
+    assert_eq!(
+        (&w["ended"], &w["status"]),
+        (&json!("timeout"), &json!("running")),
+        "{w}"
+    );
+    assert!(w["waited_s"].as_f64().unwrap() >= 0.3, "{w}");
+    call_json(&cx, "jobs.stop", json!({"job": job})).unwrap();
+    let w = wait(json!({"job": job, "timeout_s": 60}));
+    assert_eq!(w["ended"], "paused", "{w}");
+    fails(
+        call_json(&cx, "jobs.wait", json!({"job": 999})),
+        ErrorKind::NotFound,
     );
 }

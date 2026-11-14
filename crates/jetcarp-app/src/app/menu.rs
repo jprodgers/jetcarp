@@ -294,6 +294,7 @@ impl Action {
             AutoReseed => "Auto reseed".into(),
             Setup => "Setup…".into(),
             Pane("screensaver") => "Screensaver settings…".into(),
+            Pane("desktop") => "Desktop background settings…".into(),
             Pane(id) => panes::pane_def(id).map(|d| d.title).unwrap_or(id).into(),
             Tool(t) => t.label().into(),
         }
@@ -317,7 +318,9 @@ impl Action {
                 "Hide the menu bar; it shows when the pointer touches the top edge or Alt is held"
             }
             HidePanes => "Let the grid fill the window (Tab shows the panes again)",
-            GpuSim => "Step on the GPU; results are identical to the CPU",
+            GpuSim => {
+                "Follow the shared setting, on, off: step on the GPU; results are identical to the CPU"
+            }
             TileJson => "Load a tile from the prototype's JSON (in the Tiling pane)",
             SeedAll => "Apply each CA's own seed",
             RandomAll => "Add random live cells (30%) to every CA that takes them",
@@ -334,6 +337,9 @@ impl Action {
             }
             Pane("screensaver") => {
                 "Screensaver profiles (scene, palette, reseeding, cells, speed), rotations, and options"
+            }
+            Pane("desktop") => {
+                "The background host: the desktop background, its screens and monitors, the lock screen, and fitting it to this computer"
             }
             PixelZoom => "One cell edge is the Display pane's cell size in physical pixels",
             FillCanvas => "Rebuild this tiling to cover the canvas at the cell size",
@@ -394,6 +400,8 @@ pub(super) enum Custom {
     ToolList,
     Displays,
     ReseedNow,
+    /// GPU simulation: automatic, on, off.
+    Gpu,
 }
 
 pub(super) enum Item {
@@ -455,6 +463,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             A(A_::ToggleOutputs),
             A(A_::Screensaver),
             A(A_::Pane("screensaver")),
+            A(A_::Pane("desktop")),
             A(A_::KeepAwake),
             A(A_::Pane("display")),
         ],
@@ -468,7 +477,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             Sep,
             C(Custom::Speed),
             A(A_::MaxSpeed),
-            A(A_::GpuSim),
+            C(Custom::Gpu),
         ],
     ),
     (
@@ -561,6 +570,7 @@ fn custom_actions(c: Custom) -> Vec<Action> {
         Custom::PaneList => panes::PANES.iter().map(|p| Action::Pane(p.id)).collect(),
         Custom::ToolList => ToolWin::ALL.map(Action::Tool).to_vec(),
         Custom::Displays => vec![Action::RefreshDisplays, Action::IdentifyMonitors],
+        Custom::Gpu => vec![Action::GpuSim],
         _ => vec![],
     }
 }
@@ -700,7 +710,7 @@ impl JetcarpApp {
         Some(match a {
             RunPause => self.playing,
             MaxSpeed => self.max_speed,
-            GpuSim => self.sim.on,
+            GpuSim => self.sim.mode != jetcarp_gpu::select::Mode::Off,
             CellOutlines => self.shell.cell_outlines,
             StatusBar => self.shell.status_bar,
             AutoHideMenu => self.shell.menu_autohide,
@@ -716,6 +726,20 @@ impl JetcarpApp {
     }
 
     /// Do an action (from the menu or a shortcut).
+    /// The app's own GPU choice: follow the shared setting, on or off (saved in app.json).
+    pub(super) fn set_gpu_choice(&mut self, own: jetcarp_gpu::select::Own) {
+        self.shell.gpu = own;
+        self.sim.mode = crate::simgpu::app_policy(own).mode;
+    }
+
+    /// The shared GPU setting every part of JETCARP follows unless it has a choice of its own.
+    pub(super) fn set_shared_gpu(&mut self, m: jetcarp_gpu::select::Mode) {
+        match crate::simgpu::save_shared(m) {
+            Ok(()) => self.sim.mode = crate::simgpu::app_policy(self.shell.gpu).mode,
+            Err(e) => self.message = Some((format!("GPU setting not saved: {e}"), true)),
+        }
+    }
+
     pub(super) fn run_action(&mut self, ctx: &egui::Context, a: Action) {
         use Action::*;
         if !self.action_enabled(a) {
@@ -775,7 +799,7 @@ impl JetcarpApp {
                 self.exec(Command::Step { gens: 1 });
             }
             MaxSpeed => self.max_speed = !self.max_speed,
-            GpuSim => self.sim.on = !self.sim.on,
+            GpuSim => self.set_gpu_choice(crate::simgpu::next_choice(self.shell.gpu)),
             TileJson | Pane(_) | AddByNotation => {
                 let id = match a {
                     TileJson => "tiling",
@@ -999,6 +1023,36 @@ impl JetcarpApp {
                                 }
                             });
                     });
+                });
+            }
+            Custom::Gpu => {
+                use jetcarp_gpu::select::Own;
+                let hint = self.sim.hint();
+                let shared = crate::simgpu::mode_label(crate::simgpu::shared_mode());
+                ui.add_enabled_ui(self.sim.available(), |ui| {
+                    ui.menu_button("GPU simulation", |ui| {
+                        for (o, label) in [
+                            (Own::Follow, format!("Follow the shared setting ({shared})")),
+                            (Own::On, "On".into()),
+                            (Own::Off, "Off".into()),
+                        ] {
+                            if ui.radio(self.shell.gpu == o, label).clicked() {
+                                self.set_gpu_choice(o);
+                                ui.close();
+                            }
+                        }
+                        ui.label(
+                            RichText::new(
+                                "The shared setting is in the Desktop background pane; the app, \
+                                 the background host and the command line follow it unless they \
+                                 have a choice of their own.",
+                            )
+                            .small()
+                            .weak(),
+                        );
+                    })
+                    .response
+                    .on_hover_text(hint);
                 });
             }
             Custom::Boundary => {

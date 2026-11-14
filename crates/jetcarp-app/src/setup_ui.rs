@@ -444,7 +444,8 @@ impl Wizard {
                     .map(|(id, _)| id.clone())
                     .collect(),
             ),
-            gpu: true,
+            // As JETCARP's GPU setting says.
+            gpu: None,
             background: true,
             ..Default::default()
         })
@@ -491,9 +492,8 @@ impl Wizard {
     }
 
     /// Carry on a job that stopped (`jobs.resume` in the background).
-    fn resume(&mut self, job: i64, kind: &str) {
+    fn resume(&mut self, job: i64, _kind: &str) {
         let mk = self.make_ctx.clone();
-        let gpu = kind == "explore";
         let lib = self.library_path();
         std::thread::Builder::new()
             .name("jetcarp-setup-resume".into())
@@ -502,7 +502,8 @@ impl Wizard {
                 let a = jetcarp_api::ops::jobs::ResumeIn {
                     job,
                     background: true,
-                    gpu,
+                    // As the job and JETCARP's GPU setting say.
+                    gpu: None,
                     budget: None,
                     threads: None,
                     detach: false,
@@ -1030,8 +1031,8 @@ impl Wizard {
         ui.add_space(4.0);
         ui.label(
             "These change your desktop, so each stays off unless you tick it. You can turn them \
-             off again in the Screensaver pane's Background host section, or with the jetcarp \
-             host command.",
+             off again in the Desktop background pane (View → Desktop background settings…), or \
+             with the jetcarp host command.",
         );
         ui.add_space(8.0);
         for o in Offer::ALL {

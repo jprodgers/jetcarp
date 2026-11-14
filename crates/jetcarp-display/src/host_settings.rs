@@ -2,6 +2,8 @@
 //! place they live. The app and the CLI write it, then tell a running host to read it again.
 
 use crate::caption::CaptionSettings;
+pub use jetcarp_gpu::select::Own;
+use jetcarp_gpu::select::Policy;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -58,6 +60,9 @@ pub struct ScreenSettings {
     pub monitor: Option<usize>,
     pub rotation: String,
     pub place: Place,
+    /// The cell sizes *Fit to this computer* chose for this screen's rotation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tuning: Option<Tuning>,
 }
 
 impl Default for ScreenSettings {
@@ -66,7 +71,296 @@ impl Default for ScreenSettings {
             monitor: None,
             rotation: "A classic a day".into(),
             place: Place::Window,
+            tuning: None,
         }
+    }
+}
+
+/// The limits *Fit to this computer* tunes the desktop background for.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(default)]
+pub struct TuneLimits {
+    /// JETCARP's own processor time, in percent of the whole machine (every core).
+    pub cpu_percent: f32,
+    /// JETCARP's own share of the GPU's time, in percent.
+    pub gpu_percent: f32,
+    /// Frames per second it must keep. None: the monitor's refresh rate, or 60, at most the
+    /// host's own frame rate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fps: Option<f32>,
+    /// Tune again by itself when the monitors change (only once it has been tuned).
+    pub auto: bool,
+}
+
+impl Default for TuneLimits {
+    fn default() -> Self {
+        TuneLimits {
+            cpu_percent: 10.0,
+            gpu_percent: 25.0,
+            fps: None,
+            auto: true,
+        }
+    }
+}
+
+impl TuneLimits {
+    pub const CPU_RANGE: std::ops::RangeInclusive<f32> = 1.0..=100.0;
+    pub const GPU_RANGE: std::ops::RangeInclusive<f32> = 1.0..=100.0;
+    pub const FPS_RANGE: std::ops::RangeInclusive<f32> = 1.0..=240.0;
+
+    /// In range.
+    pub fn checked(mut self) -> TuneLimits {
+        let fix = |x: f32, r: std::ops::RangeInclusive<f32>, d: f32| {
+            if x.is_finite() {
+                x.clamp(*r.start(), *r.end())
+            } else {
+                d
+            }
+        };
+        let d = TuneLimits::default();
+        self.cpu_percent = fix(self.cpu_percent, Self::CPU_RANGE, d.cpu_percent);
+        self.gpu_percent = fix(self.gpu_percent, Self::GPU_RANGE, d.gpu_percent);
+        self.fps = self
+            .fps
+            .filter(|f| f.is_finite())
+            .map(|f| f.clamp(*Self::FPS_RANGE.start(), *Self::FPS_RANGE.end()));
+        self
+    }
+
+    /// The frame rate to keep: the one asked for, else the monitor's refresh rate (or 60), and
+    /// never more than the host draws (`host_fps`).
+    pub fn target_fps(&self, refresh: Option<f32>, host_fps: f32) -> f32 {
+        let want = self
+            .fps
+            .or(refresh.filter(|r| r.is_finite() && *r >= 1.0))
+            .unwrap_or(60.0);
+        want.min(host_fps).max(1.0)
+    }
+}
+
+/// How the GPU's time was measured.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GpuTiming {
+    /// No GPU: everything ran on the processor.
+    #[default]
+    None,
+    /// The system's own count of JETCARP's GPU time (Linux's DRM `fdinfo`): exact, and blind to
+    /// other programs' use of the GPU.
+    Kernel,
+    /// The GPU's own clock, from timestamp queries around the step and the drawing (an upper
+    /// bound for the step, whose span includes the processor's share of it).
+    Timestamps,
+    /// From handing the work to the GPU until it said it was done: an upper bound, used where the
+    /// GPU has no timestamp queries.
+    Submission,
+}
+
+impl GpuTiming {
+    pub fn describe(self) -> &'static str {
+        match self {
+            GpuTiming::None => "no GPU",
+            GpuTiming::Kernel => "the system's count of JETCARP's GPU time",
+            GpuTiming::Timestamps => "the GPU's timestamp queries",
+            GpuTiming::Submission => "submission to completion (an upper bound)",
+        }
+    }
+}
+
+/// A size a scene can show at: a cell size in physical pixels on a lattice, a patch level on an
+/// aperiodic tiling (whose tiles are then as big as fitting the patch to the screen makes them).
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct Size {
+    /// Physical pixels per cell: what a lattice is built at, and what a patch's tiles show at.
+    pub px: f32,
+    /// An aperiodic patch's level (None: the scene's own, or a lattice).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+}
+
+impl Size {
+    pub fn px(px: f32) -> Size {
+        Size { px, level: None }
+    }
+
+    /// `3 px`, `level 6 (2.4 px)`.
+    pub fn describe(&self) -> String {
+        match self.level {
+            Some(l) => format!("level {l} ({} px)", round_px(self.px)),
+            None => format!("{} px", round_px(self.px)),
+        }
+    }
+
+    /// The same size (a level, or a cell size within a hundredth of a pixel).
+    pub fn same(&self, o: &Size) -> bool {
+        match (self.level, o.level) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => (self.px - o.px).abs() < 0.01,
+            _ => false,
+        }
+    }
+}
+
+/// A pixel size as people read it: whole, or to a tenth.
+pub fn round_px(px: f32) -> String {
+    if (px - px.round()).abs() < 0.05 {
+        format!("{}", px.round())
+    } else {
+        format!("{px:.1}")
+    }
+}
+
+/// What one size of a sweep measured: one card in the pane.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct Rung {
+    /// The size, with the cell size the screen showed (for a patch, its tiles' size).
+    pub size: Size,
+    /// Cells in the world.
+    pub cells: u64,
+    /// JETCARP's processor time, in percent of the machine.
+    pub cpu_percent: f32,
+    /// Its share of the GPU's time, in percent (None: not measured).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_percent: Option<f32>,
+    /// The 95th percentile of the time a frame took, in milliseconds.
+    pub p95_ms: f32,
+    /// Frames drawn a second.
+    pub fps: f32,
+    /// Stepped on the GPU (else on the processor).
+    pub on_gpu: bool,
+    /// Within every limit, with their margins.
+    pub fits: bool,
+    /// Which limits it passed, when it did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub over: Option<String>,
+    /// The picture of the screen at this size: a PNG in the tuning folder ([`crops_dir`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop: Option<String>,
+    /// The scene's own size.
+    pub own: bool,
+}
+
+/// What *Fit to this computer* found and chose for one scene.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct TunedScene {
+    /// The scene's label in the rotation.
+    pub scene: String,
+    /// The scene's tiling family.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub tiling: String,
+    /// The cell size the scene asks for, in physical pixels.
+    pub design_px: f32,
+    /// The size it shows at: a cell size in physical pixels (a lattice), or with `level`, the
+    /// size a patch of that level's tiles show at.
+    pub cell_px: f32,
+    /// An aperiodic patch's level (None: the scene's own, or a lattice).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Someone chose this size (else it is the recommended one).
+    pub chosen: bool,
+    /// The finest size within the limits (a placed pattern: its own size).
+    pub recommended: Size,
+    /// A pattern placed on an empty field, which keeps its own size unless someone chooses another.
+    pub placed: bool,
+    /// Every size the sweep showed, finest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rungs: Vec<Rung>,
+    pub gpu_timing: GpuTiming,
+    /// Why it shows at this size, when that needs saying.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl TunedScene {
+    /// The size it shows at.
+    pub fn size(&self) -> Size {
+        Size {
+            px: self.cell_px,
+            level: self.level,
+        }
+    }
+
+    /// Shows at `size`.
+    pub fn set_size(&mut self, size: Size) {
+        self.cell_px = size.px;
+        self.level = size.level;
+    }
+
+    /// The rung at the size it shows at.
+    pub fn rung(&self) -> Option<&Rung> {
+        let s = self.size();
+        self.rungs.iter().find(|r| r.size.same(&s))
+    }
+}
+
+/// The folder the sweep's pictures go in: `tune` beside the host's settings.
+pub fn crops_dir() -> Option<PathBuf> {
+    Some(config_dir()?.join("tune"))
+}
+
+/// What *Fit to this computer* found for one screen: a cell size for each scene of its rotation.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct Tuning {
+    /// The rotation it was found for. A screen given another rotation shows its scenes at their
+    /// own sizes until it is tuned again.
+    pub rotation: String,
+    /// The canvas it was found for, in physical pixels.
+    pub canvas: [u32; 2],
+    /// Its pixels per point.
+    pub scale: f64,
+    /// The limits it was found for (each screen's share of them).
+    pub limits: TuneLimits,
+    /// The frame rate it kept.
+    pub fps: f32,
+    pub scenes: Vec<TunedScene>,
+}
+
+impl Default for Tuning {
+    fn default() -> Self {
+        Tuning {
+            rotation: String::new(),
+            canvas: [0, 0],
+            scale: 1.0,
+            limits: TuneLimits::default(),
+            fps: 0.0,
+            scenes: vec![],
+        }
+    }
+}
+
+impl Tuning {
+    /// The size for the scene labelled `label`, which asks for `design_px` on a canvas of
+    /// `canvas` pixels: None when it was not tuned, its own size was chosen, or the scene has
+    /// changed size since. On another canvas a lattice keeps its cell count (its cells grow or
+    /// shrink with the canvas), and a patch its level.
+    pub fn size_for(&self, label: &str, design_px: f32, canvas: [f64; 2]) -> Option<Size> {
+        let t = self.scenes.iter().find(|s| s.scene == label)?;
+        if (t.design_px - design_px).abs() > 1e-3 {
+            return None;
+        }
+        if let Some(level) = t.level {
+            return Some(Size {
+                px: t.cell_px,
+                level: Some(level),
+            });
+        }
+        let [w0, h0] = self.canvas;
+        let mut px = t.cell_px;
+        let (a0, a1) = (w0 as f64 * h0 as f64, canvas[0] * canvas[1]);
+        if a0 > 0.0 && a1 > 0.0 && (a0 - a1).abs() > 0.5 && px > 0.0 {
+            px = ((px as f64 * (a1 / a0).sqrt()).round() as f32).max(1.0);
+        }
+        let px = px.min(*crate::profiles::CELL_PX_RANGE.end());
+        (px > 0.0 && (px - design_px).abs() > 1e-3).then_some(Size::px(px))
+    }
+
+    /// Whether it was found for a canvas of this size.
+    pub fn fits_canvas(&self, canvas: [f64; 2]) -> bool {
+        self.canvas == [canvas[0].round() as u32, canvas[1].round() as u32]
     }
 }
 
@@ -76,8 +370,11 @@ pub struct HostSettings {
     pub screens: Vec<ScreenSettings>,
     /// Frames per second, at most.
     pub fps: f32,
-    /// Step on the GPU where the rules allow it.
-    pub gpu: bool,
+    /// The desktop background's own GPU choice: follow JETCARP's shared setting (`gpu.json`,
+    /// automatic by default), or on, or off whatever it says. `JETCARP_GPU` comes first. Older
+    /// files' `true` reads as follow and `false` as off.
+    #[serde(deserialize_with = "Own::deserialize_lenient")]
+    pub gpu: Own,
     pub caption: CaptionSettings,
     /// Abandon an item when the host passes this much memory.
     pub max_memory_mb: u64,
@@ -97,6 +394,8 @@ pub struct HostSettings {
     /// Pause while the whole processor stays this busy (percent), as during research runs, and
     /// carry on once it is well below. 0: never.
     pub busy_percent: u8,
+    /// The limits *Fit to this computer* tunes for.
+    pub tune: TuneLimits,
 }
 
 impl Default for HostSettings {
@@ -104,7 +403,7 @@ impl Default for HostSettings {
         HostSettings {
             screens: vec![ScreenSettings::default()],
             fps: 30.0,
-            gpu: true,
+            gpu: Own::Follow,
             caption: CaptionSettings::default(),
             max_memory_mb: 6144,
             max_cells: 64_000_000,
@@ -114,11 +413,15 @@ impl Default for HostSettings {
             pause_on_battery: true,
             still_picture: false,
             busy_percent: 80,
+            tune: TuneLimits::default(),
         }
     }
 }
 
 pub const MAX_AWAKE_MINUTES: u32 = 24 * 60;
+
+/// Who the host's own GPU choice belongs to, in reports.
+pub const OWNER: &str = "the desktop background";
 
 /// JETCARP's settings folder (`JETCARP_CONFIG_DIR` overrides it, as it does for the app).
 pub fn config_dir() -> Option<PathBuf> {
@@ -164,7 +467,28 @@ impl HostSettings {
         }
         self.fps = self.fps.min(240.0);
         self.lock_awake_minutes = self.lock_awake_minutes.min(MAX_AWAKE_MINUTES);
+        self.tune = self.tune.checked();
         self
+    }
+
+    /// The tuning that applies to screen `i` now: the one found for the rotation it runs.
+    pub fn tuning_for(&self, i: usize, rotation: &str) -> Option<&Tuning> {
+        self.screens
+            .get(i)?
+            .tuning
+            .as_ref()
+            .filter(|t| t.rotation == rotation)
+    }
+
+    /// The GPU policy the desktop background follows: `JETCARP_GPU`, else its own choice, else the
+    /// shared setting.
+    pub fn gpu_policy(&self) -> Policy {
+        Policy::load_for(self.gpu, OWNER)
+    }
+
+    /// Whether any screen has been tuned.
+    pub fn tuned(&self) -> bool {
+        self.screens.iter().any(|s| s.tuning.is_some())
     }
 
     pub fn save(&self) -> Result<(), String> {
@@ -212,5 +536,179 @@ mod tests {
         let s: HostSettings = serde_json::from_str(r#"{"screens": [{"rotation": "x"}]}"#).unwrap();
         assert_eq!(s.screens[0].place, Place::Window);
         assert_eq!(s.lock_screen, LockScreen::Live);
+    }
+
+    /// A host.json as JETCARP 0.4.1 wrote it.
+    const OLD: &str = r#"{
+  "screens": [{"monitor": 0, "rotation": "My wallpaper", "place": "wallpaper"}],
+  "fps": 30.0, "gpu": true,
+  "caption": {"show": false, "corner": "BottomLeft", "size": 20.0, "generation": false, "seconds": 0.0},
+  "max_memory_mb": 6144, "max_cells": 64000000, "saver_rotation": null,
+  "lock_screen": "live", "lock_awake_minutes": 30, "pause_on_battery": true,
+  "still_picture": true, "busy_percent": 80
+}"#;
+
+    #[test]
+    fn an_old_file_reads_untuned_and_a_tuned_one_round_trips() {
+        let s: HostSettings = serde_json::from_str(OLD).unwrap();
+        let s = s.checked();
+        assert_eq!(s.screens[0].rotation, "My wallpaper");
+        assert!(s.still_picture);
+        assert_eq!(s.tune, TuneLimits::default());
+        assert_eq!(
+            s.gpu,
+            Own::Follow,
+            "0.4.1's true follows the shared setting"
+        );
+        let off: HostSettings =
+            serde_json::from_str(&OLD.replace(r#""gpu": true"#, r#""gpu": false"#)).unwrap();
+        assert_eq!(off.gpu, Own::Off, "and false is off");
+        let on: HostSettings = serde_json::from_str(r#"{"gpu": "on"}"#).unwrap();
+        assert_eq!(on.gpu, Own::On);
+        assert!(
+            serde_json::to_string(&on)
+                .unwrap()
+                .contains(r#""gpu":"on""#)
+        );
+        assert!(!s.tuned() && s.screens[0].tuning.is_none());
+        // Untuned screens write no `tuning`, so a file read back by 0.4.1 looks as it did.
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(!text.contains("\"tuning\""), "{text}");
+        let mut t = s.clone();
+        t.tune = TuneLimits {
+            cpu_percent: 5.0,
+            gpu_percent: 40.0,
+            fps: Some(60.0),
+            auto: false,
+        };
+        t.screens[0].tuning = Some(Tuning {
+            rotation: "My wallpaper".into(),
+            canvas: [2560, 1440],
+            scale: 1.25,
+            limits: t.tune,
+            fps: 30.0,
+            scenes: vec![TunedScene {
+                scene: "profile Life".into(),
+                tiling: "square".into(),
+                design_px: 3.0,
+                cell_px: 2.0,
+                level: None,
+                chosen: true,
+                recommended: Size::px(4.0),
+                placed: false,
+                rungs: vec![Rung {
+                    size: Size::px(2.0),
+                    cells: 921_600,
+                    cpu_percent: 2.5,
+                    gpu_percent: Some(4.0),
+                    p95_ms: 6.0,
+                    fps: 30.0,
+                    on_gpu: true,
+                    fits: false,
+                    over: Some("GPU".into()),
+                    crop: Some("s0-life-2px.png".into()),
+                    own: false,
+                }],
+                gpu_timing: GpuTiming::Kernel,
+                note: None,
+            }],
+        });
+        let back: HostSettings = serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
+        assert_eq!(back.checked(), t);
+        assert!(t.tuned());
+        assert!(t.tuning_for(0, "My wallpaper").is_some());
+        assert!(t.tuning_for(0, "Another").is_none(), "another rotation");
+        assert!(t.tuning_for(1, "My wallpaper").is_none(), "no such screen");
+        // Limits out of range are brought in.
+        let s: HostSettings = serde_json::from_str(
+            r#"{"tune": {"cpu_percent": 0, "gpu_percent": 500, "fps": 1000}}"#,
+        )
+        .unwrap();
+        let s = s.checked();
+        assert_eq!((s.tune.cpu_percent, s.tune.gpu_percent), (1.0, 100.0));
+        assert_eq!(s.tune.fps, Some(240.0));
+        assert!(s.tune.auto, "unset fields keep their defaults");
+        // A tuning saved before the sweep (one size a scene, its numbers beside it) still reads,
+        // and its size still applies.
+        let old: Tuning = serde_json::from_str(
+            r#"{"rotation": "r", "canvas": [2560, 1440], "scenes": [{"scene": "a",
+                "design_px": 3.0, "cell_px": 5.0, "cells": 147456, "cpu_percent": 2.5,
+                "gpu_percent": 4.0, "p95_ms": 6.0, "on_gpu": true, "gpu_timing": "kernel",
+                "fits": true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            old.size_for("a", 3.0, [2560.0, 1440.0]),
+            Some(Size::px(5.0))
+        );
+        assert!(!old.scenes[0].chosen && old.scenes[0].rungs.is_empty());
+    }
+
+    #[test]
+    fn a_tuned_size_applies_to_its_scene_and_keeps_the_cell_count_on_another_canvas() {
+        let t = Tuning {
+            rotation: "r".into(),
+            canvas: [2000, 1000],
+            scenes: vec![
+                TunedScene {
+                    scene: "a".into(),
+                    design_px: 2.0,
+                    cell_px: 6.0,
+                    ..Default::default()
+                },
+                TunedScene {
+                    scene: "b".into(),
+                    design_px: 3.0,
+                    cell_px: 3.0,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let px = |label: &str, design: f32, w: f64, h: f64| {
+            t.size_for(label, design, [w, h]).map(|s| s.px)
+        };
+        assert_eq!(px("a", 2.0, 2000.0, 1000.0), Some(6.0));
+        assert_eq!(px("b", 3.0, 2000.0, 1000.0), None, "its own size");
+        assert_eq!(px("c", 3.0, 2000.0, 1000.0), None, "not tuned");
+        assert_eq!(
+            px("a", 4.0, 2000.0, 1000.0),
+            None,
+            "the scene's size changed since"
+        );
+        // Four times the pixels: twice the size, the same cells.
+        assert_eq!(px("a", 2.0, 4000.0, 2000.0), Some(12.0));
+        // A quarter of the pixels: half the size, but never below a pixel.
+        assert_eq!(px("a", 2.0, 1000.0, 500.0), Some(3.0));
+        assert_eq!(px("a", 2.0, 500.0, 250.0), None, "back to its own 2 px");
+        // Finer than its own, and a patch's level, apply too.
+        let mut t = t.clone();
+        t.scenes[1].cell_px = 1.0;
+        assert_eq!(t.size_for("b", 3.0, [2000.0, 1000.0]), Some(Size::px(1.0)));
+        t.scenes.push(TunedScene {
+            scene: "p".into(),
+            design_px: 2.4,
+            cell_px: 1.7,
+            level: Some(6),
+            ..Default::default()
+        });
+        let patch = t.size_for("p", 2.4, [500.0, 250.0]).unwrap();
+        assert_eq!(
+            patch.level,
+            Some(6),
+            "a patch keeps its level on any canvas"
+        );
+        assert_eq!(patch.describe(), "level 6 (1.7 px)");
+        assert!(Size::px(3.0).same(&Size::px(3.004)) && !Size::px(3.0).same(&patch));
+        assert!(t.fits_canvas([2000.0, 1000.0]) && !t.fits_canvas([1920.0, 1080.0]));
+        let l = TuneLimits::default();
+        assert_eq!(l.target_fps(Some(144.0), 30.0), 30.0, "at most the host's");
+        assert_eq!(l.target_fps(None, 120.0), 60.0);
+        assert_eq!(l.target_fps(Some(75.0), 120.0), 75.0);
+        let l = TuneLimits {
+            fps: Some(24.0),
+            ..l
+        };
+        assert_eq!(l.target_fps(Some(144.0), 30.0), 24.0);
     }
 }

@@ -80,6 +80,13 @@ fn edge_neighbourhood_notation_keeps_the_v() {
     let n = w.cas[0].notation();
     assert_eq!(n, "JACA +B2/S34V -B3/S23V");
     assert_eq!(Rule::parse(&n).unwrap().1, Some(Nb::Edge));
+    // Issue #7: its default name keeps the V too, as a B/S rule's does.
+    assert_eq!(w.cas[0].name, "JACA +B2/S34V -B3/S23V");
+    let life = world("square", 10, 10, "B3/S23V", SeedSpec::Empty, 1);
+    assert_eq!(life.cas[0].name, "B3/S23V");
+    // A rule with a catalogue name for its edge-neighbour form keeps that name.
+    let gnarl = world("square", 10, 10, "B1/S0V", SeedSpec::Empty, 1);
+    assert_eq!(gnarl.cas[0].name, "Gnarl (von Neumann)");
 }
 
 /// Seeded with one sign only, JACA is the plain B/S rule.
@@ -298,7 +305,7 @@ fn seeds_and_defaults() {
     .unwrap();
     let ca = &w.cas[0];
     assert_eq!(ca.palette, "Tide");
-    assert_eq!(ca.palette_neg, "Ember");
+    assert_eq!(ca.palette_neg, "Koi");
     assert!(ca.glow);
     assert_eq!(
         ca.seed,
@@ -545,5 +552,110 @@ fn presets_load_and_start_with_both_signs() {
         w.apply(Command::Step { gens: 50 }).unwrap();
         let (a, b) = counts(&w);
         assert!(a > 0 && b > 0, "{} after 50: {a} {b}", p.id);
+    }
+}
+
+/// CIELAB colour of an sRGB colour, for telling how far apart two colours look.
+fn lab([r, g, b]: [f64; 3]) -> [f64; 3] {
+    let lin = |u: f64| {
+        let u = u / 255.0;
+        if u > 0.04045 {
+            ((u + 0.055) / 1.055).powf(2.4)
+        } else {
+            u / 12.92
+        }
+    };
+    let (r, g, b) = (lin(r), lin(g), lin(b));
+    let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+    let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    let t = |v: f64| {
+        if v > 0.008856 {
+            v.cbrt()
+        } else {
+            7.787 * v + 16.0 / 116.0
+        }
+    };
+    [
+        116.0 * t(y) - 16.0,
+        500.0 * (t(x) - t(y)),
+        200.0 * (t(y) - t(z)),
+    ]
+}
+
+/// A palette's colour at `f` (0 its first stop, 1 its last), as the age colouring ramps it.
+fn ramp(p: &Palette, f: f64) -> [f64; 3] {
+    let n = p.stops.len() - 1;
+    let x = f.clamp(0.0, 1.0) * n as f64;
+    let i = (x.floor() as usize).min(n - 1);
+    let u = x - i as f64;
+    let (a, b) = (p.stops[i], p.stops[i + 1]);
+    [0, 1, 2].map(|k| a[k] as f64 + (b[k] as f64 - a[k] as f64) * u)
+}
+
+/// How far apart a JACA palette pair's colours look over the older half of their ramps (CIELAB
+/// distance, the smallest over ages 0.5 to 1): what still territories of the two signs show.
+fn older_half_contrast(pos: &str, neg: &str) -> f64 {
+    let p = Palette::builtin(pos).unwrap_or_else(|| panic!("no palette {pos}"));
+    let q = Palette::builtin(neg).unwrap_or_else(|| panic!("no palette {neg}"));
+    (5..=10)
+        .map(|i| {
+            let (a, b) = (
+                lab(ramp(&p, i as f64 / 10.0)),
+                lab(ramp(&q, i as f64 / 10.0)),
+            );
+            ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Issue #6: JACA's palette pairs keep the two signs apart as their cells age. Tide and Ember,
+/// the defaults until 0.4.2, both end in dark indigo (9 apart at the oldest), so still
+/// territories of the two signs looked alike.
+#[test]
+fn jaca_palette_pairs_keep_the_signs_apart_as_cells_age() {
+    use jetcarp_core::world::{DEFAULT_PALETTE_JACA, DEFAULT_PALETTE_NEG};
+    assert!(
+        older_half_contrast("Tide", "Ember") < 20.0,
+        "the check sees the old bug"
+    );
+    let d = older_half_contrast(DEFAULT_PALETTE_JACA, DEFAULT_PALETTE_NEG);
+    assert!(d >= 20.0, "default pair only {d:.1} apart");
+    let ca = World::new(TilingSpec::rect("square", 8, 8, Boundary::Wrap), 1)
+        .and_then(|mut w| {
+            w.apply(Command::AddCa {
+                ca: CaSpec::new("JACA B3/S23"),
+            })?;
+            Ok(w)
+        })
+        .unwrap()
+        .cas[0]
+        .clone();
+    assert_eq!(
+        (ca.palette.as_str(), ca.palette_neg.as_str()),
+        (DEFAULT_PALETTE_JACA, DEFAULT_PALETTE_NEG)
+    );
+    // Every JACA preset in the Quick Start.
+    let presets: serde_json::Value =
+        serde_json::from_str(include_str!("../data/scenes/presets/jaca.json")).unwrap();
+    let mut pairs = Vec::new();
+    fn walk(v: &serde_json::Value, out: &mut Vec<(String, String)>) {
+        match v {
+            serde_json::Value::Object(m) => {
+                if let Some(neg) = m.get("palette_neg").and_then(|x| x.as_str()) {
+                    let pos = m.get("palette").and_then(|x| x.as_str()).unwrap_or("Tide");
+                    out.push((pos.to_string(), neg.to_string()));
+                }
+                m.values().for_each(|x| walk(x, out));
+            }
+            serde_json::Value::Array(a) => a.iter().for_each(|x| walk(x, out)),
+            _ => {}
+        }
+    }
+    walk(&presets, &mut pairs);
+    assert!(pairs.len() >= 70, "{} presets read", pairs.len());
+    for (pos, neg) in pairs {
+        let d = older_half_contrast(&pos, &neg);
+        assert!(d >= 20.0, "preset pair {pos}/{neg} only {d:.1} apart");
     }
 }

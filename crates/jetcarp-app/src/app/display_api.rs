@@ -213,7 +213,8 @@ impl JetcarpApp {
             "playing": self.playing,
             "speed": self.speed,
             "max_speed": self.max_speed,
-            "gpu": self.sim.on,
+            "gpu": self.sim.mode.name(),
+            "gpu_choice": self.shell.gpu.name(),
             "menu_autohide": self.shell.menu_autohide,
             "panes_hidden": self.shell.panes_hidden,
             "status_bar": self.shell.status_bar,
@@ -393,14 +394,23 @@ impl JetcarpApp {
                 self.speed = s.clamp(0.1, 100_000.0) as f32;
             }
         }
-        if let Some(g) = get_bool(args, "gpu")? {
-            if g && !self.sim.available() {
+        if let Some(g) = args.get("gpu").filter(|g| !g.is_null()) {
+            use jetcarp_gpu::select::Own;
+            let o = match g {
+                Value::Bool(true) => Own::On,
+                Value::Bool(false) => Own::Off,
+                Value::String(t) => {
+                    Own::parse(t).ok_or_else(|| format!("gpu is follow, on or off, not {t:?}"))?
+                }
+                _ => return Err("gpu is follow, on or off (or true or false)".into()),
+            };
+            if o == Own::On && !self.sim.available() {
                 return Err(format!(
                     "GPU simulation is not available: {}",
                     self.sim.hint()
                 ));
             }
-            self.sim.on = g;
+            self.set_gpu_choice(o);
         }
         // The screensaver last, so it starts on the outputs and settings given with it.
         if let Some(p) = &profile {

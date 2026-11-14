@@ -7,7 +7,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B2/S",
      "seed": {
       "signed": {
@@ -42,7 +42,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B27/S013",
      "seed": {
       "signed": {
@@ -247,7 +247,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B1235/S0,3,6,7,10 blast 1",
      "seed": {
       "signed": {
@@ -462,7 +462,7 @@
      "enabled": true,
      "neighborhood": "edge",
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA +B1/S13 -B1/S1 blast 1",
      "seed": {
       "signed": {
@@ -672,7 +672,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B16/S1378 blast 1",
      "seed": {
       "signed": {
@@ -879,7 +879,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B267/S1,3,4,6,7,8,9,10",
      "seed": {
       "signed": {
@@ -1086,7 +1086,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B2/S0124",
      "seed": {
       "signed": {
@@ -1300,7 +1300,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA +B2,6,7,8,10/S1,3,4,6,7,8,9,10 -B2679/S1,3,4,6,7,8,9,10",
      "seed": {
       "signed": {
@@ -1503,7 +1503,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B23/S0,1,2,3,4,8,12 blast 2",
      "seed": {
       "halves": {
@@ -1711,7 +1711,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA +B25/S14568 -B257/S245678",
      "seed": {
       "halves": {
@@ -1779,7 +1779,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B36/S3456",
      "seed": {
       "signed": {
@@ -1989,7 +1989,7 @@
     {
      "enabled": true,
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B345/S3,4,5,6,8,9,11 blast 1",
      "seed": {
       "signed": {
@@ -2344,7 +2344,7 @@
      "enabled": true,
      "neighborhood": "edge",
      "palette": "Tide",
-     "palette_neg": "Ember",
+     "palette_neg": "Koi",
      "rule": "JACA B13/S012 blast 1",
      "seed": {
       "signed": {

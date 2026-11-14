@@ -133,7 +133,7 @@ Every field but `rule` may be left out; a saved scene writes them all.
 | `affects_others` | `true` for binary rules, else `false` | Whether it shares the field with the other automata of its kind, or keeps a private one that is only drawn alongside. Sandpiles always keep their own |
 | `steps_per_gen` | `1` | Steps this automaton takes each generation (1 to 100,000) |
 | `palette` | Ember (Tide for JACA) | Its [palette](palettes.md) |
-| `palette_neg` | Ember | JACA only: the palette of −1 cells |
+| `palette_neg` | Koi | JACA only: the palette of −1 cells |
 | `glow` | `true` | JACA only: draw the fading glow of destroyed cells |
 | `color_by` | `"auto"` | `"auto"`, `"age"`, `"state"` or `"row"` (see [Palettes](palettes.md#how-a-palette-colours-cells)) |
 | `seed` | the rule's default | What it puts on the field when the world is built or reset (see [Seeds](#seeds)) |

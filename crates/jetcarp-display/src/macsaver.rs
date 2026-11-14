@@ -94,7 +94,8 @@ pub fn bake(
         fps: settings.fps,
         caption: settings.caption,
         max_cells: settings.max_cells,
-        gpu: settings.gpu,
+        // The sandboxed saver cannot read the GPU settings: the desktop background's choice now.
+        gpu: settings.gpu_policy().mode != jetcarp_gpu::select::Mode::Off,
     };
     Ok((baked, warnings))
 }

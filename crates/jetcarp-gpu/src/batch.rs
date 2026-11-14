@@ -30,6 +30,8 @@ const SLOT_BYTES: u64 = 256;
 const MAX_CHUNK_GENS: u32 = 1024;
 /// The largest trace buffer a run allocates.
 const TRACE_BUDGET: u64 = 128 << 20;
+/// Bytes of trace per world and generation: population, changed, hash, and cells in state 2.
+const TRACE_ENTRY: u64 = 16;
 /// How long one submission should take.
 const TARGET_SECS: f64 = 0.075;
 /// Bytes of init data per submission, so upload staging stays small.
@@ -338,48 +340,13 @@ fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
 }
 
 impl BatchSim {
-    /// Open the default high-performance adapter without a window.
+    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window.
     pub fn headless() -> Result<BatchSim, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        crate::check_adapter(&adapter)?;
-        let mut limits = wgpu::Limits::default();
-        let al = adapter.limits();
-        limits.max_storage_buffer_binding_size = al.max_storage_buffer_binding_size;
-        limits.max_buffer_size = al.max_buffer_size;
-        limits.max_storage_buffers_per_shader_stage = al.max_storage_buffers_per_shader_stage;
-        limits.max_compute_workgroups_per_dimension = al.max_compute_workgroups_per_dimension;
-        if al.max_storage_buffers_per_shader_stage < 9 {
-            return Err(format!(
-                "{} allows only {} storage buffers per shader",
-                info.name, al.max_storage_buffers_per_shader_stage
-            ));
-        }
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu batch"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(BatchSim::new(device, queue, crate::describe(&info)))
+        let (device, queue, name) = crate::select::compute_device("jetcarp-gpu batch")?;
+        Ok(BatchSim::new(device, queue, name))
     }
 
-    fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
+    pub(crate) fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
         let lim = device.limits();
         let max_bytes = lim.max_storage_buffer_binding_size.min(lim.max_buffer_size);
         let max_cells = (max_bytes / 4).min(u32::MAX as u64 / 2) as usize;
@@ -667,6 +634,8 @@ impl BatchSim {
                 tr.pop.push(p);
                 tr.changed.push(0);
                 tr.hash.push(h);
+                tr.neg
+                    .push(jetcarp_core::explore::batch::count_neg(&w.init));
                 if job.frames_at.first() == Some(&0) {
                     tr.frames.push(w.init.clone());
                 }
@@ -689,6 +658,7 @@ impl BatchSim {
                     tr.pop.push(0);
                     tr.changed.push(0);
                     tr.hash.push(0);
+                    tr.neg.push(0);
                 }
             }
             return Ok(traces);
@@ -788,8 +758,8 @@ impl BatchSim {
         self.upload_init(job, stride)?;
 
         let dev = &self.device;
-        let cap_gens = MAX_CHUNK_GENS.min((TRACE_BUDGET / (nw as u64 * 12)).max(1) as u32);
-        let trace_bytes = cap_gens as u64 * nw as u64 * 12;
+        let cap_gens = MAX_CHUNK_GENS.min((TRACE_BUDGET / (nw as u64 * TRACE_ENTRY)).max(1) as u32);
+        let trace_bytes = cap_gens as u64 * nw as u64 * TRACE_ENTRY;
         self.trace.ensure(dev, trace_bytes);
         self.trace_read.ensure(dev, trace_bytes);
 
@@ -895,7 +865,7 @@ impl BatchSim {
             }
             self.queue.write_buffer(&self.disp, 0, &slot_bytes);
 
-            let chunk_bytes = gens as u64 * nw as u64 * 12;
+            let chunk_bytes = gens as u64 * nw as u64 * TRACE_ENTRY;
             let start = Instant::now();
             let encode_slice = |pass: &mut wgpu::ComputePass, g: usize, s: usize, cur: usize| {
                 let (_, count) = world_range(s);
@@ -983,10 +953,11 @@ impl BatchSim {
                 let words: &[u32] = bytemuck::cast_slice(bytes);
                 for g in 0..gens as usize {
                     for (w, tr) in traces.iter_mut().enumerate() {
-                        let at = (g * nw + w) * 3;
+                        let at = (g * nw + w) * 4;
                         tr.pop.push(words[at]);
                         tr.changed.push(words[at + 1]);
                         tr.hash.push(words[at + 2].wrapping_add(base_hash));
+                        tr.neg.push(words[at + 3]);
                     }
                 }
             })?;

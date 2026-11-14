@@ -67,6 +67,25 @@ impl OnOff {
     }
 }
 
+/// GPU simulation: automatic, on or off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum GpuMode {
+    /// JETCARP's shared GPU setting.
+    Follow,
+    On,
+    Off,
+}
+
+impl GpuMode {
+    fn name(self) -> &'static str {
+        match self {
+            GpuMode::Follow => "follow",
+            GpuMode::On => "on",
+            GpuMode::Off => "off",
+        }
+    }
+}
+
 #[derive(Args, Debug, Default)]
 pub struct DisplayArgs {
     /// window, fullscreen, or outputs.
@@ -114,9 +133,10 @@ pub struct DisplayArgs {
     pub panes_hidden: Option<OnOff>,
     #[arg(long)]
     pub status_bar: Option<OnOff>,
-    /// GPU simulation.
+    /// The app's own GPU choice: follow (JETCARP's shared setting, automatic unless changed), on
+    /// (every world the rules allow) or off (saved).
     #[arg(long)]
-    pub gpu: Option<OnOff>,
+    pub gpu: Option<GpuMode>,
     /// Show each monitor's index on it for three seconds.
     #[arg(long)]
     pub identify: bool,
@@ -199,11 +219,13 @@ fn display_args(a: &DisplayArgs) -> Result<Value> {
         ("menu_autohide", a.menu_autohide),
         ("panes_hidden", a.panes_hidden),
         ("status_bar", a.status_bar),
-        ("gpu", a.gpu),
     ] {
         if let Some(x) = x {
             put(k, json!(x.b()));
         }
+    }
+    if let Some(g) = a.gpu {
+        put("gpu", json!(g.name()));
     }
     if let Some(c) = a.cell_px {
         put("cell_px", json!(c));
@@ -299,7 +321,13 @@ pub fn summary(s: &Value) -> String {
         },
         s["speed"],
         if s["max_speed"] == true { " (max)" } else { "" },
-        onoff(&s["gpu"])
+        // The mode's name, and the app's own choice when it follows the shared setting; an older
+        // app gives true or false.
+        match (&s["gpu"], s["gpu_choice"].as_str()) {
+            (Value::String(m), Some("follow")) => format!("{m} (the shared setting)"),
+            (Value::String(m), _) => m.clone(),
+            (b, _) => onoff(b).to_string(),
+        }
     ));
     let ss = &s["screensaver"];
     let mut saver = format!(
@@ -511,7 +539,7 @@ mod tests {
     fn summary_reads_the_state() {
         let s = json!({"mode": "outputs", "outputs": [{"monitor": 0}, {"window": [800, 600]}],
             "arrangement": "span", "canvas_px": [1600, 600], "cell_px": 1.0, "playing": true,
-            "speed": 30.0, "gpu": true, "screensaver": {"active": true, "settings": {"source": "rotation"},
+            "speed": 30.0, "gpu": "auto", "screensaver": {"active": true, "settings": {"source": "rotation"},
             "items": ["Quick Start life", "scene a.json"], "index": 1, "seconds_left": 42.0},
             "keep_awake": {"held": true, "backend": "portal"}, "monitors": [], "menu_autohide": true,
             "panes_hidden": true, "status_bar": false});
@@ -525,6 +553,7 @@ mod tests {
             "{t}"
         );
         assert!(t.contains("held by portal"), "{t}");
+        assert!(t.contains("GPU simulation auto"), "{t}");
         let s = json!({"screensaver": {"active": true, "profile": "Hodgepodge",
             "settings": {"source": "Profile", "profile": "Life"}},
             "profiles": [

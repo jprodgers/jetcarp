@@ -163,12 +163,13 @@ alternate on even and odd generations, so that what you see is the rule's real b
 strobing ([Golly: QuickLife](../research/bibliography.md#gollynd_quicklife)); Golly credits David
 Eppstein with the idea ([Golly credits](../research/bibliography.md#gollynd_credits)). JETCARP does
 the same, and its tests check the result against running the rule by brute force. B0 rules also run
-under HashLife.
+under HashLife and on the GPU.
 
 ### Speed
 
-On lattice tilings JETCARP can step Life-like rules on the GPU as well as the CPU, with identical
-results, and HashLife can jump wrap-edge lattice worlds far ahead.
+In the app and in the background host, JETCARP can step Life-like rules, B0 rules among them, on the
+GPU as well as the CPU, on lattices and aperiodic patches, with identical results. HashLife can jump
+wrap-edge lattice worlds far ahead.
 
 ## What is new here
 

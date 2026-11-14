@@ -48,9 +48,13 @@ pub struct PileJobSpec {
     pub reverse: bool,
     pub preview_side: u32,
     pub png: bool,
-    /// Topple on the GPU when the host has one (periodic tilings).
+    /// Asked to topple on the GPU when it was made (periodic tilings). With neither this nor
+    /// `cpu`, JETCARP's GPU setting decides at each run.
     #[serde(default)]
     pub gpu: bool,
+    /// Asked to topple on the CPU only when it was made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cpu: bool,
     /// Extra metadata for `pile.json` (who started it, where); the job id is added.
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub extra: serde_json::Value,

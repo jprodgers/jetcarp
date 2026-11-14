@@ -219,23 +219,45 @@ impl World {
             .map(|v| v.as_slice())
     }
 
+    /// The period watch's snapshot of a field's grain counts (sandpiles), if one is held.
+    pub fn watch_snapshot_heights(&self, field: usize) -> Option<&[u32]> {
+        self.watch
+            .snap
+            .as_ref()
+            .and_then(|s| s.heights.get(field))
+            .map(|v| v.as_slice())
+    }
+
     /// Record generations computed outside the engine, one [`GenMetrics`] each. The caller has
-    /// written (or will write, before anything reads the world) the running fields' new states and
-    /// ages. `snapshot` is called at most once, when the period watch took a snapshot during the
-    /// batch; it returns the running fields' states at the last such generation.
+    /// written (or will write, before anything reads the world) the running fields' new states,
+    /// ages, and grain counts. `snapshot` is called at most once, when the period watch took a
+    /// snapshot during the batch; it returns the running fields' states and grain counts at the
+    /// last such generation, as `(field, states, heights)` (a sandpile's states and any other
+    /// field's heights are empty, as in [`Field`](super::Field)).
+    ///
+    /// The step counters of B0, forest fire, and Margolus CAs (`CaInstance::ticks`) advance
+    /// here, as `World::step` advances them. A repeat counts only when Margolus partitions are in
+    /// the same phase as at the snapshot, as on the CPU.
     ///
     /// Returns the number of generations recorded. That is all of them unless the script moved on
     /// before the last one, which means the stepper ignored [`ExternalPlan`].
     pub fn finish_external(
         &mut self,
         gens: &[GenMetrics],
-        snapshot: impl FnOnce() -> Vec<(usize, Vec<u8>)>,
+        snapshot: impl FnOnce() -> Vec<(usize, Vec<u8>, Vec<u32>)>,
     ) -> u64 {
-        let mut took = false;
+        // The phases at the snapshot taken during this batch, if one was.
+        let mut took: Option<Vec<u64>> = None;
         let mut done = 0u64;
         self.last_changed = None;
         self.last_moved = false;
         for m in gens {
+            // The CAs that ran this generation advance their step counters, as in `step_ca`.
+            for ca in self.cas.iter_mut().filter(|c| c.enabled) {
+                if crate::step::counts_ticks(&ca.rule) {
+                    ca.ticks += ca.steps_per_gen as u64;
+                }
+            }
             let running = self.running_fields().len();
             let total = (self.topo.len() * running).max(1) as u64;
             let activity = self
@@ -253,13 +275,19 @@ impl World {
                 self.push_activity(m.changed, total);
             }
             done += 1;
+            let phases = self.phases();
             let w = &mut self.watch;
             if w.found.is_none() {
                 w.lam += 1;
-                if (w.snap.is_some() || took) && m.repeat {
+                let same_phase = match (&took, &w.snap) {
+                    (Some(p), _) => *p == phases,
+                    (None, Some(s)) => s.phases == phases,
+                    (None, None) => false,
+                };
+                if same_phase && m.repeat {
                     w.found = Some((w.lam, self.generation));
                 } else if w.lam == w.power {
-                    took = true;
+                    took = Some(phases);
                     w.power *= 2;
                     w.lam = 0;
                 }
@@ -273,22 +301,27 @@ impl World {
             if moved_on || reseeded {
                 // Entering a step or reseeding resets the watch, so any snapshot taken so far is
                 // discarded.
-                took = false;
+                took = None;
                 break;
             }
         }
-        if took && self.watch.found.is_none() {
+        if let Some(phases) = took
+            && self.watch.found.is_none()
+        {
             let mut states: Vec<Vec<u8>> = self.fields.iter().map(|f| f.state.clone()).collect();
-            for (f, mut s) in snapshot() {
+            let mut heights: Vec<Vec<u32>> = self.fields.iter().map(|f| f.height.clone()).collect();
+            for (f, mut s, mut h) in snapshot() {
                 s.truncate(self.topo.len());
+                h.truncate(self.topo.len());
                 states[f] = s;
+                heights[f] = h;
             }
             self.watch.snap = Some(Snapshot {
                 states,
-                heights: self.fields.iter().map(|f| f.height.clone()).collect(),
+                heights,
                 agents: self.cas.iter().map(|c| c.agents.clone()).collect(),
                 cursors: self.cas.iter().map(|c| c.cursor).collect(),
-                phases: self.phases(),
+                phases,
                 values: self.fields.iter().map(|f| f.value.clone()).collect(),
             });
         }

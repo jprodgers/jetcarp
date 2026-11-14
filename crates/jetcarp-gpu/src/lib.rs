@@ -1,11 +1,18 @@
-//! GPU simulation for JETCARP: `wgpu` compute shaders that step Life-like, Generations, WireWorld,
-//! cyclic, rock-paper-scissors, Greenberg–Hastings, hodgepodge, Spectre-glider, and priority-table
-//! (`jetcarp search evolve`) CAs on lattice
-//! storage (square, hex, any periodic tiling) and explicit storage (aperiodic patches, via a CSR
-//! neighbour buffer), with dead, wrap, and live edges.
+//! GPU simulation for JETCARP: `wgpu` compute shaders that step CAs on lattice storage (square,
+//! hex, any periodic tiling) and explicit storage (aperiodic patches, via a CSR neighbour
+//! buffer), with dead, wrap, and live edges. The rules:
 //!
-//! Results are bit-identical to the CPU steppers in `jetcarp-core`: states, ages, generation, and the
-//! state hash. The engine keeps every piece of bookkeeping (see `jetcarp_core::world::external`):
+//! - Life-like and Generations rules, WireWorld, cyclic, rock-paper-scissors, Greenberg–Hastings,
+//!   hodgepodge, the Spectre glider, and priority tables (`jetcarp search evolve`)
+//! - JACA, with its annihilation glow and counts
+//! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
+//! - Larger than Life, its reach in an aux buffer
+//! - forest fire, with the CPU's 64-bit random numbers
+//! - sandpiles, with 64-bit grain totals and losses
+//!
+//! Results are bit-identical to the CPU steppers in `jetcarp-core`: everything the state hash
+//! covers, and JACA's glow and counts. The engine keeps every piece of bookkeeping (see
+//! `jetcarp_core::world::external`):
 //!
 //! - Generations run in batches without reading the field back. Only a few bytes of per-generation
 //!   metrics are read after each batch; the fields are read back once, at the end of [`GpuSim::run`].
@@ -15,14 +22,17 @@
 //! - **Scripts** keep working: a batch ends where a step's generation count or time limit ends, and
 //!   the GPU stops itself after any generation where a population, activity, or repeat trigger
 //!   could fire. The engine then checks the trigger exactly as on the CPU.
-//! - Anything else (turmites, elementary rules, sandpiles, tables, forest fire) is reported by
+//! - Anything else (turmites and elementary rules, for example) is reported by
 //!   [`GpuSim::check`]; the caller runs those worlds on the CPU.
 
-use jetcarp_core::rules::Rule;
+use jetcarp_core::jaca::JacaRule;
+use jetcarp_core::ltl::{Hood, Reach};
+use jetcarp_core::rules::{FieldKind, Rule};
 use jetcarp_core::world::{ExternalPlan, GenMetrics, Halt};
 use jetcarp_core::{Storage, Topology, World};
 use rayon::prelude::*;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 pub mod pile;
@@ -33,6 +43,8 @@ pub mod hunt;
 
 pub mod batch;
 
+pub mod select;
+
 const WG: u32 = 256;
 /// Generations per batch at most (per-generation metrics slots).
 const MAX_BATCH: u64 = 1024;
@@ -42,6 +54,24 @@ const PARAM_STRIDE: usize = 256;
 const CTRL_HEADER: usize = 8;
 /// Activity halts the control shader tracks at once (one streak each).
 const MAX_ACT_HALTS: usize = 4;
+/// Statistics slots (JACA's counts, a sandpile's lost grains; four words each, one per such step
+/// in a batch) start here in the control buffer, after the per-generation metrics. `STAT_BASE` in
+/// sim.wgsl counts from the end of the header.
+const STAT_BASE: usize = CTRL_HEADER + 4 * MAX_BATCH as usize;
+/// "No statistics slot" in [`Params::stat`]; "no open cells" for sandpiles.
+const NONE: u32 = u32::MAX;
+/// Entries a patch's Larger than Life reach may have (one word each on the GPU): 256 MB.
+const REACH_CAP: usize = 1 << 26;
+
+// Rule codes, as in sim.wgsl.
+const R_JACA: u32 = 7;
+const R_B0: u32 = 8;
+const R_MARGOLUS: u32 = 9;
+const R_LTL: u32 = 10;
+const R_FOREST: u32 = 11;
+const R_SANDPILE: u32 = 12;
+/// Fields smaller than this are packed and unpacked on one thread.
+const PAR_CELLS: usize = 1 << 20;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -61,12 +91,16 @@ struct Params {
     pop_mode: u32,
     pop_n: u32,
     act_mode: u32,
-    act_limit: u32,
-    act_for: u32,
+    /// JACA: where the blast zone is read and written (offsets into the aux buffer).
+    zin: u32,
+    zout: u32,
     halt_repeat: u32,
     compare: u32,
-    pad: u32,
+    /// The step's statistics slot, or [`NONE`].
+    stat: u32,
     /// Priority rules: the packed rows (see [`priority_words`]), `k1` words.
+    /// Margolus: the block table in `table[0]`.
+    /// Forest fire: the noise key and thresholds (see [`forest_threshold`]).
     table: [[u32; 4]; 11],
 }
 
@@ -116,19 +150,70 @@ enum Op {
     Step,
     Pack,
     Control,
+    /// JACA's contact cells (a blast radius above 0).
+    Contact,
+    /// JACA's blast zone, grown one neighbourhood step.
+    Dilate,
 }
 
 const FLAG_COMPARE: u32 = 1;
 const FLAG_POP: u32 = 2;
 const FLAG_CHANGES: u32 = 4;
 
+/// Forest fire: the CPU's test `noise01(..) < p`, where the noise is `x / 2^53` for a 53-bit
+/// integer `x`, holds exactly when `x < ceil(p * 2^53)` (the product is exact in f64). The
+/// threshold as (low, high) words, so the GPU compares integers only.
+fn forest_threshold(p: f64) -> [u32; 2] {
+    let t: u64 = if p.is_nan() || p <= 0.0 {
+        0
+    } else if p >= 1.0 {
+        1 << 53
+    } else {
+        (p * (1u64 << 53) as f64).ceil() as u64
+    };
+    [t as u32, (t >> 32) as u32]
+}
+
+/// The step's noise key: the part of the CPU's `noise01` that does not depend on the cell.
+fn forest_key(seed: u64, tick: u64) -> u64 {
+    seed ^ tick.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+/// Larger than Life's birth and survival tables as bitsets of equal length, long enough for
+/// counts up to `max` (the most cells any cell reaches; counts past the CPU's tables are false).
+fn ltl_table(l: &jetcarp_core::ltl::LtlRule, max: u32) -> Vec<u32> {
+    let words = (max as usize + 1).div_ceil(32);
+    let mut out = Vec::with_capacity(2 * words);
+    for v in [&l.birth, &l.survive] {
+        out.extend((0..words).map(|w| {
+            (0..32).fold(0u32, |a, b| {
+                a | (v.get(w * 32 + b).copied().unwrap_or(false) as u32) << b
+            })
+        }));
+    }
+    out
+}
+
+/// Shader dispatches one step of this rule takes: JACA with a blast radius runs a contact pass and
+/// one pass per neighbourhood step of the blast before the step itself.
+fn passes(p: &Params) -> usize {
+    if p.rule == R_JACA && p.thresh > 0 {
+        p.thresh as usize + 2
+    } else {
+        1
+    }
+}
+
 /// The rule's shader parameters, or why it cannot run on the GPU.
 fn rule_params(rule: &Rule) -> Result<Params, ()> {
-    let mut p = Params::default();
+    let mut p = Params {
+        stat: NONE,
+        ..Default::default()
+    };
     match *rule {
-        // B0 Life-like rules run on the CPU as alternating complementary rules (counted in `ticks`).
-        Rule::LifeLike { birth, .. } if birth & 1 == 1 => {
-            return Err(());
+        // B0 Life-like rules alternate complementary rules, by the parity of the CA's step count.
+        Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
+            (p.rule, p.birth, p.survive, p.states) = (R_B0, birth, survive, 2)
         }
         Rule::LifeLike { birth, survive } => {
             (p.rule, p.birth, p.survive, p.states) = (0, birth, survive, 2)
@@ -160,6 +245,39 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
                 p.table[k / 4][k % 4] = x;
             }
         }
+        Rule::Jaca(ref j) => {
+            let JacaRule {
+                pos_birth,
+                pos_survive,
+                neg_birth,
+                neg_survive,
+                blast,
+            } = **j;
+            (p.rule, p.states, p.birth, p.survive, p.k1, p.k2, p.thresh) = (
+                R_JACA,
+                3,
+                pos_birth,
+                pos_survive,
+                neg_birth,
+                neg_survive,
+                blast as u32,
+            );
+        }
+        Rule::Margolus(t) => {
+            p.rule = R_MARGOLUS;
+            for (k, &b) in t.iter().enumerate() {
+                p.table[0][k / 4] |= (b as u32) << (8 * (k % 4));
+            }
+        }
+        // The reach and tables go to the aux buffer (see `GpuSim::prepare_aux`).
+        Rule::Ltl(ref l) => (p.rule, p.states) = (R_LTL, l.states as u32),
+        Rule::ForestFire { p: grow, f: strike } => {
+            p.rule = R_FOREST;
+            let (g, s) = (forest_threshold(grow), forest_threshold(strike));
+            (p.table[0][2], p.table[0][3]) = (g[0], g[1]);
+            (p.table[1][0], p.table[1][1]) = (s[0], s[1]);
+        }
+        Rule::Sandpile => p.rule = R_SANDPILE,
         _ => return Err(()),
     }
     Ok(p)
@@ -168,6 +286,75 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
 /// Can this rule run on the GPU?
 pub fn supports_rule(rule: &Rule) -> bool {
     rule_params(rule).is_ok()
+}
+
+/// A paced display (a wallpaper, a screen saver, the app at a set speed) steps on the GPU from
+/// this many cells, when the policy is automatic. Below it the processor's step and the GPU's
+/// round trip cost about the same; above it the GPU frees the processor. Measured with
+/// `examples/bench.rs` (see its `--paced` table).
+pub const GPU_PACED_CELLS: usize = 16_000;
+
+/// An unpaced run (`jetcarp run`, scripts, the MCP server, maximum speed) steps on the GPU from
+/// this many neighbour reads per generation (cells times neighbours, summed over every CA's
+/// passes), when the policy is automatic. Measured with `examples/bench.rs`.
+pub const GPU_UNPACED_READS: u64 = 1_000_000;
+
+/// A run of a known length steps on the GPU, when the policy is automatic, once its neighbour
+/// reads in all (per generation times generations) reach this many, even below
+/// [`GPU_UNPACED_READS`] per generation: about 40 ms of work for 32 threads of the Radeon 8060S
+/// machine's processor (2 to 4 billion reads a second), which is what opening the GPU costs with
+/// its self-test cached. The 1,500 generations of the book's JACA scenes (120,000 cells or fewer)
+/// ran 7 to 17 times faster on the GPU, opening included.
+pub const GPU_UNPACED_RUN_READS: u64 = 100_000_000;
+
+/// Neighbour reads one generation of the world's enabled CAs makes: cells times neighbours (the
+/// tiling's mean for each CA's neighbourhood), summed over each CA's passes.
+pub fn neighbour_reads(world: &World) -> u64 {
+    let n = world.topo.len() as u64;
+    let degree = |nb: jetcarp_core::Nb| -> f64 {
+        let k = nb as usize;
+        match &world.topo.storage {
+            Storage::Lattice(g) => {
+                let types = (g.ntypes as usize).max(1);
+                g.offsets[k].iter().map(|o| o.len()).sum::<usize>() as f64 / types as f64
+            }
+            Storage::Explicit(e) => e.csr[k].nb.len() as f64 / n.max(1) as f64,
+        }
+    };
+    world
+        .cas
+        .iter()
+        .filter(|c| c.enabled)
+        .map(|c| (n as f64 * degree(c.nb)) as u64 * c.steps_per_gen as u64)
+        .sum()
+}
+
+impl GpuSim {
+    /// Is the world large enough that the GPU beats the processor (the automatic policy)? A
+    /// paced display from [`GPU_PACED_CELLS`] cells, anything else from [`GPU_UNPACED_READS`]
+    /// neighbour reads per generation. False when no running CA can run on the GPU.
+    pub fn worth(world: &World, paced: bool) -> bool {
+        let runs = world
+            .cas
+            .iter()
+            .any(|c| c.enabled && supports_rule(&c.rule));
+        runs && if paced {
+            world.topo.len() >= GPU_PACED_CELLS
+        } else {
+            neighbour_reads(world) >= GPU_UNPACED_READS
+        }
+    }
+
+    /// [`GpuSim::worth`] for an unpaced run of `gens` generations: also when the run's reads in
+    /// all reach [`GPU_UNPACED_RUN_READS`].
+    pub fn worth_run(world: &World, gens: u64) -> bool {
+        GpuSim::worth(world, false)
+            || (world
+                .cas
+                .iter()
+                .any(|c| c.enabled && supports_rule(&c.rule))
+                && neighbour_reads(world).saturating_mul(gens) >= GPU_UNPACED_RUN_READS)
+    }
 }
 
 /// How a call to [`GpuSim::run`] ended.
@@ -198,7 +385,35 @@ struct GpuField {
     valid: bool,
     /// GPU copy is newer than the world's field.
     dirty: bool,
+    /// A sandpile's field: one grain count per word, and a snapshot of whole words.
+    height: bool,
+    /// The JACA CA (by id) whose annihilation glow the cells carry in bits 8-15.
+    glow_owner: Option<u32>,
 }
+
+/// One section of the aux buffer.
+#[derive(Clone, PartialEq)]
+enum AuxKey {
+    /// A Larger than Life reach: neighbourhood (0 Moore, 1 von Neumann, 2 cross) and range.
+    Reach(u8, u8),
+    /// Larger than Life birth and survival bits.
+    Table(Vec<u32>),
+    /// A patch's open boundary cells, one bit each.
+    Open,
+}
+
+/// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
+struct ReachSec {
+    words: Vec<u32>,
+    max: u32,
+}
+
+/// Reaches built for one topology (held weakly, so a world's old tiling is freed), by
+/// (neighbourhood, range).
+type ReachCache = Option<(
+    Weak<Topology>,
+    HashMap<(u8, u8), Result<Arc<ReachSec>, String>>,
+)>;
 
 struct Resident {
     topo: Arc<Topology>,
@@ -207,6 +422,14 @@ struct Resident {
     gx: u32,
     fields: Vec<Option<GpuField>>,
     rev: u64,
+    /// The aux buffer, bound as group 2: the sections in `aux_keys` (at `aux_at`), `aux_len`
+    /// words in all, then room for JACA's blast zone (`zone_words`: 2n when a blast runs).
+    aux: wgpu::Buffer,
+    aux_keys: Vec<AuxKey>,
+    aux_at: Vec<u32>,
+    aux_len: u32,
+    zone_words: usize,
+    bind2: wgpu::BindGroup,
 }
 
 /// A GPU stepper bound to one `wgpu` device. Keeps the running fields on the GPU between calls
@@ -218,9 +441,13 @@ pub struct GpuSim {
     max_cells: usize,
     layout1: wgpu::BindGroupLayout,
     layout0: wgpu::BindGroupLayout,
+    layout2: wgpu::BindGroupLayout,
     step: wgpu::ComputePipeline,
     pack: wgpu::ComputePipeline,
     control: wgpu::ComputePipeline,
+    contact: wgpu::ComputePipeline,
+    dilate: wgpu::ComputePipeline,
+    reaches: Mutex<ReachCache>,
     /// Applies reseed edits to a resident field (`edit.wgsl`).
     edit: wgpu::ComputePipeline,
     layout_e: wgpu::BindGroupLayout,
@@ -231,62 +458,81 @@ pub struct GpuSim {
     res: Option<Resident>,
     /// Generations per batch, adapted to keep each batch near the target time.
     batch_hint: u64,
+    /// The world as it was when the current run began (see [`Before`]).
+    before: Option<Before>,
+    /// Why this stepper no longer runs anything: its device failed during a run.
+    broken: Option<String>,
+    /// Tests: the batch (1 for the next run's first) that fails, and whether it fails after the
+    /// engine has recorded it.
+    fault: Option<(u32, bool)>,
+}
+
+/// What a world was when a run began, so that a run failing part way puts it back (#13): its
+/// generation, log, period watch, script and reseed state, CAs and every field as they were. The
+/// fields' cells are not copied up front, since the GPU leaves the world's copies alone until the
+/// run reads them back; a field the run changes before then (a field read back because it stopped
+/// running, reseed edits made on the world's copy) is copied just before.
+struct Before {
+    /// The world without its fields.
+    meta: World,
+    fields: usize,
+    /// Each field's lost grains (a sandpile's, counted at every batch).
+    lost: Vec<u64>,
+    /// Fields the run changed, as they were.
+    saved: Vec<Option<jetcarp_core::world::Field>>,
+}
+
+impl Before {
+    fn of(world: &mut World) -> Before {
+        let fields = std::mem::take(&mut world.fields);
+        let meta = world.clone();
+        world.fields = fields;
+        Before {
+            meta,
+            fields: world.fields.len(),
+            lost: world.fields.iter().map(|f| f.lost).collect(),
+            saved: vec![None; world.fields.len()],
+        }
+    }
+
+    /// Field `f` is about to change: keep it as it was, the first time.
+    fn keep(&mut self, world: &World, f: usize) {
+        if f < self.fields && self.saved[f].is_none() {
+            self.saved[f] = Some(world.fields[f].clone());
+        }
+    }
+
+    fn restore(mut self, world: &mut World) {
+        let mut fields = std::mem::take(&mut world.fields);
+        fields.truncate(self.fields);
+        for (i, f) in fields.iter_mut().enumerate() {
+            match self.saved[i].take() {
+                Some(was) => *f = was,
+                None => f.lost = self.lost[i],
+            }
+        }
+        *world = self.meta;
+        world.fields = fields;
+    }
 }
 
 impl GpuSim {
-    /// Open the default high-performance adapter without a window (CLI, tests, benchmarks).
+    /// Open the compute adapter the policy chooses ([`select`]), without a window (CLI, tests,
+    /// benchmarks).
     pub fn headless() -> Result<GpuSim, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        check_adapter(&adapter)?;
-        let mut limits = wgpu::Limits::default();
-        let al = adapter.limits();
-        limits.max_storage_buffer_binding_size = al.max_storage_buffer_binding_size;
-        limits.max_buffer_size = al.max_buffer_size;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(GpuSim::new(device, queue, describe(&info)))
+        let (device, queue, name) = select::compute_device("jetcarp-gpu")?;
+        Ok(GpuSim::new(device, queue, name))
     }
 
     /// Use an existing device (for example the app's `egui_wgpu::RenderState` device), after
-    /// checking that its adapter runs compute shaders.
+    /// checking that its adapter is decent and passes the self-test ([`select::verify`]).
     pub fn from_device(
         adapter: &wgpu::Adapter,
         device: wgpu::Device,
         queue: wgpu::Queue,
     ) -> Result<GpuSim, String> {
-        // Windows' software renderer (WARP, which a machine with no graphics card falls back to)
-        // crashes in the simulation's compute shaders (0xC0000005 in d3d10warp.dll, stepping
-        // Life). Mesa's software Vulkan on Linux works, and CI runs the GPU tests on it.
-        let info = adapter.get_info();
-        if cfg!(windows) && info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({}), which the GPU simulation does not use \
-                 on Windows",
-                info.name
-            ));
-        }
-        check_adapter(adapter)?;
-        Ok(GpuSim::new(device, queue, describe(&info)))
+        select::verify(adapter)?;
+        Ok(GpuSim::new(device, queue, describe(&adapter.get_info())))
     }
 
     /// Use an existing device that is known to run compute shaders.
@@ -333,9 +579,13 @@ impl GpuSim {
             label: Some("jetcarp-gpu field"),
             entries: &[storage(0, true), storage(1, false), storage(2, false)],
         });
+        let layout2 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("jetcarp-gpu aux"),
+            entries: &[storage(0, false)],
+        });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("jetcarp-gpu"),
-            bind_group_layouts: &[Some(&layout0), Some(&layout1)],
+            bind_group_layouts: &[Some(&layout0), Some(&layout1), Some(&layout2)],
             immediate_size: 0,
         });
         let pipe = |entry: &str| {
@@ -349,6 +599,7 @@ impl GpuSim {
             })
         };
         let (step, pack, control) = (pipe("step"), pipe("pack"), pipe("control"));
+        let (contact, dilate) = (pipe("contact"), pipe("dilate"));
         let layout_e = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("jetcarp-gpu edits"),
             entries: &[storage(0, true)],
@@ -376,7 +627,7 @@ impl GpuSim {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let ctrl_size = ((CTRL_HEADER + 4 * MAX_BATCH as usize) * 4) as u64;
+        let ctrl_size = ((STAT_BASE + 4 * MAX_ENTRIES) * 4) as u64;
         let ctrl = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("jetcarp-gpu control"),
             size: ctrl_size,
@@ -398,9 +649,13 @@ impl GpuSim {
             max_cells,
             layout0,
             layout1,
+            layout2,
             step,
             pack,
             control,
+            contact,
+            dilate,
+            reaches: Mutex::new(None),
             edit,
             layout_e,
             params,
@@ -409,7 +664,19 @@ impl GpuSim {
             staging: None,
             res: None,
             batch_hint: 4,
+            before: None,
+            broken: None,
+            fault: None,
         }
+    }
+
+    /// Tests: make the `nth` batch from now fail (1: the next run's first; 0: none), as a device
+    /// that fails would: before the engine records it, or with `late` after (as when the engine
+    /// and the GPU disagree). Also lets a stepper broken by such a failure run again.
+    #[doc(hidden)]
+    pub fn fail_batch(&mut self, nth: u32, late: bool) {
+        self.fault = (nth > 0).then_some((nth, late));
+        self.broken = None;
     }
 
     /// Adapter name and backend, for status lines.
@@ -442,21 +709,51 @@ impl GpuSim {
         }
         let mut any = false;
         let mut subs = vec![0usize; world.fields.len()];
+        let mut jaca = vec![false; world.fields.len()];
+        let mut dispatches = 0usize;
         for ca in world.cas.iter().filter(|c| c.enabled) {
             any = true;
-            if rule_params(&ca.rule).is_err() {
-                return Err(format!(
-                    "{} ({}) runs only on the CPU",
-                    ca.name,
-                    ca.notation()
-                ));
+            let cpu_only = || format!("{} ({}) runs only on the CPU", ca.name, ca.notation());
+            let p = rule_params(&ca.rule).map_err(|_| cpu_only())?;
+            let height = world.fields[ca.field].kind == FieldKind::Height;
+            if height != (p.rule == R_SANDPILE)
+                || world.fields[ca.field].kind == FieldKind::Continuous
+            {
+                return Err(cpu_only());
+            }
+            match ca.rule {
+                Rule::Jaca(ref j) => {
+                    // The glow lives in the field's cells, so one JACA CA per field at a time.
+                    if std::mem::replace(&mut jaca[ca.field], true) {
+                        return Err("two JACA CAs running on one field run on the CPU".into());
+                    }
+                    if j.blast > 0 && 2 * n > self.max_cells {
+                        return Err(format!(
+                            "JACA's blast zone for {n} cells exceeds this GPU's buffer limit"
+                        ));
+                    }
+                }
+                Rule::Margolus(_) if world.topo.rows().is_none() => {
+                    return Err("Margolus rules on this tiling run on the CPU".into());
+                }
+                Rule::Ltl(ref l) => {
+                    self.reach(&world.topo, l.hood, l.range)
+                        .map_err(|e| format!("{}: {e}", cpu_only()))?;
+                }
+                Rule::Sandpile if plan.halts.contains(&Halt::Settled) => {
+                    // The CPU's `done` asks whether a sandpile can still topple, which the GPU
+                    // does not measure.
+                    return Err("a done trigger on a sandpile runs on the CPU".into());
+                }
+                _ => {}
             }
             subs[ca.field] += ca.steps_per_gen as usize;
+            dispatches += ca.steps_per_gen as usize * passes(&p);
         }
         if !any {
             return Err("no CA is running".into());
         }
-        let per_gen: usize = subs.iter().sum::<usize>() + plan.running_fields.len() + 1;
+        let per_gen: usize = dispatches + plan.running_fields.len() + 1;
         if per_gen > MAX_ENTRIES {
             return Err("too many steps per generation for the GPU".into());
         }
@@ -480,16 +777,175 @@ impl GpuSim {
         Ok(())
     }
 
+    /// A Larger than Life reach for the shader, built once per topology: on a lattice, per tile
+    /// type a (start, count) pair, then the offsets as (di, dj, type); on a patch, a CSR (n + 1
+    /// offsets, then the cells), at most [`REACH_CAP`] cells.
+    fn reach(&self, topo: &Arc<Topology>, hood: Hood, r: u8) -> Result<Arc<ReachSec>, String> {
+        let mut cache = self.reaches.lock().unwrap_or_else(|e| e.into_inner());
+        let same =
+            |(t, _): &(Weak<Topology>, _)| t.upgrade().is_some_and(|t| Arc::ptr_eq(&t, topo));
+        if !cache.as_ref().is_some_and(same) {
+            *cache = Some((Arc::downgrade(topo), HashMap::new()));
+        }
+        let map = &mut cache.as_mut().unwrap().1;
+        let key = (hood as u8, r);
+        map.entry(key)
+            .or_insert_with(|| {
+                let words_max = match jetcarp_core::ltl::reach(topo, hood, r)? {
+                    Reach::Lattice(per) => {
+                        let mut w = Vec::new();
+                        let mut start = 0u32;
+                        for list in &per {
+                            w.extend_from_slice(&[start, list.len() as u32]);
+                            start += list.len() as u32;
+                        }
+                        for o in per.iter().flatten() {
+                            w.extend_from_slice(&[o.di as u32, o.dj as u32, o.k]);
+                        }
+                        let max = per.iter().map(|l| l.len()).max().unwrap_or(0) as u32;
+                        (w, max)
+                    }
+                    Reach::Explicit(csr) => {
+                        if csr.nb.len() > REACH_CAP.min(self.max_cells) {
+                            return Err(format!(
+                                "its reach on this patch has {} entries, more than the GPU takes ({})",
+                                csr.nb.len(),
+                                REACH_CAP.min(self.max_cells)
+                            ));
+                        }
+                        let max = csr.off.windows(2).map(|w| w[1] - w[0]).max().unwrap_or(0);
+                        let mut w = csr.off;
+                        w.extend_from_slice(&csr.nb);
+                        (w, max)
+                    }
+                };
+                Ok(Arc::new(ReachSec {
+                    words: words_max.0,
+                    max: words_max.1,
+                }))
+            })
+            .clone()
+    }
+
+    /// Make the aux buffer hold the sections the enabled CAs need (see [`AuxKey`]), with room
+    /// after them for JACA's blast zone.
+    fn prepare_aux(&mut self, world: &World) -> Result<(), String> {
+        let n = world.topo.len();
+        let explicit = matches!(world.topo.storage, Storage::Explicit(_));
+        let mut keys: Vec<AuxKey> = Vec::new();
+        let mut blast = false;
+        for ca in world.cas.iter().filter(|c| c.enabled) {
+            let mut add = |k: AuxKey| {
+                if !keys.contains(&k) {
+                    keys.push(k);
+                }
+            };
+            match ca.rule {
+                Rule::Ltl(ref l) => {
+                    let sec = self.reach(&world.topo, l.hood, l.range)?;
+                    add(AuxKey::Reach(l.hood as u8, l.range));
+                    add(AuxKey::Table(ltl_table(l, sec.max)));
+                }
+                Rule::Sandpile if explicit => add(AuxKey::Open),
+                Rule::Jaca(ref j) if j.blast > 0 => blast = true,
+                _ => {}
+            }
+        }
+        let zone_words = if blast { 2 * n } else { 0 };
+        let res = self.res.as_ref().unwrap();
+        if res.aux_keys == keys && res.zone_words >= zone_words {
+            return Ok(());
+        }
+        let mut words: Vec<u32> = Vec::new();
+        let mut at = Vec::new();
+        for k in &keys {
+            at.push(words.len() as u32);
+            match k {
+                AuxKey::Reach(h, r) => {
+                    let hood = [Hood::Moore, Hood::VonNeumann, Hood::Cross][*h as usize];
+                    let sec = self.reach(&world.topo, hood, *r)?;
+                    words.extend_from_slice(&sec.words);
+                }
+                AuxKey::Table(t) => words.extend_from_slice(t),
+                AuxKey::Open => {
+                    let mut bits = vec![0u32; n.div_ceil(32)];
+                    for (i, b) in bits.iter_mut().enumerate() {
+                        for k in 0..32 {
+                            let c = i * 32 + k;
+                            if c < n && world.topo.is_open(c) {
+                                *b |= 1 << k;
+                            }
+                        }
+                    }
+                    words.extend_from_slice(&bits);
+                }
+            }
+        }
+        let total = words.len() + zone_words;
+        if total > self.max_cells {
+            return Err(
+                "the rules' neighbourhood tables and JACA's blast zone exceed this GPU's buffer limit"
+                    .into(),
+            );
+        }
+        let aux = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("jetcarp-gpu aux"),
+            size: (total.max(4) * 4) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        if !words.is_empty() {
+            self.queue
+                .write_buffer(&aux, 0, bytemuck::cast_slice(&words));
+        }
+        let bind2 = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("jetcarp-gpu aux"),
+            layout: &self.layout2,
+            entries: &[entry(0, &aux)],
+        });
+        let res = self.res.as_mut().unwrap();
+        (res.aux, res.bind2) = (aux, bind2);
+        res.aux_keys = keys;
+        res.aux_at = at;
+        res.aux_len = words.len() as u32;
+        res.zone_words = zone_words;
+        Ok(())
+    }
+
     /// Step `gens` generations on the GPU (or until `deadline`, after at least one batch).
     /// The world is fully up to date when this returns. `Err` means nothing ran: run on the CPU.
+    ///
+    /// When the GPU fails part way (a readback that fails, a lost device, the engine and the GPU
+    /// disagreeing about a batch), the world is put back as it was before the run, so its
+    /// generation and log never run ahead of its cells, and this stepper runs nothing more.
     pub fn run(
         &mut self,
         world: &mut World,
         gens: u64,
         deadline: Option<Instant>,
     ) -> Result<Outcome, String> {
+        if let Some(e) = &self.broken {
+            return Err(e.clone());
+        }
         self.check(world)?;
         self.bind_topology(world);
+        self.before = Some(Before::of(world));
+        let out = self.run_batches(world, gens, deadline);
+        let before = self.before.take().expect("taken at the start");
+        if let Err(e) = &out {
+            before.restore(world);
+            self.res = None;
+            self.broken = Some(format!("the GPU failed earlier ({e})"));
+        }
+        out
+    }
+
+    fn run_batches(
+        &mut self,
+        world: &mut World,
+        gens: u64,
+        deadline: Option<Instant>,
+    ) -> Result<Outcome, String> {
         let mut done = 0u64;
         let mut stopped = None;
         while done < gens {
@@ -497,11 +953,14 @@ impl GpuSim {
                 break;
             }
             let plan = world.external_plan();
-            if let Err(e) = self.check_plan(world, &plan) {
+            if let Err(e) = self
+                .check_plan(world, &plan)
+                .and_then(|_| self.prepare_aux(world))
+            {
                 stopped = Some(e);
                 break;
             }
-            self.prepare_fields(world, &plan);
+            self.prepare_fields(world, &plan)?;
             let mut len = (gens - done).min(MAX_BATCH).min(self.batch_hint);
             if let Some(c) = plan.max_gens {
                 len = len.min(c);
@@ -520,7 +979,12 @@ impl GpuSim {
             let want = (target.as_secs_f64() / per_gen.max(1e-7)) as u64;
             self.batch_hint = want.clamp(1, MAX_BATCH).min(self.batch_hint * 4);
         }
-        self.read_back(world, |_| true);
+        // The last readback writes every field or none, and nothing can fail after it, so it
+        // need not keep the fields as they were.
+        let before = self.before.take();
+        let read = self.read_back(world, |_| true);
+        self.before = before;
+        read?;
         let res = self.res.as_mut().unwrap();
         res.rev = world.revision();
         Ok(Outcome {
@@ -648,6 +1112,18 @@ impl GpuSim {
                 },
             ],
         });
+        // A placeholder until `prepare_aux` sizes it.
+        let aux = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("jetcarp-gpu aux"),
+            size: 16,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind2 = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("jetcarp-gpu aux"),
+            layout: &self.layout2,
+            entries: &[entry(0, &aux)],
+        });
         self.res = Some(Resident {
             topo,
             bind0,
@@ -655,19 +1131,53 @@ impl GpuSim {
             gx,
             fields: Vec::new(),
             rev: world.revision(),
+            aux,
+            aux_keys: Vec::new(),
+            aux_at: Vec::new(),
+            aux_len: 0,
+            zone_words: 0,
+            bind2,
         });
     }
 
     /// Make every running field resident and current; read back fields that stopped running.
-    fn prepare_fields(&mut self, world: &mut World, plan: &ExternalPlan) {
+    fn prepare_fields(&mut self, world: &mut World, plan: &ExternalPlan) -> Result<(), String> {
         let running = plan.running_fields.clone();
-        self.read_back(world, |f| !running.contains(&f));
+        // The JACA CA whose glow each running field carries (`check_plan` allows one).
+        let owner = |f: usize| {
+            world
+                .cas
+                .iter()
+                .find(|c| c.enabled && c.field == f && matches!(c.rule, Rule::Jaca(_)))
+                .map(|c| c.id)
+        };
+        let owners: Vec<Option<u32>> = (0..world.fields.len()).map(owner).collect();
+        // Fields that stopped running, or whose glow changes hands, go back to the world first.
+        let moved: Vec<usize> = self.res.as_ref().map_or(vec![], |r| {
+            r.fields
+                .iter()
+                .enumerate()
+                .filter_map(|(f, g)| g.as_ref().map(|g| (f, g)))
+                .filter(|(f, g)| g.valid && owners.get(*f).is_some_and(|o| *o != g.glow_owner))
+                .map(|(f, _)| f)
+                .collect()
+        });
+        self.read_back(world, |f| !running.contains(&f) || moved.contains(&f))?;
         let n = world.topo.len();
         let res = self.res.as_mut().unwrap();
+        for &f in &moved {
+            if let Some(g) = res.fields[f].as_mut() {
+                g.valid = false;
+            }
+        }
         if res.fields.len() < world.fields.len() {
             res.fields.resize_with(world.fields.len(), || None);
         }
         for &fi in &running {
+            let height = world.fields[fi].kind == FieldKind::Height;
+            if res.fields[fi].as_ref().is_some_and(|g| g.height != height) {
+                res.fields[fi] = None;
+            }
             if res.fields[fi].is_none() {
                 let size = (n.max(1) * 4) as u64;
                 let mkb = |label| {
@@ -683,7 +1193,7 @@ impl GpuSim {
                 let bufs = [mkb("jetcarp-gpu field a"), mkb("jetcarp-gpu field b")];
                 let snap = self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("jetcarp-gpu snapshot"),
-                    size: (n.div_ceil(4).max(1) * 4) as u64,
+                    size: snap_bytes(n, height),
                     usage: wgpu::BufferUsages::STORAGE
                         | wgpu::BufferUsages::COPY_DST
                         | wgpu::BufferUsages::COPY_SRC,
@@ -704,6 +1214,8 @@ impl GpuSim {
                     cur: 0,
                     valid: false,
                     dirty: false,
+                    height,
+                    glow_owner: None,
                 });
             }
             let gf = res.fields[fi].as_mut().unwrap();
@@ -711,41 +1223,120 @@ impl GpuSim {
                 continue;
             }
             let f = &world.fields[fi];
-            let packed: Vec<u32> = f
-                .state
-                .par_iter()
-                .zip(f.age.par_iter())
-                .map(|(&s, &a)| s as u32 | (a as u32) << 16)
-                .collect();
+            gf.glow_owner = owners[fi];
             gf.cur = 0;
-            self.queue
-                .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&packed));
-            if let Some(s) = world.watch_snapshot_states(fi) {
-                let mut bytes = s.to_vec();
-                bytes.resize(n.div_ceil(4).max(1) * 4, 0);
-                self.queue.write_buffer(&gf.snap, 0, &bytes);
+            if height {
+                self.queue
+                    .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&f.height));
+                if let Some(h) = world.watch_snapshot_heights(fi) {
+                    let mut words = h.to_vec();
+                    words.resize(n.max(1), 0);
+                    self.queue
+                        .write_buffer(&gf.snap, 0, bytemuck::cast_slice(&words));
+                }
+            } else {
+                // The owner's glow, unless it has none yet for these cells (the CPU starts it
+                // at 0 then).
+                let glow = gf.glow_owner.and_then(|id| {
+                    let ca = world.cas.iter().find(|c| c.id == id)?;
+                    ca.heat.as_ref().map(|h| &h.glow).filter(|g| g.len() == n)
+                });
+                let pack = |(i, (&s, &a)): (usize, (&u8, &u16))| {
+                    let g = glow.map_or(0, |g| g[i] as u32);
+                    s as u32 | g << 8 | (a as u32) << 16
+                };
+                // Waking every worker thread for a small field costs more processor time
+                // than the copy (a wallpaper sends its world each time it changes).
+                let packed: Vec<u32> = if n < PAR_CELLS {
+                    f.state.iter().zip(&f.age).enumerate().map(pack).collect()
+                } else {
+                    f.state
+                        .par_iter()
+                        .zip(f.age.par_iter())
+                        .enumerate()
+                        .map(pack)
+                        .collect()
+                };
+                self.queue
+                    .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&packed));
+                if let Some(s) = world.watch_snapshot_states(fi) {
+                    let mut bytes = s.to_vec();
+                    bytes.resize(n.div_ceil(4).max(1) * 4, 0);
+                    self.queue.write_buffer(&gf.snap, 0, &bytes);
+                }
             }
             gf.valid = true;
             gf.dirty = false;
         }
+        Ok(())
+    }
+
+    /// A CA's shader parameters for this world: the rule's, plus what depends on the topology
+    /// and the aux buffer (`prepare_aux` has run).
+    fn ca_params(&self, world: &World, ci: usize) -> Params {
+        let ca = &world.cas[ci];
+        let mut p = rule_params(&ca.rule).unwrap();
+        p.nb = ca.nb as u32;
+        let res = self.res.as_ref().unwrap();
+        let at = |k: &AuxKey| {
+            res.aux_keys
+                .iter()
+                .position(|x| x == k)
+                .map_or(NONE, |i| res.aux_at[i])
+        };
+        match ca.rule {
+            Rule::Margolus(_) => {
+                // Blocks wrap across the seam only on an axis of even length.
+                if let Some(g) = world.topo.rows() {
+                    p.gg = (g.wrap && g.w % 2 == 0) as u32 | ((g.wrap && g.h % 2 == 0) as u32) << 1;
+                }
+            }
+            Rule::Ltl(ref l) => {
+                let sec = self.reach(&world.topo, l.hood, l.range).unwrap();
+                let table = ltl_table(l, sec.max);
+                p.k1 = at(&AuxKey::Reach(l.hood as u8, l.range));
+                p.k2 = at(&AuxKey::Table(table.clone()));
+                p.gg = (table.len() / 2) as u32;
+            }
+            Rule::Sandpile => {
+                p.k2 = world.topo.center_cell() as u32;
+                p.gg = at(&AuxKey::Open);
+            }
+            _ => {}
+        }
+        p
     }
 
     /// Run one batch of at most `len` generations; returns the generations done.
     fn batch(&mut self, world: &mut World, plan: &ExternalPlan, len: u64) -> Result<u64, String> {
-        let enabled: Vec<_> = world.cas.iter().filter(|c| c.enabled).collect();
+        let enabled: Vec<usize> = (0..world.cas.len())
+            .filter(|&c| world.cas[c].enabled)
+            .collect();
         let nf = world.fields.len();
+        let n = world.topo.len();
         // Last dispatch touching each field in a generation gets the metric flags.
         let mut last = vec![usize::MAX; nf];
         let mut subs = vec![0u64; nf];
-        let mut order = Vec::new();
-        for (ci, ca) in enabled.iter().enumerate() {
-            for _ in 0..ca.steps_per_gen {
+        // Each step of a generation: (index into `enabled`, step within the generation).
+        let mut order: Vec<(usize, u64)> = Vec::new();
+        for (ei, &ci) in enabled.iter().enumerate() {
+            let ca = &world.cas[ci];
+            for s in 0..ca.steps_per_gen as u64 {
                 last[ca.field] = order.len();
-                order.push(ci);
+                order.push((ei, s));
             }
             subs[ca.field] += ca.steps_per_gen as u64;
         }
-        let per_gen = order.len() + plan.running_fields.len() + 1;
+        let rule: Vec<Params> = enabled
+            .iter()
+            .map(|&ci| self.ca_params(world, ci))
+            .collect();
+        let per_gen = order
+            .iter()
+            .map(|&(ei, _)| passes(&rule[ei]))
+            .sum::<usize>()
+            + plan.running_fields.len()
+            + 1;
         let len = len.min((MAX_ENTRIES / per_gen) as u64).max(1);
         let sched = plan
             .watch
@@ -777,15 +1368,6 @@ impl GpuSim {
                 0,
             ];
         }
-        let c32 = |v: u64| v.min(u32::MAX as u64) as u32;
-        let rule: Vec<Params> = enabled
-            .iter()
-            .map(|c| {
-                let mut p = rule_params(&c.rule).unwrap();
-                p.nb = c.nb as u32;
-                p
-            })
-            .collect();
 
         // Parameters and the dispatch list.
         let res = self.res.as_ref().unwrap();
@@ -799,17 +1381,65 @@ impl GpuSim {
                     .map_or(0, |g| g.cur)
             })
             .collect();
+        // Statistics slots in order: (generation, index into `enabled`).
+        let mut stats: Vec<(usize, usize)> = Vec::new();
         let push = |p: Params, bytes: &mut Vec<u8>| {
             let at = bytes.len();
             bytes.resize(at + PARAM_STRIDE, 0);
             bytes[at..at + std::mem::size_of::<Params>()].copy_from_slice(bytemuck::bytes_of(&p));
         };
         for (g, &(compare, take)) in sched.iter().enumerate() {
-            for (d, &ci) in order.iter().enumerate() {
-                let f = enabled[ci].field;
-                let mut p = rule[ci];
+            for (d, &(ei, s)) in order.iter().enumerate() {
+                let ca = &world.cas[enabled[ei]];
+                let f = ca.field;
+                let mut p = rule[ei];
                 p.op = 0;
                 p.gen_slot = g as u32;
+                // The CA's step count before this step, as `CaInstance::ticks` counts them.
+                let ticks = ca.ticks + g as u64 * ca.steps_per_gen as u64 + s;
+                match p.rule {
+                    // B0: the 1-based step number's parity, and whether it is the first step.
+                    R_B0 => p.k1 = ((ticks + 1) & 1) as u32 | ((ticks == 0) as u32) << 1,
+                    R_MARGOLUS => p.k2 = (ticks & 1) as u32,
+                    R_FOREST => {
+                        let key = forest_key(ca.noise, ticks + 1);
+                        (p.table[0][0], p.table[0][1]) = (key as u32, (key >> 32) as u32);
+                    }
+                    R_SANDPILE => {
+                        // Grains drop on the first step of a generation.
+                        p.k1 = if s == 0 { ca.drop_per_gen } else { 0 };
+                        p.stat = stats.len() as u32;
+                        stats.push((g, ei));
+                    }
+                    R_JACA => {
+                        p.stat = stats.len() as u32;
+                        stats.push((g, ei));
+                        if p.thresh > 0 {
+                            // Contact cells into the zone's first half, then one pass per blast
+                            // step, alternating halves; the step reads the half written last.
+                            let (z0, half) = (res.aux_len, n as u32);
+                            let pass = |op, zin, zout| Params {
+                                op,
+                                rule: R_JACA,
+                                nb: p.nb,
+                                gen_slot: g as u32,
+                                zin,
+                                zout,
+                                stat: p.stat,
+                                ..Default::default()
+                            };
+                            push(pass(3, z0, z0), &mut bytes);
+                            list.push((Op::Contact, Some((f, cur[f]))));
+                            for k in 0..p.thresh {
+                                let (zin, zout) = (z0 + (k % 2) * half, z0 + ((k + 1) % 2) * half);
+                                push(pass(4, zin, zout), &mut bytes);
+                                list.push((Op::Dilate, Some((f, cur[f]))));
+                            }
+                            p.zin = z0 + (p.thresh % 2) * half;
+                        }
+                    }
+                    _ => {}
+                }
                 if last[f] == d {
                     p.flags = if compare { FLAG_COMPARE } else { 0 }
                         | if pop_mode != 0 || plan.count_population {
@@ -825,9 +1455,11 @@ impl GpuSim {
             }
             if take {
                 for &f in &plan.running_fields {
+                    let height = res.fields[f].as_ref().is_some_and(|g| g.height);
                     push(
                         Params {
                             op: 1,
+                            rule: height as u32,
                             ..Default::default()
                         },
                         &mut bytes,
@@ -841,8 +1473,10 @@ impl GpuSim {
                         op: 2,
                         gen_slot: g as u32,
                         pop_mode,
-                        pop_n: c32(pop_max),
-                        thresh: c32(pop_min),
+                        pop_n: pop_max as u32,
+                        k1: (pop_max >> 32) as u32,
+                        thresh: pop_min as u32,
+                        k2: (pop_min >> 32) as u32,
                         act_mode: acts.len() as u32,
                         halt_repeat: halt_repeat as u32,
                         compare: compare as u32,
@@ -855,21 +1489,24 @@ impl GpuSim {
             }
         }
         self.queue.write_buffer(&self.params, 0, &bytes);
-        let ctrl_words = CTRL_HEADER + 4 * len as usize;
+        let ctrl_words = if stats.is_empty() {
+            CTRL_HEADER + 4 * len as usize
+        } else {
+            STAT_BASE + 4 * stats.len()
+        };
         let mut init = vec![0u32; ctrl_words];
         for (k, a) in acts.iter().enumerate() {
-            init[2 + k] = c32(a.3);
+            init[2 + k] = a.3.min(u32::MAX as u64) as u32;
         }
         self.queue
             .write_buffer(&self.ctrl, 0, bytemuck::cast_slice(&init));
 
-        let n = world.topo.len() as u32;
         let groups = |items: u32| {
             let gtotal = items.div_ceil(WG).max(1);
             (gtotal.min(res.gx), gtotal.div_ceil(res.gx))
         };
-        let (sx, sy) = groups(n);
-        let (px, py) = groups(n.div_ceil(4));
+        let (sx, sy) = groups(n as u32);
+        let (px, py) = groups((n as u32).div_ceil(4));
         let mut enc = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -880,6 +1517,7 @@ impl GpuSim {
                 label: Some("jetcarp-gpu batch"),
                 timestamp_writes: None,
             });
+            pass.set_bind_group(2, &res.bind2, &[]);
             let mut bound: Option<Op> = None;
             for (k, (op, field)) in list.iter().enumerate() {
                 if bound != Some(*op) {
@@ -887,6 +1525,8 @@ impl GpuSim {
                         Op::Step => &self.step,
                         Op::Pack => &self.pack,
                         Op::Control => &self.control,
+                        Op::Contact => &self.contact,
+                        Op::Dilate => &self.dilate,
                     });
                     bound = Some(*op);
                 }
@@ -896,8 +1536,13 @@ impl GpuSim {
                     pass.set_bind_group(1, &gf.bind[*parity], &[]);
                 }
                 match op {
-                    Op::Step => pass.dispatch_workgroups(sx, sy, 1),
-                    Op::Pack => pass.dispatch_workgroups(px, py, 1),
+                    Op::Step | Op::Contact | Op::Dilate => pass.dispatch_workgroups(sx, sy, 1),
+                    Op::Pack => {
+                        let height = field
+                            .is_some_and(|(f, _)| res.fields[f].as_ref().is_some_and(|g| g.height));
+                        let (x, y) = if height { (sx, sy) } else { (px, py) };
+                        pass.dispatch_workgroups(x, y, 1)
+                    }
                     Op::Control => pass.dispatch_workgroups(1, 1, 1),
                 }
             }
@@ -905,6 +1550,22 @@ impl GpuSim {
         let ctrl_bytes = (ctrl_words * 4) as u64;
         enc.copy_buffer_to_buffer(&self.ctrl, 0, &self.ctrl_read, 0, ctrl_bytes);
         self.queue.submit([enc.finish()]);
+        // Tests: a batch that fails, now (before the engine records it) or after recording.
+        let fails_late = match &mut self.fault {
+            Some((1, late)) => {
+                let late = *late;
+                self.fault = None;
+                if !late {
+                    return Err("injected failure: the batch's results could not be read".into());
+                }
+                true
+            }
+            Some((k, _)) => {
+                *k -= 1;
+                false
+            }
+            None => false,
+        };
         let words: Vec<u32> = map_read(&self.device, &self.ctrl_read, ctrl_bytes)?;
 
         let k = if words[0] != 0 { words[1] as u64 } else { len };
@@ -912,13 +1573,35 @@ impl GpuSim {
             .map(|g| {
                 let m = &words[CTRL_HEADER + 4 * g..CTRL_HEADER + 4 * g + 4];
                 GenMetrics {
-                    population: m[0] as u64,
+                    population: m[0] as u64 | (m[3] as u64) << 32,
                     changed: m[1] as u64,
                     repeat: sched[g].0 && m[2] == 0,
                     counted,
                 }
             })
             .collect();
+        // JACA's counts and sandpiles' lost grains, for the generations done (as `step_ca`
+        // records them, step by step).
+        for (slot, &(g, ei)) in stats.iter().enumerate() {
+            if g as u64 >= k {
+                break;
+            }
+            let w = &words[STAT_BASE + 4 * slot..STAT_BASE + 4 * slot + 4];
+            let ca = &mut world.cas[enabled[ei]];
+            if matches!(ca.rule, Rule::Jaca(_)) {
+                let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
+                heat.last = jetcarp_core::jaca::Stats {
+                    contacts: w[0] as u64,
+                    destroyed: w[1] as u64,
+                    cancelled: w[2] as u64,
+                };
+                heat.total_contacts += w[0] as u64;
+                heat.total_destroyed += w[1] as u64;
+            } else {
+                let f = ca.field;
+                world.fields[f].lost += w[0] as u64 | (w[1] as u64) << 32;
+            }
+        }
         let res = self.res.as_mut().unwrap();
         for (f, &sf) in subs.iter().enumerate() {
             if sf > 0 {
@@ -929,14 +1612,27 @@ impl GpuSim {
         }
         let running = plan.running_fields.clone();
         let this = &*self;
-        let recorded =
-            world.finish_external(&metrics, || this.read_snapshots(&running, n as usize));
+        let snap_failed = std::cell::Cell::new(None);
+        let recorded = world.finish_external(&metrics, || {
+            this.read_snapshots(&running, n).unwrap_or_else(|e| {
+                snap_failed.set(Some(e));
+                vec![]
+            })
+        });
+        if let Some(e) = snap_failed.take() {
+            return Err(format!(
+                "the period watch's snapshot could not be read: {e}"
+            ));
+        }
         if recorded != k {
-            // The engine and the GPU disagree about where the batch ended; drop GPU state.
-            self.res = None;
+            // The engine and the GPU disagree about where the batch ended (`run` puts the world
+            // back and drops the GPU's state).
             return Err(format!(
                 "GPU batch ended after {k} generations but the script moved on or a reseed fired after {recorded}"
             ));
+        }
+        if fails_late {
+            return Err("injected failure after the engine recorded the batch".into());
         }
         let pending = world.take_pending_reseed();
         if !pending.is_empty() {
@@ -997,6 +1693,11 @@ impl GpuSim {
                     if let Some(gf) = other {
                         gf.valid = false;
                     }
+                    if let Some(b) = self.before.as_mut()
+                        && f < world.fields.len()
+                    {
+                        b.keep(world, f);
+                    }
                     if let Some(field) = world.fields.get_mut(f) {
                         edits.apply(field);
                     }
@@ -1005,15 +1706,20 @@ impl GpuSim {
         }
     }
 
-    fn read_snapshots(&self, fields: &[usize], n: usize) -> Vec<(usize, Vec<u8>)> {
+    /// The period-watch snapshots of these fields: (field, states, heights), the states of a
+    /// state field and the grain counts of a sandpile's.
+    fn read_snapshots(&self, fields: &[usize], n: usize) -> Result<Vec<Snap>, String> {
         let res = self.res.as_ref().unwrap();
         fields
             .iter()
             .map(|&f| {
                 let gf = res.fields[f].as_ref().unwrap();
-                let bytes = (n.div_ceil(4).max(1) * 4) as u64;
-                let v: Vec<u8> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
-                (f, v)
+                let bytes = snap_bytes(n, gf.height);
+                Ok(if gf.height {
+                    (f, vec![], self.copy_out(&gf.snap, bytes)?)
+                } else {
+                    (f, self.copy_out(&gf.snap, bytes)?, vec![])
+                })
             })
             .collect()
     }
@@ -1031,47 +1737,127 @@ impl GpuSim {
         map_read(&self.device, &staging, bytes)
     }
 
-    /// Copy dirty fields that `pick` selects back into the world.
-    fn read_back(&mut self, world: &mut World, pick: impl Fn(usize) -> bool) {
+    /// Copy dirty fields that `pick` selects back into the world: states and ages (and the
+    /// owner's JACA glow), or a sandpile's grain counts. Every field is read before any is
+    /// written, so a readback that fails leaves the world as it was. During a run, a field read
+    /// back is first kept in [`Before`].
+    fn read_back(&mut self, world: &mut World, pick: impl Fn(usize) -> bool) -> Result<(), String> {
         let n = world.topo.len();
         let bytes = (n.max(1) * 4) as u64;
-        let Some(res) = self.res.as_mut() else { return };
-        for (fi, gf) in res.fields.iter_mut().enumerate() {
-            let Some(gf) = gf.as_mut() else { continue };
-            if !gf.dirty || !pick(fi) {
-                continue;
-            }
-            if self.staging.as_ref().is_none_or(|s| s.size() < bytes) {
-                self.staging = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("jetcarp-gpu field readback"),
-                    size: bytes,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }));
-            }
-            let staging = self.staging.as_ref().unwrap();
-            let mut enc = self.device.create_command_encoder(&Default::default());
-            enc.copy_buffer_to_buffer(&gf.bufs[gf.cur], 0, staging, 0, bytes);
-            self.queue.submit([enc.finish()]);
-            let slice = staging.slice(0..bytes);
-            slice.map_async(wgpu::MapMode::Read, |_| {});
-            let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-            {
-                let view = slice.get_mapped_range().expect("mapped readback");
-                let words: &[u32] = bytemuck::cast_slice(&view);
-                let f = &mut world.fields[fi];
-                f.state
-                    .par_iter_mut()
-                    .zip(f.age.par_iter_mut())
-                    .zip(words[..n].par_iter())
-                    .for_each(|((s, a), &x)| {
-                        *s = (x & 0xff) as u8;
-                        *a = (x >> 16) as u16;
-                    });
-            }
-            staging.unmap();
-            gf.dirty = false;
+        let Some(res) = self.res.as_ref() else {
+            return Ok(());
+        };
+        let todo: Vec<usize> = res
+            .fields
+            .iter()
+            .enumerate()
+            .filter(|(fi, gf)| gf.as_ref().is_some_and(|g| g.dirty) && pick(*fi))
+            .map(|(fi, _)| fi)
+            .collect();
+        if todo.is_empty() {
+            return Ok(());
         }
+        let total = bytes * todo.len() as u64;
+        if self.staging.as_ref().is_none_or(|s| s.size() < total) {
+            self.staging = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("jetcarp-gpu field readback"),
+                size: total,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        let staging = self.staging.as_ref().unwrap();
+        let mut enc = self.device.create_command_encoder(&Default::default());
+        for (k, &fi) in todo.iter().enumerate() {
+            let gf = res.fields[fi].as_ref().unwrap();
+            enc.copy_buffer_to_buffer(&gf.bufs[gf.cur], 0, staging, k as u64 * bytes, bytes);
+        }
+        self.queue.submit([enc.finish()]);
+        let slice = staging.slice(0..total);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| format!("GPU poll: {e}"))?;
+        rx.recv()
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("GPU readback: {e}"))?;
+        if let Some(b) = self.before.as_mut() {
+            for &fi in &todo {
+                b.keep(world, fi);
+            }
+        }
+        {
+            let view = slice.get_mapped_range().map_err(|e| format!("{e:?}"))?;
+            let all: &[u32] = bytemuck::cast_slice(&view);
+            for (k, &fi) in todo.iter().enumerate() {
+                let gf = res.fields[fi].as_ref().unwrap();
+                let words = &all[k * n.max(1)..k * n.max(1) + n];
+                let f = &mut world.fields[fi];
+                if gf.height {
+                    f.height.copy_from_slice(words);
+                    continue;
+                }
+                let unpack = |((s, a), &x): ((&mut u8, &mut u16), &u32)| {
+                    *s = (x & 0xff) as u8;
+                    *a = (x >> 16) as u16;
+                };
+                // Waking every worker thread for a small field costs more processor time than
+                // the copy (a wallpaper reads its world back every frame).
+                let small = n < PAR_CELLS;
+                if small {
+                    f.state
+                        .iter_mut()
+                        .zip(f.age.iter_mut())
+                        .zip(words)
+                        .for_each(unpack);
+                } else {
+                    f.state
+                        .par_iter_mut()
+                        .zip(f.age.par_iter_mut())
+                        .zip(words.par_iter())
+                        .for_each(unpack);
+                }
+                let owner = gf
+                    .glow_owner
+                    .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
+                if let Some(ca) = owner {
+                    let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
+                    heat.glow.resize(n, 0);
+                    let glow = |(g, &x): (&mut u8, &u32)| *g = (x >> 8) as u8;
+                    if small {
+                        heat.glow.iter_mut().zip(words).for_each(glow);
+                    } else {
+                        heat.glow
+                            .par_iter_mut()
+                            .zip(words.par_iter())
+                            .for_each(glow);
+                    }
+                }
+            }
+        }
+        staging.unmap();
+        let res = self.res.as_mut().unwrap();
+        for &fi in &todo {
+            res.fields[fi].as_mut().unwrap().dirty = false;
+        }
+        Ok(())
+    }
+}
+
+/// A field's period-watch snapshot as `World::finish_external` takes it: (field, states,
+/// heights).
+type Snap = (usize, Vec<u8>, Vec<u32>);
+
+/// Bytes of a field's period-watch snapshot on the GPU: a byte per state, or a word per grain
+/// count.
+fn snap_bytes(n: usize, height: bool) -> u64 {
+    if height {
+        (n.max(1) * 4) as u64
+    } else {
+        (n.div_ceil(4).max(1) * 4) as u64
     }
 }
 
@@ -1094,17 +1880,6 @@ fn act_halts(halts: &[Halt]) -> Vec<(u32, u64, u64, u64)> {
             _ => None,
         })
         .collect()
-}
-
-fn check_adapter(adapter: &wgpu::Adapter) -> Result<(), String> {
-    let caps = adapter.get_downlevel_capabilities();
-    if !caps.flags.contains(wgpu::DownlevelFlags::COMPUTE_SHADERS) {
-        return Err(format!(
-            "{} has no compute shaders",
-            adapter.get_info().name
-        ));
-    }
-    Ok(())
 }
 
 fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
@@ -1157,7 +1932,7 @@ pub struct AdapterReport {
     /// DiscreteGpu, IntegratedGpu, VirtualGpu, Cpu, Other.
     pub kind: String,
     pub driver: String,
-    /// The adapter the GPU simulation would pick (high performance, not software).
+    /// The adapter the GPU simulation computes on ([`select::pick`] for computing).
     pub chosen: bool,
     /// Why the GPU simulation cannot use it, if it can't.
     pub problem: Option<String>,
@@ -1176,22 +1951,26 @@ pub fn adapter_reports() -> Vec<AdapterReport> {
 fn adapter_list() -> Vec<AdapterReport> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let chosen = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        ..Default::default()
-    }))
-    .ok()
-    .map(|a| a.get_info())
-    .filter(|i| i.device_type != wgpu::DeviceType::Cpu);
-    pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+    let policy = select::Policy::load();
+    let chosen = select::pick_from(&adapters, &policy, select::Purpose::Compute, None)
+        .ok()
+        .map(|c| c.info);
+    adapters
         .into_iter()
         .map(|a| {
             let info = a.get_info();
-            let problem = if info.device_type == wgpu::DeviceType::Cpu {
-                Some("software adapter: the GPU simulation does not use it".to_string())
-            } else {
-                check_adapter(&a).err()
-            };
+            let problem = select::requirements(
+                &info,
+                &a.limits(),
+                &a.get_downlevel_capabilities(),
+                &policy.want,
+            )
+            .err()
+            .or_else(|| {
+                let t = select::self_test(&a);
+                (!t.passed).then_some(t.note)
+            });
             let driver = [info.driver.as_str(), info.driver_info.as_str()]
                 .iter()
                 .filter(|s| !s.is_empty())
@@ -1199,9 +1978,9 @@ fn adapter_list() -> Vec<AdapterReport> {
                 .collect::<Vec<_>>()
                 .join(" ");
             AdapterReport {
-                chosen: chosen
-                    .as_ref()
-                    .is_some_and(|c| c.name == info.name && c.backend == info.backend),
+                chosen: chosen.as_ref().is_some_and(|c| {
+                    c.name == info.name && c.backend == info.backend && c.driver == info.driver
+                }),
                 name: info.name,
                 backend: format!("{:?}", info.backend),
                 kind: format!("{:?}", info.device_type),
@@ -1210,4 +1989,43 @@ fn adapter_list() -> Vec<AdapterReport> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The integer threshold decides exactly as the CPU's `x / 2^53 < p` in f64, right at the
+    /// boundary, for probabilities of every size.
+    #[test]
+    fn forest_threshold_is_exact() {
+        let two53 = (1u64 << 53) as f64;
+        let mut ps = vec![
+            0.0, 1.0, 0.5, 0.25, 1e-300, 1e-17, 1e-9, 0.01, 0.0001, 0.3, 0.999999,
+        ];
+        ps.extend([
+            1.0 / two53,
+            3.0 / two53,
+            1.0 - 1.0 / two53,
+            f64::MIN_POSITIVE,
+        ]);
+        let mut x = 0x2545_f491_4f6c_dd1du64;
+        for _ in 0..2000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            ps.push((x >> 11) as f64 / two53);
+            ps.push(((x >> 11) as f64 / two53).powi(5));
+        }
+        for p in ps {
+            let [lo, hi] = forest_threshold(p);
+            let t = lo as u64 | (hi as u64) << 32;
+            for x in t.saturating_sub(2)..(t + 2).min(1 << 53) {
+                assert_eq!(x < t, (x as f64) / two53 < p, "p = {p:e}, x = {x}");
+            }
+        }
+        assert_eq!(forest_threshold(f64::NAN), [0, 0]);
+        assert_eq!(forest_threshold(-1.0), [0, 0]);
+        assert_eq!(forest_threshold(2.0), [0, 1 << 21]);
+    }
 }

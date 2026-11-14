@@ -81,7 +81,7 @@ impl Default for HuntForm {
             forever: false,
             seed: 1,
             max_gens: d.max_gens,
-            gpu: false,
+            gpu: true,
             threads: 0,
         }
     }
@@ -280,19 +280,21 @@ impl Worker {
         self.shared.lock().unwrap().messages.push((m, err));
     }
 
-    /// GPU batches for a hunt when asked for and there is a GPU; else the CPU, said once.
-    fn gpu(&mut self, asked: bool) -> bool {
-        if !asked || self.no_gpu {
-            return false;
+    /// A hunt's GPU request: the form's *GPU batches* unticked asks for the CPU; ticked leaves
+    /// it to JETCARP's GPU setting. A missing GPU is said once (the hunt then runs on the CPU,
+    /// with the same finds).
+    fn gpu(&mut self, asked: bool) -> Option<bool> {
+        if !asked {
+            return Some(false);
         }
-        match AppPlatform.soup_batcher() {
-            Ok(_) => true,
-            Err(e) => {
-                self.no_gpu = true;
-                self.msg(format!("No GPU for hunts ({e}); running on the CPU."), true);
-                false
-            }
+        if !self.no_gpu
+            && AppPlatform.gpu_mode() != jetcarp_api::ctx::GpuMode::Off
+            && let Err(e) = AppPlatform.soup_batcher()
+        {
+            self.no_gpu = true;
+            self.msg(format!("No GPU for hunts ({e}); running on the CPU."), true);
         }
+        None
     }
 
     /// *Resume here*: `jobs.resume` in the background (the run gets its own catalog
@@ -302,12 +304,12 @@ impl Worker {
             return;
         }
         let kind = self.lib.job(job).map(|r| r.kind).unwrap_or_default();
-        // Hunts need the GPU soup hunter; an explore search takes the GPU batch stepper when
-        // there is one and runs on the CPU otherwise (its progress says which).
+        // Hunts use the GPU soup hunter and explore searches the GPU batch stepper when there is
+        // one, as JETCARP's GPU setting says; unticked, both run on the CPU.
         let gpu = match kind.as_str() {
             "hunt" => self.gpu(gpu),
-            "explore" => gpu,
-            _ => false,
+            "explore" => (!gpu).then_some(false),
+            _ => None,
         };
         let a = ResumeIn {
             job,
@@ -1156,7 +1158,10 @@ impl DashWindow {
                 ui.end_row();
                 ui.label("Run");
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut f.gpu, "GPU batches");
+                    ui.checkbox(&mut f.gpu, "GPU batches").on_hover_text(
+                        "On the GPU as JETCARP's GPU setting says (automatic: when there is a \
+                         usable one); unticked, on the CPU only. The finds are the same.",
+                    );
                     ui.label("threads");
                     ui.add(egui::DragValue::new(&mut f.threads).range(0..=512))
                         .on_hover_text("0 = all cores");

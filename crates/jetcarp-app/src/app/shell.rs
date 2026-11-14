@@ -6,6 +6,8 @@ use super::*;
 
 /// State of the app's chrome (everything but the world and the tools).
 pub(super) struct ShellState {
+    /// The app's own GPU choice (saved): follow the shared setting, on or off.
+    pub gpu: jetcarp_gpu::select::Own,
     pub layout: panes::Layout,
     pub menu_autohide: bool,
     pub status_bar: bool,
@@ -44,6 +46,7 @@ pub(super) struct ShellState {
 impl ShellState {
     pub fn new() -> ShellState {
         ShellState {
+            gpu: Default::default(),
             layout: panes::Layout::default(),
             menu_autohide: false,
             status_bar: true,

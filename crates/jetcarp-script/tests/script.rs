@@ -953,3 +953,117 @@ fn reseed_functions() {
     );
     assert_eq!(s.log[0], "true true 4");
 }
+
+#[test]
+fn geometry_functions_give_neighbours_live_cells_and_tiles() {
+    let root = temp_root("geometry");
+    let s = ok(
+        r#"
+        // A square grid with wrapped edges: 8 touch and 4 edge neighbours everywhere.
+        let w = world(#{ tiling: "square", size: [8, 8], boundary: "wrap" });
+        w.add_ca("B3/S23", #{ seed: "empty", neighborhood: "edge" });
+        print(`${w.neighbours(9).len()} ${w.neighbours(9, "edge").len()} ${w.neighbours(0).len()}`);
+        let e = w.neighbours(9, "edge");
+        e.sort();
+        print(`${e}`);
+        print(w.cas()[0].neighborhood);
+        // Dead edges: a corner has 3 and 2.
+        let d = world(#{ tiling: "square", size: [8, 8], boundary: "dead" });
+        d.add_ca("B3/S23", #{ seed: "empty" });
+        print(`${d.neighbours(0).len()} ${d.neighbours(0, "edge").len()}`);
+        // Live cells, by index, with their states.
+        w.set_cell(3, 1);
+        w.set_cell(11, 1);
+        print(`${w.live_cells()}`);
+        let g = world(#{ tiling: "square", size: [8, 8] });
+        g.add_ca("B2/S/C3", #{ seed: "empty" });
+        g.set_cell(4, 2);
+        print(`${g.live_cells(1)}`);
+        // A tile: its centre and its corners, in world units.
+        let t = w.tile(9);
+        let mx = 0.0; let my = 0.0;
+        for v in t.vertices { mx += v[0]; my += v[1]; }
+        let k = t.vertices.len();
+        print(`${k} ${(mx / k.to_float() - t.x).abs() < 1e-9} ${(my / k.to_float() - t.y).abs() < 1e-9}`);
+        // On an aperiodic patch too.
+        let h = world(#{ tiling: "hat", level: 2 });
+        h.add_ca("B3/S23", #{ seed: "empty" });
+        let i = h.cells() / 2;
+        print(`${h.neighbours(i).len() > 0} ${h.tile(i).vertices.len()}`);
+        "#,
+        opts(&root),
+    );
+    assert_eq!(s.log[0], "8 4 8");
+    assert_eq!(s.log[1], "[1, 8, 10, 17]");
+    assert_eq!(s.log[2], "edge");
+    assert_eq!(s.log[3], "3 2");
+    assert_eq!(s.log[4], "[[3, 1], [11, 1]]");
+    assert_eq!(s.log[5], "[[4, 2]]");
+    assert_eq!(s.log[6], "4 true true");
+    assert_eq!(s.log[7], "true 13");
+    // Bad input says what is wrong.
+    let e = run(
+        r#"let w = world(#{ tiling: "square", size: [8, 8] }); w.add_ca("Life"); w.neighbours(64);"#,
+        opts(&root),
+    );
+    assert!(
+        !e.ok
+            && e.error
+                .as_ref()
+                .unwrap()
+                .message
+                .contains("outside the grid"),
+        "{:?}",
+        e.error
+    );
+    let e = run(
+        r#"let w = world(#{ tiling: "square", size: [8, 8] }); w.add_ca("Life"); w.neighbours(1, "diagonal");"#,
+        opts(&root),
+    );
+    assert!(
+        !e.ok && e.error.as_ref().unwrap().message.contains("touch"),
+        "{:?}",
+        e.error
+    );
+}
+
+#[test]
+fn the_jaca_territories_example_sorts_the_signs() {
+    let root = temp_root("jaca-territories");
+    let s = ok(
+        include_str!("../scripts/jaca-territories.rhai"),
+        opts(&root),
+    );
+    // "generation G: +1 P, -1 M, balance B, sorted S, fronts F, traded T"
+    let field = |l: &str, k: &str| -> f64 {
+        let v = l.split(&format!("{k} ")).nth(1).unwrap();
+        v.split(',').next().unwrap().trim().parse().unwrap()
+    };
+    let moments: Vec<&String> = s
+        .log
+        .iter()
+        .filter(|l| l.starts_with("generation "))
+        .collect();
+    assert_eq!(moments.len(), 5, "{:?}", s.log);
+    let (first, last) = (moments[0], moments[4]);
+    assert!(field(first, "balance") > 0.45, "{first}");
+    assert!(
+        field(first, "sorted").abs() < 0.1,
+        "a soup is mixed: {first}"
+    );
+    assert!(
+        field(last, "sorted") > 0.9,
+        "territories by the end: {last}"
+    );
+    assert!(
+        field(last, "fronts") < field(first, "fronts"),
+        "{first} / {last}"
+    );
+    let csv = std::fs::read_dir(&root)
+        .unwrap()
+        .flatten()
+        .map(|d| d.path().join("territories.csv"))
+        .find(|p| p.exists())
+        .expect("territories.csv");
+    assert_eq!(std::fs::read_to_string(csv).unwrap().lines().count(), 6);
+}

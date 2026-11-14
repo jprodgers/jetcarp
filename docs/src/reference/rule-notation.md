@@ -52,6 +52,7 @@ be written in any order and are sorted when written back (`B32/S2` becomes `B23/
 | --- | --- |
 | `B3/S23` | Touch neighbours (the default) |
 | `B3/S23V` | A trailing `V` picks edge neighbours, as on LifeWiki |
+| `B3V/S23` | The `V` may also follow the B or S counts; JETCARP writes it at the end |
 | `B2/S34H` | A trailing `H` is accepted and ignored: it records that a rule was meant for hexagons, and the tiling decides what the rule runs on |
 | `B3,10/S2,3` | Commas separate the counts as soon as one of them is 10 or more; counts up to 31 are allowed |
 | `B10,/S2` | A single count above 9 keeps a trailing comma, so it does not read as 1 and 0 |
@@ -64,7 +65,10 @@ Only the birth-first order, with its letters, is read: the older survival/birth 
 
 `B<birth>/S<survival>/C<states>`, with 2 to 255 states. The third part may also be written without
 the `C` (`B2/S/3`) or with a `G` (`B2/S/G3`); JETCARP writes it with `C`. With two states the rule is
-an ordinary B/S rule (`B3/S23/C2` is `B3/S23`). A trailing `V` picks edge neighbours (`B2/S/C3V`).
+an ordinary B/S rule (`B3/S23/C2` is `B3/S23`). A `V` picks edge neighbours. It goes at the end
+(`B2/S/C3V`) or right after the B or S counts (`B3/S23V/C4`, `B47V/S13568/4`); JETCARP writes it at
+the end. A `V` anywhere else is refused with the rule written the right way: `B4V7/S13568/4` gives
+*"a V goes at the end of the rule or right after its B or S counts: B47/S13568/C4V"*.
 
 ## Larger than Life
 
@@ -252,6 +256,8 @@ differs from what was typed:
 | `B3,10/S2,3` | `B3,10/S23` |
 | `B2/S/3`, `B2/S/G3` | `B2/S/C3` (named *Brian's Brain*) |
 | `B3/S23/C2` | `B3/S23` |
+| `B3V/S23` | `B3/S23V` |
+| `B3/S23V/C4`, `B47V/S13568/4` | `B3/S23/C4V`, `B47/S13568/C4V` |
 | `R5,C0,M1,S34..58,B34..45,NM` | `R5,C2,S33-57,B34-45` (named *Bosco's Rule*) |
 | `Rule 30`, `Rule110`, `W 30` | `W30`, `W110`, `W30` |
 | `HexW2 6`, `HexT2 30` | `HexW 6`, `HexT 30` |

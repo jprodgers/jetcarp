@@ -42,6 +42,24 @@ pub fn lock_path(lib: &Library, job: i64) -> PathBuf {
         .join(format!("{job}.lock"))
 }
 
+/// Whether a runner, in this process or another, holds `job`'s lock now (no lock file: no);
+/// `None` when it cannot be told (a file system without locks). The test takes a shared lock
+/// for a moment, so a runner taking the job at that very moment would be refused: ask only
+/// when the heartbeat says the runner may be gone (`jobs.wait` does, to tell a crashed run from
+/// a live one).
+pub fn lock_held(lib: &Library, job: i64) -> Option<bool> {
+    let file = match File::open(lock_path(lib, job)) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(false),
+        Err(_) => return None,
+    };
+    match file.try_lock_shared() {
+        Ok(()) => Some(false),
+        Err(TryLockError::WouldBlock) => Some(true),
+        Err(TryLockError::Error(_)) => None,
+    }
+}
+
 /// A runner's hold on one job: the lock on its lock file, and the `owner` and `heartbeat`
 /// columns. Let go (the lock released, the columns cleared) when dropped.
 #[derive(Debug)]

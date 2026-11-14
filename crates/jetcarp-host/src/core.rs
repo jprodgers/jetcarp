@@ -5,6 +5,10 @@ use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSett
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
+use jetcarp_display::tuning::{Pick, RUNG_SECONDS, TuneEvent, TuneRequest};
+
+mod sweep;
+use jetcarp_gpu::select;
 use jetcarp_mcp::link::{HOST_ENDPOINT, HOST_TOOL, Listener, Pending};
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, VecDeque};
@@ -16,7 +20,7 @@ const DEFAULT_CANVAS: [f64; 2] = [1280.0, 720.0];
 /// Frames per second while everything is paused.
 const PAUSED_FPS: f32 = 5.0;
 /// Share of a frame spent stepping; the rest is for drawing.
-const STEP_SHARE: f32 = 0.6;
+pub(crate) const STEP_SHARE: f32 = 0.6;
 const MEMORY_CHECK: f64 = 2.0;
 /// How often the battery and the processor load are looked at.
 const POWER_CHECK: f64 = 5.0;
@@ -28,6 +32,10 @@ const EXTENSION_WAIT: f64 = 20.0;
 const EXTENSION_SILENCE: f64 = 10.0;
 /// Longest a quitting host waits for its answers to be written back.
 const QUIT_GRACE: f64 = 1.0;
+/// A tuner that has not renewed its hold for this long has gone: the screens carry on.
+const TUNING_SILENCE: f64 = 30.0;
+/// The monitors must stay as they are this long before the host tunes again for them.
+const RETUNE_SETTLE: f64 = 15.0;
 
 /// Whether wallpapers can be shown, as far as the host knows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -49,15 +57,25 @@ pub struct SharedGpu {
 pub use jetcarp_display::painter::device_descriptor;
 
 impl SharedGpu {
-    /// A device with no surface (None when the machine has no GPU).
+    /// A device with no surface, on the adapter the GPU policy chooses for a display (None when
+    /// the machine has no GPU).
     pub fn headless() -> Option<SharedGpu> {
+        SharedGpu::headless_with(wgpu::Features::empty())
+    }
+
+    /// The same, with those of `optional` the adapter has (the tuner's timestamp queries).
+    pub fn headless_with(optional: wgpu::Features) -> Option<SharedGpu> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-                .ok()?;
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&device_descriptor(&adapter))).ok()?;
+        let choice = select::pick(&instance, select::Purpose::Display, None).ok()?;
+        SharedGpu::on_with(choice.adapter, optional)
+    }
+
+    /// A device on this adapter, with those of `optional` it has.
+    fn on_with(adapter: wgpu::Adapter, optional: wgpu::Features) -> Option<SharedGpu> {
+        let mut desc = device_descriptor(&adapter);
+        desc.required_features |= adapter.features() & optional;
+        let (device, queue) = pollster::block_on(adapter.request_device(&desc)).ok()?;
         Some(SharedGpu {
             adapter,
             device,
@@ -123,6 +141,41 @@ pub struct Core {
     /// Asked to quit; the host ends once [`Core::finished`] says so.
     pub quit: bool,
     quit_at: Option<f64>,
+    /// Each monitor's refresh rate, in the OS's order (None: not known).
+    pub monitor_hz: Vec<Option<f32>>,
+    /// When a tuner last renewed its `tuning` hold.
+    tuning_at: Option<f64>,
+    /// A sweep this host is making on the real screen (for `tune`, or because the monitors
+    /// changed).
+    sweep: Option<sweep::HostSweep>,
+    /// What the last sweep reported, for `tune_events`.
+    sweep_events: Vec<TuneEvent>,
+    /// How the last sweep ended, for `status`.
+    sweep_last: Option<Value>,
+    /// Since when the tuned screens' sizes have differed from their tuning.
+    retune_since: Option<f64>,
+    /// The sizes the host last tuned again for by itself, so it tries each arrangement once.
+    retune_tried: Option<Vec<(usize, [u32; 2])>>,
+}
+
+/// The tuned desktop background screens whose canvas is not the one their tuning was found for,
+/// with the canvas each has now: what a tune by itself would be for. `screens` gives each running
+/// screen's place, canvas, and whether it shows.
+pub fn retune_wanted(
+    settings: &HostSettings,
+    screens: &[(Place, [f64; 2], bool)],
+) -> Vec<(usize, [u32; 2])> {
+    screens
+        .iter()
+        .enumerate()
+        .filter(|(_, (place, _, shown))| *place == Place::Wallpaper && *shown)
+        .filter_map(|(i, &(_, canvas, _))| {
+            let s = settings.screens.get(i)?;
+            let t = s.tuning.as_ref().filter(|t| t.rotation == s.rotation)?;
+            (!t.fits_canvas(canvas))
+                .then(|| (i, [canvas[0].round() as u32, canvas[1].round() as u32]))
+        })
+        .collect()
 }
 
 /// The wallpaper screen monitor `i` of `count` showed: the one placed on it, else one across every
@@ -164,6 +217,7 @@ pub fn pause_reasons<'a>(
             "battery" => "on battery".to_string(),
             "busy" => "the processor is busy".into(),
             "covered" => "held by the desktop: windows cover it".into(),
+            "tuning" => "tuning the desktop background for this computer".into(),
             "dark" => "held by the desktop: the screen is locked or off".into(),
             other => format!("held by the desktop ({other})"),
         };
@@ -279,6 +333,13 @@ impl Core {
             login: false,
             quit: false,
             quit_at: None,
+            monitor_hz: vec![],
+            tuning_at: None,
+            sweep: None,
+            sweep_events: vec![],
+            sweep_last: None,
+            retune_since: None,
+            retune_tried: None,
         };
         if let Some(w) = warning {
             core.note(w);
@@ -305,12 +366,15 @@ impl Core {
         self.started.elapsed().as_secs_f64()
     }
 
+    /// A simulator on the shared device, stepping as the desktop background's GPU choice says.
     fn new_sim(&self) -> SimBackend {
         match &self.gpu {
-            Some(g) if self.settings.gpu => {
-                SimBackend::from_device(&g.adapter, g.device.clone(), g.queue.clone())
-            }
-            Some(_) => SimBackend::unavailable("GPU stepping is off in the host's settings".into()),
+            Some(g) => SimBackend::from_device_with(
+                &g.adapter,
+                g.device.clone(),
+                g.queue.clone(),
+                self.settings.gpu_policy(),
+            ),
             None => SimBackend::unavailable("no GPU".into()),
         }
     }
@@ -350,16 +414,21 @@ impl Core {
                 self.settings.screens[i].monitor,
                 self.settings.screens[i].place,
             );
+            let tuned = self.settings.tuning_for(i, &want).cloned();
             let kept = old.get_mut(i).and_then(Option::take);
             if let Some(mut s) = kept.filter(|s| s.stage.rotation() == want) {
                 s.monitor = monitor;
                 s.place = place;
+                s.stage.set_tuned(tuned);
                 out.push(s);
                 continue;
             }
             match self.new_stage(&want, self.canvas) {
-                Ok(stage) => out.push(Screen {
-                    stage,
+                Ok(mut stage) => out.push(Screen {
+                    stage: {
+                        stage.set_tuned(tuned);
+                        stage
+                    },
                     sim: self.new_sim(),
                     monitor,
                     place,
@@ -381,8 +450,15 @@ impl Core {
 
     /// The GPU is ready: stages step on it from now on.
     pub fn attach_gpu(&mut self, gpu: Option<SharedGpu>) {
-        if gpu.is_none() {
-            self.note("no GPU found; running on the CPU");
+        match &gpu {
+            None => self.note("no GPU found; running on the CPU"),
+            Some(g) => {
+                self.note(format!(
+                    "GPU: {}; GPU simulation {}",
+                    jetcarp_gpu::describe(&g.adapter.get_info()),
+                    self.settings.gpu_policy().describe()
+                ));
+            }
         }
         self.gpu = gpu;
         for i in 0..self.screens.len() {
@@ -408,8 +484,14 @@ impl Core {
 
     fn apply_pause(&mut self) {
         let paused = self.user_paused || self.held();
-        for s in &mut self.screens {
-            s.stage.set_paused(paused);
+        // A sweep runs its screen whatever else holds it, and pauses the others, so the host's
+        // load is the swept scene's.
+        let swept = self.sweep.as_ref().and_then(|s| s.screen());
+        for (i, s) in self.screens.iter_mut().enumerate() {
+            s.stage.set_paused(match swept {
+                Some(k) => i != k,
+                None => paused,
+            });
         }
     }
 
@@ -567,6 +649,13 @@ impl Core {
             self.still_at = now;
             self.refresh_still();
         }
+        if self.tuning_at.is_some_and(|t| now - t > TUNING_SILENCE) {
+            self.tuning_at = None;
+            self.set_local_hold("tuning", false);
+            self.note("the tuner stopped answering; carrying on");
+        }
+        self.sweep_step();
+        self.watch_retune();
         let count = self.screens.len().max(1) as f32;
         let budget = Duration::from_secs_f32(STEP_SHARE / self.settings.fps.max(1.0) / count);
         let mut notes = vec![];
@@ -637,8 +726,11 @@ impl Core {
             "extension": self.shell() == Shell::Alive,
             "lock_screen": self.settings.lock_screen.word(),
             "monitors": self.monitors,
+            "monitor_hz": self.monitor_hz,
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
             "fps": self.settings.fps,
+            "tune": self.settings.tune,
+            "tuning": self.tuning_status(),
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
             "rotations": rotation_names(),
@@ -683,7 +775,7 @@ impl Core {
         self.build_screens()
     }
 
-    /// Reads the settings file again.
+    /// Reads the settings file again, and the shared GPU setting.
     pub fn reload(&mut self) -> Result<(), String> {
         let (settings, warning) = HostSettings::load();
         if let Some(w) = warning {
@@ -691,6 +783,11 @@ impl Core {
         }
         self.settings = settings;
         let built = self.build_screens();
+        // The GPU choice may have changed: its own, or the shared setting it follows.
+        let mode = self.settings.gpu_policy().mode;
+        for s in &mut self.screens {
+            s.sim.mode = mode;
+        }
         self.settle_still();
         built
     }
@@ -725,7 +822,7 @@ impl Core {
             };
             let still = Still {
                 monitor: Some(r),
-                png: jetcarp_core::media::encode::png(&image)?,
+                png: still_png(s, &image)?,
             };
             // The primary monitor's first, for a system with one picture.
             if i == primary {
@@ -738,7 +835,7 @@ impl Core {
             let image = first.stage.still().ok_or(none)?;
             stills.push(Still {
                 monitor: None,
-                png: jetcarp_core::media::encode::png(&image)?,
+                png: still_png(first, &image)?,
             });
         }
         desktop_picture::show_each(&stills)
@@ -808,6 +905,64 @@ impl Core {
                 self.set_wallpaper(on)?;
             }
             "open_app" => self.open_app()?,
+            "tuning" => {
+                let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
+                self.tuning_at = on.then(|| self.now());
+                self.set_local_hold("tuning", on);
+                return Ok(json!({"ok": true}));
+            }
+            "tune" if a.get("on").and_then(Value::as_bool) == Some(false) => {
+                self.stop_sweep("stopped")?
+            }
+            "tune" => {
+                let num = |k: &str| a.get(k).and_then(Value::as_f64).map(|x| x as f32);
+                let pick = match a.get("pick") {
+                    Some(Value::String(t)) => Some(Pick::parse(t)?),
+                    Some(Value::Number(n)) => Some(Pick::parse(&n.to_string())?),
+                    _ => None,
+                };
+                let seconds = a
+                    .get("seconds")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(RUNG_SECONDS);
+                self.start_sweep(
+                    TuneRequest {
+                        cpu_percent: num("cpu_limit"),
+                        gpu_percent: num("gpu_limit"),
+                        fps: num("fps"),
+                        screen,
+                        pick,
+                        dry_run: a.get("dry_run").and_then(Value::as_bool).unwrap_or(false),
+                        auto: false,
+                    },
+                    seconds,
+                )?;
+            }
+            "tune_stop" => self.stop_sweep("stopped")?,
+            "tune_events" => {
+                let since = a.get("since").and_then(Value::as_u64).unwrap_or(0) as usize;
+                return Ok(json!({
+                    "events": self.sweep_events.get(since..).unwrap_or(&[]),
+                    "running": self.sweep.is_some(),
+                }));
+            }
+            "scene" => {
+                let i = screen.unwrap_or(0);
+                let s = self
+                    .screens
+                    .get(i)
+                    .ok_or_else(|| format!("there is no screen {i}"))?;
+                let scene = s.stage.scene().ok_or("nothing is showing yet")?;
+                let st = s.stage.status();
+                return Ok(json!({
+                    "screen": i,
+                    "label": st.label,
+                    "cell_px": st.cell_px,
+                    "tuned": st.tuned,
+                    "grid": st.grid,
+                    "scene": serde_json::to_value(&scene).map_err(|e| e.to_string())?,
+                }));
+            }
             "login" => {
                 let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
                 self.set_login(on)?;
@@ -847,6 +1002,73 @@ impl Core {
         p.reply(reply);
     }
 
+    /// Sweeps again when the monitors have changed under tuned screens.
+    fn watch_retune(&mut self) {
+        if self.sweep.is_some()
+            || !self.is_host
+            || !self.settings.tune.auto
+            || self.shell() != Shell::Alive
+        {
+            self.retune_since = None;
+            return;
+        }
+        let screens: Vec<_> = self
+            .screens
+            .iter()
+            .map(|s| (s.place, s.stage.canvas(), !self.hidden(s)))
+            .collect();
+        let want = retune_wanted(&self.settings, &screens);
+        let now = self.now();
+        if want.is_empty() || self.retune_tried.as_ref() == Some(&want) {
+            self.retune_since = None;
+            return;
+        }
+        let since = *self.retune_since.get_or_insert(now);
+        let waiting = self.user_paused
+            || self.local_holds.contains("battery")
+            || self.local_holds.contains("busy")
+            || self.tuning_at.is_some();
+        if now - since < RETUNE_SETTLE || waiting {
+            return;
+        }
+        self.retune_since = None;
+        self.retune_tried = Some(want);
+        let req = TuneRequest {
+            auto: true,
+            ..Default::default()
+        };
+        match self.start_sweep(req, RUNG_SECONDS) {
+            Ok(()) => {
+                self.note("the monitors changed; sweeping the desktop background's sizes again")
+            }
+            Err(e) => self.note(format!("could not sweep again for the new monitors: {e}")),
+        }
+    }
+
+    /// What `status` says of tuning: a sweep here (or a tuner elsewhere holding the host), and how
+    /// the last one ended.
+    fn tuning_status(&self) -> Value {
+        let mut v = json!({
+            "running": self.sweep.is_some() || self.tuning_at.is_some(),
+            "here": self.sweep.is_some(),
+            "auto": self.sweep.as_ref().is_some_and(|s| s.auto()),
+        });
+        if let Some(sw) = &self.sweep {
+            v["sweep"] = sw.progress();
+            v["progress"] = json!(
+                self.sweep_events
+                    .iter()
+                    .rev()
+                    .find(|e| matches!(e, TuneEvent::Rung { .. }))
+                    .map(TuneEvent::describe)
+            );
+        }
+        if let Some(last) = &self.sweep_last {
+            v["last"] = last.clone();
+        }
+        v
+    }
+
     /// A screen's surfaces changed size (physical pixels) or scale (pixels per point).
     pub fn resize_screen(&mut self, i: usize, canvas: [f64; 2], scale: f64) {
         let now = self.now();
@@ -860,9 +1082,59 @@ impl Core {
     }
 }
 
+/// A still picture's PNG, with the scene it shows (its grid's size included) inside, as every
+/// picture JETCARP writes has, so the desktop's picture can be opened and run again.
+fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>, String> {
+    let meta = s
+        .stage
+        .world()
+        .map(jetcarp_core::render::png_metadata)
+        .unwrap_or_default();
+    jetcarp_core::media::encode::png_with_text(image, &meta)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::pause_reasons;
+    use super::{pause_reasons, retune_wanted};
+    use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
+
+    #[test]
+    fn a_tuned_desktop_screen_of_another_size_wants_tuning_again() {
+        let tuned = |rotation: &str| Tuning {
+            rotation: rotation.into(),
+            canvas: [2560, 1440],
+            ..Default::default()
+        };
+        let screen = |rotation: &str, t: Option<Tuning>| ScreenSettings {
+            rotation: rotation.into(),
+            place: Place::Wallpaper,
+            tuning: t,
+            ..Default::default()
+        };
+        let mut s = HostSettings {
+            screens: vec![
+                screen("a", Some(tuned("a"))),
+                screen("b", Some(tuned("old"))),
+                screen("c", None),
+            ],
+            ..Default::default()
+        };
+        let wall = |w: f64, h: f64| (Place::Wallpaper, [w, h], true);
+        // The size it was tuned for: nothing to do.
+        let same = [wall(2560.0, 1440.0); 3];
+        assert!(retune_wanted(&s, &same).is_empty());
+        // A new monitor: only the screen tuned for its rotation wants it.
+        let moved = [wall(1920.0, 1080.0); 3];
+        assert_eq!(retune_wanted(&s, &moved), [(0, [1920, 1080])]);
+        // Not while it is in a window, or not shown.
+        let window = [(Place::Window, [1920.0, 1080.0], true)];
+        assert!(retune_wanted(&s, &window).is_empty());
+        let hidden = [(Place::Wallpaper, [1920.0, 1080.0], false)];
+        assert!(retune_wanted(&s, &hidden).is_empty());
+        // Never tuned: never by itself.
+        s.screens.iter_mut().for_each(|x| x.tuning = None);
+        assert!(retune_wanted(&s, &moved).is_empty());
+    }
 
     #[test]
     fn status_says_why_it_is_paused() {

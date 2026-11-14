@@ -1,5 +1,5 @@
-//! `jetcarp library`: the pattern library (list, show, paste, promote, render, update, remove,
-//! quickstart, info, verify, reverify, compounds, prune) and its ant runs (`library ants`)
+//! `jetcarp library`: the pattern library (list, show, paste, soup, promote, render, update,
+//! remove, quickstart, info, verify, reverify, compounds, prune) and its ant runs (`library ants`)
 //! and movers (`library movers`). Searches that add to it are jobs: `jetcarp search`,
 //! `jetcarp jobs`.
 
@@ -15,6 +15,7 @@ use jetcarp_api::ops::library::{
 use jetcarp_api::ops::quickstart::{
     AddIn, HideIn, IdIn, ListIn, QuickstartAdd, QuickstartList, QuickstartRemove, QuickstartUpdate,
 };
+use jetcarp_api::ops::soup::{LibrarySoup, SoupIn};
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
@@ -43,6 +44,24 @@ enum LibCmd {
     },
     /// Make a scene from several library patterns placed on one grid.
     Paste(PasteArgs),
+    /// Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run
+    /// again with the hunt's engine to check it); --best N gives the N soups of its hunt that made
+    /// the most copies of it instead.
+    Soup {
+        id: String,
+        /// The N soups of the find's hunt that made the most copies of it (then the most
+        /// spaceships). Needs the hunt's seed: the record's (finds from 0.4.2 on) or its job's.
+        #[arg(long)]
+        best: Option<usize>,
+        /// With --best: how many of the hunt's soups to run again, from soup 0 (default: as many
+        /// as the hunt ran, at most 10,000).
+        #[arg(long)]
+        soups: Option<u64>,
+        /// Write the scene here; with --best, the best soup's, and the others beside it as
+        /// NAME-2.json, NAME-3.json, ...
+        #[arg(long)]
+        save: Option<PathBuf>,
+    },
     /// Add a Quick Start entry ("My finds"): a library pattern (ID, which is marked promoted),
     /// a run of an explore search (--search-run), or a scene file (--scene).
     Promote {
@@ -365,6 +384,30 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 gens: p.gens,
             };
             show(&LibraryPaste::run(&cx, a, &Quiet)?, json)
+        }
+        LibCmd::Soup {
+            id,
+            best,
+            soups,
+            save,
+        } => {
+            let a = SoupIn {
+                id,
+                best,
+                soups,
+                save: save.as_deref().map(path),
+            };
+            let p = crate::search_cmd::CliProgress::new(false);
+            let r = LibrarySoup::run(&cx, a, &p);
+            p.finish();
+            let r = r?;
+            if json || r.soups.iter().any(|m| m.saved.is_some()) {
+                return show(&r, json);
+            }
+            // No file: the scene on standard output, the report on standard error.
+            eprint!("{}", jetcarp_api::op::Report::text(&r));
+            println!("{}", r.scene.to_json());
+            Ok(())
         }
         LibCmd::Promote {
             id,

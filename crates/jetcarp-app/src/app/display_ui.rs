@@ -1,5 +1,6 @@
 //! The Display pane: where the grid shows (window, full screen, outputs), the outputs'
-//! arrangement, the cell size, keep-awake, and a pointer to the Screensaver pane.
+//! arrangement, the cell size, keep-awake, and pointers to the Screensaver and Desktop background
+//! panes.
 
 use super::display::{OutputMode, OutputSpec};
 use super::*;
@@ -123,6 +124,18 @@ impl JetcarpApp {
             };
             if ui.button(label).on_hover_text("F12").clicked() {
                 self.saver_toggle(&ctx);
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Desktop background").strong());
+            if ui
+                .button("Desktop background settings…")
+                .on_hover_text(
+                    "The background host: scenes behind your windows, the lock screen, and fitting them to this computer (View → Desktop background settings…)",
+                )
+                .clicked()
+            {
+                self.shell.layout.show_pane("desktop");
             }
         });
         // ------------------------------------------------ monitors

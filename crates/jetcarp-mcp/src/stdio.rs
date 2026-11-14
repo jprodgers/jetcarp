@@ -31,12 +31,16 @@ fn host_control_definition() -> Value {
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, the separate program that keeps live scenes running as wallpapers or windows without the app. Returns its status: each screen's rotation, item, generation and caption, memory use, and recent problems. Fails if the host is not running; the user starts it with `jetcarp host start`. Examples: {}, {\"action\": \"next\"}, {\"action\": \"pause\"}, {\"action\": \"wallpaper\", \"on\": false}.",
+        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it).",
         "inputSchema": {"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "quit"], "description": "Default status. wallpaper puts every screen on the desktop background (GNOME: with the extension) or back in a window; login sets whether the host starts at login; open_app opens the app; reload rereads host.json."},
-            "on": {"type": "boolean", "description": "With wallpaper or login: on or off. Default on."},
-            "name": {"type": "string", "description": "With action rotation: the rotation to run (saved)."},
-            "screen": {"type": "integer", "minimum": 0, "description": "With next, previous, or rotation: which screen, counted from 0. Default: every screen for next and previous, the first for rotation."},
+            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "tune", "scene", "quit"], "description": "Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene."},
+            "on": {"type": "boolean", "description": "With wallpaper, login or tune: on or off. Default on."},
+            "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
+            "screen": {"type": "integer", "minimum": 0, "description": "Counted from 0. Default: every screen for next, previous and tune, else the first."},
+            "cpu_limit": {"type": "number"},
+            "gpu_limit": {"type": "number"},
+            "fps": {"type": "number"},
+            "pick": {"type": ["string", "number"]},
         }, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })

@@ -7,7 +7,7 @@
 //! reach of the box edge during a batch, the batch is undone from the snapshot, the board grows
 //! on the CPU, and the batch runs again, so no grain is ever lost.
 
-use crate::{check_adapter, describe, map_read};
+use crate::map_read;
 use jetcarp_core::pile::lattice::{LatticeBoard, TILE};
 use jetcarp_core::pile::{BoardRef, Ctl, StabStats, Tick, Toppler};
 use std::time::Instant;
@@ -87,37 +87,10 @@ pub struct PileGpu {
 }
 
 impl PileGpu {
-    /// Open the default high-performance adapter without a window.
+    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window.
     pub fn headless() -> Result<PileGpu, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        check_adapter(&adapter)?;
-        let mut limits = wgpu::Limits::default();
-        let al = adapter.limits();
-        limits.max_storage_buffer_binding_size = al.max_storage_buffer_binding_size;
-        limits.max_buffer_size = al.max_buffer_size;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu pile"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(PileGpu::new(device, queue, describe(&info)))
+        let (device, queue, name) = crate::select::compute_device("jetcarp-gpu pile")?;
+        Ok(PileGpu::new(device, queue, name))
     }
 
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> PileGpu {

@@ -91,6 +91,7 @@ fn the_schema_ids_table_is_every_schema_id() {
         [
             "jetcarp-search 1",
             "jetcarp-explore-runs 1",
+            "jetcarp-explore-runs 2",
             "jetcarp-explore-scores 1",
         ]
         .map(String::from),

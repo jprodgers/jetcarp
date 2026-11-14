@@ -44,6 +44,9 @@ pub(super) struct AppSettings {
     /// The main window's size, position and maximised state.
     #[serde(deserialize_with = "lenient")]
     pub window: Option<super::window_place::WindowPlace>,
+    /// The app's own GPU choice: follow JETCARP's shared setting (the default), on or off.
+    #[serde(deserialize_with = "lenient_gpu")]
+    pub gpu: jetcarp_gpu::select::Own,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Debug)]
@@ -55,6 +58,13 @@ pub(super) struct ToolWindowSettings {
 }
 
 pub(super) use super::display::DisplaySettings;
+
+/// The GPU choice, older files' booleans included; follow when it does not parse.
+fn lenient_gpu<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<jetcarp_gpu::select::Own, D::Error> {
+    Ok(jetcarp_gpu::select::Own::deserialize_lenient(d).unwrap_or_default())
+}
 
 /// Any value, or the type's default when it does not parse.
 fn lenient<'de, D, T>(d: D) -> Result<T, D::Error>
@@ -82,8 +92,18 @@ impl Default for AppSettings {
             wallpaper: Default::default(),
             tool_palettes: Default::default(),
             window: None,
+            gpu: Default::default(),
         }
     }
+}
+
+/// The app's own GPU choice as saved in `app.json` (follow when there is none), for reports such
+/// as `jetcarp doctor` made outside the app.
+pub(crate) fn saved_gpu_choice() -> jetcarp_gpu::select::Own {
+    jetcarp_display::host_settings::app_settings_file()
+        .and_then(|f| std::fs::read_to_string(f).ok())
+        .map(|t| AppSettings::from_json(&t).gpu)
+        .unwrap_or_default()
 }
 
 impl AppSettings {
@@ -216,6 +236,7 @@ impl JetcarpApp {
             wallpaper: self.wallpaper.settings.clone(),
             tool_palettes: self.tool_palettes(),
             window: self.shell.window,
+            gpu: self.shell.gpu,
         }
     }
 
@@ -232,6 +253,8 @@ impl JetcarpApp {
         self.wallpaper.settings = s.wallpaper;
         self.set_tool_palettes(s.tool_palettes);
         self.shell.window = s.window;
+        self.shell.gpu = s.gpu;
+        self.sim.mode = crate::simgpu::app_policy(s.gpu).mode;
         let mut reg = crate::popout::Registry::default();
         for (k, t) in s.tool_windows {
             let Some(tool) = menu::ToolWin::from_key(&k) else {
@@ -455,6 +478,29 @@ mod tests {
         let bad = AppSettings::from_json(&v.to_string());
         assert_eq!(bad.window, None);
         assert!(bad.menu_autohide);
+    }
+
+    #[test]
+    fn the_app_s_own_gpu_choice_round_trips_and_defaults_to_following() {
+        use jetcarp_gpu::select::Own;
+        let s = AppSettings::from_json(r#"{"version": 1}"#);
+        assert_eq!(
+            s.gpu,
+            Own::Follow,
+            "files from before follow the shared setting"
+        );
+        let s = AppSettings {
+            gpu: Own::Off,
+            ..AppSettings::default()
+        };
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains(r#""gpu":"off""#), "{text}");
+        assert_eq!(AppSettings::from_json(&text).gpu, Own::Off);
+        // A choice it cannot read follows, and the rest of the file is kept.
+        let bad =
+            AppSettings::from_json(r#"{"version": 1, "gpu": "sometimes", "status_bar": false}"#);
+        assert_eq!(bad.gpu, Own::Follow);
+        assert!(!bad.status_bar);
     }
 
     #[test]

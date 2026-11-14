@@ -19,7 +19,7 @@ Nothing in a run depends on the clock, the thread schedule or the platform's ran
 - **Searches.** Soup `i` of a soup hunt uses a random state computed from the hunt's seed and `i`;
   soup `s` of a census or bounded search uses `seed + s`; the evolutionary search is a pure function
   of its seed; samples of turmite tables are seeded. A search's results never depend on how many
-  threads ran it.
+  threads ran it, and `jetcarp library soup ID` rebuilds the soup a hunt's find came from.
 - **Portable arithmetic.** Tiling construction and Lenia use JETCARP's own deterministic maths for
   exponentials, powers, distances, sines, cosines and angles, built only from the IEEE 754
   operations that every processor rounds the same way (addition, multiplication, division and square
@@ -110,6 +110,14 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   aperiodic patches, several automata with several steps per generation, commands between GPU runs,
   scripts and period detection, priority tables, reseed policies, ages, and rules the GPU cannot run
   (which must fall back to the CPU, never run differently).
+- **More families** (`families.rs`): JACA (with blast radii 0 to 64, its glow and its counts),
+  B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
+  Larger than Life on lattices and patches,
+  the forest fire (at probabilities 0 and 1, and past 2^32 steps),
+  sandpiles (grains dropped and lost, open patch edges, piles past 2^32 grains),
+  on lattices and patches with every edge, through scripts, reseeds and period detection, and
+  every Quick Start entry of these families. Everything the state hash covers must agree, and so
+  must JACA's glow and counts.
 - **The exploratory search's batches** (`batch.rs`): populations, changes, hashes and frames of many
   worlds stepped together.
 - **Soup hunts** (`hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must

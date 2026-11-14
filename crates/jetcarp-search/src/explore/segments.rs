@@ -6,8 +6,12 @@
 //! [`ROW_GROUP_ROWS`] rows and data pages of at most [`PAGE_ROWS`] rows, with statistics per
 //! row group and per page (the column and offset indexes), so a reader that wants a few runs
 //! skips the pages it does not need. Its columns are [`COLUMNS`]: the 21 columns of the working
-//! database's `runs` table, with the 80-byte feature blob as typed columns (the blob's `settle`
-//! and `period` are the run's own `settle` and `period` columns, so they are stored once).
+//! database's `runs` table, with the feature blob as typed columns (the blob's `settle` and
+//! `period` are the run's own `settle` and `period` columns, so they are stored once), JACA's sign
+//! measures last (nullable: null for other families).
+//!
+//! Schema 2 ([`RUN_SCHEMA`]) added the five sign columns; a segment of schema 1 has none, and
+//! reads as runs without sign measures. Columns a reader does not know are skipped.
 //!
 //! A **score sidecar** (`scores-<n>/part-000001.parquet`) holds `id` and `score` for every run of
 //! one segment, in the segment's row order and row groups, so a reader swaps one column for the
@@ -33,7 +37,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The run schema's name and version, in each file's key-value metadata (`jetcarp.schema`).
-pub const RUN_SCHEMA: &str = "jetcarp-explore-runs 1";
+pub const RUN_SCHEMA: &str = "jetcarp-explore-runs 2";
+/// The run schemas this JETCARP reads.
+pub const RUN_SCHEMAS: [&str; 2] = ["jetcarp-explore-runs 1", RUN_SCHEMA];
 /// The score sidecar schema's name and version.
 pub const SCORE_SCHEMA: &str = "jetcarp-explore-scores 1";
 /// Rows per row group.
@@ -66,12 +72,14 @@ pub enum Kind {
     U32,
     /// 32-bit float.
     F32,
+    /// 32-bit float or null.
+    OptF32,
     /// UTF-8 text.
     Str,
 }
 
 /// Every column of a run segment, in file order: (name, type).
-pub const COLUMNS: [(&str, Kind); 38] = [
+pub const COLUMNS: [(&str, Kind); 43] = [
     ("id", Kind::I64),
     ("stage", Kind::I8),
     ("parent", Kind::OptI64),
@@ -110,6 +118,11 @@ pub const COLUMNS: [(&str, Kind); 38] = [
     ("movers", Kind::I32),
     ("mover_speed", Kind::F32),
     ("ts", Kind::I64),
+    ("sign_pos", Kind::OptF32),
+    ("sign_balance", Kind::OptF32),
+    ("sign_sorted", Kind::OptF32),
+    ("sign_trade", Kind::OptF32),
+    ("sign_lost", Kind::OptF32),
 ];
 
 /// Column numbers in [`COLUMNS`].
@@ -138,6 +151,9 @@ pub mod col {
     pub const MOVERS: usize = 35;
     pub const MOVER_SPEED: usize = 36;
     pub const TS: usize = 37;
+    /// JACA's sign measures (schema 2): pos, balance, sorted, trade, lost.
+    pub const SIGN0: usize = 38;
+    pub const SIGN_LOST: usize = 42;
 }
 
 /// A set of columns, one bit per column of [`COLUMNS`].
@@ -156,10 +172,11 @@ pub const fn cols(list: &[usize]) -> Cols {
 
 /// Every column.
 pub const ALL: Cols = (1 << COLUMNS.len()) - 1;
-/// The features (with `settle` and `period`).
+/// The features (with `settle` and `period`, and JACA's sign measures).
 pub const FEATURES: Cols = (((1 << (col::MOVER_SPEED + 1)) - 1) & !((1 << col::FEAT0) - 1))
     | (1 << col::SETTLE)
-    | (1 << col::PERIOD);
+    | (1 << col::PERIOD)
+    | (((1 << (col::SIGN_LOST + 1)) - 1) & !((1 << col::SIGN0) - 1));
 /// What a run's candidate and measures need ([`RunRec::eval`]).
 pub const EVAL: Cols = FEATURES
     | cols(&[
@@ -232,6 +249,20 @@ fn feature_floats(f: &Features) -> [f32; 16] {
     ]
 }
 
+/// A run's sign measures as the four sign columns hold them (None: null).
+fn sign_values(f: &Features) -> [Option<f32>; 5] {
+    match f.signs {
+        Some(s) => [
+            Some(s.pos),
+            Some(s.balance),
+            Some(s.sorted),
+            Some(s.trade),
+            Some(s.lost),
+        ],
+        None => [None; 5],
+    }
+}
+
 fn set_feature(f: &mut Features, k: usize, v: f32) {
     match k {
         0 => f.density = v,
@@ -277,6 +308,7 @@ fn prim(name: &str, k: Kind) -> TypePtr {
             Repetition::REQUIRED,
         ),
         Kind::F32 => (Phys::FLOAT, None, Repetition::REQUIRED),
+        Kind::OptF32 => (Phys::FLOAT, None, Repetition::OPTIONAL),
         Kind::Str => (
             Phys::BYTE_ARRAY,
             Some(LogicalType::String),
@@ -293,7 +325,15 @@ fn prim(name: &str, k: Kind) -> TypePtr {
 }
 
 fn run_schema() -> TypePtr {
-    let fields = COLUMNS.iter().map(|(n, k)| prim(n, *k)).collect();
+    run_schema_of(COLUMNS.len())
+}
+
+/// Columns of a run segment of schema 1 (the first of [`COLUMNS`]).
+const SCHEMA1_COLUMNS: usize = col::TS + 1;
+
+/// The run schema of the first `n` columns.
+fn run_schema_of(n: usize) -> TypePtr {
+    let fields = COLUMNS[..n].iter().map(|(n, k)| prim(n, *k)).collect();
     Arc::new(
         Type::group_type_builder("jetcarp_explore_run")
             .with_fields(fields)
@@ -372,7 +412,7 @@ fn properties(kv: &[(String, String)], t: &Tuning) -> Result<WriterProperties, S
     }
     // Floats: their bytes split into streams compress better than whole values.
     for (n, k) in COLUMNS {
-        if k == Kind::F32 && t.split_floats {
+        if matches!(k, Kind::F32 | Kind::OptF32) && t.split_floats {
             b = b
                 .set_column_dictionary_enabled(ColumnPath::from(n), false)
                 .set_column_encoding(ColumnPath::from(n), Encoding::BYTE_STREAM_SPLIT);
@@ -429,6 +469,21 @@ impl SegmentWriter {
         t: &Tuning,
     ) -> Result<SegmentWriter, String> {
         Self::make(path, kv, run_schema(), RUN_SCHEMA, None, false, t)
+    }
+
+    /// A run segment of schema 1, as JETCARP 0.4.1 and earlier wrote them (no sign columns), to
+    /// test that they still read.
+    #[doc(hidden)]
+    pub fn create_schema1(path: &Path, kv: &[(String, String)]) -> Result<SegmentWriter, String> {
+        Self::make(
+            path,
+            kv,
+            run_schema_of(SCHEMA1_COLUMNS),
+            RUN_SCHEMAS[0],
+            None,
+            false,
+            &Tuning::default(),
+        )
     }
 
     /// A score sidecar at `path`, with row groups of these sizes (its segment's).
@@ -644,6 +699,17 @@ fn write_column(
                 .write_batch(&v, None, None)
                 .map_err(pe)?;
         }
+        Kind::OptF32 => {
+            let all: Vec<Option<f32>> = rows
+                .iter()
+                .map(|r| sign_values(&r.feat)[c - col::SIGN0])
+                .collect();
+            let v: Vec<f32> = all.iter().flatten().copied().collect();
+            let d: Vec<i16> = all.iter().map(|x| x.is_some() as i16).collect();
+            cw.typed::<FloatType>()
+                .write_batch(&v, Some(&d), None)
+                .map_err(pe)?;
+        }
         Kind::Str => {
             let v: Vec<ByteArray> = rows
                 .iter()
@@ -738,6 +804,7 @@ pub enum ColData {
     OptI64(Vec<Option<i64>>),
     I32(Vec<i32>),
     F32(Vec<f32>),
+    OptF32(Vec<Option<f32>>),
     Str(Vec<ByteArray>),
 }
 
@@ -783,7 +850,16 @@ impl Batch {
     pub fn f32(&self, c: usize, i: usize) -> f32 {
         match &self.cols[c] {
             Some(ColData::F32(v)) => v[i],
+            Some(ColData::OptF32(v)) => v[i].unwrap_or(f32::NAN),
             _ => 0.0,
+        }
+    }
+    /// A nullable float column's value (None: null, or the column not read or not in the file).
+    pub fn opt_f32(&self, c: usize, i: usize) -> Option<f32> {
+        match &self.cols[c] {
+            Some(ColData::OptF32(v)) => v[i],
+            Some(ColData::F32(v)) => Some(v[i]),
+            _ => None,
         }
     }
     pub fn bytes(&self, c: usize, i: usize) -> &[u8] {
@@ -816,6 +892,9 @@ impl Batch {
         for k in 0..16 {
             set_feature(&mut feat, k, self.f32(col::FEAT0 + k, i));
         }
+        feat.signs = crate::explore::store::signs_of(
+            [0, 1, 2, 3, 4].map(|k| self.opt_f32(col::SIGN0 + k, i)),
+        );
         RunRec {
             id: self.id(i),
             stage: self.stage(i),
@@ -885,6 +964,11 @@ impl Batch {
                         })
                         .collect(),
                 ),
+                Kind::OptF32 => ColData::OptF32(
+                    recs.iter()
+                        .map(|r| sign_values(&r.feat)[c - col::SIGN0])
+                        .collect(),
+                ),
                 Kind::Str => ColData::Str(
                     recs.iter()
                         .map(|r| {
@@ -910,7 +994,8 @@ impl Batch {
 enum ColReader {
     I64(ColumnReaderImpl<Int64Type>, bool),
     I32(ColumnReaderImpl<Int32Type>),
-    F32(ColumnReaderImpl<FloatType>),
+    /// Nullable when the flag is set.
+    F32(ColumnReaderImpl<FloatType>, bool),
     Str(ColumnReaderImpl<ByteArrayType>),
 }
 
@@ -940,7 +1025,8 @@ impl ColReader {
             Kind::I64 | Kind::U64 => ColReader::I64(get_typed_column_reader(r), false),
             Kind::OptI64 => ColReader::I64(get_typed_column_reader(r), true),
             Kind::I32 | Kind::I8 | Kind::U32 => ColReader::I32(get_typed_column_reader(r)),
-            Kind::F32 => ColReader::F32(get_typed_column_reader(r)),
+            Kind::F32 => ColReader::F32(get_typed_column_reader(r), false),
+            Kind::OptF32 => ColReader::F32(get_typed_column_reader(r), true),
             Kind::Str => ColReader::Str(get_typed_column_reader(r)),
         }
     }
@@ -949,7 +1035,7 @@ impl ColReader {
         let done = match self {
             ColReader::I64(r, _) => r.skip_records(n),
             ColReader::I32(r) => r.skip_records(n),
-            ColReader::F32(r) => r.skip_records(n),
+            ColReader::F32(r, _) => r.skip_records(n),
             ColReader::Str(r) => r.skip_records(n),
         }
         .map_err(pe)?;
@@ -980,9 +1066,20 @@ impl ColReader {
                 let mut v = Vec::with_capacity(n);
                 (read_n(r, n, None, &mut v)?, ColData::I32(v))
             }
-            ColReader::F32(r) => {
+            ColReader::F32(r, false) => {
                 let mut v = Vec::with_capacity(n);
                 (read_n(r, n, None, &mut v)?, ColData::F32(v))
+            }
+            ColReader::F32(r, true) => {
+                let mut v = Vec::with_capacity(n);
+                let mut def = Vec::with_capacity(n);
+                let got = read_n(r, n, Some(&mut def), &mut v)?;
+                let mut it = v.into_iter();
+                let full = def
+                    .iter()
+                    .map(|d| if *d > 0 { it.next() } else { None })
+                    .collect();
+                (got, ColData::OptF32(full))
             }
             ColReader::Str(r) => {
                 let mut v = Vec::with_capacity(n);
@@ -1000,8 +1097,9 @@ impl ColReader {
 pub struct Segment {
     pub path: PathBuf,
     reader: SerializedFileReader<PosFile>,
-    /// Column numbers of [`COLUMNS`] in this file, in file order (a sidecar: id and score).
-    map: Vec<usize>,
+    /// Column numbers of [`COLUMNS`] in this file, in file order (a sidecar: id and score; None:
+    /// a column this JETCARP does not know, skipped).
+    map: Vec<Option<usize>>,
 }
 
 impl Segment {
@@ -1023,15 +1121,13 @@ impl Segment {
         .map_err(|e| format!("{}: {}", path.display(), pe(e)))?;
         let schema = reader.metadata().file_metadata().schema_descr();
         let names: Vec<String> = schema.columns().iter().map(|c| c.name().into()).collect();
-        let map = names
+        let map: Vec<Option<usize>> = names
             .iter()
-            .map(|n| {
-                COLUMNS
-                    .iter()
-                    .position(|(m, _)| m == n)
-                    .ok_or_else(|| format!("{}: unknown column {n}", path.display()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|n| COLUMNS.iter().position(|(m, _)| m == n))
+            .collect();
+        if !map.contains(&Some(col::ID)) {
+            return Err(format!("{}: no id column", path.display()));
+        }
         Ok(Segment {
             path: path.to_path_buf(),
             reader,
@@ -1069,7 +1165,7 @@ impl Segment {
     }
 
     fn file_col(&self, c: usize) -> Option<usize> {
-        self.map.iter().position(|x| *x == c)
+        self.map.iter().position(|x| *x == Some(c))
     }
 
     /// A row group's smallest and largest value of an integer column (from its statistics).
@@ -1180,7 +1276,8 @@ impl Segment {
         want: Cols,
     ) -> Result<Vec<(usize, ColReader)>, String> {
         let mut out = Vec::new();
-        for (k, &c) in self.map.iter().enumerate() {
+        for (k, c) in self.map.iter().enumerate() {
+            let Some(c) = *c else { continue };
             if want & (1 << c) != 0 {
                 let r = g.get_column_reader(k).map_err(pe)?;
                 out.push((c, ColReader::new(r, COLUMNS[c].1)));

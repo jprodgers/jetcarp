@@ -373,8 +373,8 @@ fn ai_control_window_on_the_quick_start() {
 }
 
 /// Tutorial 1 (`tutorials/first-wallpaper.md`): a Quick Start entry opened, its palette list
-/// open in the CAs pane; then the Screensaver pane, with the world saved as a profile and the
-/// Background host section open (its rotation is the host settings', *My wallpaper* in the book's
+/// open in the CAs pane; then the Screensaver pane, with the world saved as a profile; then the
+/// Desktop background pane (its rotation is the host settings', *My wallpaper* in the book's
 /// picture).
 #[test]
 #[ignore]
@@ -421,13 +421,144 @@ fn shots_wallpaper() {
         h.escape();
     }
     assert_eq!(h.app.shell.display.screensaver.profile, name);
+    // Back to the pane's top.
+    h.scroll(egui::pos2(200.0, 300.0), -4000.0);
+    h.find("Start the screensaver");
+    h.steady();
+    h.shot("wallpaper-screensaver-pane");
+    // The Desktop background pane, from the link at the Screensaver pane's foot.
     h.app
         .display
         .host
         .test_extension(jetcarp_display::gnome::ExtensionState::NotInstalled);
-    h.click("Background host");
+    h.action(menu::Action::Pane("desktop"));
+    h.find("Fit to this computer…");
     h.steady();
-    h.shot("wallpaper-screensaver-pane");
+    h.shot("wallpaper-desktop-pane");
+}
+
+/// The Desktop background pane after *Fit to this computer* (`guides/wallpapers.md`): each scene's
+/// cards, with their pictures. A real sweep saved in the scratch settings is shown when there is
+/// one (`jetcarp host tune` run with the same `JETCARP_CONFIG_DIR` first); else two scenes' cards
+/// are made up here, their pictures drawn on the processor.
+#[test]
+#[ignore]
+fn shots_desktop_pane_cards() {
+    use jetcarp_display::host_settings::{
+        GpuTiming, HostSettings, Place, Rung, Size, TunedScene, Tuning, crops_dir,
+    };
+    let Some(mut h) = Harness::new(1600, 1000) else {
+        return;
+    };
+    let (mut s, _) = HostSettings::load();
+    let swept = s.screens[0]
+        .tuning
+        .as_ref()
+        .is_some_and(|t| t.scenes.iter().any(|x| !x.rungs.is_empty()));
+    if !swept {
+        s.screens[0].place = Place::Wallpaper;
+        let dir = crops_dir().unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut scenes = vec![];
+        for (k, (name, rule, own)) in [
+            ("profile Life", "B3/S23", 3.0f32),
+            ("profile HighLife", "B36/S23", 4.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut rungs = vec![];
+            for (i, px) in [1.0f32, 2.0, 3.0, 4.0, 6.0, 8.0].into_iter().enumerate() {
+                let (w, h) = (
+                    (192.0 / px).ceil() as u32 + 2,
+                    (120.0 / px).ceil() as u32 + 2,
+                );
+                let mut sc = Scene::new(TilingSpec::rect(
+                    "square",
+                    w.max(8),
+                    h.max(8),
+                    Boundary::Wrap,
+                ));
+                sc.rng_state = 7 + k as u64;
+                sc.cas = vec![CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 })];
+                let mut world = World::from_scene(&sc).unwrap();
+                let _ = world.apply(Command::Step { gens: 30 });
+                let b = world.topo.bounds;
+                let img = jetcarp_core::render::render_view(
+                    &world,
+                    192,
+                    120,
+                    [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0],
+                    px as f64,
+                    &jetcarp_core::render::ViewOptions::default(),
+                );
+                let file = format!("s0-made-up-{k}-{i}.png");
+                std::fs::write(
+                    dir.join(&file),
+                    jetcarp_core::media::encode::png(&img).unwrap(),
+                )
+                .unwrap();
+                let cells = (2560.0 * 1440.0 / (px * px)) as u64;
+                let load = cells as f32 / 1e6;
+                rungs.push(Rung {
+                    size: Size::px(px),
+                    cells,
+                    cpu_percent: 0.1 + 2.0 * load,
+                    gpu_percent: Some(0.8 + 3.0 * load),
+                    p95_ms: 1.5 + 3.0 * load,
+                    fps: 30.0,
+                    on_gpu: cells >= 16_000,
+                    fits: px >= 2.0 || k == 0,
+                    over: (px < 2.0 && k == 1)
+                        .then(|| "processor 8.4% (over 8.0%: the 10% limit, less 20%)".into()),
+                    crop: Some(file),
+                    own: px == own,
+                });
+            }
+            let rec = if k == 0 { 1.0 } else { 2.0 };
+            scenes.push(TunedScene {
+                scene: name.into(),
+                tiling: "square".into(),
+                design_px: own,
+                cell_px: if k == 0 { 2.0 } else { rec },
+                chosen: k == 0,
+                recommended: Size::px(rec),
+                rungs,
+                gpu_timing: GpuTiming::Kernel,
+                ..Default::default()
+            });
+        }
+        s.screens[0].tuning = Some(Tuning {
+            rotation: s.screens[0].rotation.clone(),
+            canvas: [2560, 1440],
+            scale: 1.0,
+            fps: 30.0,
+            scenes,
+            ..Default::default()
+        });
+        s.save().unwrap();
+    }
+    h.app.empty_world();
+    h.app
+        .display
+        .host
+        .test_extension(jetcarp_display::gnome::ExtensionState::Active);
+    h.action(menu::Action::Pane("desktop"));
+    h.column(0.62, 0.94);
+    h.frame_with(0.05, vec![]);
+    let pane = h.find("Show on the desktop").center();
+    let bottom = h.o.size()[1] as f32 - 30.0;
+    h.scroll_to("Fit to this computer…", pane, bottom);
+    // Up to the Performance group's top, the cards below it.
+    for _ in 0..40 {
+        if h.o.find("Performance").is_some_and(|r| r.min.y < 60.0) {
+            break;
+        }
+        h.scroll(pane, 60.0);
+    }
+    h.find("Recommended");
+    h.steady();
+    h.shot("desktop-pane-cards");
 }
 
 /// Tutorial 2 (`tutorials/life-on-a-new-tiling.md`): a new empty world, the 2-uniform tiling

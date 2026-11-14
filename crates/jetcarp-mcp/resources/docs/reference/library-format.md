@@ -311,6 +311,14 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `source` | what found it: `search`, `collide A + B`, a scene path; `import <file>` on a record imported from a JSON file before packs replaced that |
 | `date` | when (UTC) |
 
+A record also keeps the run that found it first (in the pattern's `body`, and in a pack as provenance
+row 0's `run`): its source, the tiling with its size and boundary, the random state, the soup's index,
+the density, the generation, the engine and the date. A hunt's find from 0.4.2 on also keeps `shape`,
+the soup's shape (`rect` or `disc`), and `seed`, the hunt's seed (soup `i` has the random state made
+from the seed and `i`), so `jetcarp library soup` can make its soup, and its hunt's other soups,
+without the hunt's job. A hunt's tiling size is the soup's size in unit cells. The soup's rows are
+sheared as the tiling's lattice is, which the tiling itself gives, so the shear is not kept.
+
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
 rows 1, 2, ...: today `reverified`, which also records a split of a compound (its `source` begins
 `compound-split:`; see [Compounds](#compounds)). The records brought in from CART's catalog and from two early development catalogs are the one
@@ -493,15 +501,38 @@ library when the search's folder is deleted or shared:
 | --- | --- |
 | `target_kind` | `search_run` |
 | `target_id` | `<search uuid>:<run id>`: the search's folder name and the run's id in its [run records](search-runs.md) |
-| `verdict` | `keep`, `maybe` or `drop` (empty for the 1 to 5 ratings of other records) |
-| `rating` | the rating that stands for the verdict: keep 5, maybe 3, drop 1 |
+| `verdict` | `keep`, `maybe` or `drop`; empty for a star, and for the 1 to 5 ratings of other records |
+| `rating` | the rating that stands for the verdict: keep 5, maybe 3, drop 1; 5 for a star |
 | `rater` | who judged: a name, `user` or `model:<name>` |
 | `note` | what was seen, in a sentence |
-| `source` | where it came from: `review` (one at a time), `ratings:<folder>` (a folder of rating files from the clip-rating page; the taste rounds of [the search imported from CART](search-runs.md#the-search-imported-from-cart) are `ratings:ratings1` to `ratings:ratings4`); a folder by its name only, never where it was on the disk |
+| `source` | where it came from: `review` (one at a time), `ratings:<round>` (a ratings file saved by the clip-rating page, `<round>` being the clips folder's name), or `ratings:<folder>` (a folder of rating files; the taste rounds of [the search imported from CART](search-runs.md#the-search-imported-from-cart) are `ratings:ratings1` to `ratings:ratings4`); a folder by its name only, never where it was on the disk |
 | `created` | when (UTC): the rating file's time, or the file's own when it holds none |
 
 Reading a folder of rating files again records only the ratings not already recorded (the same run,
 verdict, note, rater, time and source).
+
+A **star** on a run (the clip-rating page's ★: a run the rater would show someone, beside any
+verdict) is a row on the same target with no verdict and a rating of 5. Verdict counts, `--reviewed`
+and the score's tuning read verdicts only, so they leave stars out, and a pack carries a star as a
+five-star rating.
+
+### The clip-rating page's ratings file
+
+`jetcarp jobs clips --page` writes `index.html` into the clips folder, and its *Save ratings* button
+downloads the ratings as one JSON file, which `jetcarp jobs review JOB --from FILE` reads:
+
+| Key | Holds |
+| --- | --- |
+| `format` | `jetcarp-ratings 1` |
+| `job` | the explore job's id |
+| `search` | the search's uuid; a file for another search is refused |
+| `round` | the clips folder's name: the ratings' source is `ratings:<round>` |
+| `rater` | the name typed on the page (empty: the default rater); `--rater` overrides it |
+| `ratings` | a list of `{"run": id, "verdict": "keep", "maybe", "drop" or null, "star": true or false, "ts": milliseconds since 1970}` |
+| `note` | what the page's note box held; `jobs review` prints it |
+
+Until it is saved, the page keeps the ratings in the browser's local storage, under a key made from
+the hash of the folder's `manifest.json`, so two clips folders never share them.
 
 ## Media files
 

@@ -112,10 +112,13 @@ fn worker_pool(threads: usize, name: &'static str) -> Result<rayon::ThreadPool, 
 pub struct ExploreSpec {
     #[serde(flatten)]
     pub search: Settings,
-    /// Run the rules a GPU can run on the GPU when there is one (a run's own `gpu` option also
-    /// asks for it).
+    /// Asked for the GPU when it was made: run the rules a GPU can run there. With neither this
+    /// nor `cpu`, JETCARP's GPU setting decides at each run (a run's own request wins over both).
     #[serde(default)]
     pub gpu: bool,
+    /// Asked for the CPU only when it was made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cpu: bool,
     /// Stop (paused) when the process uses more memory than this.
     #[serde(
         default,

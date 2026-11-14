@@ -52,9 +52,10 @@ pub struct WallpaperIn {
     /// Generations to run first (on the host's world: only with `fresh`).
     #[serde(default)]
     pub gens: Option<u64>,
-    /// Step on the GPU where the rules allow it (results are identical).
+    /// Step on the GPU where the rules allow it (true), or only on the CPU (false). Default: as
+    /// JETCARP's GPU setting says. Results are identical either way.
     #[serde(default)]
-    pub gpu: bool,
+    pub gpu: Option<bool>,
     /// Colour every CA with this palette first: a name (`reference.palettes` lists them) or hex
     /// colours like `#4fc3ff` or `#103050-#4fc3ff`.
     #[serde(default)]
@@ -185,16 +186,7 @@ impl WorldOp for WallpaperExport {
                     }
                 }
                 let gens = a.gens.unwrap_or(0);
-                if gens > 0 {
-                    match a.gpu.then(|| cx.platform.gpu_stepper()) {
-                        Some(Ok(mut sim)) => {
-                            sim.step_mixed(&mut w, gens)?;
-                        }
-                        _ => {
-                            w.apply(Command::Step { gens })?;
-                        }
-                    }
-                }
+                crate::ctx::step_world(&*cx.platform, &mut w, gens, a.gpu)?;
                 let name = if sc.name.is_empty() {
                     Path::new(source)
                         .file_stem()
@@ -236,14 +228,7 @@ impl WorldOp for WallpaperExport {
                             "too many generations for a grid this size; lower gens or raise cell_px",
                         ));
                     }
-                    match (a.gpu && gens > 0).then(|| cx.platform.gpu_stepper()) {
-                        Some(Ok(mut sim)) => {
-                            sim.step_mixed(&mut fw, gens)?;
-                        }
-                        _ => {
-                            fw.apply(Command::Step { gens })?;
-                        }
-                    }
+                    crate::ctx::step_world(&*cx.platform, &mut fw, gens, a.gpu)?;
                     own = fw;
                     &own
                 } else {

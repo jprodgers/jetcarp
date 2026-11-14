@@ -239,9 +239,11 @@ pub struct RunIn {
     /// Fail unless the final hash equals this (the summary is still returned).
     #[serde(default)]
     pub expect: Option<String>,
-    /// Step on the GPU where the rules allow it (results are identical).
+    /// Step on the GPU where the rules allow it (true), or only on the CPU (false). Default: as
+    /// JETCARP's GPU setting says (automatic: on the GPU once the world is large enough to gain).
+    /// Results are identical either way.
     #[serde(default)]
-    pub gpu: bool,
+    pub gpu: Option<bool>,
     /// Automatic reseed policies to install first: one policy or a list.
     #[serde(default)]
     pub reseed: Option<Value>,
@@ -347,29 +349,7 @@ fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiErro
         w.apply(Command::Reseed { ca: None, mode })?;
     }
     let gens = a.gens;
-    let cpu = format!("cpu ({} threads)", rayon::current_num_threads());
-    let backend = match a.gpu.then(|| cx.platform.gpu_stepper()) {
-        Some(Ok(mut sim)) => {
-            let m = sim.step_mixed(&mut w, gens)?;
-            match m.fallback {
-                None => format!("gpu ({})", sim.name()),
-                Some(why) => format!(
-                    "gpu ({}); {} of {gens} generations on the {cpu}: {why}",
-                    sim.name(),
-                    m.cpu_gens
-                ),
-            }
-        }
-        other => {
-            if gens > 0 {
-                w.apply(Command::Step { gens })?;
-            }
-            match other {
-                Some(Err(e)) => format!("{cpu}; no GPU: {e}"),
-                _ => cpu,
-            }
-        }
-    };
+    let backend = crate::ctx::step_world(&*cx.platform, &mut w, gens, a.gpu)?;
     let seconds = t0.elapsed().as_secs_f64();
     let hash = w.hash_hex();
     let mut png_size = None;

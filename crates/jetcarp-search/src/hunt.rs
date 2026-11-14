@@ -69,6 +69,10 @@ pub struct HuntSpec {
     /// Which new objects get full records (the rest are counted as `unstored` rows).
     #[serde(default)]
     pub store: StorePolicy,
+    /// Stop (paused, resumable) when the process uses more memory than this many GB, as an
+    /// explore search does ([`crate::jobs::over_memory`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_rss_gb: Option<f64>,
 }
 
 /// Which new objects a hunt stores as full catalog records. Spaceships, guns, puffers, and
@@ -128,6 +132,7 @@ impl Default for HuntSpec {
             pop_cap: 0,
             margin: 0,
             store: StorePolicy::default(),
+            max_rss_gb: None,
         }
     }
 }
@@ -146,7 +151,7 @@ impl HuntSpec {
         if !(0.0..=1.0).contains(&self.soup.density) {
             return Err("density must be between 0 and 1".into());
         }
-        Ok(())
+        crate::jobs::check_memory_cap(self.max_rss_gb)
     }
     /// The soup margin in use.
     pub fn margin(&self) -> u32 {
@@ -262,6 +267,9 @@ pub struct HuntProgress {
     pub gpu: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why the run stopped when nobody asked it to (its memory cap).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     pub updated: String,
 }
 
@@ -272,10 +280,14 @@ impl HuntProgress {
             .soups_total
             .map(|t| format!("/{}", group_digits(t)))
             .unwrap_or_default();
+        // Soups count per rule-and-tiling group: "100/100 soups in each of 1,200 groups".
         let groups = if self.groups.len() > 1 {
-            format!(" x {} groups", self.groups.len())
+            format!(
+                " soups in each of {} groups",
+                group_digits(self.groups.len() as u64)
+            )
         } else {
-            String::new()
+            " soups".to_string()
         };
         let classes: Vec<String> = ["spaceship", "oscillator", "still life", "puffer", "gun"]
             .iter()
@@ -286,7 +298,7 @@ impl HuntProgress {
             })
             .collect();
         format!(
-            "hunt {}: {}{}{} soups, {:.0} soups/s, {} objects ({}), {} distinct, {} new{}",
+            "hunt {}: {}{}{}, {:.0} soups/s, {} objects ({}), {} distinct, {} new{}",
             self.job,
             group_digits(self.soups_done),
             total,
@@ -295,7 +307,7 @@ impl HuntProgress {
             group_digits(self.objects),
             classes.join(", "),
             group_digits(self.distinct),
-            self.new_patterns,
+            group_digits(self.new_patterns),
             self.newest
                 .first()
                 .map(|f| format!(" | newest: {} ({})", f.label, f.rule))
@@ -1133,6 +1145,8 @@ fn provenance(
         soup: Some(soup),
         density: Some(spec.soup.density),
         generation: Some(gens),
+        shape: Some(spec.soup.shape),
+        seed: Some(spec.seed),
         jetcarp_version: jetcarp_core::VERSION.into(),
         date: date.into(),
     };
@@ -1151,5 +1165,36 @@ fn ship_record(c: &Census, info: &jetcarp_core::pattern::GunInfo) -> Option<Arc<
             Some(c.intern(&mut cache, rec))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod progress_line_tests {
+    use super::*;
+
+    /// Issue #8: a hunt over many rule-and-tiling groups says its soups are per group.
+    #[test]
+    fn the_progress_line_counts_soups_per_group() {
+        let mut p = HuntProgress {
+            job: 21,
+            soups_done: 100,
+            soups_total: Some(100),
+            distinct: 82_445,
+            new_patterns: 75_657,
+            ..Default::default()
+        };
+        p.groups = vec![Default::default(); 1200];
+        let line = p.line();
+        assert!(
+            line.starts_with("hunt 21: 100/100 soups in each of 1,200 groups, "),
+            "{line}"
+        );
+        assert!(line.contains("82,445 distinct, 75,657 new"), "{line}");
+        p.groups.truncate(1);
+        assert!(
+            p.line().starts_with("hunt 21: 100/100 soups, "),
+            "{}",
+            p.line()
+        );
     }
 }

@@ -92,7 +92,7 @@ pub struct BatchJob {
     pub frames_at: Vec<u32>,
 }
 
-/// What one world did. The three series have `gens + 1` entries: index `t` describes generation
+/// What one world did. The four series have `gens + 1` entries: index `t` describes generation
 /// `t`, and `changed[0]` is 0.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorldTrace {
@@ -102,6 +102,8 @@ pub struct WorldTrace {
     pub changed: Vec<u32>,
     /// Wrapping sum over cells of `(state + 1) * mix(cell)`.
     pub hash: Vec<u32>,
+    /// Cells in state 2 (a JACA world's negative sign; its positive cells are `pop - neg`).
+    pub neg: Vec<u32>,
     /// One frame per `frames_at`, one byte per cell.
     pub frames: Vec<Vec<u8>>,
 }
@@ -114,9 +116,24 @@ impl WorldTrace {
             pop: Vec::with_capacity(n),
             changed: Vec::with_capacity(n),
             hash: Vec::with_capacity(n),
+            neg: Vec::with_capacity(n),
             frames: Vec::new(),
         }
     }
+
+    /// Add generation `t`'s measures of a state array (`changed` against the one before).
+    fn push(&mut self, state: &[u8], changed: u32) {
+        let (p, h) = measure(state);
+        self.pop.push(p);
+        self.hash.push(h);
+        self.changed.push(changed);
+        self.neg.push(count_neg(state));
+    }
+}
+
+/// Cells in state 2 (JACA's negative sign), for [`WorldTrace::neg`].
+pub fn count_neg(state: &[u8]) -> u32 {
+    state.iter().filter(|&&s| s == 2).count() as u32
 }
 
 /// `(pop, hash)` of a state array.
@@ -189,10 +206,7 @@ pub fn trace_world(world: &mut World, gens: u32, frames_at: &[u32]) -> Result<Wo
     }
     let mut tr = WorldTrace::with_capacity(gens);
     let mut prev = field_bytes(&world.fields[0]);
-    let (p, h) = measure(&prev);
-    tr.pop.push(p);
-    tr.changed.push(0);
-    tr.hash.push(h);
+    tr.push(&prev, 0);
     let mut next_frame = 0;
     if frames_at.first() == Some(&0) {
         tr.frames.push(prev.clone());
@@ -201,11 +215,10 @@ pub fn trace_world(world: &mut World, gens: u32, frames_at: &[u32]) -> Result<Wo
     for t in 1..=gens {
         world.step();
         let s = field_bytes(&world.fields[0]);
-        let (p, h) = measure(&s);
-        tr.pop.push(p);
-        tr.hash.push(h);
-        tr.changed
-            .push(s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32);
+        tr.push(
+            &s,
+            s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32,
+        );
         prev.copy_from_slice(&s);
         if frames_at.get(next_frame) == Some(&t) {
             tr.frames.push(prev.clone());
@@ -227,16 +240,28 @@ pub fn trace_world_while(
     window: usize,
     go: &mut dyn FnMut(u32) -> bool,
 ) -> Result<(WorldTrace, u32), String> {
+    trace_world_keeping(world, gens, window, None, go)
+}
+
+/// [`trace_world_while`], also keeping the frame of generation `keep` (a JACA run's
+/// [`trade_gen`](crate::explore::features::trade_gen)) before the last `window` frames when it
+/// was reached and they do not hold it. A run that reaches `gens` then has exactly the trace
+/// [`trace_world`] gives with frames at `keep` and [`frames_for`](crate::explore::features::frames_for).
+pub fn trace_world_keeping(
+    world: &mut World,
+    gens: u32,
+    window: usize,
+    keep: Option<u32>,
+    go: &mut dyn FnMut(u32) -> bool,
+) -> Result<(WorldTrace, u32), String> {
     if world.fields.is_empty() {
         return Err("the world has no field".into());
     }
     let window = window.max(1);
     let mut tr = WorldTrace::with_capacity(gens);
     let mut prev = field_bytes(&world.fields[0]);
-    let (p, h) = measure(&prev);
-    tr.pop.push(p);
-    tr.changed.push(0);
-    tr.hash.push(h);
+    tr.push(&prev, 0);
+    let mut kept = (keep == Some(0)).then(|| prev.clone());
     // The last `window` states, oldest first once `ring` is full (`head` is the oldest).
     let mut ring: Vec<Vec<u8>> = vec![prev.clone()];
     let mut head = 0;
@@ -244,12 +269,14 @@ pub fn trace_world_while(
     for t in 1..=gens {
         world.step();
         let s = field_bytes(&world.fields[0]);
-        let (p, h) = measure(&s);
-        tr.pop.push(p);
-        tr.hash.push(h);
-        tr.changed
-            .push(s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32);
+        tr.push(
+            &s,
+            s.iter().zip(&prev).filter(|(a, b)| a != b).count() as u32,
+        );
         prev.copy_from_slice(&s);
+        if keep == Some(t) {
+            kept = Some(s.clone());
+        }
         if ring.len() < window {
             ring.push(s);
         } else {
@@ -262,6 +289,12 @@ pub fn trace_world_while(
         }
     }
     ring.rotate_left(head);
+    let first = reached + 1 - ring.len() as u32;
+    if let (Some(k), Some(f)) = (keep, kept)
+        && k < first
+    {
+        ring.insert(0, f);
+    }
     tr.frames = ring;
     Ok((tr, reached))
 }

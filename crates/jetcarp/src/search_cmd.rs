@@ -163,9 +163,11 @@ pub struct HuntArgs {
     /// Store every new object as a full record (the policy before wave 4).
     #[arg(long)]
     store_all: bool,
-    /// Run the start of each soup on the GPU (many soups per dispatch; results are identical).
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
+    /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
-    gpu: bool,
+    max_rss_gb: Option<f64>,
 }
 
 #[derive(clap::Args)]
@@ -214,6 +216,9 @@ pub struct BoundedArgs {
     /// Rows per group in the printed report.
     #[arg(long, default_value_t = 12)]
     top: usize,
+    /// Stop (paused, resumable) if the process uses more memory than this many GB.
+    #[arg(long)]
+    max_rss_gb: Option<f64>,
 }
 
 #[derive(clap::Args)]
@@ -427,9 +432,8 @@ pub struct PileArgs {
     /// Skip the full-size pile.png.
     #[arg(long)]
     no_png: bool,
-    /// Topple on the GPU (periodic tilings).
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
 }
 
 #[derive(clap::Args)]
@@ -567,13 +571,22 @@ pub struct ExploreArgs {
     batch: usize,
     #[arg(long, default_value_t = 0)]
     seed: u64,
-    /// Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the
-    /// job); without one, or without this, the CPU runs everything.
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
     /// Stop (paused, resumable) if the process uses more memory than this many GB.
     #[arg(long)]
     max_rss_gb: Option<f64>,
+    /// Score runs with this fitted score model (`jetcarp jobs refit --out` writes one) instead
+    /// of the built-in score; the job keeps a copy, so resuming it keeps the model.
+    #[arg(long)]
+    score: Option<PathBuf>,
+    /// Take parents from this explore job: the JACA rules of its reviewed runs (or its best
+    /// runs), transplanted to other tilings and tuned for balance early in this search.
+    #[arg(long)]
+    parents_from: Option<i64>,
+    /// With --parents-from: the verdicts whose runs to take (default keep,maybe).
+    #[arg(long, requires = "parents_from")]
+    reviewed: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -783,11 +796,14 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         confirm_seeds: Some(a.confirm_seeds),
         batch: Some(a.batch),
         seed: Some(a.seed),
-        gpu: Some(a.gpu),
+        gpu: a.gpu.asked(),
         max_rss_gb: a.max_rss_gb,
+        score: a.score.map(|p| Value::String(p.display().to_string())),
+        parents_from: a.parents_from,
+        parents_reviewed: a.reviewed,
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 
@@ -838,9 +854,10 @@ fn hunt(a: HuntArgs, json: bool) -> Result<()> {
         pop_cap: Some(a.pop_cap),
         margin: Some(a.margin),
         store: Some(store),
+        max_rss_gb: a.max_rss_gb,
     };
     let mut i = start_in("hunt", spec(&s), &a.job)?;
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 
@@ -859,6 +876,7 @@ fn bounded(a: BoundedArgs, json: bool) -> Result<()> {
         max_period: Some(a.max_period),
         soup_radius: a.soup_radius,
         store: Some(!a.no_store),
+        max_rss_gb: a.max_rss_gb,
         ..Default::default()
     };
     let mut i = start_in("search", spec(&s), &a.job)?;
@@ -1026,7 +1044,7 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         reverse: a.reverse.then_some(true),
         preview: a.preview,
         png: a.no_png.then_some(false),
-        gpu: Some(a.gpu),
+        gpu: a.gpu.asked(),
         ..Default::default()
     };
     match folder {
@@ -1049,7 +1067,7 @@ pub fn pile(a: PileArgs, json: bool) -> Result<()> {
         detach: a.job.detach,
         ..Default::default()
     };
-    i.gpu = a.gpu;
+    i.gpu = a.gpu.asked();
     start(&a.job, i, json).map(|_| ())
 }
 

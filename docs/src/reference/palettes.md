@@ -54,7 +54,7 @@ as Verdigris, end on a bright stop, so a pattern that has settled stays vivid un
 
 - **In a scene**, each automaton's `palette` field names its palette (see the
   [scene file format](scene-format.md#automata-cas)). A JACA automaton has a second one,
-  `palette_neg`, for its −1 cells. The defaults are Ember, and for JACA Tide (+1) and Ember (−1).
+  `palette_neg`, for its −1 cells. The defaults are Ember, and for JACA Tide (+1) and Koi (−1), which stay apart at every age.
 - **On the command line**, commands that draw pictures, such as `jetcarp wallpaper`,
   `jetcarp hashlife`, `jetcarp sheet` and `jetcarp search pile`, take `--palette NAME`.
 - **Your own colours.** Wherever a palette name is accepted you can also write colours: `#4fc3ff`

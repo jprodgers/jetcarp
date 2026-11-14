@@ -73,6 +73,7 @@ Useful hunt options:
 | Option | Effect |
 | --- | --- |
 | `--soups N` | Soups per rule and tiling (default 100,000); `--forever` runs until stopped |
+| `--rules-file FILE` | More rules, one per line (`#` starts a comment). Every rule is read before the job starts: one that cannot run stops the job from starting, and the error names its line |
 | `--size WxH`, `--density P`, `--shape rect\|disc` | The soups: 16 × 16 unit cells at 0.5 by default |
 | `--nb touch\|edge` | The neighbourhood for every rule (a `V` suffix in a rule means edge) |
 | `--gens N`, `--max-period N` | How long a soup may run before it is classed as it is, and the longest period looked for |
@@ -91,18 +92,47 @@ $ jetcarp jobs list
 - **Budgets.** `--minutes M` or `--until UNIX-TIME` stops a search, still resumable, at its next
   checkpoint after that time (the exploratory search ends at that time; see below), and `--limit N`
   after N items.
+- **Memory.** `--max-rss-gb GB` pauses a hunt, a bounded search or an explore search, still
+  resumable, once JETCARP uses more memory than that. The job keeps the cap, so a resumed run keeps
+  to it too, and `jetcarp jobs status JOB` says why it paused.
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an
   uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns at once;
   `jetcarp jobs status JOB` follows it, and `--label NAME` makes it easy to find.
+- **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs, and
+  `--timeout S` gives up after S seconds. Its exit status says how the job ended (see below).
 - **Reports.** `jetcarp jobs report JOB` writes a Markdown report of what a job searched, for how
   long, and what it found: one table per hunted rule, with its spaceships, guns, puffers and
   longest oscillators.
 
 `jetcarp jobs remove JOB` deletes a job that has finished or stopped, with its sightings;
 `--delete-results` also deletes the patterns only it found.
+
+### Waiting in a script
+
+`jetcarp jobs wait` ends with one of these exit statuses:
+
+| Exit status | The job |
+| --- | --- |
+| 0 | is done |
+| 3 | is paused: stopped, at the end of its budget, or past its memory cap |
+| 4 | failed |
+| 5 | was still running at `--timeout` |
+| 6 | is marked running, but no process runs it: its process crashed or was killed |
+
+Exit status 1 means the wait itself failed: there is no such job, or the library cannot be read.
+A crashed run is noticed within about a minute, once its heartbeat is late. `jetcarp jobs resume
+JOB` carries such a job on from its last checkpoint (an explore search from its archive), so a
+long search can be kept going through crashes until a deadline with a loop in the shell:
+
+```sh
+until jetcarp jobs resume 12 --until 1763200000; do sleep 15; done
+```
+
+`jobs resume` returns 0 when the search ends or pauses at the deadline, which ends the loop; a
+crash returns something else, and the loop starts it again.
 
 ## The other strategies
 
@@ -133,11 +163,12 @@ $ jetcarp jobs list
 `explore` searches across tilings, rule families, rules and seeds at once and keeps the most
 interesting run of each kind it sees, scored for how lively, varied and long-lasting it is (the
 method is quality-diversity search; see [Search methods](../research/search-methods.md#explore)).
-It runs until stopped, keeps every run in the job's own folder, and is best given a long time and
-the GPU:
+It runs until stopped, keeps every run in the job's own folder, and is best given a long time. It
+runs on the GPU when there is a usable one, as the [GPU setting](gpu.md) says; `--cpu` keeps a
+search on the processor and `--gpu` on the GPU whatever the setting, in this and later runs:
 
 ```text
-$ jetcarp search explore --gpu --minutes 60 --label first-look
+$ jetcarp search explore --minutes 60 --label first-look
 ```
 
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
@@ -158,9 +189,15 @@ $ jetcarp jobs runs 7 --limit 5
 
 - `jetcarp jobs sheet JOB --ids …` draws a contact sheet of chosen runs.
 - `jetcarp jobs scene JOB RUN` gives a scene that replays a run, to open in the app.
-- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye.
+- `jetcarp jobs runs JOB --measures all --format csv --limit 0 > runs.csv` writes every run with
+  every measure, for a spreadsheet or a notebook.
+- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye;
+  `--page` adds a page for rating them in a browser.
   `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, and
   `jetcarp jobs rescore JOB` scores the runs again after the score changes.
+- `jetcarp jobs refit JOB --out taste.json` fits a score model to your verdicts and says how well
+  it ranks runs it did not see. `jetcarp jobs rescore JOB --score taste.json` scores the job's runs
+  with it, and `jetcarp search explore --score taste.json` searches with it.
 - `jetcarp quickstart publish JOB` puts the search's best confirmed runs, a few per category, rule
   family and tiling, into your Quick Start menu as its *atlas*.
 

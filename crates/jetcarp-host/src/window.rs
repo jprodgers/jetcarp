@@ -361,13 +361,14 @@ impl App {
         if let Some(g) = &self.gpu {
             return Ok(g.clone());
         }
-        let adapter =
-            pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(surface),
-                ..Default::default()
-            }))
-            .map_err(|e| format!("no graphics adapter: {e}"))?;
+        // The adapter driving the screen, under the GPU policy (the same choice as the app's).
+        let adapter = jetcarp_gpu::select::pick(
+            &self.instance,
+            jetcarp_gpu::select::Purpose::Display,
+            Some(surface),
+        )
+        .map_err(|e| format!("no graphics adapter: {e}"))?
+        .adapter;
         let (device, queue) =
             pollster::block_on(adapter.request_device(&device_descriptor(&adapter)))
                 .map_err(|e| format!("no graphics device: {e}"))?;
@@ -640,6 +641,10 @@ impl App {
         }
         let names: Vec<String> = geometry.iter().map(|g| g.0.clone()).collect();
         let renamed = names != self.core.monitors;
+        self.core.monitor_hz = el
+            .available_monitors()
+            .map(|m| m.refresh_rate_millihertz().map(|h| h as f32 / 1000.0))
+            .collect();
         self.core.monitor_rects = geometry
             .iter()
             .map(|g| Rect::new(g.1.0, g.1.1, g.2.0, g.2.1))
@@ -934,6 +939,17 @@ impl ApplicationHandler for App {
                 } else if let Some(w) = self.outputs[i].body.os() {
                     w.request_redraw();
                 }
+            }
+            // A sweep measures each frame's work, and where the system does not count the
+            // host's GPU time, how long the GPU took over the frame's last submission.
+            self.core.frame_done(now.elapsed().as_secs_f64());
+            if let (Some(acc), Some(g)) = (self.core.sweep_gpu_meter(), &self.gpu) {
+                let t = Instant::now();
+                g.queue.on_submitted_work_done(move || {
+                    if let Ok(mut a) = acc.lock() {
+                        *a += t.elapsed().as_secs_f64();
+                    }
+                });
             }
             self.next_frame = now + self.core.frame_time();
         }

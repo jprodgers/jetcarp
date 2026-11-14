@@ -39,6 +39,7 @@ mod scene;
 mod screensaver;
 mod sequence_ui;
 mod settings;
+pub(crate) use settings::saved_gpu_choice;
 mod shell;
 #[cfg(test)]
 mod shots;

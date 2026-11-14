@@ -335,49 +335,35 @@ impl Rule {
         if let Some(r) = crate::ltl::LtlRule::parse(t) {
             return Ok((Rule::Ltl(Box::new(r?)), None));
         }
-        // B/S notation.
-        let (body, nb) = if let Some(b) = compact.strip_suffix('v') {
-            (b, Some(Nb::Edge))
+        // B/S notation. A `V` (edge neighbours) ends the rule, or the B or S part it sits
+        // beside: `B3/S23V/C4` and `B3V/S23/C4` are `B3/S23/C4V`.
+        let (body, mut edge) = if let Some(b) = compact.strip_suffix('v') {
+            (b, true)
         } else if let Some(b) = compact.strip_suffix('h') {
-            (b, None)
+            (b, false)
         } else {
-            (compact.as_str(), None)
+            (compact.as_str(), false)
         };
-        let parts: Vec<&str> = body.split('/').collect();
+        let mut parts: Vec<&str> = body.split('/').collect();
         if !(2..=3).contains(&parts.len()) {
             return Err(format!(
                 "'{t}' is not a rule. Try B3/S23, B2/S/C3, W30, Ant RL, WireWorld, or Sandpile."
             ));
         }
-        let b = parts[0]
-            .strip_prefix('b')
-            .ok_or("B/S rules start with B, like B3/S23")?;
-        let s = parts[1]
-            .strip_prefix('s')
-            .ok_or("the second part starts with S, like B3/S23")?;
-        let birth = mask(b)?;
-        let survive = mask(s)?;
-        if parts.len() == 3 {
-            let c = parts[2].trim_start_matches(['c', 'g']);
-            let states: u32 = c
-                .parse()
-                .map_err(|_| "Generations need a state count, like B2/S/C3")?;
-            if !(2..=255).contains(&states) {
-                return Err("Generations state count must be 2 to 255".into());
+        for p in parts.iter_mut().take(2) {
+            if let Some(q) = p.strip_suffix('v') {
+                *p = q;
+                edge = true;
             }
-            if states == 2 {
-                return Ok((Rule::LifeLike { birth, survive }, nb));
-            }
-            return Ok((
-                Rule::Generations {
-                    birth,
-                    survive,
-                    states: states as u8,
-                },
-                nb,
-            ));
         }
-        Ok((Rule::LifeLike { birth, survive }, nb))
+        let rule = bs_parts(&parts).map_err(|e| {
+            if parts.iter().any(|p| p.contains('v')) {
+                misplaced_v(&parts, e)
+            } else {
+                e
+            }
+        })?;
+        Ok((rule, edge.then_some(Nb::Edge)))
     }
 
     pub fn notation(&self) -> String {
@@ -680,6 +666,53 @@ fn parse_family(low: &str) -> Result<Option<Rule>, String> {
         }
         _ => return Ok(None),
     }))
+}
+
+/// A B/S or Generations rule from its parts: `b<counts>`, `s<counts>`, and an optional state
+/// count (lower case, any `V` already taken off).
+fn bs_parts(parts: &[&str]) -> Result<Rule, String> {
+    let b = parts[0]
+        .strip_prefix('b')
+        .ok_or("B/S rules start with B, like B3/S23")?;
+    let s = parts[1]
+        .strip_prefix('s')
+        .ok_or("the second part starts with S, like B3/S23")?;
+    let birth = mask(b)?;
+    let survive = mask(s)?;
+    if parts.len() == 3 {
+        let c = parts[2].trim_start_matches(['c', 'g']);
+        let states: u32 = c
+            .parse()
+            .map_err(|_| "Generations need a state count, like B2/S/C3")?;
+        if !(2..=255).contains(&states) {
+            return Err("Generations state count must be 2 to 255".into());
+        }
+        if states > 2 {
+            return Ok(Rule::Generations {
+                birth,
+                survive,
+                states: states as u8,
+            });
+        }
+    }
+    Ok(Rule::LifeLike { birth, survive })
+}
+
+/// The error for a rule with a `V` among its counts: where the `V` goes, with the rule written
+/// that way when it reads without the stray `V`.
+fn misplaced_v(parts: &[&str], e: String) -> String {
+    let plain: Vec<String> = parts.iter().map(|p| p.replace('v', "")).collect();
+    let plain: Vec<&str> = plain.iter().map(String::as_str).collect();
+    match bs_parts(&plain) {
+        Ok(r) => format!(
+            "a V goes at the end of the rule or right after its B or S counts: {}V",
+            r.notation()
+        ),
+        Err(_) => format!(
+            "{e}; a V goes at the end of the rule (B2/S/C3V) or right after its B or S counts \
+             (B3/S23V/C4)"
+        ),
+    }
 }
 
 fn mask(s: &str) -> Result<u32, String> {
@@ -1246,12 +1279,26 @@ pub static CATALOG: &[CatalogEntry] = &[
     },
 ];
 
+/// A rule's notation with its neighbourhood: B/S and Generations rules on edge neighbours carry a
+/// trailing `V` (`B3/S23V`), JACA rules a `V` on each B/S part; other rules fix their own.
+pub fn notation_on(rule: &Rule, nb: Nb) -> String {
+    match rule {
+        Rule::LifeLike { .. } | Rule::Generations { .. } if nb == Nb::Edge => {
+            let mut n = rule.notation();
+            n.push('V');
+            n
+        }
+        Rule::Jaca(j) if nb == Nb::Edge => j.notation_with(true),
+        _ => rule.notation(),
+    }
+}
+
 /// Catalog name for a rule with a neighbourhood (B/S rules on edge neighbours carry a V).
 pub fn catalog_name(rule: &Rule, nb: Nb) -> Option<&'static str> {
-    let mut n = rule.notation();
-    if nb == Nb::Edge && matches!(rule, Rule::LifeLike { .. } | Rule::Generations { .. }) {
-        n.push('V');
-    }
+    let n = match rule {
+        Rule::LifeLike { .. } | Rule::Generations { .. } => notation_on(rule, nb),
+        _ => rule.notation(),
+    };
     catalog().iter().find(|e| e.notation == n).map(|e| e.name)
 }
 
@@ -1412,6 +1459,29 @@ mod tests {
         }
         assert_eq!(Rule::parse("b2/s/3").unwrap().0.notation(), "B2/S/C3");
         assert_eq!(Rule::parse("B3/S23V").unwrap().1, Some(Nb::Edge));
+        // A V beside the B or S part means the same as the trailing one (#5).
+        let trailing = Rule::parse("B47/S13568/4V").unwrap();
+        for s in [
+            "B47/S13568V/4",
+            "B47V/S13568/4",
+            "b47/s13568v/c4",
+            "B47V/S13568V/G4V",
+        ] {
+            assert_eq!(Rule::parse(s).unwrap(), trailing, "{s}");
+        }
+        assert_eq!(Rule::parse("B3/S23V/C4").unwrap().0.notation(), "B3/S23/C4");
+        assert_eq!(
+            Rule::parse("B3V/S23").unwrap(),
+            Rule::parse("B3/S23V").unwrap()
+        );
+        assert_eq!(Rule::parse("B2/S34H").unwrap().1, None);
+        // A V anywhere else says where it goes.
+        let e = Rule::parse("B4V7/S13568/4").unwrap_err();
+        assert!(e.contains("B47/S13568/C4V"), "{e}");
+        let e = Rule::parse("B3/S23/C4V5").unwrap_err();
+        assert!(e.contains("B3/S23/C45V"), "{e}");
+        let e = Rule::parse("B3/S2V3x").unwrap_err();
+        assert!(e.contains("a V goes at the end"), "{e}");
         assert_eq!(Rule::parse("rule 110").unwrap().0, Rule::Wolfram(110));
         assert_eq!(
             Rule::parse("table:spectre-glider").unwrap().0,

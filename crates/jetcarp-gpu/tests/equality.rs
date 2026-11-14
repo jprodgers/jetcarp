@@ -403,22 +403,12 @@ fn ages_saturate_like_the_cpu() {
 #[test]
 fn unsupported_rules_fall_back() {
     let Some(mut sim) = gpu() else { return };
-    // B0 Life-like rules alternate complementary rules on the CPU; they must not run on the GPU.
-    for rule in ["B0/S8", "B013/S1"] {
-        let sc = scene(
-            TilingSpec::rect("square", 20, 16, Boundary::Wrap),
-            vec![CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 })],
-        );
-        let w = World::from_scene(&sc).unwrap();
-        assert!(sim.check(&w).is_err(), "{rule} should not run on the GPU");
-        let (on_gpu, _) = compare(&mut sim, &sc, &[3, 10], rule);
-        assert_eq!(on_gpu, 0);
-    }
     for f in [
         "langtons-ant.json",
-        "sandpile-hex.json",
         "rule30-life-ants.json",
         "hex-wolfram.json",
+        "vonneumann-growing-channels.json",
+        "layered-spectre.json",
     ] {
         let text = std::fs::read_to_string(format!("../jetcarp-core/data/scenes/{f}")).unwrap();
         let sc = Scene::from_json(&text).unwrap();
@@ -427,13 +417,9 @@ fn unsupported_rules_fall_back() {
         let (on_gpu, _) = compare(&mut sim, &sc, &[5, 20], f);
         assert_eq!(on_gpu, 0);
     }
-    // Phase 3 families run on the CPU: Margolus blocks, Lenia, three-parent hexagon rules.
+    // Lenia and three-parent hexagon rules run on the CPU. (B0, Margolus and the other
+    // families the GPU runs are tested in families.rs.)
     for (fam, rule, seed) in [
-        (
-            "square",
-            "Margolus Critters",
-            SeedSpec::Random { density: 0.3 },
-        ),
         (
             "square",
             "Lenia R=5,T=10,b=1,m=0.15,s=0.017",

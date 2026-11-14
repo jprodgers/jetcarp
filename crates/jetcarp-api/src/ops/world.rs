@@ -2332,13 +2332,21 @@ impl WorldOp for WorldStep {
                 }
             }
         } else {
-            // In chunks of about a second's work, so a cancel stops it.
+            // In chunks of about a second's work, so a cancel stops it. On the GPU when the GPU
+            // setting says so (automatic: a world large enough to gain), with the same result.
             let cells = host.world().topo.len().max(1) as u64;
             let chunk = (50_000_000 / cells).clamp(1, gens);
             let mut left = gens;
             while left > 0 && !p.cancelled() {
                 let n = chunk.min(left);
-                host.exec(Command::Step { gens: n })?;
+                match host.world_mut() {
+                    Some(w) if crate::ctx::wants_gpu(&*cx.platform, None, w) => {
+                        crate::ctx::step_world(&*cx.platform, w, n, None)?;
+                    }
+                    _ => {
+                        host.exec(Command::Step { gens: n })?;
+                    }
+                }
                 left -= n;
                 p.report(gens - left, Some(gens), "generations");
             }

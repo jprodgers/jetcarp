@@ -25,6 +25,11 @@ jobs:
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    env:
+      # The runners have no GPU: run the GPU tests on a software adapter (Mesa's lavapipe on
+      # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
+      # tests skip there; macOS uses the runner's own GPU.
+      JETCARP_GPU: software
     strategy:
       fail-fast: false
       matrix:
@@ -56,7 +61,11 @@ jobs:
           JETCARP_OUT: ""
           JETCARP_LIBRARY: ""
         run: |
+          # The settings folder exists first, as on any machine that ran JETCARP, so code that
+          # writes only into an existing settings folder is caught too.
+          mkdir -p "$HOME/.config/jetcarp"
           cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
+          rmdir "$HOME/.config/jetcarp" 2>/dev/null || true
           for d in "$HOME/Pictures/JETCARP" "$HOME/.local/share/jetcarp" "$HOME/.config/jetcarp"; do
             if [ -e "$d" ]; then
               echo "::error::a test wrote to $d"

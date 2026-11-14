@@ -1,5 +1,6 @@
 //! Interest scores, behaviour bins and the archive of the best run found in each niche.
 
+pub use crate::explore::model::ScoreModel;
 use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features};
 use jetcarp_core::explore::space::Fam;
@@ -31,19 +32,14 @@ fn tri(x: f32, lo: f32, peak: f32, hi: f32) -> f32 {
 /// How interesting a run looks; about 0 to 3, higher is better. The stored features allow
 /// rescoring without rerunning, so this function can change between searches.
 pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
-    let life = (1.0 + f.settle as f32).log2() / (1.0 + gens as f32).log2();
     if fam.is_rows() {
         // Rows and layers are judged as a picture.
         let pic = tri(f.bits, 0.05, 0.75, 1.9) + 0.5 * tri(f.smooth, 0.1, 0.45, 0.95);
         let bal = tri(f.density, 0.04, 0.4, 0.9);
         return pic + 0.5 * bal + 0.3 * tri(f.size_entropy, 0.2, 2.0, 5.0);
     }
-    match fate {
-        Fate::Died => return 0.25 * life,
-        Fate::Froze | Fate::Cycle if life < 0.3 => {
-            return 0.1 + 0.6 * life + 0.3 * tri(f.smooth, 0.05, 0.4, 0.95);
-        }
-        _ => {}
+    if let Some(s) = gated(fate, f, gens) {
+        return s;
     }
     let mut s = taste(fate, f, gens, fam);
     // What the fit can't see, from looking at its top picks. Like-shuffled noise:
@@ -58,7 +54,51 @@ pub fn score(fate: Fate, f: &Features, gens: u32, fam: Fam) -> f32 {
     if fam == Fam::ForestFire {
         s *= 0.75;
     }
-    s
+    jaca_gate(f, fam, s)
+}
+
+/// What a JACA run that lost a sign keeps of its score, whenever in the run the sign fell below
+/// 1% of live cells: from there on it is a plain Life-like run under another name. In a JACA-only
+/// search, more than half the best-scoring runs lost a sign in the first half and every one was
+/// dropped by eye, as were 7 of the 9 rated runs that lost one later.
+pub const JACA_LOST_SIGN: f32 = 0.3;
+
+/// A score with the JACA rule applied, after the built-in score or a fitted model:
+/// [`JACA_LOST_SIGN`] of it for a JACA run that lost a sign (`sign_lost` below 1).
+pub fn jaca_gate(f: &Features, fam: Fam, s: f32) -> f32 {
+    if fam == Fam::Jaca && f.signs.is_some_and(|x| x.lost < 1.0) {
+        s * JACA_LOST_SIGN
+    } else {
+        s
+    }
+}
+
+/// The score of a run under a fitted score model ([`ScoreModel`]) when there is one that applies
+/// to its family, else the built-in [`score`].
+pub fn score_with(
+    model: Option<&ScoreModel>,
+    fate: Fate,
+    f: &Features,
+    gens: u32,
+    fam: Fam,
+) -> f32 {
+    match model {
+        Some(m) if m.applies(fam) => m.score(fate, f, gens, fam),
+        _ => score(fate, f, gens, fam),
+    }
+}
+
+/// The runs a score treats apart before its fitted core: those that died, and those that froze
+/// or cycled early. `None` for the rest.
+pub(crate) fn gated(fate: Fate, f: &Features, gens: u32) -> Option<f32> {
+    let life = (1.0 + f.settle as f32).log2() / (1.0 + gens as f32).log2();
+    match fate {
+        Fate::Died => Some(0.25 * life),
+        Fate::Froze | Fate::Cycle if life < 0.3 => {
+            Some(0.1 + 0.6 * life + 0.3 * tri(f.smooth, 0.05, 0.4, 0.95))
+        }
+        _ => None,
+    }
 }
 
 /// How much people liked runs like this one, 0 to 3: a logistic fit to 829 field-rule clips rated
@@ -129,7 +169,22 @@ fn bucket(x: f32, edges: &[f32]) -> u32 {
     edges.iter().take_while(|&&e| x >= e).count() as u32
 }
 
-/// The coarse behaviour class of a run (packed into an integer).
+/// A JACA run's sign state, for its niche: 0 both signs kept (or not measured), 1 a sign lost in
+/// the second half, 2 lost in the first half.
+fn sign_state(f: &Features) -> u32 {
+    match f.signs {
+        Some(s) if s.lost_early() => 2,
+        Some(s) if s.lost < 1.0 => 1,
+        _ => 0,
+    }
+}
+
+/// Bins below this are the behaviour of [`behaviour_bin`] without the sign state.
+const SIGN_STEP: u32 = 5 * 5 * 5 * 5 * 2 * 5;
+
+/// The coarse behaviour class of a run (packed into an integer). A JACA run's sign state (both
+/// signs kept, one lost late, one lost early) is part of it, so runs that lost a sign do not
+/// compete with battles for a niche; runs without sign measures read as both kept.
 pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
     let fate_bin = match fate {
         Fate::Died => 0,
@@ -154,7 +209,8 @@ pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
         4
     };
     let mover = (f.movers > 0) as u32;
-    fate_bin * 5 * 5 * 5 * 5 * 2
+    sign_state(f) * SIGN_STEP
+        + fate_bin * 5 * 5 * 5 * 5 * 2
         + trans * 5 * 5 * 5 * 2
         + dens * 5 * 5 * 2
         + act * 5 * 2
@@ -293,6 +349,52 @@ impl Archive {
         None
     }
 
+    /// A parent for a new candidate: an elite that `ok` accepts, of family `fam` when given. Four
+    /// picks in five are quality-weighted, a tournament of four niches (drawn at random) won by the
+    /// niche whose best accepted elite scores highest; the fifth takes one niche at random, so the
+    /// search never settles on its current best. Within the niche it leans to the better elites,
+    /// as [`sample`](Self::sample) does.
+    pub fn sample_parent(
+        &self,
+        rng: &mut Rng,
+        fam: Option<Fam>,
+        ok: &dyn Fn(&Eval) -> bool,
+    ) -> Option<(i64, &Eval)> {
+        if self.order.is_empty() {
+            return None;
+        }
+        let rounds = if rng.below(5) == 0 { 1 } else { 4 };
+        let mut best: Option<(f32, Vec<(i64, f32)>)> = None;
+        let (mut found, mut tries) = (0, 0);
+        while found < rounds && tries < 256 {
+            tries += 1;
+            let k = self.order[rng.below(self.order.len() as u64) as usize];
+            if fam.is_some_and(|f| f != k.0) {
+                continue;
+            }
+            let Some(list) = self.cells.get(&k) else {
+                continue;
+            };
+            let good: Vec<(i64, f32)> = list
+                .iter()
+                .filter(|(id, _)| self.runs.get(id).is_some_and(ok))
+                .copied()
+                .collect();
+            let Some(&(_, top)) = good.first() else {
+                continue;
+            };
+            found += 1;
+            if best.as_ref().is_none_or(|b| top > b.0) {
+                best = Some((top, good));
+            }
+        }
+        let (_, list) = best?;
+        let i = (rng.below(list.len() as u64) * rng.below(list.len() as u64 + 1)) as usize
+            / list.len().max(1);
+        let (id, _) = list[i.min(list.len() - 1)];
+        self.runs.get(&id).map(|e| (id, e))
+    }
+
     /// Elites not yet confirmed, up to `n`: best first within a family, families taking turns,
     /// the family with the fewest confirmed elites first. Scores are not comparable across
     /// families, so one ranking would leave the lower-scoring families unconfirmed.
@@ -329,5 +431,61 @@ impl Archive {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jetcarp_core::topology::Nb;
+    use jetcarp_core::world::SeedSpec;
+
+    fn ev(rule: &str, score: f32, bin: u32) -> Eval {
+        Eval {
+            cand: Cand {
+                tiling: "square".into(),
+                nb: Nb::Touch,
+                fam: Fam::LifeLike,
+                rule: rule.into(),
+                seed: SeedSpec::Empty,
+                cells: 100,
+                gens: 10,
+                steps: 1,
+                rng: 1,
+                origin: "random".into(),
+            },
+            fate: Fate::Running,
+            feat: Features::default(),
+            score,
+            bin,
+        }
+    }
+
+    /// Parents lean to the better niches but not only to them, and only ones `ok` accepts.
+    #[test]
+    fn parents_are_picked_by_quality_with_a_uniform_share() {
+        let mut a = Archive::default();
+        for b in 0..20u32 {
+            let score = if b == 0 { 3.0 } else { 0.5 };
+            a.offer(b as i64, ev(&format!("B{b}/S"), score, b), 0);
+        }
+        let mut rng = Rng::new(9);
+        let n = 5000;
+        let best = (0..n)
+            .filter(|_| a.sample_parent(&mut rng, None, &|_| true).unwrap().0 == 0)
+            .count();
+        // Uniform would give 1 in 20 (250); a tournament of four, 4/5 of the time, about 670.
+        assert!(best > 500 && best < 1000, "{best}");
+        let picks: std::collections::HashSet<i64> = (0..n)
+            .map(|_| a.sample_parent(&mut rng, None, &|_| true).unwrap().0)
+            .collect();
+        assert_eq!(picks.len(), 20, "every niche is still picked");
+        let odd = |e: &Eval| e.bin % 2 == 1;
+        assert!((0..500).all(|_| a.sample_parent(&mut rng, None, &odd).unwrap().0 % 2 == 1));
+        assert!(a.sample_parent(&mut rng, None, &|_| false).is_none());
+        assert!(
+            a.sample_parent(&mut rng, Some(Fam::Jaca), &|_| true)
+                .is_none()
+        );
     }
 }

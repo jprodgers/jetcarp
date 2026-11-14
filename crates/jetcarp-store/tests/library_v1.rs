@@ -456,6 +456,7 @@ fn spectre_search(lib: &Library, level: u32) -> i64 {
         spec: serde_json::to_value(jetcarp_search::jobs::search::SearchJobSpec {
             search: spec,
             store: true,
+            max_rss_gb: None,
         })
         .unwrap(),
         ..Default::default()
@@ -625,6 +626,7 @@ fn provenance_row_0_is_written_once_and_never_rewritten() {
         spec: serde_json::to_value(jetcarp_search::jobs::search::SearchJobSpec {
             search: spec,
             store: true,
+            max_rss_gb: None,
         })
         .unwrap(),
         ..Default::default()

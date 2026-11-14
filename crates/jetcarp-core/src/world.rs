@@ -272,6 +272,14 @@ fn is_one_f(v: &f64) -> bool {
     *v == 1.0
 }
 
+/// JACA's default palettes: Tide for +1 cells and Koi for -1 cells. The two must stay apart at every
+/// age: cells that live on take the last colour, so a still territory of each sign shows its
+/// palette's last stop (Tide's dark indigo against Koi's red). Ember, the default until 0.4.2, ends
+/// in nearly Tide's indigo, and still territories of the two signs looked alike (issue #6).
+pub const DEFAULT_PALETTE_JACA: &str = "Tide";
+/// See [`DEFAULT_PALETTE_JACA`].
+pub const DEFAULT_PALETTE_NEG: &str = "Koi";
+
 /// A CA as saved in scenes. Missing fields take the rule's defaults.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CaSpec {
@@ -298,7 +306,7 @@ pub struct CaSpec {
     pub color_by: ColorBy,
     #[serde(default, skip_serializing_if = "is_bounce")]
     pub agent_edge: AgentEdge,
-    /// JACA: the palette of -1 cells (`palette` colours +1 cells).
+    /// JACA: the palette of -1 cells (`palette` colours +1 cells; default [`DEFAULT_PALETTE_NEG`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub palette_neg: Option<String>,
     /// JACA: draw a fading glow where cells were annihilated.
@@ -445,14 +453,7 @@ impl CaInstance {
     }
     /// The rule in notation, with the V suffix for edge neighbourhoods on B/S rules.
     pub fn notation(&self) -> String {
-        let n = self.rule.notation();
-        match &self.rule {
-            Rule::LifeLike { .. } | Rule::Generations { .. } if self.nb == Nb::Edge => {
-                format!("{n}V")
-            }
-            Rule::Jaca(j) if self.nb == Nb::Edge => j.notation_with(true),
-            _ => n,
-        }
+        crate::rules::notation_on(&self.rule, self.nb)
     }
 }
 
@@ -831,6 +832,9 @@ struct Base {
     reseed: Vec<AutoReseed>,
 }
 
+/// Clone copies everything, fields included (a GPU stepper keeps a copy without the fields, to
+/// put a world back as it was when a run fails part way).
+#[derive(Clone)]
 pub struct World {
     pub topo: Arc<Topology>,
     pub fields: Vec<Field>,
@@ -1570,18 +1574,25 @@ impl World {
             name: spec.name.clone().unwrap_or_else(|| {
                 crate::rules::catalog_name_on(&rule, nb, &self.topo)
                     .map(String::from)
-                    .unwrap_or_else(|| rule.notation())
+                    .unwrap_or_else(|| crate::rules::notation_on(&rule, nb))
             }),
             rule,
             nb,
             enabled: spec.enabled,
             affects_others: affects,
             steps_per_gen: spec.steps_per_gen.clamp(1, 100_000),
-            palette: spec
-                .palette
+            palette: spec.palette.clone().unwrap_or_else(|| {
+                if is_jaca {
+                    DEFAULT_PALETTE_JACA
+                } else {
+                    "Ember"
+                }
+                .into()
+            }),
+            palette_neg: spec
+                .palette_neg
                 .clone()
-                .unwrap_or_else(|| if is_jaca { "Tide" } else { "Ember" }.into()),
-            palette_neg: spec.palette_neg.clone().unwrap_or_else(|| "Ember".into()),
+                .unwrap_or_else(|| DEFAULT_PALETTE_NEG.into()),
             glow: spec.glow,
             heat: None,
             seed: seed.clone(),

@@ -21,6 +21,17 @@ const FILES: [(&str, &str); 3] = [
     ),
 ];
 
+/// The text of one of the extension's files as this program installs it: the metadata's
+/// `version-name` is the program's version, so GNOME (and [`state`]) can tell which JETCARP's
+/// extension it has loaded.
+fn file_text(name: &str, text: &'static str) -> std::borrow::Cow<'static, str> {
+    if name == "metadata.json" {
+        text.replace("@VERSION@", env!("CARGO_PKG_VERSION")).into()
+    } else {
+        text.into()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExtensionState {
     /// This session isn't GNOME, or GNOME Shell can't be reached.
@@ -31,6 +42,9 @@ pub enum ExtensionState {
     /// GNOME Shell knows it but it isn't running, with GNOME's word for why.
     Inactive(String),
     Active,
+    /// Running, but GNOME Shell loaded an older JETCARP's extension (the version it reports, if
+    /// any): the files on disk are this program's, and GNOME Shell reads them at login.
+    Outdated(Option<String>),
 }
 
 impl ExtensionState {
@@ -44,6 +58,12 @@ impl ExtensionState {
             }
             ExtensionState::Inactive(why) => format!("The GNOME extension is not running: {why}."),
             ExtensionState::Active => "The GNOME extension is running.".into(),
+            ExtensionState::Outdated(v) => format!(
+                "The GNOME extension was updated to JETCARP {}'s, but GNOME is still running {}. Log out and back in once to load it.",
+                env!("CARGO_PKG_VERSION"),
+                v.as_deref()
+                    .map_or("an older version".to_string(), |v| format!("JETCARP {v}'s"))
+            ),
         }
     }
 }
@@ -81,7 +101,14 @@ fn parse_state(reply: &str) -> Option<f64> {
     rest.split('>').next()?.trim().parse().ok()
 }
 
-/// GNOME 50's meaning for the state numbers (`ExtensionState` in `extensionUtils.js`).
+/// The `version-name` in a `GetExtensionInfo` reply: the JETCARP version whose extension GNOME
+/// Shell loaded (extensions from JETCARP 0.4.1 and earlier have none).
+fn parse_version_name(reply: &str) -> Option<String> {
+    let rest = reply.split("'version-name': <'").nth(1)?;
+    Some(rest.split('\'').next()?.to_string())
+}
+
+/// GNOME 50's and 51's meaning for the state numbers (`ExtensionState` in `extensionUtils.js`).
 fn state_word(n: f64) -> &'static str {
     match n as i32 {
         2 => "it is switched off",
@@ -117,8 +144,15 @@ pub fn state() -> ExtensionState {
     let Ok(out) = out.ok().filter(|o| o.status.success()).ok_or(()) else {
         return ExtensionState::NoGnome;
     };
-    match parse_state(&String::from_utf8_lossy(&out.stdout)) {
-        Some(1.0) => ExtensionState::Active,
+    let reply = String::from_utf8_lossy(&out.stdout);
+    match parse_state(&reply) {
+        Some(1.0) => match parse_version_name(&reply) {
+            Some(v) if v == env!("CARGO_PKG_VERSION") => ExtensionState::Active,
+            // Files of another version on disk than GNOME loaded: one login loads them. (Files
+            // left from an older JETCARP that nothing refreshed are what GNOME runs, and fine.)
+            v if !stale() => ExtensionState::Outdated(v),
+            _ => ExtensionState::Active,
+        },
         Some(n) => ExtensionState::Inactive(state_word(n).into()),
         None if files => ExtensionState::NeedsLogin,
         None => ExtensionState::NotInstalled,
@@ -165,18 +199,58 @@ fn set_enabled_list(list: &[String]) -> Result<(), String> {
     }
 }
 
+/// Whether the extension in `extensions` differs from this program's: one of its files is
+/// missing or holds other text. False when it isn't installed.
+pub fn stale_in(extensions: &Path) -> bool {
+    if !installed_in(extensions) {
+        return false;
+    }
+    let d = extensions.join(UUID);
+    FILES.iter().any(|(name, text)| {
+        std::fs::read_to_string(d.join(name)).map_or(true, |t| t != file_text(name, text))
+    })
+}
+
+/// Whether this user's extension differs from this program's.
+pub fn stale() -> bool {
+    extensions_dir().is_ok_and(|d| stale_in(&d))
+}
+
+fn write_files(dir: &Path) -> Result<(), String> {
+    for (name, text) in FILES {
+        let path = dir.join(name);
+        let parent = path.parent().expect("a folder");
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        std::fs::write(&path, file_text(name, text).as_bytes())
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// Brings an installed extension in `extensions` up to this program's files, so upgrading
+/// JETCARP upgrades its extension too; the background host does this when it starts. It leaves
+/// GNOME's list of enabled extensions alone (switching the extension off stays the user's
+/// choice) and does nothing when the extension isn't installed or is already this program's.
+/// GNOME Shell loads the new files at the next login. Returns whether it wrote them.
+pub fn refresh_in(extensions: &Path) -> Result<bool, String> {
+    if !stale_in(extensions) {
+        return Ok(false);
+    }
+    write_files(&extensions.join(UUID))?;
+    Ok(true)
+}
+
+/// [`refresh_in`] this user's extensions folder.
+pub fn refresh() -> Result<bool, String> {
+    refresh_in(&extensions_dir()?)
+}
+
 /// Copies the extension into place and switches it on for the next login.
 pub fn install() -> Result<(), String> {
     if !is_gnome() {
         return Err("this desktop is not GNOME".into());
     }
-    let dir = dir()?;
-    for (name, text) in FILES {
-        let path = dir.join(name);
-        let parent = path.parent().expect("a folder");
-        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
-    }
+    write_files(&dir()?)?;
     let mut list = enabled_list()?;
     if !list.iter().any(|u| u == UUID) {
         list.push(UUID.to_string());
@@ -235,9 +309,52 @@ mod tests {
     }
 
     #[test]
-    fn metadata_names_the_uuid_and_the_lock_screen() {
-        let m: serde_json::Value = serde_json::from_str(FILES[0].1).unwrap();
+    fn metadata_names_the_uuid_the_lock_screen_and_this_version() {
+        let m: serde_json::Value =
+            serde_json::from_str(&file_text(FILES[0].0, FILES[0].1)).unwrap();
         assert_eq!(m["uuid"], UUID);
         assert_eq!(m["session-modes"][1], "unlock-dialog");
+        assert_eq!(m["version-name"], env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn reads_the_loaded_version() {
+        let reply = "({'uuid': <'x'>, 'version-name': <'0.4.2'>, 'state': <1.0>},)";
+        assert_eq!(parse_version_name(reply).as_deref(), Some("0.4.2"));
+        assert_eq!(parse_version_name("({'state': <1.0>},)"), None);
+    }
+
+    /// An upgrade's host brings an older extension's files up to its own, leaves a current one
+    /// and a missing one alone, and doesn't touch other extensions.
+    #[test]
+    fn refresh_updates_only_an_installed_older_extension() {
+        let tmp = std::env::temp_dir().join(format!("jetcarp-gnome-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Not installed: nothing written.
+        assert!(!stale_in(&tmp));
+        assert_eq!(refresh_in(&tmp), Ok(false));
+        assert!(!tmp.join(UUID).exists());
+        // An older version's files (as 0.4.1 left them: other metadata, other script).
+        let d = tmp.join(UUID);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(
+            d.join("metadata.json"),
+            r#"{"uuid": "jetcarp@jimmieprodgers.com", "shell-version": ["50"]}"#,
+        )
+        .unwrap();
+        std::fs::write(d.join("extension.js"), "// old").unwrap();
+        assert!(stale_in(&tmp));
+        assert_eq!(refresh_in(&tmp), Ok(true));
+        for (name, text) in FILES {
+            assert_eq!(
+                std::fs::read_to_string(d.join(name)).unwrap(),
+                file_text(name, text)
+            );
+        }
+        // Now current: left alone.
+        assert!(!stale_in(&tmp));
+        assert_eq!(refresh_in(&tmp), Ok(false));
+        std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

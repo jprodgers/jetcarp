@@ -7,6 +7,11 @@
 //! it (keep 5, maybe 3, drop 1), its rater (a name, `user`, or `model:<name>`), note, and
 //! `source` (`review` or `ratings:<folder>`). They live in the library, not in the search's folder, so the
 //! folder can be deleted or shared without them.
+//!
+//! **Stars.** A star on a run (the clip-rating page's ★: a run the rater would show others, beside
+//! any verdict) is a row on the same target with no verdict and a rating of 5 ([`RunStar`]). The
+//! verdict counts and the score's tuning read verdicts only, so they leave stars out, and a pack
+//! carries a star as a five-star rating.
 
 use super::*;
 
@@ -53,6 +58,21 @@ pub struct RunReview {
     /// keep, maybe, or drop.
     pub verdict: String,
     pub note: String,
+    pub rater: String,
+    pub source: String,
+    /// When (UTC, `2026-11-11T12:00:00Z`).
+    pub created: String,
+}
+
+/// The rating a star stands for: the top of the 1 to 5 scale.
+pub const STAR_RATING: f64 = 5.0;
+
+/// A star on a run of an explore search (see the module notes).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RunStar {
+    /// The search's uuid.
+    pub search: String,
+    pub run: i64,
     pub rater: String,
     pub source: String,
     /// When (UTC, `2026-11-11T12:00:00Z`).
@@ -193,6 +213,72 @@ impl Library {
                 done += 1;
             }
             Ok((done, skipped))
+        })
+    }
+
+    /// Record stars on search runs in one transaction, skipping those recorded already (the
+    /// same run, rater, source and time). Returns (recorded, skipped).
+    pub fn add_run_stars(&self, stars: &[RunStar]) -> Result<(u64, u64), String> {
+        self.write(|tx| {
+            let (mut done, mut skipped) = (0, 0);
+            for s in stars {
+                let target = search_run_target(&s.search, s.run);
+                let dup = tx
+                    .prepare_cached(
+                        "SELECT 1 FROM ratings WHERE target_kind = 'search_run' AND target_id = ?1
+                         AND verdict IS NULL AND rater = ?2 AND source = ?3 AND created = ?4",
+                    )
+                    .map_err(e)?
+                    .exists(params![target, s.rater, s.source, s.created])
+                    .map_err(e)?;
+                if dup {
+                    skipped += 1;
+                    continue;
+                }
+                tx.prepare_cached(
+                    "INSERT INTO ratings (target_kind, target_id, rater, rating, verdict, note,
+                        source, created)
+                     VALUES ('search_run', ?1, ?2, ?3, NULL, '', ?4, ?5)",
+                )
+                .map_err(e)?
+                .execute(params![target, s.rater, STAR_RATING, s.source, s.created])
+                .map_err(e)?;
+                done += 1;
+            }
+            Ok((done, skipped))
+        })
+    }
+
+    /// Every star on the runs of search `search`, oldest first.
+    pub fn run_stars(&self, search: &str) -> Result<Vec<RunStar>, String> {
+        let lo = format!("{search}:");
+        let hi = format!("{search};");
+        self.read(vec![], |c| {
+            let mut st = c
+                .prepare(
+                    "SELECT target_id, rater, source, created FROM ratings
+                     WHERE target_kind = 'search_run' AND target_id >= ?1 AND target_id < ?2
+                       AND verdict IS NULL
+                     ORDER BY id",
+                )
+                .map_err(e)?;
+            let rows = st
+                .query_map(params![lo, hi], |r| {
+                    let t: String = r.get(0)?;
+                    Ok(RunStar {
+                        search: search.to_string(),
+                        run: t
+                            .rsplit(':')
+                            .next()
+                            .and_then(|x| x.parse().ok())
+                            .unwrap_or(0),
+                        rater: r.get(1)?,
+                        source: r.get(2)?,
+                        created: r.get(3)?,
+                    })
+                })
+                .map_err(e)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(e)
         })
     }
 

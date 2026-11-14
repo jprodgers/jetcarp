@@ -16,7 +16,7 @@
     {
       "enabled": true,
       "palette": "Tide",
-      "palette_neg": "Ember",
+      "palette_neg": "Koi",
       "rule": "JACA B16/S1378 blast 1",
       "seed": {
         "signed": {

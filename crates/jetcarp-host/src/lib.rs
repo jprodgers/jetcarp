@@ -25,7 +25,10 @@ mod saver_args;
 mod targets;
 #[cfg(any(windows, target_os = "macos"))]
 mod tray;
+pub mod tune;
 mod window;
+
+pub use tune::TuneArgs;
 
 use std::time::{Duration, Instant};
 
@@ -94,6 +97,7 @@ fn run_headless(mut core: core::Core, seconds: Option<f64>) -> ! {
         let frame = core.frame_time();
         let t0 = Instant::now();
         core.tick();
+        core.frame_done(t0.elapsed().as_secs_f64());
         if let Some(rest) = frame.checked_sub(t0.elapsed()) {
             std::thread::sleep(rest.min(Duration::from_millis(250)));
         }
@@ -130,7 +134,7 @@ fn open_settings() {
         .is_ok();
     if !opened {
         desktop_win::message(
-            "JETCARP's screen saver settings are in the JETCARP app: open the Screensaver pane, then Background host.",
+            "JETCARP's screen saver settings are in the JETCARP app: View, then Screensaver settings.",
         );
     }
 }
@@ -144,6 +148,21 @@ pub fn run_scr(args: &[String]) {
         ScrMode::Run => run_saver(window::Mode::Saver, None),
         ScrMode::Preview(parent) => run_saver(window::Mode::Preview(parent), None),
         ScrMode::Configure => open_settings(),
+    }
+}
+
+/// Brings an installed GNOME extension up to this version's files, so an upgrade of JETCARP
+/// upgrades its extension too (GNOME Shell loads them at the next login).
+fn refresh_gnome_extension() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    match jetcarp_display::gnome::refresh() {
+        Ok(true) => say!(
+            "jetcarp-host: updated the GNOME extension to this version's; GNOME loads it at the next login"
+        ),
+        Ok(false) => {}
+        Err(e) => say!("jetcarp-host: could not update the GNOME extension: {e}"),
     }
 }
 
@@ -164,6 +183,7 @@ pub fn run(args: HostArgs) -> ! {
         // The GNOME menu and the screen saver start the host with this command.
         let _ = jetcarp_display::autostart::record_host_program(&cmd);
     }
+    refresh_gnome_extension();
     let mut core = match core::Core::new(args.rotation, args.headless.then_some(args.canvas)) {
         Ok(c) => c,
         Err(e) => {

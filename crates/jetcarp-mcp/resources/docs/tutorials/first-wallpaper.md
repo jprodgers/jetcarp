@@ -37,7 +37,7 @@ Keep this world as it is now by saving it as a *screensaver profile*: press *Sav
 profile* under *Profiles*. The profile is named after the scene and holds its tiling, rule, seed and
 palette. Then set *Show* to *One profile* and *Profile* to *Brian's Brain on Penrose rhombs*:
 
-<img src="../images/tutorials/wallpaper-screensaver-pane.webp" alt="The Screensaver pane: Start the screensaver; Show One profile, Profile Brian's Brain on Penrose rhombs; the Background host section open, not running, with Start, Rotation My wallpaper, the caption, the pauses on battery and when busy, Show on the desktop, the lock screen choice and the GNOME extension's state with Install; the world now in the Aurora palette" width="700">
+<img src="../images/tutorials/wallpaper-screensaver-pane.webp" alt="The Screensaver pane: Start the screensaver; Show One profile, Profile Brian's Brain on Penrose rhombs; While it runs, and a link to the Desktop background settings; the list of profiles, and the new profile Brian's Brain on Penrose rhombs open in the editor; the world now in the Aurora palette" width="700">
 
 Now *View → Screensaver mode* (F12), or *Start the screensaver* at the top of the pane, fills the
 screen with your profile. (*Show → The current world* runs whatever world is open instead.)
@@ -54,7 +54,10 @@ your profile in it:
    box for a Quick Start entry and press Enter.
 3. Press *Save*.
 
-Then open *Background host*, below *While it runs*:
+Then open the *Desktop background* pane: *View → Desktop background settings…*, or *Desktop
+background settings…* under *While it runs*. Everything about the host is there:
+
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor; Add a screen; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, the processor and GPU limits and Fit to this computer…" width="700">
 
 1. Set its *Rotation* to *My wallpaper*.
 2. Press *Start*. The host starts in a window of its own.
@@ -71,6 +74,15 @@ menu bar (macOS) or GNOME's top bar, has *Next*, *Previous*, *Paused* and *Quit*
 while the computer runs on battery, while the processor is busy (during a long search, say), and
 while its wallpaper is hidden behind windows. The guide's
 [background host](../guides/wallpapers.md#the-background-host) section has every setting.
+
+Then press *Fit to this computer…* under *Performance*. The host shows each scene of the rotation
+on the desktop at a ladder of sizes, from big cells to one pixel a cell, a couple of seconds each
+(move this window aside to watch), measuring how hard JETCARP works at each. Then each scene gets a
+row of cards: a picture of the screen at that size, its cells, the processor, GPU and frame rate,
+and whether it stays under the *Processor limit* and *GPU limit* and keeps its frames smooth. Each
+scene shows at the card marked *Recommended*, the finest size within the limits; click another card
+if you like it better. The rules and colours stay as they are (see
+[Fit to this computer](../guides/wallpapers.md#fit-to-this-computer)).
 
 ## 5. The same from the command line
 
@@ -101,11 +113,11 @@ $ jetcarp host rotation "My wallpaper"
 saved; the host is not running
 $ jetcarp host start
 running, pid 3429677, up 0.0s, 94 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 3 · 4000 cells · window
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 3 · 4000 cells of 4 px · window
 caption: off
 $ jetcarp host wallpaper on
 running, pid 3429677, up 4.0s, 95 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells · wallpaper
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 4 px · wallpaper
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: off
 ```
@@ -124,7 +136,7 @@ screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting 
 …
 $ jetcarp host caption on
 running, pid 3429677, up 8.0s, 99 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 33 · 4000 cells · wallpaper
+screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 33 · 4000 cells of 4 px · wallpaper
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: on, bottom left, 20 pt
 ```
@@ -160,7 +172,7 @@ $ jetcarp host saver install --rotation "My wallpaper"
 This installs it and opens the system's screen saver settings, where you choose *JETCARP*. On
 Windows it needs `jetcarpw.exe` beside `jetcarp.exe`, which JETCARP's Windows downloads have. On
 macOS the rotation is copied into the screen saver, so install it again after changing the rotation.
-In the app, *Screen saver runs* in the *Background host* section does the same, with an *Install*
+In the app, *System screen saver runs* in the *Screensaver* pane does the same, with an *Install*
 button. `jetcarp host saver status` says whether it is installed.
 
 **On Linux** there is no such list, and the command says so:
@@ -188,7 +200,7 @@ saved; the host is not running
 `jetcarp host wallpaper off` turns the screens back into windows for the next time the host runs.
 To remove the rest: `jetcarp host saver remove` takes the screen saver out (close the screen saver
 settings first on Windows), and `jetcarp host gnome remove` removes the GNOME extension. In the app,
-*Stop* in the *Background host* section stops the host and unticking *Show on the desktop* turns the
+*Stop* in the *Desktop background* pane stops the host and unticking *Show on the desktop* turns the
 wallpaper off.
 
 `jetcarp uninstall` lists everything JETCARP has set up on your desktop, and `jetcarp uninstall
@@ -200,6 +212,6 @@ wallpaper off.
 - **Rotations** can change by the hour or the day, and run whole series of rules: see
   [Rotations](../guides/rotations.md).
 - **Reseeding** keeps a wallpaper from dying out: see [Reseeding](../guides/reseeding.md).
-- **Start at login:** *Start at login* in the *Background host* section, or `jetcarp host login on`,
+- **Start at login:** *Start at login* in the *Desktop background* pane, or `jetcarp host login on`,
   writes the entry that starts the host when you log in. Logging in with it has not been tested on
   a real machine yet (see [Start at login](../guides/wallpapers.md#start-at-login)).

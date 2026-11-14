@@ -27,6 +27,135 @@ impl CpuMeter {
     }
 }
 
+/// The processor time this process has used so far, on all its threads (the GPU driver's
+/// included), from the system's own accounting: `getrusage` on Linux and macOS,
+/// `GetProcessTimes` on Windows. None where it can't be read.
+pub fn process_cpu_time() -> Option<std::time::Duration> {
+    process_time()
+}
+
+/// This process's share of the machine's processor time between one sample and the next: its
+/// processor time per second of wall-clock time, over every core the process may use.
+pub struct ProcessMeter {
+    wall: std::time::Instant,
+    cpu: std::time::Duration,
+    cores: f64,
+}
+
+impl ProcessMeter {
+    /// Starts measuring now. None where the process's processor time can't be read.
+    pub fn start() -> Option<ProcessMeter> {
+        Some(ProcessMeter {
+            wall: std::time::Instant::now(),
+            cpu: process_cpu_time()?,
+            cores: std::thread::available_parallelism().map_or(1, |n| n.get()) as f64,
+        })
+    }
+
+    /// The share (0 to 1) since [`start`](Self::start).
+    pub fn share(&self) -> f64 {
+        let wall = self.wall.elapsed().as_secs_f64();
+        let cpu = process_cpu_time()
+            .unwrap_or(self.cpu)
+            .saturating_sub(self.cpu)
+            .as_secs_f64();
+        if wall <= 0.0 {
+            return 0.0;
+        }
+        (cpu / wall / self.cores).clamp(0.0, 1.0)
+    }
+}
+
+/// The GPU time this process has used so far, as the kernel counts it for each program (Linux's
+/// DRM `fdinfo`: every engine's `drm-engine-*` time, each GPU client once). None where the system
+/// does not count it, or before this process has opened a GPU.
+pub fn process_gpu_time() -> Option<std::time::Duration> {
+    #[cfg(target_os = "linux")]
+    {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut total: Option<u64> = None;
+        for e in std::fs::read_dir("/proc/self/fdinfo").ok()?.flatten() {
+            let Ok(text) = std::fs::read_to_string(e.path()) else {
+                continue;
+            };
+            if let Some(ns) = drm_engine_ns(&text, &mut seen) {
+                *total.get_or_insert(0) += ns;
+            }
+        }
+        total.map(std::time::Duration::from_nanos)
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
+}
+
+/// The engine time in one `fdinfo` file of a GPU client not already in `seen` (the same client
+/// can be open on several descriptors). None for a file that is not a GPU client's.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn drm_engine_ns(text: &str, seen: &mut std::collections::BTreeSet<String>) -> Option<u64> {
+    let mut driver = false;
+    let mut client = None;
+    let mut ns = 0u64;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        match key.trim() {
+            "drm-driver" => driver = true,
+            "drm-client-id" => client = Some(value.to_string()),
+            k if k.starts_with("drm-engine-") && !k.starts_with("drm-engine-capacity-") => {
+                if let Some(n) = value
+                    .strip_suffix("ns")
+                    .and_then(|n| n.trim().parse::<u64>().ok())
+                {
+                    ns += n;
+                }
+            }
+            _ => {}
+        }
+    }
+    if !driver {
+        return None;
+    }
+    match client {
+        Some(c) if !seen.insert(c.clone()) => Some(0),
+        _ => Some(ns),
+    }
+}
+
+#[cfg(unix)]
+fn process_time() -> Option<std::time::Duration> {
+    let mut u: libc::rusage = unsafe { std::mem::zeroed() };
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut u) } != 0 {
+        return None;
+    }
+    let tv = |t: libc::timeval| {
+        std::time::Duration::new(t.tv_sec.max(0) as u64, (t.tv_usec.max(0) as u32) * 1000)
+    };
+    Some(tv(u.ru_utime) + tv(u.ru_stime))
+}
+
+#[cfg(windows)]
+fn process_time() -> Option<std::time::Duration> {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+    let mut t: [FILETIME; 4] = unsafe { std::mem::zeroed() };
+    let [created, exited, kernel, user] = &mut t;
+    if unsafe { GetProcessTimes(GetCurrentProcess(), created, exited, kernel, user) } == 0 {
+        return None;
+    }
+    let ticks = |f: &FILETIME| (f.dwHighDateTime as u64) << 32 | f.dwLowDateTime as u64;
+    // In units of 100 ns.
+    Some(std::time::Duration::from_nanos(
+        (ticks(&t[2]) + ticks(&t[3])).saturating_mul(100),
+    ))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn process_time() -> Option<std::time::Duration> {
+    None
+}
+
 /// Samples in a row over (or well under) the limit before the answer changes.
 const BUSY_SAMPLES: u32 = 3;
 /// Calm needs the load this many points under the limit.
@@ -249,6 +378,58 @@ mod tests {
         assert!(!r.feed(85.0, 80) && !r.feed(70.0, 80) && !r.feed(85.0, 80) && !r.feed(85.0, 80));
         assert!(r.feed(85.0, 80));
         assert!(!r.feed(100.0, 0), "0 turns it off");
+    }
+
+    #[test]
+    fn this_process_s_processor_time_counts_every_thread() {
+        let before = process_cpu_time().expect("this platform reads it");
+        let meter = ProcessMeter::start().unwrap();
+        // Two threads busy for about 300 ms each.
+        let spin = || {
+            let t = std::time::Instant::now();
+            let mut x = 0u64;
+            while t.elapsed() < std::time::Duration::from_millis(300) {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+            }
+            std::hint::black_box(x);
+        };
+        std::thread::scope(|s| {
+            s.spawn(spin);
+            s.spawn(spin);
+        });
+        let used = process_cpu_time().unwrap().saturating_sub(before);
+        // Both threads count (allowing for a busy test machine that gives them less).
+        assert!(
+            used >= std::time::Duration::from_millis(350),
+            "only {used:?} of about 600 ms"
+        );
+        let share = meter.share();
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get()) as f64;
+        // About two cores' worth of the machine, give or take.
+        assert!(share > 0.0 && share <= 1.0, "{share}");
+        assert!(share * cores <= 2.5, "{share} of {cores} cores");
+    }
+
+    #[test]
+    fn gpu_time_is_read_from_each_gpu_client_once() {
+        let fd = "pos:\t0\ndrm-driver:\tamdgpu\ndrm-client-id:\t7\ndrm-engine-gfx:\t1500 ns\n\
+                  drm-engine-compute:\t500 ns\ndrm-engine-capacity-gfx:\t2\ndrm-total-vram:\t12 KiB\n";
+        let mut seen = std::collections::BTreeSet::new();
+        assert_eq!(drm_engine_ns(fd, &mut seen), Some(2000));
+        assert_eq!(
+            drm_engine_ns(fd, &mut seen),
+            Some(0),
+            "the same client again"
+        );
+        assert_eq!(
+            drm_engine_ns("pos:\t0\nflags:\t02\n", &mut seen),
+            None,
+            "not a GPU"
+        );
+        let idle = "drm-driver:\ti915\ndrm-client-id:\t9\n";
+        assert_eq!(drm_engine_ns(idle, &mut seen), Some(0), "no work yet");
+        // Whatever this machine is, reading it is not an error.
+        let _ = process_gpu_time();
     }
 
     #[test]

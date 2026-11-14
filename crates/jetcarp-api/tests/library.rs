@@ -710,3 +710,90 @@ fn retracted_records_show_as_retracted() {
     assert_eq!(all.retracted, vec![blinker]);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_hunt_finds_soup_is_rebuilt_as_a_scene_that_replays_to_it() {
+    let dir = scratch("lib-soup");
+    let cx = jetcarp_api::Ctx::new()
+        .with_library(Some(dir.join("lib")))
+        .with_out_root(Some(dir.join("out")));
+    // A hunt of disc soups on hexagons, where the rows are sheared.
+    let h = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "hunt", "spec": {"rules": "B2/S34", "tilings": "hex", "soups": 300,
+               "size": 20, "shape": "disc", "seed": 5}}),
+    )
+    .unwrap();
+    let job = h["job"].as_i64().unwrap();
+    let lib = cx.library();
+    let finds = lib.list().unwrap();
+    let rec = finds
+        .iter()
+        .max_by_key(|r| (r.seen, r.id.clone()))
+        .expect("a find")
+        .clone();
+    // Records from 0.4.2 on keep the soup's shape and the hunt's seed.
+    assert_eq!(
+        rec.provenance.shape,
+        Some(jetcarp_core::hunt::soup::SoupShape::Disc)
+    );
+    assert_eq!(rec.provenance.seed, Some(5));
+    let save = dir.join("soup.json").display().to_string();
+    let v = call_json(&cx, "library.soup", json!({"id": rec.id, "save": save})).unwrap();
+    assert_eq!(
+        (&v["job"], &v["shape"]),
+        (&json!(job), &json!("disc")),
+        "{v}"
+    );
+    let first = &v["soups"][0];
+    assert_eq!(first["soup"], json!(rec.provenance.soup.unwrap()), "{v}");
+    assert!(first["copies"].as_u64().unwrap() >= 1, "{v}");
+    // The scene holds the soup and loads; replayed, the find is there by its generation.
+    let text = std::fs::read_to_string(&save).unwrap();
+    let scene = jetcarp_core::Scene::from_json(&text).unwrap();
+    assert_eq!(scene.tiling.boundary, jetcarp_core::Boundary::Dead);
+    let mut w = jetcarp_core::World::from_scene(&scene).unwrap();
+    let gens = first["generation"].as_u64().unwrap();
+    w.apply(jetcarp_core::Command::Step { gens }).unwrap();
+    let objs =
+        jetcarp_core::objects::find_objects(&w, &jetcarp_core::objects::ObjectOptions::default())
+            .unwrap();
+    assert!(
+        objs.objects
+            .iter()
+            .any(|o| o.content_id.as_deref() == Some(rec.id.as_str())),
+        "the replayed soup does not hold {}",
+        rec.id
+    );
+    // The best soups: the most copies first.
+    let b = call_json(&cx, "library.soup", json!({"id": rec.id, "best": 3})).unwrap();
+    let copies: Vec<u64> = b["soups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["copies"].as_u64().unwrap())
+        .collect();
+    assert!(!copies.is_empty() && copies.len() <= 3, "{b}");
+    assert!(copies.windows(2).all(|c| c[0] >= c[1]), "{copies:?}");
+    assert_eq!(b["looked"], 300, "as many soups as the hunt ran");
+    // Without its job, the record alone still makes the soup, and its seed the others.
+    call_json(&cx, "jobs.remove", json!({"job": job})).unwrap();
+    let v2 = call_json(&cx, "library.soup", json!({"id": rec.id})).unwrap();
+    assert_eq!(v2["scene"], v["scene"]);
+    assert_eq!(v2["job"], json!(null));
+    let b2 = call_json(
+        &cx,
+        "library.soup",
+        json!({"id": rec.id, "best": 3, "soups": 300}),
+    )
+    .unwrap();
+    assert_eq!(b2["soups"], b["soups"]);
+    // A find that no hunt made is refused.
+    let (_, cx2) = catalog(&dir.join("other"));
+    let glider = cx2.library().list().unwrap()[0].id.clone();
+    fails(
+        call_json(&cx2, "library.soup", json!({"id": glider})),
+        ErrorKind::Invalid,
+    );
+}

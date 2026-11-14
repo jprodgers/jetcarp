@@ -61,7 +61,10 @@ to an empty value counts as not set.
 **Settings.** `app.json` holds the app's layout, panes, tool windows and display settings, and
 `host.json` the background host's. `setup.json` records the first-run setup (the profile chosen,
 when, and the jobs it started; its being there is what tells the app that setup has run), and
-`paths.json` a data folder chosen in setup. Screensaver profiles are in `screensavers/` and rotations in
+`paths.json` a data folder chosen in setup. `gpu.json` is the [GPU setting](../guides/gpu.md#the-setting)
+that every part of JETCARP shares (automatic, on or off, and which adapter), and `gpu-checks.json`
+keeps the GPU self-test's result for each adapter, driver and version (it is written only where the
+settings folder already exists). Screensaver profiles are in `screensavers/` and rotations in
 `rotations/`, one JSON file each. The host records the command that starts it in `host-program`, for
 GNOME's menu and the Windows screen saver; while it shows a still picture as your desktop background
 it keeps the stills in `desktop-pictures/` and remembers your own picture in `desktop-picture.json`,
@@ -124,7 +127,7 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_FINDER`, `JETCARP_ORCID` | Your name and ORCID iD, recorded as the finder in the [provenance](library-format.md#provenance) of the records you find or import (empty when unset) |
 | `JETCARP_RUNTIME_DIR` | The runtime folder for the app's and host's control files |
 | `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder (when that folder is a `bin` folder, as in Homebrew and Python installs) or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
-| `JETCARP_GPU` | Set to anything but `0`, the app starts with GPU simulation switched on (where the graphics adapter allows) |
+| `JETCARP_GPU` | The GPU setting, over `gpu.json`: `off`, `auto` or `on` (`0` and `1` too), or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of an adapter's name, such as `UHD` (see [The GPU](../guides/gpu.md)) |
 | `JETCARP_AI_CONTROL` | `1` or `on`: the app switches AI control on at launch, as its setting of the same name does |
 | `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default 1,536) |
 | `JETCARP_QS_SEED` | A number: the seed of the Quick Start menu's *Featured* shuffle, so the menu comes up the same each time (default: from the clock) |

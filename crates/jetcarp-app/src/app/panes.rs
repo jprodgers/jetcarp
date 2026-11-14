@@ -92,6 +92,12 @@ pub(super) const PANES: &[PaneDef] = &[
         ui: JetcarpApp::saver_pane,
         group: 0,
     },
+    PaneDef {
+        id: "desktop",
+        title: "Desktop background",
+        ui: JetcarpApp::desktop_pane,
+        group: 0,
+    },
 ];
 
 /// The grid view's id in the tree.

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="JETCARP __VERSION__">
+<title>__TITLE__</title>
+<style>
+/* JETCARP's clip-rating page: batches of looping clips under a sticky strip (progress, tally,
+   name, save); the current clip carries a ring for keyboard rating. Everything is in this file,
+   so it works offline from the clips folder. */
+:root {
+  --ground: #f5f6f8; --panel: #ffffff; --line: #d3d8e1; --ink: #161a22; --dim: #5b6576;
+  --keep: #0e8a70; --maybe: #a26a00; --drop: #c63a2c; --star: #7a4fcf;
+  --on-keep: #ffffff; --on-maybe: #ffffff; --on-drop: #ffffff; --on-star: #ffffff;
+  --display: Georgia, "Times New Roman", serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1118; --panel: #181d28; --line: #2a3140; --ink: #e8ebf1; --dim: #99a3b5;
+    --keep: #58e0c2; --maybe: #ffc23e; --drop: #ff6a5a; --star: #c9a7ff;
+    --on-keep: #06201a; --on-maybe: #2a1e00; --on-drop: #2c0805; --on-star: #1d0d38;
+  }
+}
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-family: var(--display); font-weight: 650; font-size: clamp(28px, 5vw, 42px); margin: 0 0 8px; text-wrap: balance; }
+.lede { color: var(--dim); max-width: 72ch; line-height: 1.55; margin: 0 0 10px; }
+.lede b { color: var(--ink); font-weight: 600; }
+.lede code { font: 13px var(--mono); color: var(--ink); }
+.keys { color: var(--dim); font-size: 13px; margin: 0 0 22px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+kbd { font: 500 12px var(--mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px; }
+.bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--ground); border-bottom: 1px solid var(--line); padding-block: 10px; margin-bottom: 8px; }
+.count { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.track { flex: 1 1 160px; height: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; min-width: 0; }
+.track i { display: block; height: 100%; width: 0; background: var(--keep); transition: width .2s; }
+.tally { font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.who { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--dim); }
+.who input { font: 13px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 11em; }
+.state { color: var(--dim); font-size: 13px; flex-basis: 100%; }
+section { margin-top: 30px; }
+h2 { font-family: var(--display); font-weight: 500; font-size: 24px; margin: 0 0 12px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h2 small { font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; position: relative; scroll-margin-top: 90px; }
+figure.keep { box-shadow: 0 0 0 2px var(--keep); } figure.maybe { box-shadow: 0 0 0 2px var(--maybe); } figure.drop { box-shadow: 0 0 0 2px var(--drop); }
+figure.cur { outline: 3px solid var(--ink); outline-offset: 3px; }
+figure.drop img { opacity: .45; }
+figure img { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: #000; cursor: pointer; }
+.starred { position: absolute; top: 8px; right: 8px; font: 500 12px var(--mono); background: var(--star); color: var(--on-star); border-radius: 3px; padding: 2px 6px; }
+figcaption { padding: 8px 10px 2px; font-size: 12px; line-height: 1.45; min-width: 0; }
+.rule { font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; }
+.meta { color: var(--dim); overflow-wrap: anywhere; }
+.btns { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 6px; padding: 8px 10px 10px; }
+button { font: 500 12.5px var(--body); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 7px 0; cursor: pointer; }
+.btns button[data-v="star"] { padding: 7px 10px; }
+button:hover { border-color: var(--dim); }
+button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--keep); outline-offset: 1px; }
+.btns button[aria-pressed="true"][data-v="keep"] { background: var(--keep); border-color: var(--keep); color: var(--on-keep); }
+.btns button[aria-pressed="true"][data-v="maybe"] { background: var(--maybe); border-color: var(--maybe); color: var(--on-maybe); }
+.btns button[aria-pressed="true"][data-v="drop"] { background: var(--drop); border-color: var(--drop); color: var(--on-drop); }
+.btns button[aria-pressed="true"][data-v="star"] { background: var(--star); border-color: var(--star); color: var(--on-star); }
+#save { padding: 7px 14px; background: var(--keep); border-color: var(--keep); color: var(--on-keep); }
+.note { margin-top: 36px; }
+.note label { font-family: var(--display); font-size: 22px; display: block; margin-bottom: 8px; }
+textarea { width: 100%; box-sizing: border-box; min-height: 110px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: 14px/1.5 var(--body); }
+@media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>__HEADING__</h1>
+  <p class="lede">__LEDE__</p>
+  <p class="lede"><b>Keep</b> the runs you would like to see more of, <b>Maybe</b> those you would not mind, <b>Drop</b> the rest. <b>★</b> marks a clip you would show someone; it goes with any verdict. Rate as many as you like, in any order. This browser keeps your ratings as you click, so you can come back later; <b>Save ratings</b> downloads them as one file, which <code>__COMMAND__</code> reads.</p>
+  <p class="keys"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>K</kbd> keep</span><span><kbd>M</kbd> maybe</span><span><kbd>D</kbd> drop</span><span><kbd>S</kbd> star</span><span>Click a clip to make it the current one. Rating moves on to the next clip.</span></p>
+  <div class="bar">
+    <span class="count" id="count">0 of 0 rated</span><div class="track"><i id="fill"></i></div><span class="tally" id="tally"></span>
+    <label class="who">Your name <input id="rater" autocomplete="name" placeholder="optional"></label>
+    <button type="button" id="save">Save ratings</button>
+    <span class="state" id="state" aria-live="polite"></span>
+  </div>
+  <div id="sections"></div>
+  <div class="note"><label for="note">Anything you noticed?</label>
+  <textarea id="note" placeholder="What makes a run good or bad to you: movement, fronts, colours, speed, tilings, kinds of behaviour you want more of…"></textarea></div>
+</div>
+<script id="meta" type="application/json">__META__</script>
+<script id="clips" type="application/json">__CLIPS__</script>
+<script>
+"use strict";
+const META = JSON.parse(document.getElementById("meta").textContent);
+const clips = JSON.parse(document.getElementById("clips").textContent);
+const KEY = "jetcarp-ratings:" + META.key;
+const votes = new Map();   // run id -> {verdict, star, ts}
+const cards = new Map();
+const order = [];
+const root = document.getElementById("sections");
+const state = document.getElementById("state");
+const note = document.getElementById("note");
+const rater = document.getElementById("rater");
+let cur = -1;
+let unsaved = false;
+
+// Batches: the clips' buckets when they have them, else 24 at a time.
+const batches = [];
+if (clips.some(c => c.bucket)) {
+  for (const c of clips) {
+    const b = c.bucket || "other";
+    let x = batches.find(y => y.name === b);
+    if (!x) { x = { name: b, list: [] }; batches.push(x); }
+    x.list.push(c);
+  }
+} else {
+  for (let i = 0; i < clips.length; i += 24) batches.push({ name: "Batch " + (batches.length + 1), list: clips.slice(i, i + 24) });
+}
+for (const b of batches) {
+  const sec = document.createElement("section");
+  const h = document.createElement("h2"); h.textContent = b.name;
+  const sm = document.createElement("small"); sm.textContent = b.list.length + " clips"; h.append(sm); sec.append(h);
+  const g = document.createElement("div"); g.className = "grid";
+  for (const c of b.list) {
+    const idx = order.length; order.push(c.id);
+    const fig = document.createElement("figure"); fig.id = "c" + c.id;
+    const img = document.createElement("img"); img.src = c.file; img.loading = "lazy"; img.alt = c.rule + " on " + c.tiling;
+    img.addEventListener("click", () => setCur(idx, false));
+    fig.append(img);
+    const st = document.createElement("span"); st.className = "starred"; st.textContent = "★"; st.hidden = true; fig.append(st);
+    const cap = document.createElement("figcaption");
+    const r = document.createElement("div"); r.className = "rule"; r.textContent = c.rule;
+    const m = document.createElement("div"); m.className = "meta"; m.textContent = c.tiling;
+    const s = document.createElement("div"); s.className = "meta"; s.textContent = c.seed;
+    cap.append(r, m, s); fig.append(cap);
+    const bx = document.createElement("div"); bx.className = "btns";
+    for (const [v, label] of [["keep", "Keep"], ["maybe", "Maybe"], ["drop", "Drop"], ["star", "★"]]) {
+      const bt = document.createElement("button"); bt.type = "button"; bt.textContent = label; bt.dataset.v = v; bt.setAttribute("aria-pressed", "false");
+      if (v === "star") bt.setAttribute("aria-label", "Star");
+      bt.addEventListener("click", () => { setCur(idx, false); v === "star" ? toggleStar(c.id) : vote(c.id, v, false); });
+      bx.append(bt);
+    }
+    fig.append(bx); g.append(fig); cards.set(c.id, fig);
+  }
+  sec.append(g); root.append(sec);
+}
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function setCur(i, scroll) {
+  if (i < 0 || i >= order.length) return;
+  if (cur >= 0) cards.get(order[cur]).classList.remove("cur");
+  cur = i;
+  const fig = cards.get(order[cur]); fig.classList.add("cur");
+  if (scroll) fig.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+}
+function paint(id) {
+  const fig = cards.get(id); if (!fig) return;
+  const v = votes.get(id) || {};
+  fig.classList.remove("keep", "maybe", "drop");
+  if (v.verdict) fig.classList.add(v.verdict);
+  fig.querySelector(".starred").hidden = !v.star;
+  fig.querySelectorAll(".btns button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === "star" ? !!v.star : b.dataset.v === v.verdict)));
+}
+function count() {
+  let n = 0, k = 0, m = 0, d = 0, s = 0;
+  for (const [id, v] of votes) {
+    if (!cards.has(id)) continue;
+    if (v.verdict) n++;
+    if (v.verdict === "keep") k++; if (v.verdict === "maybe") m++; if (v.verdict === "drop") d++;
+    if (v.star) s++;
+  }
+  document.getElementById("count").textContent = n + " of " + clips.length + " rated";
+  document.getElementById("fill").style.width = (100 * n / Math.max(1, clips.length)) + "%";
+  document.getElementById("tally").textContent = k + " keep · " + m + " maybe · " + d + " drop · " + s + " ★";
+}
+
+// Kept in this browser, under this clips folder's manifest.
+let store = null;
+try { store = window.localStorage; store.getItem(KEY); } catch (e) { store = null; }
+function keep() {
+  unsaved = true;
+  if (!store) { state.textContent = "This browser cannot keep ratings for this page: save them before you close it."; return; }
+  try {
+    store.setItem(KEY, JSON.stringify({ votes: Object.fromEntries(votes), note: note.value, rater: rater.value }));
+    state.textContent = "Kept in this browser. Save ratings to make the file.";
+  } catch (e) { state.textContent = "This browser would not keep the ratings: save them before you close the page."; }
+}
+function restore() {
+  if (!store) return;
+  try {
+    const s = JSON.parse(store.getItem(KEY) || "null");
+    if (!s) return;
+    for (const [id, v] of Object.entries(s.votes || {})) if (cards.has(Number(id))) votes.set(Number(id), v);
+    note.value = s.note || ""; rater.value = s.rater || "";
+    if (votes.size) state.textContent = "Your ratings from before are back.";
+  } catch (e) {}
+}
+function set(id, v) {
+  if (v.verdict || v.star) votes.set(id, { verdict: v.verdict || null, star: !!v.star, ts: Date.now() });
+  else votes.delete(id);
+  paint(id); count(); keep();
+}
+function vote(id, v, advance) {
+  const old = votes.get(id) || {};
+  set(id, { verdict: old.verdict === v && !advance ? null : v, star: old.star });
+  if (advance) setCur(cur + 1, true);
+}
+function toggleStar(id) {
+  const old = votes.get(id) || {};
+  set(id, { verdict: old.verdict, star: !old.star });
+}
+function save() {
+  const ratings = [];
+  for (const c of clips) {
+    const v = votes.get(c.id);
+    if (v && (v.verdict || v.star)) ratings.push({ run: c.id, verdict: v.verdict || null, star: !!v.star, ts: v.ts });
+  }
+  const out = { format: "jetcarp-ratings 1", job: META.job, search: META.search, round: META.round, rater: rater.value.trim(), ratings: ratings, note: note.value.trim() };
+  const blob = new Blob([JSON.stringify(out, null, 1) + "\n"], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "ratings-" + META.round + ".json";
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  unsaved = false;
+  state.textContent = "Saved " + ratings.length + " ratings as " + a.download + " (in your downloads).";
+}
+document.getElementById("save").addEventListener("click", save);
+document.addEventListener("keydown", e => {
+  if (e.target === note || e.target === rater || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "arrowright") { setCur(cur < 0 ? 0 : cur + 1, true); e.preventDefault(); return; }
+  if (k === "arrowleft") { setCur(cur < 0 ? 0 : cur - 1, true); e.preventDefault(); return; }
+  if (cur < 0) return;
+  const id = order[cur];
+  if (k === "k") vote(id, "keep", true);
+  else if (k === "m") vote(id, "maybe", true);
+  else if (k === "d") vote(id, "drop", true);
+  else if (k === "s") toggleStar(id);
+});
+let typing = null;
+for (const el of [note, rater]) el.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(keep, 500); });
+window.addEventListener("beforeunload", e => { if (unsaved && !store) { e.preventDefault(); e.returnValue = ""; } });
+restore();
+for (const id of cards.keys()) paint(id);
+count();
+if (!state.textContent) state.textContent = store ? "This browser keeps your ratings as you click." : "This browser cannot keep ratings for this page: save them before you close it.";
+</script>
+</body>
+</html>

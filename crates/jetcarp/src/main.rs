@@ -72,9 +72,8 @@ enum Cmd {
         /// Fail unless the final hash equals this.
         #[arg(long)]
         expect: Option<String>,
-        /// Step the --gens generations on the GPU where the rules allow it (results are identical).
-        #[arg(long)]
-        gpu: bool,
+        #[command(flatten)]
+        gpu: platform::GpuFlags,
         /// Install automatic reseed policies before running: one policy or a list, as JSON
         /// (the book's "Reseeding" guide), e.g.
         /// '{"mode":{"kind":"blobs"},"when":{"kind":"settled"},"cooldown":200}'.
@@ -370,6 +369,9 @@ fn without_json(cmd: &Cmd) -> Option<&'static str> {
 fn main() -> Result<()> {
     // A PastePattern naming a library pattern finds it in the default library.
     jetcarp_store::install();
+    // GPU self-test results are kept in the settings folder by the program, never by code that
+    // uses the GPU crate as a library (the test suites).
+    jetcarp_gpu::select::keep_checks(true);
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
@@ -394,6 +396,8 @@ fn run() -> Result<()> {
         );
     }
     // Scripts may ask for GPU toppling of large sandpiles.
+    // Scripts step large worlds on the GPU as the GPU setting says.
+    jetcarp_api::ctx::set_gpu_platform(std::sync::Arc::new(jetcarp_app::gpu_info::GpuOnly));
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()
             .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
@@ -444,7 +448,7 @@ fn run() -> Result<()> {
                 save: save.map(|p| p.display().to_string()),
                 threads,
                 expect,
-                gpu,
+                gpu: gpu.asked(),
                 reseed,
                 reseed_now,
             };
@@ -580,7 +584,7 @@ fn run() -> Result<()> {
                     families: families.map(serde_json::Value::String),
                     ..Default::default()
                 },
-                gpu: Some(!no_gpu),
+                gpu: no_gpu.then_some(false),
                 threads,
                 detach,
                 ..Default::default()

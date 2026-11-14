@@ -7,17 +7,18 @@
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.objects`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
-//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune` |
+//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune`, `library.soup` ([`soup`]) |
 //! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish`, `quickstart.build` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
 //! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
 //! | [`search`] | `search.start` |
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
-//! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
+//! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.wait`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 //! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
 //! | [`setup`] | `setup.status`, `setup.set_data_dir`, `setup.apply` (the first-run setup; with the `pack` feature) |
 
+mod clip_ratings;
 pub mod explore;
 pub mod files;
 pub mod jobs;
@@ -32,6 +33,7 @@ pub mod search;
 #[cfg(feature = "pack")]
 pub mod setup;
 pub mod sheet;
+pub mod soup;
 pub mod system;
 pub mod wallpaper;
 pub mod world;
@@ -73,6 +75,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<library::LibraryRemove>::NEW,
     &Plain::<library::LibraryRender>::NEW,
     &Plain::<library::LibraryPaste>::NEW,
+    &Plain::<soup::LibrarySoup>::NEW,
     &Plain::<library::LibraryVerify>::NEW,
     &Plain::<library::LibraryReverify>::NEW,
     &Plain::<library::LibraryCompounds>::NEW,
@@ -101,10 +104,12 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<explore::SearchTry>::NEW,
     &Plain::<explore::SearchReview>::NEW,
     &Plain::<explore::SearchRescore>::NEW,
+    &Plain::<explore::SearchRefit>::NEW,
     &Plain::<explore::SearchSeal>::NEW,
     &Plain::<explore::SearchClips>::NEW,
     &Plain::<jobs::JobsList>::NEW,
     &Plain::<jobs::JobsStatus>::NEW,
+    &Plain::<jobs::JobsWait>::NEW,
     &Plain::<jobs::JobsStop>::NEW,
     &Plain::<jobs::JobsResume>::NEW,
     &Plain::<jobs::JobsRemove>::NEW,

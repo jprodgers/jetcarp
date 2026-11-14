@@ -1,7 +1,7 @@
 //! Run segments and score sidecars (`jetcarp_search::explore::segments`): what is written reads
 //! back, whole and a few rows at a time, and a sidecar's scores replace the segment's.
 
-use jetcarp_core::explore::features::Features;
+use jetcarp_core::explore::features::{Features, SignMeasures};
 use jetcarp_search::explore::segments::*;
 use std::path::PathBuf;
 
@@ -33,6 +33,14 @@ fn rec(id: i64) -> RunRec {
             travel: 0.5,
             movers: (id % 11) as u32,
             mover_speed: 0.25,
+            // Every third run a JACA run with sign measures; the rest without (nulls).
+            signs: (id % 3 == 0).then(|| SignMeasures {
+                pos: 1.0 - (id % 50) as f32 / 100.0,
+                balance: (id % 50) as f32 / 100.0,
+                sorted: 0.75,
+                trade: (id % 7) as f32 / 10.0,
+                lost: if id % 2 == 0 { 1.0 } else { 0.25 },
+            }),
             ..Default::default()
         },
         ts: 1_700_000_000 + id,
@@ -127,4 +135,46 @@ fn a_segment_reads_back_what_was_written() {
             (recs[11].id, (-recs[11].score - 1.0) as f32 as f64)
         ]
     );
+}
+
+/// A segment of schema 1 (before the sign columns) still reads: its runs have no sign measures,
+/// and asking for the sign columns finds them null. A feature blob of 20 floats reads the same.
+#[test]
+fn a_schema_1_segment_reads_without_sign_measures() {
+    use jetcarp_search::explore::store::{feat_blob, feat_from_blob};
+    let d = scratch("schema1");
+    let p = d.join("part-000001.parquet");
+    let recs: Vec<RunRec> = (1..=500).map(rec).collect();
+    let mut w = SegmentWriter::create_schema1(&p, &[]).unwrap();
+    for r in &recs {
+        w.push(r.clone()).unwrap();
+    }
+    w.finish().unwrap();
+    let s = Segment::open(&p).unwrap();
+    assert_eq!(s.meta("jetcarp.schema").as_deref(), Some(RUN_SCHEMAS[0]));
+    let mut back = Vec::new();
+    s.read(0, ALL, None, None, &mut |_, b| {
+        assert!(!b.has(col::SIGN0));
+        back.extend((0..b.len).map(|i| b.rec(i)));
+        Ok(())
+    })
+    .unwrap();
+    let want: Vec<RunRec> = recs
+        .into_iter()
+        .map(|mut r| {
+            r.feat.signs = None;
+            r
+        })
+        .collect();
+    assert!(back == want);
+    // Blobs: 24 floats now, 20 before; both read.
+    let mut f = rec(3).feat;
+    assert!(f.signs.is_some());
+    let blob = feat_blob(&f);
+    assert_eq!(blob.len(), 100);
+    assert_eq!(feat_from_blob(&blob), f);
+    f.signs = None;
+    assert_eq!(feat_from_blob(&blob[..80]), f);
+    let none = feat_blob(&f);
+    assert_eq!(feat_from_blob(&none), f, "NaN signs read as none");
 }

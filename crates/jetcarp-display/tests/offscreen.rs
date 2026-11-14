@@ -8,6 +8,7 @@ use jetcarp_display::gpu::{Geometry, TileDraw, TileRenderer, slot_capacity};
 use jetcarp_display::profiles::{self, Show};
 use jetcarp_display::simgpu::{SimBackend, SimStatus};
 use jetcarp_display::view::{ViewRequest, Views};
+use jetcarp_gpu::select::Mode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -23,19 +24,15 @@ struct Gpu {
 fn gpu() -> Option<Gpu> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .ok()?;
-    // Windows without a graphics card (a CI runner) offers only WARP, Microsoft's software
-    // renderer, which crashes these tests; JETCARP itself never simulates on a software adapter.
-    // (Mesa's software Vulkan on Linux works, and keeps the tests running in CI there.)
-    if cfg!(windows) && adapter.get_info().device_type == wgpu::DeviceType::Cpu {
-        eprintln!(
-            "skipped: only a software adapter ({})",
-            adapter.get_info().name
-        );
+    // The display adapter as JETCARP chooses it: a software one only with JETCARP_GPU=software
+    // (Mesa's software Vulkan in CI); Windows' WARP, which crashes these tests, never.
+    let choice =
+        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+    if let Err(e) = &choice.usable {
+        eprintln!("skipped: {e}");
         return None;
     }
+    let adapter = choice.adapter;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
     let renderer = TileRenderer::new(&device, FORMAT);
@@ -420,11 +417,16 @@ fn gpu_stepping_matches_the_cpu_without_a_window_toolkit() {
     let mut sim = SimBackend::from_device(&g.adapter, g.device.clone(), g.queue.clone());
     assert!(sim.available(), "{}", sim.hint());
     sim.on = true;
-    assert_eq!(sim.status(), SimStatus::Waiting);
+    // Automatic leaves a world this small on the CPU.
+    sim.mode = Mode::Auto;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    assert_eq!(sim.step(&mut on_gpu, 5, deadline, true), 0);
+    assert_eq!(sim.status(), SimStatus::Small);
+    sim.mode = Mode::On;
     let mut done = 0;
     while done < 20 {
         let deadline = Instant::now() + Duration::from_secs(5);
-        let n = sim.step(&mut on_gpu, 20 - done, deadline);
+        let n = sim.step(&mut on_gpu, 20 - done, deadline, true);
         assert!(n > 0, "{:?}", sim.status());
         done += n;
     }

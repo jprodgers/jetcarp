@@ -22,7 +22,7 @@ setup, see [Your first live wallpaper](../tutorials/first-wallpaper.md).
 | --- | --- | --- | --- | --- |
 | Screensaver mode in the app | Yes | Yes | Yes | Yes |
 | Background host in a window | Yes | Yes | Yes | Yes |
-| Live desktop background | With JETCARP's GNOME extension (GNOME Shell 50) | No: the host shows a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space |
+| Live desktop background | With JETCARP's GNOME extension (GNOME Shell 50 or 51) | No: the host shows a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space |
 | Live lock screen | Yes, through the extension | No | No | No |
 | In the system's screen saver list | No (use the lock screen instead) | No | Yes (`JETCARP.scr`) | Yes (`JETCARP.saver`) |
 | Menu for the host | In the top bar, from the extension | None | In the notification area | In the menu bar |
@@ -36,7 +36,7 @@ settings, and [Uninstalling](uninstalling.md) undoes it.
 
 These features were tested by hand in November 2026 on three machines, on the code of JETCARP's
 predecessor CART just before it took its present name. The renamed program has not yet been tested
-on these machines again.
+on these machines again, except as the Fedora 45 line says.
 
 - **Fedora 44, GNOME 50.6 on Wayland, one monitor:** the live desktop background, the top-bar menu,
   and the lock screen in both modes, including unlocking with a real password and stopping the host by
@@ -44,6 +44,11 @@ on these machines again.
   have only been tried in a headless GNOME session. Since those tests, the part of the extension that
   keeps the host's windows out of the overview and the window switcher has been rewritten, and the new
   version has not yet been tested in a real GNOME session.
+- **Fedora 45, GNOME 51.1 on Wayland, one monitor, with JETCARP 0.4.1's host and the extension as
+  fixed for [#2](https://github.com/jprodgers/jetcarp/issues/2):** the live desktop background runs
+  on the desktop. Pausing under a full screen app has been tried only in a headless GNOME 51.1
+  session. The lock screen, the top-bar menu, and keeping the host's windows out of the overview
+  and the window switcher have not been checked on GNOME 51 yet.
 - **Windows 11 Home (version 26H2) on a laptop with two graphics adapters, with and without a second
   monitor:** the live desktop background under the icons (including after Explorer restarts and after
   a change of display scaling), the screen saver (install, preview, starting after the idle time,
@@ -72,8 +77,13 @@ monitors chosen in the *Display* pane.
   while the screensaver runs to show or hide it), *Keep the computer awake while it runs*, *Leave on
   any key or mouse movement (else Esc only)*, *Hide floating and popped-out windows*, *Start AI
   control*, and *Hide the pointer after* a delay.
-- **Background host** controls the host (see [below](#the-background-host)).
+- **System screen saver runs** (Windows and macOS) chooses the rotation of the system's own screen
+  saver, with an *Install* button (see [below](#the-systems-screen-saver)).
 - **Profiles** lists and edits the screensaver profiles (see [below](#screensaver-profiles)).
+
+The background host, which runs the desktop background, has a pane of its own (see
+[below](#the-desktop-background-pane)); a link under *While it runs* opens it. Profiles and rotations
+are shared: the desktop background runs the same ones, and they are edited here.
 
 The app can also start straight into screensaver mode, for example from a desktop shortcut:
 
@@ -115,13 +125,13 @@ The host runs as its own program, so its scenes keep going when the app closes, 
 time. It shows one or more *screens*, each running a [rotation](rotations.md) either in a window or
 as the desktop background, on a chosen monitor or across all of them.
 
-**Start and stop it** from the *Background host* section of the *Screensaver* pane (*Start*, *Stop*,
-*Pause*, and ◀ ▶ for the previous and next item), from its menu, or from the command line:
+**Start and stop it** from the *Desktop background* pane (*Start*, *Stop*, *Pause*, and ◀ ▶ for the
+previous and next item), from its menu, or from the command line:
 
 ```text
 $ jetcarp host start --rotation "Wolfram series"
 running, pid 676359, up 0.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells · window
+screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells of 4 px · window
 caption: off
 $ jetcarp host next
 running, pid 676359, up 3.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
@@ -146,6 +156,8 @@ until its world is built.
 | `jetcarp host fps N` | The most frames per second it draws (1 to 240; default 30) |
 | `jetcarp host caption on\|off` | Show what is running in a corner, with `--corner`, `--size`, `--generation on\|off` and `--seconds` |
 | `jetcarp host battery on\|off` | Pause while the computer runs on battery (default on) |
+| `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]` | Fit the desktop background to this computer (see [below](#fit-to-this-computer)) |
+| `jetcarp host scene [--screen N] [--save FILE]` | The scene a screen shows, its grid's size included, as a scene file |
 | `jetcarp host busy PERCENT` | Pause while the whole processor stays at least this busy, as during a long search (default 80; 0 never). It carries on once the load is 20 points lower |
 | `jetcarp host wallpaper`, `still`, `lock`, `gnome`, `saver`, `login` | See the sections below |
 
@@ -156,14 +168,146 @@ the host also pauses by itself while its desktop background is completely hidden
 and while the screen is locked and dark. `jetcarp host status --json` shows what it is holding for,
 under `held`.
 
+The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
+with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
+16,000 cells, as the [GPU setting](gpu.md) says. *GPU simulation* in the *Desktop background* pane is
+the host's own choice: *Follow the shared setting* (the default), *On* or *Off*, whatever the shared
+setting says. *Shared setting*, under it, is the one the app, the command line and the screen savers
+follow too (*Automatic*, *On* or *Off*). The host's log names the adapter it took.
+
 On Windows and macOS the host has an icon in the notification area or the menu bar, and on GNOME the
 extension adds one to the top bar. Its menu names what is showing and has *Next*, *Previous*,
 *Paused*, *Show on the desktop*, *Rotation*, *Open JETCARP*, *Start at login* and *Quit* (on GNOME,
 also *Start JETCARP host* while it is stopped).
 
+## The Desktop background pane
+
+*View → Desktop background settings…* opens the *Desktop background* pane, which holds everything
+about the host. The *Display* and *Screensaver* panes link to it.
+
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane: Start; Show on the desktop; Rotation A classic a day on Every monitor, Add a screen, and a link to the Screensaver pane for rotations and profiles; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, Fit to this computer…, and Measure again by itself when the monitors change" width="700">
+
+- **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too, and
+  whether tuning chose it), or why it is paused.
+- **Where:** *Show on the desktop*, and for each screen its rotation and its monitor (*Every monitor*,
+  or one of them). *Add a screen* puts another rotation on another monitor. Rotations and profiles are
+  edited in the *Screensaver* pane, which the link beside them opens.
+- **The desktop:** *Leave a still picture when it stops*, and on GNOME *On the lock screen*, how long
+  the screen stays lit while locked, and the extension's state with an *Install* button.
+- **How it runs:** *Frames per second*, *GPU simulation* (the host's own choice) and the *Shared
+  setting* it can follow (see [The GPU](gpu.md#the-setting)), the *Caption*, *Pause on battery*,
+  *Pause while the processor is busier than* a share, and *Start at login*.
+- **Performance:** the GPU it uses, the limits, *Fit to this computer…*, and the cards it leaves
+  (see below).
+
+The settings are the host's own `host.json`, as before; the pane writes them and tells a running host.
+
+## Fit to this computer
+
+How small a wallpaper's cells can be depends on the screen and the computer. On a lower-resolution
+laptop panel, Life on squares at one pixel a cell is still easy to see; on a Retina screen, a
+one-pixel cell is too small to see, and four million of them crawl; an aperiodic patch wants tiles
+small but not tiny. So rather than guess, *Fit to this computer…* in the pane's *Performance* group,
+or `jetcarp host tune`, shows you: it sweeps each scene of the desktop background through a ladder
+of sizes, a couple of seconds each, on the desktop itself, measures each one, and then lets you
+choose from a row of cards.
+
+<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each of three scenes. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate and within the limits, 1 px recommended and chosen; Penrose waves at its own size, level 5 and level 4, its own size recommended" width="700">
+
+**The sizes.** On a lattice the ladder is 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48 and 64 pixels a cell,
+in the screen's own pixels (on a screen of two pixels a point, 2 px is one point), and the scene's own
+size. It runs from the finest that keeps the world within 4 million cells (and within the GPU's
+buffers) to the coarsest sensible, 60 cells across the screen's shorter side. On an aperiodic tiling
+it is the patch's levels, each fitted to the screen, whatever size that makes its tiles, and the
+scene's own. The rules, palettes and colouring stay as they are: only the number of cells changes.
+
+**The sweep** shows the coarsest size first and works finer, each size for two seconds, measured over
+the last one and a half. On the host it runs on the real screen (the other screens pause meanwhile);
+move your windows aside to watch. It stops going finer once a size is more than twice over a limit:
+anything finer would only crawl. Several scenes take a minute or two.
+
+**The limits** decide which cards are marked *within the limits*:
+
+- **Processor limit:** JETCARP's own processor time, as a share of the whole machine with every core
+  counted (default 10%).
+- **GPU limit:** JETCARP's own share of the graphics card's time (default 25%).
+- **Smooth at:** the frame rate it must keep (default the monitor's refresh rate, or 60, and never more
+  than the host's *Frames per second*, which is 30 unless you change it).
+
+A size is within them when the processor and GPU stay under 80% of their limits, 95% of frames take
+under 90% of the frame's time, and the scene keeps its speed. With several screens on the desktop,
+each gets an equal share. Sizes over the limits are shown too, marked, and you can still choose them.
+
+**The cards.** Each card has a picture of the screen at that size, shown at the screen's own pixels so
+a one-pixel cell looks as it will; the size and the number of cells; the processor, GPU and frame
+rate; and whether it is within the limits. *Recommended* marks the finest size within them, and each
+scene shows at its recommended size unless you click another card. A scene that is a pattern placed
+on an empty field (a glider gun, an ant from one cell) keeps its own size unless you choose another.
+*Use this size for every scene on this tiling* gives the card's size to the screen's other scenes on
+the same tiling, and *Use the recommended size for the rest* settles every scene you have not chosen.
+*Use the scenes' own sizes* forgets the sweep.
+
+```text
+$ jetcarp host tune --cpu-limit 1 --gpu-limit 3
+sweeping 3 scenes on 1 screen at 30 frames a second, on AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+screen 0, scene 1 of 3: profile Life at 24 px (size 1 of up to 9)
+  24 px, 6,360 cells: processor 0.1%, GPU 0.8%, 30 fps, frames 2.3 ms, on the processor — within the limits
+...
+  4 px, 230,400 cells: processor 0.8%, GPU 1.8%, 30 fps, frames 4.8 ms, on the GPU — within the limits
+  3 px, 409,440 cells: processor 1.2%, GPU 2.5%, 30 fps, frames 4.5 ms, on the GPU, its own size — over: processor 1.2% (over 0.8%: the 1.0% limit, less 20%), GPU 2.5% (over 2.4%: the 3.0% limit, less 20%)
+...
+screen 0: profile Life: 9 sizes; recommended 4 px; shows at 4 px, 230,400 cells
+...
+screen 0: profile Penrose waves: 3 sizes; recommended level 5 (7.3 px); shows at level 5 (7.3 px), 35,000 cells
+swept 3 scene(s) (GPU time from the system's count of JETCARP's GPU time); saved to ~/.config/jetcarp/host.json
+```
+
+**What it measures.** The processor time is JETCARP's own, on every thread. The GPU time is the
+system's own count of JETCARP's GPU time on Linux; elsewhere the host times each frame from its last
+submission until the GPU is done (an upper bound), and a sweep off screen uses the GPU's timestamp
+queries where it has them. The summary says which. A world small enough that the
+[GPU setting](gpu.md) leaves it on the processor is tried there, and held to the processor limit like
+any other. On battery a sweep started by hand says that a computer on battery may measure slower than
+plugged in.
+
+**With the host stopped**, `jetcarp host tune` (and the pane) sweep off screen in a program of their own,
+at each screen's size, drawing and stepping the way the host does, and the cards are the same.
+
+**What is kept.** Each scene's cards and the size it shows at are saved in `host.json` as each scene's
+sweep ends, with whether you chose it, and the pictures in the `tune` folder beside it. A screen given
+another rotation shows its scenes at their own sizes until it is swept again; on a screen of another
+size, a lattice scene keeps its number of cells and a patch its level. With *Measure again by itself
+when the monitors change* (on by default), the host sweeps again once a swept screen's size changes
+and the monitors have stayed put for 15 seconds (not on battery, while the processor is busy, or
+while paused by hand). A size you chose is kept if it is still within the limits there; if not, the
+recommended one shows, with a note in the pane and in `jetcarp host status`.
+
+**A tuned scene is still exactly reproducible**, since a scene's grid size is part of it. The host's
+status gives each screen's cell size and grid; `jetcarp host scene --save FILE` saves the scene a
+screen shows, at the size it was built, and the still picture the host leaves carries that scene
+inside it, as every picture JETCARP writes does.
+
+| Option | Effect |
+| --- | --- |
+| `--cpu-limit P` | JETCARP's processor time, in percent of the whole machine (1 to 100; saved; default 10) |
+| `--gpu-limit P` | JETCARP's share of the GPU's time, in percent (1 to 100; saved; default 25) |
+| `--fps N` | The frame rate to keep (saved; default the monitor's refresh rate, or 60, at most the host's) |
+| `--pick WHICH` | The size each scene is left at: `recommended` (the finest within the limits), `finest` (the finest shown), `own`, or a cell size in pixels. Without it, a size chosen before is kept while it fits, else the recommended one |
+| `--crops DIR` | Save each size's picture here as a PNG |
+| `--screen N` | Only this screen |
+| `--canvas WxH` | The screen's size, when no host is running to say (else the size it was swept for before, else its monitor's) |
+| `--trial-seconds S` | How long each size shows (default 2; the last three quarters are measured) |
+| `--dry-run` | Measure and report, but save nothing |
+| `--stop` | Stop the host's sweep (the scenes done stay saved) |
+| `--json` | Each size's numbers, and each scene's cards, as lines of JSON |
+
+Scripts and AI assistants reach it through the host: the MCP tool `host_control` takes
+`{"action": "tune", "cpu_limit": 10, "pick": "recommended"}` (and `"on": false` to stop it), and its
+status shows the progress under `tuning`; `{"action": "scene"}` gives a screen's scene.
+
 ## The live desktop background
 
-Tick *Show on the desktop* in the *Background host* section, or run `jetcarp host wallpaper on`. To
+Tick *Show on the desktop* in the *Desktop background* pane, or run `jetcarp host wallpaper on`. To
 put different rotations on different monitors, set up one screen per monitor:
 
 ```text
@@ -177,7 +321,7 @@ other screen claims, and `jetcarp host wallpaper off` turns the screens back int
 
 **GNOME** needs JETCARP's GNOME Shell extension, *JETCARP live desktop*, which shows the host's
 windows as the background of the desktop, the overview and the lock screen, and adds the top-bar menu.
-It supports GNOME Shell 50.
+It supports GNOME Shell 50 and 51.
 
 ```text
 jetcarp host gnome install    # copy it into place and switch it on; log out and back in once
@@ -185,7 +329,12 @@ jetcarp host gnome status     # "The GNOME extension is running."
 jetcarp host gnome remove
 ```
 
-The *Background host* section shows the same status, with an *Install* button. Without the extension
+Upgrading JETCARP upgrades the extension: the host, when it starts, and any `jetcarp host` command
+bring an installed extension up to the program's version, and leave it switched off if you switched it
+off. GNOME reads extensions at login, so log out and back in once after upgrading; until then
+`jetcarp host gnome status` says that GNOME is still running the older version.
+
+The *Desktop background* pane shows the same status, with an *Install* button. Without the extension
 the host shows a plain window and says why, so nothing is left covering the desktop. The extension
 only places copies of the host's picture in GNOME's background; it takes no part in unlocking, and if
 the host stops, GNOME's own background comes back.
@@ -213,7 +362,8 @@ is turned off, unless you have chosen another picture in the meantime. It is off
 
 `jetcarp host saver install` adds JETCARP to the system's list of screen savers and opens the system's
 screen saver settings, with JETCARP to choose. `--rotation NAME` chooses what it runs (otherwise the
-first screen's rotation); in the app, the same choice is *Screen saver runs*, with an *Install* button.
+first screen's rotation); in the app, the same choice is *System screen saver runs* in the
+*Screensaver* pane, with an *Install* button.
 `jetcarp host saver status` says whether it is installed, and `remove` takes it out.
 
 - **Windows.** A copy of JETCARP's windowless launcher is made at `%LOCALAPPDATA%\JETCARP\JETCARP.scr`
@@ -242,7 +392,8 @@ first screen's rotation); in the app, the same choice is *Screen saver runs*, wi
 
 ## Start at login
 
-`jetcarp host login on` (or *Start at login*, in the app or the host's menu) makes the host start when
+`jetcarp host login on` (or *Start at login*, in the *Desktop background* pane or the host's menu)
+makes the host start when
 you log in; `jetcarp host login off` stops that. It uses each system's own per-user mechanism:
 
 | System | What is written |

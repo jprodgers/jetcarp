@@ -55,7 +55,7 @@ far:
 <figure class="pair">
 <div><picture>
   <source srcset="../images/automata/jaca-hat-war-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/automata/jaca-hat-war.webp" alt="JACA on the hat: green and orange armies meeting along a glowing front" width="304" loading="lazy">
+  <img src="../images/automata/jaca-hat-war.webp" alt="JACA on the hat: teal and coral armies meeting along a glowing front" width="304" loading="lazy">
 </picture></div>
 <div><picture>
   <source srcset="../images/automata/jaca-square-beads-still.png" media="(prefers-reduced-motion: reduce)">
@@ -113,7 +113,18 @@ written with commas, as in other B/S rules.
 
 JACA uses only neighbour counts and neighbourhood steps, so it runs on every tiling (see
 [How JETCARP generalises automata](generalising.md)); the blast radius is measured in steps of the
-automaton's own neighbourhood. It runs on the CPU; there is no GPU or HashLife version yet.
+automaton's own neighbourhood.
+
+### On the GPU
+
+A JACA world runs on the GPU in the app and in the background host, so on live desktops, the lock
+screen and the screen saver too, whenever *GPU simulation* is on. It runs on lattices and on
+aperiodic patches, with either neighbourhood, any blast radius and any edge. The GPU gives exactly
+the CPU's result: the same cells, ages, hash and repeat, the same glow and the same counts. Each
+generation takes one pass to find the touching cells, one pass per step of the blast, and one pass
+for births and survival, as on the CPU. `jetcarp run --gpu` uses the GPU in the same way. The
+explore search runs JACA on the GPU too, in its batches, when it is given one (`--gpu`). There is
+no HashLife version of JACA.
 
 ### Seeds, colours and counts
 
@@ -121,8 +132,8 @@ A JACA field is stored as a three-state field (states 1 and 2 are +1 and −1), 
 and scripts treat it like any other multi-state rule. The usual start is a mixed soup
 (`{"signed": {"density": 0.3, "negative": 0.5}}`: 30% of cells live, half of them negative); a
 *halves* start puts +1 cells on the left and −1 on the right. Each sign has its own palette
-(`palette` and `palette_neg`), coloured by age. Destroyed cells glow briefly and fade; the glow is
-drawn only and is not part of the state or its hash. The app's card shows the number of cells of each
+(`palette` and `palette_neg`), coloured by age. Destroyed cells glow briefly and fade (the glow
+halves each generation); the glow is drawn only and is not part of the state or its hash. The app's card shows the number of cells of each
 sign and how many were touching and destroyed; the world status that scripts and the MCP server read
 also reports cancelled births.
 

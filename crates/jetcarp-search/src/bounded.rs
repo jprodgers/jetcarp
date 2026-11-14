@@ -491,6 +491,8 @@ fn run_soup(spec: &SearchSpec, topo: &Arc<Topology>, rule: &str, soup: u32, date
         soup: Some(soup as u64),
         density: Some(spec.density),
         generation: None,
+        shape: None,
+        seed: None,
         jetcarp_version: jetcarp_core::VERSION.into(),
         date: date.to_string(),
     };
