@@ -36,7 +36,7 @@ settings, and [Uninstalling](uninstalling.md) undoes it.
 
 These features were tested by hand in November 2026 on three machines, on the code of JETCARP's
 predecessor CART just before it took its present name. The renamed program has not yet been tested
-on these machines again.
+on these machines again, except as the Fedora 45 line says.
 
 - **Fedora 44, GNOME 50.6 on Wayland, one monitor:** the live desktop background, the top-bar menu,
   and the lock screen in both modes, including unlocking with a real password and stopping the host by
@@ -44,6 +44,11 @@ on these machines again.
   have only been tried in a headless GNOME session. Since those tests, the part of the extension that
   keeps the host's windows out of the overview and the window switcher has been rewritten, and the new
   version has not yet been tested in a real GNOME session.
+- **Fedora 45, GNOME 51.1 on Wayland, one monitor, with JETCARP 0.4.1's host and the extension as
+  fixed for [#2](https://github.com/jprodgers/jetcarp/issues/2):** the live desktop background runs
+  on the desktop. Pausing under a full screen app has been tried only in a headless GNOME 51.1
+  session. The lock screen, the top-bar menu, and keeping the host's windows out of the overview
+  and the window switcher have not been checked on GNOME 51 yet.
 - **Windows 11 Home (version 26H2) on a laptop with two graphics adapters, with and without a second
   monitor:** the live desktop background under the icons (including after Explorer restarts and after
   a change of display scaling), the screen saver (install, preview, starting after the idle time,
