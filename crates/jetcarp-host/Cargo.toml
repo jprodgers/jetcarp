@@ -27,6 +27,11 @@ pollster.workspace = true
 winit = { workspace = true, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"] }
 memory-stats = "1.2.0"
 
+# The tuner's measure of the host's own processor time: getrusage, a binding only, already in the
+# dependency tree (Windows uses GetProcessTimes from windows-sys).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
+
 # Linux gets its menu from the GNOME Shell extension (PLAN.md wave 5), so it needs no GTK.
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 tray-icon = "0.26.1"
