@@ -161,6 +161,11 @@ the host also pauses by itself while its desktop background is completely hidden
 and while the screen is locked and dark. `jetcarp host status --json` shows what it is holding for,
 under `held`.
 
+The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
+with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
+16,000 cells, as the [GPU setting](gpu.md) says. Setting `gpu` to `false` in `host.json` keeps the
+host on the processor whatever that setting says. The host's log names the adapter it took.
+
 On Windows and macOS the host has an icon in the notification area or the menu bar, and on GNOME the
 extension adds one to the top bar. Its menu names what is showing and has *Next*, *Previous*,
 *Paused*, *Show on the desktop*, *Rotation*, *Open JETCARP*, *Start at login* and *Quit* (on GNOME,

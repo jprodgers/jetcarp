@@ -163,11 +163,12 @@ crash returns something else, and the loop starts it again.
 `explore` searches across tilings, rule families, rules and seeds at once and keeps the most
 interesting run of each kind it sees, scored for how lively, varied and long-lasting it is (the
 method is quality-diversity search; see [Search methods](../research/search-methods.md#explore)).
-It runs until stopped, keeps every run in the job's own folder, and is best given a long time and
-the GPU:
+It runs until stopped, keeps every run in the job's own folder, and is best given a long time. It
+runs on the GPU when there is a usable one, as the [GPU setting](gpu.md) says; `--cpu` keeps a
+search on the processor and `--gpu` on the GPU whatever the setting, in this and later runs:
 
 ```text
-$ jetcarp search explore --gpu --minutes 60 --label first-look
+$ jetcarp search explore --minutes 60 --label first-look
 ```
 
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs

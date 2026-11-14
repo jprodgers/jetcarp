@@ -53,6 +53,21 @@ that will declare them stable.
   now reads "100/100 soups in each of 1,200 groups", and the count of new patterns is grouped by
   thousands like the others. ([#8](https://github.com/jprodgers/jetcarp/issues/8))
 
+- **A hunt asked for the GPU failed when there was none.** `jetcarp search hunt --gpu` on a computer
+  without a usable GPU stopped with an error, and a pile asked for the GPU did the same in a program
+  without a GPU toppler. Both now run on the processor, with the same results and one note in their
+  log. ([#10](https://github.com/jprodgers/jetcarp/issues/10))
+- **Each part of JETCARP chose its graphics adapter its own way.** The command line asked for the
+  fastest adapter, the app took its toolkit's choice, the host's windows asked for high performance
+  and its headless device for no preference, and only the command line refused software adapters. On
+  a computer with two GPUs, the app and the command line could use different ones, and there was no
+  way to pick one. They now all choose the same way (see [The GPU](../guides/gpu.md#which-adapter)),
+  and `JETCARP_GPU` or the GPU setting can name the adapter.
+  ([#11](https://github.com/jprodgers/jetcarp/issues/11))
+- **The GPU parity tests never ran in CI.** CI installs Mesa's software Vulkan, but the GPU tests
+  refused software adapters, so every one of them skipped. CI now sets `JETCARP_GPU=software`, and
+  they run on lavapipe. ([#12](https://github.com/jprodgers/jetcarp/issues/12))
+
 ### Changed
 
 - **JACA worlds run on the GPU.** With *GPU simulation* on, the app and the background host (so
@@ -91,6 +106,27 @@ that will declare them stable.
   schema 1, from earlier searches and packs, still read, as runs without sign measures, and
   publishing and importing copy segments as they are. JETCARP 0.4.1 cannot read a segment of
   schema 2.
+
+- **The GPU is the default wherever it gains, and the processor the fallback.** Under the new
+  automatic GPU setting, the app's world, wallpapers and screen savers step on the GPU from 16,000
+  cells; `jetcarp run`, `jetcarp wallpaper`, scripts (`w.step`, sweeps) and the MCP server's
+  `world_step` and `world_render` from a million neighbour reads a generation; hunts and explore
+  searches always; piles from 100,000 grains. The results are the same, bit for bit. The app's
+  world used to start on the processor, and the command line's runs and searches stayed there unless
+  given `--gpu`. See [The GPU](../guides/gpu.md).
+- **`--cpu` joins `--gpu`** on `jetcarp run`, `wallpaper`, `search hunt`, `search explore`, `pile`,
+  `jobs resume`, `jobs refit` and `jobs rescore`; either wins over the GPU setting. The operations'
+  `gpu` options are now true, false or left out (the setting decides), and an explore search or pile
+  made with `--gpu` or `--cpu` keeps that choice. `jetcarp setup --no-gpu` is unchanged.
+- **Displays use the adapter driving the screen.** The app, the host, the lock screen and the screen
+  savers prefer it (the integrated GPU on a laptop with two), so a wallpaper does not keep a
+  discrete GPU awake; searches and runs use the fastest adapter.
+- **The app's *Run → GPU simulation* is *Automatic*, *On* or *Off*,** and is saved. So is
+  `jetcarp app display --gpu auto|on|off` (MCP `app_display {gpu}`), which reports the mode. The
+  host's own `gpu` setting now means "follow the GPU setting" unless it is off.
+- **A wallpaper on the GPU costs the processor far less.** Reading a small world back from the GPU
+  woke every worker thread each frame, about 4 ms of processor time; worlds under a million cells now
+  do it on one thread, about 0.04 ms.
 
 ### Added
 
@@ -146,6 +182,22 @@ that will declare them stable.
 - **Every measure out.** `jetcarp jobs runs` takes `--measures all` (or a list), `--format
   csv|json`, `--since ID` for the runs after an id, `--limit 0` for every run, and `--out FILE`.
   The MCP `search_runs` tool writes a CSV file of every run with `csv` and limit 0.
+
+- **A GPU setting shared by the app, the host, the command line and the MCP server**: `gpu.json`
+  in the settings folder, with `gpu` (`auto`, `on`, `off`) and an optional `gpu_adapter`
+  (`integrated`, `discrete`, `software`, or part of a name). `JETCARP_GPU` overrides it with the same
+  words, so `JETCARP_GPU=UHD` uses an Intel UHD rather than the RTX beside it. Software adapters are
+  used only when asked for, and Windows' WARP never.
+- **A GPU self-test.** Before simulating on an adapter, JETCARP steps one rule of every family the
+  GPU runs on two lattices and an aperiodic patch, and a small explore batch, and compares every hash
+  with the processor's (about 0.1 seconds). An adapter whose results differ is not used. The result
+  is kept in `gpu-checks.json` in the settings folder for that adapter, driver and version.
+- **`jetcarp doctor` says which adapter each purpose uses and why**: the GPU setting and where it
+  came from, and for displays and computing the adapter, how it was chosen, its limits, the
+  self-test's result and whether the simulation uses it; `doctor --json` has it as `gpu_policy`.
+- **`examples/bench.rs` in `jetcarp-gpu` times from 4,000 cells up**, with a `--paced` table of
+  one generation a frame and the processor time each path takes, from which the automatic
+  thresholds come.
 
 ## [0.4.1] – 2026-11-13
 

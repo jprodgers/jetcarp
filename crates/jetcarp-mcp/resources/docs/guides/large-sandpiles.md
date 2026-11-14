@@ -25,9 +25,11 @@ job:     1
 A million grains take 20 steps, one for each binary digit of 1,000,000, and each step is about four
 times the work of the one before. N can be written `1000000`, `1e7` or `2^30`.
 
-**On the GPU,** `--gpu` topples periodic tilings on the graphics card. It gives the same pile, and on
-the desktop these numbers come from (a Radeon 8060S), a million grains on squares took 1.7 seconds
-instead of 20.6 on 32 CPU threads. Aperiodic tilings are toppled on the CPU.
+**On the GPU,** periodic tilings topple on the graphics card from 100,000 grains, as the
+[GPU setting](gpu.md) says; `--gpu` puts any pile there and `--cpu` keeps it on the processor. It gives
+the same pile, and on the desktop these numbers come from (a Radeon 8060S), a million grains on
+squares took 1.7 seconds instead of 20.6 on 32 CPU threads. Aperiodic tilings are toppled on the CPU.
+Without a usable GPU the pile topples on the CPU, with a note.
 
 | Option | Effect |
 | --- | --- |
@@ -36,7 +38,7 @@ instead of 20.6 on 32 CPU threads. Aperiodic tilings are toppled on the CPU.
 | `--nb edge` / `--nb touch` | Neighbours that share an edge (the default; von Neumann on squares), or that touch at all (Moore on squares) |
 | `--centre cell` / `vertex` / `edge` | Drop the grains on one tile (the default), or share them among the tiles that meet at a vertex or an edge |
 | `--level N` | Aperiodic tilings: the patch level (by default the smallest that should hold the pile, up to 8) |
-| `--gpu` | Topple on the GPU (periodic tilings) |
+| `--gpu` / `--cpu` | Topple on the GPU (periodic tilings) or only on the CPU, whatever the GPU setting says |
 | `--threads N` | CPU threads (default all); the result doesn't depend on it |
 
 The pile is the same however it is built: on the CPU or the GPU, with any number of threads, in one
@@ -100,7 +102,8 @@ $ jetcarp jobs list
   in the app stops it at once.
 - `jetcarp jobs resume JOB` carries it on. So does `jetcarp pile --resume JOB-OR-FOLDER`, which keeps
   the pile's settings (its picture options too, until it is finished: see [Colours](#colours)).
-  Add `--gpu` to resume on the GPU again: it is chosen for each run, not stored with the pile.
+  A pile made with `--gpu` or `--cpu` keeps that choice; `--gpu` or `--cpu` on the resume decides
+  for that run.
 - `--detach` runs the pile in a process of its own and returns at once, so `jetcarp jobs status JOB`
   can follow it.
 
