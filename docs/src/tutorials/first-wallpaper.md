@@ -57,7 +57,7 @@ your profile in it:
 Then open the *Desktop background* pane: *View → Desktop background settings…*, or *Desktop
 background settings…* under *While it runs*. Everything about the host is there:
 
-<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor; Add a screen; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Automatic, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, the processor and GPU limits and Fit to this computer…" width="700">
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor; Add a screen; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, the processor and GPU limits and Fit to this computer…" width="700">
 
 1. Set its *Rotation* to *My wallpaper*.
 2. Press *Start*. The host starts in a window of its own.
@@ -75,11 +75,13 @@ while the computer runs on battery, while the processor is busy (during a long s
 while its wallpaper is hidden behind windows. The guide's
 [background host](../guides/wallpapers.md#the-background-host) section has every setting.
 
-On a laptop, or a computer busy with other work, press *Fit to this computer…* under *Performance*.
-It runs each scene of the rotation for a few seconds at a time and keeps the most cells it can show
-while JETCARP stays under the *Processor limit* and *GPU limit* and keeps its frames smooth; the
-rules and colours stay as they are. The table under it says what it chose for each scene, and the
-host shows the new sizes at once (see
+Then press *Fit to this computer…* under *Performance*. The host shows each scene of the rotation
+on the desktop at a ladder of sizes, from big cells to one pixel a cell, a couple of seconds each
+(move this window aside to watch), measuring how hard JETCARP works at each. Then each scene gets a
+row of cards: a picture of the screen at that size, its cells, the processor, GPU and frame rate,
+and whether it stays under the *Processor limit* and *GPU limit* and keeps its frames smooth. Each
+scene shows at the card marked *Recommended*, the finest size within the limits; click another card
+if you like it better. The rules and colours stay as they are (see
 [Fit to this computer](../guides/wallpapers.md#fit-to-this-computer)).
 
 ## 5. The same from the command line

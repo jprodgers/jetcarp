@@ -154,15 +154,18 @@ that will declare them stable.
 ### Added
 
 - **Fit the desktop background to this computer.** *Fit to this computer…* in the new *Desktop
-  background* pane, or `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]`, runs each scene
-  of the wallpaper's rotation for a few seconds at a time at its screen's size, as the host runs it,
-  and keeps for each the most cells (the same rules, palettes and colouring) with which JETCARP stays
-  under a processor limit (default 10% of the machine), a GPU limit (default 25% of its time) and a
-  smooth frame rate. It measures JETCARP's own processor time, and its own GPU time (the system's
-  count on Linux, else timestamp queries, else submission to completion; it says which). The sizes
-  are saved in `host.json` and shown at once; a running host pauses while it tunes; and the host
-  tunes again by itself when the monitors change under a tuned screen. Scripts and AI assistants
-  reach it through `host_control` (`{"action": "tune"}`). See
+  background* pane, or `jetcarp host tune`, sweeps each scene of the wallpaper's rotation through a
+  ladder of sizes on the desktop itself, two seconds each: 1 to 64 screen pixels a cell on a
+  lattice (from the finest within 4 million cells to 60 cells across), patch levels on an aperiodic
+  tiling. It measures JETCARP's own processor and GPU time (the system's count on Linux) and frame
+  rate at each, against a processor limit (default 10% of the machine), a GPU limit (default 25%)
+  and a smooth frame rate, and then each scene gets a row of cards: a picture of the screen at that
+  size at its own pixels, the numbers, and whether it is within the limits. The finest within them is
+  recommended and shown unless you click another card; a pattern placed on an empty field keeps its
+  own size. The host sweeps again when the monitors change, keeping a size you chose while it still
+  fits. With the host stopped it sweeps off screen. `--pick recommended|finest|own|PX`, `--crops
+  DIR`, `--dry-run`, `--stop` and `--json` (every size's numbers); scripts and AI assistants reach it
+  through `host_control` (`{"action": "tune"}`). See
   [Fit to this computer](../guides/wallpapers.md#fit-to-this-computer).
 - **`jetcarp host scene`** prints or saves (`--save FILE`) the scene a screen shows, its grid's size
   included, so a tuned wallpaper replays exactly; `host_control` gives it as `{"action": "scene"}`.
