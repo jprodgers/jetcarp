@@ -2226,50 +2226,83 @@ Usage: jetcarp app display [OPTIONS]
 Options:
       --mode <MODE>
           window, fullscreen, or outputs
+
       --fullscreen <FULLSCREEN>
-          The main window full screen (on) or windowed (off) [possible values: on, off]
+          The main window full screen (on) or windowed (off)
+          
+          [possible values: on, off]
+
       --fullscreen-monitor <FULLSCREEN_MONITOR>
           Monitor for full screen (index from `jetcarp app status`)
+
       --monitors <MONITORS>
           Output monitors by index, comma separated (sets mode outputs)
+
       --windows <WINDOWS>
           Outputs as plain windows: WxH@X,Y separated by ';' (trying a span on one monitor)
+
       --span
           One canvas across the outputs
+
       --mirror
           The same view on each output
+
       --units <UNITS>
           Canvas units: pixels or logical
+
       --hide-preview <HIDE_PREVIEW>
-          Draw no grid in the main window while outputs are on [possible values: on, off]
+          Draw no grid in the main window while outputs are on
+          
+          [possible values: on, off]
+
       --cell-px <CELL_PX>
           Cell size in physical pixels (1 to 64)
+
       --port <PORT>
           App port (default: the one the app recorded when AI control was switched on)
+
       --refill
           Rebuild the tiling to fill the canvas at the cell size
+
       --pixel-zoom
           Zoom so a cell edge is the cell size in pixels
+
       --token <TOKEN>
           App token (default: the recorded one)
+
       --json
           Print the app's reply as JSON
+
       --keep-awake <KEEP_AWAKE>
           [possible values: on, off]
+
       --menu-autohide <MENU_AUTOHIDE>
           [possible values: on, off]
+
       --panes-hidden <PANES_HIDDEN>
-          Hide (on) or show (off) every pane [possible values: on, off]
+          Hide (on) or show (off) every pane
+          
+          [possible values: on, off]
+
       --status-bar <STATUS_BAR>
           [possible values: on, off]
+
       --gpu <GPU>
-          GPU simulation: auto (large worlds step on the GPU), on (every world the rules allow) or off. Saved as JETCARP's GPU setting [possible values: auto, on, off]
+          The app's own GPU choice: follow (JETCARP's shared setting, automatic unless changed), on (every world the rules allow) or off (saved)
+
+          Possible values:
+          - follow: JETCARP's shared GPU setting
+          - on
+          - off
+
       --identify
           Show each monitor's index on it for three seconds
+
       --saver <SAVER>
           Screensaver settings as JSON (see the app_display tool's `saver`), e.g. '{"source": "rotation", "rotation": "Wolfram series"}'
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp app play`
@@ -2708,9 +2741,12 @@ Options:
       --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent (saved; default 25)
       --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the host's frame rate)
       --screen <SCREEN>                Only this screen (counted from 0). Default: every screen on the desktop
+      --pick <WHICH>                   Which size each scene is left at: recommended (the finest within the limits; the default), finest (the finest shown), own (the scene's own), or a cell size in pixels. Without it, a size chosen before is kept while it is still within the limits
+      --crops <DIR>                    Save each size's picture here as a PNG (they are kept beside the host's settings too)
       --canvas <CANVAS>                The screen's size in pixels, as WxH, when no host is running to say (default: the size it was tuned for before, else its monitor's)
-      --trial-seconds <TRIAL_SECONDS>  Seconds each trial measures [default: 3]
+      --trial-seconds <TRIAL_SECONDS>  Seconds each size shows for (the last three quarters are measured) [default: 2]
       --dry-run                        Measure and report, but save nothing
+      --stop                           Stop the sweep a running host is making (the scenes already done stay saved)
       --json                           Print the host's reply as JSON
   -h, --help                           Print help
 ```

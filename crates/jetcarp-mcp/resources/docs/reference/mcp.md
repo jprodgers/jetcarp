@@ -938,18 +938,19 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Examples: {}, {"action": "next"}.
+**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it).
 
 *`jetcarp mcp` (stdio) only.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune fits cell sizes to this computer (cpu_limit, gpu_limit in percent, fps; saved); scene: a screen's scene. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene. |
 | `cpu_limit` | number |  |
 | `fps` | number |  |
 | `gpu_limit` | number |  |
 | `name` | string | With rotation: the one to run (saved). |
 | `on` | boolean | With wallpaper, login or tune: on or off. Default on. |
+| `pick` | string or number |  |
 | `screen` | integer | Counted from 0. Default: every screen for next, previous and tune, else the first. |
 
 Example:
@@ -976,7 +977,7 @@ Example:
 | `delete_rotation` | string | Delete a rotation of yours by name (a built-in's edited copy reverts to the built-in). |
 | `fullscreen` | boolean | Shorthand: true is mode fullscreen, false is mode window. |
 | `fullscreen_monitor` | integer or null | Monitor index for full screen; null: the monitor the window is on. |
-| `gpu` | `"auto"`, `"on"`, `"off"`, `true`, `false` | GPU simulation: auto, on or off (or true, false). Saved as JETCARP's GPU setting. |
+| `gpu` | `"follow"`, `"on"`, `"off"`, `true`, `false` | The app's own GPU choice: follow JETCARP's shared setting, on or off (saved). |
 | `hide_preview` | boolean | With outputs on, draw no grid in the main window (saves GPU work). |
 | `identify` | boolean | true: show each monitor's index full screen on it for three seconds. |
 | `keep_awake` | boolean | Keep the computer awake (no blanking, locking or suspend) while the app is open. |
