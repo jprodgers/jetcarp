@@ -521,12 +521,8 @@ fn a_tuned_size_is_applied_and_recorded() {
     assert_eq!(v["tuning"]["running"], false);
 }
 
-/// `jetcarp host tune` with no host running: each scene of the wallpaper's rotation is tried at the
-/// size given, the progress comes as JSON lines, and a size for each scene is saved with the
-/// rotation and canvas it was found for.
-#[test]
-fn host_tune_saves_a_size_for_each_scene() {
-    let dir = home("tune");
+/// A rotation of two rules, as the desktop background of the folders in `dir`.
+fn two_rules(dir: &Path) {
     let rotation = json!({"name": "Two rules",
         "items": [{"source": {"kind": "series", "rules": "B3/S23,B36/S23"}}]});
     std::fs::write(
@@ -536,6 +532,55 @@ fn host_tune_saves_a_size_for_each_scene() {
     .unwrap();
     let settings = json!({"screens": [{"rotation": "Two rules", "place": "wallpaper"}]});
     std::fs::write(dir.join("config/jetcarp/host.json"), settings.to_string()).unwrap();
+}
+
+/// `jetcarp host tune --json`'s lines.
+fn events_of(stdout: &str) -> Vec<Value> {
+    stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("{e}: {l}")))
+        .collect()
+}
+
+/// The sweep's results in the folders' host.json: (scene, sizes shown, size shown at, chosen).
+fn swept(dir: &Path) -> Vec<(String, Vec<f64>, f64, bool)> {
+    let saved: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("config/jetcarp/host.json")).unwrap(),
+    )
+    .unwrap();
+    let t = &saved["screens"][0]["tuning"];
+    assert_eq!(t["rotation"], "Two rules");
+    assert_eq!(t["canvas"], json!([160, 120]));
+    t["scenes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            let sizes = s["rungs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["size"]["px"].as_f64().unwrap())
+                .collect();
+            (
+                s["scene"].as_str().unwrap().to_string(),
+                sizes,
+                s["cell_px"].as_f64().unwrap(),
+                s["chosen"] == true,
+            )
+        })
+        .collect()
+}
+
+/// `jetcarp host tune` with no host running: the sweep runs off screen. On a 160 x 120 screen a
+/// 4 px scene shows at 1 and 2 px (the coarsest keeps 60 cells across) and at its own 4 px, each
+/// size's numbers come as JSON lines, `--pick own` leaves each scene at its own size, and the
+/// pictures land in `--crops` and beside the settings.
+#[test]
+fn host_tune_sweeps_off_screen_with_no_host() {
+    let dir = home("tune");
+    two_rules(&dir);
+    let crops = dir.join("crops");
     let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
     c.args([
         "host",
@@ -547,7 +592,11 @@ fn host_tune_saves_a_size_for_each_scene() {
         "0.5",
         "--cpu-limit",
         "50",
+        "--pick",
+        "own",
+        "--crops",
     ])
+    .arg(&crops)
     .stdin(Stdio::null());
     with_env(&mut c, &dir);
     let out = c.output().unwrap();
@@ -556,49 +605,117 @@ fn host_tune_saves_a_size_for_each_scene() {
         String::from_utf8_lossy(&out.stderr),
     );
     assert!(out.status.success(), "{stdout}\n{stderr}");
-    let events: Vec<Value> = stdout
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("{e}: {l}")))
-        .collect();
+    let events = events_of(&stdout);
     assert_eq!(events[0]["event"], "start", "{stdout}");
     assert_eq!(events[0]["scenes"], 2);
-    let scenes = events.iter().filter(|e| e["event"] == "scene").count();
-    assert_eq!(scenes, 2, "{stdout}");
-    let last = events.last().unwrap();
-    assert_eq!(last["event"], "done", "{stdout}");
-    assert!(
-        last["saved"]
-            .as_str()
-            .is_some_and(|p| p.ends_with("host.json"))
+    let count = |kind: &str| events.iter().filter(|e| e["event"] == kind).count();
+    assert_eq!(
+        (count("rung"), count("measured"), count("scene")),
+        (6, 6, 2),
+        "{stdout}"
     );
+    // Coarsest first; every size's numbers.
+    let shown: Vec<f64> = events
+        .iter()
+        .filter(|e| e["event"] == "measured")
+        .take(3)
+        .map(|e| e["rung"]["size"]["px"].as_f64().unwrap())
+        .collect();
+    assert_eq!(shown, [4.0, 2.0, 1.0]);
+    let m = events.iter().find(|e| e["event"] == "measured").unwrap();
+    for k in ["cells", "cpu_percent", "p95_ms", "fps", "fits"] {
+        assert!(!m["rung"][k].is_null(), "{k} in {m}");
+    }
+    assert_eq!(m["rung"]["cells"], 1200);
+    assert_eq!(events.last().unwrap()["event"], "done", "{stdout}");
+    assert_eq!(saved_limit(&dir), 50.0, "the limit given is saved");
+    for (scene, sizes, shows, chosen) in swept(&dir) {
+        assert!(scene == "B3/S23" || scene == "B36/S23", "{scene}");
+        assert_eq!(sizes, [1.0, 2.0, 4.0], "finest first");
+        assert_eq!((shows, chosen), (4.0, true), "--pick own");
+    }
+    // Pictures, where there was a GPU to draw them.
+    let pictures: Vec<String> = events
+        .iter()
+        .filter_map(|e| e["rung"]["crop"].as_str().map(String::from))
+        .collect();
+    for p in &pictures {
+        assert!(crops.join(p).is_file(), "{p} in --crops");
+        assert!(
+            dir.join("config/jetcarp/tune").join(p).is_file(),
+            "{p} beside the settings"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn saved_limit(dir: &Path) -> f64 {
     let saved: Value = serde_json::from_str(
         &std::fs::read_to_string(dir.join("config/jetcarp/host.json")).unwrap(),
     )
     .unwrap();
-    let t = &saved["screens"][0]["tuning"];
-    assert_eq!(t["rotation"], "Two rules");
-    assert_eq!(t["canvas"], json!([160, 120]));
-    assert_eq!(
-        saved["tune"]["cpu_percent"], 50.0,
-        "the limit given is saved"
+    saved["tune"]["cpu_percent"].as_f64().unwrap()
+}
+
+/// With the host running, `jetcarp host tune` has the host sweep on its own screen and follows
+/// it; each scene is left at the recommended size (the finest within the limits), which the host
+/// then shows. A sweep can be stopped part way.
+#[test]
+fn the_host_sweeps_its_own_screen_and_shows_the_recommended_size() {
+    let dir = home("sweep");
+    two_rules(&dir);
+    let child = spawn(&dir, &[]);
+    let h = Host { child, home: dir };
+    h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(0),
+        "the host to run",
     );
-    let names: Vec<&str> = t["scenes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|s| s["scene"].as_str().unwrap())
-        .collect();
-    assert_eq!(names, ["B3/S23", "B36/S23"]);
-    // 160 x 120 is too small to coarsen a 4 px scene (the coarsest keeps 60 cells across), so each
-    // keeps its own size, measured once.
-    for s in t["scenes"].as_array().unwrap() {
-        assert_eq!(
-            (s["design_px"].as_f64(), s["cell_px"].as_f64()),
-            (Some(4.0), Some(4.0))
-        );
-        assert_eq!(s["cells"], 1200);
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args(["host", "tune", "--json", "--trial-seconds", "0.5"])
+        .stdin(Stdio::null());
+    with_env(&mut c, &h.home);
+    let out = c.output().unwrap();
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(out.status.success(), "{stdout}\n{stderr}");
+    let events = events_of(&stdout);
+    let count = |kind: &str| events.iter().filter(|e| e["event"] == kind).count();
+    assert_eq!(
+        (count("start"), count("scene"), count("done")),
+        (1, 2, 1),
+        "{stdout}"
+    );
+    assert!(count("measured") >= 4, "{stdout}");
+    let results = swept(&h.home);
+    assert_eq!(results.len(), 2);
+    for (_, sizes, shows, chosen) in &results {
+        assert!(sizes.contains(&4.0) && sizes.contains(&1.0), "{sizes:?}");
+        assert!(!chosen, "the recommended size, not a choice");
+        assert!(sizes.contains(shows));
     }
-    let trials = events.iter().filter(|e| e["event"] == "trial").count();
-    assert_eq!(trials, 2);
-    let _ = std::fs::remove_dir_all(&dir);
+    // The host shows the first scene at its recommended size.
+    let want = results.iter().find(|r| r.0 == "B3/S23").unwrap().2;
+    let v = h.wait(
+        |v| {
+            let s = Host::stage(v);
+            s["label"] == "B3/S23"
+                && s["cells"].as_u64() > Some(0)
+                && s["cell_px"].as_f64() == Some(want)
+        },
+        "the host to show the size found",
+    );
+    assert_eq!(v["tuning"]["last"]["outcome"], "done");
+    // Started and stopped: the screen carries on as before.
+    h.call(json!({"action": "tune", "seconds": 5.0})).unwrap();
+    let v = h.call(json!({"action": "status"})).unwrap();
+    assert_eq!(v["tuning"]["running"], true);
+    let v = h.call(json!({"action": "tune", "on": false})).unwrap();
+    assert_eq!(v["tuning"]["running"], false);
+    assert_eq!(v["tuning"]["last"]["outcome"], "stopped");
+    let e = h
+        .call(json!({"action": "tune", "pick": "bigger"}))
+        .unwrap_err();
+    assert!(e.contains("--pick is"), "{e}");
 }

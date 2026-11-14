@@ -31,15 +31,16 @@ fn host_control_definition() -> Value {
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Examples: {}, {\"action\": \"next\"}.",
+        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it).",
         "inputSchema": {"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "tune", "scene", "quit"], "description": "Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune fits cell sizes to this computer (cpu_limit, gpu_limit in percent, fps; saved); scene: a screen's scene."},
+            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "tune", "scene", "quit"], "description": "Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene."},
             "on": {"type": "boolean", "description": "With wallpaper, login or tune: on or off. Default on."},
             "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
             "screen": {"type": "integer", "minimum": 0, "description": "Counted from 0. Default: every screen for next, previous and tune, else the first."},
             "cpu_limit": {"type": "number"},
             "gpu_limit": {"type": "number"},
             "fps": {"type": "number"},
+            "pick": {"type": ["string", "number"]},
         }, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
