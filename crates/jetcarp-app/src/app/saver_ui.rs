@@ -377,7 +377,23 @@ impl JetcarpApp {
         egui::CollapsingHeader::new("While it runs")
             .id_salt("saver-options")
             .show(ui, |ui| self.saver_options_ui(ui));
-        self.host_section(ui, now);
+        self.system_saver_ui(ui);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new("The desktop background has a pane of its own:")
+                    .small()
+                    .weak(),
+            );
+            if ui
+                .small_button("Desktop background settings…")
+                .on_hover_text(
+                    "The background host: scenes behind your windows, the lock screen, and fitting them to this computer",
+                )
+                .clicked()
+            {
+                self.shell.layout.show_pane("desktop");
+            }
+        });
         // ---------------------------------------------- profiles
         ui.separator();
         self.profiles_list_ui(ui, &ctx);

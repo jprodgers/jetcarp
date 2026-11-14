@@ -294,6 +294,7 @@ impl Action {
             AutoReseed => "Auto reseed".into(),
             Setup => "Setup…".into(),
             Pane("screensaver") => "Screensaver settings…".into(),
+            Pane("desktop") => "Desktop background settings…".into(),
             Pane(id) => panes::pane_def(id).map(|d| d.title).unwrap_or(id).into(),
             Tool(t) => t.label().into(),
         }
@@ -334,6 +335,9 @@ impl Action {
             }
             Pane("screensaver") => {
                 "Screensaver profiles (scene, palette, reseeding, cells, speed), rotations, and options"
+            }
+            Pane("desktop") => {
+                "The background host: the desktop background, its screens and monitors, the lock screen, and fitting it to this computer"
             }
             PixelZoom => "One cell edge is the Display pane's cell size in physical pixels",
             FillCanvas => "Rebuild this tiling to cover the canvas at the cell size",
@@ -457,6 +461,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             A(A_::ToggleOutputs),
             A(A_::Screensaver),
             A(A_::Pane("screensaver")),
+            A(A_::Pane("desktop")),
             A(A_::KeepAwake),
             A(A_::Pane("display")),
         ],

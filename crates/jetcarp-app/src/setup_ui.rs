@@ -1031,8 +1031,8 @@ impl Wizard {
         ui.add_space(4.0);
         ui.label(
             "These change your desktop, so each stays off unless you tick it. You can turn them \
-             off again in the Screensaver pane's Background host section, or with the jetcarp \
-             host command.",
+             off again in the Desktop background pane (View → Desktop background settings…), or \
+             with the jetcarp host command.",
         );
         ui.add_space(8.0);
         for o in Offer::ALL {

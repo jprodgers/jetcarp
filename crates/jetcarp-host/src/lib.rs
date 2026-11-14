@@ -133,7 +133,7 @@ fn open_settings() {
         .is_ok();
     if !opened {
         desktop_win::message(
-            "JETCARP's screen saver settings are in the JETCARP app: open the Screensaver pane, then Background host.",
+            "JETCARP's screen saver settings are in the JETCARP app: View, then Screensaver settings.",
         );
     }
 }
