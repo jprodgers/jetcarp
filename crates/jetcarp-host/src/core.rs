@@ -908,6 +908,7 @@ impl Core {
                 self.set_local_hold("tuning", on);
                 return Ok(json!({"ok": true}));
             }
+            "tune" if a.get("on").and_then(Value::as_bool) == Some(false) => self.stop_tuner()?,
             "tune" => {
                 let num = |k: &str| a.get(k).and_then(Value::as_f64).map(|x| x as f32);
                 self.start_tuner(
