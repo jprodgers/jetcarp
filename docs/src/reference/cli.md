@@ -153,7 +153,8 @@ Options:
       --save <SAVE>              Save the resulting scene (with its generation and hash recorded)
       --threads <THREADS>        Worker threads (default: all cores). The hash must not depend on this
       --expect <EXPECT>          Fail unless the final hash equals this
-      --gpu                      Step the --gens generations on the GPU where the rules allow it (results are identical)
+      --gpu                      Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                      Use only the CPU, whatever the GPU setting says
       --reseed <RESEED>          Install automatic reseed policies before running: one policy or a list, as JSON (the book's "Reseeding" guide), e.g. '{"mode":{"kind":"blobs"},"when":{"kind":"settled"},"cooldown":200}'
       --reseed-now <RESEED_NOW>  Reseed once before running, with a mode as JSON, e.g. '{"kind":"rain","drops":40}'
   -h, --help                     Print help
@@ -345,7 +346,9 @@ Options:
       --store-all
           Store every new object as a full record (the policy before wave 4)
       --gpu
-          Run the start of each soup on the GPU (many soups per dispatch; results are identical)
+          Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu
+          Use only the CPU, whatever the GPU setting says
       --max-rss-gb <MAX_RSS_GB>
           Stop (paused, resumable) if the process uses more memory than this many GB
   -h, --help
@@ -533,7 +536,8 @@ Options:
       --reverse            Run the palette the other way (height 1 at its last stop)
       --preview <PREVIEW>  Longest side of preview.png (default 1024; 0 = none)
       --no-png             Skip the full-size pile.png
-      --gpu                Topple on the GPU (periodic tilings)
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -641,7 +645,8 @@ Options:
       --confirm-seeds <CONFIRM_SEEDS>  Seeds an elite is confirmed with [default: 3]
       --batch <BATCH>                  Most worlds in a GPU batch [default: 1024]
       --seed <SEED>                    [default: 0]
-      --gpu                            Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the job); without one, or without this, the CPU runs everything
+      --gpu                            Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                            Use only the CPU, whatever the GPU setting says
       --max-rss-gb <MAX_RSS_GB>        Stop (paused, resumable) if the process uses more memory than this many GB
       --score <SCORE>                  Score runs with this fitted score model (`jetcarp jobs refit --out` writes one) instead of the built-in score; the job keeps a copy, so resuming it keeps the model
       --parents-from <PARENTS_FROM>    Take parents from this explore job: the JACA rules of its reviewed runs (or its best runs), transplanted to other tilings and tuned for balance early in this search
@@ -791,7 +796,8 @@ Options:
       --json                 Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --threads <THREADS>    Worker threads (default: all cores; an explore search leaves two free)
-      --gpu                  Hunts: the start of each soup on the GPU; piles: topple on the GPU; explore: the GPU batch stepper, when there is one
+      --gpu                  Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                  Use only the CPU, whatever the GPU setting says
       --minutes <MINUTES>    Stop at the next checkpoint after this many minutes
       --until <UNTIL>        Stop at the next checkpoint after this Unix time (seconds since 1970)
       --limit <LIMIT>        Stop after this many units in this session
@@ -971,7 +977,8 @@ Options:
       --family <FAMILY>    Fit to this family's runs only; the model then scores only that family
       --out <OUT>          Write the model here (JSON), for `search explore --score` and `jobs rescore --score`
       --no-replay          Do not replay reviewed runs that lack measures (JACA runs stored before sign measures); they count at the mean
-      --gpu                Replay on the GPU, when there is one
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -990,7 +997,8 @@ Options:
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --score <SCORE>      Score with this fitted model (`jetcarp jobs refit --out` writes one); the job keeps it, so the search goes on with it. `builtin` goes back to the built-in score
       --replay             First replay the runs that lack measures the score reads (JACA runs stored before sign measures), caching what they measure. Slow for a large search
-      --gpu                Replay on the GPU, when there is one
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -1040,7 +1048,8 @@ Options:
       --reverse            Run the palette the other way (height 1 at its last stop)
       --preview <PREVIEW>  Longest side of preview.png (default 1024; 0 = none)
       --no-png             Skip the full-size pile.png
-      --gpu                Topple on the GPU (periodic tilings)
+      --gpu                Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                Use only the CPU, whatever the GPU setting says
   -h, --help               Print help
 ```
 
@@ -2089,7 +2098,8 @@ Options:
       --fresh                Build a fresh grid of the scene's tiling sized to fill the image at --cell-px (the scene's CAs and seeds, without its edits). An aperiodic tiling gets the substitution level nearest that
       --cell-px <CELL_PX>    Tile size in pixels for --fresh and --fit repeat [default: 4]
       --gens <GENS>          Generations to run before rendering [default: 0]
-      --gpu                  Step on the GPU where the rules allow it (results are identical)
+      --gpu                  Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
+      --cpu                  Use only the CPU, whatever the GPU setting says
       --palette <PALETTE>    Colour every CA with this palette (`jetcarp palettes` lists them), or with hex colours like `#4fc3ff` or `#103050-#4fc3ff`
       --monitors <MONITORS>  Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout), for a span image
       --split                With --monitors: write one image per monitor instead of the whole span
@@ -2253,7 +2263,7 @@ Options:
       --status-bar <STATUS_BAR>
           [possible values: on, off]
       --gpu <GPU>
-          GPU simulation [possible values: on, off]
+          GPU simulation: auto (large worlds step on the GPU), on (every world the rules allow) or off. Saved as JETCARP's GPU setting [possible values: auto, on, off]
       --identify
           Show each monitor's index on it for three seconds
       --saver <SAVER>
@@ -2380,6 +2390,8 @@ Commands:
   lock       What a wallpaper does on the GNOME lock screen (saved)
   gnome      The GNOME Shell extension behind wallpapers and the top-bar menu
   saver      The screen saver (Windows and macOS)
+  tune       Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
+  scene      The scene a screen shows now, its grid's size included, as a scene file that replays it
   help       Print this message or the help of the given subcommand(s)
 
 Options:
@@ -2682,6 +2694,39 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+```
+
+#### `jetcarp host tune`
+
+```text
+Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
+
+Usage: jetcarp host tune [OPTIONS]
+
+Options:
+      --cpu-limit <PERCENT>            JETCARP's processor time, in percent of the whole machine, every core counted (saved; default 10)
+      --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent (saved; default 25)
+      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the host's frame rate)
+      --screen <SCREEN>                Only this screen (counted from 0). Default: every screen on the desktop
+      --canvas <CANVAS>                The screen's size in pixels, as WxH, when no host is running to say (default: the size it was tuned for before, else its monitor's)
+      --trial-seconds <TRIAL_SECONDS>  Seconds each trial measures [default: 3]
+      --dry-run                        Measure and report, but save nothing
+      --json                           Print the host's reply as JSON
+  -h, --help                           Print help
+```
+
+#### `jetcarp host scene`
+
+```text
+The scene a screen shows now, its grid's size included, as a scene file that replays it
+
+Usage: jetcarp host scene [OPTIONS]
+
+Options:
+      --screen <SCREEN>  
+      --save <SAVE>      Write it to this file (default: print it)
+      --json             Print the host's reply as JSON
+  -h, --help             Print help
 ```
 
 ### `jetcarp mcp`

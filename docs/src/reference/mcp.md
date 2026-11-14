@@ -73,7 +73,7 @@ settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 115 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 116 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}.
 
@@ -554,7 +554,7 @@ Example:
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
 | `explore.confirm_seeds` | integer | Seeds an elite is confirmed with (default 3). |
 | `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
-| `explore.gpu` | boolean | Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything). |
+| `explore.gpu` | boolean | Run the rules a GPU can run on the GPU (true) or everything on the CPU (false), in this and later runs. Default: as JETCARP's GPU setting says at each run (automatic: on the GPU when there is a usable one). |
 | `explore.max_rss_gb` | number | Stop (paused, resumable) when the process uses more memory than this many GB. |
 | `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
 | `explore.parents_reviewed` | string | With parents_from: the verdicts whose runs to take, keep, maybe or drop, separated by commas (default keep,maybe). |
@@ -563,7 +563,7 @@ Example:
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
 | `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
-| `gpu` | boolean | Use the GPU where there is one: hunts run the start of each soup there (results are identical), piles topple there, explore runs there the rules it can. Default false; explore true. |
+| `gpu` | boolean | Use the GPU (true) or only the CPU (false); results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic). |
 | `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |
 | `hunt.density` | number | Soup density (default 0.5). |
 | `hunt.gens` | integer | Generations before a soup that has not settled is censused as it is (default 20,000). |
@@ -599,7 +599,7 @@ Example:
 | `pile` | object | One large sandpile: N grains dropped on one cell of an unbounded grid. It is built by doubling, with pictures in its folder under the output folder. Settings: `jetcarp://schema/search_start/pile`. |
 | `pile.centre` | string | cell (default), vertex, or edge: where the grains go. |
 | `pile.folder` | string | The pile's own folder: carried on from where it stopped when it holds a step file (the job whose folder it is, or a new job for it), else the new pile is built there. A finished pile given picture options (palette, reverse, px, margin, preview, png) is exported again in them. |
-| `pile.gpu` | boolean | Topple on the GPU when there is one (periodic tilings). |
+| `pile.gpu` | boolean | Topple on the GPU (true) or only on the CPU (false), in this and later runs (periodic tilings). Default: as JETCARP's GPU setting says at each run (automatic: on the GPU from 100,000 grains). |
 | `pile.grains` | integer or string | Grains: 1000000, "1e7", "2^30" (up to 2^64 - 1; default 10,000). |
 | `pile.level` | integer | Aperiodic tilings: patch level (default: the smallest that should hold the pile). |
 | `pile.margin` | number | Empty cells around the pile in the image (default 4). |
@@ -938,16 +938,19 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Controls the JETCARP background host, the separate program that keeps live scenes running as wallpapers or windows without the app. Returns its status: each screen's rotation, item, generation and caption, memory use, and recent problems. Fails if the host is not running; the user starts it with `jetcarp host start`. Examples: {}, {"action": "next"}, {"action": "pause"}, {"action": "wallpaper", "on": false}.
+**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Examples: {}, {"action": "next"}.
 
 *`jetcarp mcp` (stdio) only.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"quit"` | Default status. wallpaper puts every screen on the desktop background (GNOME: with the extension) or back in a window; login sets whether the host starts at login; open_app opens the app; reload rereads host.json. |
-| `name` | string | With action rotation: the rotation to run (saved). |
-| `on` | boolean | With wallpaper or login: on or off. Default on. |
-| `screen` | integer | With next, previous, or rotation: which screen, counted from 0. Default: every screen for next and previous, the first for rotation. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune fits cell sizes to this computer (cpu_limit, gpu_limit in percent, fps; saved); scene: a screen's scene. |
+| `cpu_limit` | number |  |
+| `fps` | number |  |
+| `gpu_limit` | number |  |
+| `name` | string | With rotation: the one to run (saved). |
+| `on` | boolean | With wallpaper, login or tune: on or off. Default on. |
+| `screen` | integer | Counted from 0. Default: every screen for next, previous and tune, else the first. |
 
 Example:
 
@@ -973,7 +976,7 @@ Example:
 | `delete_rotation` | string | Delete a rotation of yours by name (a built-in's edited copy reverts to the built-in). |
 | `fullscreen` | boolean | Shorthand: true is mode fullscreen, false is mode window. |
 | `fullscreen_monitor` | integer or null | Monitor index for full screen; null: the monitor the window is on. |
-| `gpu` | boolean | Step on the GPU where the rules allow it (results are identical). |
+| `gpu` | `"auto"`, `"on"`, `"off"`, `true`, `false` | GPU simulation: auto, on or off (or true, false). Saved as JETCARP's GPU setting. |
 | `hide_preview` | boolean | With outputs on, draw no grid in the main window (saves GPU work). |
 | `identify` | boolean | true: show each monitor's index full screen on it for three seconds. |
 | `keep_awake` | boolean | Keep the computer awake (no blanking, locking or suspend) while the app is open. |
@@ -1031,7 +1034,7 @@ The settings of 32 tool arguments, which `tools/list` only summarises (each argu
 - `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
 - `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
-And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
+And the 78 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
 
 <details><summary>The book's pages</summary>
 
@@ -1061,6 +1064,7 @@ And the 77 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/guides/hashlife`: HashLife and very long runs
 - `jetcarp://docs/guides/aperiodic-patches`: Aperiodic patches and following movers
 - `jetcarp://docs/guides/website-export`: Website export
+- `jetcarp://docs/guides/gpu`: The GPU
 - `jetcarp://docs/guides/uninstalling`: Uninstalling
 - `jetcarp://docs/automata/generalising`: How JETCARP generalises automata to any tiling
 - `jetcarp://docs/automata/life-like`: Life-like rules
