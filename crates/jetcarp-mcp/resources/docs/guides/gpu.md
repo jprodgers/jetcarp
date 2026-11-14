@@ -94,7 +94,7 @@ GPU: auto (automatic)
   display: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the adapter driving the screen (automatic)
       limits: 1864135 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers
-      self-test: passed (80 ms, kept from before): 27 world rules and 33 explore batches matched the CPU
+      self-test: passed (101 ms, kept from before): 53 world rules and 33 explore batches matched the CPU
       the GPU simulation uses it
   compute: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the fastest adapter (automatic)
