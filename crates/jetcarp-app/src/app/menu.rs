@@ -317,7 +317,7 @@ impl Action {
                 "Hide the menu bar; it shows when the pointer touches the top edge or Alt is held"
             }
             HidePanes => "Let the grid fill the window (Tab shows the panes again)",
-            GpuSim => "Step on the GPU; results are identical to the CPU",
+            GpuSim => "Automatic, on, off: step on the GPU; results are identical to the CPU",
             TileJson => "Load a tile from the prototype's JSON (in the Tiling pane)",
             SeedAll => "Apply each CA's own seed",
             RandomAll => "Add random live cells (30%) to every CA that takes them",
@@ -394,6 +394,8 @@ pub(super) enum Custom {
     ToolList,
     Displays,
     ReseedNow,
+    /// GPU simulation: automatic, on, off.
+    Gpu,
 }
 
 pub(super) enum Item {
@@ -468,7 +470,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             Sep,
             C(Custom::Speed),
             A(A_::MaxSpeed),
-            A(A_::GpuSim),
+            C(Custom::Gpu),
         ],
     ),
     (
@@ -561,6 +563,7 @@ fn custom_actions(c: Custom) -> Vec<Action> {
         Custom::PaneList => panes::PANES.iter().map(|p| Action::Pane(p.id)).collect(),
         Custom::ToolList => ToolWin::ALL.map(Action::Tool).to_vec(),
         Custom::Displays => vec![Action::RefreshDisplays, Action::IdentifyMonitors],
+        Custom::Gpu => vec![Action::GpuSim],
         _ => vec![],
     }
 }
@@ -700,7 +703,7 @@ impl JetcarpApp {
         Some(match a {
             RunPause => self.playing,
             MaxSpeed => self.max_speed,
-            GpuSim => self.sim.on,
+            GpuSim => self.sim.mode != jetcarp_gpu::select::Mode::Off,
             CellOutlines => self.shell.cell_outlines,
             StatusBar => self.shell.status_bar,
             AutoHideMenu => self.shell.menu_autohide,
@@ -716,6 +719,13 @@ impl JetcarpApp {
     }
 
     /// Do an action (from the menu or a shortcut).
+    /// GPU simulation off, automatic or on, saved as the setting every part of JETCARP shares.
+    pub(super) fn set_gpu_mode(&mut self, m: jetcarp_gpu::select::Mode) {
+        if let Err(e) = crate::simgpu::set_mode(&mut self.sim, m) {
+            self.message = Some((format!("GPU setting not saved: {e}"), true));
+        }
+    }
+
     pub(super) fn run_action(&mut self, ctx: &egui::Context, a: Action) {
         use Action::*;
         if !self.action_enabled(a) {
@@ -775,7 +785,7 @@ impl JetcarpApp {
                 self.exec(Command::Step { gens: 1 });
             }
             MaxSpeed => self.max_speed = !self.max_speed,
-            GpuSim => self.sim.on = !self.sim.on,
+            GpuSim => self.set_gpu_mode(crate::simgpu::next_mode(self.sim.mode)),
             TileJson | Pane(_) | AddByNotation => {
                 let id = match a {
                     TileJson => "tiling",
@@ -999,6 +1009,26 @@ impl JetcarpApp {
                                 }
                             });
                     });
+                });
+            }
+            Custom::Gpu => {
+                use jetcarp_gpu::select::Mode;
+                let hint = self.sim.hint();
+                ui.add_enabled_ui(self.sim.available(), |ui| {
+                    ui.menu_button("GPU simulation", |ui| {
+                        for (m, label) in [
+                            (Mode::Auto, "Automatic"),
+                            (Mode::On, "On"),
+                            (Mode::Off, "Off"),
+                        ] {
+                            if ui.radio(self.sim.mode == m, label).clicked() {
+                                self.set_gpu_mode(m);
+                                ui.close();
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text(hint);
                 });
             }
             Custom::Boundary => {

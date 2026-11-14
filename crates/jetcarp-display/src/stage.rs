@@ -371,7 +371,7 @@ impl Stage {
         if s.world.cas.is_empty() {
             return;
         }
-        sim.on = s.gpu && sim.available();
+        sim.on = s.gpu;
         let max_speed = s.speed <= 0.0;
         let want = if max_speed {
             u64::MAX
@@ -382,7 +382,7 @@ impl Stage {
         };
         let mut stepped = false;
         if want > 0 {
-            let done = sim.step(&mut s.world, want, deadline);
+            let done = sim.step(&mut s.world, want, deadline, !max_speed);
             if done > 0 {
                 stepped = true;
                 self.acc = (self.acc - done as f64).max(0.0);

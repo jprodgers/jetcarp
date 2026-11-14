@@ -76,7 +76,8 @@ pub struct HostSettings {
     pub screens: Vec<ScreenSettings>,
     /// Frames per second, at most.
     pub fps: f32,
-    /// Step on the GPU where the rules allow it.
+    /// Step on the GPU as JETCARP's GPU setting says (`gpu.json`, or `JETCARP_GPU`: automatic
+    /// by default). False: never, whatever that setting says.
     pub gpu: bool,
     pub caption: CaptionSettings,
     /// Abandon an item when the host passes this much memory.

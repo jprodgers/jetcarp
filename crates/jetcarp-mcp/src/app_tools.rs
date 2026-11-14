@@ -55,7 +55,7 @@ fn display_schema() -> Value {
             "screensaver": {"type": "boolean", "description": "Start (true) or end (false) screensaver mode: no controls, the grid running on the outputs (or full screen)."},
             "playing": {"type": "boolean", "description": "Run (true) or pause (false) generations."},
             "speed": {"type": "number", "minimum": 0, "description": "Generations per second; 0 runs as fast as possible."},
-            "gpu": {"type": "boolean", "description": "Step on the GPU where the rules allow it (results are identical)."},
+            "gpu": {"type": ["string", "boolean"], "enum": ["auto", "on", "off", true, false], "description": "GPU simulation: auto (large worlds step on the GPU), on (every world the rules allow), off (true is on, false is off). Saved as JETCARP's GPU setting. Results are identical either way."},
             "mode": {"type": "string", "enum": ["window", "fullscreen", "outputs"], "description": "Where the grid shows: the main window, the main window full screen, or the output windows."},
             "fullscreen": {"type": "boolean", "description": "Shorthand: true is mode fullscreen, false is mode window."},
             "fullscreen_monitor": {"type": ["integer", "null"], "description": "Monitor index for full screen; null: the monitor the window is on."},

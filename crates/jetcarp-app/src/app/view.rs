@@ -118,7 +118,9 @@ impl JetcarpApp {
             self.acc_after(dt)
         };
         if want > 0 {
-            let done = self.sim.step(&mut self.world, want, deadline);
+            let done = self
+                .sim
+                .step(&mut self.world, want, deadline, !self.max_speed);
             if done > 0 {
                 self.colors_dirty = true;
                 self.acc = (self.acc - done as f64).max(0.0);

@@ -213,7 +213,7 @@ impl JetcarpApp {
             "playing": self.playing,
             "speed": self.speed,
             "max_speed": self.max_speed,
-            "gpu": self.sim.on,
+            "gpu": self.sim.mode.name(),
             "menu_autohide": self.shell.menu_autohide,
             "panes_hidden": self.shell.panes_hidden,
             "status_bar": self.shell.status_bar,
@@ -393,14 +393,23 @@ impl JetcarpApp {
                 self.speed = s.clamp(0.1, 100_000.0) as f32;
             }
         }
-        if let Some(g) = get_bool(args, "gpu")? {
-            if g && !self.sim.available() {
+        if let Some(g) = args.get("gpu").filter(|g| !g.is_null()) {
+            use jetcarp_gpu::select::Mode;
+            let m = match g {
+                Value::Bool(true) => Mode::On,
+                Value::Bool(false) => Mode::Off,
+                Value::String(t) => {
+                    Mode::parse(t).ok_or_else(|| format!("gpu is auto, on or off, not {t:?}"))?
+                }
+                _ => return Err("gpu is auto, on or off (or true or false)".into()),
+            };
+            if m != Mode::Off && !self.sim.available() {
                 return Err(format!(
                     "GPU simulation is not available: {}",
                     self.sim.hint()
                 ));
             }
-            self.sim.on = g;
+            crate::simgpu::set_mode(&mut self.sim, m)?;
         }
         // The screensaver last, so it starts on the outputs and settings given with it.
         if let Some(p) = &profile {
