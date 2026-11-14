@@ -361,13 +361,14 @@ impl App {
         if let Some(g) = &self.gpu {
             return Ok(g.clone());
         }
-        let adapter =
-            pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(surface),
-                ..Default::default()
-            }))
-            .map_err(|e| format!("no graphics adapter: {e}"))?;
+        // The adapter driving the screen, under the GPU policy (the same choice as the app's).
+        let adapter = jetcarp_gpu::select::pick(
+            &self.instance,
+            jetcarp_gpu::select::Purpose::Display,
+            Some(surface),
+        )
+        .map_err(|e| format!("no graphics adapter: {e}"))?
+        .adapter;
         let (device, queue) =
             pollster::block_on(adapter.request_device(&device_descriptor(&adapter)))
                 .map_err(|e| format!("no graphics device: {e}"))?;

@@ -5,6 +5,7 @@ use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSett
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
+use jetcarp_gpu::select;
 use jetcarp_mcp::link::{HOST_ENDPOINT, HOST_TOOL, Listener, Pending};
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, VecDeque};
@@ -49,13 +50,17 @@ pub struct SharedGpu {
 pub use jetcarp_display::painter::device_descriptor;
 
 impl SharedGpu {
-    /// A device with no surface (None when the machine has no GPU).
+    /// A device with no surface, on the adapter the GPU policy chooses for a display (None when
+    /// the machine has no GPU).
     pub fn headless() -> Option<SharedGpu> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-                .ok()?;
+        let choice = select::pick(&instance, select::Purpose::Display, None).ok()?;
+        SharedGpu::on(choice.adapter)
+    }
+
+    /// A device on this adapter.
+    pub fn on(adapter: wgpu::Adapter) -> Option<SharedGpu> {
         let (device, queue) =
             pollster::block_on(adapter.request_device(&device_descriptor(&adapter))).ok()?;
         Some(SharedGpu {
@@ -381,8 +386,20 @@ impl Core {
 
     /// The GPU is ready: stages step on it from now on.
     pub fn attach_gpu(&mut self, gpu: Option<SharedGpu>) {
-        if gpu.is_none() {
-            self.note("no GPU found; running on the CPU");
+        match &gpu {
+            None => self.note("no GPU found; running on the CPU"),
+            Some(g) => {
+                let policy = select::Policy::load();
+                self.note(format!(
+                    "GPU: {}; GPU simulation {}",
+                    jetcarp_gpu::describe(&g.adapter.get_info()),
+                    if self.settings.gpu {
+                        policy.describe()
+                    } else {
+                        "off in the host's settings".into()
+                    }
+                ));
+            }
         }
         self.gpu = gpu;
         for i in 0..self.screens.len() {

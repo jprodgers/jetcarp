@@ -59,6 +59,18 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // what the adapter allows.
     let mut wgpu_options = eframe::NativeOptions::default().wgpu_options;
     if let egui_wgpu::WgpuSetup::CreateNew(c) = &mut wgpu_options.wgpu_setup {
+        // The adapter driving the screen, under the GPU policy: the host and the screen savers
+        // choose the same way (`jetcarp_gpu::select`).
+        c.native_adapter_selector = Some(std::sync::Arc::new(|adapters, surface| {
+            use jetcarp_gpu::select;
+            select::pick_from(
+                adapters,
+                &select::Policy::load(),
+                select::Purpose::Display,
+                surface,
+            )
+            .map(|c| c.adapter)
+        }));
         let base = c.device_descriptor.clone();
         c.device_descriptor = std::sync::Arc::new(move |adapter| {
             let mut d = base(adapter);

@@ -32,9 +32,11 @@ impl Offscreen {
     pub fn new(width: u32, height: u32) -> Option<Offscreen> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        // As the window would choose (`jetcarp_gpu::select`), with no surface.
         let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-                .ok()?;
+            jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None)
+                .ok()?
+                .adapter;
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
         let renderer = egui_wgpu::Renderer::new(&device, FORMAT, Default::default());
