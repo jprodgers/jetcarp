@@ -83,8 +83,8 @@ pub struct SignMeasures {
     pub balance: f32,
     /// How well the signs sort into territories at the end: the same-sign fraction among
     /// neighbour pairs of live cells (over the CA's neighbourhood), relative to what shuffled
-    /// signs would give (0 mixed, 1 fully sorted; 1 when one sign is all that is left, 0 with no
-    /// live pairs).
+    /// signs would give (0 mixed, 1 fully sorted; 0 when one sign is all that is left, with no
+    /// territories to sort, and with no live pairs).
     pub sorted: f32,
     /// How much territory changes hands late: of the cells live both at the three-quarter mark
     /// ([`trade_gen`]) and at the end, the fraction whose sign differs (0 when there are none).
@@ -621,8 +621,9 @@ pub fn measure_signs(
     } else {
         let fp = pos as f64 / (pos + neg) as f64;
         let expect = fp * fp + (1.0 - fp) * (1.0 - fp);
+        // One sign nearly all that is left: no territories.
         if expect >= 0.999 {
-            1.0
+            0.0
         } else {
             (((same as f64 / pairs as f64) - expect) / (1.0 - expect)).clamp(0.0, 1.0) as f32
         }

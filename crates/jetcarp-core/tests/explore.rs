@@ -337,7 +337,7 @@ fn sign_measures_see_balance_territories_and_loss() {
     let one = measure_signs(&g, &still(vec![1; n]), gens, 17, Nb::Touch).unwrap();
     assert_eq!(
         (one.pos, one.balance, one.lost, one.sorted, one.trade),
-        (1.0, 0.0, 0.0, 1.0, 0.0)
+        (1.0, 0.0, 0.0, 0.0, 0.0)
     );
     assert!(one.lost_early());
     let h = measure_signs(&g, &still(halves()), gens, 17, Nb::Touch).unwrap();
