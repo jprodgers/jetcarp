@@ -18,6 +18,7 @@
 //! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
 //! | [`setup`] | `setup.status`, `setup.set_data_dir`, `setup.apply` (the first-run setup; with the `pack` feature) |
 
+mod clip_ratings;
 pub mod explore;
 pub mod files;
 pub mod jobs;

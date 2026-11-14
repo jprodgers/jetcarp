@@ -188,7 +188,8 @@ $ jetcarp jobs runs 7 --limit 5
 
 - `jetcarp jobs sheet JOB --ids …` draws a contact sheet of chosen runs.
 - `jetcarp jobs scene JOB RUN` gives a scene that replays a run, to open in the app.
-- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye.
+- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye;
+  `--page` adds a page for rating them in a browser.
   `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, and
   `jetcarp jobs rescore JOB` scores the runs again after the score changes.
 - `jetcarp quickstart publish JOB` puts the search's best confirmed runs, a few per category, rule

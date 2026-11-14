@@ -58,6 +58,13 @@ that will declare them stable.
 
 ### Added
 
+- **A page for rating clips.** `jetcarp jobs clips --page` also writes `index.html` into the clips
+  folder: the clips in batches, each with Keep, Maybe and Drop and a ★, with a progress bar, a
+  tally, a note box, and the keyboard (← →, K, M, D, S). It works offline from the folder and
+  follows the system's light or dark setting. The browser keeps the ratings as you go, and *Save
+  ratings* downloads them as one file, which `jetcarp jobs review JOB --from FILE` records (with
+  `--rater NAME` to name someone else). Stars are kept as five-star ratings of the runs, apart from
+  the verdicts. Scripts and `jetcarp api call` reach it as `search.clips` with `page`.
 - **`--max-rss-gb` for hunts and bounded searches,** as explore searches have it: past that much
   memory the search pauses, resumable, and says why. The job keeps the cap, so a resumed run keeps
   to it too. Scripts and the MCP server's `search_start` take it as `max_rss_gb`.

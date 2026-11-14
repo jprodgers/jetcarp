@@ -13,6 +13,7 @@
 //! score is applied to every stored run by `search.rescore`. Reviews are kept in the library
 //! (ratings of target kind `search_run`), so deleting a search's folder keeps them.
 
+use super::clip_ratings;
 use super::library::catalog_err;
 use crate::args;
 use crate::ctx::Ctx;
@@ -679,11 +680,10 @@ pub struct ReviewIn {
     /// What was seen, in a sentence.
     #[serde(default)]
     pub note: Option<String>,
-    /// Who judged: a name, `user`, or `model:<name>` (default: the publisher's name when one is
-    /// set, as `pack.key` sets it, else `user`).
+    /// Who judged: a name, `user`, or `model:<name>` (default: a ratings file's own rater, else the publisher's name when one is set, as `pack.key` sets it, else `user`). Given, it overrides a ratings file's.
     #[serde(default)]
     pub rater: Option<String>,
-    /// Instead of one run: a folder of rating files as the clip-rating page saves them (`<run id>.json` holding {"verdict": "keep", "ts": ...}); ratings already recorded from it are skipped.
+    /// Instead of one run: a ratings file as the clip-rating page saves it (`jetcarp-ratings 1`: its verdicts become reviews, its stars stars), or a folder of rating files (`<run id>.json` holding {"verdict": "keep", "ts": ...}); ratings already recorded from it are skipped.
     #[serde(default)]
     pub from: Option<String>,
 }
@@ -698,26 +698,44 @@ pub struct Reviewed {
     pub unknown_runs: u64,
     pub unreadable: u64,
     pub already: u64,
+    /// With a ratings file: the stars recorded, its rater as recorded, and its note.
+    pub stars: u64,
+    pub rater: Option<String>,
+    pub note: Option<String>,
     /// The job's reviews now, per verdict.
     pub counts: Vec<(String, u64)>,
+    /// The job's stars now.
+    pub starred: u64,
 }
 
 impl Report for Reviewed {
     fn text(&self) -> String {
         let mut s = format!("recorded {} review(s)", self.recorded);
-        if self.files > 0 {
+        if let Some(r) = &self.rater {
+            let _ = write!(
+                s,
+                " and {} star(s) by {r} ({} for runs not in job {}, {} already recorded)",
+                self.stars, self.unknown_runs, self.job, self.already
+            );
+        } else if self.files > 0 {
             let _ = write!(
                 s,
                 " from {} file(s) ({} for runs not in job {}, {} unreadable, {} already recorded)",
                 self.files, self.unknown_runs, self.job, self.unreadable, self.already
             );
         }
-        let c: Vec<String> = self
+        let mut c: Vec<String> = self
             .counts
             .iter()
             .map(|(k, n)| format!("{k} {n}"))
             .collect();
+        if self.starred > 0 {
+            c.push(format!("\u{2605} {}", self.starred));
+        }
         let _ = writeln!(s, "; job {} has {}", self.job, c.join(", "));
+        if let Some(n) = &self.note {
+            let _ = writeln!(s, "note: {n}");
+        }
         s
     }
 }
@@ -751,9 +769,25 @@ impl Op for SearchReview {
             unknown_runs: 0,
             unreadable: 0,
             already: 0,
+            stars: 0,
+            rater: None,
+            note: None,
             counts: vec![],
+            starred: 0,
         };
         match (&a.from, a.run, &a.verdict) {
+            (Some(from), None, None) if clip_ratings::is_ratings_file(&cx.fs.readable(from)?)? => {
+                let f = cx.fs.readable(from)?;
+                let default = publisher_name().unwrap_or_else(|| "user".into());
+                let r = clip_ratings::import_file(&lib, &c, &f, a.rater.as_deref(), &default)?;
+                out.recorded = r.recorded;
+                out.files = 1;
+                out.unknown_runs = r.unknown_runs;
+                out.already = r.already;
+                out.stars = r.stars;
+                out.rater = Some(r.rater);
+                out.note = r.note;
+            }
             (Some(dir), None, None) => {
                 let d = cx.fs.readable(dir)?;
                 let r = reviews::import_ratings(&lib, &c, &d, &rater).map_err(ApiError::io)?;
@@ -790,6 +824,7 @@ impl Op for SearchReview {
             }
         }
         out.counts = reviews::review_counts(&lib, &c.uuid()).map_err(ApiError::engine)?;
+        out.starred = lib.run_stars(&c.uuid()).map_err(ApiError::engine)?.len() as u64;
         Ok(out)
     }
 }
@@ -1033,6 +1068,9 @@ pub struct ClipsIn {
     /// Frames per clip, spread over the run (default 28).
     #[serde(default = "frames_default")]
     pub frames: u32,
+    /// Also write `index.html`, a page for rating the clips by eye (Keep, Maybe, Drop, a star), which works offline and saves the ratings as one file for search.review.
+    #[serde(default)]
+    pub page: bool,
 }
 
 /// One clip.
@@ -1057,12 +1095,18 @@ pub struct Clips {
     pub folder: String,
     /// The manifest (`manifest.json`, the clips' list).
     pub manifest: String,
+    /// The rating page (`index.html`), with `page`.
+    pub page: Option<String>,
     pub clips: Vec<Clip>,
 }
 
 impl Report for Clips {
     fn text(&self) -> String {
-        format!("{} clips in {}\n", self.clips.len(), self.folder)
+        let mut s = format!("{} clips in {}\n", self.clips.len(), self.folder);
+        if let Some(p) = &self.page {
+            let _ = writeln!(s, "rating page: {p}");
+        }
+        s
     }
 }
 
@@ -1134,12 +1178,19 @@ impl Op for SearchClips {
         let manifest = dir.join("manifest.json");
         let text =
             serde_json::to_string_pretty(&clips).map_err(|e| ApiError::engine(e.to_string()))?;
-        std::fs::write(&manifest, text)
+        std::fs::write(&manifest, &text)
             .map_err(|e| ApiError::io(format!("writing {}: {e}", manifest.display())))?;
+        let page = if a.page {
+            let p = clip_ratings::write_page(&dir, row.id, &c.uuid(), row.label(), &text, &clips)?;
+            Some(p.display().to_string())
+        } else {
+            None
+        };
         Ok(Clips {
             job: row.id,
             folder: dir.display().to_string(),
             manifest: manifest.display().to_string(),
+            page,
             clips,
         })
     }

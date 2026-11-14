@@ -145,7 +145,7 @@ enum JobsCmd {
         save: Option<PathBuf>,
     },
     /// Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings
-    /// in a folder of rating files (`<run id>.json`, as the clip-rating page saves them).
+    /// that the clip-rating page saved (`jobs clips --page`).
     Review {
         /// The explore job.
         job: i64,
@@ -156,12 +156,14 @@ enum JobsCmd {
         /// What was seen, in a sentence.
         #[arg(long)]
         note: Option<String>,
-        /// Who judged (default: the publisher's name when `jetcarp pack key --name` set one,
-        /// else user).
+        /// Who judged; with --from, instead of the name the ratings file gives (default: the
+        /// file's name, else the publisher's name when `jetcarp pack key --name` set one, else
+        /// user).
         #[arg(long)]
         rater: Option<String>,
-        /// Instead of one run: a folder of rating files (`<run id>.json`), as the clip-rating
-        /// page saves them; ratings already recorded from it are skipped.
+        /// Instead of one run: the ratings file the clip-rating page saved (its verdicts become
+        /// reviews, its stars stars), or a folder of rating files (`<run id>.json`); ratings
+        /// already recorded from it are skipped.
         #[arg(long)]
         from: Option<PathBuf>,
     },
@@ -252,6 +254,11 @@ struct ClipsArgs {
     /// Render these runs instead of a sample: a file of one `id[ bucket]` per line.
     #[arg(long)]
     ids: Option<PathBuf>,
+    /// Also write index.html, a page for rating the clips by eye: Keep, Maybe, Drop and a star
+    /// per clip, with the keyboard too. It works offline; its Save ratings button downloads a
+    /// file for `jetcarp jobs review JOB --from FILE`.
+    #[arg(long)]
+    page: bool,
 }
 
 /// `jetcarp jobs wait`'s exit status for how the job ended (1 is any error, 2 a usage error).
@@ -455,6 +462,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 ids_file: a.ids.map(|p| p.display().to_string()),
                 px: a.px,
                 frames: a.frames,
+                page: a.page,
             };
             let p = CliProgress::new(false);
             let r = SearchClips::run(&cx, i, &p);

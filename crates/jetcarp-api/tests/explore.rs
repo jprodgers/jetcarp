@@ -417,3 +417,111 @@ fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
         vec![("drop".into(), 1), ("keep".into(), 1), ("maybe".into(), 1)]
     );
 }
+
+#[test]
+fn a_clips_rating_page_saves_ratings_that_reviews_read_back() {
+    let dir = scratch("explore-rating-page");
+    let cx = ctx(&dir);
+    let r = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "explore", "spec": small(), "budget": {"items": 200}, "threads": 2}),
+    )
+    .unwrap();
+    let job = r["job"].as_i64().unwrap();
+    let out = dir.join("round-1");
+    let c = call_json(
+        &cx,
+        "search.clips",
+        json!({"job": job, "out": out.display().to_string(), "sample": 4, "px": 32,
+               "frames": 3, "page": true}),
+    )
+    .unwrap();
+    // The page: offline, with the manifest's clips and the search's uuid embedded.
+    let page = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert_eq!(c["page"], out.join("index.html").display().to_string());
+    assert!(!page.contains("http://") && !page.contains("https://"));
+    assert!(!page.contains("__"), "a slot was left unfilled");
+    let clips = c["clips"].as_array().unwrap();
+    let uuid = cx.library().job(job).unwrap().uuid;
+    assert!(page.contains(&format!("\"search\":\"{uuid}\"")));
+    assert!(page.contains("\"round\":\"round-1\""));
+    for x in clips {
+        assert!(page.contains(&format!("\"file\":\"{}\"", x["file"].as_str().unwrap())));
+    }
+    // A ratings file as the page saves it: verdicts, a star alone, and a run of another search.
+    let ids: Vec<i64> = clips.iter().map(|x| x["id"].as_i64().unwrap()).collect();
+    let file = dir.join("ratings-round-1.json");
+    let ratings = json!({
+        "format": "jetcarp-ratings 1", "job": job, "search": uuid, "round": "round-1",
+        "rater": "Ada", "note": "fronts are best",
+        "ratings": [
+            {"run": ids[0], "verdict": "keep", "star": true, "ts": 1794662868264_i64},
+            {"run": ids[1], "verdict": "drop", "star": false, "ts": 1794662868300_i64},
+            {"run": ids[2], "verdict": null, "star": true, "ts": 1794662868400_i64},
+            {"run": 999_999, "verdict": "maybe", "star": false, "ts": 1794662868500_i64},
+        ],
+    });
+    std::fs::write(&file, ratings.to_string()).unwrap();
+    let from = file.display().to_string();
+    let rv = call_json(&cx, "search.review", json!({"job": job, "from": from})).unwrap();
+    assert_eq!(
+        (
+            &rv["recorded"],
+            &rv["stars"],
+            &rv["unknown_runs"],
+            &rv["rater"],
+            &rv["note"]
+        ),
+        (
+            &json!(2),
+            &json!(2),
+            &json!(1),
+            &json!("Ada"),
+            &json!("fronts are best")
+        ),
+        "{rv}"
+    );
+    assert_eq!(rv["counts"], json!([["drop", 1], ["keep", 1]]), "{rv}");
+    assert_eq!(rv["starred"], 2, "{rv}");
+    // Stars are not verdicts: the reviewed runs are the two with one.
+    let v = call_json(&cx, "search.runs", json!({"job": job, "reviewed": "any"})).unwrap();
+    assert_eq!(v["runs"].as_array().unwrap().len(), 2, "{v}");
+    let stars = cx.library().run_stars(&uuid).unwrap();
+    assert_eq!(stars.len(), 2);
+    assert!(
+        stars
+            .iter()
+            .all(|s| s.rater == "Ada" && s.source == "ratings:round-1")
+    );
+    // Read again: nothing new. With another rater: recorded for that rater.
+    let rv = call_json(&cx, "search.review", json!({"job": job, "from": from})).unwrap();
+    assert_eq!(
+        (&rv["recorded"], &rv["already"]),
+        (&json!(0), &json!(4)),
+        "{rv}"
+    );
+    let rv = call_json(
+        &cx,
+        "search.review",
+        json!({"job": job, "from": from, "rater": "Bob"}),
+    )
+    .unwrap();
+    assert_eq!(
+        (&rv["recorded"], &rv["stars"], &rv["rater"]),
+        (&json!(2), &json!(2), &json!("Bob"))
+    );
+    // Another search's ratings, or another kind of file, are refused.
+    let mut other = ratings.clone();
+    other["search"] = json!("00000000-0000-0000-0000-000000000000");
+    std::fs::write(&file, other.to_string()).unwrap();
+    fails(
+        call_json(&cx, "search.review", json!({"job": job, "from": from})),
+        ErrorKind::Invalid,
+    );
+    std::fs::write(&file, r#"{"format": "something else"}"#).unwrap();
+    fails(
+        call_json(&cx, "search.review", json!({"job": job, "from": from})),
+        ErrorKind::Invalid,
+    );
+}
