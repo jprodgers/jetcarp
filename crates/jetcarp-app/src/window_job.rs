@@ -52,6 +52,9 @@ impl Platform for AppPlatform {
     fn gpu_worth(&self, w: &jetcarp_core::World, paced: bool) -> bool {
         jetcarp_gpu::GpuSim::worth(w, paced)
     }
+    fn gpu_worth_run(&self, w: &jetcarp_core::World, gens: u64) -> bool {
+        jetcarp_gpu::GpuSim::worth_run(w, gens)
+    }
 }
 
 /// A context for operations on this catalog: the app's platform, and no limits (the app's

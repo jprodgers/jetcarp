@@ -345,6 +345,11 @@ pub trait Platform: Send + Sync {
     fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
         false
     }
+    /// [`Platform::gpu_worth`] for an unpaced run of `gens` generations, whose total work can make
+    /// the GPU worth opening (`jetcarp_gpu::GpuSim::worth_run`).
+    fn gpu_worth_run(&self, w: &World, _gens: u64) -> bool {
+        self.gpu_worth(w, false)
+    }
     /// The desktop integration's state.
     fn desktop(&self) -> Desktop {
         Desktop::default()
@@ -398,6 +403,15 @@ pub fn wants_gpu(platform: &dyn Platform, asked: Option<bool>, w: &World) -> boo
     }
 }
 
+/// [`wants_gpu`] for a run of `gens` generations: automatic also takes the run's total work into
+/// account, so a long run of a mid-sized world goes to the GPU.
+pub fn wants_gpu_for(platform: &dyn Platform, asked: Option<bool>, w: &World, gens: u64) -> bool {
+    match (asked, platform.gpu_mode()) {
+        (None, GpuMode::Auto) => platform.gpu_worth_run(w, gens),
+        _ => wants_gpu(platform, asked, w),
+    }
+}
+
 /// Step `gens` generations as [`wants_gpu`] says: on the GPU where the rules allow it, on the
 /// CPU otherwise and whenever there is no GPU to be had. The result is the same either way;
 /// the answer says where the generations ran (`RunSummary::backend`).
@@ -408,7 +422,7 @@ pub fn step_world(
     asked: Option<bool>,
 ) -> Result<String, String> {
     let cpu = format!("cpu ({} threads)", rayon::current_num_threads());
-    if gens > 0 && wants_gpu(platform, asked, w) {
+    if gens > 0 && wants_gpu_for(platform, asked, w, gens) {
         match platform.gpu_stepper() {
             Ok(mut sim) => {
                 let m = sim.step_mixed(w, gens)?;

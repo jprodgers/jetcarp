@@ -20,7 +20,7 @@ The GPU setting is automatic unless you change it. Automatic means:
 | What | On the GPU |
 | --- | --- |
 | Windows, wallpapers and screen savers (a set speed) | Worlds of 16,000 cells or more |
-| `jetcarp run`, `jetcarp wallpaper`, scripts, the MCP server, the app at maximum speed | Worlds with a million neighbour reads a generation or more (about 125,000 cells of Life on squares) |
+| `jetcarp run`, `jetcarp wallpaper`, scripts, the MCP server, the app at maximum speed | Worlds with a million neighbour reads a generation or more (about 125,000 cells of Life on squares), and any run of known length whose reads in all reach 100 million (1,500 generations of a 120,000-cell world, for example), since opening the GPU then pays for itself |
 | Explore searches and hunts | Always |
 | Sandpiles | From 100,000 grains |
 

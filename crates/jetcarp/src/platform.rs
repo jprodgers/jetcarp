@@ -77,6 +77,9 @@ impl Platform for Machine {
     fn gpu_worth(&self, w: &World, paced: bool) -> bool {
         jetcarp_gpu::GpuSim::worth(w, paced)
     }
+    fn gpu_worth_run(&self, w: &World, gens: u64) -> bool {
+        jetcarp_gpu::GpuSim::worth_run(w, gens)
+    }
 
     fn desktop(&self) -> Desktop {
         Desktop {

@@ -81,6 +81,9 @@ impl Platform for GpuOnly {
     fn gpu_worth(&self, w: &World, paced: bool) -> bool {
         GpuSim::worth(w, paced)
     }
+    fn gpu_worth_run(&self, w: &World, gens: u64) -> bool {
+        GpuSim::worth_run(w, gens)
+    }
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
         soup_batcher()
     }

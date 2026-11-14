@@ -1,7 +1,9 @@
 //! When the automatic policy steps a world on the GPU (no GPU needed).
 
 use jetcarp_core::*;
-use jetcarp_gpu::{GPU_PACED_CELLS, GPU_UNPACED_READS, GpuSim, neighbour_reads};
+use jetcarp_gpu::{
+    GPU_PACED_CELLS, GPU_UNPACED_READS, GPU_UNPACED_RUN_READS, GpuSim, neighbour_reads,
+};
 
 fn world(w: u32, h: u32, cas: Vec<CaSpec>) -> World {
     let mut sc = Scene::new(TilingSpec::rect("square", w, h, Boundary::Wrap));
@@ -56,4 +58,23 @@ fn rules_the_gpu_cannot_run_never_go_there() {
     );
     assert!(!GpuSim::worth(&ant, true));
     assert!(!GpuSim::worth(&ant, false));
+}
+
+/// A long run of a mid-sized world goes to the GPU on its total work; a short run of the same
+/// world, or a long run of a tiny one, stays on the processor.
+#[test]
+fn runs_of_known_length_go_by_their_total_work() {
+    assert_eq!(GPU_UNPACED_RUN_READS, 100_000_000);
+    // 400 x 300 square Life: 960,000 reads a generation, under the per-generation threshold.
+    let mid = world(400, 300, vec![life()]);
+    assert!(!GpuSim::worth(&mid, false));
+    assert!(GpuSim::worth_run(&mid, 1500));
+    assert!(!GpuSim::worth_run(&mid, 10));
+    // 40 x 40: 12,800 reads a generation; even 1,500 generations is 19 million reads.
+    let tiny = world(40, 40, vec![life()]);
+    assert!(!GpuSim::worth_run(&tiny, 1500));
+    assert!(GpuSim::worth_run(&tiny, 1_000_000));
+    // A rule the GPU can't run never goes there.
+    let lenia = world(400, 300, vec![CaSpec::new("Lenia").seed(SeedSpec::Empty)]);
+    assert!(!GpuSim::worth_run(&lenia, 1_000_000));
 }

@@ -299,6 +299,14 @@ pub const GPU_PACED_CELLS: usize = 16_000;
 /// passes), when the policy is automatic. Measured with `examples/bench.rs`.
 pub const GPU_UNPACED_READS: u64 = 1_000_000;
 
+/// A run of a known length steps on the GPU, when the policy is automatic, once its neighbour
+/// reads in all (per generation times generations) reach this many, even below
+/// [`GPU_UNPACED_READS`] per generation: about 40 ms of work for 32 threads of the Radeon 8060S
+/// machine's processor (2 to 4 billion reads a second), which is what opening the GPU costs with
+/// its self-test cached. The 1,500 generations of the book's JACA scenes (120,000 cells or fewer)
+/// ran 7 to 17 times faster on the GPU, opening included.
+pub const GPU_UNPACED_RUN_READS: u64 = 100_000_000;
+
 /// Neighbour reads one generation of the world's enabled CAs makes: cells times neighbours (the
 /// tiling's mean for each CA's neighbourhood), summed over each CA's passes.
 pub fn neighbour_reads(world: &World) -> u64 {
@@ -335,6 +343,17 @@ impl GpuSim {
         } else {
             neighbour_reads(world) >= GPU_UNPACED_READS
         }
+    }
+
+    /// [`GpuSim::worth`] for an unpaced run of `gens` generations: also when the run's reads in
+    /// all reach [`GPU_UNPACED_RUN_READS`].
+    pub fn worth_run(world: &World, gens: u64) -> bool {
+        GpuSim::worth(world, false)
+            || (world
+                .cas
+                .iter()
+                .any(|c| c.enabled && supports_rule(&c.rule))
+                && neighbour_reads(world).saturating_mul(gens) >= GPU_UNPACED_RUN_READS)
     }
 }
 
