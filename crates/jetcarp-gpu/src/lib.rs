@@ -439,6 +439,62 @@ pub struct GpuSim {
     res: Option<Resident>,
     /// Generations per batch, adapted to keep each batch near the target time.
     batch_hint: u64,
+    /// The world as it was when the current run began (see [`Before`]).
+    before: Option<Before>,
+    /// Why this stepper no longer runs anything: its device failed during a run.
+    broken: Option<String>,
+    /// Tests: the batch (1 for the next run's first) that fails, and whether it fails after the
+    /// engine has recorded it.
+    fault: Option<(u32, bool)>,
+}
+
+/// What a world was when a run began, so that a run failing part way puts it back (#13): its
+/// generation, log, period watch, script and reseed state, CAs and every field as they were. The
+/// fields' cells are not copied up front, since the GPU leaves the world's copies alone until the
+/// run reads them back; a field the run changes before then (a field read back because it stopped
+/// running, reseed edits made on the world's copy) is copied just before.
+struct Before {
+    /// The world without its fields.
+    meta: World,
+    fields: usize,
+    /// Each field's lost grains (a sandpile's, counted at every batch).
+    lost: Vec<u64>,
+    /// Fields the run changed, as they were.
+    saved: Vec<Option<jetcarp_core::world::Field>>,
+}
+
+impl Before {
+    fn of(world: &mut World) -> Before {
+        let fields = std::mem::take(&mut world.fields);
+        let meta = world.clone();
+        world.fields = fields;
+        Before {
+            meta,
+            fields: world.fields.len(),
+            lost: world.fields.iter().map(|f| f.lost).collect(),
+            saved: vec![None; world.fields.len()],
+        }
+    }
+
+    /// Field `f` is about to change: keep it as it was, the first time.
+    fn keep(&mut self, world: &World, f: usize) {
+        if f < self.fields && self.saved[f].is_none() {
+            self.saved[f] = Some(world.fields[f].clone());
+        }
+    }
+
+    fn restore(mut self, world: &mut World) {
+        let mut fields = std::mem::take(&mut world.fields);
+        fields.truncate(self.fields);
+        for (i, f) in fields.iter_mut().enumerate() {
+            match self.saved[i].take() {
+                Some(was) => *f = was,
+                None => f.lost = self.lost[i],
+            }
+        }
+        *world = self.meta;
+        world.fields = fields;
+    }
 }
 
 impl GpuSim {
@@ -589,7 +645,19 @@ impl GpuSim {
             staging: None,
             res: None,
             batch_hint: 4,
+            before: None,
+            broken: None,
+            fault: None,
         }
+    }
+
+    /// Tests: make the `nth` batch from now fail (1: the next run's first; 0: none), as a device
+    /// that fails would: before the engine records it, or with `late` after (as when the engine
+    /// and the GPU disagree). Also lets a stepper broken by such a failure run again.
+    #[doc(hidden)]
+    pub fn fail_batch(&mut self, nth: u32, late: bool) {
+        self.fault = (nth > 0).then_some((nth, late));
+        self.broken = None;
     }
 
     /// Adapter name and backend, for status lines.
@@ -827,14 +895,38 @@ impl GpuSim {
 
     /// Step `gens` generations on the GPU (or until `deadline`, after at least one batch).
     /// The world is fully up to date when this returns. `Err` means nothing ran: run on the CPU.
+    ///
+    /// When the GPU fails part way (a readback that fails, a lost device, the engine and the GPU
+    /// disagreeing about a batch), the world is put back as it was before the run, so its
+    /// generation and log never run ahead of its cells, and this stepper runs nothing more.
     pub fn run(
         &mut self,
         world: &mut World,
         gens: u64,
         deadline: Option<Instant>,
     ) -> Result<Outcome, String> {
+        if let Some(e) = &self.broken {
+            return Err(e.clone());
+        }
         self.check(world)?;
         self.bind_topology(world);
+        self.before = Some(Before::of(world));
+        let out = self.run_batches(world, gens, deadline);
+        let before = self.before.take().expect("taken at the start");
+        if let Err(e) = &out {
+            before.restore(world);
+            self.res = None;
+            self.broken = Some(format!("the GPU failed earlier ({e})"));
+        }
+        out
+    }
+
+    fn run_batches(
+        &mut self,
+        world: &mut World,
+        gens: u64,
+        deadline: Option<Instant>,
+    ) -> Result<Outcome, String> {
         let mut done = 0u64;
         let mut stopped = None;
         while done < gens {
@@ -849,7 +941,7 @@ impl GpuSim {
                 stopped = Some(e);
                 break;
             }
-            self.prepare_fields(world, &plan);
+            self.prepare_fields(world, &plan)?;
             let mut len = (gens - done).min(MAX_BATCH).min(self.batch_hint);
             if let Some(c) = plan.max_gens {
                 len = len.min(c);
@@ -868,7 +960,12 @@ impl GpuSim {
             let want = (target.as_secs_f64() / per_gen.max(1e-7)) as u64;
             self.batch_hint = want.clamp(1, MAX_BATCH).min(self.batch_hint * 4);
         }
-        self.read_back(world, |_| true);
+        // The last readback writes every field or none, and nothing can fail after it, so it
+        // need not keep the fields as they were.
+        let before = self.before.take();
+        let read = self.read_back(world, |_| true);
+        self.before = before;
+        read?;
         let res = self.res.as_mut().unwrap();
         res.rev = world.revision();
         Ok(Outcome {
@@ -1025,7 +1122,7 @@ impl GpuSim {
     }
 
     /// Make every running field resident and current; read back fields that stopped running.
-    fn prepare_fields(&mut self, world: &mut World, plan: &ExternalPlan) {
+    fn prepare_fields(&mut self, world: &mut World, plan: &ExternalPlan) -> Result<(), String> {
         let running = plan.running_fields.clone();
         // The JACA CA whose glow each running field carries (`check_plan` allows one).
         let owner = |f: usize| {
@@ -1046,7 +1143,7 @@ impl GpuSim {
                 .map(|(f, _)| f)
                 .collect()
         });
-        self.read_back(world, |f| !running.contains(&f) || moved.contains(&f));
+        self.read_back(world, |f| !running.contains(&f) || moved.contains(&f))?;
         let n = world.topo.len();
         let res = self.res.as_mut().unwrap();
         for &f in &moved {
@@ -1152,6 +1249,7 @@ impl GpuSim {
             gf.valid = true;
             gf.dirty = false;
         }
+        Ok(())
     }
 
     /// A CA's shader parameters for this world: the rule's, plus what depends on the topology
@@ -1433,6 +1531,22 @@ impl GpuSim {
         let ctrl_bytes = (ctrl_words * 4) as u64;
         enc.copy_buffer_to_buffer(&self.ctrl, 0, &self.ctrl_read, 0, ctrl_bytes);
         self.queue.submit([enc.finish()]);
+        // Tests: a batch that fails, now (before the engine records it) or after recording.
+        let fails_late = match &mut self.fault {
+            Some((1, late)) => {
+                let late = *late;
+                self.fault = None;
+                if !late {
+                    return Err("injected failure: the batch's results could not be read".into());
+                }
+                true
+            }
+            Some((k, _)) => {
+                *k -= 1;
+                false
+            }
+            None => false,
+        };
         let words: Vec<u32> = map_read(&self.device, &self.ctrl_read, ctrl_bytes)?;
 
         let k = if words[0] != 0 { words[1] as u64 } else { len };
@@ -1479,13 +1593,27 @@ impl GpuSim {
         }
         let running = plan.running_fields.clone();
         let this = &*self;
-        let recorded = world.finish_external(&metrics, || this.read_snapshots(&running, n));
+        let snap_failed = std::cell::Cell::new(None);
+        let recorded = world.finish_external(&metrics, || {
+            this.read_snapshots(&running, n).unwrap_or_else(|e| {
+                snap_failed.set(Some(e));
+                vec![]
+            })
+        });
+        if let Some(e) = snap_failed.take() {
+            return Err(format!(
+                "the period watch's snapshot could not be read: {e}"
+            ));
+        }
         if recorded != k {
-            // The engine and the GPU disagree about where the batch ended; drop GPU state.
-            self.res = None;
+            // The engine and the GPU disagree about where the batch ended (`run` puts the world
+            // back and drops the GPU's state).
             return Err(format!(
                 "GPU batch ended after {k} generations but the script moved on or a reseed fired after {recorded}"
             ));
+        }
+        if fails_late {
+            return Err("injected failure after the engine recorded the batch".into());
         }
         let pending = world.take_pending_reseed();
         if !pending.is_empty() {
@@ -1546,6 +1674,11 @@ impl GpuSim {
                     if let Some(gf) = other {
                         gf.valid = false;
                     }
+                    if let Some(b) = self.before.as_mut()
+                        && f < world.fields.len()
+                    {
+                        b.keep(world, f);
+                    }
                     if let Some(field) = world.fields.get_mut(f) {
                         edits.apply(field);
                     }
@@ -1556,20 +1689,18 @@ impl GpuSim {
 
     /// The period-watch snapshots of these fields: (field, states, heights), the states of a
     /// state field and the grain counts of a sandpile's.
-    fn read_snapshots(&self, fields: &[usize], n: usize) -> Vec<(usize, Vec<u8>, Vec<u32>)> {
+    fn read_snapshots(&self, fields: &[usize], n: usize) -> Result<Vec<Snap>, String> {
         let res = self.res.as_ref().unwrap();
         fields
             .iter()
             .map(|&f| {
                 let gf = res.fields[f].as_ref().unwrap();
                 let bytes = snap_bytes(n, gf.height);
-                if gf.height {
-                    let h: Vec<u32> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
-                    (f, vec![], h)
+                Ok(if gf.height {
+                    (f, vec![], self.copy_out(&gf.snap, bytes)?)
                 } else {
-                    let v: Vec<u8> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
-                    (f, v, vec![])
-                }
+                    (f, self.copy_out(&gf.snap, bytes)?, vec![])
+                })
             })
             .collect()
     }
@@ -1588,81 +1719,118 @@ impl GpuSim {
     }
 
     /// Copy dirty fields that `pick` selects back into the world: states and ages (and the
-    /// owner's JACA glow), or a sandpile's grain counts.
-    fn read_back(&mut self, world: &mut World, pick: impl Fn(usize) -> bool) {
+    /// owner's JACA glow), or a sandpile's grain counts. Every field is read before any is
+    /// written, so a readback that fails leaves the world as it was. During a run, a field read
+    /// back is first kept in [`Before`].
+    fn read_back(&mut self, world: &mut World, pick: impl Fn(usize) -> bool) -> Result<(), String> {
         let n = world.topo.len();
         let bytes = (n.max(1) * 4) as u64;
-        let Some(res) = self.res.as_mut() else { return };
-        for (fi, gf) in res.fields.iter_mut().enumerate() {
-            let Some(gf) = gf.as_mut() else { continue };
-            if !gf.dirty || !pick(fi) {
-                continue;
+        let Some(res) = self.res.as_ref() else {
+            return Ok(());
+        };
+        let todo: Vec<usize> = res
+            .fields
+            .iter()
+            .enumerate()
+            .filter(|(fi, gf)| gf.as_ref().is_some_and(|g| g.dirty) && pick(*fi))
+            .map(|(fi, _)| fi)
+            .collect();
+        if todo.is_empty() {
+            return Ok(());
+        }
+        let total = bytes * todo.len() as u64;
+        if self.staging.as_ref().is_none_or(|s| s.size() < total) {
+            self.staging = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("jetcarp-gpu field readback"),
+                size: total,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        let staging = self.staging.as_ref().unwrap();
+        let mut enc = self.device.create_command_encoder(&Default::default());
+        for (k, &fi) in todo.iter().enumerate() {
+            let gf = res.fields[fi].as_ref().unwrap();
+            enc.copy_buffer_to_buffer(&gf.bufs[gf.cur], 0, staging, k as u64 * bytes, bytes);
+        }
+        self.queue.submit([enc.finish()]);
+        let slice = staging.slice(0..total);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| format!("GPU poll: {e}"))?;
+        rx.recv()
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("GPU readback: {e}"))?;
+        if let Some(b) = self.before.as_mut() {
+            for &fi in &todo {
+                b.keep(world, fi);
             }
-            if self.staging.as_ref().is_none_or(|s| s.size() < bytes) {
-                self.staging = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("jetcarp-gpu field readback"),
-                    size: bytes,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }));
-            }
-            let staging = self.staging.as_ref().unwrap();
-            let mut enc = self.device.create_command_encoder(&Default::default());
-            enc.copy_buffer_to_buffer(&gf.bufs[gf.cur], 0, staging, 0, bytes);
-            self.queue.submit([enc.finish()]);
-            let slice = staging.slice(0..bytes);
-            slice.map_async(wgpu::MapMode::Read, |_| {});
-            let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-            {
-                let view = slice.get_mapped_range().expect("mapped readback");
-                let words: &[u32] = bytemuck::cast_slice(&view);
+        }
+        {
+            let view = slice.get_mapped_range().map_err(|e| format!("{e:?}"))?;
+            let all: &[u32] = bytemuck::cast_slice(&view);
+            for (k, &fi) in todo.iter().enumerate() {
+                let gf = res.fields[fi].as_ref().unwrap();
+                let words = &all[k * n.max(1)..k * n.max(1) + n];
                 let f = &mut world.fields[fi];
                 if gf.height {
-                    f.height.copy_from_slice(&words[..n]);
+                    f.height.copy_from_slice(words);
+                    continue;
+                }
+                let unpack = |((s, a), &x): ((&mut u8, &mut u16), &u32)| {
+                    *s = (x & 0xff) as u8;
+                    *a = (x >> 16) as u16;
+                };
+                // Waking every worker thread for a small field costs more processor time than
+                // the copy (a wallpaper reads its world back every frame).
+                let small = n < PAR_CELLS;
+                if small {
+                    f.state
+                        .iter_mut()
+                        .zip(f.age.iter_mut())
+                        .zip(words)
+                        .for_each(unpack);
                 } else {
-                    let unpack = |((s, a), &x): ((&mut u8, &mut u16), &u32)| {
-                        *s = (x & 0xff) as u8;
-                        *a = (x >> 16) as u16;
-                    };
-                    // Waking every worker thread for a small field costs more processor time
-                    // than the copy (a wallpaper reads its world back every frame).
-                    let small = n < PAR_CELLS;
+                    f.state
+                        .par_iter_mut()
+                        .zip(f.age.par_iter_mut())
+                        .zip(words.par_iter())
+                        .for_each(unpack);
+                }
+                let owner = gf
+                    .glow_owner
+                    .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
+                if let Some(ca) = owner {
+                    let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
+                    heat.glow.resize(n, 0);
+                    let glow = |(g, &x): (&mut u8, &u32)| *g = (x >> 8) as u8;
                     if small {
-                        f.state
-                            .iter_mut()
-                            .zip(f.age.iter_mut())
-                            .zip(&words[..n])
-                            .for_each(unpack);
+                        heat.glow.iter_mut().zip(words).for_each(glow);
                     } else {
-                        f.state
+                        heat.glow
                             .par_iter_mut()
-                            .zip(f.age.par_iter_mut())
-                            .zip(words[..n].par_iter())
-                            .for_each(unpack);
-                    }
-                    let owner = gf
-                        .glow_owner
-                        .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
-                    if let Some(ca) = owner {
-                        let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
-                        heat.glow.resize(n, 0);
-                        let glow = |(g, &x): (&mut u8, &u32)| *g = (x >> 8) as u8;
-                        if small {
-                            heat.glow.iter_mut().zip(&words[..n]).for_each(glow);
-                        } else {
-                            heat.glow
-                                .par_iter_mut()
-                                .zip(words[..n].par_iter())
-                                .for_each(glow);
-                        }
+                            .zip(words.par_iter())
+                            .for_each(glow);
                     }
                 }
             }
-            staging.unmap();
-            gf.dirty = false;
         }
+        staging.unmap();
+        let res = self.res.as_mut().unwrap();
+        for &fi in &todo {
+            res.fields[fi].as_mut().unwrap().dirty = false;
+        }
+        Ok(())
     }
 }
+
+/// A field's period-watch snapshot as `World::finish_external` takes it: (field, states,
+/// heights).
+type Snap = (usize, Vec<u8>, Vec<u32>);
 
 /// Bytes of a field's period-watch snapshot on the GPU: a byte per state, or a word per grain
 /// count.

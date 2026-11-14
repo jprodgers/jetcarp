@@ -832,6 +832,9 @@ struct Base {
     reseed: Vec<AutoReseed>,
 }
 
+/// Clone copies everything, fields included (a GPU stepper keeps a copy without the fields, to
+/// put a world back as it was when a run fails part way).
+#[derive(Clone)]
 pub struct World {
     pub topo: Arc<Topology>,
     pub fields: Vec<Field>,

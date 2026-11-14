@@ -67,6 +67,12 @@ that will declare them stable.
 - **The GPU parity tests never ran in CI.** CI installs Mesa's software Vulkan, but the GPU tests
   refused software adapters, so every one of them skipped. CI now sets `JETCARP_GPU=software`, and
   they run on lavapipe. ([#12](https://github.com/jprodgers/jetcarp/issues/12))
+- **A GPU that failed part way through a run left the world ahead of its cells.** When a later
+  batch of a run failed (a readback that failed, a lost device), the generations the earlier
+  batches had stepped were counted and logged but their cells never read back, so the processor
+  carried on from the wrong cells. The world is now put back as it was before the run, and the
+  processor carries on from there to the same result. A failed readback no longer stops the program
+  either. ([#13](https://github.com/jprodgers/jetcarp/issues/13))
 
 ### Changed
 
