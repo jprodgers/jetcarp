@@ -39,9 +39,8 @@ pub struct WallpaperArgs {
     /// Generations to run before rendering.
     #[arg(long, default_value_t = 0)]
     gens: u64,
-    /// Step on the GPU where the rules allow it (results are identical).
-    #[arg(long)]
-    gpu: bool,
+    #[command(flatten)]
+    gpu: crate::platform::GpuFlags,
     /// Colour every CA with this palette (`jetcarp palettes` lists them), or with hex colours
     /// like `#4fc3ff` or `#103050-#4fc3ff`.
     #[arg(long)]
@@ -82,7 +81,7 @@ pub fn run(cx: &Ctx, a: WallpaperArgs, json: bool) -> Result<()> {
         cell_px: a.cell_px,
         fresh: a.fresh,
         gens: Some(a.gens),
-        gpu: a.gpu,
+        gpu: a.gpu.asked(),
         palette: a.palette,
         monitors: a.monitors,
         split: a.split,

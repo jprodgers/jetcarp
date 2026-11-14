@@ -242,7 +242,7 @@ fn run_checks_expectations_reseeds_and_falls_back_to_the_cpu() {
     // No GPU without a platform: the run says so and steps on the CPU.
     let mut g = run_in(&input);
     g.gens = 3;
-    g.gpu = true;
+    g.gpu = Some(true);
     let r = SceneRun::run(&cx, g, &Quiet).unwrap();
     assert!(r.backend.contains("; no GPU: "), "{}", r.backend);
     assert_eq!(r.generation, 3);

@@ -963,11 +963,7 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
         if c.stopped() {
             return err("stopped");
         }
-        s.lock()
-            .world
-            .apply(Command::Step { gens: 1 })
-            .or_err()
-            .map(|_| ())
+        crate::sim::step(&mut s.lock().world, 1).or_err()
     });
     let c = ctx.clone();
     e.register_fn("step", move |s: &mut Shared, n: INT| -> R<()> {

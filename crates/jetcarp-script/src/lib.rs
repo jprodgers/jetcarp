@@ -683,8 +683,9 @@ impl Ctx {
 
     /// The context of the operations a script calls: this run's file rules (writes inside the
     /// output root and the allowed folders, relative paths from the newest output folder, reads
-    /// restricted when the run says so), its output root, its world-size limit, and the catalog
-    /// `lib` (default: the run's `library` option, else the default catalog).
+    /// restricted when the run says so), its output root, its world-size limit, the catalog
+    /// `lib` (default: the run's `library` option, else the default catalog), and the program's
+    /// GPU (`jetcarp_api::ctx::gpu_platform`).
     pub fn api(&self, lib: Option<jetcarp_store::Library>) -> jetcarp_api::Ctx {
         let roots = self.guard.lock().unwrap().roots.clone();
         let mut limits = jetcarp_api::Limits::NONE;
@@ -692,6 +693,7 @@ impl Ctx {
             limits.max_cells = m;
         }
         let cx = jetcarp_api::Ctx::new()
+            .with_platform(jetcarp_api::ctx::gpu_platform())
             .with_limits(limits)
             .with_fs(jetcarp_api::FsPolicy::guarded(
                 self.base(),

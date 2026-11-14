@@ -72,9 +72,8 @@ enum Cmd {
         /// Fail unless the final hash equals this.
         #[arg(long)]
         expect: Option<String>,
-        /// Step the --gens generations on the GPU where the rules allow it (results are identical).
-        #[arg(long)]
-        gpu: bool,
+        #[command(flatten)]
+        gpu: platform::GpuFlags,
         /// Install automatic reseed policies before running: one policy or a list, as JSON
         /// (the book's "Reseeding" guide), e.g.
         /// '{"mode":{"kind":"blobs"},"when":{"kind":"settled"},"cooldown":200}'.
@@ -394,6 +393,8 @@ fn run() -> Result<()> {
         );
     }
     // Scripts may ask for GPU toppling of large sandpiles.
+    // Scripts step large worlds on the GPU as the GPU setting says.
+    jetcarp_api::ctx::set_gpu_platform(std::sync::Arc::new(jetcarp_app::gpu_info::GpuOnly));
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()
             .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
@@ -444,7 +445,7 @@ fn run() -> Result<()> {
                 save: save.map(|p| p.display().to_string()),
                 threads,
                 expect,
-                gpu,
+                gpu: gpu.asked(),
                 reseed,
                 reseed_now,
             };

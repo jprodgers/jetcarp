@@ -336,6 +336,15 @@ pub trait Platform: Send + Sync {
     fn gpu_policy(&self) -> Option<GpuPolicy> {
         None
     }
+    /// Whether to use the GPU when a command leaves it to the policy (none here: off).
+    fn gpu_mode(&self) -> GpuMode {
+        GpuMode::Off
+    }
+    /// Is this world large enough to gain from the GPU (`jetcarp_gpu::GpuSim::worth`)? `paced`:
+    /// stepped at a set speed, as opposed to as fast as possible.
+    fn gpu_worth(&self, _w: &World, _paced: bool) -> bool {
+        false
+    }
     /// The desktop integration's state.
     fn desktop(&self) -> Desktop {
         Desktop::default()
@@ -374,6 +383,72 @@ pub trait Platform: Send + Sync {
 /// No GPU, no desktop integration.
 pub struct Headless;
 impl Platform for Headless {}
+
+/// Whether a world steps on the GPU: the command's own request (`Some(true)` for `--gpu`,
+/// `Some(false)` for `--cpu`), else the platform's GPU policy (automatic: when the world is
+/// large enough to gain at full speed).
+pub fn wants_gpu(platform: &dyn Platform, asked: Option<bool>, w: &World) -> bool {
+    match asked {
+        Some(b) => b,
+        None => match platform.gpu_mode() {
+            GpuMode::Off => false,
+            GpuMode::On => true,
+            GpuMode::Auto => platform.gpu_worth(w, false),
+        },
+    }
+}
+
+/// Step `gens` generations as [`wants_gpu`] says: on the GPU where the rules allow it, on the
+/// CPU otherwise and whenever there is no GPU to be had. The result is the same either way;
+/// the answer says where the generations ran (`RunSummary::backend`).
+pub fn step_world(
+    platform: &dyn Platform,
+    w: &mut World,
+    gens: u64,
+    asked: Option<bool>,
+) -> Result<String, String> {
+    let cpu = format!("cpu ({} threads)", rayon::current_num_threads());
+    if gens > 0 && wants_gpu(platform, asked, w) {
+        match platform.gpu_stepper() {
+            Ok(mut sim) => {
+                let m = sim.step_mixed(w, gens)?;
+                return Ok(match m.fallback {
+                    None => format!("gpu ({})", sim.name()),
+                    Some(why) => format!(
+                        "gpu ({}); {} of {gens} generations on the {cpu}: {why}",
+                        sim.name(),
+                        m.cpu_gens
+                    ),
+                });
+            }
+            Err(e) => {
+                w.apply(jetcarp_core::Command::Step { gens })?;
+                return Ok(format!("{cpu}; no GPU: {e}"));
+            }
+        }
+    }
+    if gens > 0 {
+        w.apply(jetcarp_core::Command::Step { gens })?;
+    }
+    Ok(cpu)
+}
+
+static GPU_PLATFORM: std::sync::OnceLock<Arc<dyn Platform>> = std::sync::OnceLock::new();
+
+/// Register the program's GPU (the `jetcarp` program and the app do at start, with a platform
+/// that has only the GPU parts), for code that has no platform of its own: scripts' world steps
+/// and sweeps, and the operations scripts call. First call wins.
+pub fn set_gpu_platform(p: Arc<dyn Platform>) {
+    let _ = GPU_PLATFORM.set(p);
+}
+
+/// The registered GPU platform ([`set_gpu_platform`]), else [`Headless`].
+pub fn gpu_platform() -> Arc<dyn Platform> {
+    GPU_PLATFORM
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(Headless))
+}
 
 /// JETCARP's folders.
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]

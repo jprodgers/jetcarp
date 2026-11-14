@@ -7,7 +7,7 @@
 //! its own, `jetcarp jobs resume JOB`).
 
 use clap::Args;
-use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuPolicy, GpuStepper, GpuSteps, UndoStep};
+use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuMode, GpuPolicy, GpuStepper, UndoStep};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
@@ -27,28 +27,13 @@ pub fn ctx() -> Ctx {
     Ctx::new().with_platform(Arc::new(Machine))
 }
 
-struct Gpu(jetcarp_gpu::GpuSim);
-
-impl GpuStepper for Gpu {
-    fn name(&self) -> String {
-        self.0.name().to_string()
-    }
-    fn step_mixed(&mut self, w: &mut World, gens: u64) -> Result<GpuSteps, String> {
-        let m = self.0.step_mixed(w, gens)?;
-        Ok(GpuSteps {
-            cpu_gens: m.cpu_gens,
-            fallback: m.fallback,
-        })
-    }
-}
-
 fn host_running() -> bool {
     host_call(&json!({"action": "status"})).is_ok()
 }
 
 impl Platform for Machine {
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
-        jetcarp_gpu::hunt::GpuHunter::headless().map(|g| Arc::new(g) as Arc<dyn SoupBatcher>)
+        jetcarp_app::gpu_info::soup_batcher()
     }
 
     fn explore_backend(&self) -> Result<Box<dyn Backend>, String> {
@@ -82,7 +67,15 @@ impl Platform for Machine {
     }
 
     fn gpu_stepper(&self) -> Result<Box<dyn GpuStepper>, String> {
-        jetcarp_gpu::GpuSim::headless().map(|s| Box::new(Gpu(s)) as Box<dyn GpuStepper>)
+        jetcarp_app::gpu_info::stepper()
+    }
+
+    fn gpu_mode(&self) -> GpuMode {
+        jetcarp_app::gpu_info::mode()
+    }
+
+    fn gpu_worth(&self, w: &World, paced: bool) -> bool {
+        jetcarp_gpu::GpuSim::worth(w, paced)
     }
 
     fn desktop(&self) -> Desktop {
@@ -179,6 +172,31 @@ fn stop_host() -> Result<(), String> {
 /// and its settings want a still).
 fn picture_step(still_showing: bool, host_running: bool, still_wanted: bool) -> bool {
     still_showing || (host_running && still_wanted)
+}
+
+/// `--gpu` and `--cpu`: where a command steps, when not as JETCARP's GPU setting says
+/// (`JETCARP_GPU`, else `gpu.json` in the settings folder, else automatic).
+#[derive(Args, Debug, Default, Clone, Copy)]
+pub struct GpuFlags {
+    /// Use the GPU where the rules allow it, whatever the GPU setting says (results are
+    /// identical). Default: as the GPU setting says (automatic: the GPU once the work is large
+    /// enough to gain).
+    #[arg(long, conflicts_with = "cpu")]
+    pub gpu: bool,
+    /// Use only the CPU, whatever the GPU setting says.
+    #[arg(long)]
+    pub cpu: bool,
+}
+
+impl GpuFlags {
+    /// `Some(true)` for `--gpu`, `Some(false)` for `--cpu`, `None`: the GPU setting decides.
+    pub fn asked(self) -> Option<bool> {
+        match (self.gpu, self.cpu) {
+            (true, _) => Some(true),
+            (_, true) => Some(false),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Args, Debug)]

@@ -9,10 +9,10 @@ mod cell_editor;
 mod cli;
 mod dash_ui;
 pub mod desktop_offers;
-pub mod gpu_info;
 mod editor;
 mod frametime;
 mod gpu;
+pub mod gpu_info;
 mod hlview_ui;
 mod isohedral_ui;
 mod jump_ui;
@@ -42,6 +42,8 @@ pub use cli::LaunchArgs;
 pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // On macOS the application menu takes its name from the process: JETCARP, not `jetcarp`.
     jetcarp_display::set_process_name("JETCARP");
+    // Scripts run from the app step large worlds on the GPU as the GPU setting says.
+    jetcarp_api::ctx::set_gpu_platform(std::sync::Arc::new(gpu_info::GpuOnly));
     // Scripts run from the app may ask for GPU toppling of large sandpiles.
     jetcarp_core::pile::set_gpu_factory(|| {
         jetcarp_gpu::pile::PileGpu::headless()

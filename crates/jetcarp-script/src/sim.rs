@@ -43,6 +43,20 @@ pub struct RunOutcome {
     pub done_reason: Option<String>,
 }
 
+/// Step `gens` generations as JETCARP's GPU setting says: on the GPU (the program's, see
+/// `jetcarp_api::ctx::set_gpu_platform`) when the world is large enough to gain, on the CPU
+/// otherwise. The result, and the world's log, are the same either way.
+pub fn step(w: &mut World, gens: u64) -> Result<(), String> {
+    #[cfg(feature = "api")]
+    {
+        jetcarp_api::ctx::step_world(&*jetcarp_api::ctx::gpu_platform(), w, gens, None).map(|_| ())
+    }
+    #[cfg(not(feature = "api"))]
+    {
+        w.apply(Command::Step { gens }).map(|_| ())
+    }
+}
+
 /// Run until the trigger fires or `max_gens` generations have run. `stop` is polled every few
 /// generations (cancellation and time limits).
 pub fn run_until(w: &mut World, u: &Until, stop: &dyn Fn() -> bool) -> RunOutcome {
@@ -112,7 +126,7 @@ pub fn run_until(w: &mut World, u: &Until, stop: &dyn Fn() -> bool) -> RunOutcom
                 break;
             }
             let k = left.min(256);
-            let _ = w.apply(Command::Step { gens: k });
+            let _ = step(w, k);
             left -= k;
         }
         if stopped != "cancelled"

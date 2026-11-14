@@ -13,8 +13,14 @@ pub const APP_ONLY: &str = "app_display is only available in the JETCARP app: st
 pub trait Host {
     /// The current world (read only).
     fn world(&self) -> &World;
-    /// Apply one command. This is the only way an existing world is changed.
+    /// Apply one command. This is the only way an existing world is changed, except for
+    /// [`world_mut`](Self::world_mut).
     fn exec(&mut self, cmd: Command) -> Result<Applied, String>;
+    /// The world itself, so `world.step` can step it on the GPU (with the same result and log as
+    /// `exec`ing the steps). None: steps go through `exec` (the app steps its own world).
+    fn world_mut(&mut self) -> Option<&mut World> {
+        None
+    }
     /// Replace the whole world with a scene (new world, open scene).
     fn replace(&mut self, scene: Scene) -> Result<(), String>;
     /// The current scene, as it would be saved.
@@ -66,6 +72,9 @@ impl Host for Session {
     }
     fn exec(&mut self, cmd: Command) -> Result<Applied, String> {
         self.world.apply(cmd)
+    }
+    fn world_mut(&mut self) -> Option<&mut World> {
+        Some(&mut self.world)
     }
     fn replace(&mut self, scene: Scene) -> Result<(), String> {
         self.world = World::from_scene(&scene)?;

@@ -21,7 +21,7 @@ use jetcarp_store::Library;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What the app tells the operations about the machine: the GPU soup hunter for hunts, made
@@ -41,13 +41,16 @@ impl Platform for AppPlatform {
         jetcarp_gpu::batch::BatchSim::headless().map(|g| Box::new(g) as Box<dyn Backend>)
     }
     fn soup_batcher(&self) -> Result<Arc<dyn SoupBatcher>, String> {
-        static HUNTER: OnceLock<Result<Arc<dyn SoupBatcher>, String>> = OnceLock::new();
-        HUNTER
-            .get_or_init(|| {
-                jetcarp_gpu::hunt::GpuHunter::headless()
-                    .map(|g| Arc::new(g) as Arc<dyn SoupBatcher>)
-            })
-            .clone()
+        crate::gpu_info::soup_batcher()
+    }
+    fn gpu_stepper(&self) -> Result<Box<dyn jetcarp_api::ctx::GpuStepper>, String> {
+        crate::gpu_info::stepper()
+    }
+    fn gpu_mode(&self) -> jetcarp_api::ctx::GpuMode {
+        crate::gpu_info::mode()
+    }
+    fn gpu_worth(&self, w: &jetcarp_core::World, paced: bool) -> bool {
+        jetcarp_gpu::GpuSim::worth(w, paced)
     }
 }
 
