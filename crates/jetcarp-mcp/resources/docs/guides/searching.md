@@ -123,8 +123,16 @@ $ jetcarp jobs list
 | 6 | is marked running, but no process runs it: its process crashed or was killed |
 
 Exit status 1 means the wait itself failed: there is no such job, or the library cannot be read.
-A crashed run is noticed within about a minute, once its heartbeat is late, and `jetcarp jobs
-resume JOB` carries such a job on from its last checkpoint.
+A crashed run is noticed within about a minute, once its heartbeat is late. `jetcarp jobs resume
+JOB` carries such a job on from its last checkpoint (an explore search from its archive), so a
+long search can be kept going through crashes until a deadline with a loop in the shell:
+
+```sh
+until jetcarp jobs resume 12 --until 1763200000; do sleep 15; done
+```
+
+`jobs resume` returns 0 when the search ends or pauses at the deadline, which ends the loop; a
+crash returns something else, and the loop starts it again.
 
 ## The other strategies
 

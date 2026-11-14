@@ -27,6 +27,12 @@ that will declare them stable.
   a GPU) now confirm their best runs on bigger grids, and run every candidate. A round under way now
   runs to its end; a stop still takes effect within moments.
   ([#3](https://github.com/jprodgers/jetcarp/issues/3))
+- **A stale example script is gone.** `explore-supervise.sh`, beside the example scripts in the
+  scripting crate's source, called `jetcarp explore run`, a command of JETCARP's predecessor, so it
+  failed at once. An explore search stops on time by itself and carries on from its archive after a
+  crash, so keeping one going needs only the one-line loop around `jetcarp jobs resume` that the
+  [searching guide](../guides/searching.md#waiting-in-a-script) now shows.
+  ([#4](https://github.com/jprodgers/jetcarp/issues/4))
 
 - **The two signs of JACA looked alike once their territories went still.** JACA colours each sign
   by age, and its default palettes, Tide and Ember, both end in nearly the same dark indigo, so old
