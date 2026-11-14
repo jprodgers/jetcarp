@@ -120,8 +120,13 @@ unchanged, so conserving rules still conserve. Use even sides for a true torus.
 
 JETCARP's tests run Critters forward 101 generations and then backward with the inverse table, and
 recover the starting pattern exactly; check that the billiard ball machine keeps its number of balls;
-and check the lone ball, the Single Rotation square and Tron's flashing background. Block rules run on
-the CPU.
+and check the lone ball, the Single Rotation square and Tron's flashing background.
+
+### On the GPU
+
+Block rules run on the GPU in the app and in the background host, with exactly the CPU's result. The
+offset of the blocks follows the same step count, so a world can move between the CPU and the GPU
+at any generation, and a repeat counts only when the blocks are on the same offset, as on the CPU.
 
 ## What is new here
 

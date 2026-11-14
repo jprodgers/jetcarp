@@ -367,13 +367,148 @@ fn jaca_commands_between_runs() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// B0 Life-like rules and Margolus blocks
+
+const B0: &[&str] = &[
+    "B0/S8",
+    "B013/S1",
+    "B0123478/S01234678",
+    "B02/S013",
+    "B0/S",
+    "B03/S23V",
+];
+
+#[test]
+fn b0_rules() {
+    let Some(mut sim) = gpu() else { return };
+    for &(fam, w, h) in LATTICES {
+        for b in BOUNDARIES {
+            for &rule in B0 {
+                let sc = scene(
+                    TilingSpec::rect(fam, w, h, b),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.3 })],
+                );
+                compare_gpu(&mut sim, &sc, CHUNKS, &format!("{rule} on {fam} {b:?}"));
+            }
+        }
+    }
+    for &rule in B0 {
+        let t = TilingSpec::new("spectre").with_size(SizeSpec::Level(3));
+        let sc = scene(
+            t,
+            vec![ca(rule, Some(Nb::Touch), SeedSpec::Random { density: 0.3 })],
+        );
+        compare_gpu(
+            &mut sim,
+            &sc,
+            &[1, 5, 40, 150],
+            &format!("{rule} on spectre"),
+        );
+    }
+}
+
+/// B0 runs alternate complementary rules by the parity of the step count, so a GPU run that
+/// starts on an odd tick (after a CPU generation), or with two steps per generation, must keep
+/// the parity.
+#[test]
+fn b0_from_an_odd_tick() {
+    let Some(mut sim) = gpu() else { return };
+    for &rule in B0 {
+        for spg in [1, 2, 3] {
+            let sc = scene(
+                TilingSpec::rect("square", 32, 24, Boundary::Wrap),
+                vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
+            );
+            let mut cpu = World::from_scene(&sc).unwrap();
+            let mut gw = World::from_scene(&sc).unwrap();
+            cpu.apply(Command::Step { gens: 1 }).unwrap();
+            gw.apply(Command::Step { gens: 1 }).unwrap();
+            assert_eq!(gw.cas[0].ticks, spg as u64);
+            let (_, on_cpu) = compare_worlds(
+                &mut sim,
+                &mut cpu,
+                &mut gw,
+                &[1, 2, 7, 50],
+                &format!("{rule} x{spg} from tick {spg}"),
+            );
+            assert_eq!(on_cpu, 0);
+        }
+    }
+}
+
+#[test]
+fn margolus_rules() {
+    let Some(mut sim) = gpu() else { return };
+    for rule in [
+        "Margolus BBM",
+        "Margolus Critters",
+        "Margolus Tron",
+        "Margolus SingleRotation",
+        "Margolus HPP",
+    ] {
+        // Even and odd sides: blocks wrap across the seam only on an even side.
+        for (w, h) in [(40, 30), (41, 30), (40, 31), (33, 27)] {
+            for b in BOUNDARIES {
+                let sc = scene(
+                    TilingSpec::rect("square", w, h, b),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.3 })],
+                );
+                compare_gpu(&mut sim, &sc, CHUNKS, &format!("{rule} {w}x{h} {b:?}"));
+            }
+        }
+        // From an odd step count, and with two steps per generation.
+        let sc = scene(
+            TilingSpec::rect("square", 24, 24, Boundary::Wrap),
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(2)],
+        );
+        compare_gpu(&mut sim, &sc, &[1, 3, 40], &format!("{rule} x2"));
+        let sc = scene(
+            TilingSpec::rect("square", 24, 24, Boundary::Wrap),
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 })],
+        );
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.apply(Command::Step { gens: 1 }).unwrap();
+        gw.apply(Command::Step { gens: 1 }).unwrap();
+        compare_worlds(
+            &mut sim,
+            &mut cpu,
+            &mut gw,
+            &[1, 2, 7, 50],
+            &format!("{rule} from tick 1"),
+        );
+    }
+    // An empty Critters world flips every block each step: period 2, never 1, because a repeat
+    // must also be in the same partition phase.
+    let sc = scene(
+        TilingSpec::rect("square", 16, 16, Boundary::Wrap),
+        vec![ca("Margolus Critters", None, SeedSpec::Empty)],
+    );
+    compare_gpu(&mut sim, &sc, &[1, 1, 1, 5, 20], "empty Critters");
+    let w = {
+        let mut w = World::from_scene(&sc).unwrap();
+        sim.step_mixed(&mut w, 20).unwrap();
+        w
+    };
+    assert!(
+        matches!(w.status(), Status::Repeats { period: 2, .. }),
+        "{:?}",
+        w.status()
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
 // Quick Start
 
 /// Every Quick Start entry of these families, at preview size, on the GPU like the CPU.
 #[test]
 fn quick_start_entries() {
     let Some(mut sim) = gpu() else { return };
-    let ours = |r: &Rule| matches!(r, Rule::Jaca(_));
+    let ours = |r: &Rule| match r {
+        Rule::Jaca(_) | Rule::Margolus(_) => true,
+        Rule::LifeLike { birth, .. } => birth & 1 == 1,
+        _ => false,
+    };
     let mut counts = std::collections::BTreeMap::<String, (u32, u32)>::new();
     for q in jetcarp_core::quickstart::entries() {
         let rules: Vec<Rule> = q

@@ -11,6 +11,7 @@ struct Params {
   pop_mode: u32, pop_n: u32, act_mode: u32, zin: u32,
   zout: u32, halt_repeat: u32, compare: u32, stat: u32,
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
+  // Margolus: the block table, one byte per entry, in table[0].
   table: array<vec4<u32>, 11>,
 };
 
@@ -212,6 +213,22 @@ fn bs_age(s: u32, v: u32, age: u32) -> u32 {
   return 0u;
 }
 
+// B0: the low d + 1 bits of m, reversed.
+fn rev_mask(m: u32, d: u32) -> u32 {
+  return reverseBits(m) >> (31u - d);
+}
+
+// Margolus: x on an axis of n cells, wrapped when `wrap`; -1 past the edge.
+fn block_fix(x: i32, n: i32, wrap: bool) -> i32 {
+  if (wrap) {
+    if (x < 0) { return x + n; }
+    if (x >= n) { return x - n; }
+    return x;
+  }
+  if (x < 0 || x >= n) { return -1; }
+  return x;
+}
+
 @compute @workgroup_size(256)
 fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
   if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
@@ -371,6 +388,65 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
             else if (bn && !bp) { v = 2u; }
             else if (bp && bn) { atomicAdd(&wg_s2, 1u); }
           }
+        }
+        na = commit_age(s, v, age);
+      }
+      // B0 Life-like rules (step.rs `step_b0`): masks per degree, from the step number's parity
+      // (k1 bit 0: odd) and whether it is the CA's first step (k1 bit 1).
+      case 8u: {
+        let c = gather(i, 1u, 1u, &deg).x;
+        let d = min(deg, 31u);
+        let full = select((2u << d) - 1u, 0xffffffffu, d >= 31u);
+        var bm = 0u;
+        var sm = 0u;
+        if (((p.survive >> d) & 1u) == 1u) {
+          if ((p.k1 & 2u) != 0u) {
+            bm = ~p.birth & full;
+            sm = ~p.survive & full;
+          } else {
+            bm = rev_mask(~p.survive & full, d);
+            sm = rev_mask(~p.birth & full, d);
+          }
+        } else if ((p.k1 & 1u) != 0u) {
+          bm = ~p.birth & full;
+          sm = ~p.survive & full;
+        } else {
+          bm = rev_mask(p.survive & full, d);
+          sm = rev_mask(p.birth & full, d);
+        }
+        if (s == 0u) { v = (bm >> c) & 1u; } else { v = (sm >> c) & 1u; }
+        if (v == 1u) {
+          if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+        }
+      }
+      // Margolus blocks on the square grid (step.rs `step_margolus`): blocks start at even
+      // coordinates plus the phase (k2); gg bit 0 wraps x, bit 1 wraps y. A block that would
+      // cross an edge keeps its cells.
+      case 9u: {
+        let w = topo[1];
+        let hh = topo[2];
+        let u = i32(i % u32(w));
+        let j = i32(i / u32(w));
+        let ph = i32(p.k2);
+        let bx = ph + 2 * ((u - ph) >> 1u);
+        let by = ph + 2 * ((j - ph) >> 1u);
+        let wx = (p.gg & 1u) != 0u;
+        let wy = (p.gg & 2u) != 0u;
+        let x0 = block_fix(bx, w, wx);
+        let x1 = block_fix(bx + 1, w, wx);
+        let y0 = block_fix(by, hh, wy);
+        let y1 = block_fix(by + 1, hh, wy);
+        if (x0 < 0 || x1 < 0 || y0 < 0 || y1 < 0) {
+          v = s;
+        } else {
+          var code = 0u;
+          code |= u32((src[u32(y0 * w + x0)] & 0xffu) != 0u);
+          code |= u32((src[u32(y0 * w + x1)] & 0xffu) != 0u) << 1u;
+          code |= u32((src[u32(y1 * w + x0)] & 0xffu) != 0u) << 2u;
+          code |= u32((src[u32(y1 * w + x1)] & 0xffu) != 0u) << 3u;
+          let me = u32((u - bx) + 2 * (j - by));
+          let entry = (p.table[0][code / 4u] >> ((code % 4u) * 8u)) & 0xffu;
+          v = (entry >> me) & 1u;
         }
         na = commit_age(s, v, age);
       }

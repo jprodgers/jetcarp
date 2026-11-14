@@ -60,6 +60,8 @@ that will declare them stable.
   aperiodic patches, both neighbourhoods, blast radii up to 64, every edge. The result is the CPU's
   to the bit, the annihilation glow and the counts on the card and in the status included. On an
   AMD Radeon 8060S a 1-million-cell JACA world runs about 48 times as fast as on 32 CPU threads.
+- **B0 Life-like rules and Margolus blocks run on the GPU,** in the app and the background host,
+  with the CPU's results. Both depend on the step count's parity, which the GPU now keeps.
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in

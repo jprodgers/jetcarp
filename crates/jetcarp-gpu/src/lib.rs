@@ -5,6 +5,7 @@
 //! - Life-like and Generations rules, WireWorld, cyclic, rock-paper-scissors, Greenberg–Hastings,
 //!   hodgepodge, the Spectre glider, and priority tables (`jetcarp search evolve`)
 //! - JACA, with its annihilation glow and counts
+//! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
 //!
 //! Results are bit-identical to the CPU steppers in `jetcarp-core`: everything the state hash
 //! covers, and JACA's glow and counts. The engine keeps every piece of bookkeeping (see
@@ -55,6 +56,8 @@ const NONE: u32 = u32::MAX;
 
 // Rule codes, as in sim.wgsl.
 const R_JACA: u32 = 7;
+const R_B0: u32 = 8;
+const R_MARGOLUS: u32 = 9;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -82,6 +85,7 @@ struct Params {
     /// The step's statistics slot, or [`NONE`].
     stat: u32,
     /// Priority rules: the packed rows (see [`priority_words`]), `k1` words.
+    /// Margolus: the block table in `table[0]`.
     table: [[u32; 4]; 11],
 }
 
@@ -158,9 +162,9 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
         ..Default::default()
     };
     match *rule {
-        // B0 Life-like rules run on the CPU as alternating complementary rules (counted in `ticks`).
-        Rule::LifeLike { birth, .. } if birth & 1 == 1 => {
-            return Err(());
+        // B0 Life-like rules alternate complementary rules, by the parity of the CA's step count.
+        Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
+            (p.rule, p.birth, p.survive, p.states) = (R_B0, birth, survive, 2)
         }
         Rule::LifeLike { birth, survive } => {
             (p.rule, p.birth, p.survive, p.states) = (0, birth, survive, 2)
@@ -209,6 +213,12 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
                 neg_survive,
                 blast as u32,
             );
+        }
+        Rule::Margolus(t) => {
+            p.rule = R_MARGOLUS;
+            for (k, &b) in t.iter().enumerate() {
+                p.table[0][k / 4] |= (b as u32) << (8 * (k % 4));
+            }
         }
         _ => return Err(()),
     }
@@ -527,6 +537,9 @@ impl GpuSim {
                             "JACA's blast zone for {n} cells exceeds this GPU's buffer limit"
                         ));
                     }
+                }
+                Rule::Margolus(_) if world.topo.rows().is_none() => {
+                    return Err("Margolus rules on this tiling run on the CPU".into());
                 }
                 _ => {}
             }
@@ -901,6 +914,15 @@ impl GpuSim {
         let ca = &world.cas[ci];
         let mut p = rule_params(&ca.rule).unwrap();
         p.nb = ca.nb as u32;
+        match ca.rule {
+            Rule::Margolus(_) => {
+                // Blocks wrap across the seam only on an axis of even length.
+                if let Some(g) = world.topo.rows() {
+                    p.gg = (g.wrap && g.w % 2 == 0) as u32 | ((g.wrap && g.h % 2 == 0) as u32) << 1;
+                }
+            }
+            _ => {}
+        }
         p
     }
 
@@ -986,13 +1008,18 @@ impl GpuSim {
             bytes[at..at + std::mem::size_of::<Params>()].copy_from_slice(bytemuck::bytes_of(&p));
         };
         for (g, &(compare, take)) in sched.iter().enumerate() {
-            for (d, &(ei, _)) in order.iter().enumerate() {
+            for (d, &(ei, s)) in order.iter().enumerate() {
                 let ca = &world.cas[enabled[ei]];
                 let f = ca.field;
                 let mut p = rule[ei];
                 p.op = 0;
                 p.gen_slot = g as u32;
+                // The CA's step count before this step, as `CaInstance::ticks` counts them.
+                let ticks = ca.ticks + g as u64 * ca.steps_per_gen as u64 + s;
                 match p.rule {
+                    // B0: the 1-based step number's parity, and whether it is the first step.
+                    R_B0 => p.k1 = ((ticks + 1) & 1) as u32 | ((ticks == 0) as u32) << 1,
+                    R_MARGOLUS => p.k2 = (ticks & 1) as u32,
                     R_JACA => {
                         p.stat = stats.len() as u32;
                         stats.push((g, ei));
