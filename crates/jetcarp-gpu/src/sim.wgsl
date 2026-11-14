@@ -1,19 +1,22 @@
-// JETCARP GPU stepper. One invocation per cell; each cell is a u32: state in bits 0-7, age in 16-31.
-// Every rule here mirrors jetcarp-core's step.rs exactly (integer arithmetic only), so results are
+// JETCARP GPU stepper. One invocation per cell; each cell is a u32: state in bits 0-7, JACA's
+// annihilation glow in bits 8-15 (display only; rules other than JACA pass it through), age in
+// bits 16-31.
+// Every rule here mirrors jetcarp-core exactly (integer arithmetic only), so results are
 // bit-identical to the CPU.
 
 struct Params {
   op: u32, rule: u32, nb: u32, states: u32,
   birth: u32, survive: u32, thresh: u32, k1: u32,
   k2: u32, gg: u32, flags: u32, gen: u32,
-  pop_mode: u32, pop_n: u32, act_mode: u32, act_limit: u32,
-  act_for: u32, halt_repeat: u32, compare: u32, pad: u32,
+  pop_mode: u32, pop_n: u32, act_mode: u32, zin: u32,
+  zout: u32, halt_repeat: u32, compare: u32, stat: u32,
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
   table: array<vec4<u32>, 11>,
 };
 
 // Header (halted, halt generation, one streak per activity halt, padding), then per generation
 // of the batch: population, changed cells, snapshot mismatch, unused.
+// After MAX_BATCH generations, four words per statistics slot (see STAT_BASE).
 struct Ctrl {
   halted: atomic<u32>,
   halt_gen: atomic<u32>,
@@ -33,13 +36,24 @@ struct Ctrl {
 @group(1) @binding(0) var<storage, read> src: array<u32>;
 @group(1) @binding(1) var<storage, read_write> dst: array<u32>;
 @group(1) @binding(2) var<storage, read_write> snap: array<u32>;
+// Per-rule data (see `prepare_aux` in lib.rs), then JACA's blast zone (two halves of n words,
+// in and out), at offsets given in the parameters. One buffer, as devices may allow only eight
+// storage buffers per shader stage.
+@group(2) @binding(0) var<storage, read_write> aux: array<u32>;
 
 var<workgroup> wg_halt: u32;
 var<workgroup> wg_pop: atomic<u32>;
 var<workgroup> wg_chg: atomic<u32>;
 var<workgroup> wg_mis: atomic<u32>;
+// Statistics: JACA's contacts, destroyed cells and cancelled births.
+var<workgroup> wg_s0: atomic<u32>;
+var<workgroup> wg_s1: atomic<u32>;
+var<workgroup> wg_s2: atomic<u32>;
 
 const WG: u32 = 256u;
+// Where the statistics slots start in ctrl.m: after 4 words for each of MAX_BATCH generations.
+const STAT_BASE: u32 = 4096u;
+const NONE: u32 = 0xffffffffu;
 
 // Lattice coordinates (unsheared i, row j, type k) to a cell index, honouring wrap; -1 past a dead edge.
 fn resolve(i0: i32, j0: i32, k: i32) -> i32 {
@@ -140,6 +154,36 @@ fn counts(i: u32, c: ptr<function, array<u32, 8>>) {
   }
 }
 
+// The neighbour slots of a cell (p.nb): a CSR range on explicit storage; on a lattice, the
+// cell's position and its type's range of offsets.
+struct Hood { lo: u32, cnt: u32, base: i32, j: i32 };
+
+fn hood(i: u32) -> Hood {
+  var h: Hood;
+  if (topo[6] != 0) {
+    let row = p.nb * (u32(topo[0]) + 1u) + i;
+    h.lo = csr_off[row];
+    h.cnt = csr_off[row + 1u] - h.lo;
+    return h;
+  }
+  let nt = u32(topo[3]);
+  let w = u32(topo[1]);
+  let c = i / nt;
+  h.j = i32(c / w);
+  h.base = i32(c % w) + topo[topo[9] + h.j];
+  let t = topo[10] + i32((p.nb * nt + i % nt) * 2u);
+  h.lo = u32(topo[t]);
+  h.cnt = u32(topo[t + 1]);
+  return h;
+}
+
+// Slot o of a hood: the neighbour's index, or -1 past a dead edge.
+fn nbr(h: Hood, o: u32) -> i32 {
+  if (topo[6] != 0) { return i32(csr_nb[h.lo + o]); }
+  let e = topo[11] + i32(h.lo + o) * 3;
+  return resolve(h.base + topo[e], h.j + topo[e + 1], topo[e + 2]);
+}
+
 fn table_word(w: u32) -> u32 {
   return p.table[w / 4u][w % 4u];
 }
@@ -158,6 +202,16 @@ fn commit_age(old: u32, v: u32, age: u32) -> u32 {
   return 1u;
 }
 
+// Ages for Life-like and Generations rules.
+fn bs_age(s: u32, v: u32, age: u32) -> u32 {
+  if (v == 1u) {
+    if (s == 1u) { return min(age + 1u, 65000u); }
+    return 1u;
+  }
+  if (v != 0u) { return age; }
+  return 0u;
+}
+
 @compute @workgroup_size(256)
 fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
   if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
@@ -168,6 +222,7 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
     let old = src[i];
     let s = old & 0xffu;
     let age = old >> 16u;
+    var glow = old & 0xff00u;
     var v = 0u;
     var na = 0u;
     var deg = 0u;
@@ -186,13 +241,7 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         } else {
           v = 0u;
         }
-        if (v == 1u) {
-          if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
-        } else if (v != 0u) {
-          na = age;
-        } else {
-          na = 0u;
-        }
+        na = bs_age(s, v, age);
       }
       // WireWorld: ages are left as they are.
       case 1u: {
@@ -236,6 +285,19 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         v = min(v, p.states);
         na = commit_age(s, v, age);
       }
+      // Edmond's Spectre glider rule.
+      case 5u: {
+        let g = gather(i, 1u, 3u, &deg);
+        let c1 = g.x;
+        let c3 = g.y;
+        let c2 = (g.z - c1 - 3u * c3) / 2u;
+        let c0 = g.w - c1 - c2 - c3;
+        if (s == 0u && c0 >= 3u && c1 >= 1u) { v = 3u; }
+        else if (s == 3u && c3 >= 3u) { v = 0u; }
+        else if (s == 3u && c1 >= 1u) { v = 1u; }
+        else { v = 0u; }
+        na = select(0u, 1u, v != 0u);
+      }
       // Priority table: the first row whose own state matches and whose conditions all hold
       // gives the next state, else 0 (evolve/priority.rs). Ages: 1 when non-zero.
       case 6u: {
@@ -262,21 +324,59 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         }
         na = select(0u, 1u, v != 0u);
       }
-      // Edmond's Spectre glider rule.
-      default: {
-        let g = gather(i, 1u, 3u, &deg);
-        let c1 = g.x;
-        let c3 = g.y;
-        let c2 = (g.z - c1 - 3u * c3) / 2u;
-        let c0 = g.w - c1 - c2 - c3;
-        if (s == 0u && c0 >= 3u && c1 >= 1u) { v = 3u; }
-        else if (s == 3u && c3 >= 3u) { v = 0u; }
-        else if (s == 3u && c1 >= 1u) { v = 1u; }
-        else { v = 0u; }
-        na = select(0u, 1u, v != 0u);
+      // JACA (jaca.rs): birth/survive = the positive rule, k1/k2 = the negative rule, thresh =
+      // blast radius. With no blast the zone is the contact cells, found here; otherwise the
+      // contact and dilate passes leave it in aux[zin..]. A destroyed cell glows 255, and the
+      // glow halves each step.
+      case 7u: {
+        let h = hood(i);
+        var cp = 0u;
+        var cn = 0u;
+        var present = 0u;
+        for (var o = 0u; o < h.cnt; o = o + 1u) {
+          let x = nbr(h, o);
+          if (x >= 0) {
+            let t = src[u32(x)] & 0xffu;
+            cp += u32(t == 1u);
+            cn += u32(t == 2u);
+            present += 1u;
+          }
+        }
+        var z = false;
+        if (p.thresh == 0u) {
+          if (s == 1u) { z = cn > 0u; } else if (s != 0u) { z = cp > 0u; }
+          if (z) { atomicAdd(&wg_s0, 1u); }
+        } else {
+          z = aux[p.zin + i] != 0u;
+        }
+        if (z) {
+          atomicAdd(&wg_s1, 1u);
+          glow = 0xff00u;
+        } else {
+          glow = (glow >> 1u) & 0xff00u;
+          if (topo[7] != 0) {
+            cp += h.cnt - present;
+            cn += h.cnt - present;
+          }
+          let sp = min(cp, 31u);
+          let sn = min(cn, 31u);
+          if (s == 1u) {
+            v = (p.survive >> sp) & 1u;
+          } else if (s == 2u) {
+            v = ((p.k2 >> sn) & 1u) * 2u;
+          } else {
+            let bp = ((p.birth >> sp) & 1u) == 1u;
+            let bn = ((p.k1 >> sn) & 1u) == 1u;
+            if (bp && !bn) { v = 1u; }
+            else if (bn && !bp) { v = 2u; }
+            else if (bp && bn) { atomicAdd(&wg_s2, 1u); }
+          }
+        }
+        na = commit_age(s, v, age);
       }
+      default: {}
     }
-    dst[i] = v | (na << 16u);
+    dst[i] = v | glow | (na << 16u);
     if ((p.flags & 1u) != 0u) {
       let sb = (snap[i >> 2u] >> ((i & 3u) * 8u)) & 0xffu;
       if (sb != v) { atomicStore(&wg_mis, 1u); }
@@ -284,7 +384,7 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
     if ((p.flags & 2u) != 0u && v != 0u) { atomicAdd(&wg_pop, 1u); }
     if ((p.flags & 4u) != 0u && v != s) { atomicAdd(&wg_chg, 1u); }
   }
-  if (p.flags != 0u) {
+  if (p.flags != 0u || p.stat != NONE) {
     workgroupBarrier();
     if (li == 0u) {
       let slot = 4u * p.gen;
@@ -293,7 +393,72 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
       let cc = atomicLoad(&wg_chg);
       if (cc != 0u) { atomicAdd(&ctrl.m[slot + 1u], cc); }
       if (atomicLoad(&wg_mis) != 0u) { atomicOr(&ctrl.m[slot + 2u], 1u); }
+      if (p.stat != NONE) {
+        let at = STAT_BASE + 4u * p.stat;
+        let s0 = atomicLoad(&wg_s0);
+        let s1 = atomicLoad(&wg_s1);
+        let s2 = atomicLoad(&wg_s2);
+        if (s0 != 0u) { atomicAdd(&ctrl.m[at], s0); }
+        if (s1 != 0u) { atomicAdd(&ctrl.m[at + 1u], s1); }
+        if (s2 != 0u) { atomicAdd(&ctrl.m[at + 2u], s2); }
+      }
     }
+  }
+}
+
+// JACA with a blast radius, part 1: live cells touching the opposite sign, into the zone,
+// counted in the step's statistics slot. The zone is aux[zout..].
+@compute @workgroup_size(256)
+fn contact(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
+  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
+  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }
+  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;
+  let n = u32(topo[0]);
+  if (i < n) {
+    let s = src[i] & 0xffu;
+    var hit = 0u;
+    if (s != 0u) {
+      let other = select(1u, 2u, s == 1u);
+      let h = hood(i);
+      for (var o = 0u; o < h.cnt; o = o + 1u) {
+        let x = nbr(h, o);
+        if (x >= 0 && (src[u32(x)] & 0xffu) == other) {
+          hit = 1u;
+          break;
+        }
+      }
+    }
+    aux[p.zout + i] = hit;
+    if (hit != 0u) { atomicAdd(&wg_s0, 1u); }
+  }
+  workgroupBarrier();
+  if (li == 0u) {
+    let c = atomicLoad(&wg_s0);
+    if (c != 0u) { atomicAdd(&ctrl.m[STAT_BASE + 4u * p.stat], c); }
+  }
+}
+
+// JACA with a blast radius, part 2: grow the zone by one neighbourhood step, aux[zin..] into
+// aux[zout..].
+@compute @workgroup_size(256)
+fn dilate(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {
+  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }
+  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }
+  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;
+  let n = u32(topo[0]);
+  if (i < n) {
+    var hit = aux[p.zin + i];
+    if (hit == 0u) {
+      let h = hood(i);
+      for (var o = 0u; o < h.cnt; o = o + 1u) {
+        let x = nbr(h, o);
+        if (x >= 0 && aux[p.zin + u32(x)] != 0u) {
+          hit = 1u;
+          break;
+        }
+      }
+    }
+    aux[p.zout + i] = hit;
   }
 }
 

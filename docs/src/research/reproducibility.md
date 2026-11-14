@@ -110,6 +110,10 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   aperiodic patches, several automata with several steps per generation, commands between GPU runs,
   scripts and period detection, priority tables, reseed policies, ages, and rules the GPU cannot run
   (which must fall back to the CPU, never run differently).
+- **More families** (`families.rs`): JACA (with blast radii 0 to 64, its glow and its counts),
+  on lattices and patches with every edge, through scripts, reseeds and period detection, and
+  every Quick Start entry of these families. Everything the state hash covers must agree, and so
+  must JACA's glow and counts.
 - **The exploratory search's batches** (`batch.rs`): populations, changes, hashes and frames of many
   worlds stepped together.
 - **Soup hunts** (`hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must

@@ -28,9 +28,9 @@ that will declare them stable.
   rules among them), now confirm their best runs on bigger grids, and run every candidate. A round under way now
   runs to its end; a stop still takes effect within moments.
   ([#3](https://github.com/jprodgers/jetcarp/issues/3))
-- **The JACA page said JACA runs only on the CPU.** That is true of a JACA world in the app and in
-  scripts, but the explore search runs JACA on the GPU, in its batches, when given one; the page now
-  says so. ([#9](https://github.com/jprodgers/jetcarp/issues/9))
+- **The JACA page said JACA runs only on the CPU.** The explore search runs JACA on the GPU, in its
+  batches, when given one, and a JACA world now runs on the GPU in the app and the background host
+  too (see below); the page says so. ([#9](https://github.com/jprodgers/jetcarp/issues/9))
 - **A stale example script is gone.** `explore-supervise.sh`, beside the example scripts in the
   scripting crate's source, called `jetcarp explore run`, a command of JETCARP's predecessor, so it
   failed at once. An explore search stops on time by itself and carries on from its archive after a
@@ -55,6 +55,11 @@ that will declare them stable.
 
 ### Changed
 
+- **JACA worlds run on the GPU.** With *GPU simulation* on, the app and the background host (so
+  live desktops, the lock screen and the screen saver) step JACA on the graphics card: lattices and
+  aperiodic patches, both neighbourhoods, blast radii up to 64, every edge. The result is the CPU's
+  to the bit, the annihilation glow and the counts on the card and in the status included. On an
+  AMD Radeon 8060S a 1-million-cell JACA world runs about 48 times as fast as on 32 CPU threads.
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in

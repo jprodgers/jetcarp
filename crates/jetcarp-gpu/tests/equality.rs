@@ -419,6 +419,8 @@ fn unsupported_rules_fall_back() {
         "sandpile-hex.json",
         "rule30-life-ants.json",
         "hex-wolfram.json",
+        "vonneumann-growing-channels.json",
+        "layered-spectre.json",
     ] {
         let text = std::fs::read_to_string(format!("../jetcarp-core/data/scenes/{f}")).unwrap();
         let sc = Scene::from_json(&text).unwrap();
