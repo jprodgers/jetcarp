@@ -7,7 +7,7 @@
 //! its own, `jetcarp jobs resume JOB`).
 
 use clap::Args;
-use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuStepper, GpuSteps, UndoStep};
+use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuPolicy, GpuStepper, GpuSteps, UndoStep};
 use jetcarp_api::{Ctx, Platform};
 use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
@@ -74,17 +74,11 @@ impl Platform for Machine {
     }
 
     fn gpu_adapters(&self) -> Vec<GpuAdapter> {
-        jetcarp_gpu::adapter_reports()
-            .into_iter()
-            .map(|g| GpuAdapter {
-                name: g.name,
-                backend: g.backend,
-                kind: g.kind,
-                driver: g.driver,
-                chosen: g.chosen,
-                problem: g.problem,
-            })
-            .collect()
+        jetcarp_app::gpu_info::adapters()
+    }
+
+    fn gpu_policy(&self) -> Option<GpuPolicy> {
+        Some(jetcarp_app::gpu_info::policy())
     }
 
     fn gpu_stepper(&self) -> Result<Box<dyn GpuStepper>, String> {

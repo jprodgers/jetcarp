@@ -9,6 +9,7 @@ mod cell_editor;
 mod cli;
 mod dash_ui;
 pub mod desktop_offers;
+pub mod gpu_info;
 mod editor;
 mod frametime;
 mod gpu;

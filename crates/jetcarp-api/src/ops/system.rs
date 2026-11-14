@@ -1,6 +1,6 @@
 //! `system.*`: JETCARP's folders, what it sees on this machine, and undoing what it set up.
 
-use crate::ctx::{Ctx, Desktop, GpuAdapter, Paths};
+use crate::ctx::{Ctx, Desktop, GpuAdapter, GpuPolicy, Paths};
 use crate::error::ApiError;
 use crate::op::{NoInput, Op, Progress, Report};
 use schemars::JsonSchema;
@@ -159,6 +159,8 @@ pub struct DoctorReport {
     pub threads: usize,
     pub folders: DoctorFolders,
     pub gpu: Vec<GpuAdapter>,
+    /// The GPU policy, and the adapter each purpose uses and why (none: no GPU support here).
+    pub gpu_policy: Option<GpuPolicy>,
     pub desktop: Desktop,
     /// `JETCARP_*` variables as `[name, value]`.
     pub environment: Vec<(String, String)>,
@@ -228,7 +230,11 @@ impl Report for DoctorReport {
             );
         }
         s.push('\n');
-        s.push_str("Graphics adapters (* = used by the GPU simulation)\n");
+        if let Some(p) = &self.gpu_policy {
+            s.push_str(&gpu_policy_text(p));
+            s.push('\n');
+        }
+        s.push_str("Graphics adapters (* = used for computing)\n");
         if self.gpu.is_empty() {
             s.push_str("  none found: simulation runs on the CPU\n");
         }
@@ -279,6 +285,59 @@ impl Report for DoctorReport {
     }
 }
 
+/// The GPU section of `jetcarp doctor`.
+fn gpu_policy_text(p: &GpuPolicy) -> String {
+    let mut s = format!("GPU: {}\n", p.summary);
+    match &p.setting_file {
+        Some(f) => {
+            let _ = writeln!(
+                s,
+                "  setting: {} ({})",
+                f.display(),
+                if f.exists() { "saved" } else { "not saved" }
+            );
+        }
+        None => s.push_str("  setting: no settings folder on this system\n"),
+    }
+    if let Some(n) = &p.note {
+        let _ = writeln!(s, "  note: {n}");
+    }
+    for c in &p.choices {
+        match &c.adapter {
+            Some(a) => {
+                let _ = writeln!(s, "  {}: {a} ({})", c.purpose, c.kind);
+            }
+            None => {
+                let _ = writeln!(s, "  {}: none", c.purpose);
+            }
+        }
+        let _ = writeln!(s, "      why: {}", c.why);
+        if !c.limits.is_empty() {
+            let _ = writeln!(s, "      limits: {}", c.limits);
+        }
+        if let Some(t) = &c.self_test {
+            let _ = writeln!(
+                s,
+                "      self-test: {} ({} ms{}): {}",
+                if t.passed { "passed" } else { "failed" },
+                t.millis,
+                if t.cached { ", kept from before" } else { "" },
+                t.note
+            );
+        }
+        match &c.problem {
+            Some(e) => {
+                let _ = writeln!(s, "      the GPU simulation does not use it: {e}");
+            }
+            None if c.adapter.is_some() => {
+                let _ = writeln!(s, "      the GPU simulation uses it");
+            }
+            None => {}
+        }
+    }
+    s
+}
+
 /// `system.doctor`.
 pub struct SystemDoctor;
 impl Op for SystemDoctor {
@@ -324,6 +383,7 @@ impl Op for SystemDoctor {
                 data_chosen_missing,
             },
             gpu: cx.platform.gpu_adapters(),
+            gpu_policy: cx.platform.gpu_policy(),
             desktop: cx.platform.desktop(),
             environment: jetcarp_env(),
         })

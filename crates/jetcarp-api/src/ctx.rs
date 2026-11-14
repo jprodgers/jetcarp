@@ -222,6 +222,69 @@ pub struct GpuAdapter {
     pub problem: Option<String>,
 }
 
+/// Whether to use the GPU when a command leaves it to the policy (`JETCARP_GPU`, else the saved
+/// setting in the settings folder's `gpu.json`, else automatic).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum GpuMode {
+    /// Never, unless a command asks (`--gpu`).
+    Off,
+    /// When a decent GPU is present and the work is large enough to gain from it.
+    #[default]
+    Auto,
+    /// Whenever a decent GPU is present.
+    On,
+}
+
+/// The GPU self-test on one adapter: GPU against CPU hashes for every world kernel and the
+/// explore batch stepper.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuSelfTest {
+    pub passed: bool,
+    /// What matched, or what did not.
+    pub note: String,
+    /// How long it took when it ran, in milliseconds.
+    pub millis: u64,
+    /// The result was kept from an earlier run (`gpu-checks.json` in the settings folder).
+    pub cached: bool,
+}
+
+/// The adapter one purpose uses, as `jetcarp doctor` shows it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuChoice {
+    /// `display` (windows, wallpapers, screen savers) or `compute` (runs, searches, scripts).
+    pub purpose: String,
+    /// The adapter, with its driver and backend (none: no adapter at all).
+    pub adapter: Option<String>,
+    /// discrete, integrated, virtual, software, other.
+    pub kind: String,
+    /// How it was chosen.
+    pub why: String,
+    /// Its limits that matter to the simulation.
+    pub limits: String,
+    pub self_test: Option<GpuSelfTest>,
+    /// Why the GPU simulation does not use it, if it does not.
+    pub problem: Option<String>,
+}
+
+/// The GPU policy and what it chose, for `jetcarp doctor`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
+pub struct GpuPolicy {
+    pub mode: GpuMode,
+    /// The adapter asked for: software, integrated, discrete, or part of a name.
+    pub adapter: Option<String>,
+    /// Where the policy came from: `env` (`JETCARP_GPU`), `setting` (`gpu.json`), `auto`.
+    pub source: String,
+    /// The policy in words.
+    pub summary: String,
+    /// The saved setting's file.
+    pub setting_file: Option<PathBuf>,
+    /// A setting file that could not be read.
+    pub note: Option<String>,
+    /// One per purpose.
+    pub choices: Vec<GpuChoice>,
+}
+
 /// How JETCARP is set up on the desktop.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, JsonSchema)]
 pub struct Desktop {
@@ -268,6 +331,10 @@ pub trait Platform: Send + Sync {
     /// A GPU simulator.
     fn gpu_stepper(&self) -> Result<Box<dyn GpuStepper>, String> {
         Err("this program was built without the GPU simulator".into())
+    }
+    /// The GPU policy and each purpose's adapter, with the self-test (`jetcarp doctor`).
+    fn gpu_policy(&self) -> Option<GpuPolicy> {
+        None
     }
     /// The desktop integration's state.
     fn desktop(&self) -> Desktop {

@@ -3,7 +3,7 @@
 mod common;
 
 use common::{fails, keys, scratch};
-use jetcarp_api::ctx::{Platform, UndoStep};
+use jetcarp_api::ctx::{GpuChoice, GpuMode, GpuPolicy, GpuSelfTest, Platform, UndoStep};
 use jetcarp_api::op::{NoInput, Op, Quiet, Report, to_value};
 use jetcarp_api::ops::files::{FilesIn, FilesList, FilesOut};
 use jetcarp_api::ops::reference::*;
@@ -180,12 +180,77 @@ fn paths_and_doctor() {
             "environment",
             "folders",
             "gpu",
+            "gpu_policy",
             "os",
             "threads",
             "version"
         ]
     );
     assert!(v["folders"].get("library_bytes").is_none());
+    assert!(v["gpu_policy"].is_null());
+    assert!(!t.contains("\nGPU: "), "{t}");
+}
+
+/// A platform with a GPU policy: an integrated GPU drawing, a software adapter refused.
+struct GpuFake;
+
+impl Platform for GpuFake {
+    fn gpu_policy(&self) -> Option<GpuPolicy> {
+        let test = GpuSelfTest {
+            passed: true,
+            note: "27 world rules and 33 explore batches matched the CPU".into(),
+            millis: 80,
+            cached: true,
+        };
+        Some(GpuPolicy {
+            mode: GpuMode::Auto,
+            adapter: Some("UHD".into()),
+            source: "env".into(),
+            summary: "auto, the adapter named UHD (JETCARP_GPU=UHD)".into(),
+            setting_file: None,
+            note: None,
+            choices: vec![
+                GpuChoice {
+                    purpose: "display".into(),
+                    adapter: Some("Intel UHD 630, Vulkan".into()),
+                    kind: "integrated".into(),
+                    why: "named UHD, as asked (JETCARP_GPU=UHD)".into(),
+                    limits: "16 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers"
+                        .into(),
+                    self_test: Some(test),
+                    problem: None,
+                },
+                GpuChoice {
+                    purpose: "compute".into(),
+                    adapter: None,
+                    why: "JETCARP_GPU=UHD".into(),
+                    problem: Some("no usable adapter".into()),
+                    ..Default::default()
+                },
+            ],
+        })
+    }
+}
+
+#[test]
+fn the_doctor_says_which_adapter_each_purpose_uses_and_why() {
+    let cx = Ctx::new().with_platform(Arc::new(GpuFake));
+    let d = SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
+    let t = d.text();
+    for want in [
+        "\nGPU: auto, the adapter named UHD (JETCARP_GPU=UHD)\n",
+        "  setting: no settings folder on this system\n",
+        "  display: Intel UHD 630, Vulkan (integrated)\n      why: named UHD, as asked (JETCARP_GPU=UHD)\n",
+        "      limits: 16 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers\n",
+        "      self-test: passed (80 ms, kept from before): 27 world rules and 33 explore batches matched the CPU\n      the GPU simulation uses it\n",
+        "  compute: none\n      why: JETCARP_GPU=UHD\n      the GPU simulation does not use it: no usable adapter\n",
+    ] {
+        assert!(t.contains(want), "{want:?} in\n{t}");
+    }
+    let v = to_value(&d);
+    assert_eq!(v["gpu_policy"]["mode"], "auto");
+    assert_eq!(v["gpu_policy"]["choices"][0]["self_test"]["passed"], true);
+    assert_eq!(v["gpu_policy"]["choices"][1]["purpose"], "compute");
 }
 
 /// A platform whose undo steps count their runs; the second one fails.

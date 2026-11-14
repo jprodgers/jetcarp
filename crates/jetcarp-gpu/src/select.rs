@@ -527,7 +527,8 @@ pub fn requirements(
         (_, Want::Named(_)) => {}
         (k, _) => {
             return Err(format!(
-                "a {} adapter: the GPU simulation uses one only when JETCARP_GPU names it",
+                "neither discrete nor integrated (the system says {}): the GPU simulation uses it \
+                 only when JETCARP_GPU names it",
                 kind_name(k)
             ));
         }
@@ -562,10 +563,11 @@ pub fn kind_name(k: wgpu::DeviceType) -> &'static str {
     }
 }
 
-/// `128 MiB`, `4 GiB`.
+/// `128 MiB`, `2 GiB`, `1.5 GiB`.
 pub fn bytes_text(b: u64) -> String {
-    if b >= 1 << 30 && b.is_multiple_of(1 << 30) || b >= 16 << 30 {
-        format!("{} GiB", b >> 30)
+    if b >= 1 << 30 {
+        let g = format!("{:.1}", b as f64 / (1u64 << 30) as f64);
+        format!("{} GiB", g.trim_end_matches(".0"))
     } else if b >= 1 << 20 {
         format!("{} MiB", b >> 20)
     } else {
@@ -1092,7 +1094,8 @@ mod tests {
     fn sizes_read_plainly() {
         assert_eq!(bytes_text(128 << 20), "128 MiB");
         assert_eq!(bytes_text(4 << 30), "4 GiB");
-        assert_eq!(bytes_text((4 << 30) - 4), "4095 MiB");
+        assert_eq!(bytes_text((2 << 30) - 1), "2 GiB");
+        assert_eq!(bytes_text(3 << 29), "1.5 GiB");
     }
 
     #[test]
