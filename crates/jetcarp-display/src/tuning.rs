@@ -137,8 +137,7 @@ pub fn percent(x: f64) -> String {
 pub fn coarsest_px(canvas: [f64; 2], design_px: f32) -> f32 {
     let short = canvas[0].min(canvas[1]).max(1.0);
     let px = (short / MIN_CELLS_ACROSS).floor() as f32;
-    px.min(*crate::profiles::CELL_PX_RANGE.end())
-        .max(design_px)
+    px.min(*crate::profiles::CELL_PX_RANGE.end()).max(design_px)
 }
 
 /// The cell sizes to try, smallest first: the scene's own, then each whole number of pixels above
@@ -362,9 +361,9 @@ pub fn scene_line(screen: usize, t: &TunedScene) -> String {
     } else {
         format!("{} px, its own size", t.cell_px)
     };
-    let gpu = t
-        .gpu_percent
-        .map_or(String::new(), |g| format!(", GPU {}", percent(g as f64 / 100.0)));
+    let gpu = t.gpu_percent.map_or(String::new(), |g| {
+        format!(", GPU {}", percent(g as f64 / 100.0))
+    });
     let mut s = format!(
         "screen {screen}: {}: {size}, {} cells; processor {}{gpu}, frames {:.1} ms",
         t.scene,
@@ -383,7 +382,7 @@ pub fn thousands(n: u64) -> String {
     let s = n.to_string();
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(c);
@@ -452,7 +451,9 @@ impl TuneChild {
             // CREATE_NO_WINDOW: no console flashes up from the app or the host.
             c.creation_flags(0x0800_0000);
         }
-        let mut child = c.spawn().map_err(|e| format!("could not start the tuner: {e}"))?;
+        let mut child = c
+            .spawn()
+            .map_err(|e| format!("could not start the tuner: {e}"))?;
         let out = child.stdout.take().ok_or("the tuner has no output")?;
         let (tx, rx) = channel();
         std::thread::Builder::new()
@@ -501,9 +502,12 @@ impl TuneChild {
     pub fn outcome(&self) -> Option<Result<(), String>> {
         let exit = self.exit?;
         Some(
-            match self.events.iter().rev().find(|e| {
-                matches!(e, TuneEvent::Done { .. } | TuneEvent::Failed { .. })
-            }) {
+            match self
+                .events
+                .iter()
+                .rev()
+                .find(|e| matches!(e, TuneEvent::Done { .. } | TuneEvent::Failed { .. }))
+            {
                 Some(TuneEvent::Done { .. }) => Ok(()),
                 Some(TuneEvent::Failed { error }) => Err(error.clone()),
                 _ if exit.success() => Ok(()),
@@ -561,7 +565,11 @@ mod tests {
     use super::*;
 
     /// A made-up machine: the load grows with the cell count, and frames with it.
-    fn model(cells_per_px2: f64, cpu_per_mcell: f64, gpu_per_mcell: f64) -> impl Fn(f32) -> Measure {
+    fn model(
+        cells_per_px2: f64,
+        cpu_per_mcell: f64,
+        gpu_per_mcell: f64,
+    ) -> impl Fn(f32) -> Measure {
         move |px: f32| {
             let cells = cells_per_px2 / (px as f64 * px as f64);
             let mc = cells / 1e6;
@@ -636,7 +644,10 @@ mod tests {
         assert_eq!(f.cell_px, 18.0);
         assert!(!f.fits);
         let note = f.note.unwrap();
-        assert!(note.contains("coarsest") && note.contains("frames"), "{note}");
+        assert!(
+            note.contains("coarsest") && note.contains("frames"),
+            "{note}"
+        );
         // A scene that cannot change size: one trial, and the note.
         let f = search(&[5.0], &limits(), |px| Ok(m(px))).unwrap();
         assert_eq!((f.cell_px, f.fits, f.trials), (5.0, false, 1));
@@ -669,8 +680,16 @@ mod tests {
         assert_eq!(candidates(2.5, 5.0), [2.5, 3.0, 4.0, 5.0]);
         assert_eq!(candidates(8.0, 8.0), [8.0]);
         assert_eq!(coarsest_px([1920.0, 1080.0], 1.0), 18.0);
-        assert_eq!(coarsest_px([800.0, 600.0], 20.0), 20.0, "never below its own");
-        assert_eq!(coarsest_px([20000.0, 10000.0], 1.0), 64.0, "the largest cell");
+        assert_eq!(
+            coarsest_px([800.0, 600.0], 20.0),
+            20.0,
+            "never below its own"
+        );
+        assert_eq!(
+            coarsest_px([20000.0, 10000.0], 1.0),
+            64.0,
+            "the largest cell"
+        );
         assert_eq!(thousands(1234567), "1,234,567");
         assert_eq!(thousands(999), "999");
         let r = TuneRequest {

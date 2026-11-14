@@ -646,7 +646,8 @@ pub fn run(a: HostArgs) -> Result<()> {
         }
         HostCmd::Tune(args) => jetcarp_host::tune::run(args, j).map_err(|e| anyhow!(e)),
         HostCmd::Scene { screen, save } => {
-            let v = host_call(&json!({"action": "scene", "screen": screen})).map_err(|e| anyhow!(e))?;
+            let v =
+                host_call(&json!({"action": "scene", "screen": screen})).map_err(|e| anyhow!(e))?;
             let text = serde_json::to_string_pretty(&v["scene"])?;
             match save {
                 Some(path) => {
@@ -766,7 +767,8 @@ mod tests {
         assert!(!lines.iter().any(|l| l.starts_with("paused:")));
         // Tuning: under way, then how it ended.
         let mut tuning = v.clone();
-        tuning["tuning"] = json!({"running": true, "progress": "screen 0, scene 2 of 7: Life at 4 px"});
+        tuning["tuning"] =
+            json!({"running": true, "progress": "screen 0, scene 2 of 7: Life at 4 px"});
         let lines = status_lines(&tuning);
         assert!(
             lines
@@ -774,8 +776,12 @@ mod tests {
                 .any(|l| l == "tuning: screen 0, scene 2 of 7: Life at 4 px"),
             "{lines:?}"
         );
-        tuning["tuning"] = json!({"running": false, "last": {"outcome": "failed", "error": "no GPU"}});
+        tuning["tuning"] =
+            json!({"running": false, "last": {"outcome": "failed", "error": "no GPU"}});
         let lines = status_lines(&tuning);
-        assert!(lines.iter().any(|l| l == "last tune: failed: no GPU"), "{lines:?}");
+        assert!(
+            lines.iter().any(|l| l == "last tune: failed: no GPU"),
+            "{lines:?}"
+        );
     }
 }

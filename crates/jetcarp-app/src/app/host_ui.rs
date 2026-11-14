@@ -9,6 +9,7 @@
 //! the screensaver and edited in its pane.
 
 use super::*;
+use egui_wgpu::wgpu;
 use jetcarp_display::autostart;
 use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome::{self, ExtensionState};
@@ -16,7 +17,6 @@ use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings, TuneLimits, TunedScene,
 };
 use jetcarp_display::tuning::{self, TuneChild, TuneRequest};
-use egui_wgpu::wgpu;
 use jetcarp_gpu::select::{self, Mode};
 use jetcarp_mcp::link::host_call;
 use serde_json::{Value, json};
@@ -787,7 +787,9 @@ fn performance_ui(
         .small()
         .weak(),
     )
-    .on_hover_text("The adapter JETCARP's GPU setting picks for a display (jetcarp doctor shows why)");
+    .on_hover_text(
+        "The adapter JETCARP's GPU setting picks for a display (jetcarp doctor shows why)",
+    );
     let l = &mut settings.tune;
     egui::Grid::new("host-tune-limits")
         .num_columns(2)

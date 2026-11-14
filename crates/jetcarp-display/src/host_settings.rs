@@ -469,9 +469,10 @@ mod tests {
         assert!(t.tuning_for(0, "Another").is_none(), "another rotation");
         assert!(t.tuning_for(1, "My wallpaper").is_none(), "no such screen");
         // Limits out of range are brought in.
-        let s: HostSettings =
-            serde_json::from_str(r#"{"tune": {"cpu_percent": 0, "gpu_percent": 500, "fps": 1000}}"#)
-                .unwrap();
+        let s: HostSettings = serde_json::from_str(
+            r#"{"tune": {"cpu_percent": 0, "gpu_percent": 500, "fps": 1000}}"#,
+        )
+        .unwrap();
         let s = s.checked();
         assert_eq!((s.tune.cpu_percent, s.tune.gpu_percent), (1.0, 100.0));
         assert_eq!(s.tune.fps, Some(240.0));
@@ -500,7 +501,11 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(t.cell_px_for("a", 2.0, [2000.0, 1000.0]), Some(6.0));
-        assert_eq!(t.cell_px_for("b", 3.0, [2000.0, 1000.0]), None, "its own size");
+        assert_eq!(
+            t.cell_px_for("b", 3.0, [2000.0, 1000.0]),
+            None,
+            "its own size"
+        );
         assert_eq!(t.cell_px_for("c", 3.0, [2000.0, 1000.0]), None, "not tuned");
         assert_eq!(
             t.cell_px_for("a", 4.0, [2000.0, 1000.0]),

@@ -104,7 +104,9 @@ fn drm_engine_ns(text: &str, seen: &mut std::collections::BTreeSet<String>) -> O
             "drm-driver" => driver = true,
             "drm-client-id" => client = Some(value.to_string()),
             k if k.starts_with("drm-engine-") && !k.starts_with("drm-engine-capacity-") => {
-                if let Some(n) = value.strip_suffix("ns").and_then(|n| n.trim().parse::<u64>().ok())
+                if let Some(n) = value
+                    .strip_suffix("ns")
+                    .and_then(|n| n.trim().parse::<u64>().ok())
                 {
                     ns += n;
                 }
@@ -414,8 +416,16 @@ mod tests {
                   drm-engine-compute:\t500 ns\ndrm-engine-capacity-gfx:\t2\ndrm-total-vram:\t12 KiB\n";
         let mut seen = std::collections::BTreeSet::new();
         assert_eq!(drm_engine_ns(fd, &mut seen), Some(2000));
-        assert_eq!(drm_engine_ns(fd, &mut seen), Some(0), "the same client again");
-        assert_eq!(drm_engine_ns("pos:\t0\nflags:\t02\n", &mut seen), None, "not a GPU");
+        assert_eq!(
+            drm_engine_ns(fd, &mut seen),
+            Some(0),
+            "the same client again"
+        );
+        assert_eq!(
+            drm_engine_ns("pos:\t0\nflags:\t02\n", &mut seen),
+            None,
+            "not a GPU"
+        );
         let idle = "drm-driver:\ti915\ndrm-client-id:\t9\n";
         assert_eq!(drm_engine_ns(idle, &mut seen), Some(0), "no work yet");
         // Whatever this machine is, reading it is not an error.

@@ -471,7 +471,14 @@ fn shots_desktop_pane_tuned() {
         fps: 30.0,
         scenes: vec![
             scene("profile Life", 3.0, 3.0, 1.8, 2.8, 4.2),
-            scene("Quick Start rule:ForestFire 0.01/0.0001", 2.0, 3.0, 1.9, 3.9, 5.1),
+            scene(
+                "Quick Start rule:ForestFire 0.01/0.0001",
+                2.0,
+                3.0,
+                1.9,
+                3.9,
+                5.1,
+            ),
             scene("profile Hodgepodge", 3.0, 3.0, 2.2, 2.7, 5.8),
         ],
     });

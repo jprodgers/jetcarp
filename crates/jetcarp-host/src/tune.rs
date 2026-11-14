@@ -446,7 +446,11 @@ impl Hold {
     }
 
     fn renew(&mut self) {
-        if self.on && self.at.is_none_or(|t| t.elapsed().as_secs_f64() >= HOLD_EVERY) {
+        if self.on
+            && self
+                .at
+                .is_none_or(|t| t.elapsed().as_secs_f64() >= HOLD_EVERY)
+        {
             self.at = Some(Instant::now());
             let _ = host_call(&json!({"action": "tuning", "on": true}));
         }
@@ -487,7 +491,11 @@ struct Timer {
 
 impl Timer {
     fn new(g: &SharedGpu) -> Option<Timer> {
-        if !g.device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+        if !g
+            .device
+            .features()
+            .contains(wgpu::Features::TIMESTAMP_QUERY)
+        {
             return None;
         }
         let set = g.device.create_query_set(&wgpu::QuerySetDescriptor {
@@ -544,8 +552,8 @@ impl Timer {
         let t: [u64; 4] = match self.read.get_mapped_range(..) {
             Ok(data) => {
                 let mut t = [0u64; 4];
-                for (k, c) in data.chunks_exact(8).take(4).enumerate() {
-                    t[k] = u64::from_le_bytes(c.try_into().unwrap_or([0; 8]));
+                for (k, c) in data.as_chunks::<8>().0.iter().take(4).enumerate() {
+                    t[k] = u64::from_le_bytes(*c);
                 }
                 t
             }
@@ -804,13 +812,19 @@ impl Rig {
             gpu_total = b.saturating_sub(a).as_secs_f64();
         }
         drop(draw);
-        let gens_done = stage.world().map_or(0, |w| w.generation).saturating_sub(gen0) as f64;
+        let gens_done = stage
+            .world()
+            .map_or(0, |w| w.generation)
+            .saturating_sub(gen0) as f64;
         let speed = slot.profile.speed as f64;
         let on_gpu = matches!(self.sim.status(), SimStatus::Gpu(_));
         let gpu_timing = self.gpu_timing();
         Ok(Measure {
             cpu,
-            gpu: self.gpu.as_ref().map(|_| (gpu_total / wall).clamp(0.0, 1.0)),
+            gpu: self
+                .gpu
+                .as_ref()
+                .map(|_| (gpu_total / wall).clamp(0.0, 1.0)),
             p95: p95(&mut times),
             gens_wanted: (speed > 0.0).then_some(speed * wall),
             gens_done,
