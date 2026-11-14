@@ -41,6 +41,14 @@ that will declare them stable.
   Tide with Ember. A test keeps every JACA palette pair apart as cells age.
   ([#6](https://github.com/jprodgers/jetcarp/issues/6))
 
+- **An edge-neighbour rule was named as the plain rule.** A world given `B3/S23V` named its
+  automaton "B3/S23", the touch-neighbour rule's notation, on cards, captions and status lines. The
+  default name now keeps the `V` (and a JACA rule's `V`s), as the rule's notation does.
+  ([#7](https://github.com/jprodgers/jetcarp/issues/7))
+- **A hunt over many rules and tilings worded its progress oddly.** "100/100 x 1200 groups soups"
+  now reads "100/100 soups in each of 1,200 groups", and the count of new patterns is grouped by
+  thousands like the others. ([#8](https://github.com/jprodgers/jetcarp/issues/8))
+
 ### Changed
 
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any

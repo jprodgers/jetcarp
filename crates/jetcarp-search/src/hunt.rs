@@ -280,10 +280,14 @@ impl HuntProgress {
             .soups_total
             .map(|t| format!("/{}", group_digits(t)))
             .unwrap_or_default();
+        // Soups count per rule-and-tiling group: "100/100 soups in each of 1,200 groups".
         let groups = if self.groups.len() > 1 {
-            format!(" x {} groups", self.groups.len())
+            format!(
+                " soups in each of {} groups",
+                group_digits(self.groups.len() as u64)
+            )
         } else {
-            String::new()
+            " soups".to_string()
         };
         let classes: Vec<String> = ["spaceship", "oscillator", "still life", "puffer", "gun"]
             .iter()
@@ -294,7 +298,7 @@ impl HuntProgress {
             })
             .collect();
         format!(
-            "hunt {}: {}{}{} soups, {:.0} soups/s, {} objects ({}), {} distinct, {} new{}",
+            "hunt {}: {}{}{}, {:.0} soups/s, {} objects ({}), {} distinct, {} new{}",
             self.job,
             group_digits(self.soups_done),
             total,
@@ -303,7 +307,7 @@ impl HuntProgress {
             group_digits(self.objects),
             classes.join(", "),
             group_digits(self.distinct),
-            self.new_patterns,
+            group_digits(self.new_patterns),
             self.newest
                 .first()
                 .map(|f| format!(" | newest: {} ({})", f.label, f.rule))
@@ -1161,5 +1165,32 @@ fn ship_record(c: &Census, info: &jetcarp_core::pattern::GunInfo) -> Option<Arc<
             Some(c.intern(&mut cache, rec))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod progress_line_tests {
+    use super::*;
+
+    /// Issue #8: a hunt over many rule-and-tiling groups says its soups are per group.
+    #[test]
+    fn the_progress_line_counts_soups_per_group() {
+        let mut p = HuntProgress {
+            job: 21,
+            soups_done: 100,
+            soups_total: Some(100),
+            distinct: 82_445,
+            new_patterns: 75_657,
+            ..Default::default()
+        };
+        p.groups = vec![Default::default(); 1200];
+        let line = p.line();
+        assert!(
+            line.starts_with("hunt 21: 100/100 soups in each of 1,200 groups, "),
+            "{line}"
+        );
+        assert!(line.contains("82,445 distinct, 75,657 new"), "{line}");
+        p.groups.truncate(1);
+        assert!(p.line().starts_with("hunt 21: 100/100 soups, "), "{}", p.line());
     }
 }
