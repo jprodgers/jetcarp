@@ -584,6 +584,13 @@ pub struct ExploreArgs {
     /// of the built-in score; the job keeps a copy, so resuming it keeps the model.
     #[arg(long)]
     score: Option<PathBuf>,
+    /// Take parents from this explore job: the JACA rules of its reviewed runs (or its best
+    /// runs), transplanted to other tilings and tuned for balance early in this search.
+    #[arg(long)]
+    parents_from: Option<i64>,
+    /// With --parents-from: the verdicts whose runs to take (default keep,maybe).
+    #[arg(long, requires = "parents_from")]
+    reviewed: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -795,9 +802,9 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         seed: Some(a.seed),
         gpu: Some(a.gpu),
         max_rss_gb: a.max_rss_gb,
-        score: a
-            .score
-            .map(|p| Value::String(p.display().to_string())),
+        score: a.score.map(|p| Value::String(p.display().to_string())),
+        parents_from: a.parents_from,
+        parents_reviewed: a.reviewed,
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
     i.gpu = a.gpu;

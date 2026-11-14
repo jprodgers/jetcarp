@@ -115,6 +115,13 @@ that will declare them stable.
   runs replay exactly, so a refit runs again those that lack the sign measures, and `jetcarp jobs
   rescore --replay` does it for a whole search (`--gpu` on the GPU). The MCP `search_runs` tool
   can refit and rescore too, and `search_start` takes a model.
+- **The explore search breeds JACA its own way.** Parents are chosen in proportion to quality, a
+  fifth of the time at random, and for JACA only from runs whose signs both held. Strong JACA pairs
+  are transplanted to tilings they have not run on (with their counts scaled when the neighbour
+  counts differ), and pairs whose weaker sign is losing are tuned to help it, with 30% of JACA's
+  candidates still fresh random draws. `jetcarp search explore --parents-from JOB` starts a search
+  from another job's reviewed JACA runs (`--reviewed`, default keep and maybe), transplanting and
+  tuning them first. See [Search methods](../research/search-methods.md#explore).
 - **Every measure out.** `jetcarp jobs runs` takes `--measures all` (or a list), `--format
   csv|json`, `--since ID` for the runs after an id, `--limit 0` for every run, and `--out FILE`.
   The MCP `search_runs` tool writes a CSV file of every run with `csv` and limit 0.

@@ -11,6 +11,7 @@
 //! searches with the same settings try different candidates.
 
 use crate::explore::archive::{self, Archive, Eval, ScoreModel};
+use crate::explore::breed::{self, Parent};
 use crate::explore::store::{Delta, FamStat, RunOut, Saved};
 use jetcarp_core::explore::batch::{
     Backend, BatchJob, BatchWorld, GIVEN_UP, WorldTrace, field_bytes, trace_world,
@@ -160,6 +161,9 @@ pub struct Settings {
     /// score (for its family only, when it was fitted to one); none: the built-in score.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub score: Option<ScoreModel>,
+    /// JACA rules another job found (`--parents-from`), transplanted and tuned early.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parents: Vec<Parent>,
 }
 
 impl Default for Settings {
@@ -175,6 +179,7 @@ impl Default for Settings {
             tilings: vec![],
             families: vec![],
             score: None,
+            parents: vec![],
         }
     }
 }
@@ -287,6 +292,66 @@ fn weighted(rng: &mut Rng, w: &[(Fam, f64)]) -> Fam {
         }
     }
     w[0].0
+}
+
+/// A candidate made: its rule (none when it could not be made), seed kind, seed and origin.
+type Made = (
+    Option<Rule>,
+    String,
+    jetcarp_core::world::SeedSpec,
+    &'static str,
+);
+
+/// A parent for a transplant or a balance variant.
+struct Pick {
+    rule: String,
+    tiling: String,
+    nb: Nb,
+    seed: jetcarp_core::world::SeedSpec,
+    weaker: Option<breed::Sign>,
+}
+
+/// How a candidate is made.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Way {
+    /// A fresh draw.
+    Random,
+    /// An elite's rule, changed.
+    Mutate,
+    /// An elite's rule from a new starting pattern.
+    Seed,
+    /// The least-tried starting pattern, with a fresh rule.
+    Cover,
+    /// A catalogue rule.
+    Named,
+    /// JACA: a strong pair on a grid it has not run on.
+    Transplant,
+    /// JACA: a pair whose weaker sign was losing, changed to help it.
+    Balance,
+}
+
+/// The way for a family and a roll in [0, 1). JACA's effort: random 30%, mutate 20%, transplant
+/// 15%, balance 15%, seed 10%, cover 10%. The other families: random 40%, mutate 25%, seed 15%,
+/// cover 10%, named 10%.
+fn way(fam: Fam, roll: f64) -> Way {
+    if fam == Fam::Jaca {
+        match roll {
+            r if r < 0.30 => Way::Random,
+            r if r < 0.50 => Way::Mutate,
+            r if r < 0.65 => Way::Transplant,
+            r if r < 0.80 => Way::Balance,
+            r if r < 0.90 => Way::Seed,
+            _ => Way::Cover,
+        }
+    } else {
+        match roll {
+            r if r < 0.4 => Way::Random,
+            r if r < 0.65 => Way::Mutate,
+            r if r < 0.8 => Way::Seed,
+            r if r < 0.9 => Way::Cover,
+            _ => Way::Named,
+        }
+    }
 }
 
 /// The identities tried: a sorted list (loaded) and a set of the ones tried since.
@@ -503,6 +568,12 @@ pub struct Search {
     /// Runs cut short by their time cap, and runs given up, in this session.
     capped: AtomicU64,
     given_up: AtomicU64,
+    /// The tilings each JACA pair has been transplanted to in this session.
+    transplanted: Mutex<HashMap<String, HashSet<String>>>,
+    /// Mean and largest neighbour counts by tiling and neighbourhood.
+    degrees: Mutex<HashMap<(String, u8), (f64, usize)>>,
+    /// Where the next parent of `--parents-from` is taken from.
+    parent_turn: AtomicU64,
 }
 
 impl Search {
@@ -532,6 +603,14 @@ impl Search {
             if let Some(&i) = index.get(t.as_str()) {
                 *coverage.entry((i, f, k)).or_insert(0) += n;
             }
+        }
+        // A parent from another job has run where it was found.
+        let mut transplanted: HashMap<String, HashSet<String>> = HashMap::new();
+        for p in &set.parents {
+            transplanted
+                .entry(p.rule.clone())
+                .or_default()
+                .insert(p.tiling.clone());
         }
         let rng = |k: &str, x: u64| {
             Rng::new(
@@ -571,6 +650,9 @@ impl Search {
             ),
             capped: AtomicU64::new(0),
             given_up: AtomicU64::new(0),
+            transplanted: Mutex::new(transplanted),
+            degrees: Mutex::new(HashMap::new()),
+            parent_turn: AtomicU64::new(0),
         })
     }
 
@@ -943,106 +1025,129 @@ impl Search {
             return out;
         };
         let mut tries = 0;
+        // A transplant's scaled variant, made with it and tried next.
+        let mut extra: Option<Made> = None;
         while out.len() < n && tries < n * 12 {
             tries += 1;
-            let fam = if ltl.is_some() {
-                Fam::Ltl
+            let (rule, kind, seed, origin): Made = if let Some(x) = extra.take() {
+                x
             } else {
-                weighted(rng, fams)
-            };
-            if !fam.fits(grid) {
-                continue;
-            }
-            let roll = rng.next_f64();
-            let (rule, kind, seed, origin): (
-                Option<Rule>,
-                String,
-                jetcarp_core::world::SeedSpec,
-                &str,
-            ) = if roll < 0.4 {
-                let r = match ltl {
-                    Some(g) => sample_ltl(grid, rng, Some(g)),
-                    None => sample_rule(fam, grid, nb, rng),
+                let fam = if ltl.is_some() {
+                    Fam::Ltl
+                } else {
+                    weighted(rng, fams)
                 };
-                let (sd, k) = seed_for(fam, grid, rng);
-                (r, k.to_string(), sd, "random")
-            } else if roll < 0.65 {
-                let el = self
-                    .archive
-                    .lock()
-                    .unwrap()
-                    .sample(rng, Some(fam))
-                    .map(|(_, e)| e.clone());
-                let Some(el) = el else { continue };
-                let Some(base) = el.cand.rule() else { continue };
-                if let Some(g) = ltl
-                    && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
-                {
+                if !fam.fits(grid) {
                     continue;
                 }
-                let r = space::mutate_rule(&base, grid, nb, rng);
-                (r, "mutated".to_string(), el.cand.seed.clone(), "mutate")
-            } else if roll < 0.8 {
-                let el = self
-                    .archive
-                    .lock()
-                    .unwrap()
-                    .sample(rng, Some(fam))
-                    .map(|(_, e)| e.clone());
-                let Some(el) = el else { continue };
-                let Some(base) = el.cand.rule() else { continue };
-                if let Some(g) = ltl
-                    && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
-                {
-                    continue;
-                }
-                let (sd, k) = seed_for(fam, grid, rng);
-                (Some(base), k.to_string(), sd, "seed")
-            } else if roll < 0.9 {
-                // The least-tried seed kind of this family on this grid.
-                let mut best: Option<(u32, jetcarp_core::world::SeedSpec, &'static str)> = None;
-                let cov = self.coverage.lock().unwrap();
-                for _ in 0..6 {
-                    let (sd, k) = seed_for(fam, grid, rng);
-                    let c = cov.get(&(ti, fam, k.to_string())).copied().unwrap_or(0);
-                    if best.as_ref().is_none_or(|b| c < b.0) {
-                        best = Some((c, sd, k));
+                let roll = rng.next_f64();
+                // Parents: in proportion to quality, and for JACA only runs whose signs both held.
+                let parent_ok = |e: &Eval| fam != Fam::Jaca || breed::strong(e);
+                match way(fam, roll) {
+                    Way::Random => {
+                        let r = match ltl {
+                            Some(g) => sample_ltl(grid, rng, Some(g)),
+                            None => sample_rule(fam, grid, nb, rng),
+                        };
+                        let (sd, k) = seed_for(fam, grid, rng);
+                        (r, k.to_string(), sd, "random")
+                    }
+                    Way::Mutate => {
+                        let el = self
+                            .archive
+                            .lock()
+                            .unwrap()
+                            .sample_parent(rng, Some(fam), &parent_ok)
+                            .map(|(_, e)| e.clone());
+                        let Some(el) = el else { continue };
+                        let Some(base) = el.cand.rule() else { continue };
+                        if let Some(g) = ltl
+                            && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
+                        {
+                            continue;
+                        }
+                        let r = space::mutate_rule(&base, grid, nb, rng);
+                        (r, "mutated".to_string(), el.cand.seed.clone(), "mutate")
+                    }
+                    Way::Seed => {
+                        let el = self
+                            .archive
+                            .lock()
+                            .unwrap()
+                            .sample_parent(rng, Some(fam), &parent_ok)
+                            .map(|(_, e)| e.clone());
+                        let Some(el) = el else { continue };
+                        let Some(base) = el.cand.rule() else { continue };
+                        if let Some(g) = ltl
+                            && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
+                        {
+                            continue;
+                        }
+                        let (sd, k) = seed_for(fam, grid, rng);
+                        (Some(base), k.to_string(), sd, "seed")
+                    }
+                    Way::Transplant => {
+                        let Some((made, scaled)) = self.transplant(grid, nb, rng) else {
+                            continue;
+                        };
+                        extra = scaled;
+                        made
+                    }
+                    Way::Balance => {
+                        let Some(made) = self.balance(grid, nb, rng) else {
+                            continue;
+                        };
+                        made
+                    }
+                    Way::Cover => {
+                        // The least-tried seed kind of this family on this grid.
+                        let mut best: Option<(u32, jetcarp_core::world::SeedSpec, &'static str)> =
+                            None;
+                        let cov = self.coverage.lock().unwrap();
+                        for _ in 0..6 {
+                            let (sd, k) = seed_for(fam, grid, rng);
+                            let c = cov.get(&(ti, fam, k.to_string())).copied().unwrap_or(0);
+                            if best.as_ref().is_none_or(|b| c < b.0) {
+                                best = Some((c, sd, k));
+                            }
+                        }
+                        drop(cov);
+                        let (_, sd, k) = best.unwrap();
+                        let r = match ltl {
+                            Some(g) => sample_ltl(grid, rng, Some(g)),
+                            None => sample_rule(fam, grid, nb, rng),
+                        };
+                        (r, k.to_string(), sd, "cover")
+                    }
+                    Way::Named => {
+                        // A named rule on this grid.
+                        let named = {
+                            let mut q = self.named.lock().unwrap();
+                            if q.is_empty() {
+                                continue;
+                            }
+                            let i = rng.below(q.len() as u64) as usize;
+                            q.swap_remove(i)
+                        };
+                        let Ok((r, _)) = Rule::parse(&named.1) else {
+                            continue;
+                        };
+                        let f2 = Fam::of(&r);
+                        // A rule this loop cannot run goes back for the other loop.
+                        if ltl.is_some()
+                            || backend.is_some_and(|b| !b(&r))
+                            || !fams.iter().any(|(f, _)| *f == f2)
+                        {
+                            self.named.lock().unwrap().push(named);
+                            continue;
+                        }
+                        if !f2.fits(grid) {
+                            continue;
+                        }
+                        let (sd, k) = seed_for(f2, grid, rng);
+                        (Some(r), k.to_string(), sd, "named")
                     }
                 }
-                drop(cov);
-                let (_, sd, k) = best.unwrap();
-                let r = match ltl {
-                    Some(g) => sample_ltl(grid, rng, Some(g)),
-                    None => sample_rule(fam, grid, nb, rng),
-                };
-                (r, k.to_string(), sd, "cover")
-            } else {
-                // A named rule on this grid.
-                let named = {
-                    let mut q = self.named.lock().unwrap();
-                    if q.is_empty() {
-                        continue;
-                    }
-                    let i = rng.below(q.len() as u64) as usize;
-                    q.swap_remove(i)
-                };
-                let Ok((r, _)) = Rule::parse(&named.1) else {
-                    continue;
-                };
-                let f2 = Fam::of(&r);
-                // A rule this loop cannot run goes back for the other loop.
-                if ltl.is_some()
-                    || backend.is_some_and(|b| !b(&r))
-                    || !fams.iter().any(|(f, _)| *f == f2)
-                {
-                    self.named.lock().unwrap().push(named);
-                    continue;
-                }
-                if !f2.fits(grid) {
-                    continue;
-                }
-                let (sd, k) = seed_for(f2, grid, rng);
-                (Some(r), k.to_string(), sd, "named")
             };
             let Some(rule) = rule else { continue };
             if backend.is_some_and(|b| !b(&rule)) {
@@ -1068,6 +1173,145 @@ impl Search {
             out.push((cand, kind));
         }
         out
+    }
+
+    /// A grid's mean and largest neighbour counts for a neighbourhood (from the grid cache, or
+    /// built and remembered).
+    fn degree(&self, key: &str, nb: Nb) -> Option<(f64, usize)> {
+        let k = (key.to_string(), nb as u8);
+        if let Some(d) = self.degrees.lock().unwrap().get(&k) {
+            return Some(*d);
+        }
+        let g = self.grid(key, self.set.screen_cells).ok()?;
+        let d = (g.mean_deg[nb as usize], g.max_deg[nb as usize]);
+        self.degrees.lock().unwrap().insert(k, d);
+        Some(d)
+    }
+
+    /// Has this JACA pair run on this tiling (as a transplant, or where it was found)?
+    fn tried_on(&self, rule: &str, home: &str, key: &str) -> bool {
+        home == key
+            || self
+                .transplanted
+                .lock()
+                .unwrap()
+                .get(rule)
+                .is_some_and(|t| t.contains(key))
+    }
+
+    /// Up to `n` parents for a transplant or a balance variant: rules another job found
+    /// (`--parents-from`, taken in turn, three picks in four while there are any), else elites of
+    /// the archive that `ok` accepts. Each is (rule, its tiling, its neighbourhood, its seed, its
+    /// weaker sign when it was losing).
+    fn picks(
+        &self,
+        rng: &mut Rng,
+        n: usize,
+        from_queue: &dyn Fn(&Parent) -> bool,
+        ok: &dyn Fn(&Eval) -> bool,
+    ) -> Vec<Pick> {
+        let mut out = Vec::new();
+        let queued: Vec<&Parent> = self.set.parents.iter().filter(|p| from_queue(p)).collect();
+        if !queued.is_empty() && rng.below(4) != 0 {
+            let start = self.parent_turn.fetch_add(n as u64, Ordering::Relaxed) as usize;
+            for i in 0..n.min(queued.len()) {
+                let p = queued[(start + i) % queued.len()];
+                let Ok(seed) = serde_json::from_str(&p.seed) else {
+                    continue;
+                };
+                out.push(Pick {
+                    rule: p.rule.clone(),
+                    tiling: p.tiling.clone(),
+                    nb: if p.nb == 0 { Nb::Touch } else { Nb::Edge },
+                    seed,
+                    weaker: p.weaker,
+                });
+            }
+            return out;
+        }
+        let a = self.archive.lock().unwrap();
+        for _ in 0..n {
+            if let Some((_, e)) = a.sample_parent(rng, Some(Fam::Jaca), ok) {
+                out.push(Pick {
+                    rule: e.cand.rule.clone(),
+                    tiling: e.cand.tiling.clone(),
+                    nb: e.cand.nb,
+                    seed: e.cand.seed.clone(),
+                    weaker: breed::losing(&e.feat),
+                });
+            }
+        }
+        out
+    }
+
+    /// A transplant: a strong JACA pair, unchanged, on this grid where it has not run yet,
+    /// preferring pairs found on grids of a similar neighbour count. With it, when the counts
+    /// differ, its variant with every count scaled to this grid's (tried next).
+    fn transplant(&self, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<(Made, Option<Made>)> {
+        let picks = self.picks(rng, 6, &|p| p.strong, &breed::strong);
+        let (d_new, max_new) = (grid.mean_deg[nb as usize], grid.max_deg[nb as usize]);
+        let mut best: Option<(f64, Pick, f64)> = None;
+        for p in picks {
+            if self.tried_on(&p.rule, &p.tiling, &grid.key) {
+                continue;
+            }
+            let Some((d_old, _)) = self.degree(&p.tiling, p.nb) else {
+                continue;
+            };
+            // Near degrees first; now and then one farther afield.
+            let far = (d_old - d_new).abs() / d_new.max(1.0) + 0.3 * rng.next_f64();
+            if best.as_ref().is_none_or(|b| far < b.0) {
+                best = Some((far, p, d_old));
+            }
+        }
+        let (_, p, d_old) = best?;
+        {
+            let mut t = self.transplanted.lock().unwrap();
+            let tried = t.entry(p.rule.clone()).or_default();
+            tried.insert(p.tiling.clone());
+            tried.insert(grid.key.clone());
+        }
+        let Ok((rule, _)) = Rule::parse(&p.rule) else {
+            return None;
+        };
+        let scaled = match &rule {
+            Rule::Jaca(j) if (d_old - d_new).abs() >= 0.5 => {
+                let s = breed::scaled(j, d_old, d_new, max_new);
+                (s != **j).then(|| {
+                    (
+                        Some(Rule::Jaca(Box::new(s))),
+                        "transplant".to_string(),
+                        p.seed.clone(),
+                        "transplant-scaled",
+                    )
+                })
+            }
+            _ => None,
+        };
+        Some((
+            (Some(rule), "transplant".to_string(), p.seed, "transplant"),
+            scaled,
+        ))
+    }
+
+    /// A balance variant: a JACA pair whose weaker sign was losing, changed to help that sign
+    /// ([`breed::balance_variant`]).
+    fn balance(&self, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Made> {
+        let picks = self.picks(rng, 1, &|p| p.weaker.is_some(), &|e: &Eval| {
+            breed::losing(&e.feat).is_some()
+        });
+        let p = picks.into_iter().next()?;
+        let weaker = p.weaker?;
+        let Ok((Rule::Jaca(j), _)) = Rule::parse(&p.rule) else {
+            return None;
+        };
+        let (r, seed) = breed::balance_variant(&j, &p.seed, weaker, grid.degree(nb), rng)?;
+        Some((
+            Some(Rule::Jaca(Box::new(r))),
+            "balance".to_string(),
+            seed,
+            "balance",
+        ))
     }
 
     /// Run one GPU batch of candidates on a grid. `reach` is a Larger than Life batch's reach
@@ -1496,21 +1740,22 @@ impl Search {
             }
             let window = if c.fam.is_rows() { 1 } else { WINDOW };
             let keep = (c.fam == Fam::Jaca).then(|| trade_gen(c.gens));
-            let (mut t, reached) = trace_world_keeping(&mut world, c.gens, window, keep, &mut |_| {
-                if slow > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(slow));
-                }
-                if lim.cut() {
-                    cut = Some("given up");
-                    false
-                } else if t_eval.elapsed() >= cap {
-                    cut = Some("capped");
-                    false
-                } else {
-                    true
-                }
-            })
-            .ok()?;
+            let (mut t, reached) =
+                trace_world_keeping(&mut world, c.gens, window, keep, &mut |_| {
+                    if slow > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(slow));
+                    }
+                    if lim.cut() {
+                        cut = Some("given up");
+                        false
+                    } else if t_eval.elapsed() >= cap {
+                        cut = Some("capped");
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .ok()?;
             if cut == Some("given up") {
                 return Some(None);
             }
@@ -2103,6 +2348,104 @@ mod tests {
         let mut v = lines.into_inner().unwrap();
         v.sort();
         println!("{}", v.join("\n"));
+    }
+
+    /// JACA's effort: at least 30% fresh draws, with transplants and balance variants; the other
+    /// families as before.
+    #[test]
+    fn jaca_splits_its_effort() {
+        let mut n: HashMap<&str, usize> = HashMap::new();
+        for i in 0..1000 {
+            let w = way(Fam::Jaca, (i as f64 + 0.5) / 1000.0);
+            *n.entry(format!("{w:?}").leak()).or_default() += 1;
+        }
+        assert_eq!(n["Random"], 300);
+        assert_eq!((n["Mutate"], n["Transplant"], n["Balance"]), (200, 150, 150));
+        assert_eq!((n["Seed"], n["Cover"]), (100, 100));
+        assert!(!n.contains_key("Named"));
+        assert_eq!(way(Fam::LifeLike, 0.39), Way::Random);
+        assert_eq!(way(Fam::LifeLike, 0.95), Way::Named);
+        assert_eq!(way(Fam::LifeLike, 0.7), Way::Seed);
+    }
+
+    /// A search given parents transplants their pairs, unchanged, to tilings they have not run
+    /// on (once per pair and tiling), scales them when the neighbour counts differ, and tunes the
+    /// losing ones for balance.
+    #[test]
+    fn parents_are_transplanted_and_tuned() {
+        let base = Settings {
+            tilings: vec!["square".into(), "hex".into(), "trihex".into()],
+            families: vec![Fam::Jaca],
+            screen_cells: 600,
+            screen_gens: 120,
+            confirm_cells: 600,
+            confirm_gens: 120,
+            confirm_seeds: 1,
+            seed: 11,
+            ..Settings::default()
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let run = |s: &Search, n: u64| {
+            let lim = StepLimits {
+                until: Instant::now() + Duration::from_secs(30),
+                end: None,
+                stop: &stop,
+                max_screened: Some(n),
+            };
+            assert!(s.step(&pool, None, &lim).is_none());
+            s.take_delta().rows
+        };
+        // Parents: the first search's runs on the square grid, every one taken as strong, and
+        // the odd ones as losing their positive sign.
+        let first = Search::new(base.clone(), Saved::default()).unwrap();
+        let parents: Vec<Parent> = run(&first, 60)
+            .iter()
+            .filter(|r| r.ev.cand.tiling == "square")
+            .take(8)
+            .enumerate()
+            .map(|(i, r)| Parent {
+                strong: true,
+                weaker: (i % 2 == 1).then_some(breed::Sign::Pos),
+                ..Parent::of(1, r.id, "keep", &r.ev)
+            })
+            .collect();
+        assert!(parents.len() >= 4, "{} parents", parents.len());
+        let s = Search::new(
+            Settings {
+                parents: parents.clone(),
+                seed: 12,
+                ..base
+            },
+            Saved::default(),
+        )
+        .unwrap();
+        let rows = run(&s, 300);
+        let by = |o: &str| rows.iter().filter(|r| r.ev.cand.origin == o).count();
+        assert!(by("random") > 0 && by("transplant") > 0 && by("balance") > 0);
+        let rules: HashSet<&str> = parents.iter().map(|p| p.rule.as_str()).collect();
+        let mut seen = HashSet::new();
+        for r in rows.iter().filter(|r| r.ev.cand.origin == "transplant") {
+            let c = &r.ev.cand;
+            if rules.contains(c.rule.as_str()) {
+                assert_ne!(c.tiling, "square", "a parent's own tiling");
+                assert!(seen.insert((c.rule.clone(), c.tiling.clone())), "twice");
+            }
+        }
+        // Scaled transplants are JACA pairs too, never a parent's pair unchanged.
+        for r in rows.iter().filter(|r| r.ev.cand.origin == "transplant-scaled") {
+            assert!(r.ev.cand.rule.starts_with("JACA"), "{}", r.ev.cand.rule);
+            assert!(!rules.contains(r.ev.cand.rule.as_str()) || r.ev.cand.tiling != "square");
+        }
+        // Balance variants come from the losing parents (or losing elites).
+        assert!(
+            rows.iter()
+                .filter(|r| r.ev.cand.origin == "balance")
+                .all(|r| r.ev.cand.fam == Fam::Jaca)
+        );
     }
 
     #[test]

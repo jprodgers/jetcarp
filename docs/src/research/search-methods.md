@@ -321,7 +321,10 @@ A JACA run's niche also has its sign state: both signs kept to the end, one lost
 or one lost in the first half, so runs that turned into a plain Life-like run do not compete with
 battles for a place. Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
-for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
+for the starting patterns and tilings tried least. An elite is taken as a parent in proportion to its
+quality: four picks in five are a tournament of four niches drawn at random, won by the niche whose
+best run scores highest, and the fifth takes a niche at random, so the search never settles on its
+current best. A GPU loop runs the rules the graphics card
 supports in large batches while a CPU loop runs the rest. A run on the processor that would take
 longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
 run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
@@ -362,7 +365,7 @@ eye. So a JACA run also records five sign measures:
 - `sign_balance`: the smaller sign's share of live cells over the last quarter (0 to 0.5);
 - `sign_sorted`: how well the signs sort into territories at the end. Over the CA's own
   neighbourhood, it compares the same-sign fraction among neighbouring live cells with what
-  shuffled signs would give (0 mixed, 1 fully sorted);
+  shuffled signs would give (0 mixed, 1 fully sorted, and 0 when one sign is all that is left);
 - `sign_trade`: how much territory changes hands late. Of the cells live both at the three-quarter
   mark and at the end, it is the fraction whose sign differs;
 - `sign_lost`: when a sign first fell below 1% of live cells, as a fraction of the run (1 if
@@ -372,6 +375,32 @@ The built-in score keeps 0.3 of the score of a JACA run that lost a sign in the 
 measured before JETCARP 0.4.2 have no sign measures; `jetcarp jobs refit` and `jetcarp jobs rescore
 --replay` run them again from their candidates to measure them, since runs replay exactly, and keep
 what they measure in the search folder (`remeasured.sqlite`).
+
+**Breeding JACA.** The search space is near infinite, and JACA is harder to tune than a plain B/S
+rule, since both signs have to hold their own. So the search spends its JACA effort its own way:
+30% fresh random draws, 20% variations of an elite's rule, 15% transplants, 15% balance variants,
+10% an elite's rule from a new starting pattern, and 10% the least-tried starting patterns. The
+other families keep their split (40% random, 25% variations, 15% new starting patterns, 10% the
+least-tried, 10% catalogue rules).
+
+- **Parents.** A JACA parent for a variation or a new starting pattern is a run whose signs both
+  held to the end and that is not noise (its signs sort into territories at least a little), never
+  one that lost a sign.
+- **Transplants** (origin `transplant`). A strong pair runs unchanged on this round's grid when it
+  has not run there yet, preferring pairs found on grids with a similar neighbour count, then
+  farther afield. When the counts differ, a second candidate scales every birth and survival count
+  to the new grid (k becomes the nearest whole number to k times the new mean neighbour count over
+  the old, at most the grid's largest count; origin `transplant-scaled`). The search remembers the
+  tilings each pair has been transplanted to while it runs.
+- **Balance variants** (origin `balance`). For a pair whose weaker sign is losing (it holds under
+  30% of live cells late on, or was lost in the second half), `sign_pos` says which side that is,
+  and a variant helps it: a survival or birth count added to the weaker sign's rule, one taken from
+  the stronger's, or more of the weaker sign in a signed starting pattern.
+- **Parents from another search.** `jetcarp search explore --parents-from JOB` takes the JACA runs
+  of another job that were reviewed `keep` or `maybe` (`--reviewed` chooses the verdicts), or that
+  job's best JACA runs when it has no such reviews, and transplants and tunes them first: while there
+  are any, three transplant or balance picks in four come from them, keeps first. They are kept in
+  the job's spec, so a resumed search has them still.
 
 **Your taste as the score.** `jetcarp jobs refit` fits a score model to the keep, maybe and drop
 reviews recorded for a job's runs, all raters' or one's (`--rater`). It is a ridge logistic

@@ -16,6 +16,7 @@
 
 pub mod archive;
 pub mod atlas;
+pub mod breed;
 pub mod job;
 pub mod model;
 pub mod remeasure;

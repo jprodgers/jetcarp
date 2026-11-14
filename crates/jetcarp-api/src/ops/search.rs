@@ -1493,6 +1493,12 @@ pub struct ExploreIn {
     #[serde(default)]
     #[schemars(with = "Option<Value>")]
     pub score: Option<Value>,
+    /// Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on.
+    #[serde(default)]
+    pub parents_from: Option<i64>,
+    /// With parents_from: the verdicts whose runs to take, keep, maybe or drop, separated by commas (default keep,maybe).
+    #[serde(default)]
+    pub parents_reviewed: Option<String>,
 }
 
 /// The rule families, for hints.
@@ -1527,6 +1533,7 @@ impl ExploreIn {
                 tilings,
                 families,
                 score: None,
+                parents: vec![],
             },
             gpu: self.gpu.unwrap_or(false),
             max_rss_gb: self.max_rss_gb,
@@ -1633,6 +1640,10 @@ fn build(
                 Some(v) => super::explore::load_model(cx, v)?,
                 None => None,
             };
+            if let Some(j) = e.parents_from {
+                s.search.parents =
+                    super::explore::parents_from(cx, j, e.parents_reviewed.as_deref(), p)?;
+            }
             to_json(&s)?
         }
         k => return Err(invalid(format!("no strategy '{k}'"))),

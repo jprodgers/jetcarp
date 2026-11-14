@@ -131,12 +131,12 @@ Every column is required (never null) except `parent` and the sign columns.
 | `fam` | string | The rule family: `life_like`, `generations`, `ltl`, `jaca`, `cyclic`, ... |
 | `rule` | string | The rule, in [rule notation](rule-notation.md) |
 | `seed` | string | The starting pattern, as JSON (a scene's seed) |
-| `seed_kind` | string | Its kind: `soup`, `mutated` (an elite's seed, changed), `blobs`, `symmetric`, `point` (one cell), `circuit` (WireWorld), `confirm` (a confirmation run), ... |
+| `seed_kind` | string | Its kind: `soup`, `mutated` (an elite's seed, changed), `blobs`, `symmetric`, `point` (one cell), `circuit` (WireWorld), `confirm` (a confirmation run), `transplant` (a transplanted pair's own seed), `balance` (a balance variant's, perhaps with more of the weaker sign), ... |
 | `cells` | int32 | About how many cells the grid has |
 | `gens` | int32 | Generations run |
 | `steps` | int32 | Steps per generation |
 | `rng` | uint64 | The random seed: with the columns above it replays the run exactly |
-| `origin` | string | How the candidate was made: `random` (a fresh draw), `mutate` (an elite's rule, changed), `seed` (an elite's rule from a new starting pattern), `cover` (the least-tried starting pattern), `named` (a catalogue rule), `confirm` (a confirmation run) |
+| `origin` | string | How the candidate was made: `random` (a fresh draw), `mutate` (an elite's rule, changed), `seed` (an elite's rule from a new starting pattern), `cover` (the least-tried starting pattern), `named` (a catalogue rule), `confirm` (a confirmation run), and for JACA `transplant` (a strong pair, unchanged, on a grid it had not run on), `transplant-scaled` (the same with its counts scaled to the grid's neighbour count) and `balance` (a pair changed to help its losing sign) |
 | `fate` | string | How it ended: `died`, `froze`, `cycle` (a repeating cycle) or `running` |
 | `settle` | int32 | The generation it settled (died, froze or entered its cycle); the run's length if it never did |
 | `period` | int32 | The period of its final cycle (1 frozen, 0 none seen) |
@@ -163,7 +163,7 @@ Every column is required (never null) except `parent` and the sign columns.
 | `ts` | int64 | When the run was stored, in seconds since 1970 (UTC) |
 | `sign_pos` | float32, null but for JACA | JACA: the positive sign's (state 1's) share of live cells, as a mean over the last quarter (0 to 1) |
 | `sign_balance` | float32, null but for JACA | JACA: the smaller sign's share of live cells, as a mean over the last quarter (0 to 0.5) |
-| `sign_sorted` | float32, null but for JACA | JACA: how well the signs sort into territories at the end: the same-sign fraction among neighbouring live cells (the CA's own neighbourhood), relative to what shuffled signs would give (0 mixed, 1 fully sorted; 1 when one sign is all that is left, 0 with no live neighbours) |
+| `sign_sorted` | float32, null but for JACA | JACA: how well the signs sort into territories at the end: the same-sign fraction among neighbouring live cells (the CA's own neighbourhood), relative to what shuffled signs would give (0 mixed, 1 fully sorted; 0 when one sign is all that is left, and with no live neighbours) |
 | `sign_trade` | float32, null but for JACA | JACA: of the cells live at both the three-quarter mark and the end, the fraction whose sign differs |
 | `sign_lost` | float32, null but for JACA | JACA: when a sign first fell below 1% of live cells, as a fraction of the run (1 if never) |
 

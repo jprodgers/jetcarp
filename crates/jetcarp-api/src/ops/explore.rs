@@ -20,28 +20,29 @@ use crate::args;
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
+use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::explore::cand::Cand;
+use jetcarp_core::explore::features::Features;
+use jetcarp_core::explore::features::SignMeasures;
 use jetcarp_core::explore::space::{Fam, sized_spec};
 use jetcarp_core::rules::Rule;
 use jetcarp_core::topology::Nb;
-use jetcarp_core::explore::batch::Backend;
-use jetcarp_core::explore::features::SignMeasures;
 use jetcarp_search::explore::Db;
 use jetcarp_search::explore::archive::{Eval, ScoreModel};
+use jetcarp_search::explore::breed::Parent;
 use jetcarp_search::explore::atlas;
-use jetcarp_search::explore::{model, remeasure, runs, segments};
 use jetcarp_search::explore::job::{tiling_groups, try_one};
 use jetcarp_search::explore::reviews;
 use jetcarp_search::explore::runs::{RunFilter, Runs};
 use jetcarp_search::explore::sheet::{self, RunRow};
 use jetcarp_search::explore::store::{self, feat_from_blob};
+use jetcarp_search::explore::{model, remeasure, runs, segments};
 use jetcarp_search::jobs::{self, Lease};
 use jetcarp_store::Library;
 use jetcarp_store::library::JobRow;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use jetcarp_core::explore::features::Features;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -285,7 +286,12 @@ fn csv_line(r: &RunRow, names: &[String]) -> String {
         r.parent.map(|p| p.to_string()).unwrap_or_default(),
         r.cand.fam.name().into(),
         r.cand.tiling.clone(),
-        if r.cand.nb == Nb::Edge { "edge" } else { "touch" }.into(),
+        if r.cand.nb == Nb::Edge {
+            "edge"
+        } else {
+            "touch"
+        }
+        .into(),
         r.cand.rule.clone(),
         serde_json::to_string(&r.cand.seed).unwrap_or_default(),
         r.seed_kind.clone(),
@@ -499,7 +505,9 @@ pub fn runs_csv(cx: &Ctx, a: &RunsIn, w: &mut dyn std::io::Write) -> Result<(i64
             if n >= most {
                 break;
             }
-            if a.min_movers.is_some_and(|m| feat_from_blob(&r.feats).movers < m) {
+            if a.min_movers
+                .is_some_and(|m| feat_from_blob(&r.feats).movers < m)
+            {
                 continue;
             }
             writeln!(w, "{}", csv_line(&r, &names)).map_err(io)?;
@@ -1222,6 +1230,83 @@ pub(crate) fn load_model(cx: &Ctx, v: &Value) -> Result<Option<ScoreModel>, ApiE
     }
 }
 
+/// Parents runs taken from another job are at most.
+const MOST_PARENTS: usize = 500;
+
+/// The parents a new search takes from explore job `job` (`parents_from`): its JACA runs with
+/// these verdicts (any rater's; default keep and maybe), keeps first, or with none recorded its
+/// best screened JACA runs; runs stored before sign measures are replayed for them.
+pub(crate) fn parents_from(
+    cx: &Ctx,
+    job: i64,
+    reviewed: Option<&str>,
+    p: &dyn Progress,
+) -> Result<Vec<Parent>, ApiError> {
+    let want = super::search::texts(
+        Some(&Value::String(reviewed.unwrap_or("keep,maybe").into())),
+        "parents_reviewed",
+        &[',', ' ', ';'],
+    )?;
+    if let Some(v) = want.iter().find(|v| !reviews::VERDICTS.contains(&v.as_str())) {
+        return Err(invalid(format!(
+            "parents_reviewed takes keep, maybe and drop, not {v}"
+        )));
+    }
+    let (lib, row, path) = explore_job(cx, Some(job))?;
+    let c = read_db(&path)?;
+    let mut why: HashMap<i64, String> = HashMap::new();
+    for r in lib.run_reviews(&c.uuid()).map_err(ApiError::engine)? {
+        if want.contains(&r.verdict) {
+            let e = why.entry(r.run).or_insert(r.verdict.clone());
+            if r.verdict == "keep" {
+                *e = r.verdict;
+            }
+        }
+    }
+    let mut ids: Vec<i64> = why.keys().copied().collect();
+    if ids.is_empty() {
+        let f = RunFilter {
+            family: Some(Fam::Jaca),
+            ..Default::default()
+        };
+        ids = c.ids(&f, MOST_PARENTS).map_err(invalid)?;
+    }
+    let mut evs: Vec<(i64, Eval)> = c
+        .get(&ids)
+        .map_err(ApiError::engine)?
+        .iter()
+        .filter_map(|r| Some((r.id, store::eval_of(r)?)))
+        .filter(|(_, ev)| ev.cand.fam == Fam::Jaca)
+        .collect();
+    let rank = |id: &i64| match why.get(id).map(String::as_str) {
+        Some("keep") => 0,
+        Some("maybe") => 1,
+        Some(_) => 2,
+        None => 3,
+    };
+    evs.sort_by_key(|(id, _)| (rank(id), *id));
+    evs.truncate(MOST_PARENTS);
+    let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+    remeasure::fill(&dir, &mut evs, true, None, &|n, total| {
+        p.report(n, Some(total), &format!("replayed {n} of {total} parents"));
+        !p.cancelled()
+    })
+    .map_err(ApiError::engine)?;
+    if evs.is_empty() {
+        return Err(invalid(format!(
+            "explore job {} has no JACA runs to take parents from",
+            row.id
+        )));
+    }
+    Ok(evs
+        .iter()
+        .map(|(id, ev)| {
+            let w = why.get(id).map_or("best", String::as_str);
+            Parent::of(row.id, *id, w, ev)
+        })
+        .collect())
+}
+
 /// The score model a job's spec holds (none: the built-in score).
 fn spec_model(row: &JobRow) -> Result<Option<ScoreModel>, ApiError> {
     match row.spec.get("score") {
@@ -1291,13 +1376,7 @@ impl Report for Rescored {
         };
         format!(
             "rescored {} runs of explore job {} by {} ({} scores changed{side}{replay}); the archive now holds {} elites in {} niches ({:.1} s)\n",
-            self.runs,
-            self.job,
-            self.score,
-            self.changed,
-            self.elites,
-            self.niches,
-            self.seconds
+            self.runs, self.job, self.score, self.changed, self.elites, self.niches, self.seconds
         )
     }
 }
@@ -1376,10 +1455,11 @@ impl Op for SearchRescore {
                 )?;
                 drop(c);
                 let mut be = replay_backend(cx, a.gpu, p);
-                filled = remeasure::fill(&dir, &mut lacking, true, gpu_of(&mut be), &|n, total| {
-                    p.report(n, Some(total), &format!("replayed {n} of {total} runs"));
-                    !p.cancelled()
-                })?;
+                filled =
+                    remeasure::fill(&dir, &mut lacking, true, gpu_of(&mut be), &|n, total| {
+                        p.report(n, Some(total), &format!("replayed {n} of {total} runs"));
+                        !p.cancelled()
+                    })?;
             }
             let signs: HashMap<i64, SignMeasures> = if dir.join(remeasure::FILE).is_file() {
                 remeasure::Remeasured::open(&dir)?
@@ -1587,7 +1667,10 @@ impl Op for SearchRefit {
             // Each rater's latest verdict on a run.
             let mut latest: HashMap<(String, i64), (String, String)> = HashMap::new();
             for r in lib.run_reviews(&c.uuid()).map_err(ApiError::engine)? {
-                if a.rater.as_deref().is_some_and(|x| x != r.rater) {
+                // Verdicts only: a rating without one (a star) says nothing of keep or drop.
+                if a.rater.as_deref().is_some_and(|x| x != r.rater)
+                    || !reviews::VERDICTS.contains(&r.verdict.as_str())
+                {
                     continue;
                 }
                 let e = latest
@@ -1641,7 +1724,9 @@ impl Op for SearchRefit {
             }
         }
         let mut m = model::fit(&rated, &model::FitOptions { family }).map_err(|e| {
-            invalid(e).hint("review more runs: jobs clips makes clips to rate, jobs review records the ratings")
+            invalid(e).hint(
+                "review more runs: jobs clips makes clips to rate, jobs review records the ratings",
+            )
         })?;
         let raters: Vec<String> = raters.into_iter().collect();
         m.fitted_on.jobs = jobs.clone();

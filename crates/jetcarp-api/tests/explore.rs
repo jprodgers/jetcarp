@@ -556,14 +556,30 @@ fn measures_out_a_refit_and_its_score() {
     assert_eq!(v["measures"].as_array().unwrap().len(), 26);
     for x in &runs {
         let m = &x["measures"];
-        for k in ["sign_pos", "sign_balance", "sign_sorted", "sign_trade", "sign_lost"] {
+        for k in [
+            "sign_pos",
+            "sign_balance",
+            "sign_sorted",
+            "sign_trade",
+            "sign_lost",
+        ] {
             assert!(m[k].is_number(), "{k}: {x}");
         }
-        let (pos, bal) = (m["sign_pos"].as_f64().unwrap(), m["sign_balance"].as_f64().unwrap());
-        assert!((0.0..=1.0).contains(&pos) && (0.0..=0.5).contains(&bal), "{m}");
+        let (pos, bal) = (
+            m["sign_pos"].as_f64().unwrap(),
+            m["sign_balance"].as_f64().unwrap(),
+        );
+        assert!(
+            (0.0..=1.0).contains(&pos) && (0.0..=0.5).contains(&bal),
+            "{m}"
+        );
     }
     fails(
-        call_json(&cx, "search.runs", json!({"job": job, "measures": "colour"})),
+        call_json(
+            &cx,
+            "search.runs",
+            json!({"job": job, "measures": "colour"}),
+        ),
         ErrorKind::Invalid,
     );
     // A CSV file: every run after an id, with the measures asked for.
@@ -579,9 +595,17 @@ fn measures_out_a_refit_and_its_score() {
     assert_eq!(c["written"].as_u64(), Some(runs.len() as u64 - 10), "{c}");
     let text = std::fs::read_to_string(c["csv"].as_str().unwrap()).unwrap();
     let mut lines = text.lines();
-    assert!(lines.next().unwrap().ends_with(",score,sign_lost,density_late"));
+    assert!(
+        lines
+            .next()
+            .unwrap()
+            .ends_with(",score,sign_lost,density_late")
+    );
     let first = lines.next().unwrap();
-    assert!(first.starts_with(&format!("{},", runs[10]["id"])), "{first}");
+    assert!(
+        first.starts_with(&format!("{},", runs[10]["id"])),
+        "{first}"
+    );
     assert_eq!(lines.count() + 1, runs.len() - 10);
     // Reviews: runs that kept both signs and sorted them well kept, lost ones dropped.
     let measure = |x: &Value, k: &str| x["measures"][k].as_f64().unwrap();
@@ -606,7 +630,11 @@ fn measures_out_a_refit_and_its_score() {
                "out": dir.join("taste.json").display().to_string()}),
     )
     .unwrap();
-    assert_eq!((f["keep"].as_u64(), f["drop"].as_u64()), (Some(30), Some(30)), "{f}");
+    assert_eq!(
+        (f["keep"].as_u64(), f["drop"].as_u64()),
+        (Some(30), Some(30)),
+        "{f}"
+    );
     assert_eq!(f["replayed"], 0, "new runs have their sign measures: {f}");
     let auc = f["auc"].as_f64().unwrap();
     assert!(auc > 0.6 && auc <= 1.0, "{f}");
@@ -620,11 +648,20 @@ fn measures_out_a_refit_and_its_score() {
     assert_eq!(model["fitted_on"]["raters"], json!(["tester"]));
     // Too few reviews of another rater: refused.
     fails(
-        call_json(&cx, "search.refit", json!({"jobs": [job], "rater": "nobody"})),
+        call_json(
+            &cx,
+            "search.refit",
+            json!({"jobs": [job], "rater": "nobody"}),
+        ),
         ErrorKind::Invalid,
     );
     // Rescored by the model: the job keeps it; back to the built-in score drops it.
-    let rs = call_json(&cx, "search.rescore", json!({"job": job, "score": model_path})).unwrap();
+    let rs = call_json(
+        &cx,
+        "search.rescore",
+        json!({"job": job, "score": model_path}),
+    )
+    .unwrap();
     assert!(rs["score"].as_str().unwrap().contains("tester"), "{rs}");
     assert!(rs["changed"].as_u64().unwrap() > 0, "{rs}");
     assert_eq!(cx.library().job(job).unwrap().spec["score"], model);
@@ -632,7 +669,12 @@ fn measures_out_a_refit_and_its_score() {
     assert!(top["runs"][0]["score"].as_f64().unwrap() <= 3.0);
     let again = call_json(&cx, "search.rescore", json!({"job": job})).unwrap();
     assert_eq!(again["changed"], 0, "the job's own model: {again}");
-    let back = call_json(&cx, "search.rescore", json!({"job": job, "score": "builtin"})).unwrap();
+    let back = call_json(
+        &cx,
+        "search.rescore",
+        json!({"job": job, "score": "builtin"}),
+    )
+    .unwrap();
     assert_eq!(back["score"], "the built-in score");
     assert!(cx.library().job(job).unwrap().spec.get("score").is_none());
     // A new search with the model: its spec holds it.
@@ -652,6 +694,39 @@ fn measures_out_a_refit_and_its_score() {
             &cx,
             "search.start",
             json!({"strategy": "explore", "spec": spec2, "budget": {"items": 20}}),
+        ),
+        ErrorKind::Invalid,
+    );
+    // Parents from the first job: its keeps and maybes by default, or the verdicts asked for.
+    let parents = |extra: Value| -> Vec<Value> {
+        let mut sp = spec.clone();
+        sp["parents_from"] = json!(job);
+        for (k, v) in extra.as_object().unwrap() {
+            sp[k] = v.clone();
+        }
+        let r = call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore", "spec": sp, "budget": {"items": 10}, "threads": 2}),
+        )
+        .unwrap();
+        let j = r["job"].as_i64().unwrap();
+        let spec = cx.library().job(j).unwrap().spec;
+        spec["parents"].as_array().cloned().unwrap_or_default()
+    };
+    let both = parents(json!({}));
+    assert_eq!(both.len(), 60);
+    assert!(both[..30].iter().all(|p| p["why"] == "keep" && p["job"] == job));
+    let keeps = parents(json!({"parents_reviewed": "keep"}));
+    assert_eq!(keeps.len(), 30);
+    let drops = parents(json!({"parents_reviewed": "drop"}));
+    assert!(drops.len() == 30 && drops.iter().all(|p| p["why"] == "drop"));
+    fails(
+        call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore",
+                   "spec": {"families": ["jaca"], "parents_from": job, "parents_reviewed": "fine"}}),
         ),
         ErrorKind::Invalid,
     );
