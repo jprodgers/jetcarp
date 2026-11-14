@@ -405,7 +405,6 @@ fn unsupported_rules_fall_back() {
     let Some(mut sim) = gpu() else { return };
     for f in [
         "langtons-ant.json",
-        "sandpile-hex.json",
         "rule30-life-ants.json",
         "hex-wolfram.json",
         "vonneumann-growing-channels.json",

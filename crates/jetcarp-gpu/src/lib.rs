@@ -8,6 +8,7 @@
 //! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
 //! - Larger than Life, its reach in an aux buffer
 //! - forest fire, with the CPU's 64-bit random numbers
+//! - sandpiles, with 64-bit grain totals and losses
 //!
 //! Results are bit-identical to the CPU steppers in `jetcarp-core`: everything the state hash
 //! covers, and JACA's glow and counts. The engine keeps every piece of bookkeeping (see
@@ -26,7 +27,7 @@
 
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, Reach};
-use jetcarp_core::rules::Rule;
+use jetcarp_core::rules::{FieldKind, Rule};
 use jetcarp_core::world::{ExternalPlan, GenMetrics, Halt};
 use jetcarp_core::{Storage, Topology, World};
 use rayon::prelude::*;
@@ -51,11 +52,11 @@ const PARAM_STRIDE: usize = 256;
 const CTRL_HEADER: usize = 8;
 /// Activity halts the control shader tracks at once (one streak each).
 const MAX_ACT_HALTS: usize = 4;
-/// Statistics slots (JACA's counts; four words each, one per such step
+/// Statistics slots (JACA's counts, a sandpile's lost grains; four words each, one per such step
 /// in a batch) start here in the control buffer, after the per-generation metrics. `STAT_BASE` in
 /// sim.wgsl counts from the end of the header.
 const STAT_BASE: usize = CTRL_HEADER + 4 * MAX_BATCH as usize;
-/// "No statistics slot" in [`Params::stat`].
+/// "No statistics slot" in [`Params::stat`]; "no open cells" for sandpiles.
 const NONE: u32 = u32::MAX;
 /// Entries a patch's Larger than Life reach may have (one word each on the GPU): 256 MB.
 const REACH_CAP: usize = 1 << 26;
@@ -66,6 +67,7 @@ const R_B0: u32 = 8;
 const R_MARGOLUS: u32 = 9;
 const R_LTL: u32 = 10;
 const R_FOREST: u32 = 11;
+const R_SANDPILE: u32 = 12;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -271,6 +273,7 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
             (p.table[0][2], p.table[0][3]) = (g[0], g[1]);
             (p.table[1][0], p.table[1][1]) = (s[0], s[1]);
         }
+        Rule::Sandpile => p.rule = R_SANDPILE,
         _ => return Err(()),
     }
     Ok(p)
@@ -309,6 +312,8 @@ struct GpuField {
     valid: bool,
     /// GPU copy is newer than the world's field.
     dirty: bool,
+    /// A sandpile's field: one grain count per word, and a snapshot of whole words.
+    height: bool,
     /// The JACA CA (by id) whose annihilation glow the cells carry in bits 8-15.
     glow_owner: Option<u32>,
 }
@@ -320,6 +325,8 @@ enum AuxKey {
     Reach(u8, u8),
     /// Larger than Life birth and survival bits.
     Table(Vec<u32>),
+    /// A patch's open boundary cells, one bit each.
+    Open,
 }
 
 /// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
@@ -604,6 +611,12 @@ impl GpuSim {
             any = true;
             let cpu_only = || format!("{} ({}) runs only on the CPU", ca.name, ca.notation());
             let p = rule_params(&ca.rule).map_err(|_| cpu_only())?;
+            let height = world.fields[ca.field].kind == FieldKind::Height;
+            if height != (p.rule == R_SANDPILE)
+                || world.fields[ca.field].kind == FieldKind::Continuous
+            {
+                return Err(cpu_only());
+            }
             match ca.rule {
                 Rule::Jaca(ref j) => {
                     // The glow lives in the field's cells, so one JACA CA per field at a time.
@@ -622,6 +635,11 @@ impl GpuSim {
                 Rule::Ltl(ref l) => {
                     self.reach(&world.topo, l.hood, l.range)
                         .map_err(|e| format!("{}: {e}", cpu_only()))?;
+                }
+                Rule::Sandpile if plan.halts.contains(&Halt::Settled) => {
+                    // The CPU's `done` asks whether a sandpile can still topple, which the GPU
+                    // does not measure.
+                    return Err("a done trigger on a sandpile runs on the CPU".into());
                 }
                 _ => {}
             }
@@ -709,6 +727,7 @@ impl GpuSim {
     /// after them for JACA's blast zone.
     fn prepare_aux(&mut self, world: &World) -> Result<(), String> {
         let n = world.topo.len();
+        let explicit = matches!(world.topo.storage, Storage::Explicit(_));
         let mut keys: Vec<AuxKey> = Vec::new();
         let mut blast = false;
         for ca in world.cas.iter().filter(|c| c.enabled) {
@@ -723,6 +742,7 @@ impl GpuSim {
                     add(AuxKey::Reach(l.hood as u8, l.range));
                     add(AuxKey::Table(ltl_table(l, sec.max)));
                 }
+                Rule::Sandpile if explicit => add(AuxKey::Open),
                 Rule::Jaca(ref j) if j.blast > 0 => blast = true,
                 _ => {}
             }
@@ -743,6 +763,18 @@ impl GpuSim {
                     words.extend_from_slice(&sec.words);
                 }
                 AuxKey::Table(t) => words.extend_from_slice(t),
+                AuxKey::Open => {
+                    let mut bits = vec![0u32; n.div_ceil(32)];
+                    for (i, b) in bits.iter_mut().enumerate() {
+                        for k in 0..32 {
+                            let c = i * 32 + k;
+                            if c < n && world.topo.is_open(c) {
+                                *b |= 1 << k;
+                            }
+                        }
+                    }
+                    words.extend_from_slice(&bits);
+                }
             }
         }
         let total = words.len() + zone_words;
@@ -1009,6 +1041,10 @@ impl GpuSim {
             res.fields.resize_with(world.fields.len(), || None);
         }
         for &fi in &running {
+            let height = world.fields[fi].kind == FieldKind::Height;
+            if res.fields[fi].as_ref().is_some_and(|g| g.height != height) {
+                res.fields[fi] = None;
+            }
             if res.fields[fi].is_none() {
                 let size = (n.max(1) * 4) as u64;
                 let mkb = |label| {
@@ -1024,7 +1060,7 @@ impl GpuSim {
                 let bufs = [mkb("jetcarp-gpu field a"), mkb("jetcarp-gpu field b")];
                 let snap = self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("jetcarp-gpu snapshot"),
-                    size: (n.div_ceil(4).max(1) * 4) as u64,
+                    size: snap_bytes(n, height),
                     usage: wgpu::BufferUsages::STORAGE
                         | wgpu::BufferUsages::COPY_DST
                         | wgpu::BufferUsages::COPY_SRC,
@@ -1045,6 +1081,7 @@ impl GpuSim {
                     cur: 0,
                     valid: false,
                     dirty: false,
+                    height,
                     glow_owner: None,
                 });
             }
@@ -1055,28 +1092,39 @@ impl GpuSim {
             let f = &world.fields[fi];
             gf.glow_owner = owners[fi];
             gf.cur = 0;
-            // The owner's glow, unless it has none yet for these cells (the CPU starts it
-            // at 0 then).
-            let glow = gf.glow_owner.and_then(|id| {
-                let ca = world.cas.iter().find(|c| c.id == id)?;
-                ca.heat.as_ref().map(|h| &h.glow).filter(|g| g.len() == n)
-            });
-            let packed: Vec<u32> = f
-                .state
-                .par_iter()
-                .zip(f.age.par_iter())
-                .enumerate()
-                .map(|(i, (&s, &a))| {
-                    let g = glow.map_or(0, |g| g[i] as u32);
-                    s as u32 | g << 8 | (a as u32) << 16
-                })
-                .collect();
-            self.queue
-                .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&packed));
-            if let Some(s) = world.watch_snapshot_states(fi) {
-                let mut bytes = s.to_vec();
-                bytes.resize(n.div_ceil(4).max(1) * 4, 0);
-                self.queue.write_buffer(&gf.snap, 0, &bytes);
+            if height {
+                self.queue
+                    .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&f.height));
+                if let Some(h) = world.watch_snapshot_heights(fi) {
+                    let mut words = h.to_vec();
+                    words.resize(n.max(1), 0);
+                    self.queue
+                        .write_buffer(&gf.snap, 0, bytemuck::cast_slice(&words));
+                }
+            } else {
+                // The owner's glow, unless it has none yet for these cells (the CPU starts it
+                // at 0 then).
+                let glow = gf.glow_owner.and_then(|id| {
+                    let ca = world.cas.iter().find(|c| c.id == id)?;
+                    ca.heat.as_ref().map(|h| &h.glow).filter(|g| g.len() == n)
+                });
+                let packed: Vec<u32> = f
+                    .state
+                    .par_iter()
+                    .zip(f.age.par_iter())
+                    .enumerate()
+                    .map(|(i, (&s, &a))| {
+                        let g = glow.map_or(0, |g| g[i] as u32);
+                        s as u32 | g << 8 | (a as u32) << 16
+                    })
+                    .collect();
+                self.queue
+                    .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&packed));
+                if let Some(s) = world.watch_snapshot_states(fi) {
+                    let mut bytes = s.to_vec();
+                    bytes.resize(n.div_ceil(4).max(1) * 4, 0);
+                    self.queue.write_buffer(&gf.snap, 0, &bytes);
+                }
             }
             gf.valid = true;
             gf.dirty = false;
@@ -1109,6 +1157,10 @@ impl GpuSim {
                 p.k1 = at(&AuxKey::Reach(l.hood as u8, l.range));
                 p.k2 = at(&AuxKey::Table(table.clone()));
                 p.gg = (table.len() / 2) as u32;
+            }
+            Rule::Sandpile => {
+                p.k2 = world.topo.center_cell() as u32;
+                p.gg = at(&AuxKey::Open);
             }
             _ => {}
         }
@@ -1213,6 +1265,12 @@ impl GpuSim {
                         let key = forest_key(ca.noise, ticks + 1);
                         (p.table[0][0], p.table[0][1]) = (key as u32, (key >> 32) as u32);
                     }
+                    R_SANDPILE => {
+                        // Grains drop on the first step of a generation.
+                        p.k1 = if s == 0 { ca.drop_per_gen } else { 0 };
+                        p.stat = stats.len() as u32;
+                        stats.push((g, ei));
+                    }
                     R_JACA => {
                         p.stat = stats.len() as u32;
                         stats.push((g, ei));
@@ -1257,9 +1315,11 @@ impl GpuSim {
             }
             if take {
                 for &f in &plan.running_fields {
+                    let height = res.fields[f].as_ref().is_some_and(|g| g.height);
                     push(
                         Params {
                             op: 1,
+                            rule: height as u32,
                             ..Default::default()
                         },
                         &mut bytes,
@@ -1273,8 +1333,10 @@ impl GpuSim {
                         op: 2,
                         gen_slot: g as u32,
                         pop_mode,
-                        pop_n: pop_max.min(u32::MAX as u64) as u32,
-                        thresh: pop_min.min(u32::MAX as u64) as u32,
+                        pop_n: pop_max as u32,
+                        k1: (pop_max >> 32) as u32,
+                        thresh: pop_min as u32,
+                        k2: (pop_min >> 32) as u32,
                         act_mode: acts.len() as u32,
                         halt_repeat: halt_repeat as u32,
                         compare: compare as u32,
@@ -1335,7 +1397,12 @@ impl GpuSim {
                 }
                 match op {
                     Op::Step | Op::Contact | Op::Dilate => pass.dispatch_workgroups(sx, sy, 1),
-                    Op::Pack => pass.dispatch_workgroups(px, py, 1),
+                    Op::Pack => {
+                        let height = field
+                            .is_some_and(|(f, _)| res.fields[f].as_ref().is_some_and(|g| g.height));
+                        let (x, y) = if height { (sx, sy) } else { (px, py) };
+                        pass.dispatch_workgroups(x, y, 1)
+                    }
                     Op::Control => pass.dispatch_workgroups(1, 1, 1),
                 }
             }
@@ -1350,28 +1417,34 @@ impl GpuSim {
             .map(|g| {
                 let m = &words[CTRL_HEADER + 4 * g..CTRL_HEADER + 4 * g + 4];
                 GenMetrics {
-                    population: m[0] as u64,
+                    population: m[0] as u64 | (m[3] as u64) << 32,
                     changed: m[1] as u64,
                     repeat: sched[g].0 && m[2] == 0,
                     counted,
                 }
             })
             .collect();
-        // JACA's counts, for the generations done (as `step_ca` records them, step by step).
+        // JACA's counts and sandpiles' lost grains, for the generations done (as `step_ca`
+        // records them, step by step).
         for (slot, &(g, ei)) in stats.iter().enumerate() {
             if g as u64 >= k {
                 break;
             }
             let w = &words[STAT_BASE + 4 * slot..STAT_BASE + 4 * slot + 4];
             let ca = &mut world.cas[enabled[ei]];
-            let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
-            heat.last = jetcarp_core::jaca::Stats {
-                contacts: w[0] as u64,
-                destroyed: w[1] as u64,
-                cancelled: w[2] as u64,
-            };
-            heat.total_contacts += w[0] as u64;
-            heat.total_destroyed += w[1] as u64;
+            if matches!(ca.rule, Rule::Jaca(_)) {
+                let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
+                heat.last = jetcarp_core::jaca::Stats {
+                    contacts: w[0] as u64,
+                    destroyed: w[1] as u64,
+                    cancelled: w[2] as u64,
+                };
+                heat.total_contacts += w[0] as u64;
+                heat.total_destroyed += w[1] as u64;
+            } else {
+                let f = ca.field;
+                world.fields[f].lost += w[0] as u64 | (w[1] as u64) << 32;
+            }
         }
         let res = self.res.as_mut().unwrap();
         for (f, &sf) in subs.iter().enumerate() {
@@ -1458,16 +1531,22 @@ impl GpuSim {
         }
     }
 
-    /// The period-watch snapshots of these fields: (field, states, no heights).
+    /// The period-watch snapshots of these fields: (field, states, heights), the states of a
+    /// state field and the grain counts of a sandpile's.
     fn read_snapshots(&self, fields: &[usize], n: usize) -> Vec<(usize, Vec<u8>, Vec<u32>)> {
         let res = self.res.as_ref().unwrap();
         fields
             .iter()
             .map(|&f| {
                 let gf = res.fields[f].as_ref().unwrap();
-                let bytes = (n.div_ceil(4).max(1) * 4) as u64;
-                let v: Vec<u8> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
-                (f, v, vec![])
+                let bytes = snap_bytes(n, gf.height);
+                if gf.height {
+                    let h: Vec<u32> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
+                    (f, vec![], h)
+                } else {
+                    let v: Vec<u8> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
+                    (f, v, vec![])
+                }
             })
             .collect()
     }
@@ -1485,8 +1564,8 @@ impl GpuSim {
         map_read(&self.device, &staging, bytes)
     }
 
-    /// Copy dirty fields that `pick` selects back into the world: states and ages, and the
-    /// owner's JACA glow.
+    /// Copy dirty fields that `pick` selects back into the world: states and ages (and the
+    /// owner's JACA glow), or a sandpile's grain counts.
     fn read_back(&mut self, world: &mut World, pick: impl Fn(usize) -> bool) {
         let n = world.topo.len();
         let bytes = (n.max(1) * 4) as u64;
@@ -1515,29 +1594,43 @@ impl GpuSim {
                 let view = slice.get_mapped_range().expect("mapped readback");
                 let words: &[u32] = bytemuck::cast_slice(&view);
                 let f = &mut world.fields[fi];
-                f.state
-                    .par_iter_mut()
-                    .zip(f.age.par_iter_mut())
-                    .zip(words[..n].par_iter())
-                    .for_each(|((s, a), &x)| {
-                        *s = (x & 0xff) as u8;
-                        *a = (x >> 16) as u16;
-                    });
-                let owner = gf
-                    .glow_owner
-                    .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
-                if let Some(ca) = owner {
-                    let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
-                    heat.glow.resize(n, 0);
-                    heat.glow
+                if gf.height {
+                    f.height.copy_from_slice(&words[..n]);
+                } else {
+                    f.state
                         .par_iter_mut()
+                        .zip(f.age.par_iter_mut())
                         .zip(words[..n].par_iter())
-                        .for_each(|(g, &x)| *g = (x >> 8) as u8);
+                        .for_each(|((s, a), &x)| {
+                            *s = (x & 0xff) as u8;
+                            *a = (x >> 16) as u16;
+                        });
+                    let owner = gf
+                        .glow_owner
+                        .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
+                    if let Some(ca) = owner {
+                        let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
+                        heat.glow.resize(n, 0);
+                        heat.glow
+                            .par_iter_mut()
+                            .zip(words[..n].par_iter())
+                            .for_each(|(g, &x)| *g = (x >> 8) as u8);
+                    }
                 }
             }
             staging.unmap();
             gf.dirty = false;
         }
+    }
+}
+
+/// Bytes of a field's period-watch snapshot on the GPU: a byte per state, or a word per grain
+/// count.
+fn snap_bytes(n: usize, height: bool) -> u64 {
+    if height {
+        (n.max(1) * 4) as u64
+    } else {
+        (n.div_ceil(4).max(1) * 4) as u64
     }
 }
 

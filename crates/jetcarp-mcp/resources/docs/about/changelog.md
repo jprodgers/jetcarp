@@ -68,6 +68,9 @@ that will declare them stable.
 - **The forest fire runs on the GPU,** in the app and the background host. The GPU makes the CPU's
   64-bit random numbers and compares them with the probabilities as whole numbers, so every fire
   starts on the same tree at the same generation.
+- **Sandpiles run on the GPU,** in the app and the background host, on lattices and aperiodic
+  patches: the same grains, drops and losses as on the CPU, piles past 2^32 grains included. A script
+  step that waits for a sandpile to be done still runs on the CPU.
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in

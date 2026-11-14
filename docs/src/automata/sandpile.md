@@ -89,6 +89,10 @@ Starting piles include `{"pile": {"grains": N}}` (N grains on the centre tile) a
 `steps_per_gen` sets how many toppling sweeps make one generation, so you can watch an avalanche
 spread or let it settle quickly.
 
+A sandpile world runs on the GPU in the app and in the background host, on lattices and aperiodic
+patches, with exactly the CPU's grain counts, grains dropped and grains lost. A script step that
+waits for the pile to be *done* runs on the CPU, which checks whether any tile can still topple.
+
 ### The identity
 
 JETCARP computes the identity of the sandpile group as stab(2m − stab(2m)), where m is the pile in

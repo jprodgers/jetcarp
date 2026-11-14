@@ -114,6 +114,7 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
   Larger than Life on lattices and patches,
   the forest fire (at probabilities 0 and 1, and past 2^32 steps),
+  sandpiles (grains dropped and lost, open patch edges, piles past 2^32 grains),
   on lattices and patches with every edge, through scripts, reseeds and period detection, and
   every Quick Start entry of these families. Everything the state hash covers must agree, and so
   must JACA's glow and counts.

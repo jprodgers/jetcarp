@@ -645,6 +645,125 @@ fn forest_fire() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Sandpiles
+
+#[test]
+fn sandpile_scenes() {
+    let Some(mut sim) = gpu() else { return };
+    for f in [
+        "sandpile-hex.json",
+        "sandpile-cairo.json",
+        "sandpile-spectre.json",
+        "sandpile-identity-cairo.json",
+        "penrose-kd-sandpile.json",
+    ] {
+        let text = std::fs::read_to_string(format!("../jetcarp-core/data/scenes/{f}")).unwrap();
+        let sc = Scene::from_json(&text).unwrap();
+        compare_gpu(&mut sim, &sc, &[1, 2, 13, 60, 180], f);
+    }
+}
+
+#[test]
+fn sandpile_edges_drops_and_patches() {
+    let Some(mut sim) = gpu() else { return };
+    for &(fam, w, h) in LATTICES {
+        for b in BOUNDARIES {
+            for drop in [0, 1, 7] {
+                for nb in [Nb::Edge, Nb::Touch] {
+                    let mut c = ca("Sandpile", Some(nb), SeedSpec::Pile { grains: 20_000 });
+                    c.drop_per_gen = drop;
+                    let sc = scene(TilingSpec::rect(fam, w, h, b), vec![c]);
+                    compare_gpu(
+                        &mut sim,
+                        &sc,
+                        CHUNKS,
+                        &format!("sandpile drop {drop} on {fam} {b:?} {nb:?}"),
+                    );
+                }
+            }
+        }
+    }
+    // Patches: open boundary cells take every grain that reaches them.
+    for (fam, level) in [("spectre", 3), ("hat", 3), ("penrose-rhomb", 4)] {
+        for nb in [Nb::Edge, Nb::Touch] {
+            let mut c = ca("Sandpile", Some(nb), SeedSpec::Pile { grains: 50_000 });
+            c.drop_per_gen = 3;
+            let t = TilingSpec::new(fam).with_size(SizeSpec::Level(level));
+            compare_gpu(
+                &mut sim,
+                &scene(t, vec![c]),
+                &[1, 5, 40, 150],
+                &format!("sandpile on {fam} {nb:?}"),
+            );
+        }
+    }
+    // Huge piles: populations and losses past 2^32 grains.
+    let mut c = ca(
+        "Sandpile",
+        None,
+        SeedSpec::Pile {
+            grains: 3_000_000_000,
+        },
+    );
+    c.drop_per_gen = 4_000_000_000;
+    let sc = scene(TilingSpec::rect("square", 20, 20, Boundary::Dead), vec![c]);
+    compare_gpu(&mut sim, &sc, &[1, 2, 13, 60], "a huge sandpile");
+    let mut w = World::from_scene(&sc).unwrap();
+    sim.step_mixed(&mut w, 76).unwrap();
+    assert!(w.fields[0].lost > 1 << 32, "lost {}", w.fields[0].lost);
+}
+
+/// A pile that stabilises is caught by the period watch at the CPU's generation; population
+/// triggers count grains; a `done` trigger stays on the CPU.
+#[test]
+fn sandpile_repeats_and_scripts() {
+    let Some(mut sim) = gpu() else { return };
+    for b in [Boundary::Dead, Boundary::Wrap] {
+        let sc = scene(
+            TilingSpec::rect("square", 30, 30, b),
+            vec![ca("Sandpile", None, SeedSpec::Pile { grains: 2_000 })],
+        );
+        compare_gpu(
+            &mut sim,
+            &sc,
+            &[1, 3, 50, 400, 600],
+            &format!("settling pile {b:?}"),
+        );
+        // Dead edges drain the pile until it is stable; on a torus no grain leaves, and the
+        // pile may settle into a cycle instead.
+        let mut w = World::from_scene(&sc).unwrap();
+        sim.step_mixed(&mut w, 1054).unwrap();
+        match (b, w.status()) {
+            (Boundary::Dead, Status::Repeats { period: 1, .. }) => {}
+            (Boundary::Wrap, Status::Repeats { .. }) => {}
+            (_, s) => panic!("pile {b:?}: {s:?}"),
+        }
+    }
+    let mut drip = ca("Sandpile", None, SeedSpec::Pile { grains: 500 });
+    drip.drop_per_gen = 2;
+    let mut sc = scene(
+        TilingSpec::rect("hex", 30, 24, Boundary::Dead),
+        vec![drip, ca("B3/S23", None, SeedSpec::Random { density: 0.3 })],
+    );
+    sc.script = Some(script(
+        vec![
+            (vec![1], Trigger::PopulationAbove { n: 600 }, Some(300)),
+            (vec![2], Trigger::Generations { n: 20 }, None),
+            (vec![1, 2], Trigger::PopulationBelow { n: 100 }, Some(50)),
+        ],
+        true,
+    ));
+    compare_gpu(&mut sim, &sc, &[1, 9, 64, 300], "sandpile script");
+    sc.script = Some(script(vec![(vec![1], Trigger::Done, Some(200))], false));
+    let w = World::from_scene(&sc).unwrap();
+    assert!(
+        sim.check(&w).is_err(),
+        "a done trigger on a sandpile stays on the CPU"
+    );
+    compare(&mut sim, &sc, &[5, 100], "sandpile done trigger");
+}
+
+// ---------------------------------------------------------------------------------------------
 // Quick Start
 
 /// Every Quick Start entry of these families, at preview size, on the GPU like the CPU.
@@ -656,6 +775,7 @@ fn quick_start_entries() {
         Rule::LifeLike { birth, .. } => birth & 1 == 1,
         Rule::Ltl(_) => true,
         Rule::ForestFire { .. } => true,
+        Rule::Sandpile => true,
         _ => false,
     };
     let mut counts = std::collections::BTreeMap::<String, (u32, u32)>::new();
