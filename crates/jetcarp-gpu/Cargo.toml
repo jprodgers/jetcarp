@@ -17,6 +17,5 @@ wgpu.workspace = true
 bytemuck.workspace = true
 pollster.workspace = true
 rayon.workspace = true
-
-[dev-dependencies]
+serde.workspace = true
 serde_json.workspace = true

@@ -43,6 +43,8 @@ pub mod hunt;
 
 pub mod batch;
 
+pub mod select;
+
 const WG: u32 = 256;
 /// Generations per batch at most (per-generation metrics slots).
 const MAX_BATCH: u64 = 1024;
@@ -388,59 +390,22 @@ pub struct GpuSim {
 }
 
 impl GpuSim {
-    /// Open the default high-performance adapter without a window (CLI, tests, benchmarks).
+    /// Open the compute adapter the policy chooses ([`select`]), without a window (CLI, tests,
+    /// benchmarks).
     pub fn headless() -> Result<GpuSim, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        check_adapter(&adapter)?;
-        let mut limits = wgpu::Limits::default();
-        let al = adapter.limits();
-        limits.max_storage_buffer_binding_size = al.max_storage_buffer_binding_size;
-        limits.max_buffer_size = al.max_buffer_size;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(GpuSim::new(device, queue, describe(&info)))
+        let (device, queue, name) = select::compute_device("jetcarp-gpu")?;
+        Ok(GpuSim::new(device, queue, name))
     }
 
     /// Use an existing device (for example the app's `egui_wgpu::RenderState` device), after
-    /// checking that its adapter runs compute shaders.
+    /// checking that its adapter is decent and passes the self-test ([`select::verify`]).
     pub fn from_device(
         adapter: &wgpu::Adapter,
         device: wgpu::Device,
         queue: wgpu::Queue,
     ) -> Result<GpuSim, String> {
-        // Windows' software renderer (WARP, which a machine with no graphics card falls back to)
-        // crashes in the simulation's compute shaders (0xC0000005 in d3d10warp.dll, stepping
-        // Life). Mesa's software Vulkan on Linux works, and CI runs the GPU tests on it.
-        let info = adapter.get_info();
-        if cfg!(windows) && info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({}), which the GPU simulation does not use \
-                 on Windows",
-                info.name
-            ));
-        }
-        check_adapter(adapter)?;
-        Ok(GpuSim::new(device, queue, describe(&info)))
+        select::verify(adapter)?;
+        Ok(GpuSim::new(device, queue, describe(&adapter.get_info())))
     }
 
     /// Use an existing device that is known to run compute shaders.
@@ -1655,17 +1620,6 @@ fn act_halts(halts: &[Halt]) -> Vec<(u32, u64, u64, u64)> {
         .collect()
 }
 
-fn check_adapter(adapter: &wgpu::Adapter) -> Result<(), String> {
-    let caps = adapter.get_downlevel_capabilities();
-    if !caps.flags.contains(wgpu::DownlevelFlags::COMPUTE_SHADERS) {
-        return Err(format!(
-            "{} has no compute shaders",
-            adapter.get_info().name
-        ));
-    }
-    Ok(())
-}
-
 fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
     wgpu::BindGroupEntry {
         binding,
@@ -1716,7 +1670,7 @@ pub struct AdapterReport {
     /// DiscreteGpu, IntegratedGpu, VirtualGpu, Cpu, Other.
     pub kind: String,
     pub driver: String,
-    /// The adapter the GPU simulation would pick (high performance, not software).
+    /// The adapter the GPU simulation computes on ([`select::pick`] for computing).
     pub chosen: bool,
     /// Why the GPU simulation cannot use it, if it can't.
     pub problem: Option<String>,
@@ -1735,22 +1689,26 @@ pub fn adapter_reports() -> Vec<AdapterReport> {
 fn adapter_list() -> Vec<AdapterReport> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let chosen = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        ..Default::default()
-    }))
-    .ok()
-    .map(|a| a.get_info())
-    .filter(|i| i.device_type != wgpu::DeviceType::Cpu);
-    pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+    let policy = select::Policy::load();
+    let chosen = select::pick_from(&adapters, &policy, select::Purpose::Compute, None)
+        .ok()
+        .map(|c| c.info);
+    adapters
         .into_iter()
         .map(|a| {
             let info = a.get_info();
-            let problem = if info.device_type == wgpu::DeviceType::Cpu {
-                Some("software adapter: the GPU simulation does not use it".to_string())
-            } else {
-                check_adapter(&a).err()
-            };
+            let problem = select::requirements(
+                &info,
+                &a.limits(),
+                &a.get_downlevel_capabilities(),
+                &policy.want,
+            )
+            .err()
+            .or_else(|| {
+                let t = select::self_test(&a);
+                (!t.passed).then_some(t.note)
+            });
             let driver = [info.driver.as_str(), info.driver_info.as_str()]
                 .iter()
                 .filter(|s| !s.is_empty())
@@ -1758,9 +1716,9 @@ fn adapter_list() -> Vec<AdapterReport> {
                 .collect::<Vec<_>>()
                 .join(" ");
             AdapterReport {
-                chosen: chosen
-                    .as_ref()
-                    .is_some_and(|c| c.name == info.name && c.backend == info.backend),
+                chosen: chosen.as_ref().is_some_and(|c| {
+                    c.name == info.name && c.backend == info.backend && c.driver == info.driver
+                }),
                 name: info.name,
                 backend: format!("{:?}", info.backend),
                 kind: format!("{:?}", info.device_type),

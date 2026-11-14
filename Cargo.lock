@@ -2478,6 +2478,7 @@ dependencies = [
  "jetcarp-core",
  "pollster 0.4.0",
  "rayon",
+ "serde",
  "serde_json",
  "wgpu",
 ]

@@ -340,48 +340,13 @@ fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
 }
 
 impl BatchSim {
-    /// Open the default high-performance adapter without a window.
+    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window.
     pub fn headless() -> Result<BatchSim, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        crate::check_adapter(&adapter)?;
-        let mut limits = wgpu::Limits::default();
-        let al = adapter.limits();
-        limits.max_storage_buffer_binding_size = al.max_storage_buffer_binding_size;
-        limits.max_buffer_size = al.max_buffer_size;
-        limits.max_storage_buffers_per_shader_stage = al.max_storage_buffers_per_shader_stage;
-        limits.max_compute_workgroups_per_dimension = al.max_compute_workgroups_per_dimension;
-        if al.max_storage_buffers_per_shader_stage < 9 {
-            return Err(format!(
-                "{} allows only {} storage buffers per shader",
-                info.name, al.max_storage_buffers_per_shader_stage
-            ));
-        }
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu batch"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(BatchSim::new(device, queue, crate::describe(&info)))
+        let (device, queue, name) = crate::select::compute_device("jetcarp-gpu batch")?;
+        Ok(BatchSim::new(device, queue, name))
     }
 
-    fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
+    pub(crate) fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
         let lim = device.limits();
         let max_bytes = lim.max_storage_buffer_binding_size.min(lim.max_buffer_size);
         let max_cells = (max_bytes / 4).min(u32::MAX as u64 / 2) as usize;

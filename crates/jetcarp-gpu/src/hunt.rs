@@ -114,39 +114,10 @@ struct Params {
 }
 
 impl GpuHunter {
-    /// Open the default high-performance adapter without a window.
+    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window.
     pub fn headless() -> Result<GpuHunter, String> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .map_err(|e| format!("no GPU adapter: {e}"))?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "only a software adapter is available ({})",
-                info.name
-            ));
-        }
-        let al = adapter.limits();
-        let limits = wgpu::Limits {
-            max_storage_buffer_binding_size: al.max_storage_buffer_binding_size,
-            max_buffer_size: al.max_buffer_size,
-            max_compute_workgroup_storage_size: al.max_compute_workgroup_storage_size,
-            ..Default::default()
-        };
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("jetcarp-gpu hunter"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits,
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| format!("GPU device: {e}"))?;
-        Ok(GpuHunter::new(device, queue, crate::describe(&info)))
+        let (device, queue, name) = crate::select::compute_device("jetcarp-gpu hunter")?;
+        Ok(GpuHunter::new(device, queue, name))
     }
 
     /// Use an existing device.
