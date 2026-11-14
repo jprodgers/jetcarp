@@ -76,6 +76,17 @@ that will declare them stable.
 
 ### Changed
 
+- **The desktop background has its own pane.** *View → Desktop background settings…* (linked from
+  the *Display* and *Screensaver* panes) holds everything about the background host that was in the
+  *Screensaver* pane's *Background host* section, and more: each screen's rotation and monitor,
+  *Add a screen*, the lock screen, the still picture, the frame rate, *GPU simulation* (the shared
+  setting: Automatic, On, Off), the caption, the pauses, start at login, GNOME's extension, and the
+  new *Performance* group. The *Screensaver* pane keeps the screensaver's own settings, its profiles
+  and rotations (which the desktop background shares), and the system screen saver's rotation.
+  `host.json` and `app.json` are unchanged.
+- **The still picture the host leaves carries its scene,** as every picture JETCARP writes does, so
+  the desktop's picture can be opened in JETCARP and run again.
+
 - **JACA worlds run on the GPU.** With *GPU simulation* on, the app and the background host (so
   live desktops, the lock screen and the screen saver) step JACA on the graphics card: lattices and
   aperiodic patches, both neighbourhoods, blast radii up to 64, every edge. The result is the CPU's
@@ -135,6 +146,21 @@ that will declare them stable.
   do it on one thread, about 0.04 ms.
 
 ### Added
+
+- **Fit the desktop background to this computer.** *Fit to this computer…* in the new *Desktop
+  background* pane, or `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]`, runs each scene
+  of the wallpaper's rotation for a few seconds at a time at its screen's size, as the host runs it,
+  and keeps for each the most cells (the same rules, palettes and colouring) with which JETCARP stays
+  under a processor limit (default 10% of the machine), a GPU limit (default 25% of its time) and a
+  smooth frame rate. It measures JETCARP's own processor time, and its own GPU time (the system's
+  count on Linux, else timestamp queries, else submission to completion; it says which). The sizes
+  are saved in `host.json` and shown at once; a running host pauses while it tunes; and the host
+  tunes again by itself when the monitors change under a tuned screen. Scripts and AI assistants
+  reach it through `host_control` (`{"action": "tune"}`). See
+  [Fit to this computer](../guides/wallpapers.md#fit-to-this-computer).
+- **`jetcarp host scene`** prints or saves (`--save FILE`) the scene a screen shows, its grid's size
+  included, so a tuned wallpaper replays exactly; `host_control` gives it as `{"action": "scene"}`.
+  The host's status gives each screen's cell size and grid, and says when tuning chose them.
 
 - **A page for rating clips.** `jetcarp jobs clips --page` also writes `index.html` into the clips
   folder: the clips in batches, each with Keep, Maybe and Drop and a ★, with a progress bar, a

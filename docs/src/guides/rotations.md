@@ -20,11 +20,11 @@ built-in rotations, using one, and making your own.
 
 - **Screensaver mode in the app:** in the *Screensaver* pane, set *Show* to *A rotation* and choose it
   under *Rotation*, or start the app with `jetcarp --screensaver --rotation "Wolfram series"`.
-- **The background host:** choose it under *Rotation* in the pane's *Background host* section, or run
+- **The background host:** choose it under *Rotation* in the *Desktop background* pane, or run
   `jetcarp host rotation "Classics, hourly"` (add `--screen N` for one screen of several).
   `jetcarp host start --rotation NAME` runs one for that run only.
-- **The system's screen saver:** `jetcarp host saver install --rotation NAME`, or *Screen saver runs* in
-  the app. On macOS the rotation is copied into the screen saver, so install it again after changing
+- **The system's screen saver:** `jetcarp host saver install --rotation NAME`, or *System screen saver
+  runs* in the *Screensaver* pane. On macOS the rotation is copied into the screen saver, so install it again after changing
   the rotation (see [Wallpapers](wallpapers.md#the-systems-screen-saver)).
 
 While a rotation runs, the ◀ and ▶ buttons in the pane, *Next* and *Previous* in the host's menu,
