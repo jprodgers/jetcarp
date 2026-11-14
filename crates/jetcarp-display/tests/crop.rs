@@ -34,7 +34,7 @@ fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 fn checkerboard(w: u32, h: u32, px: f32) -> Stage {
     let mut sc = Scene::new(TilingSpec::rect("square", w, h, Boundary::Wrap));
     let cells: Vec<[u32; 2]> = (0..w * h)
-        .filter(|i| (i % w + i / w) % 2 == 0)
+        .filter(|i| (i % w + i / w).is_multiple_of(2))
         .map(|i| [i, 1])
         .collect();
     // Nothing is born and everything survives: the board stays as it is.

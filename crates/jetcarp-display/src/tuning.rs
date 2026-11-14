@@ -537,7 +537,12 @@ pub fn crop_size(canvas: [f64; 2]) -> [u32; 2] {
     let fit = |want: u32, side: f64| {
         let side = side.round().max(1.0) as u32;
         let w = want.min(side);
-        if (side - w) % 2 == 0 { w } else { w - 1 }.max(1)
+        if (side - w).is_multiple_of(2) {
+            w
+        } else {
+            w - 1
+        }
+        .max(1)
     };
     [fit(192, canvas[0]), fit(120, canvas[1])]
 }
