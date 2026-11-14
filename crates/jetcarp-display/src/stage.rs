@@ -4,7 +4,7 @@
 
 use crate::caption::{self, Place};
 use crate::gpu::{Geometry, TileDraw};
-use crate::host_settings::Tuning;
+use crate::host_settings::{Size, Tuning};
 use crate::profiles::{self, Profile};
 use crate::reseed_presets::blobs_mode;
 use crate::rotation::{Action, Clock, Observation, Player, Rotation, Slot};
@@ -87,8 +87,11 @@ pub struct StageStatus {
     pub canvas: [f64; 2],
     /// Physical pixels per point.
     pub scale: f64,
-    /// The cell size the world shown was built at, in physical pixels (0 before it is built).
+    /// The size the world shown's cells show at, in physical pixels (0 before it is built).
     pub cell_px: f32,
+    /// An aperiodic patch's level.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
     /// That size came from *Fit to this computer*, not the scene.
     pub tuned: bool,
     /// The grid's width and height in cells, where the tiling has them.
@@ -122,6 +125,8 @@ pub struct Stage {
     notes: Vec<String>,
     /// Cell sizes chosen for this computer, by scene.
     tuned: Option<Tuning>,
+    /// Worlds put on show so far.
+    builds: u64,
 }
 
 /// About how many cells `scene` will have (None: cannot tell before building it).
@@ -129,9 +134,14 @@ pub fn estimate_cells(scene: &Scene) -> Option<u64> {
     match scene.tiling.size? {
         SizeSpec::Cells(n) => Some(n as u64),
         SizeSpec::Rect { w, h } => Some(w as u64 * h as u64),
-        SizeSpec::Level(_) => None,
+        SizeSpec::Level(l) => {
+            jetcarp_core::aperiodic::tile_count(&scene.tiling.family, l).map(|n| n as u64)
+        }
     }
 }
+
+/// The cell size asked for when a patch should simply be fitted to the screen.
+pub const FIT_PX: f32 = 0.05;
 
 /// A cell of `points` on a screen of `scale` pixels per point, in pixels. On a scaled screen it is
 /// rounded to whole pixels, so cell edges still fall on pixel edges (1 point at 150% is 2 pixels,
@@ -177,6 +187,7 @@ impl Stage {
             failures: 0,
             notes: vec![],
             tuned: None,
+            builds: 0,
         })
     }
 
@@ -186,30 +197,47 @@ impl Stage {
         if tuned == self.tuned {
             return;
         }
-        let before = self.current_cell_px();
+        let before = self.current_size();
         self.tuned = tuned;
-        if before != self.current_cell_px() && (self.show.is_some() || self.building.is_some()) {
+        if before != self.current_size() && (self.show.is_some() || self.building.is_some()) {
             self.load_pending = true;
         }
     }
 
-    /// The cell size, in pixels, the current item is built at, and whether a tuning chose it.
-    fn current_cell_px(&self) -> Option<(f32, bool)> {
+    /// The size the current item is built at, and whether a tuning chose it.
+    fn current_size(&self) -> Option<(Size, bool)> {
         let slot = self.player.current()?;
-        Some(self.cell_px_for(&slot.label, &slot.profile))
+        Some(self.size_for(&slot.label, &slot.profile))
     }
 
-    /// The cell size, in pixels, for an item: its profile's on this screen, or a tuning's.
-    fn cell_px_for(&self, label: &str, profile: &Profile) -> (f32, bool) {
+    /// The size for an item: its profile's cell size on this screen, or a tuning's (a cell size,
+    /// or an aperiodic patch's level).
+    fn size_for(&self, label: &str, profile: &Profile) -> (Size, bool) {
         let design = cell_pixels(profile.cell_px, self.scale);
         match self
             .tuned
             .as_ref()
-            .and_then(|t| t.cell_px_for(label, design, self.canvas))
+            .and_then(|t| t.size_for(label, design, self.canvas))
         {
-            Some(px) => (px, true),
-            None => (design, false),
+            Some(size) => (size, true),
+            None => (Size::px(design), false),
         }
+    }
+
+    /// Every item of its rotation.
+    pub fn slots(&self) -> &[Slot] {
+        self.player.slots()
+    }
+
+    /// How many worlds it has put on show: a new one has been built when this moves.
+    pub fn builds(&self) -> u64 {
+        self.builds
+    }
+
+    /// Takes up again after not being ticked for a while (a sweep showed something else): the
+    /// rotation's clock does not count the time away.
+    pub fn resume_clock(&mut self) {
+        self.last_now = None;
     }
 
     pub fn rotation(&self) -> &str {
@@ -333,10 +361,20 @@ impl Stage {
         };
         let (mut profile, scene, note) = profiles::resolve(&slot.profile, &*self.lookup);
         // In pixels from here on.
-        let (px, tuned) = self.cell_px_for(&slot.label, &profile);
-        profile.cell_px = px;
+        let (size, tuned) = self.size_for(&slot.label, &profile);
+        // A patch of a chosen level is fitted to the screen, whatever its tiles' size comes to.
+        profile.cell_px = if size.level.is_some() {
+            FIT_PX
+        } else {
+            size.px
+        };
         let canvas = self.canvas;
-        let scene = profiles::apply_profile(&profile, scene, Some(canvas));
+        let mut scene = profiles::apply_profile(&profile, scene, Some(canvas));
+        if let Some(l) = size.level
+            && !profiles::is_lattice(&scene)
+        {
+            scene.tiling.size = Some(SizeSpec::Level(l));
+        }
         if let Some(n) = estimate_cells(&scene)
             && n > self.max_cells
         {
@@ -397,9 +435,12 @@ impl Stage {
             }
         }
         let (center, zoom) = view::place(&world, self.canvas, profile.cell_px as f64);
+        // The size its cells show at (a patch fitted to the screen may show them larger).
+        let shown_px = (zoom * view::cell_unit(&world)) as f32;
         self.failures = 0;
         self.acc = 0.0;
         self.epoch += 1;
+        self.builds += 1;
         self.show = Some(Show {
             slot,
             world,
@@ -408,7 +449,7 @@ impl Stage {
             zoom,
             speed: profile.speed,
             gpu: profile.gpu,
-            cell_px: profile.cell_px,
+            cell_px: shown_px,
             tuned,
             watch_from: 0,
             announced: false,
@@ -633,6 +674,10 @@ impl Stage {
             Some(SizeSpec::Rect { w, h }) => Some([w, h]),
             _ => None,
         });
+        let level = w.and_then(|w| match w.topo.spec.size {
+            Some(SizeSpec::Level(l)) => Some(l),
+            _ => None,
+        });
         StageStatus {
             rotation: self.rotation.clone(),
             label: self
@@ -651,6 +696,7 @@ impl Stage {
             cell_px: shown.map_or(0.0, |s| s.cell_px),
             tuned: shown.is_some_and(|s| s.tuned),
             grid,
+            level,
             seconds_left: self.player.seconds_left(self.play_time),
             caption: w
                 .map(|w| caption::lines(w, Some(self.place()), true))

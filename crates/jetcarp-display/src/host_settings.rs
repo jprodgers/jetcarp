@@ -167,33 +167,138 @@ impl GpuTiming {
     }
 }
 
-/// What *Fit to this computer* chose for one scene.
+/// A size a scene can show at: a cell size in physical pixels on a lattice, a patch level on an
+/// aperiodic tiling (whose tiles are then as big as fitting the patch to the screen makes them).
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct Size {
+    /// Physical pixels per cell: what a lattice is built at, and what a patch's tiles show at.
+    pub px: f32,
+    /// An aperiodic patch's level (None: the scene's own, or a lattice).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+}
+
+impl Size {
+    pub fn px(px: f32) -> Size {
+        Size { px, level: None }
+    }
+
+    /// `3 px`, `level 6 (2.4 px)`.
+    pub fn describe(&self) -> String {
+        match self.level {
+            Some(l) => format!("level {l} ({} px)", round_px(self.px)),
+            None => format!("{} px", round_px(self.px)),
+        }
+    }
+
+    /// The same size (a level, or a cell size within a hundredth of a pixel).
+    pub fn same(&self, o: &Size) -> bool {
+        match (self.level, o.level) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => (self.px - o.px).abs() < 0.01,
+            _ => false,
+        }
+    }
+}
+
+/// A pixel size as people read it: whole, or to a tenth.
+pub fn round_px(px: f32) -> String {
+    if (px - px.round()).abs() < 0.05 {
+        format!("{}", px.round())
+    } else {
+        format!("{px:.1}")
+    }
+}
+
+/// What one size of a sweep measured: one card in the pane.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 #[serde(default)]
-pub struct TunedScene {
-    /// The scene's label in the rotation.
-    pub scene: String,
-    /// The cell size the scene asks for, in physical pixels.
-    pub design_px: f32,
-    /// The cell size chosen, in physical pixels: never smaller than `design_px`.
-    pub cell_px: f32,
-    /// Cells at that size.
+pub struct Rung {
+    /// The size, with the cell size the screen showed (for a patch, its tiles' size).
+    pub size: Size,
+    /// Cells in the world.
     pub cells: u64,
-    /// JETCARP's processor time at that size, in percent of the machine.
+    /// JETCARP's processor time, in percent of the machine.
     pub cpu_percent: f32,
     /// Its share of the GPU's time, in percent (None: not measured).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gpu_percent: Option<f32>,
     /// The 95th percentile of the time a frame took, in milliseconds.
     pub p95_ms: f32,
-    /// Generations stepped on the GPU (else on the processor).
+    /// Frames drawn a second.
+    pub fps: f32,
+    /// Stepped on the GPU (else on the processor).
     pub on_gpu: bool,
-    pub gpu_timing: GpuTiming,
-    /// It met every limit at `cell_px`.
+    /// Within every limit, with their margins.
     pub fits: bool,
-    /// Why it did not, or why its size could not change.
+    /// Which limits it passed, when it did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub over: Option<String>,
+    /// The picture of the screen at this size: a PNG in the tuning folder ([`crops_dir`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop: Option<String>,
+    /// The scene's own size.
+    pub own: bool,
+}
+
+/// What *Fit to this computer* found and chose for one scene.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct TunedScene {
+    /// The scene's label in the rotation.
+    pub scene: String,
+    /// The scene's tiling family.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub tiling: String,
+    /// The cell size the scene asks for, in physical pixels.
+    pub design_px: f32,
+    /// The size it shows at: a cell size in physical pixels (a lattice), or with `level`, the
+    /// size a patch of that level's tiles show at.
+    pub cell_px: f32,
+    /// An aperiodic patch's level (None: the scene's own, or a lattice).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Someone chose this size (else it is the recommended one).
+    pub chosen: bool,
+    /// The finest size within the limits (a placed pattern: its own size).
+    pub recommended: Size,
+    /// A pattern placed on an empty field, which keeps its own size unless someone chooses another.
+    pub placed: bool,
+    /// Every size the sweep showed, finest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rungs: Vec<Rung>,
+    pub gpu_timing: GpuTiming,
+    /// Why it shows at this size, when that needs saying.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+}
+
+impl TunedScene {
+    /// The size it shows at.
+    pub fn size(&self) -> Size {
+        Size {
+            px: self.cell_px,
+            level: self.level,
+        }
+    }
+
+    /// Shows at `size`.
+    pub fn set_size(&mut self, size: Size) {
+        self.cell_px = size.px;
+        self.level = size.level;
+    }
+
+    /// The rung at the size it shows at.
+    pub fn rung(&self) -> Option<&Rung> {
+        let s = self.size();
+        self.rungs.iter().find(|r| r.size.same(&s))
+    }
+}
+
+/// The folder the sweep's pictures go in: `tune` beside the host's settings.
+pub fn crops_dir() -> Option<PathBuf> {
+    Some(config_dir()?.join("tune"))
 }
 
 /// What *Fit to this computer* found for one screen: a cell size for each scene of its rotation.
@@ -228,23 +333,29 @@ impl Default for Tuning {
 }
 
 impl Tuning {
-    /// The cell size, in pixels, for the scene labelled `label`, which asks for `design_px` on a
-    /// canvas of `canvas` pixels: None when it was not tuned, its own size was chosen, or the
-    /// scene has changed size since. On another canvas the cell count is kept (the size grows
-    /// or shrinks with the canvas), never below the scene's own.
-    pub fn cell_px_for(&self, label: &str, design_px: f32, canvas: [f64; 2]) -> Option<f32> {
+    /// The size for the scene labelled `label`, which asks for `design_px` on a canvas of
+    /// `canvas` pixels: None when it was not tuned, its own size was chosen, or the scene has
+    /// changed size since. On another canvas a lattice keeps its cell count (its cells grow or
+    /// shrink with the canvas), and a patch its level.
+    pub fn size_for(&self, label: &str, design_px: f32, canvas: [f64; 2]) -> Option<Size> {
         let t = self.scenes.iter().find(|s| s.scene == label)?;
-        if (t.design_px - design_px).abs() > 1e-3 || t.cell_px <= design_px {
+        if (t.design_px - design_px).abs() > 1e-3 {
             return None;
+        }
+        if let Some(level) = t.level {
+            return Some(Size {
+                px: t.cell_px,
+                level: Some(level),
+            });
         }
         let [w0, h0] = self.canvas;
         let mut px = t.cell_px;
         let (a0, a1) = (w0 as f64 * h0 as f64, canvas[0] * canvas[1]);
-        if a0 > 0.0 && a1 > 0.0 && (a0 - a1).abs() > 0.5 {
-            px = (px as f64 * (a1 / a0).sqrt()).round() as f32;
+        if a0 > 0.0 && a1 > 0.0 && (a0 - a1).abs() > 0.5 && px > 0.0 {
+            px = ((px as f64 * (a1 / a0).sqrt()).round() as f32).max(1.0);
         }
-        let px = px.clamp(design_px, *crate::profiles::CELL_PX_RANGE.end());
-        (px > design_px).then_some(px)
+        let px = px.min(*crate::profiles::CELL_PX_RANGE.end());
+        (px > 0.0 && (px - design_px).abs() > 1e-3).then_some(Size::px(px))
     }
 
     /// Whether it was found for a canvas of this size.
@@ -478,15 +589,27 @@ mod tests {
             fps: 30.0,
             scenes: vec![TunedScene {
                 scene: "profile Life".into(),
+                tiling: "square".into(),
                 design_px: 3.0,
-                cell_px: 5.0,
-                cells: 147_456,
-                cpu_percent: 2.5,
-                gpu_percent: Some(4.0),
-                p95_ms: 6.0,
-                on_gpu: true,
-                gpu_timing: GpuTiming::Timestamps,
-                fits: true,
+                cell_px: 2.0,
+                level: None,
+                chosen: true,
+                recommended: Size::px(4.0),
+                placed: false,
+                rungs: vec![Rung {
+                    size: Size::px(2.0),
+                    cells: 921_600,
+                    cpu_percent: 2.5,
+                    gpu_percent: Some(4.0),
+                    p95_ms: 6.0,
+                    fps: 30.0,
+                    on_gpu: true,
+                    fits: false,
+                    over: Some("GPU".into()),
+                    crop: Some("s0-life-2px.png".into()),
+                    own: false,
+                }],
+                gpu_timing: GpuTiming::Kernel,
                 note: None,
             }],
         });
@@ -505,6 +628,20 @@ mod tests {
         assert_eq!((s.tune.cpu_percent, s.tune.gpu_percent), (1.0, 100.0));
         assert_eq!(s.tune.fps, Some(240.0));
         assert!(s.tune.auto, "unset fields keep their defaults");
+        // A tuning saved before the sweep (one size a scene, its numbers beside it) still reads,
+        // and its size still applies.
+        let old: Tuning = serde_json::from_str(
+            r#"{"rotation": "r", "canvas": [2560, 1440], "scenes": [{"scene": "a",
+                "design_px": 3.0, "cell_px": 5.0, "cells": 147456, "cpu_percent": 2.5,
+                "gpu_percent": 4.0, "p95_ms": 6.0, "on_gpu": true, "gpu_timing": "kernel",
+                "fits": true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            old.size_for("a", 3.0, [2560.0, 1440.0]),
+            Some(Size::px(5.0))
+        );
+        assert!(!old.scenes[0].chosen && old.scenes[0].rungs.is_empty());
     }
 
     #[test]
@@ -528,23 +665,41 @@ mod tests {
             ],
             ..Default::default()
         };
-        assert_eq!(t.cell_px_for("a", 2.0, [2000.0, 1000.0]), Some(6.0));
+        let px = |label: &str, design: f32, w: f64, h: f64| {
+            t.size_for(label, design, [w, h]).map(|s| s.px)
+        };
+        assert_eq!(px("a", 2.0, 2000.0, 1000.0), Some(6.0));
+        assert_eq!(px("b", 3.0, 2000.0, 1000.0), None, "its own size");
+        assert_eq!(px("c", 3.0, 2000.0, 1000.0), None, "not tuned");
         assert_eq!(
-            t.cell_px_for("b", 3.0, [2000.0, 1000.0]),
-            None,
-            "its own size"
-        );
-        assert_eq!(t.cell_px_for("c", 3.0, [2000.0, 1000.0]), None, "not tuned");
-        assert_eq!(
-            t.cell_px_for("a", 4.0, [2000.0, 1000.0]),
+            px("a", 4.0, 2000.0, 1000.0),
             None,
             "the scene's size changed since"
         );
         // Four times the pixels: twice the size, the same cells.
-        assert_eq!(t.cell_px_for("a", 2.0, [4000.0, 2000.0]), Some(12.0));
-        // A quarter of the pixels: half the size, never below the scene's own.
-        assert_eq!(t.cell_px_for("a", 2.0, [1000.0, 500.0]), Some(3.0));
-        assert_eq!(t.cell_px_for("a", 2.0, [500.0, 250.0]), None);
+        assert_eq!(px("a", 2.0, 4000.0, 2000.0), Some(12.0));
+        // A quarter of the pixels: half the size, but never below a pixel.
+        assert_eq!(px("a", 2.0, 1000.0, 500.0), Some(3.0));
+        assert_eq!(px("a", 2.0, 500.0, 250.0), None, "back to its own 2 px");
+        // Finer than its own, and a patch's level, apply too.
+        let mut t = t.clone();
+        t.scenes[1].cell_px = 1.0;
+        assert_eq!(t.size_for("b", 3.0, [2000.0, 1000.0]), Some(Size::px(1.0)));
+        t.scenes.push(TunedScene {
+            scene: "p".into(),
+            design_px: 2.4,
+            cell_px: 1.7,
+            level: Some(6),
+            ..Default::default()
+        });
+        let patch = t.size_for("p", 2.4, [500.0, 250.0]).unwrap();
+        assert_eq!(
+            patch.level,
+            Some(6),
+            "a patch keeps its level on any canvas"
+        );
+        assert_eq!(patch.describe(), "level 6 (1.7 px)");
+        assert!(Size::px(3.0).same(&Size::px(3.004)) && !Size::px(3.0).same(&patch));
         assert!(t.fits_canvas([2000.0, 1000.0]) && !t.fits_canvas([1920.0, 1080.0]));
         let l = TuneLimits::default();
         assert_eq!(l.target_fps(Some(144.0), 30.0), 30.0, "at most the host's");

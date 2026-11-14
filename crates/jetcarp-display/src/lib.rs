@@ -40,6 +40,7 @@ pub fn set_process_name(name: &str) {
 
 pub mod autostart;
 pub mod caption;
+pub mod crop;
 pub mod desktop_picture;
 pub mod exit;
 pub mod gnome;
