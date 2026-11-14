@@ -317,7 +317,9 @@ keeps an archive of the best few runs in each *niche*, a combination of rule fam
 and behaviour. The behaviour is a coarse class built from how the run ended (died, froze, short or
 long cycle, still running), when it settled, how dense and how active it was late in the run, the
 shape of what it left (dust, clusters, large structures, smooth regions), and whether anything moved.
-Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
+A JACA run's niche also has its sign state: both signs kept to the end, one lost in the second half,
+or one lost in the first half, so runs that turned into a plain Life-like run do not compete with
+battles for a place. Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. A GPU loop runs the rules the graphics card
 supports in large batches while a CPU loop runs the rest. A run on the processor that would take
@@ -350,6 +352,49 @@ settle late, start busy, and build large connected structures rather than dust. 
 measurements are stored, the score can be changed and recomputed without rerunning anything
 (`jetcarp jobs rescore`).
 
+**JACA's sign measures.** A JACA run has two signs, and much of what makes one worth watching is how
+they share the board. In a JACA-only search, more than half of the best-scoring runs had lost one
+sign in the first half, which leaves a plain Life-like run, and every one of those was dropped by
+eye. So a JACA run also records five sign measures:
+
+- `sign_pos`: the positive sign's share of live cells, as a mean over the last quarter (0 to 1),
+  which says which side is ahead;
+- `sign_balance`: the smaller sign's share of live cells over the last quarter (0 to 0.5);
+- `sign_sorted`: how well the signs sort into territories at the end. Over the CA's own
+  neighbourhood, it compares the same-sign fraction among neighbouring live cells with what
+  shuffled signs would give (0 mixed, 1 fully sorted);
+- `sign_trade`: how much territory changes hands late. Of the cells live both at the three-quarter
+  mark and at the end, it is the fraction whose sign differs;
+- `sign_lost`: when a sign first fell below 1% of live cells, as a fraction of the run (1 if
+  never).
+
+The built-in score keeps 0.3 of the score of a JACA run that lost a sign in the first half. Runs
+measured before JETCARP 0.4.2 have no sign measures; `jetcarp jobs refit` and `jetcarp jobs rescore
+--replay` run them again from their candidates to measure them, since runs replay exactly, and keep
+what they measure in the search folder (`remeasured.sqlite`).
+
+**Your taste as the score.** `jetcarp jobs refit` fits a score model to the keep, maybe and drop
+reviews recorded for a job's runs, all raters' or one's (`--rater`). It is a ridge logistic
+regression of keep against drop on the measures the built-in score reads, with a term for each rule
+family when the reviews cover more than one, and JACA's sign measures for JACA runs. Maybe counts as
+half a keep. Leaving maybes out would drop nearly half of a rating round, and as a half they pull
+their runs to the middle without taking a side. The built-in score was fitted the same way, with
+maybe as 0.45. The fit reports its AUC of keep against drop on runs held out of it (five folds,
+eight shuffles), and the terms that pull hardest. `--out` writes the model as a JSON file (format
+`jetcarp-score-model 1`) that records what it was fitted on: the jobs, raters, counts, date and
+AUC. A model scores on the built-in score's scale, 0 to 3, and keeps its gates (runs that died, or
+froze or cycled early, and JACA runs that lost a sign early, score low), so niches and the atlas's
+thresholds behave. `jetcarp search explore --score FILE` searches with a model, and `jetcarp jobs
+rescore JOB --score FILE` applies one to a job's stored runs. Either way the job keeps a copy in its
+spec, so a resumed search goes on with it. A model fitted with `--family` scores only that family;
+the others keep the built-in score, and row rules always do.
+
+Fitted to Jimmie Rodgers's 227 ratings of runs of a JACA-only search (48 keep, 98 maybe, 81 drop),
+a JACA model reached a held-out AUC of 0.90, against 0.74 for the score the runs were stored with
+and 0.76 for the built-in score with the rule for a lost sign. Its strongest terms were sign
+measures: territory that changes hands late pulls down, and sorted territories, a sign kept to the
+end and a balanced board pull up. With maybe left out of the fit, the held-out AUC was 0.89.
+
 **How results are checked.** The elites are re-run on larger grids (64,000 cells for 4,096
 generations, three times each) to confirm that they were not flukes of a small grid, and the *atlas*
 that the Quick Start menu offers is chosen from the confirmed runs (`jetcarp quickstart publish`, which
@@ -361,7 +406,8 @@ rather than resuming exactly, unlike the other jobs (see
 [Reproducibility](reproducibility.md#what-is-not-guaranteed-yet)). `jetcarp jobs runs`,
 `jetcarp jobs sheet` and `jetcarp jobs clips` list runs and render contact sheets and animated clips
 for reviewing results by eye, and `jetcarp jobs review` records a verdict on a run, or a folder of
-ratings of the clips, for the next fit of the score. Verdicts are kept with the library's ratings,
+ratings of the clips, for the next fit of the score. `jetcarp jobs runs --measures all --format csv
+--limit 0` writes every run with every measure, for analysis elsewhere. Verdicts are kept with the library's ratings,
 not in the search's folder, so they outlive it.
 
 **Command.** `jetcarp search explore --hours 8 --gpu`. The search reported here ran in CART,

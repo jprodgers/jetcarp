@@ -359,7 +359,8 @@ Every schema id format 1.0 uses, so none has to be derived:
 | `jetcarp-raters 1` | the `raters` table | its index's `schema` |
 | `jetcarp-score_models 1` | the `score_models` table | its index's `schema` |
 | `jetcarp-search 1` | a [search index](#search-runs) (`table` `search`) | its `schema` |
-| `jetcarp-explore-runs 1` | an explore search's run segments | the search index's `run_schema` |
+| `jetcarp-explore-runs 1` | an explore search's run segments, before JACA's sign measures | the search index's `run_schema`, and each segment's `jetcarp.schema` |
+| `jetcarp-explore-runs 2` | an explore search's run segments, with JACA's sign measures (five nullable columns) | the same |
 | `jetcarp-explore-scores 1` | an explore search's score sidecars | the search index's `score_schema` |
 | `jetcarp-reference-patch 1` | an aperiodic family's [reference patch](#reference-patches) | nowhere: a `tilings` row names the object |
 
@@ -787,8 +788,8 @@ without the ratings it was fitted on. *JETCARP 0.4 reads this table and keeps no
 ## Search runs
 
 A pack MAY include explore searches' runs in their own format ([Search runs](search-runs.md):
-segments of schema `jetcarp-explore-runs 1`, score sidecars `jetcarp-explore-scores 1`). `searches`
-in the manifest maps a search's uuid to its **search index**:
+segments of schema `jetcarp-explore-runs 2` or `1`, score sidecars `jetcarp-explore-scores 1`).
+`searches` in the manifest maps a search's uuid to its **search index**:
 
 ```json
 {"children": [], "created": "...", "engine_version": "0.4.0", "format": "jetcarp-index",
@@ -804,13 +805,19 @@ in the manifest maps a search's uuid to its **search index**:
 - `table` is `search` and `schema` `jetcarp-search 1`; `search` MUST be the uuid the manifest maps.
 - `parts`: the sealed segments in id order, each a Parquet object, with its `segment` name
   (`part-` and digits), `rows`, `bytes`, and `first` and `last` run ids in decimal.
+- `run_schema`: the newest segment's schema. Schema 2 added five nullable columns, JACA's sign
+  measures, at the end; a search sealed before them and continued after has segments of both
+  schemas, each naming its own in its `jetcarp.schema` metadata. A reader MUST read both, reading
+  the sign columns of a schema 1 segment as null, and SHOULD skip columns it does not know. The
+  objects are copied as they are: publishing and importing never rewrite a segment.
 - `scores`: each rescore, with the sidecar of each segment it changed. A run's score is the one in
   its segment's newest sidecar, or the segment's own.
 - `spec` and `remeasure`: the search's settings and import record, copied from its folder's manifest
   with every local path stripped, every non-integer number written as a string (as ECMAScript
   writes it) and every integer beyond ±(2^53 − 1) as its decimal digits (a `seed`, say). A reader
   that needs the numbers reads such a string back as a number: JETCARP does, for the settings it
-  knows to be numbers and for the record's seconds.
+  knows to be numbers and for the record's seconds, and for a score model the settings hold
+  (`score`, a [score model](search-runs.md#score-models), whose numbers all read either way).
 - **What a search carries.** Its runs (every sealed segment and score sidecar), its settings and its
   record, and nothing of its working database: everything a stopped search needs is rebuilt from
   the runs (its archive of elites, offered in id order with each run's newest score; coverage and

@@ -63,6 +63,13 @@ that will declare them stable.
   or `--rules-file` that cannot run stops the job from starting, and the error names each bad rule
   by its line in the file. A hunt used to start anyway and report the rule once per tiling, with no
   soups run. ([#5](https://github.com/jprodgers/jetcarp/issues/5))
+- **A JACA run that lost a sign early scores low and has a niche of its own.** The built-in score
+  keeps 0.3 of such a run's score, and a JACA run's niche now includes whether both signs held, so
+  runs that turned into plain Life-like runs stop competing with battles for a place.
+- **Run segments are schema 2** (`jetcarp-explore-runs 2`), with the sign columns. Segments of
+  schema 1, from earlier searches and packs, still read, as runs without sign measures, and
+  publishing and importing copy segments as they are. JETCARP 0.4.1 cannot read a segment of
+  schema 2.
 
 ### Added
 
@@ -92,6 +99,25 @@ that will declare them stable.
   and `w.tile(i)` a tile's centre and corners, on any tiling, aperiodic patches too. `w.cas()` now
   says each CA's neighbourhood. A new example script, `jaca-territories`, uses them to follow a JACA
   world's sign balance, how sorted its territories are, its fronts, and the ground the signs trade.
+- **JACA runs record how their two signs share the board.** An explore search measures five more
+  things about each JACA run: which sign is ahead, how balanced the signs are, how well they sort
+  into territories, how much territory changes hands late, and when a sign was lost. They are new
+  columns of the run segments (null for other families) and show in `jetcarp jobs runs
+  --measures`. In a JACA-only search, more than half of the best-scoring runs had lost a sign in
+  the first half, which leaves a plain Life-like run; see
+  [Search methods](../research/search-methods.md#explore).
+- **Your taste as the score.** `jetcarp jobs refit JOB` fits a score model to the keep, maybe and
+  drop verdicts on a job's runs, says how well it ranks runs it did not see, and with `--out`
+  writes it as a file. `jetcarp search explore --score FILE` searches with it, and `jetcarp jobs
+  rescore JOB --score FILE` rescores a job's runs with it; the job keeps the model, so resuming
+  the search keeps it. Fitted to 227 ratings of JACA runs, a model ranked keeps above drops 90% of
+  the time on runs held out of the fit, against 74% for the score they were stored with. Older
+  runs replay exactly, so a refit runs again those that lack the sign measures, and `jetcarp jobs
+  rescore --replay` does it for a whole search (`--gpu` on the GPU). The MCP `search_runs` tool
+  can refit and rescore too, and `search_start` takes a model.
+- **Every measure out.** `jetcarp jobs runs` takes `--measures all` (or a list), `--format
+  csv|json`, `--since ID` for the runs after an id, `--limit 0` for every run, and `--out FILE`.
+  The MCP `search_runs` tool writes a CSV file of every run with `csv` and limit 0.
 
 ## [0.4.1] – 2026-11-13
 

@@ -16,6 +16,7 @@ searches/<uuid>/
   runs/part-000002.parquet
   scores-1/part-000001.parquet     a rescore's scores for segment 1 (only when it changed them)
   manifest.json                    what the folder holds
+  remeasured.sqlite                older runs replayed for measures they lack (only once some were)
 ```
 
 The uuid is the search's, made with the job; `jetcarp jobs status JOB` prints the folder.
@@ -50,9 +51,9 @@ another process.
 | `format` | `jetcarp-search-manifest 1` |
 | `search`, `kind` | the search's uuid, and `explore` |
 | `engine_version` | the JETCARP version that last wrote the manifest |
-| `run_schema`, `score_schema` | `jetcarp-explore-runs 1` and `jetcarp-explore-scores 1`: the column layouts below |
+| `run_schema`, `score_schema` | the column layouts below: `jetcarp-explore-runs 2` (or `1` for a folder whose newest segment was sealed before JETCARP 0.4.2) and `jetcarp-explore-scores 1` |
 | `created`, `updated` | UTC times |
-| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...) |
+| `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...), with its score model (`score`) when it has one (see [Score models](#score-models)) |
 | `segments` | one per segment, in id order: `file` (relative to the folder), `sha256` and `bytes` of the file, `rows`, `first_id` and `last_id`, `sealed` (UTC) and `engine_version` |
 | `scores` | one per rescore that changed a score: `version` (1, 2, ...), `created`, `engine_version`, and `files`, one per segment it rescored: `segment`, `file`, `sha256`, `bytes`, `rows` |
 | `remeasure` | only in the search imported from CART: how its runs were checked on JETCARP 0.4.0 and which were run again (see [below](#the-search-imported-from-cart)) |
@@ -108,10 +109,17 @@ Each segment is a Parquet file compressed with zstd (level 9). Its runs are in i
 groups of 131,072 runs, with statistics for every row group and every data page (the column and
 offset indexes), so a reader that wants a few runs or the best scores skips most of the file. Floats
 are stored with byte-stream-split encoding and ids and times as deltas. The file's key-value metadata
-says `jetcarp.schema` (`jetcarp-explore-runs 1`), `jetcarp.search` (the uuid), `jetcarp.segment`
+says `jetcarp.schema` (`jetcarp-explore-runs 2`), `jetcarp.search` (the uuid), `jetcarp.segment`
 (its own name) and `jetcarp.engine_version`.
 
-Every column is required (never null) except `parent`.
+**Schema 2** (JETCARP 0.4.2) added the five sign columns at the end. A segment sealed before then is
+of schema 1: it has every column but those, and its runs have no sign measures. A search sealed
+before 0.4.2 and continued after holds segments of both schemas, each naming its own; JETCARP reads
+both, and skips columns it does not know. DuckDB reads such a folder with
+`read_parquet('runs/part-*.parquet', union_by_name = true)`, the sign columns null in the older
+segments.
+
+Every column is required (never null) except `parent` and the sign columns.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
@@ -128,12 +136,12 @@ Every column is required (never null) except `parent`.
 | `gens` | int32 | Generations run |
 | `steps` | int32 | Steps per generation |
 | `rng` | uint64 | The random seed: with the columns above it replays the run exactly |
-| `origin` | string | How the candidate was made: `random`, `mutate`, `seed`, `cover`, `named`, `confirm` |
+| `origin` | string | How the candidate was made: `random` (a fresh draw), `mutate` (an elite's rule, changed), `seed` (an elite's rule from a new starting pattern), `cover` (the least-tried starting pattern), `named` (a catalogue rule), `confirm` (a confirmation run) |
 | `fate` | string | How it ended: `died`, `froze`, `cycle` (a repeating cycle) or `running` |
 | `settle` | int32 | The generation it settled (died, froze or entered its cycle); the run's length if it never did |
 | `period` | int32 | The period of its final cycle (1 frozen, 0 none seen) |
 | `score` | float32 | The interest score, about 0 to 3 (higher is more interesting), as sealed; a rescore's sidecar may hold a newer one |
-| `bin` | uint32 | The behaviour class (fate, settling time, density, activity, shape, movers, packed), the niche's third part |
+| `bin` | uint32 | The behaviour class (fate, settling time, density, activity, shape, movers, and for JACA its sign state, packed), the niche's third part |
 | `density` | float32 | Live cells at the end, as a fraction of cells |
 | `density_late` | float32 | Mean density over the last quarter of the run |
 | `activity_late` | float32 | Mean fraction of cells changing per generation over the last quarter |
@@ -153,10 +161,17 @@ Every column is required (never null) except `parent`.
 | `movers` | int32 | Moving objects seen |
 | `mover_speed` | float32 | Their mean speed, in tiles per generation |
 | `ts` | int64 | When the run was stored, in seconds since 1970 (UTC) |
+| `sign_pos` | float32, null but for JACA | JACA: the positive sign's (state 1's) share of live cells, as a mean over the last quarter (0 to 1) |
+| `sign_balance` | float32, null but for JACA | JACA: the smaller sign's share of live cells, as a mean over the last quarter (0 to 0.5) |
+| `sign_sorted` | float32, null but for JACA | JACA: how well the signs sort into territories at the end: the same-sign fraction among neighbouring live cells (the CA's own neighbourhood), relative to what shuffled signs would give (0 mixed, 1 fully sorted; 1 when one sign is all that is left, 0 with no live neighbours) |
+| `sign_trade` | float32, null but for JACA | JACA: of the cells live at both the three-quarter mark and the end, the fraction whose sign differs |
+| `sign_lost` | float32, null but for JACA | JACA: when a sign first fell below 1% of live cells, as a fraction of the run (1 if never) |
 
-The 18 columns from `density` to `mover_speed`, with `settle` and `period`, are the run's 20 measures;
-the working database stores them as an 80-byte blob of 20 little-endian 32-bit floats (`feats`) in
-that order, `settle` and `period` first. On CART's 15.3 million runs the segments take 77 bytes a run,
+The 18 columns from `density` to `mover_speed`, with `settle` and `period`, are the run's 20 measures,
+and the sign columns five more. The working database stores them as a blob of little-endian 32-bit
+floats (`feats`): the 20 in that order, `settle` and `period` first, then the five sign measures in
+the order above (NaN for other families). A run stored before JETCARP 0.4.2 has an 80-byte blob of
+the 20. On CART's 15.3 million runs the segments take 77 bytes a run,
 1.18 GB in all, against 5.17 GB for the same runs in SQLite.
 
 ## Score sidecars
@@ -167,7 +182,39 @@ segment's own file name; `n` counts the rescores: 1, 2, ...), holding two column
 `score` (float32), for every run of that segment, in the segment's row order and row groups. A run's
 score is the one in the newest sidecar of its segment, or the segment's own if none has it. The
 manifest's `scores` list says which sidecars exist; the runs still in the working database are
-rescored in place.
+rescored in place. A rescore also rebuilds the archive, taking each run's behaviour class from its
+measures again (the stored `bin` stays as it was).
+
+## Replayed measures
+
+A run stored before a measure existed lacks it: a JACA run sealed before JETCARP 0.4.2 has no sign
+measures. Runs replay exactly from their candidates, so `jetcarp jobs refit` (for the runs it fits)
+and `jetcarp jobs rescore --replay` (for every screened run that lacks them; `--gpu` runs them on
+the GPU) run them again and keep what they measure in `remeasured.sqlite`, one row per run:
+`id`, `feats` (the blob above), `differs` (1 when the replay's other measures differ from the stored
+ones; 0 when the run replayed exactly), `engine_version` and `ts`. The segments are never rewritten:
+`jetcarp jobs runs` and rescores take a run's missing measures from there.
+
+## Score models
+
+`jetcarp jobs refit` writes a score model as JSON (see
+[Search methods](../research/search-methods.md#explore)):
+
+| Field | Holds |
+| --- | --- |
+| `format`, `kind` | `jetcarp-score-model 1`, and `logistic 1` |
+| `family` | the one family it scores, when it was fitted to one (the others keep the built-in score) |
+| `features`, `weights` | its terms and their weights in raw units: the built-in score's 18 terms (`settle_frac`, `density_late`, `sqrt_activity_late`, ..., `froze`, `cycle`), `family:<name>` for each family when it was fitted to several, and JACA's `jaca:sign_balance`, `jaca:sign_sorted`, `jaca:sign_trade`, `jaca:sign_lost` and `jaca:sign_lost_early` (0 for other families) |
+| `intercept` | the constant term |
+| `fill` | what each term counts as for a run that cannot give it: a JACA term's mean over the fit, for a JACA run without sign measures |
+| `sd` | each term's standard deviation over the runs fitted: weight times `sd` is a term's pull per standard deviation |
+| `scale` | 3: a run scores `scale / (1 + exp(-(intercept + sum of weight x term)))`, with the built-in score's gates |
+| `fitted_on` | `jobs`, `searches` (uuids), `raters`, `families`, the reviews per verdict (`keep`, `maybe`, `drop`; a rater's latest verdict on a run), `runs`, `replayed`, `maybe_as` (0.5), `ridge` (8), `family_ridge` (5), `created` (UTC) and `engine_version` |
+| `metrics` | `auc` (keep against drop on runs held out of the fit; `folds` 5, `repeats` 8), `auc_fitted` (on the runs fitted) and `auc_builtin` (the built-in score's on the same runs) |
+| `name` | who rated what, for people |
+
+Its numbers read as JSON numbers or as decimal strings, as a [pack](pack-format.md#search-runs)
+writes decimals, so a job's spec that holds a model survives being published.
 
 ## Runs not yet sealed
 

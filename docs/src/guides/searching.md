@@ -188,10 +188,15 @@ $ jetcarp jobs runs 7 --limit 5
 
 - `jetcarp jobs sheet JOB --ids …` draws a contact sheet of chosen runs.
 - `jetcarp jobs scene JOB RUN` gives a scene that replays a run, to open in the app.
+- `jetcarp jobs runs JOB --measures all --format csv --limit 0 > runs.csv` writes every run with
+  every measure, for a spreadsheet or a notebook.
 - `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye;
   `--page` adds a page for rating them in a browser.
   `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, and
   `jetcarp jobs rescore JOB` scores the runs again after the score changes.
+- `jetcarp jobs refit JOB --out taste.json` fits a score model to your verdicts and says how well
+  it ranks runs it did not see. `jetcarp jobs rescore JOB --score taste.json` scores the job's runs
+  with it, and `jetcarp search explore --score taste.json` searches with it.
 - `jetcarp quickstart publish JOB` puts the search's best confirmed runs, a few per category, rule
   family and tiling, into your Quick Start menu as its *atlas*.
 
