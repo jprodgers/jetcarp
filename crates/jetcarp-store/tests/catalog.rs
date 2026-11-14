@@ -379,6 +379,7 @@ fn catalog_store_search_jobs_and_sightings() {
         spec: serde_json::to_value(SearchJobSpec {
             search: spec.clone(),
             store: true,
+            max_rss_gb: None,
         })
         .unwrap(),
         ..Default::default()

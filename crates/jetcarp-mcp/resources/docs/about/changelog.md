@@ -50,6 +50,12 @@ that will declare them stable.
   by its line in the file. A hunt used to start anyway and report the rule once per tiling, with no
   soups run. ([#5](https://github.com/jprodgers/jetcarp/issues/5))
 
+### Added
+
+- **`--max-rss-gb` for hunts and bounded searches,** as explore searches have it: past that much
+  memory the search pauses, resumable, and says why. The job keeps the cap, so a resumed run keeps
+  to it too. Scripts and the MCP server's `search_start` take it as `max_rss_gb`.
+
 ## [0.4.1] – 2026-11-13
 
 ### Fixed

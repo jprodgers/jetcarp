@@ -69,6 +69,10 @@ pub struct HuntSpec {
     /// Which new objects get full records (the rest are counted as `unstored` rows).
     #[serde(default)]
     pub store: StorePolicy,
+    /// Stop (paused, resumable) when the process uses more memory than this many GB, as an
+    /// explore search does ([`crate::jobs::over_memory`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_rss_gb: Option<f64>,
 }
 
 /// Which new objects a hunt stores as full catalog records. Spaceships, guns, puffers, and
@@ -128,6 +132,7 @@ impl Default for HuntSpec {
             pop_cap: 0,
             margin: 0,
             store: StorePolicy::default(),
+            max_rss_gb: None,
         }
     }
 }
@@ -146,7 +151,7 @@ impl HuntSpec {
         if !(0.0..=1.0).contains(&self.soup.density) {
             return Err("density must be between 0 and 1".into());
         }
-        Ok(())
+        crate::jobs::check_memory_cap(self.max_rss_gb)
     }
     /// The soup margin in use.
     pub fn margin(&self) -> u32 {
@@ -262,6 +267,9 @@ pub struct HuntProgress {
     pub gpu: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why the run stopped when nobody asked it to (its memory cap).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     pub updated: String,
 }
 

@@ -508,3 +508,41 @@ fn bad_rules_refuse_a_hunt_bounded_search_or_census_before_it_starts() {
     let l = call_json(&cx, "jobs.list", json!({})).unwrap();
     assert_eq!(l["jobs"].as_array().unwrap().len(), 0, "{l}");
 }
+
+#[test]
+fn hunts_and_bounded_searches_pause_past_their_memory_cap() {
+    let dir = scratch("jobs-memory");
+    let cx = ctx(&dir);
+    for (strategy, spec) in [
+        ("hunt", json!({"soups": 50, "max_rss_gb": 0.0001})),
+        (
+            "bounded",
+            json!({"soups": 4, "size": [16, 16], "max_rss_gb": 0.0001}),
+        ),
+    ] {
+        let r = start(&cx, json!({"strategy": strategy, "spec": spec}));
+        assert_eq!(r["status"], "paused", "{strategy}: {r}");
+        let note = r["progress"]["note"].as_str().unwrap_or_default();
+        assert!(
+            note.contains("over the cap of 0.0001 GB"),
+            "{strategy}: {r}"
+        );
+        // The cap is the job's: it holds on resume, and the job stays resumable.
+        let job = r["job"].as_i64().unwrap();
+        let v = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+        assert_eq!(v["spec"]["max_rss_gb"], json!(0.0001), "{v}");
+        let again = call_json(&cx, "jobs.resume", json!({"job": job})).unwrap();
+        assert_eq!(again["status"], "paused", "{again}");
+        // A cap that is not above 0 is refused.
+        let mut bad = spec.clone();
+        bad["max_rss_gb"] = json!(0);
+        fails(
+            call_json(
+                &cx,
+                "search.start",
+                json!({"strategy": strategy, "spec": bad}),
+            ),
+            ErrorKind::Invalid,
+        );
+    }
+}

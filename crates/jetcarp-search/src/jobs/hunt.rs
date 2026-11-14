@@ -13,6 +13,7 @@ use jetcarp_core::topology::Nb;
 use jetcarp_store::library::JobRow;
 use jetcarp_store::{AddOutcome, HeatQuery, JobStatus, Library};
 use serde_json::Value;
+use std::sync::atomic::Ordering;
 
 pub struct HuntKind;
 pub(super) static KIND: HuntKind = HuntKind;
@@ -194,6 +195,8 @@ pub struct HuntRun {
     /// Soups per batch (0: adapt).
     pub batch: u64,
     hunt: Option<hunt::Hunt>,
+    /// Why the run stopped by itself (its memory cap).
+    note: Option<String>,
 }
 
 impl HuntRun {
@@ -215,6 +218,11 @@ impl Strategy for HuntRun {
     }
     fn step(&mut self, cx: &RunCx<'_>, sink: &mut Sink) -> Result<Step, String> {
         let h = self.hunt.as_mut().ok_or(NOT_OPEN)?;
+        if let Some(n) = super::over_memory(&cx.row.spec) {
+            self.note = Some(n);
+            cx.stop.store(true, Ordering::SeqCst);
+            return Ok(Step::More);
+        }
         Ok(if h.step(cx, sink)? {
             Step::Done
         } else {
@@ -231,7 +239,11 @@ impl Strategy for HuntRun {
     }
     fn progress(&self, status: JobStatus) -> Value {
         match &self.hunt {
-            Some(h) => serde_json::to_value(h.progress(status_name(status))).unwrap_or_default(),
+            Some(h) => {
+                let mut p = h.progress(status_name(status));
+                p.note = self.note.clone();
+                serde_json::to_value(p).unwrap_or_default()
+            }
             None => Value::Null,
         }
     }

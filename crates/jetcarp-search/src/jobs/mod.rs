@@ -294,6 +294,23 @@ pub fn request_stop(lib: &Library, job: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// Refuse a memory cap (`max_rss_gb`) that is not above 0.
+pub fn check_memory_cap(cap: Option<f64>) -> Result<(), String> {
+    match cap {
+        Some(m) if m.is_nan() || m <= 0.0 => Err(format!("max_rss_gb must be above 0, not {m}")),
+        _ => Ok(()),
+    }
+}
+
+/// When the process uses more memory than a job's cap (its spec's `max_rss_gb`: hunts and
+/// bounded searches check it before each step, as an explore search does), the note that says
+/// so; the run then stops, paused and resumable at its last checkpoint.
+pub fn over_memory(spec: &Value) -> Option<String> {
+    let cap = spec.get("max_rss_gb").and_then(Value::as_f64)?;
+    let rss = explore::rss_gb();
+    (rss > cap).then(|| format!("memory {rss:.1} GB is over the cap of {cap} GB"))
+}
+
 /// Seconds since 1970 now.
 pub(crate) fn now_seconds() -> i64 {
     crate::dashboard::now_seconds()

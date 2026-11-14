@@ -18,6 +18,7 @@ use jetcarp_store::{AddOutcome, JobStatus, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{Read, Write};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -41,6 +42,10 @@ pub struct SearchJobSpec {
     /// Store the verified records in the catalog (`false`: only report them).
     #[serde(default = "yes", skip_serializing_if = "is_yes")]
     pub store: bool,
+    /// Stop (paused, resumable) when the process uses more memory than this many GB, as an
+    /// explore search does ([`super::over_memory`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_rss_gb: Option<f64>,
 }
 
 /// What a finished search found: its report (each find's `new` set when it was stored for the
@@ -67,6 +72,7 @@ pub fn start(lib: &Library, spec: &SearchSpec) -> Result<i64, String> {
         &SearchJobSpec {
             search: spec.clone(),
             store: true,
+            max_rss_gb: None,
         },
     )
 }
@@ -83,6 +89,7 @@ pub fn start_job(lib: &Library, js: &SearchJobSpec) -> Result<i64, String> {
     if !(0.0..=1.0).contains(&spec.density) {
         return Err("density must be between 0 and 1".into());
     }
+    super::check_memory_cap(js.max_rss_gb)?;
     let v = serde_json::to_value(js).map_err(|e| e.to_string())?;
     let job = lib.create_job(KIND_NAME, &v)?;
     lib.update_job(job, Some(JobStatus::Paused), None, None)?;
@@ -163,6 +170,8 @@ pub struct SearchRun {
     added: usize,
     /// Once finished: the report, and the records' ids and rules.
     report: Option<(SearchReport, Vec<(String, String)>)>,
+    /// Why the run stopped by itself (its memory cap).
+    note: Option<String>,
 }
 
 impl SearchRun {
@@ -179,6 +188,7 @@ impl SearchRun {
             records: None,
             added: 0,
             report: None,
+            note: None,
         }
     }
 }
@@ -222,6 +232,11 @@ impl Strategy for SearchRun {
         else {
             return Err(NOT_OPEN.into());
         };
+        if let Some(n) = super::over_memory(&cx.row.spec) {
+            self.note = Some(n);
+            cx.stop.store(true, Ordering::SeqCst);
+            return Ok(Step::More);
+        }
         let total = search.runs();
         let t0 = Instant::now();
         if state.next < total {
@@ -319,7 +334,7 @@ impl Strategy for SearchRun {
 
     fn progress(&self, _status: JobStatus) -> Value {
         let total = self.search.as_ref().map_or(0, |s| s.runs());
-        match (&self.state, self.records) {
+        let mut p = match (&self.state, self.records) {
             (_, Some(records)) => json!({
                 "soups": total, "soups_done": total, "records": records, "added": self.added,
             }),
@@ -329,7 +344,11 @@ impl Strategy for SearchRun {
             }),
             (Some(g), None) => json!({"soups": total, "soups_done": g.next}),
             (None, None) => json!({"soups": total, "soups_done": 0}),
+        };
+        if let Some(n) = &self.note {
+            p["note"] = json!(n);
         }
+        p
     }
 }
 

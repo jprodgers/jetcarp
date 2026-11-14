@@ -317,6 +317,9 @@ pub struct HuntIn {
     #[serde(default)]
     #[schemars(with = "Option<Value>")]
     pub store: Option<Value>,
+    /// Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does).
+    #[serde(default)]
+    pub max_rss_gb: Option<f64>,
 }
 
 impl HuntIn {
@@ -351,6 +354,7 @@ impl HuntIn {
             pop_cap: self.pop_cap.unwrap_or(0),
             margin: self.margin.unwrap_or(0),
             store: store_policy(self.store.as_ref())?,
+            max_rss_gb: self.max_rss_gb,
         })
     }
 }
@@ -435,6 +439,9 @@ pub struct BoundedIn {
     /// Store what is found in the catalog (default true; false only reports it).
     #[serde(default)]
     pub store: Option<bool>,
+    /// Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does).
+    #[serde(default)]
+    pub max_rss_gb: Option<f64>,
 }
 
 impl BoundedIn {
@@ -487,6 +494,7 @@ impl BoundedIn {
                 soup_radius: self.soup_radius,
             },
             store: self.store.unwrap_or(true),
+            max_rss_gb: self.max_rss_gb,
         })
     }
 }

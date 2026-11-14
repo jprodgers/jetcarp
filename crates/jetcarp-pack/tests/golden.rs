@@ -913,6 +913,7 @@ fn aperiodic_search(lib: &Library) {
             spec: serde_json::to_value(jetcarp_search::jobs::search::SearchJobSpec {
                 search: spec,
                 store: true,
+                max_rss_gb: None,
             })
             .unwrap(),
             ..Default::default()

@@ -166,6 +166,9 @@ pub struct HuntArgs {
     /// Run the start of each soup on the GPU (many soups per dispatch; results are identical).
     #[arg(long)]
     gpu: bool,
+    /// Stop (paused, resumable) if the process uses more memory than this many GB.
+    #[arg(long)]
+    max_rss_gb: Option<f64>,
 }
 
 #[derive(clap::Args)]
@@ -214,6 +217,9 @@ pub struct BoundedArgs {
     /// Rows per group in the printed report.
     #[arg(long, default_value_t = 12)]
     top: usize,
+    /// Stop (paused, resumable) if the process uses more memory than this many GB.
+    #[arg(long)]
+    max_rss_gb: Option<f64>,
 }
 
 #[derive(clap::Args)]
@@ -838,6 +844,7 @@ fn hunt(a: HuntArgs, json: bool) -> Result<()> {
         pop_cap: Some(a.pop_cap),
         margin: Some(a.margin),
         store: Some(store),
+        max_rss_gb: a.max_rss_gb,
     };
     let mut i = start_in("hunt", spec(&s), &a.job)?;
     i.gpu = a.gpu;
@@ -859,6 +866,7 @@ fn bounded(a: BoundedArgs, json: bool) -> Result<()> {
         max_period: Some(a.max_period),
         soup_radius: a.soup_radius,
         store: Some(!a.no_store),
+        max_rss_gb: a.max_rss_gb,
         ..Default::default()
     };
     let mut i = start_in("search", spec(&s), &a.job)?;

@@ -108,6 +108,9 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                         .unwrap_or_default()
                 );
             }
+            if let Some(n) = &p.note {
+                let _ = writeln!(s, "  note: {n}");
+            }
             if !p.newest.is_empty() {
                 let _ = writeln!(s, "  newest finds:");
                 for f in p.newest.iter().take(10) {
@@ -259,6 +262,7 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                 ("png", "image"),
                 ("preview", "preview"),
                 ("folder", "folder"),
+                ("note", "note"),
                 ("error", "error"),
             ] {
                 if let Some(v) = text(k).filter(|v| !v.is_empty()) {
