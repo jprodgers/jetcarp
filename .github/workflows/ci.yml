@@ -25,6 +25,11 @@ jobs:
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    env:
+      # The runners have no GPU: run the GPU tests on a software adapter (Mesa's lavapipe on
+      # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
+      # tests skip there; macOS uses the runner's own GPU.
+      JETCARP_GPU: software
     strategy:
       fail-fast: false
       matrix:
