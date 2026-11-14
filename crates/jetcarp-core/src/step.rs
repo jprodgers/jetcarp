@@ -8,6 +8,13 @@ use rayon::prelude::*;
 
 pub(crate) const MIN_PAR: usize = 4096;
 
+/// Rules whose steps advance `CaInstance::ticks` in [`step_ca`] (by one per step): B0 Life-like
+/// rules, forest fire, and Margolus blocks.
+pub(crate) fn counts_ticks(rule: &Rule) -> bool {
+    matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1)
+        || matches!(rule, Rule::ForestFire { .. } | Rule::Margolus(_))
+}
+
 pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first_of_gen: bool) {
     match &ca.rule {
         Rule::LifeLike { birth, survive } if birth & 1 == 1 => {

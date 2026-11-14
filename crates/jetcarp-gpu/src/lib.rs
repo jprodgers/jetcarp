@@ -1005,7 +1005,8 @@ impl GpuSim {
         }
     }
 
-    fn read_snapshots(&self, fields: &[usize], n: usize) -> Vec<(usize, Vec<u8>)> {
+    /// The period-watch snapshots of these fields: (field, states, no heights).
+    fn read_snapshots(&self, fields: &[usize], n: usize) -> Vec<(usize, Vec<u8>, Vec<u32>)> {
         let res = self.res.as_ref().unwrap();
         fields
             .iter()
@@ -1013,7 +1014,7 @@ impl GpuSim {
                 let gf = res.fields[f].as_ref().unwrap();
                 let bytes = (n.div_ceil(4).max(1) * 4) as u64;
                 let v: Vec<u8> = self.copy_out(&gf.snap, bytes).unwrap_or_default();
-                (f, v)
+                (f, v, vec![])
             })
             .collect()
     }
