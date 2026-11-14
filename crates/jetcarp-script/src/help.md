@@ -39,11 +39,14 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | `w.generation()`, `w.hash()`, `w.population()`, `w.population(id)` | Generation, state hash (hex), live cells (all fields / one CA's field; grains for sandpiles). `w.states_hash()` hashes cell states only (no generation or ages), for comparing with HashLife. |
 | `w.status()` | Map: generation, hash, status text, done, done_reason, period, population, populations, cells, width, height, tiling, cas. |
 | `w.period()` | Exact period once seen (1 = frozen), else `()`. |
-| `w.cells()`, `w.width()`, `w.height()`, `w.tiling()`, `w.rule()`, `w.cas()` | Grid facts; `width` counts every tile of a row; the first CA's rule; the CAs as maps. |
+| `w.cells()`, `w.width()`, `w.height()`, `w.tiling()`, `w.rule()`, `w.cas()` | Grid facts; `width` counts every tile of a row; the first CA's rule; the CAs as maps (`id`, `name`, `rule`, `neighborhood`, `population`, ...). |
 | `w.get(x, y)`, `w.get(x, y, id)`, `w.get_cell(i)` | A cell's state (x = column, y = row from the top). |
 | `w.set(x, y, state)`, `w.set(x, y, state, id)`, `w.set_cell(i, s)`, `w.set_cells([[x, y, s], ...])` | Draw cells. |
 | `w.pattern(".O.\n..O\nOOO", x, y)` | Draw a text picture (`O`/`*`/`#` live, digits for states). |
 | `w.row(y)` | One row's states as a list. |
+| `w.live_cells()`, `w.live_cells(id)` | `[[index, state], ...]` for every cell that is not empty, in the first CA's field or CA `id`'s, by cell index (as `w.get_cell` reads them). |
+| `w.neighbours(i)`, `w.neighbours(i, "edge")` | The cell indices of cell `i`'s touch neighbours (cells sharing an edge or a corner), or its edge neighbours. Wrapped edges wrap; cells past a dead edge are left out. Works on every tiling, aperiodic patches too. |
+| `w.tile(i)` | Where cell `i` is and its shape, in world units: `#{ x, y, vertices: [[x, y], ...] }` (`x`, `y`: the tile's centre). |
 | `w.objects()`, `w.objects(#{ max_period: 64 })` | Still lifes, oscillators, spaceships: `#{ summary, live_cells, totals: #{still_life, oscillator, spaceship, other}, counts: [#{name, label, kind, count, period, speed}], objects: [#{name, kind, period, speed, dx, dy, size, x, y, cells}] }`. Objects that never influence each other come apart (two gliders flying side by side are two gliders), and objects that do stay one. |
 | `w.classify()`, `w.classify(#{ max_gens: 2000, explode: 0.5 })` | Run on and classify as `died`, `frozen`, `oscillating` (with `period`), `exploded`, or `active` (with `activity`), like `jetcarp census`. |
 | `w.describe()` | The manifest descriptors: population, density, `frac_<state>`, period, distinct_rows, row_period, row_shift, periodic_from, row_class (`empty`, `uniform`, `periodic`, `shifting`, `aperiodic`), row_entropy, row_hint (`nested`, `regular`, `chaotic`). |

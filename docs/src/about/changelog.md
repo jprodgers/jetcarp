@@ -66,6 +66,11 @@ that will declare them stable.
   6 when the job is marked running but its process crashed or was killed. Scripts call it as the
   operation `jobs.wait`. A search started or resumed with `--detach` is now marked running as the
   command returns, so a `jobs wait` or `jobs status` straight after sees it running.
+- **Scripts can read a tiling's geometry.** `w.neighbours(i)` and `w.neighbours(i, "edge")` give a
+  cell's touch or edge neighbours, `w.live_cells()` the cells that are not empty with their states,
+  and `w.tile(i)` a tile's centre and corners, on any tiling, aperiodic patches too. `w.cas()` now
+  says each CA's neighbourhood. A new example script, `jaca-territories`, uses them to follow a JACA
+  world's sign balance, how sorted its territories are, its fronts, and the ground the signs trade.
 
 ## [0.4.1] – 2026-11-13
 

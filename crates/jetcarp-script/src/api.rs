@@ -124,6 +124,20 @@ fn lattice_cell(w: &World, x: INT, y: INT) -> R<usize> {
     Ok(g.index((x / per) as i32, y as i32, (x % per) as u32))
 }
 
+/// A cell index, checked against the grid.
+fn cell_index(w: &World, i: INT) -> R<usize> {
+    usize::try_from(i)
+        .ok()
+        .filter(|&c| c < w.topo.len())
+        .ok_or_else(|| {
+            format!(
+                "cell {i} is outside the grid (cells 0 to {})",
+                w.topo.len().saturating_sub(1)
+            )
+            .into()
+        })
+}
+
 fn grid_size(w: &World) -> (INT, INT) {
     match w.topo.lattice() {
         Some(g) => ((g.w * g.ntypes) as INT, g.h as INT),
@@ -174,6 +188,11 @@ fn cas_array(w: &World) -> Array {
             m.insert("field".into(), (c.field as INT).into());
             m.insert("palette".into(), c.palette.clone().into());
             m.insert("steps_per_gen".into(), (c.steps_per_gen as INT).into());
+            let nb = match c.nb {
+                Nb::Touch => "touch",
+                Nb::Edge => "edge",
+            };
+            m.insert("neighborhood".into(), nb.into());
             m.insert(
                 "population".into(),
                 (w.fields[c.field].population() as INT).into(),
@@ -1132,6 +1151,66 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
                 }))
             })
             .collect()
+    });
+
+    // Geometry: a cell's neighbours, the live cells, a tile's place and shape. They work on
+    // every tiling, aperiodic patches too, by cell index.
+    let neighbours = |s: &mut Shared, i: INT, nb: Nb| -> R<Array> {
+        let g = s.lock();
+        let c = cell_index(&g.world, i)?;
+        let mut out = Array::new();
+        g.world
+            .topo
+            .for_each_neighbor(c, nb, |x| out.push(Dynamic::from(x as INT)));
+        Ok(out)
+    };
+    e.register_fn("neighbours", move |s: &mut Shared, i: INT| {
+        neighbours(s, i, Nb::Touch)
+    });
+    e.register_fn(
+        "neighbours",
+        move |s: &mut Shared, i: INT, nb: &str| -> R<Array> {
+            let nb = args::nb_word(nb)
+                .ok_or_else(|| format!("neighbours are \"touch\" or \"edge\", not {nb:?}"))?;
+            neighbours(s, i, nb)
+        },
+    );
+    let live = |s: &mut Shared, id: Option<INT>| -> R<Array> {
+        let g = s.lock();
+        let ci = ca_index(&g.world, id)?;
+        let f = &g.world.fields[g.world.cas[ci].field];
+        let state = |c: usize| -> INT {
+            if f.height.is_empty() {
+                f.state[c] as INT
+            } else {
+                f.height[c] as INT
+            }
+        };
+        Ok((0..g.world.topo.len())
+            .filter(|&c| state(c) != 0)
+            .map(|c| Dynamic::from_array(vec![(c as INT).into(), state(c).into()]))
+            .collect())
+    };
+    e.register_fn("live_cells", move |s: &mut Shared| live(s, None));
+    e.register_fn("live_cells", move |s: &mut Shared, id: INT| {
+        live(s, Some(id))
+    });
+    e.register_fn("tile", |s: &mut Shared, i: INT| -> R<Map> {
+        let g = s.lock();
+        let c = cell_index(&g.world, i)?;
+        let [x, y] = g.world.topo.centroid(c);
+        let vertices: Array = g
+            .world
+            .topo
+            .polygon(c)
+            .into_iter()
+            .map(|[px, py]| Dynamic::from_array(vec![px.into(), py.into()]))
+            .collect();
+        let mut m = Map::new();
+        m.insert("x".into(), x.into());
+        m.insert("y".into(), y.into());
+        m.insert("vertices".into(), vertices.into());
+        Ok(m)
     });
 
     // Analysis.

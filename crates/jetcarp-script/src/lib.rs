@@ -921,4 +921,8 @@ pub const EXAMPLES: &[(&str, &str)] = &[
         "script-five.rhai",
         include_str!("../scripts/script-five.rhai"),
     ),
+    (
+        "jaca-territories.rhai",
+        include_str!("../scripts/jaca-territories.rhai"),
+    ),
 ];
