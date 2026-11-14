@@ -16,7 +16,8 @@ use jetcarp_display::gnome::{self, ExtensionState};
 use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings, TuneLimits, TunedScene,
 };
-use jetcarp_display::tuning::{self, TuneChild, TuneRequest};
+use jetcarp_display::host_settings::{Rung, Size, crops_dir};
+use jetcarp_display::tuning::{self, TuneChild, TuneEvent, TuneRequest};
 use jetcarp_gpu::select::{self, Mode, Own};
 use jetcarp_mcp::link::host_call;
 use serde_json::{Value, json};
@@ -41,8 +42,10 @@ pub(super) struct HostPanel {
     /// GNOME's extension, asked for on a thread because it runs a program.
     extension: Option<ExtensionState>,
     extension_rx: Option<Receiver<Result<ExtensionState, String>>>,
-    /// *Fit to this computer*, running as a program of its own.
-    tune: Option<TuneChild>,
+    /// *Fit to this computer*: the sweep under way, the host's or one of its own.
+    feed: Option<Feed>,
+    /// The cards' pictures, by file, with when the file was written.
+    crops: std::collections::HashMap<String, (std::time::SystemTime, egui::TextureHandle)>,
     /// How the last tune ended.
     tune_note: Option<(String, bool)>,
     /// The adapter the GPU policy picks for a display, found on a thread (with no host running
@@ -187,21 +190,6 @@ impl HostPanel {
         }
         self.adapter.clone()
     }
-
-    /// Follows a tune under way; once it ends, says how and reads the sizes it saved.
-    fn poll_tune(&mut self) {
-        let Some(t) = &mut self.tune else { return };
-        t.poll();
-        if let Some(outcome) = t.outcome() {
-            let scenes = t.scenes().len();
-            self.tune_note = Some(match outcome {
-                Ok(()) => (format!("Tuned {scenes} scene(s) for this computer."), false),
-                Err(e) => (format!("Tuning stopped: {e}"), true),
-            });
-            self.tune = None;
-            self.settings = None;
-        }
-    }
 }
 
 fn summary(v: &Value) -> String {
@@ -296,11 +284,11 @@ impl JetcarpApp {
         let mut shared = shared_was;
         let h = &mut self.display.host;
         h.poll(now);
-        h.poll_tune();
+        h.poll_tune(now);
         let view = h_tune_view(h);
         let adapter = h.adapter();
         ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs_f64(if h.tune.is_some() {
+            .request_repaint_after(std::time::Duration::from_secs_f64(if h.feed.is_some() {
                 0.25
             } else {
                 POLL_EVERY
@@ -627,8 +615,16 @@ impl JetcarpApp {
         }
         // ---------------------------------------------- performance
         ui.separator();
-        let (start_tune, stop_tune, forget) =
-            performance_ui(ui, view, adapter.as_deref(), settings, &mut changed);
+        let crops = &mut h.crops;
+        let mut crop = |ctx: &egui::Context, name: &str| crop_texture(crops, ctx, name);
+        let (start_tune, stop_tune, forget) = performance_ui(
+            ui,
+            view,
+            adapter.as_deref(),
+            settings,
+            &mut changed,
+            &mut crop,
+        );
         // ---------------------------------------------- apply
         if forget {
             settings.screens.iter_mut().for_each(|s| s.tuning = None);
@@ -651,28 +647,24 @@ impl JetcarpApp {
         if start_tune {
             let l = settings.tune;
             h.tune_note = None;
-            match TuneChild::spawn(&TuneRequest {
+            let req = TuneRequest {
                 cpu_percent: Some(l.cpu_percent),
                 gpu_percent: Some(l.gpu_percent),
                 fps: l.fps,
                 ..Default::default()
-            }) {
-                Ok(t) => h.tune = Some(t),
+            };
+            match Feed::start(&req, running.is_some(), now) {
+                Ok(f) => h.feed = Some(f),
                 Err(e) => h.tune_note = Some((e, true)),
             }
         }
-        if stop_tune && let Some(mut t) = h.tune.take() {
-            t.stop();
-            // The host lets go of its hold now rather than in 30 s.
-            if running.is_some() {
-                let _ = std::thread::Builder::new()
-                    .name("jetcarp-host-ask".into())
-                    .spawn(|| host_call(&json!({"action": "tuning", "on": false})));
-            }
+        if stop_tune && let Some(mut f) = h.feed.take() {
+            f.stop();
             h.tune_note = Some((
-                "Stopped; the sizes found so far were not saved.".into(),
+                "Stopped; the scenes already swept keep their cards.".into(),
                 false,
             ));
+            h.settings = None;
         }
         if install {
             h.note = None;
@@ -763,43 +755,240 @@ impl JetcarpApp {
     }
 }
 
-/// What the Performance group shows of a tune under way.
+/// A sweep the pane follows: the host's, on the real screen, or with no host running, one off
+/// screen in a program of its own.
+pub(super) enum Feed {
+    Child(TuneChild),
+    Host {
+        events: Vec<TuneEvent>,
+        rx: Option<Receiver<Result<Value, String>>>,
+        asked: f64,
+        ended: Option<Result<(), String>>,
+    },
+}
+
+/// How often the host's sweep is asked for news.
+const FEED_EVERY: f64 = 0.3;
+
+impl Feed {
+    /// Starts a sweep: the host's when it runs, else one of its own.
+    fn start(req: &TuneRequest, host: bool, now: f64) -> Result<Feed, String> {
+        if !host {
+            return TuneChild::spawn(req).map(Feed::Child);
+        }
+        let mut ask = json!({"action": "tune"});
+        for (k, v) in [
+            ("cpu_limit", req.cpu_percent),
+            ("gpu_limit", req.gpu_percent),
+            ("fps", req.fps),
+        ] {
+            if let Some(v) = v {
+                ask[k] = json!(v);
+            }
+        }
+        host_call(&ask)?;
+        Ok(Feed::Host {
+            events: vec![],
+            rx: None,
+            asked: now,
+            ended: None,
+        })
+    }
+
+    fn events(&self) -> &[TuneEvent] {
+        match self {
+            Feed::Child(c) => &c.events,
+            Feed::Host { events, .. } => events,
+        }
+    }
+
+    /// New news; true when a scene finished (its sizes are saved).
+    fn poll(&mut self, now: f64) -> bool {
+        let new: Vec<TuneEvent> = match self {
+            Feed::Child(c) => c.poll(),
+            Feed::Host {
+                events,
+                rx,
+                asked,
+                ended,
+            } => {
+                let mut new = vec![];
+                if let Some(r) = rx
+                    && let Ok(reply) = r.try_recv()
+                {
+                    *rx = None;
+                    match reply {
+                        Ok(v) => {
+                            new = serde_json::from_value(v["events"].clone()).unwrap_or_default();
+                            events.extend(new.iter().cloned());
+                            if v["running"] == false && ended.is_none() {
+                                *ended = Some(Ok(()));
+                            }
+                        }
+                        Err(e) => *ended = Some(Err(e)),
+                    }
+                }
+                for e in &new {
+                    match e {
+                        TuneEvent::Done { .. } => *ended = Some(Ok(())),
+                        TuneEvent::Failed { error } => *ended = Some(Err(error.clone())),
+                        _ => {}
+                    }
+                }
+                if rx.is_none() && ended.is_none() && now - *asked >= FEED_EVERY {
+                    let (tx, r) = channel();
+                    let since = events.len();
+                    *rx = Some(r);
+                    *asked = now;
+                    let _ = std::thread::Builder::new()
+                        .name("jetcarp-host-sweep".into())
+                        .spawn(move || {
+                            let _ = tx
+                                .send(host_call(&json!({"action": "tune_events", "since": since})));
+                        });
+                }
+                new
+            }
+        };
+        new.iter().any(|e| matches!(e, TuneEvent::Scene { .. }))
+    }
+
+    /// How it ended, once it has.
+    fn outcome(&self) -> Option<Result<(), String>> {
+        match self {
+            Feed::Child(c) => c.outcome(),
+            Feed::Host { ended, .. } => ended.clone(),
+        }
+    }
+
+    fn stop(&mut self) {
+        match self {
+            Feed::Child(c) => c.stop(),
+            Feed::Host { .. } => {
+                let _ = std::thread::Builder::new()
+                    .name("jetcarp-host-ask".into())
+                    .spawn(|| host_call(&json!({"action": "tune", "on": false})));
+            }
+        }
+    }
+
+    /// Whether the sweep shows on the desktop (the host's), as opposed to off screen.
+    fn on_screen(&self) -> bool {
+        matches!(self, Feed::Host { .. })
+    }
+}
+
+impl HostPanel {
+    /// Follows a sweep under way; once it ends, says how and reads the sizes it saved.
+    fn poll_tune(&mut self, now: f64) {
+        let Some(f) = &mut self.feed else { return };
+        if f.poll(now) {
+            // A scene's cards are saved: read them.
+            self.settings = None;
+        }
+        if let Some(outcome) = f.outcome() {
+            let scenes = f
+                .events()
+                .iter()
+                .filter(|e| matches!(e, TuneEvent::Scene { .. }))
+                .count();
+            self.tune_note = Some(match outcome {
+                Ok(()) => (
+                    format!(
+                        "Swept {scenes} scene(s). Each shows at the recommended size unless you choose another card."
+                    ),
+                    false,
+                ),
+                Err(e) => (
+                    format!("The sweep stopped: {e}. The scenes done are saved."),
+                    true,
+                ),
+            });
+            self.feed = None;
+            self.settings = None;
+        }
+    }
+}
+
+/// What the Performance group shows of a sweep under way.
 struct TuneView {
     running: bool,
+    on_screen: bool,
     progress: Option<String>,
-    counts: Option<(usize, usize)>,
-    /// Each scene done so far: (screen, result).
-    live: Vec<(usize, TunedScene)>,
+    /// The scene on show, and its cards so far: (screen, scene, cards).
+    live: Option<(usize, String, Vec<Rung>)>,
     note: Option<(String, bool)>,
 }
 
 fn h_tune_view(h: &HostPanel) -> TuneView {
-    match &h.tune {
-        Some(t) => TuneView {
-            running: true,
-            progress: t.progress(),
-            counts: t.counts(),
-            live: t.scenes(),
-            note: None,
-        },
-        None => TuneView {
+    let Some(f) = &h.feed else {
+        return TuneView {
             running: false,
+            on_screen: false,
             progress: None,
-            counts: None,
-            live: vec![],
+            live: None,
             note: h.tune_note.clone(),
-        },
+        };
+    };
+    let events = f.events();
+    let progress = events
+        .iter()
+        .rev()
+        .find(|e| matches!(e, TuneEvent::Rung { .. } | TuneEvent::Start { .. }))
+        .map(TuneEvent::describe);
+    // The cards of the scene on show: those measured since it started.
+    let mut live: Option<(usize, String, Vec<Rung>)> = None;
+    for e in events {
+        match e {
+            TuneEvent::Rung { screen, scene, .. } => {
+                if live
+                    .as_ref()
+                    .is_none_or(|(s, n, _)| s != screen || n != scene)
+                {
+                    live = Some((*screen, scene.clone(), vec![]));
+                }
+            }
+            TuneEvent::Measured { rung, .. } => {
+                if let Some((_, _, cards)) = &mut live {
+                    cards.push(rung.clone());
+                }
+            }
+            TuneEvent::Scene { .. } => live = None,
+            _ => {}
+        }
+    }
+    if let Some((_, _, cards)) = &mut live {
+        cards.sort_by(|a, b| a.size.px.total_cmp(&b.size.px));
+    }
+    TuneView {
+        running: true,
+        on_screen: f.on_screen(),
+        progress,
+        live,
+        note: None,
     }
 }
 
-/// The limits, *Fit to this computer*, and what it found. Returns whether to start a tune, stop
-/// the one running, or forget the sizes found.
+/// What a click in the cards asks for.
+enum CardDo {
+    /// Show screen `0`'s scene `1` at this card's size.
+    Choose(usize, String, Size),
+    /// Show every scene on this tiling (screen, tiling) at this cell size.
+    AllOnTiling(usize, String, f32),
+    /// Every scene nobody chose shows at its recommended size, now as a choice.
+    RecommendedForRest,
+}
+
+/// The limits, *Fit to this computer*, and the cards. Returns whether to start a sweep, stop the
+/// one running, or forget the sizes found; a card chosen is put in `settings` (`changed`).
+#[allow(clippy::too_many_arguments)]
 fn performance_ui(
     ui: &mut egui::Ui,
     view: TuneView,
     adapter: Option<&str>,
     settings: &mut HostSettings,
     changed: &mut bool,
+    crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
 ) -> (bool, bool, bool) {
     let (mut start, mut stop, mut forget) = (false, false, false);
     ui.label(RichText::new("Performance").strong());
@@ -880,9 +1069,9 @@ fn performance_ui(
         } else if ui
             .button(RichText::new("Fit to this computer…").strong())
             .on_hover_text(
-                "Run each scene of the desktop background's rotations for a few seconds at a time, \
-                 at its screen's size, and keep the most cells (the same rules and colours) that \
-                 stay within these limits. Takes a few seconds a scene; the host pauses meanwhile",
+                "Show each scene of the desktop background at each size from 1 pixel a cell up, \
+                 a couple of seconds each, measuring the processor, the GPU and the frame rate; \
+                 then choose a card for each scene. The rules and colours stay as they are",
             )
             .clicked()
         {
@@ -893,7 +1082,7 @@ fn performance_ui(
             && tuned
             && ui
                 .small_button("Use the scenes' own sizes")
-                .on_hover_text("Forget the sizes found; each scene shows at its own cell size")
+                .on_hover_text("Forget the sweep; each scene shows at its own cell size")
                 .clicked()
         {
             forget = true;
@@ -902,20 +1091,26 @@ fn performance_ui(
     *changed |= ui
         .checkbox(
             &mut settings.tune.auto,
-            "Tune again by itself when the monitors change",
+            "Measure again by itself when the monitors change",
         )
-        .on_hover_text("Once it has been tuned, and not while on battery or busy")
+        .on_hover_text(
+            "Once swept: a size you chose is kept while it is still within the limits, else the \
+             recommended one shows. Not while on battery or busy",
+        )
         .changed();
     if view.running {
-        let text = match (view.counts, &view.progress) {
-            (Some((n, of)), _) => format!("Trying scene {n} of {of}…"),
-            (None, Some(p)) => p.clone(),
-            _ => "Starting…".into(),
-        };
-        ui.label(RichText::new(text).small());
         if let Some(p) = &view.progress {
-            ui.label(RichText::new(p).small().weak());
+            ui.label(RichText::new(p).small());
         }
+        ui.label(
+            RichText::new(if view.on_screen {
+                "Each size shows on the desktop as it is measured."
+            } else {
+                "With the host stopped, the sizes are measured off screen."
+            })
+            .small()
+            .weak(),
+        );
     }
     if let Some((t, err)) = &view.note {
         let c = if *err {
@@ -925,98 +1120,295 @@ fn performance_ui(
         };
         ui.label(RichText::new(t).small().color(c));
     }
-    // What it found: live while it runs, else what is saved.
-    let saved: Vec<(usize, TunedScene, bool)> = settings
-        .screens
-        .iter()
-        .enumerate()
-        .flat_map(|(i, s)| {
-            let current = s.tuning.as_ref().is_some_and(|t| t.rotation == s.rotation);
-            s.tuning
-                .iter()
-                .flat_map(move |t| t.scenes.iter().map(move |r| (i, r.clone(), current)))
-        })
-        .collect();
-    let rows: Vec<(usize, TunedScene, bool)> = if view.running {
-        view.live.into_iter().map(|(i, r)| (i, r, true)).collect()
-    } else {
-        saved
-    };
-    if rows.is_empty() {
-        if !view.running {
-            ui.label(
-                RichText::new("Not tuned: each scene shows at its own cell size.")
-                    .small()
-                    .weak(),
-            );
-        }
-        return (start, stop, forget);
-    }
+    // The cards: each scene's saved sweep (choosable), and the scene on show (not yet).
+    let ppp = ui.ctx().pixels_per_point();
+    let ctx = ui.ctx().clone();
+    let mut todo: Option<CardDo> = None;
+    let mut any = false;
     let screens = settings.screens.len();
-    egui::Grid::new("host-tune-results")
-        .num_columns(5)
-        .striped(true)
-        .spacing([10.0, 2.0])
-        .show(ui, |ui| {
-            for h in ["Scene", "Cell size, cells", "Processor", "GPU", "Frames"] {
-                ui.label(RichText::new(h).small().strong());
+    for (i, s) in settings.screens.iter().enumerate() {
+        let Some(t) = s.tuning.as_ref().filter(|t| t.rotation == s.rotation) else {
+            continue;
+        };
+        if t.scenes.iter().all(|x| x.rungs.is_empty()) {
+            continue;
+        }
+        any = true;
+        ui.horizontal_wrapped(|ui| {
+            if screens > 1 {
+                ui.label(RichText::new(format!("Screen {}", i + 1)).strong());
             }
-            ui.end_row();
-            for (i, r, current) in &rows {
-                let name = if screens > 1 {
-                    format!("{}: {}", i + 1, r.scene)
-                } else {
-                    r.scene.clone()
-                };
-                let mut name = RichText::new(name).small();
-                if !current {
-                    name = name.weak();
-                }
-                let resp = ui.label(name);
-                if !current {
-                    resp.on_hover_text("Found for another rotation: tune again to use it");
-                }
-                let size = if r.cell_px > r.design_px {
-                    format!("{} px (own {} px)", r.cell_px, r.design_px)
-                } else {
-                    format!("{} px, own size", r.cell_px)
-                };
-                ui.label(RichText::new(format!("{size}, {}", tuning::thousands(r.cells))).small());
-                ui.label(RichText::new(tuning::percent(r.cpu_percent as f64 / 100.0)).small());
-                ui.label(
-                    RichText::new(
-                        r.gpu_percent
-                            .map_or("–".into(), |g| tuning::percent(g as f64 / 100.0)),
+            if !view.running
+                && t.scenes.iter().any(|x| !x.chosen)
+                && ui
+                    .small_button("Use the recommended size for the rest")
+                    .on_hover_text(
+                        "Every scene you have not chosen a card for keeps its recommended size, \
+                         as your choice",
                     )
-                    .small(),
-                )
-                .on_hover_text(format!(
-                    "{}; measured with {}",
-                    if r.on_gpu {
-                        "Stepped on the GPU"
-                    } else {
-                        "Stepped on the processor"
-                    },
-                    r.gpu_timing.describe()
-                ));
-                let frames = RichText::new(format!("{:.1} ms", r.p95_ms)).small();
-                let resp = match &r.note {
-                    Some(_) if !r.fits => ui.label(frames.color(WARN)),
-                    _ => ui.label(frames),
-                };
-                let resp = resp.on_hover_text("95th percentile of a frame's time");
-                if let Some(n) = &r.note {
-                    resp.on_hover_text(n.as_str());
-                }
-                ui.end_row();
+                    .clicked()
+            {
+                todo = Some(CardDo::RecommendedForRest);
             }
         });
-    if rows.iter().any(|(_, r, _)| r.note.is_some() && !r.fits) {
+        for scene in &t.scenes {
+            if view
+                .live
+                .as_ref()
+                .is_some_and(|(sc, n, _)| *sc == i && *n == scene.scene)
+            {
+                continue;
+            }
+            if let Some(d) = scene_row(ui, &ctx, ppp, i, scene, !view.running, crop) {
+                todo = Some(d);
+            }
+        }
+    }
+    if let Some((i, name, cards)) = &view.live {
+        any = true;
+        let scene = TunedScene {
+            scene: name.clone(),
+            rungs: cards.clone(),
+            ..Default::default()
+        };
+        ui.label(RichText::new("Measuring…").small().weak());
+        let _ = scene_row(ui, &ctx, ppp, *i, &scene, false, crop);
+    }
+    if !any && !view.running {
         ui.label(
-            RichText::new("Orange: over a limit even at the coarsest size (hover for why).")
+            RichText::new("Not swept: each scene shows at its own cell size.")
                 .small()
                 .weak(),
         );
     }
+    match todo {
+        Some(CardDo::Choose(i, name, size)) => {
+            if let Some(scene) = settings.screens[i]
+                .tuning
+                .as_mut()
+                .and_then(|t| t.scenes.iter_mut().find(|x| x.scene == name))
+            {
+                let own = scene.rungs.iter().any(|r| r.own && r.size.same(&size));
+                scene.set_size(if own { Size::px(scene.design_px) } else { size });
+                scene.chosen = true;
+                scene.note = None;
+                *changed = true;
+            }
+        }
+        Some(CardDo::AllOnTiling(i, tiling, px)) => {
+            if let Some(t) = settings.screens[i].tuning.as_mut() {
+                for scene in t.scenes.iter_mut().filter(|x| {
+                    x.tiling == tiling && x.level.is_none() && x.recommended.level.is_none()
+                }) {
+                    scene.set_size(Size::px(px));
+                    scene.chosen = true;
+                    scene.note = None;
+                }
+                *changed = true;
+            }
+        }
+        Some(CardDo::RecommendedForRest) => {
+            for s in &mut settings.screens {
+                for scene in s.tuning.iter_mut().flat_map(|t| t.scenes.iter_mut()) {
+                    if !scene.chosen {
+                        let r = scene.recommended;
+                        let own = scene.rungs.iter().any(|x| x.own && x.size.same(&r));
+                        scene.set_size(if own { Size::px(scene.design_px) } else { r });
+                        scene.chosen = true;
+                    }
+                }
+            }
+            *changed = true;
+        }
+        None => {}
+    }
     (start, stop, forget)
+}
+
+/// One scene's cards in a row, its name and note above. `choosable`: a click chooses a card.
+fn scene_row(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    ppp: f32,
+    screen: usize,
+    scene: &TunedScene,
+    choosable: bool,
+    crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
+) -> Option<CardDo> {
+    let mut todo = None;
+    let showing = scene.size();
+    ui.add_space(4.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(&scene.scene).strong());
+        if scene.placed {
+            ui.label(
+                RichText::new("a placed pattern: its own size unless you choose")
+                    .small()
+                    .weak(),
+            );
+        }
+        if choosable && scene.chosen {
+            ui.label(RichText::new("your choice").small().weak());
+        }
+        let lattice = scene.rungs.iter().all(|r| r.size.level.is_none());
+        if choosable
+            && lattice
+            && scene.chosen
+            && !scene.tiling.is_empty()
+            && ui
+                .small_button("Use this size for every scene on this tiling")
+                .on_hover_text(format!(
+                    "Every scene on {} on this screen shows at {}",
+                    jetcarp_core::families::family(&scene.tiling)
+                        .map(|f| f.name.to_string())
+                        .unwrap_or_else(|| scene.tiling.clone()),
+                    showing.describe()
+                ))
+                .clicked()
+        {
+            todo = Some(CardDo::AllOnTiling(
+                screen,
+                scene.tiling.clone(),
+                showing.px,
+            ));
+        }
+    });
+    if let Some(n) = &scene.note {
+        ui.label(RichText::new(n).small().color(WARN));
+    }
+    egui::ScrollArea::horizontal()
+        .id_salt(("tune-cards", screen, &scene.scene))
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for r in &scene.rungs {
+                    let picked = choosable
+                        && (r.size.same(&showing)
+                            || (r.own && showing.level.is_none() && showing.px == scene.design_px));
+                    let recommended = choosable && r.size.same(&scene.recommended);
+                    if card(ui, ctx, ppp, r, picked, recommended, choosable, crop) {
+                        todo = Some(CardDo::Choose(screen, scene.scene.clone(), r.size));
+                    }
+                }
+            });
+        });
+    todo
+}
+
+/// One card: the picture at the screen's own pixels, the size and cells, the numbers, and whether
+/// it is within the limits. True when it was clicked.
+#[allow(clippy::too_many_arguments)]
+fn card(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    ppp: f32,
+    r: &Rung,
+    picked: bool,
+    recommended: bool,
+    choosable: bool,
+    crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
+) -> bool {
+    let accent = ui.visuals().selection.stroke.color;
+    let stroke = if picked {
+        egui::Stroke::new(2.0, accent)
+    } else {
+        egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+    };
+    let resp = egui::Frame::new()
+        .stroke(stroke)
+        .corner_radius(4.0)
+        .inner_margin(egui::Margin::same(4))
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                match r.crop.as_deref().and_then(|n| crop(ctx, n)) {
+                    // Shown at one picture pixel to one screen pixel, as on the screen it is for.
+                    Some(tex) => {
+                        let [w, h] = tex.size();
+                        ui.image((tex.id(), egui::vec2(w as f32 / ppp, h as f32 / ppp)));
+                    }
+                    None => {
+                        ui.add_space(4.0);
+                    }
+                }
+                let size = match r.size.level {
+                    Some(l) => format!(
+                        "level {l} · {} px",
+                        jetcarp_display::host_settings::round_px(r.size.px)
+                    ),
+                    None => r.size.describe(),
+                };
+                ui.label(
+                    RichText::new(format!("{size} · {}", tuning::thousands(r.cells)))
+                        .small()
+                        .strong(),
+                );
+                let gpu = r.gpu_percent.map_or(String::new(), |g| {
+                    format!(" · GPU {}", tuning::percent(g as f64 / 100.0))
+                });
+                ui.label(
+                    RichText::new(format!(
+                        "CPU {}{gpu} · {:.0} fps",
+                        tuning::percent(r.cpu_percent as f64 / 100.0),
+                        r.fps
+                    ))
+                    .small(),
+                );
+                ui.horizontal(|ui| {
+                    if r.fits {
+                        ui.label(
+                            RichText::new("within the limits")
+                                .small()
+                                .color(Color32::from_rgb(110, 200, 120)),
+                        );
+                    } else {
+                        ui.label(RichText::new("over the limits").small().color(WARN))
+                            .on_hover_text(r.over.as_deref().unwrap_or(""));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if recommended {
+                        ui.label(RichText::new("Recommended").small().strong().color(accent));
+                    }
+                    if r.own {
+                        ui.label(RichText::new("its own size").small().weak());
+                    }
+                });
+            });
+        })
+        .response;
+    if !choosable {
+        return false;
+    }
+    let resp = resp.interact(egui::Sense::click()).on_hover_text(format!(
+        "{}; frames {:.1} ms (95th percentile); stepped on the {}. Click to choose",
+        r.size.describe(),
+        r.p95_ms,
+        if r.on_gpu { "GPU" } else { "processor" }
+    ));
+    resp.clicked()
+}
+
+/// A card's picture from the cache, read from the tuning folder (again when the file changes).
+fn crop_texture(
+    cache: &mut std::collections::HashMap<String, (std::time::SystemTime, egui::TextureHandle)>,
+    ctx: &egui::Context,
+    name: &str,
+) -> Option<egui::TextureHandle> {
+    let path = crops_dir()?.join(name);
+    let modified = std::fs::metadata(&path).and_then(|m| m.modified()).ok()?;
+    if let Some((t, tex)) = cache.get(name)
+        && *t == modified
+    {
+        return Some(tex.clone());
+    }
+    let bytes = std::fs::read(&path).ok()?;
+    let img = jetcarp_core::media::encode::decode_png(&bytes).ok()?;
+    let color = egui::ColorImage::from_rgba_unmultiplied(
+        [img.width as usize, img.height as usize],
+        &img.rgba,
+    );
+    // Nearest: a 1-pixel cell stays one pixel.
+    let tex = ctx.load_texture(format!("crop-{name}"), color, egui::TextureOptions::NEAREST);
+    cache.insert(name.to_string(), (modified, tex.clone()));
+    Some(tex)
 }
