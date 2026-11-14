@@ -1,4 +1,4 @@
-//! `jetcarp jobs`: the catalog's jobs, whatever started them: `list`, `status`, `stop`,
+//! `jetcarp jobs`: the catalog's jobs, whatever started them: `list`, `status`, `wait`, `stop`,
 //! `resume`, `report`, `remove` (the operations `jobs.*`); and an explore job's run records:
 //! `runs`, `sheet`, `scene`, `review`, `clips`, `rescore`, `seal` (`search.runs`, `search.sheet`,
 //! `search.run_scene`, `search.review`, `search.clips`, `search.rescore`, `search.seal`).
@@ -12,8 +12,8 @@ use jetcarp_api::ops::explore::{
     SearchRunScene, SearchRuns, SearchSeal, SearchSheet, SheetIn,
 };
 use jetcarp_api::ops::jobs::{
-    JobIn, JobsList, JobsRemove, JobsReport, JobsResume, JobsStatus, JobsStop, ListIn, RemoveIn,
-    ReportIn, ResumeIn, StatusIn,
+    JobIn, JobsList, JobsRemove, JobsReport, JobsResume, JobsStatus, JobsStop, JobsWait, ListIn,
+    RemoveIn, ReportIn, ResumeIn, StatusIn, WaitIn,
 };
 use jetcarp_api::ops::search::FilesIn;
 use std::path::PathBuf;
@@ -62,6 +62,18 @@ enum JobsCmd {
         finds: Option<usize>,
         #[command(flatten)]
         filters: Filters,
+    },
+    /// Wait until a job stops running, in any process. The exit status says how it ended: 0
+    /// done, 3 paused (stopped, out of budget, or past its memory cap), 4 failed, 5 still
+    /// running at --timeout, 6 gone (marked running, but its process crashed or was killed).
+    Wait {
+        job: i64,
+        /// Give up after this many seconds.
+        #[arg(long)]
+        timeout: Option<f64>,
+        /// No progress on stderr.
+        #[arg(long)]
+        quiet: bool,
     },
     /// Ask a running job (in any process) to stop at its next checkpoint; it stays resumable.
     Stop { job: i64 },
@@ -242,6 +254,17 @@ struct ClipsArgs {
     ids: Option<PathBuf>,
 }
 
+/// `jetcarp jobs wait`'s exit status for how the job ended (1 is any error, 2 a usage error).
+pub fn wait_status(ended: &str) -> i32 {
+    match ended {
+        "done" => 0,
+        "paused" => 3,
+        "failed" => 4,
+        "timeout" => 5,
+        _ => 6,
+    }
+}
+
 fn list_in(f: Filters) -> ListIn {
     ListIn {
         kind: f.kind,
@@ -278,6 +301,32 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
             let r = JobsStatus::run(&cx, s, &p);
             p.finish();
             show(&r?, json)
+        }
+        JobsCmd::Wait {
+            job,
+            timeout,
+            quiet,
+        } => {
+            let p = CliProgress::new(quiet);
+            let r = JobsWait::run(
+                &cx,
+                WaitIn {
+                    job,
+                    timeout_s: timeout,
+                },
+                &p,
+            );
+            p.finish();
+            let r = r?;
+            show(&r, json)?;
+            match wait_status(&r.ended) {
+                0 => Ok(()),
+                code => {
+                    use std::io::Write as _;
+                    let _ = std::io::stdout().flush();
+                    std::process::exit(code)
+                }
+            }
         }
         JobsCmd::Stop { job } => show(&JobsStop::run(&cx, JobIn { job }, &Quiet)?, json),
         JobsCmd::Resume {

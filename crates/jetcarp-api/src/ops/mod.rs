@@ -14,7 +14,7 @@
 //! | [`sheet`] | `sheet.rules`, `sheet.sweep`, `sheet.isohedral` |
 //! | [`search`] | `search.start` |
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
-//! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
+//! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.wait`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 //! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
 //! | [`setup`] | `setup.status`, `setup.set_data_dir`, `setup.apply` (the first-run setup; with the `pack` feature) |
 
@@ -105,6 +105,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<explore::SearchClips>::NEW,
     &Plain::<jobs::JobsList>::NEW,
     &Plain::<jobs::JobsStatus>::NEW,
+    &Plain::<jobs::JobsWait>::NEW,
     &Plain::<jobs::JobsStop>::NEW,
     &Plain::<jobs::JobsResume>::NEW,
     &Plain::<jobs::JobsRemove>::NEW,

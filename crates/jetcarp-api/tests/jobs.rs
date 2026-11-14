@@ -546,3 +546,44 @@ fn hunts_and_bounded_searches_pause_past_their_memory_cap() {
         );
     }
 }
+
+#[test]
+fn waits_end_with_how_the_job_ended() {
+    let dir = scratch("jobs-wait");
+    let cx = ctx(&dir);
+    let wait = |input: Value| call_json(&cx, "jobs.wait", input).unwrap();
+    let done = start(&cx, json!({"strategy": "hunt", "spec": {"soups": 20}}));
+    let w = wait(json!({"job": done["job"]}));
+    assert_eq!(
+        (&w["ended"], &w["status"]),
+        (&json!("done"), &json!("done")),
+        "{w}"
+    );
+    let paused = start(
+        &cx,
+        json!({"strategy": "hunt", "spec": {"soups": 200}, "budget": {"items": 10}}),
+    );
+    let w = wait(json!({"job": paused["job"]}));
+    assert_eq!(w["ended"], "paused", "{w}");
+    assert!(w["line"].as_str().unwrap().contains("10/200"), "{w}");
+    // A run in the background: still running at the timeout, then paused once stopped.
+    let r = start(
+        &cx,
+        json!({"strategy": "hunt", "spec": {"soups": 0}, "threads": 2, "background": true}),
+    );
+    let job = r["job"].clone();
+    let w = wait(json!({"job": job, "timeout_s": 0.3}));
+    assert_eq!(
+        (&w["ended"], &w["status"]),
+        (&json!("timeout"), &json!("running")),
+        "{w}"
+    );
+    assert!(w["waited_s"].as_f64().unwrap() >= 0.3, "{w}");
+    call_json(&cx, "jobs.stop", json!({"job": job})).unwrap();
+    let w = wait(json!({"job": job, "timeout_s": 60}));
+    assert_eq!(w["ended"], "paused", "{w}");
+    fails(
+        call_json(&cx, "jobs.wait", json!({"job": 999})),
+        ErrorKind::NotFound,
+    );
+}

@@ -95,7 +95,7 @@ pub mod pile;
 pub mod reverify;
 pub mod search;
 
-pub use lease::{Lease, lock_path, owner_id};
+pub use lease::{HEARTBEAT_S, Lease, lock_held, lock_path, owner_id};
 pub use registry::{Registry, registry};
 pub use runner::{JobHandle, Live, Observer, Outcome, RunOptions, Runner, Stopped, Viewer};
 pub use sink::Sink;

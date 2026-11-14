@@ -55,6 +55,11 @@ that will declare them stable.
 - **`--max-rss-gb` for hunts and bounded searches,** as explore searches have it: past that much
   memory the search pauses, resumable, and says why. The job keeps the cap, so a resumed run keeps
   to it too. Scripts and the MCP server's `search_start` take it as `max_rss_gb`.
+- **`jetcarp jobs wait JOB`** waits until a job stops running, in this process or another, and its
+  exit status says how it ended: 0 done, 3 paused, 4 failed, 5 still running at `--timeout S`, and
+  6 when the job is marked running but its process crashed or was killed. Scripts call it as the
+  operation `jobs.wait`. A search started or resumed with `--detach` is now marked running as the
+  command returns, so a `jobs wait` or `jobs status` straight after sees it running.
 
 ## [0.4.1] – 2026-11-13
 

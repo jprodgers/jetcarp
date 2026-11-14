@@ -101,12 +101,30 @@ $ jetcarp jobs list
   uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns at once;
   `jetcarp jobs status JOB` follows it, and `--label NAME` makes it easy to find.
+- **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs, and
+  `--timeout S` gives up after S seconds. Its exit status says how the job ended (see below).
 - **Reports.** `jetcarp jobs report JOB` writes a Markdown report of what a job searched, for how
   long, and what it found: one table per hunted rule, with its spaceships, guns, puffers and
   longest oscillators.
 
 `jetcarp jobs remove JOB` deletes a job that has finished or stopped, with its sightings;
 `--delete-results` also deletes the patterns only it found.
+
+### Waiting in a script
+
+`jetcarp jobs wait` ends with one of these exit statuses:
+
+| Exit status | The job |
+| --- | --- |
+| 0 | is done |
+| 3 | is paused: stopped, at the end of its budget, or past its memory cap |
+| 4 | failed |
+| 5 | was still running at `--timeout` |
+| 6 | is marked running, but no process runs it: its process crashed or was killed |
+
+Exit status 1 means the wait itself failed: there is no such job, or the library cannot be read.
+A crashed run is noticed within about a minute, once its heartbeat is late, and `jetcarp jobs
+resume JOB` carries such a job on from its last checkpoint.
 
 ## The other strategies
 

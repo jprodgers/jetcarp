@@ -1,6 +1,7 @@
 //! `jobs.*`: the catalog's jobs, whatever started them (any front end, any process): list them
 //! (`jobs.list`), follow one (`jobs.status`: its live progress when it runs in this process, with
-//! an optional wait for its end and its finds), stop one at its next checkpoint (`jobs.stop`),
+//! an optional wait for its end and its finds), wait for one to stop running and say how it
+//! ended (`jobs.wait`), stop one at its next checkpoint (`jobs.stop`),
 //! carry one on (`jobs.resume`), delete one (`jobs.remove`), and write a Markdown report of what
 //! one job or a labelled set of jobs searched and found (`jobs.report`).
 //!
@@ -799,6 +800,141 @@ impl Op for JobsStatus {
 }
 
 // ---------------------------------------------------------------------------------------------
+// jobs.wait
+
+/// The job to wait for.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WaitIn {
+    /// The job id.
+    pub job: i64,
+    /// Give up after this many seconds (default: wait as long as it runs).
+    #[serde(default)]
+    pub timeout_s: Option<f64>,
+}
+
+/// How a wait ended.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct WaitOut {
+    pub job: i64,
+    pub kind: String,
+    /// How it ended: `done`; `paused` (stopped, out of its budget or past its memory cap; resumable); `failed`; `gone` (still marked running, but no process runs it: the run crashed or was killed, and `jobs.resume` carries it on); or `timeout` (still running when the wait gave up).
+    pub ended: String,
+    /// Its status now: `running`, `paused`, `done`, or `failed`.
+    pub status: String,
+    /// Seconds waited.
+    pub waited_s: f64,
+    /// Its progress as one line.
+    pub line: String,
+    /// Why it paused by itself (its memory cap), when it did.
+    pub note: Option<String>,
+    /// What went wrong, when it failed.
+    pub error: Option<String>,
+}
+
+impl Report for WaitOut {
+    fn text(&self) -> String {
+        let what = match self.ended.as_str() {
+            "done" => "is done".to_string(),
+            "paused" => "is paused".to_string(),
+            "failed" => "failed".to_string(),
+            "gone" => "is still marked running, but no process runs it".to_string(),
+            _ => format!("is still running after {:.0} s", self.waited_s),
+        };
+        let mut s = format!(
+            "{} {} {what}\n  {}\n",
+            noun(&self.kind),
+            self.job,
+            self.line
+        );
+        for (k, v) in [("note", &self.note), ("error", &self.error)] {
+            if let Some(v) = v {
+                let _ = writeln!(s, "  {k}: {v}");
+            }
+        }
+        if matches!(self.ended.as_str(), "paused" | "failed" | "gone") {
+            let _ = writeln!(
+                s,
+                "  `jetcarp jobs resume {}` {}",
+                self.job,
+                resume_words(&self.kind)
+            );
+        }
+        s
+    }
+}
+
+/// A running job's run has gone (a crash, or a killed process): this process does not run it,
+/// and neither its heartbeat nor its progress has been written for longer than a heartbeat
+/// takes, or for [`dashboard::STALE_S`], and no process holds its lock (`now`: seconds since
+/// 1970).
+fn run_gone(lib: &Library, v: &JobView, now: i64) -> bool {
+    if v.status != "running" || v.here {
+        return false;
+    }
+    if v.stale {
+        return true;
+    }
+    let Ok(row) = lib.job(v.job) else {
+        return false;
+    };
+    let alive = dashboard::utc_seconds(&row.updated).max(row.heartbeat);
+    let quiet = alive.is_none_or(|t| now - t > jobs::HEARTBEAT_S as i64 + 15);
+    quiet && jobs::lock_held(lib, v.job) == Some(false)
+}
+
+/// `jobs.wait`.
+pub struct JobsWait;
+impl Op for JobsWait {
+    const NAME: &'static str = "jobs.wait";
+    const SUMMARY: &'static str = "Wait until a job stops running (in any process), and say how it ended: done, paused, failed, gone (its process crashed), or still running at the timeout.";
+    const READ_ONLY: bool = true;
+    type In = WaitIn;
+    type Out = WaitOut;
+    fn run(cx: &Ctx, a: WaitIn, p: &dyn Progress) -> Result<WaitOut, ApiError> {
+        let lib = cx.library();
+        let t0 = Instant::now();
+        let timeout = a.timeout_s.map(|t| t.max(0.0));
+        loop {
+            let v = view(cx, &lib, a.job, None)?;
+            let waited = t0.elapsed().as_secs_f64();
+            let ended = match v.status.as_str() {
+                "running" if run_gone(&lib, &v, dashboard::now_seconds()) => Some("gone"),
+                "running" if p.cancelled() || timeout.is_some_and(|t| waited >= t) => {
+                    Some("timeout")
+                }
+                "running" => None,
+                "done" => Some("done"),
+                "failed" => Some("failed"),
+                _ => Some("paused"),
+            };
+            if let Some(ended) = ended {
+                let text = |k: &str| {
+                    v.progress
+                        .get(k)
+                        .and_then(Value::as_str)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                };
+                return Ok(WaitOut {
+                    job: a.job,
+                    kind: v.kind.clone(),
+                    ended: ended.into(),
+                    status: v.status.clone(),
+                    waited_s: waited,
+                    line: v.line.clone(),
+                    note: text("note"),
+                    error: v.error.clone().or_else(|| text("error")),
+                });
+            }
+            p.report(v.done, v.total, &v.line);
+            // A run here is followed closely; one in another process writes every few seconds.
+            std::thread::sleep(Duration::from_millis(if v.here { 200 } else { 500 }));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // jobs.stop
 
 /// The job to stop.
@@ -1492,4 +1628,39 @@ fn report(
         }
     }
     Ok(o)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A job marked running is gone once nothing has been written for longer than a heartbeat
+    /// takes and no process holds its lock; a held lock keeps it alive however late its
+    /// heartbeat is.
+    #[test]
+    fn a_running_job_nobody_holds_is_gone_once_its_heartbeat_is_late() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-api-wait-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cx = Ctx::new().with_library(Some(dir.join("lib")));
+        let lib = cx.library();
+        let js = jobs::JobSpec {
+            strategy: "hunt".into(),
+            spec: serde_json::json!(jetcarp_search::hunt::HuntSpec::default()),
+            label: None,
+            budget: Default::default(),
+        };
+        let job = jobs::create(&lib, &js).unwrap();
+        lib.update_job(job, Some(JobStatus::Running), None, None)
+            .unwrap();
+        let v = view(&cx, &lib, job, None).unwrap();
+        assert_eq!((v.status.as_str(), v.here), ("running", false));
+        let now = dashboard::now_seconds();
+        assert!(!run_gone(&lib, &v, now), "just written");
+        assert!(run_gone(&lib, &v, now + 120), "no lock file");
+        let lease = jobs::Lease::acquire(&lib, job).unwrap();
+        assert!(!run_gone(&lib, &v, now + 120), "its lock is held");
+        drop(lease);
+        assert!(run_gone(&lib, &v, now + 120), "let go without finishing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

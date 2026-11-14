@@ -2156,10 +2156,20 @@ pub(crate) fn run_job(
         if let Some(n) = how.budget.items {
             args.extend(["--limit".to_string(), n.to_string()]);
         }
-        cx.platform
-            .spawn_job(lib.path(), job, &args)
-            .map_err(ApiError::engine)?;
+        // Marked running before the new process takes it, so a `jobs.wait` or `jobs.status`
+        // straight after sees it running (a process that never starts leaves it to go stale).
+        if row.status != JobStatus::Running {
+            lib.update_job(job, Some(JobStatus::Running), None, None)
+                .map_err(catalog_err)?;
+        }
+        if let Err(e) = cx.platform.spawn_job(lib.path(), job, &args) {
+            if row.status != JobStatus::Running {
+                let _ = lib.update_job(job, Some(row.status), None, None);
+            }
+            return Err(ApiError::engine(e));
+        }
         out.mode = "detached".into();
+        out.status = "running".into();
         out.progress = k.saved_progress(lib, &row);
         out.line = line_of(k, &row, &out.progress);
         return Ok(out);
