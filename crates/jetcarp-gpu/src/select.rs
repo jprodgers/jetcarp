@@ -409,7 +409,7 @@ pub fn pick_from(
         .filter(|a| want.matches(&a.get_info()))
         .collect();
     ranked.sort_by_key(|a| rank(&a.get_info(), purpose));
-    let why = |info: &wgpu::AdapterInfo| {
+    let why = {
         let how = match (&want, purpose) {
             (Want::Best, Purpose::Compute) => "the fastest adapter".to_string(),
             (Want::Best, Purpose::Display) => "the adapter driving the screen".to_string(),
@@ -422,7 +422,6 @@ pub fn pick_from(
         if let Some(f) = &fallback {
             s = format!("{s}; {f}");
         }
-        let _ = info;
         s
     };
     let mut refused: Vec<String> = Vec::new();
@@ -434,7 +433,7 @@ pub fn pick_from(
         }
         let mut choice = Choice {
             adapter: (*a).clone(),
-            why: why(&info),
+            why: why.clone(),
             info,
             purpose,
             usable: Ok(()),
