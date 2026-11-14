@@ -214,7 +214,7 @@ impl Settings {
     }
 }
 
-const WINDOW: usize = 17;
+pub const WINDOW: usize = 17;
 /// Longest a screening run on the processor may take. A slower one (a sandpile, which takes tens
 /// of seconds at the default size; Lenia on a slow machine) stops there and is kept as a run of
 /// the generations it reached: its candidate's `gens`, below the usual run length, so it replays
@@ -1722,6 +1722,16 @@ pub fn frames_of(c: &Cand) -> Vec<u32> {
     } else {
         frames_for(c.gens, WINDOW)
     }
+}
+
+/// A candidate's world as a GPU batch takes it: its rule and starting states (`None` when it
+/// does not seed or its rule does not read).
+pub fn batch_world(grid: &Grid, c: &Cand) -> Option<BatchWorld> {
+    let world = prepare(grid, c).ok()?;
+    Some(BatchWorld {
+        rule: c.rule()?,
+        init: field_bytes(world.fields.first()?),
+    })
 }
 
 /// Run a candidate again on its grid (built for its tiling and cells) and measure it, with the

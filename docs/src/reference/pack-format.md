@@ -360,7 +360,7 @@ Every schema id format 1.0 uses, so none has to be derived:
 | `jetcarp-score_models 1` | the `score_models` table | its index's `schema` |
 | `jetcarp-search 1` | a [search index](#search-runs) (`table` `search`) | its `schema` |
 | `jetcarp-explore-runs 1` | an explore search's run segments, before JACA's sign measures | the search index's `run_schema`, and each segment's `jetcarp.schema` |
-| `jetcarp-explore-runs 2` | an explore search's run segments, with JACA's sign measures (four nullable columns) | the same |
+| `jetcarp-explore-runs 2` | an explore search's run segments, with JACA's sign measures (five nullable columns) | the same |
 | `jetcarp-explore-scores 1` | an explore search's score sidecars | the search index's `score_schema` |
 | `jetcarp-reference-patch 1` | an aperiodic family's [reference patch](#reference-patches) | nowhere: a `tilings` row names the object |
 

@@ -5,7 +5,10 @@
 //! replays each run once. The search's own records are never rewritten.
 
 use crate::explore::archive::Eval;
-use crate::explore::job::replay_on;
+use crate::explore::job::{WINDOW, batch_world, evaluate_with, replay_on};
+use jetcarp_core::explore::batch::{Backend, BatchJob, BatchWorld};
+use jetcarp_core::explore::features::{frames_for, frames_with_trade};
+use jetcarp_core::topology::Nb;
 use crate::explore::store::{feat_blob, feat_from_blob};
 use jetcarp_core::explore::features::Features;
 use jetcarp_core::explore::space::{Fam, Grid};
@@ -120,13 +123,16 @@ pub struct Filled {
 }
 
 /// Give the runs that lack measures ([`lacks`]) theirs: from the search folder `dir`'s cache, or,
-/// with `replay`, replayed now on the current thread pool and cached. A run's stored measures
-/// stay as they were; it gains only the ones it lacked. `progress(done, total)` hears of the
-/// replays and returns false to stop them (those done so far are cached).
+/// with `replay`, replayed now and cached: in batches on `gpu` when one is given (for the rules
+/// it runs; a GPU batch gives exactly the trace the processor does), the rest on the current
+/// thread pool. A run's stored measures stay as they were; it gains only the ones it lacked.
+/// `progress(done, total)` hears of the replays and returns false to stop them (those done so far
+/// are cached).
 pub fn fill(
     dir: &Path,
     runs: &mut [(i64, Eval)],
     replay: bool,
+    gpu: Option<&mut dyn Backend>,
     progress: &(dyn Fn(u64, u64) -> bool + Sync),
 ) -> Result<Filled, String> {
     let mut out = Filled::default();
@@ -141,65 +147,61 @@ pub fn fill(
     }
     let mut cache = Remeasured::open(dir)?;
     let mut have = cache.get(&want)?;
+    // A cached replay without sign measures (a cache from a build before them) does not count.
+    have.retain(|_, f| f.signs.is_some());
     out.cached = have.len() as u64;
     if replay {
-        // Grouped by grid, so each grid is built once.
-        let mut groups: HashMap<(String, u32), Vec<(i64, Eval)>> = HashMap::new();
-        for (id, ev) in runs.iter() {
-            if lacks(ev) && !have.contains_key(id) {
-                groups
-                    .entry((ev.cand.tiling.clone(), ev.cand.cells))
-                    .or_default()
-                    .push((*id, ev.clone()));
-            }
-        }
-        let total: u64 = groups.values().map(|g| g.len() as u64).sum();
+        let mut todo: Vec<(i64, Eval)> = runs
+            .iter()
+            .filter(|(id, ev)| lacks(ev) && !have.contains_key(id))
+            .cloned()
+            .collect();
+        // By grid, so a part's runs share their grids.
+        todo.sort_by(|a, b| {
+            let (x, y) = (&a.1.cand, &b.1.cand);
+            (&x.tiling, x.cells, x.nb as u8, x.gens, a.0).cmp(&(&y.tiling, y.cells, y.nb as u8, y.gens, b.0))
+        });
+        let total = todo.len() as u64;
         let done = AtomicU64::new(0);
         let stop = AtomicBool::new(false);
-        let groups: Vec<_> = groups.into_iter().collect();
-        let got: Vec<(i64, Option<(Features, bool)>)> = groups
-            .par_iter()
-            .flat_map_iter(|((tiling, cells), list)| {
-                let grid = Grid::build(tiling, *cells).ok();
-                let mut v = Vec::with_capacity(list.len());
-                for (id, ev) in list {
-                    if stop.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    let r = grid.as_ref().and_then(|g| {
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            replay_on(g, &ev.cand)
-                        }))
-                        .ok()?
-                        .ok()
-                    });
-                    let r = r.map(|x| {
-                        let mut mine = x.feat;
-                        mine.signs = ev.feat.signs;
-                        (x.feat, mine != ev.feat)
-                    });
-                    v.push((*id, r));
-                    let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                    if !progress(n, total) {
-                        stop.store(true, Ordering::Relaxed);
-                    }
-                }
-                v
-            })
-            .collect();
-        let mut keep = Vec::new();
-        for (id, r) in got {
-            match r {
-                Some((f, d)) => {
-                    out.replayed += 1;
-                    out.differ += d as u64;
-                    keep.push((id, f, d));
-                    have.insert(id, f);
-                }
-                None => out.failed += 1,
+        let tick = || {
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if !progress(n, total) {
+                stop.store(true, Ordering::Relaxed);
             }
+        };
+        let mut gpu = gpu;
+        // A part at a time, each cached as it ends, so a stop keeps what was done.
+        for part in todo.chunks(PART) {
+            if stop.load(Ordering::Relaxed) {
+                break;
+            }
+            let (on_gpu, on_cpu): (Vec<(i64, Eval)>, Vec<(i64, Eval)>) = match &gpu {
+                Some(be) => part
+                    .iter()
+                    .cloned()
+                    .partition(|(_, ev)| ev.cand.rule().is_some_and(|r| be.supports(&r))),
+                None => (vec![], part.to_vec()),
+            };
+            let mut got: Vec<(i64, Option<(Features, bool)>)> = Vec::new();
+            if let Some(be) = gpu.as_deref_mut() {
+                got.extend(replay_gpu(be, on_gpu, &stop, &tick)?);
+            }
+            got.extend(replay_cpu(on_cpu, &stop, &tick));
+            let mut keep = Vec::new();
+            for (id, r) in got {
+                match r {
+                    Some((f, d)) => {
+                        out.replayed += 1;
+                        out.differ += d as u64;
+                        keep.push((id, f, d));
+                        have.insert(id, f);
+                    }
+                    None => out.failed += 1,
+                }
+            }
+            cache.put(&keep)?;
         }
-        cache.put(&keep)?;
         if stop.load(Ordering::Relaxed) {
             return Err(format!(
                 "replaying was stopped after {} of {total} runs (those are kept for next time)",
@@ -212,6 +214,135 @@ pub fn fill(
             && let Some(f) = have.get(id)
         {
             ev.feat.signs = f.signs;
+        }
+    }
+    Ok(out)
+}
+
+/// Runs replayed and cached at a time.
+const PART: usize = 8192;
+
+/// Replay runs on the current thread pool, grouped by grid so each grid is built once.
+fn replay_cpu(
+    runs: Vec<(i64, Eval)>,
+    stop: &AtomicBool,
+    tick: &(dyn Fn() + Sync),
+) -> Vec<(i64, Option<(Features, bool)>)> {
+    let mut groups: HashMap<(String, u32), Vec<(i64, Eval)>> = HashMap::new();
+    for (id, ev) in runs {
+        groups
+            .entry((ev.cand.tiling.clone(), ev.cand.cells))
+            .or_default()
+            .push((id, ev));
+    }
+    let groups: Vec<_> = groups.into_iter().collect();
+    groups
+        .par_iter()
+        .flat_map_iter(|((tiling, cells), list)| {
+            let grid = Grid::build(tiling, *cells).ok();
+            let mut v = Vec::with_capacity(list.len());
+            for (id, ev) in list {
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let r = grid.as_ref().and_then(|g| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        replay_on(g, &ev.cand)
+                    }))
+                    .ok()?
+                    .ok()
+                });
+                v.push((*id, r.map(|x| compare(x.feat, ev))));
+                tick();
+            }
+            v
+        })
+        .collect()
+}
+
+/// A replay's measures, and whether they differ from the run's stored ones (but for those it
+/// lacked).
+fn compare(replayed: Features, ev: &Eval) -> (Features, bool) {
+    let mut mine = replayed;
+    mine.signs = ev.feat.signs;
+    (replayed, mine != ev.feat)
+}
+
+/// Worlds in one GPU batch of replays at most.
+const GPU_BATCH: usize = 1024;
+
+/// Replay runs in GPU batches, grouped by grid, neighbourhood and generations.
+fn replay_gpu(
+    be: &mut dyn Backend,
+    runs: Vec<(i64, Eval)>,
+    stop: &AtomicBool,
+    tick: &(dyn Fn() + Sync),
+) -> Result<Vec<(i64, Option<(Features, bool)>)>, String> {
+    let mut groups: HashMap<(String, u32, Nb, u32), Vec<(i64, Eval)>> = HashMap::new();
+    for (id, ev) in runs {
+        let c = &ev.cand;
+        groups
+            .entry((c.tiling.clone(), c.cells, c.nb, c.gens))
+            .or_default()
+            .push((id, ev));
+    }
+    let mut keys: Vec<_> = groups.keys().cloned().collect();
+    keys.sort_by(|a, b| (&a.0, a.1, a.2 as u8, a.3).cmp(&(&b.0, b.1, b.2 as u8, b.3)));
+    let mut out = Vec::new();
+    for k in keys {
+        let list = groups.remove(&k).unwrap_or_default();
+        let (tiling, cells, nb, gens) = k;
+        let Ok(grid) = Grid::build(&tiling, cells) else {
+            out.extend(list.iter().map(|(id, _)| (*id, None)));
+            continue;
+        };
+        let per = (be.max_cells() / grid.topo.len().next_multiple_of(256).max(1)).clamp(1, GPU_BATCH);
+        for part in list.chunks(per) {
+            if stop.load(Ordering::Relaxed) {
+                return Ok(out);
+            }
+            let worlds: Vec<Option<BatchWorld>> =
+                part.par_iter().map(|(_, ev)| batch_world(&grid, &ev.cand)).collect();
+            let (mut ok, mut bw) = (Vec::new(), Vec::new());
+            for ((id, ev), w) in part.iter().zip(worlds) {
+                match w {
+                    Some(w) => {
+                        ok.push((*id, ev));
+                        bw.push(w);
+                    }
+                    None => out.push((*id, None)),
+                }
+            }
+            if bw.is_empty() {
+                continue;
+            }
+            let jaca = ok.iter().any(|(_, ev)| ev.cand.fam == Fam::Jaca);
+            let job = BatchJob {
+                topo: grid.topo.clone(),
+                nb,
+                worlds: bw,
+                gens,
+                frames_at: if jaca {
+                    frames_with_trade(gens, WINDOW)
+                } else {
+                    frames_for(gens, WINDOW)
+                },
+            };
+            let traces = be.run(&job)?;
+            let got: Vec<(i64, Option<(Features, bool)>)> = ok
+                .par_iter()
+                .zip(traces.par_iter())
+                .map(|((id, ev), t)| {
+                    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        evaluate_with(&grid, &ev.cand, t, None)
+                    }))
+                    .ok()
+                    .map(|(_, f, _, _)| compare(f, ev));
+                    tick();
+                    (*id, r)
+                })
+                .collect();
+            out.extend(got);
         }
     }
     Ok(out)
@@ -266,13 +397,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut again = old.clone();
-        let f = fill(&dir, &mut old, false, &|_, _| true).unwrap();
+        let f = fill(&dir, &mut old, false, None, &|_, _| true).unwrap();
         assert_eq!(
             (f.lacking as usize, f.cached, f.replayed),
             (rows.len(), 0, 0)
         );
         assert!(old.iter().all(|(_, ev)| ev.feat.signs.is_none()));
-        let f = fill(&dir, &mut old, true, &|_, _| true).unwrap();
+        let f = fill(&dir, &mut old, true, None, &|_, _| true).unwrap();
         assert_eq!(
             (f.replayed as usize, f.differ, f.failed),
             (rows.len(), 0, 0)
@@ -280,9 +411,19 @@ mod tests {
         for (id, ev) in &old {
             assert_eq!(ev.feat, truth[id], "run {id}");
         }
-        let f = fill(&dir, &mut again, true, &|_, _| true).unwrap();
+        let mut batched = again.clone();
+        let f = fill(&dir, &mut again, true, None, &|_, _| true).unwrap();
         assert_eq!((f.cached as usize, f.replayed), (rows.len(), 0));
         assert!(again.iter().all(|(id, ev)| ev.feat == truth[id]));
+        let _ = std::fs::remove_dir_all(&dir);
+        // In batches, as on a GPU (the processor's batch backend: the same traces).
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut be = jetcarp_core::explore::batch::CpuBatch;
+        let f = fill(&dir, &mut batched, true, Some(&mut be), &|_, _| true).unwrap();
+        assert_eq!((f.replayed as usize, f.differ, f.failed), (rows.len(), 0, 0));
+        for (id, ev) in &batched {
+            assert_eq!(ev.feat, truth[id], "run {id} in a batch");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -336,12 +336,12 @@ fn sign_measures_see_balance_territories_and_loss() {
     let halves = || -> Vec<u8> { (0..n).map(|i| if i < n / 2 { 1 } else { 2 }).collect() };
     let one = measure_signs(&g, &still(vec![1; n]), gens, 17, Nb::Touch).unwrap();
     assert_eq!(
-        (one.balance, one.lost, one.sorted, one.trade),
-        (0.0, 0.0, 1.0, 0.0)
+        (one.pos, one.balance, one.lost, one.sorted, one.trade),
+        (1.0, 0.0, 0.0, 1.0, 0.0)
     );
     assert!(one.lost_early());
     let h = measure_signs(&g, &still(halves()), gens, 17, Nb::Touch).unwrap();
-    assert_eq!((h.balance, h.lost, h.trade), (0.5, 1.0, 0.0));
+    assert_eq!((h.pos, h.balance, h.lost, h.trade), (0.5, 0.5, 1.0, 0.0));
     assert!(h.sorted > 0.9, "{h:?}");
     let mut rng = Rng::new(3);
     let mixed: Vec<u8> = (0..n).map(|_| 1 + rng.below(2) as u8).collect();
@@ -353,7 +353,7 @@ fn sign_measures_see_balance_territories_and_loss() {
         *x = 0;
     }
     let late = measure_signs(&g, &t, gens, 17, Nb::Touch).unwrap();
-    assert_eq!(late.lost, 0.75);
+    assert_eq!((late.lost, late.pos), (0.75, 1.0));
     assert!(!late.lost_early());
     // Territory that changes hands: the end frame's signs swapped.
     let mut t = still(halves());

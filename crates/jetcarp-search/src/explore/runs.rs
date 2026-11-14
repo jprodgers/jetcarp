@@ -451,6 +451,8 @@ pub struct RunFilter {
     pub within: Option<Vec<i64>>,
     /// `score` (best first, the default), `newest`, or `id`.
     pub order: Option<String>,
+    /// Only runs with a larger id than this (for exports in parts).
+    pub after: Option<i64>,
 }
 
 /// What [`Runs::rescore`] did.
@@ -1171,6 +1173,7 @@ impl Runs {
         let tiling = f.tiling.as_ref().map(|t| t.as_bytes().to_vec());
         let fate = f.fate.as_ref().map(|t| t.as_bytes().to_vec());
         let min = f.min_score;
+        let after = f.after.unwrap_or(i64::MIN);
         let within: Option<Vec<i64>> = f.within.as_ref().map(|w| {
             let mut v = w.clone();
             v.sort_unstable();
@@ -1196,6 +1199,7 @@ impl Runs {
                     .is_none_or(|x| b.bytes(col::TILING, i) == x)
                 && fate.as_deref().is_none_or(|x| b.bytes(col::FATE, i) == x)
                 && min.is_none_or(|m| b.score(i) >= m)
+                && b.id(i) > after
                 && within_set.as_ref().is_none_or(|w| w.contains(&b.id(i)))
         };
         let keep = |s: &Segment, side: Option<&Segment>, rg: usize| -> bool {
@@ -1220,11 +1224,16 @@ impl Runs {
                     return false;
                 }
             }
+            if let Some((_, hi)) = s.int_range(rg, col::ID)
+                && hi <= after
+            {
+                return false;
+            }
             true
         };
         // The unsealed runs, by SQL (with the score index).
         let mut w = vec![
-            format!("id > {}", self.manifest.last_id()),
+            format!("id > {}", self.manifest.last_id().max(after)),
             format!("stage = {stage}"),
         ];
         if let Some(x) = f.family {
@@ -1252,8 +1261,10 @@ impl Runs {
             let mut st = self
                 .db
                 .prepare(&format!(
-                    "SELECT id, COALESCE(score, 0) FROM runs WHERE {} ORDER BY {sql_order} LIMIT {limit}",
-                    w.join(" AND ")
+                    "SELECT id, COALESCE(score, 0) FROM runs WHERE {} ORDER BY {sql_order} LIMIT {}",
+                    w.join(" AND "),
+                    // SQLite's LIMIT is a signed 64-bit integer (`usize::MAX`: every run).
+                    limit.min(i64::MAX as usize)
                 ))
                 .map_err(|x| format!("sql: {x}"))?;
             st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))

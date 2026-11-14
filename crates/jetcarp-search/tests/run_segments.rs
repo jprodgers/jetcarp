@@ -35,6 +35,7 @@ fn rec(id: i64) -> RunRec {
             mover_speed: 0.25,
             // Every third run a JACA run with sign measures; the rest without (nulls).
             signs: (id % 3 == 0).then(|| SignMeasures {
+                pos: 1.0 - (id % 50) as f32 / 100.0,
                 balance: (id % 50) as f32 / 100.0,
                 sorted: 0.75,
                 trade: (id % 7) as f32 / 10.0,
@@ -170,7 +171,7 @@ fn a_schema_1_segment_reads_without_sign_measures() {
     let mut f = rec(3).feat;
     assert!(f.signs.is_some());
     let blob = feat_blob(&f);
-    assert_eq!(blob.len(), 96);
+    assert_eq!(blob.len(), 100);
     assert_eq!(feat_from_blob(&blob), f);
     f.signs = None;
     assert_eq!(feat_from_blob(&blob[..80]), f);

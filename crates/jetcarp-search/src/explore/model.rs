@@ -679,6 +679,7 @@ mod tests {
             comps_per_live: 0.05,
             largest: 0.5,
             signs: Some(jetcarp_core::explore::features::SignMeasures {
+                pos: if lost < 1.0 { 1.0 } else { 0.6 },
                 balance: if lost < 1.0 { 0.0 } else { 0.4 },
                 sorted,
                 trade: 0.1,

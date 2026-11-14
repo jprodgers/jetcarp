@@ -10,7 +10,7 @@
 //! `period` are the run's own `settle` and `period` columns, so they are stored once), JACA's sign
 //! measures last (nullable: null for other families).
 //!
-//! Schema 2 ([`RUN_SCHEMA`]) added the four sign columns; a segment of schema 1 has none, and
+//! Schema 2 ([`RUN_SCHEMA`]) added the five sign columns; a segment of schema 1 has none, and
 //! reads as runs without sign measures. Columns a reader does not know are skipped.
 //!
 //! A **score sidecar** (`scores-<n>/part-000001.parquet`) holds `id` and `score` for every run of
@@ -79,7 +79,7 @@ pub enum Kind {
 }
 
 /// Every column of a run segment, in file order: (name, type).
-pub const COLUMNS: [(&str, Kind); 42] = [
+pub const COLUMNS: [(&str, Kind); 43] = [
     ("id", Kind::I64),
     ("stage", Kind::I8),
     ("parent", Kind::OptI64),
@@ -118,6 +118,7 @@ pub const COLUMNS: [(&str, Kind); 42] = [
     ("movers", Kind::I32),
     ("mover_speed", Kind::F32),
     ("ts", Kind::I64),
+    ("sign_pos", Kind::OptF32),
     ("sign_balance", Kind::OptF32),
     ("sign_sorted", Kind::OptF32),
     ("sign_trade", Kind::OptF32),
@@ -150,9 +151,9 @@ pub mod col {
     pub const MOVERS: usize = 35;
     pub const MOVER_SPEED: usize = 36;
     pub const TS: usize = 37;
-    /// JACA's sign measures (schema 2): balance, sorted, trade, lost.
+    /// JACA's sign measures (schema 2): pos, balance, sorted, trade, lost.
     pub const SIGN0: usize = 38;
-    pub const SIGN_LOST: usize = 41;
+    pub const SIGN_LOST: usize = 42;
 }
 
 /// A set of columns, one bit per column of [`COLUMNS`].
@@ -249,10 +250,16 @@ fn feature_floats(f: &Features) -> [f32; 16] {
 }
 
 /// A run's sign measures as the four sign columns hold them (None: null).
-fn sign_values(f: &Features) -> [Option<f32>; 4] {
+fn sign_values(f: &Features) -> [Option<f32>; 5] {
     match f.signs {
-        Some(s) => [Some(s.balance), Some(s.sorted), Some(s.trade), Some(s.lost)],
-        None => [None; 4],
+        Some(s) => [
+            Some(s.pos),
+            Some(s.balance),
+            Some(s.sorted),
+            Some(s.trade),
+            Some(s.lost),
+        ],
+        None => [None; 5],
     }
 }
 
@@ -886,7 +893,7 @@ impl Batch {
             set_feature(&mut feat, k, self.f32(col::FEAT0 + k, i));
         }
         feat.signs = crate::explore::store::signs_of(
-            [0, 1, 2, 3].map(|k| self.opt_f32(col::SIGN0 + k, i)),
+            [0, 1, 2, 3, 4].map(|k| self.opt_f32(col::SIGN0 + k, i)),
         );
         RunRec {
             id: self.id(i),

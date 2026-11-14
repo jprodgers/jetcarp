@@ -76,6 +76,9 @@ pub struct Features {
 /// How a JACA run's two signs (states 1 and 2) shared the board ([`measure_signs`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SignMeasures {
+    /// The positive sign's (state 1's) share of live cells, as a mean over the last quarter (0
+    /// to 1): which side is ahead.
+    pub pos: f32,
     /// The smaller sign's share of live cells, as a mean over the last quarter (0 to 0.5).
     pub balance: f32,
     /// How well the signs sort into territories at the end: the same-sign fraction among
@@ -575,12 +578,20 @@ pub fn measure_signs(
     };
     let last = t.pop.len() - 1;
     let q = last / 4;
-    let late: Vec<f32> = (last - q..=last).filter_map(minor).collect();
-    let balance = if late.is_empty() {
-        0.0
-    } else {
-        late.iter().sum::<f32>() / late.len() as f32
+    let mean = |v: Vec<f32>| -> f32 {
+        if v.is_empty() {
+            0.0
+        } else {
+            v.iter().sum::<f32>() / v.len() as f32
+        }
     };
+    let balance = mean((last - q..=last).filter_map(minor).collect());
+    let ahead = mean(
+        (last - q..=last)
+            .filter(|&i| t.pop[i] > 0)
+            .map(|i| (t.pop[i] - t.neg[i].min(t.pop[i])) as f32 / t.pop[i] as f32)
+            .collect(),
+    );
     let lost = (0..=last)
         .find(|&i| minor(i).is_some_and(|x| x < 0.01))
         .map_or(1.0, |i| i as f32 / last.max(1) as f32);
@@ -639,6 +650,7 @@ pub fn measure_signs(
         0.0
     };
     Some(SignMeasures {
+        pos: ahead,
         balance,
         sorted,
         trade,
