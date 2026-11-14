@@ -346,6 +346,8 @@ Options:
           Store every new object as a full record (the policy before wave 4)
       --gpu
           Run the start of each soup on the GPU (many soups per dispatch; results are identical)
+      --max-rss-gb <MAX_RSS_GB>
+          Stop (paused, resumable) if the process uses more memory than this many GB
   -h, --help
           Print help
 ```
@@ -383,6 +385,7 @@ Options:
       --json-out <JSON_OUT>        Write the full report as JSON
       --no-store                   Report only; do not add to the library
       --top <TOP>                  Rows per group in the printed report [default: 12]
+      --max-rss-gb <MAX_RSS_GB>    Stop (paused, resumable) if the process uses more memory than this many GB
   -h, --help                       Print help
 ```
 
@@ -640,6 +643,9 @@ Options:
       --seed <SEED>                    [default: 0]
       --gpu                            Run the rules a GPU can run on the GPU, when there is one (in this and later runs of the job); without one, or without this, the CPU runs everything
       --max-rss-gb <MAX_RSS_GB>        Stop (paused, resumable) if the process uses more memory than this many GB
+      --score <SCORE>                  Score runs with this fitted score model (`jetcarp jobs refit --out` writes one) instead of the built-in score; the job keeps a copy, so resuming it keeps the model
+      --parents-from <PARENTS_FROM>    Take parents from this explore job: the JACA rules of its reviewed runs (or its best runs), transplanted to other tilings and tuned for balance early in this search
+      --reviewed <REVIEWED>            With --parents-from: the verdicts whose runs to take (default keep,maybe)
   -h, --help                           Print help
 ```
 
@@ -675,6 +681,7 @@ Usage: jetcarp jobs [OPTIONS] <COMMAND>
 Commands:
   list     The jobs, newest first: id, kind, status, started, progress
   status   One job's progress (no JOB: the list), live when it runs in this process
+  wait     Wait until a job stops running, in any process. The exit status says how it ended: 0 done, 3 paused (stopped, out of budget, or past its memory cap), 4 failed, 5 still running at --timeout, 6 gone (marked running, but its process crashed or was killed)
   stop     Ask a running job (in any process) to stop at its next checkpoint; it stays resumable
   resume   Carry on a stopped, paused, or cut-off job from its last checkpoint
   report   A Markdown report of what a job (or every job with a label prefix) searched, for how long, and what it found
@@ -682,9 +689,10 @@ Commands:
   runs     An explore job's stored runs, best first (JOB default: the newest explore job)
   sheet    A contact sheet of an explore job's runs at several moments, labelled
   scene    An explore job's run as a scene that replays it (printed, or saved with --save)
-  review   Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings in a folder of rating files (`<run id>.json`, as the clip-rating page saves them)
+  review   Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings that the clip-rating page saved (`jobs clips --page`)
   clips    Animated clips of a stratified sample of an explore job's runs (or chosen runs), with a manifest, for rating by eye
-  rescore  Recompute every stored score of a stopped explore job from its stored measures (after the score changes), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
+  refit    Fit a score model to the keep, maybe and drop reviews of explore jobs' runs (JOB... default: the newest explore job), and report how well it ranks runs held out of the fit
+  rescore  Recompute every stored score of a stopped explore job from its stored measures (after the score changes, or by a fitted model), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
   seal     Seal a stopped explore job's newest runs (those not yet in a Parquet segment), so its folder holds every run in Parquet; a search seals every million runs by itself
   help     Print this message or the help of the given subcommand(s)
 
@@ -732,6 +740,24 @@ Options:
       --label <LABEL>      Only jobs with this label
       --prefix <PREFIX>    Only jobs whose label starts with this
       --limit <LIMIT>      At most this many (newest first)
+  -h, --help               Print help
+```
+
+#### `jetcarp jobs wait`
+
+```text
+Wait until a job stops running, in any process. The exit status says how it ended: 0 done, 3 paused (stopped, out of budget, or past its memory cap), 4 failed, 5 still running at --timeout, 6 gone (marked running, but its process crashed or was killed)
+
+Usage: jetcarp jobs wait [OPTIONS] <JOB>
+
+Arguments:
+  <JOB>  
+
+Options:
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --timeout <TIMEOUT>  Give up after this many seconds
+      --quiet              No progress on stderr
   -h, --help               Print help
 ```
 
@@ -834,8 +860,12 @@ Options:
       --stage <STAGE>            1 screened (default), 2 confirmation runs
       --reviewed <REVIEWED>      Only reviewed runs: any, keep, maybe, or drop
       --ids <IDS>                These runs (comma separated) instead of the filters
-      --order <ORDER>            score (default), newest, or id
-      --limit <LIMIT>            [default: 40]
+      --order <ORDER>            score (default), newest, or id (the default with --since)
+      --limit <LIMIT>            Most runs (0: every run) [default: 40]
+      --measures <MEASURES>      Also show these measures: all, or names, comma separated (settle, density_late, activity_late, smooth, sign_balance, sign_sorted, sign_trade, sign_lost, ...)
+      --format <FORMAT>          text (default), csv, or json [default: text]
+      --since <SINCE>            Only runs with a larger id than this, in id order (to export a search in parts)
+      --out <OUT>                Write the runs here as CSV instead of printing them
   -h, --help                     Print help
 ```
 
@@ -883,7 +913,7 @@ Options:
 #### `jetcarp jobs review`
 
 ```text
-Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings in a folder of rating files (`<run id>.json`, as the clip-rating page saves them)
+Record a verdict on an explore job's run (keep, maybe, drop), or with --from the ratings that the clip-rating page saved (`jobs clips --page`)
 
 Usage: jetcarp jobs review [OPTIONS] <JOB> [RUN] [VERDICT]
 
@@ -896,8 +926,8 @@ Options:
       --json               Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --note <NOTE>        What was seen, in a sentence
-      --rater <RATER>      Who judged (default: the publisher's name when `jetcarp pack key --name` set one, else user)
-      --from <FROM>        Instead of one run: a folder of rating files (`<run id>.json`), as the clip-rating page saves them; ratings already recorded from it are skipped
+      --rater <RATER>      Who judged; with --from, instead of the name the ratings file gives (default: the file's name, else the publisher's name when `jetcarp pack key --name` set one, else user)
+      --from <FROM>        Instead of one run: the ratings file the clip-rating page saved (its verdicts become reviews, its stars stars), or a folder of rating files (`<run id>.json`); ratings already recorded from it are skipped
   -h, --help               Print help
 ```
 
@@ -920,13 +950,35 @@ Options:
       --px <PX>            [default: 150]
       --frames <FRAMES>    [default: 28]
       --ids <IDS>          Render these runs instead of a sample: a file of one `id[ bucket]` per line
+      --page               Also write index.html, a page for rating the clips by eye: Keep, Maybe, Drop and a star per clip, with the keyboard too. It works offline; its Save ratings button downloads a file for `jetcarp jobs review JOB --from FILE`
+  -h, --help               Print help
+```
+
+#### `jetcarp jobs refit`
+
+```text
+Fit a score model to the keep, maybe and drop reviews of explore jobs' runs (JOB... default: the newest explore job), and report how well it ranks runs held out of the fit
+
+Usage: jetcarp jobs refit [OPTIONS] [JOBS]...
+
+Arguments:
+  [JOBS]...  The explore jobs whose runs' reviews to learn (default: the newest explore job)
+
+Options:
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --rater <RATER>      Only this rater's reviews (default: every rater's)
+      --family <FAMILY>    Fit to this family's runs only; the model then scores only that family
+      --out <OUT>          Write the model here (JSON), for `search explore --score` and `jobs rescore --score`
+      --no-replay          Do not replay reviewed runs that lack measures (JACA runs stored before sign measures); they count at the mean
+      --gpu                Replay on the GPU, when there is one
   -h, --help               Print help
 ```
 
 #### `jetcarp jobs rescore`
 
 ```text
-Recompute every stored score of a stopped explore job from its stored measures (after the score changes), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
+Recompute every stored score of a stopped explore job from its stored measures (after the score changes, or by a fitted model), and rebuild its archive. Sealed segments are not rewritten: their new scores go in a sidecar per segment (`scores-<n>/` in the search folder)
 
 Usage: jetcarp jobs rescore [OPTIONS] [JOB]
 
@@ -936,6 +988,9 @@ Arguments:
 Options:
       --json               Print the result as JSON instead of text (commands that report a result)
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --score <SCORE>      Score with this fitted model (`jetcarp jobs refit --out` writes one); the job keeps it, so the search goes on with it. `builtin` goes back to the built-in score
+      --replay             First replay the runs that lack measures the score reads (JACA runs stored before sign measures), caching what they measure. Slow for a large search
+      --gpu                Replay on the GPU, when there is one
   -h, --help               Print help
 ```
 
@@ -1004,6 +1059,7 @@ Commands:
   list         List patterns (highest interest score first), optionally filtered
   show         Show one pattern: its record, and a text drawing on square and hexagon grids
   paste        Make a scene from several library patterns placed on one grid
+  soup         Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
   promote      Add a Quick Start entry ("My finds"): a library pattern (ID, which is marked promoted), a run of an explore search (--search-run), or a scene file (--scene)
   promote-run  Promote one run of a sweep folder to the Quick Start ("My finds"): its tiling, CAs, and start, so it replays as in the sweep. The run is also marked a favourite in the folder
   render       Draw a pattern's phases (PNG), or print them as text
@@ -1090,6 +1146,25 @@ Options:
       --png <PNG>            Also write a PNG of the scene after this many generations
       --gens <GENS>          [default: 0]
   -h, --help                 Print help
+```
+
+#### `jetcarp library soup`
+
+```text
+Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
+
+Usage: jetcarp library soup [OPTIONS] <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --best <BEST>        The N soups of the find's hunt that made the most copies of it (then the most spaceships). Needs the hunt's seed: the record's (finds from 0.4.2 on) or its job's
+      --json               Print the result as JSON instead of text (commands that report a result)
+      --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
+      --soups <SOUPS>      With --best: how many of the hunt's soups to run again, from soup 0 (default: as many as the hunt ran, at most 10,000)
+      --save <SAVE>        Write the scene here; with --best, the best soup's, and the others beside it as NAME-2.json, NAME-3.json, ...
+  -h, --help               Print help
 ```
 
 #### `jetcarp library promote`

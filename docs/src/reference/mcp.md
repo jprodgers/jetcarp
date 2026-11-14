@@ -73,7 +73,7 @@ settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 113 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 115 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}.
 
@@ -556,6 +556,9 @@ Example:
 | `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
 | `explore.gpu` | boolean | Run the rules a GPU can run on the GPU when there is one, in this and later runs (default false; without a GPU the CPU runs everything). |
 | `explore.max_rss_gb` | number | Stop (paused, resumable) when the process uses more memory than this many GB. |
+| `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
+| `explore.parents_reviewed` | string | With parents_from: the verdicts whose runs to take, keep, maybe or drop, separated by commas (default keep,maybe). |
+| `explore.score` | any | Score runs with a fitted score model (a file's path, or the model) instead of the built-in score; the job keeps it. |
 | `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
@@ -566,6 +569,7 @@ Example:
 | `hunt.gens` | integer | Generations before a soup that has not settled is censused as it is (default 20,000). |
 | `hunt.margin` | integer | Empty margin around the soup before escaping ships are cut (default 0: automatic). |
 | `hunt.max_period` | integer | Longest period looked for (default 64). |
+| `hunt.max_rss_gb` | number | Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does). |
 | `hunt.nb` | string | Neighbourhood for every rule: touch or edge (default: the notation decides). |
 | `hunt.pop_cap` | integer | Live cells above which a soup counts as exploded (default 0: automatic). |
 | `hunt.rules` | array or string | Rules (B/S and Generations without B0; a `V` suffix means edge neighbours): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
@@ -615,6 +619,7 @@ Example:
 | `search.gens` | integer | Generations per soup (default 2000). |
 | `search.height` | integer | Grid height in unit cells. |
 | `search.max_period` | integer | Longest period looked for (default 64). |
+| `search.max_rss_gb` | number | Stop, paused and resumable, when the process uses more memory than this many GB (checked before each batch of soups, as an explore search does). |
 | `search.nb` | string | Neighbourhood for every rule: touch or edge (default: per rule; a V suffix means edge). |
 | `search.rules` | array or string | Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
 | `search.rules_file` | string | A file of more rules, one per line (`#` comments). |
@@ -696,18 +701,28 @@ Example:
 
 ### `search_runs`
 
-**An explore search's runs.** Reads an explore search's stored runs (search_start {"explore": ...} makes one; `job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), filtered by family, tiling, fate, min_score, min_movers, stage or reviewed. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({"scene": {"run": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); or `review`, your verdict on a run ({"review": {"run": 12, "verdict": "keep", "note": "slow gliders"}}), which feeds what is published and the score. The sealed runs are also Parquet files (runs/part-*.parquet in the search's folder) for DuckDB, Polars or pyarrow.
+**An explore search's runs.** Reads an explore search's stored runs (`job` picks it, default the newest). With no action: its runs, best first, with their measures (fate, settle time, period, density, activity, movers, score: about 0 to 3, higher is more interesting), or to a CSV file. Or one action: `sheet`, a labelled picture of runs at several moments, to judge by eye ({"sheet": {"ids": [12, 40, 7]}}); `scene`, one run's scene JSON for world_new ({"scene": {"run": 12}}); `try`, a configuration of your own run now, with its measures and a picture ({"try": {"tiling": "hex", "rule": "B2/S34", "seed": "random:0.3"}}); `review`, your verdict on a run ({"review": {"run": 12, "verdict": "keep"}}), which feeds what is published and the score; `refit` fits a score model to them, `rescore` applies it. Sealed runs are also Parquet files (runs/part-*.parquet).
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
+| `csv` | string | Write them to this CSV file (limit 0: all). |
 | `family` | string | Only this rule family (life_like, generations, ltl, jaca, cyclic, ...). |
 | `fate` | string | Only runs that ended this way: died, froze, cycle, running. |
 | `ids` | array of integer | These runs, instead of the filters. |
 | `job` | integer | The explore job (default: the newest). |
 | `limit` | integer | Most runs to return (default 40, at most 200). |
+| `measures` | any | Measures to add: all, or names. |
 | `min_movers` | integer | Only runs with at least this many moving objects. |
 | `min_score` | number | Only runs with at least this score. |
 | `order` | string | score (default, best first), newest, or id. |
+| `refit` | object | Fit a score model. Settings: `jetcarp://schema/search_runs/refit`. |
+| `refit.family` | string | Fit to this family's runs only; the model then scores only that family. |
+| `refit.jobs` | array of integer | The explore jobs whose reviews to learn (default: the newest). |
+| `refit.out` | string | Write the model here (JSON), for a search's or a rescore's `score`. |
+| `refit.rater` | string | Only this rater's reviews (default: every rater's). |
+| `rescore` | object | Rescore a stopped job. Settings: `jetcarp://schema/search_runs/rescore`. |
+| `rescore.replay` | boolean | First replay runs stored without measures the score reads (older JACA runs), caching them; slow for a large search. |
+| `rescore.score` | any | Score with this fitted model (a file's path, or the model); the job keeps it. `builtin`: back to the built-in score. Default: the job's score. |
 | `review` | object | Record a verdict on a run. Settings: `jetcarp://schema/search_runs/review`. |
 | `review.note` | string | What was seen, in a sentence. |
 | `review.run` | integer | The run reviewed. |
@@ -1005,14 +1020,14 @@ Resources are what a client can read without calling a tool. Clients that do not
 | `jetcarp://schema/scene.json` | application/schema+json | Scene file JSON Schema: The JSON Schema of a JETCARP scene file (world_status {"scene": true} returns one). |
 | `jetcarp://schema/pack.json` | application/schema+json | Pack manifest JSON Schema: The JSON Schema of a pack version's manifest (pack.json in an export). |
 
-The settings of 30 tool arguments, which `tools/list` only summarises (each argument names its resource, and its settings are listed with the tool above); `help {"schema": "search_start/hunt"}` returns the same JSON Schema:
+The settings of 32 tool arguments, which `tools/list` only summarises (each argument names its resource, and its settings are listed with the tool above); `help {"schema": "search_start/hunt"}` returns the same JSON Schema:
 
 - `world_read`: `cell` (`jetcarp://schema/world_read/<argument>`)
 - `world_edit`: `cells`, `paste`, `reseed` (`jetcarp://schema/world_edit/<argument>`)
 - `world_render`: `wallpaper` (`jetcarp://schema/world_render/<argument>`)
 - `library_curate`: `changes`, `quickstart`, `compounds` (`jetcarp://schema/library_curate/<argument>`)
 - `search_start`: `hunt`, `search`, `ants`, `census`, `mover`, `pile`, `collide`, `evolve`, `explore`, `budget` (`jetcarp://schema/search_start/<argument>`)
-- `search_runs`: `sheet`, `scene`, `try`, `review` (`jetcarp://schema/search_runs/<argument>`)
+- `search_runs`: `sheet`, `scene`, `try`, `review`, `refit`, `rescore` (`jetcarp://schema/search_runs/<argument>`)
 - `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
 - `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
