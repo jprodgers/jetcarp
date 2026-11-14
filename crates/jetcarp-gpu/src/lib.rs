@@ -70,6 +70,8 @@ const R_MARGOLUS: u32 = 9;
 const R_LTL: u32 = 10;
 const R_FOREST: u32 = 11;
 const R_SANDPILE: u32 = 12;
+/// Fields smaller than this are packed and unpacked on one thread.
+const PAR_CELLS: usize = 1 << 20;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -284,6 +286,56 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
 /// Can this rule run on the GPU?
 pub fn supports_rule(rule: &Rule) -> bool {
     rule_params(rule).is_ok()
+}
+
+/// A paced display (a wallpaper, a screen saver, the app at a set speed) steps on the GPU from
+/// this many cells, when the policy is automatic. Below it the processor's step and the GPU's
+/// round trip cost about the same; above it the GPU frees the processor. Measured with
+/// `examples/bench.rs` (see its `--paced` table).
+pub const GPU_PACED_CELLS: usize = 16_000;
+
+/// An unpaced run (`jetcarp run`, scripts, the MCP server, maximum speed) steps on the GPU from
+/// this many neighbour reads per generation (cells times neighbours, summed over every CA's
+/// passes), when the policy is automatic. Measured with `examples/bench.rs`.
+pub const GPU_UNPACED_READS: u64 = 1_000_000;
+
+/// Neighbour reads one generation of the world's enabled CAs makes: cells times neighbours (the
+/// tiling's mean for each CA's neighbourhood), summed over each CA's passes.
+pub fn neighbour_reads(world: &World) -> u64 {
+    let n = world.topo.len() as u64;
+    let degree = |nb: jetcarp_core::Nb| -> f64 {
+        let k = nb as usize;
+        match &world.topo.storage {
+            Storage::Lattice(g) => {
+                let types = (g.ntypes as usize).max(1);
+                g.offsets[k].iter().map(|o| o.len()).sum::<usize>() as f64 / types as f64
+            }
+            Storage::Explicit(e) => e.csr[k].nb.len() as f64 / n.max(1) as f64,
+        }
+    };
+    world
+        .cas
+        .iter()
+        .filter(|c| c.enabled)
+        .map(|c| (n as f64 * degree(c.nb)) as u64 * c.steps_per_gen as u64)
+        .sum()
+}
+
+impl GpuSim {
+    /// Is the world large enough that the GPU beats the processor (the automatic policy)? A
+    /// paced display from [`GPU_PACED_CELLS`] cells, anything else from [`GPU_UNPACED_READS`]
+    /// neighbour reads per generation. False when no running CA can run on the GPU.
+    pub fn worth(world: &World, paced: bool) -> bool {
+        let runs = world
+            .cas
+            .iter()
+            .any(|c| c.enabled && supports_rule(&c.rule));
+        runs && if paced {
+            world.topo.len() >= GPU_PACED_CELLS
+        } else {
+            neighbour_reads(world) >= GPU_UNPACED_READS
+        }
+    }
 }
 
 /// How a call to [`GpuSim::run`] ended.
@@ -1073,16 +1125,22 @@ impl GpuSim {
                     let ca = world.cas.iter().find(|c| c.id == id)?;
                     ca.heat.as_ref().map(|h| &h.glow).filter(|g| g.len() == n)
                 });
-                let packed: Vec<u32> = f
-                    .state
-                    .par_iter()
-                    .zip(f.age.par_iter())
-                    .enumerate()
-                    .map(|(i, (&s, &a))| {
-                        let g = glow.map_or(0, |g| g[i] as u32);
-                        s as u32 | g << 8 | (a as u32) << 16
-                    })
-                    .collect();
+                let pack = |(i, (&s, &a)): (usize, (&u8, &u16))| {
+                    let g = glow.map_or(0, |g| g[i] as u32);
+                    s as u32 | g << 8 | (a as u32) << 16
+                };
+                // Waking every worker thread for a small field costs more processor time
+                // than the copy (a wallpaper sends its world each time it changes).
+                let packed: Vec<u32> = if n < PAR_CELLS {
+                    f.state.iter().zip(&f.age).enumerate().map(pack).collect()
+                } else {
+                    f.state
+                        .par_iter()
+                        .zip(f.age.par_iter())
+                        .enumerate()
+                        .map(pack)
+                        .collect()
+                };
                 self.queue
                     .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&packed));
                 if let Some(s) = world.watch_snapshot_states(fi) {
@@ -1562,24 +1620,41 @@ impl GpuSim {
                 if gf.height {
                     f.height.copy_from_slice(&words[..n]);
                 } else {
-                    f.state
-                        .par_iter_mut()
-                        .zip(f.age.par_iter_mut())
-                        .zip(words[..n].par_iter())
-                        .for_each(|((s, a), &x)| {
-                            *s = (x & 0xff) as u8;
-                            *a = (x >> 16) as u16;
-                        });
+                    let unpack = |((s, a), &x): ((&mut u8, &mut u16), &u32)| {
+                        *s = (x & 0xff) as u8;
+                        *a = (x >> 16) as u16;
+                    };
+                    // Waking every worker thread for a small field costs more processor time
+                    // than the copy (a wallpaper reads its world back every frame).
+                    let small = n < PAR_CELLS;
+                    if small {
+                        f.state
+                            .iter_mut()
+                            .zip(f.age.iter_mut())
+                            .zip(&words[..n])
+                            .for_each(unpack);
+                    } else {
+                        f.state
+                            .par_iter_mut()
+                            .zip(f.age.par_iter_mut())
+                            .zip(words[..n].par_iter())
+                            .for_each(unpack);
+                    }
                     let owner = gf
                         .glow_owner
                         .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
                     if let Some(ca) = owner {
                         let heat = Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
                         heat.glow.resize(n, 0);
-                        heat.glow
-                            .par_iter_mut()
-                            .zip(words[..n].par_iter())
-                            .for_each(|(g, &x)| *g = (x >> 8) as u8);
+                        let glow = |(g, &x): (&mut u8, &u32)| *g = (x >> 8) as u8;
+                        if small {
+                            heat.glow.iter_mut().zip(&words[..n]).for_each(glow);
+                        } else {
+                            heat.glow
+                                .par_iter_mut()
+                                .zip(words[..n].par_iter())
+                                .for_each(glow);
+                        }
                     }
                 }
             }
