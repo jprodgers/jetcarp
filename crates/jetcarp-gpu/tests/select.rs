@@ -60,9 +60,11 @@ fn the_compute_choice_passes_the_self_test() {
             "a software adapter only when asked for"
         );
     }
-    // The second time comes from the cache.
+    // The second time comes from memory: the same result, still saying where it came from
+    // (kept from before only when it was read from the settings folder).
     let again = select::self_test(&c.adapter);
-    assert!(again.cached && again.passed);
+    assert!(again.passed);
+    assert_eq!((again.millis, again.cached), (t.millis, t.cached));
 }
 
 #[test]

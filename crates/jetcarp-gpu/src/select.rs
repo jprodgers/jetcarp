@@ -476,6 +476,17 @@ pub fn pick_from(
     purpose: Purpose,
     surface: Option<&wgpu::Surface<'_>>,
 ) -> Result<Choice, String> {
+    pick_tested(adapters, policy, purpose, surface, true)
+}
+
+/// [`pick_from`], with the compute adapter's self-test only when `test`.
+fn pick_tested(
+    adapters: &[wgpu::Adapter],
+    policy: &Policy,
+    purpose: Purpose,
+    surface: Option<&wgpu::Surface<'_>>,
+    test: bool,
+) -> Result<Choice, String> {
     let mut seen = std::collections::HashSet::new();
     let all: Vec<&wgpu::Adapter> = adapters
         .iter()
@@ -543,7 +554,7 @@ pub fn pick_from(
             usable: Ok(()),
             test: None,
         };
-        if purpose == Purpose::Compute {
+        if purpose == Purpose::Compute && test {
             let t = self_test(a);
             if !t.passed {
                 refused.push(format!("{}: {}", choice.info.name, t.note));
@@ -796,15 +807,15 @@ pub fn self_test(adapter: &wgpu::Adapter) -> SelfTest {
     // Held while a test runs, so two callers never test at once.
     let mut mem = TESTED.lock().unwrap_or_else(|e| e.into_inner());
     let mem = mem.get_or_insert_with(HashMap::new);
+    // A result found again in this run says where it first came from: `cached` (kept from before)
+    // only when it was read from the settings folder, not when this run tested the adapter.
     if let Some(t) = mem.get(&key) {
-        return SelfTest {
-            cached: true,
-            ..t.clone()
-        };
+        return t.clone();
     }
     if let Some(t) = read_checks().remove(&key) {
+        let t = SelfTest { cached: true, ..t };
         mem.insert(key, t.clone());
-        return SelfTest { cached: true, ..t };
+        return t;
     }
     let t = run_self_test(adapter);
     write_check(&key, &t);
@@ -858,9 +869,11 @@ fn read_checks() -> BTreeMap<String, SelfTest> {
 
 fn write_check(key: &str, t: &SelfTest) {
     let Some(path) = checks_file() else { return };
-    // Kept only where JETCARP already has its settings: a test run, or a program that never
-    // saved anything, makes no settings folder for it.
-    if !path.parent().is_some_and(|d| d.is_dir()) {
+    // Only the jetcarp program keeps results ([`keep_checks`]), so it may make its settings
+    // folder for them: a fresh install otherwise tested every adapter at every start.
+    if let Some(d) = path.parent()
+        && std::fs::create_dir_all(d).is_err()
+    {
         return;
     }
     let mut all = read_checks();
@@ -1069,6 +1082,12 @@ pub struct ChoiceReport {
 
 /// The policy and each purpose's choice, with the self-test (run now if it has not been).
 pub fn report() -> (Policy, Vec<ChoiceReport>) {
+    report_with(true)
+}
+
+/// [`report`], running the self-test only when `test` (doctor skips it when the GPU simulation is
+/// off for everything, so turning the GPU off doesn't cost a test of every adapter).
+pub fn report_with(test: bool) -> (Policy, Vec<ChoiceReport>) {
     let policy = Policy::load();
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -1076,11 +1095,12 @@ pub fn report() -> (Policy, Vec<ChoiceReport>) {
     let out = [Purpose::Display, Purpose::Compute]
         .into_iter()
         .map(
-            |purpose| match pick_from(&adapters, &policy, purpose, None) {
+            |purpose| match pick_tested(&adapters, &policy, purpose, None, test) {
                 Ok(c) => {
                     let (test, problem) = match (&c.usable, c.test.clone()) {
                         (Err(e), _) => (None, Some(e.clone())),
                         (Ok(()), Some(t)) => (Some(t), None),
+                        (Ok(()), None) if !test => (None, None),
                         (Ok(()), None) => {
                             let t = self_test(&c.adapter);
                             let p = (!t.passed).then(|| t.note.clone());

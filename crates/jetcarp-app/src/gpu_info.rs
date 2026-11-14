@@ -152,7 +152,19 @@ fn mode_of(m: Mode) -> GpuMode {
 /// The policy and each purpose's adapter, with the self-test (run now if it has not been), and
 /// what the app and the desktop background each do with their own choices.
 pub fn policy() -> GpuPolicy {
-    let (p, choices) = select::report();
+    let shared = select::Policy::load();
+    let own = [
+        (crate::simgpu::OWNER, crate::app::saved_gpu_choice()),
+        (
+            jetcarp_display::host_settings::OWNER,
+            jetcarp_display::host_settings::HostSettings::load().0.gpu,
+        ),
+    ];
+    // With the GPU simulation off for the app and the host alike, doctor doesn't test adapters.
+    let any_on = own
+        .iter()
+        .any(|(name, o)| program(&shared, name, *o).mode != GpuMode::Off);
+    let (p, choices) = select::report_with(any_on);
     let programs = [
         (crate::simgpu::OWNER, crate::app::saved_gpu_choice()),
         (

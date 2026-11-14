@@ -314,6 +314,12 @@ fn gpu_policy_text(p: &GpuPolicy) -> String {
             g.name, g.from, g.choice
         );
     }
+    // Off for the app and the desktop background alike: nothing uses the GPU, and doctor ran no
+    // self-test.
+    let all_off = !p.programs.is_empty()
+        && p.programs
+            .iter()
+            .all(|g| g.mode == crate::ctx::GpuMode::Off);
     for c in &p.choices {
         match &c.adapter {
             Some(a) => {
@@ -340,6 +346,12 @@ fn gpu_policy_text(p: &GpuPolicy) -> String {
         match &c.problem {
             Some(e) => {
                 let _ = writeln!(s, "      the GPU simulation does not use it: {e}");
+            }
+            None if c.adapter.is_some() && all_off => {
+                let _ = writeln!(
+                    s,
+                    "      not used, and not tested: the GPU simulation is off"
+                );
             }
             None if c.adapter.is_some() => {
                 let _ = writeln!(s, "      the GPU simulation uses it");
