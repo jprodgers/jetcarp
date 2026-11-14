@@ -59,6 +59,31 @@ how it was verified, where it was found, and a drawing of each phase. `jetcarp l
 --png FILE` draws the phases, and `jetcarp media render --pattern ID` makes its thumbnail, poster
 and animation (see [Pictures and animations](pictures.md)).
 
+**The soup it came from.** `jetcarp library soup ID` rebuilds the exact soup a hunt's find came from:
+the hunt's tiling, the soup's size, density and shape, and the soup's random state, all from the
+find's record. It runs the soup again with the hunt's own engine to check that it makes the find,
+then prints a scene with the soup at the centre of a dead-edged grid, which replays to the find in
+the app or with `jetcarp run`; `--save FILE` writes it instead. `--best N` runs the hunt's soups
+again and gives the N that made the most copies of the find, then the most spaceships, each saved
+beside the first (`soup.json`, `soup-2.json`, ...). `--soups K` says how many soups to run: by
+default as many as the hunt ran, at most 10,000.
+
+```text
+$ jetcarp library soup 5a080db3 --best 3 --save glider.json
+glider (B3/S23 on Square): 16x16 rect soups at density 0.5, hunt job 1
+  the best 3 of 400 soups run again:
+  soup 28 (rng state 807013244984872251): 17 copies, 17 ships; settled at generation 6406; scene: /home/ada/glider.json
+  soup 47 (rng state 15588416085187991748): 17 copies, 17 ships; settled at generation 5185; scene: /home/ada/glider-2.json
+  soup 230 (rng state 13388605875880922145): 16 copies, 16 ships; settled at generation 3084; scene: /home/ada/glider-3.json
+  note: the grid is 1024 unit cells across: ships that fly off reach its dead edge before generation 6406, and land there
+```
+
+Finds from JETCARP 0.4.2 on keep the soup's shape and the hunt's seed in their record. An earlier
+find's own soup is rebuilt too: its record does not say whether the soup was a rectangle or a disc,
+so both are tried, and the one that makes the find is used. `--best` needs the hunt's seed, which an
+earlier find has only while its hunt's job is in the library; a find that came in a pack, or whose
+job was removed, gives its own soup only.
+
 ## Curate
 
 ```text

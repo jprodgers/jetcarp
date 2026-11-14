@@ -65,6 +65,12 @@ that will declare them stable.
   ratings* downloads them as one file, which `jetcarp jobs review JOB --from FILE` records (with
   `--rater NAME` to name someone else). Stars are kept as five-star ratings of the runs, apart from
   the verdicts. Scripts and `jetcarp api call` reach it as `search.clips` with `page`.
+- **`jetcarp library soup ID`** rebuilds the exact soup a hunt's find came from, checks with the
+  hunt's own engine that it makes the find, and gives a scene that replays to it (`--save FILE`).
+  `--best N` runs the hunt's soups again and gives the N that made the most copies of the find.
+  Hunt finds now keep the soup's shape and the hunt's seed in their record, so their soups can be
+  made again without the hunt's job; earlier finds' own soups are rebuilt too, but `--best` needs
+  their job. Scripts reach it as the operation `library.soup`.
 - **`--max-rss-gb` for hunts and bounded searches,** as explore searches have it: past that much
   memory the search pauses, resumable, and says why. The job keeps the cap, so a resumed run keeps
   to it too. Scripts and the MCP server's `search_start` take it as `max_rss_gb`.

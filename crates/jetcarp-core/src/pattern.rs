@@ -228,6 +228,19 @@ pub struct Provenance {
         with = "crate::json_int::uint_opt"
     )]
     pub generation: Option<u64>,
+    /// Hunts (from 0.4.2): the soups' shape. With the tiling's size (the soup's), `density` and
+    /// `rng_state` it makes the soup exactly (`library.soup`); a record without it was a rect or
+    /// a disc, which a replay tells apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<crate::hunt::soup::SoupShape>,
+    /// Hunts (from 0.4.2): the hunt's seed, so its other soups can be made again without its job
+    /// (soup `i` has the random state `soup_state(seed, i)`).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::json_int::uint_opt"
+    )]
+    pub seed: Option<u64>,
     pub jetcarp_version: String,
     /// UTC time, `YYYY-MM-DDTHH:MM:SSZ`.
     pub date: String,

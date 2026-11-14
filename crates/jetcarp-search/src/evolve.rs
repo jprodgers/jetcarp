@@ -44,6 +44,8 @@ fn provenance(
         soup: None,
         density: None,
         generation: None,
+        shape: None,
+        seed: None,
         jetcarp_version: jetcarp_core::VERSION.into(),
         date: now_utc(),
     }

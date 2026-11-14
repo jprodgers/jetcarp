@@ -619,7 +619,7 @@ and latest `last_seen`), and a pattern's total sightings the sum over its rows.
 | `engine_version: string`, `pin: string`, `date: string` | |
 | `source: string?` | what found it (`search`, `hunt`, `collide A + B`, a scene's file name, `import catalog.sqlite`): a file name only, never a path |
 | `pack: string?` | the manifest hash a record was imported from |
-| `run: string?` | on row 0: the run that found it, as JSON (its source, tiling with size, random state, soup, density, generation, engine and date), so JETCARP can replay the find |
+| `run: string?` | on row 0: the run that found it, as JSON (its source, tiling with size, random state, soup, density, generation, engine and date; for a hunt's find from 0.4.2 on, the soups' `shape` and the hunt's `seed` too), so JETCARP can replay the find |
 
 ### Annotations
 

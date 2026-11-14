@@ -311,6 +311,14 @@ Every record has a history in the table `provenance`. Row 0 says how it came int
 | `source` | what found it: `search`, `collide A + B`, a scene path; `import <file>` on a record imported from a JSON file before packs replaced that |
 | `date` | when (UTC) |
 
+A record also keeps the run that found it first (in the pattern's `body`, and in a pack as provenance
+row 0's `run`): its source, the tiling with its size and boundary, the random state, the soup's index,
+the density, the generation, the engine and the date. A hunt's find from 0.4.2 on also keeps `shape`,
+the soup's shape (`rect` or `disc`), and `seed`, the hunt's seed (soup `i` has the random state made
+from the seed and `i`), so `jetcarp library soup` can make its soup, and its hunt's other soups,
+without the hunt's job. A hunt's tiling size is the soup's size in unit cells. The soup's rows are
+sheared as the tiling's lattice is, which the tiling itself gives, so the shear is not kept.
+
 Row 0 is written once and never rewritten (the file refuses an update to it). Later events append
 rows 1, 2, ...: today `reverified`, which also records a split of a compound (its `source` begins
 `compound-split:`; see [Compounds](#compounds)). The records brought in from CART's catalog and from two early development catalogs are the one

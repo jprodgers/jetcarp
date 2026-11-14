@@ -19,7 +19,7 @@ Nothing in a run depends on the clock, the thread schedule or the platform's ran
 - **Searches.** Soup `i` of a soup hunt uses a random state computed from the hunt's seed and `i`;
   soup `s` of a census or bounded search uses `seed + s`; the evolutionary search is a pure function
   of its seed; samples of turmite tables are seeded. A search's results never depend on how many
-  threads ran it.
+  threads ran it, and `jetcarp library soup ID` rebuilds the soup a hunt's find came from.
 - **Portable arithmetic.** Tiling construction and Lenia use JETCARP's own deterministic maths for
   exponentials, powers, distances, sines, cosines and angles, built only from the IEEE 754
   operations that every processor rounds the same way (addition, multiplication, division and square

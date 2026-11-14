@@ -7,7 +7,7 @@
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
 //! | [`world`] | `world.new`, `world.open`, `world.status`, `world.save`, `world.read`, `world.inspect`, `world.objects`, `world.draw`, `world.paste`, `world.reseed`, `world.apply`, `world.step`, `world.render` |
-//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune` |
+//! | [`library`] | `library.info`, `library.query`, `library.get`, `library.update`, `library.remove`, `library.render`, `library.paste`, `library.verify`, `library.prune`, `library.soup` ([`soup`]) |
 //! | [`quickstart`] | `quickstart.list`, `quickstart.get`, `quickstart.add`, `quickstart.update`, `quickstart.remove`, `quickstart.check`, `quickstart.publish`, `quickstart.build` |
 //! | [`media`] | `media.render`, `media.list`, `site.export` |
 //! | [`wallpaper`] | `wallpaper.export` |
@@ -33,6 +33,7 @@ pub mod search;
 #[cfg(feature = "pack")]
 pub mod setup;
 pub mod sheet;
+pub mod soup;
 pub mod system;
 pub mod wallpaper;
 pub mod world;
@@ -74,6 +75,7 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<library::LibraryRemove>::NEW,
     &Plain::<library::LibraryRender>::NEW,
     &Plain::<library::LibraryPaste>::NEW,
+    &Plain::<soup::LibrarySoup>::NEW,
     &Plain::<library::LibraryVerify>::NEW,
     &Plain::<library::LibraryReverify>::NEW,
     &Plain::<library::LibraryCompounds>::NEW,

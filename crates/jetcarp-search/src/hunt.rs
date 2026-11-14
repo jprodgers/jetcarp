@@ -1141,6 +1141,8 @@ fn provenance(
         soup: Some(soup),
         density: Some(spec.soup.density),
         generation: Some(gens),
+        shape: Some(spec.soup.shape),
+        seed: Some(spec.seed),
         jetcarp_version: jetcarp_core::VERSION.into(),
         date: date.into(),
     };
