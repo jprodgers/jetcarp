@@ -1279,12 +1279,26 @@ pub static CATALOG: &[CatalogEntry] = &[
     },
 ];
 
+/// A rule's notation with its neighbourhood: B/S and Generations rules on edge neighbours carry a
+/// trailing `V` (`B3/S23V`), JACA rules a `V` on each B/S part; other rules fix their own.
+pub fn notation_on(rule: &Rule, nb: Nb) -> String {
+    match rule {
+        Rule::LifeLike { .. } | Rule::Generations { .. } if nb == Nb::Edge => {
+            let mut n = rule.notation();
+            n.push('V');
+            n
+        }
+        Rule::Jaca(j) if nb == Nb::Edge => j.notation_with(true),
+        _ => rule.notation(),
+    }
+}
+
 /// Catalog name for a rule with a neighbourhood (B/S rules on edge neighbours carry a V).
 pub fn catalog_name(rule: &Rule, nb: Nb) -> Option<&'static str> {
-    let mut n = rule.notation();
-    if nb == Nb::Edge && matches!(rule, Rule::LifeLike { .. } | Rule::Generations { .. }) {
-        n.push('V');
-    }
+    let n = match rule {
+        Rule::LifeLike { .. } | Rule::Generations { .. } => notation_on(rule, nb),
+        _ => rule.notation(),
+    };
     catalog().iter().find(|e| e.notation == n).map(|e| e.name)
 }
 

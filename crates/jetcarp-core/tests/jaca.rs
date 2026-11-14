@@ -80,6 +80,13 @@ fn edge_neighbourhood_notation_keeps_the_v() {
     let n = w.cas[0].notation();
     assert_eq!(n, "JACA +B2/S34V -B3/S23V");
     assert_eq!(Rule::parse(&n).unwrap().1, Some(Nb::Edge));
+    // Issue #7: its default name keeps the V too, as a B/S rule's does.
+    assert_eq!(w.cas[0].name, "JACA +B2/S34V -B3/S23V");
+    let life = world("square", 10, 10, "B3/S23V", SeedSpec::Empty, 1);
+    assert_eq!(life.cas[0].name, "B3/S23V");
+    // A rule with a catalogue name for its edge-neighbour form keeps that name.
+    let gnarl = world("square", 10, 10, "B1/S0V", SeedSpec::Empty, 1);
+    assert_eq!(gnarl.cas[0].name, "Gnarl (von Neumann)");
 }
 
 /// Seeded with one sign only, JACA is the plain B/S rule.

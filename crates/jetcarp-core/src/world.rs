@@ -453,14 +453,7 @@ impl CaInstance {
     }
     /// The rule in notation, with the V suffix for edge neighbourhoods on B/S rules.
     pub fn notation(&self) -> String {
-        let n = self.rule.notation();
-        match &self.rule {
-            Rule::LifeLike { .. } | Rule::Generations { .. } if self.nb == Nb::Edge => {
-                format!("{n}V")
-            }
-            Rule::Jaca(j) if self.nb == Nb::Edge => j.notation_with(true),
-            _ => n,
-        }
+        crate::rules::notation_on(&self.rule, self.nb)
     }
 }
 
@@ -1578,7 +1571,7 @@ impl World {
             name: spec.name.clone().unwrap_or_else(|| {
                 crate::rules::catalog_name_on(&rule, nb, &self.topo)
                     .map(String::from)
-                    .unwrap_or_else(|| rule.notation())
+                    .unwrap_or_else(|| crate::rules::notation_on(&rule, nb))
             }),
             rule,
             nb,
