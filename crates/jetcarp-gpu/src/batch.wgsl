@@ -29,7 +29,8 @@ struct WorldParams {
 @group(0) @binding(2) var<storage, read> topo: array<u32>;
 @group(0) @binding(3) var<storage, read> worlds: array<WorldParams>;
 @group(0) @binding(4) var<storage, read> tables: array<u32>;
-// Per generation slot and world: population, changed, the hash's sum of state * mix(cell).
+// Per generation slot and world: population, changed, the hash's sum of state * mix(cell), and
+// the cells in state 2 (JACA's negative sign).
 @group(0) @binding(5) var<storage, read_write> trace: array<atomic<u32>>;
 @group(1) @binding(0) var<storage, read> src: array<u32>;
 @group(1) @binding(1) var<storage, read_write> dst: array<u32>;
@@ -268,8 +269,9 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
       }
     }
     dst[gi] = v;
+    // Three counts of at most WG (256) each, in 10 bits apiece: live, changed, state 2.
     if (v != 0u || v != s) {
-      atomicAdd(&wg_counts, u32(v != 0u) | (u32(v != s) << 16u));
+      atomicAdd(&wg_counts, u32(v != 0u) | (u32(v != s) << 10u) | (u32(v == 2u) << 20u));
     }
     if (v != 0u) {
       atomicAdd(&wg_hash, v * mix_cell(cell));
@@ -277,11 +279,12 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
   }
   workgroupBarrier();
   if (li == 0u) {
-    let at = (disp.slot * cfg.worlds + world) * 3u;
+    let at = (disp.slot * cfg.worlds + world) * 4u;
     let c = atomicLoad(&wg_counts);
     if (c != 0u) {
-      atomicAdd(&trace[at], c & 0xffffu);
-      if ((c >> 16u) != 0u) { atomicAdd(&trace[at + 1u], c >> 16u); }
+      atomicAdd(&trace[at], c & 0x3ffu);
+      if (((c >> 10u) & 0x3ffu) != 0u) { atomicAdd(&trace[at + 1u], (c >> 10u) & 0x3ffu); }
+      if ((c >> 20u) != 0u) { atomicAdd(&trace[at + 3u], c >> 20u); }
     }
     let h = atomicLoad(&wg_hash);
     if (h != 0u) { atomicAdd(&trace[at + 2u], h); }

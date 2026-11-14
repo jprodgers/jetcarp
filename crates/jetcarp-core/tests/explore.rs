@@ -286,3 +286,84 @@ fn row_rules_stop_at_the_bottom_on_wrapped_grids() {
     }
     assert_eq!(w.fields[0].state, finished);
 }
+
+/// A run kept with its three-quarter frame (as a JACA run on the processor is) has the trace
+/// `trace_world` gives with that frame asked for, whether the window holds it or not.
+#[test]
+fn a_run_keeps_its_three_quarter_frame() {
+    use jetcarp_core::explore::batch::{trace_world, trace_world_keeping};
+    use jetcarp_core::explore::features::{frames_with_trade, trade_gen};
+    let grid = Grid::build("square", 1600).unwrap();
+    let world = || {
+        let mut w = World::on_topology(grid.topo.clone(), 9);
+        w.add_ca(CaSpec::new("JACA B3/S23").seed(SeedSpec::Random { density: 0.4 }))
+            .unwrap();
+        w
+    };
+    for gens in [8u32, 40, 120] {
+        let keep = Some(trade_gen(gens));
+        let (t, reached) =
+            trace_world_keeping(&mut world(), gens, 17, keep, &mut |_| true).unwrap();
+        assert_eq!(reached, gens);
+        let reference = trace_world(&mut world(), gens, &frames_with_trade(gens, 17)).unwrap();
+        assert_eq!(t, reference, "{gens} generations");
+        assert_eq!(t.neg.len(), t.pop.len());
+        assert!(t.neg.iter().zip(&t.pop).all(|(n, p)| n <= p));
+    }
+}
+
+/// The sign measures: a board of one sign has lost the other at the start; two sign halves are
+/// balanced, sorted into territories, and trade nothing; signs mixed at random are not sorted.
+#[test]
+fn sign_measures_see_balance_territories_and_loss() {
+    use jetcarp_core::explore::batch::WorldTrace;
+    use jetcarp_core::explore::features::{frames_with_trade, measure_signs};
+    let g = Grid::build("square", 1600).unwrap();
+    let n = g.topo.len();
+    let gens = 40;
+    // A still board: every generation the same frame.
+    let still = |frame: Vec<u8>| -> WorldTrace {
+        let pop = frame.iter().filter(|&&s| s != 0).count() as u32;
+        let neg = frame.iter().filter(|&&s| s == 2).count() as u32;
+        WorldTrace {
+            pop: vec![pop; gens as usize + 1],
+            changed: vec![0; gens as usize + 1],
+            hash: vec![0; gens as usize + 1],
+            neg: vec![neg; gens as usize + 1],
+            frames: vec![frame; frames_with_trade(gens, 17).len()],
+        }
+    };
+    let halves = || -> Vec<u8> { (0..n).map(|i| if i < n / 2 { 1 } else { 2 }).collect() };
+    let one = measure_signs(&g, &still(vec![1; n]), gens, 17, Nb::Touch).unwrap();
+    assert_eq!(
+        (one.balance, one.lost, one.sorted, one.trade),
+        (0.0, 0.0, 1.0, 0.0)
+    );
+    assert!(one.lost_early());
+    let h = measure_signs(&g, &still(halves()), gens, 17, Nb::Touch).unwrap();
+    assert_eq!((h.balance, h.lost, h.trade), (0.5, 1.0, 0.0));
+    assert!(h.sorted > 0.9, "{h:?}");
+    let mut rng = Rng::new(3);
+    let mixed: Vec<u8> = (0..n).map(|_| 1 + rng.below(2) as u8).collect();
+    let m = measure_signs(&g, &still(mixed), gens, 17, Nb::Touch).unwrap();
+    assert!(m.sorted < 0.1 && m.balance > 0.4, "{m:?}");
+    // A sign that dies at generation 30 of 40.
+    let mut t = still(halves());
+    for x in &mut t.neg[30..] {
+        *x = 0;
+    }
+    let late = measure_signs(&g, &t, gens, 17, Nb::Touch).unwrap();
+    assert_eq!(late.lost, 0.75);
+    assert!(!late.lost_early());
+    // Territory that changes hands: the end frame's signs swapped.
+    let mut t = still(halves());
+    let last = t.frames.len() - 1;
+    for s in &mut t.frames[last] {
+        *s = 3 - *s;
+    }
+    let swapped = measure_signs(&g, &t, gens, 17, Nb::Touch).unwrap();
+    assert_eq!(swapped.trade, 1.0);
+    // Without a `neg` series (a trace from before it), none.
+    t.neg.clear();
+    assert!(measure_signs(&g, &t, gens, 17, Nb::Touch).is_none());
+}

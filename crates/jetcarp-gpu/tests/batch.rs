@@ -133,8 +133,8 @@ fn assert_all_active(activity: &HashMap<String, u64>) {
 fn diff(c: &WorldTrace, g: &WorldTrace, what: &str, w: usize, rule: &str) {
     for t in 0..c.pop.len() {
         assert_eq!(
-            (c.pop[t], c.changed[t], c.hash[t]),
-            (g.pop[t], g.changed[t], g.hash[t]),
+            (c.pop[t], c.changed[t], c.hash[t], c.neg[t]),
+            (g.pop[t], g.changed[t], g.hash[t], g.neg[t]),
             "{what}: world {w} ({rule}) differs at generation {t}"
         );
     }
