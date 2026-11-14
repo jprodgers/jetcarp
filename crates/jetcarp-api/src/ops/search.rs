@@ -39,11 +39,13 @@ use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
 use jetcarp_core::census::{self, CensusReport, CensusSpec, RunClass};
 use jetcarp_core::evolve::EvolveSpec;
+use jetcarp_core::hunt::bits::bs_rule;
 use jetcarp_core::hunt::soup::{SoupShape, SoupSpec};
 use jetcarp_core::pattern::collide::{CollideOutput, CollideSpec};
 use jetcarp_core::pattern::movers::{MoverReport, TrackSpec};
 use jetcarp_core::pattern::{self, PatternClass, tiling_list};
 use jetcarp_core::pile::{self, Centre, PileSpec};
+use jetcarp_core::rules::Rule;
 use jetcarp_core::window::track::WindowOpts;
 use jetcarp_core::{Boundary, Nb, SizeSpec, TilingSpec, Topology, VERSION, render, sheet};
 use jetcarp_search::hunt::{HuntSpec, StorePolicy};
@@ -127,15 +129,56 @@ const RULE_SEPS: &[char] = &[',', ';', ' ', '\t', '\n'];
 /// Ant rules: turmite tables hold commas, so only semicolons and spaces separate them.
 const ANT_SEPS: &[char] = &[';', ' ', '\t', '\n'];
 
-/// The rules of a file, one per line (`#` comments).
-fn rules_file(cx: &Ctx, path: Option<&str>) -> Result<Vec<String>, ApiError> {
-    let Some(p) = path else {
-        return Ok(vec![]);
-    };
-    let p = cx.fs.readable(p)?;
-    let text = std::fs::read_to_string(&p)
-        .map_err(|e| ApiError::io(format!("reading {}: {e}", p.display())))?;
-    Ok(census::parse_rule_list(&text))
+/// The rules given (`rules`, then a file's, one per line with `#` comments), each parsed and
+/// passed by `check` before the job starts. A rule that cannot run refuses the whole job, named
+/// by its place (its item in `rules`, or its line in the file), so a typo in a long list fails
+/// at once instead of once per tiling after the soups start (#5).
+fn checked_rules(
+    cx: &Ctx,
+    given: Option<&Value>,
+    file: Option<&str>,
+    check: fn(&Rule) -> Result<(), String>,
+) -> Result<Vec<String>, ApiError> {
+    let mut rules: Vec<(String, String)> = texts(given, "rules", RULE_SEPS)?
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| (format!("rule {} of `rules`", i + 1), r))
+        .collect();
+    if let Some(f) = file {
+        let p = cx.fs.readable(f)?;
+        let text = std::fs::read_to_string(&p)
+            .map_err(|e| ApiError::io(format!("reading {}: {e}", p.display())))?;
+        for (n, line) in text.lines().enumerate() {
+            for r in census::parse_rule_list(line) {
+                rules.push((format!("line {} of {f}", n + 1), r));
+            }
+        }
+    }
+    let bad: Vec<String> = rules
+        .iter()
+        .filter_map(|(at, r)| {
+            Rule::parse(r)
+                .and_then(|(rule, _)| check(&rule))
+                .err()
+                .map(|e| format!("{at}: {r}: {e}"))
+        })
+        .collect();
+    if !bad.is_empty() {
+        const SHOWN: usize = 20;
+        let mut msg = format!(
+            "{} rule{} cannot run, so the job was not started:",
+            bad.len(),
+            if bad.len() == 1 { "" } else { "s" }
+        );
+        for b in bad.iter().take(SHOWN) {
+            let _ = write!(msg, "\n  {b}");
+        }
+        if bad.len() > SHOWN {
+            let _ = write!(msg, "\n  and {} more", bad.len() - SHOWN);
+        }
+        return Err(invalid(msg));
+    }
+    Ok(rules.into_iter().map(|(_, r)| r).collect())
 }
 
 /// A pair of whole numbers: `n`, `"AxB"`, `[a, b]`, or a map with the two names.
@@ -279,8 +322,9 @@ pub struct HuntIn {
 impl HuntIn {
     fn spec(&self, cx: &Ctx) -> Result<HuntSpec, ApiError> {
         let d = HuntSpec::default();
-        let mut rules = texts(self.rules.as_ref(), "rules", RULE_SEPS)?;
-        rules.extend(rules_file(cx, self.rules_file.as_deref())?);
+        let mut rules = checked_rules(cx, self.rules.as_ref(), self.rules_file.as_deref(), |r| {
+            bs_rule(r).map(|_| ())
+        })?;
         if rules.is_empty() {
             rules = d.rules.clone();
         }
@@ -396,8 +440,9 @@ pub struct BoundedIn {
 impl BoundedIn {
     fn spec(&self, cx: &Ctx) -> Result<SearchJobSpec, ApiError> {
         let d = jetcarp_search::bounded::SearchSpec::default();
-        let mut rules = texts(self.rules.as_ref(), "rules", RULE_SEPS)?;
-        rules.extend(rules_file(cx, self.rules_file.as_deref())?);
+        let mut rules = checked_rules(cx, self.rules.as_ref(), self.rules_file.as_deref(), |r| {
+            jetcarp_core::objects::supported(r).map(|_| ())
+        })?;
         if rules.is_empty() {
             rules = d.rules.clone();
         }
@@ -713,8 +758,16 @@ impl CensusIn {
                 .map_err(|_| invalid("`boundary` is wrap, dead, or live"))?;
         }
         let nb = nb_of(self.nb.as_deref())?;
-        let mut rules = texts(self.rules.as_ref(), "rules", RULE_SEPS)?;
-        rules.extend(rules_file(cx, self.rules_file.as_deref())?);
+        let deterministic = |r: &Rule| match r.is_stochastic() {
+            true => Err("a census needs deterministic rules".to_string()),
+            false => Ok(()),
+        };
+        let mut rules = checked_rules(
+            cx,
+            self.rules.as_ref(),
+            self.rules_file.as_deref(),
+            deterministic,
+        )?;
         let seed = self.seed.unwrap_or(d.seed);
         let all_max = self.all_max.unwrap_or(1 << 15);
         if self.all || rules.is_empty() || all_max == 0 {

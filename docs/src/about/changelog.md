@@ -41,6 +41,14 @@ that will declare them stable.
   `jetcarp host` command bring an installed extension up to the program's version (an extension you
   have switched off stays off). GNOME loads the new files at the next login, so log out and back in
   once after upgrading; until then `jetcarp host gnome status` says that an older version is running.
+- **A `V` may follow the B or S counts of a rule.** `B3/S23V/C4` and `B47V/S13568/4` now mean the
+  same as `B3/S23/C4V`, which is how JETCARP writes them. A `V` anywhere else is refused with the
+  rule written the right way; the message used to name only the letter.
+  ([#5](https://github.com/jprodgers/jetcarp/issues/5))
+- **Hunts, bounded searches and censuses read every rule before they start.** A rule in `--rules`
+  or `--rules-file` that cannot run stops the job from starting, and the error names each bad rule
+  by its line in the file. A hunt used to start anyway and report the rule once per tiling, with no
+  soups run. ([#5](https://github.com/jprodgers/jetcarp/issues/5))
 
 ## [0.4.1] – 2026-11-13
 

@@ -464,3 +464,47 @@ fn ants_piles_evolve_searches_and_movers_run_as_jobs() {
             .contains("## Evolutionary searches")
     );
 }
+
+#[test]
+fn bad_rules_refuse_a_hunt_bounded_search_or_census_before_it_starts() {
+    let dir = scratch("jobs-bad-rules");
+    let cx = ctx(&dir);
+    let file = dir.join("rules.txt");
+    std::fs::write(
+        &file,
+        "# a list with typos\nB3/S23\nB47/S13568V/4\nB36/S2x3 ; B2/S\n\nB0/S8\nB3/S23V4/C3\n",
+    )
+    .unwrap();
+    let file = file.display().to_string();
+    for (strategy, bad) in [
+        // The hunter and the object finder refuse B0 rules; a census runs them.
+        ("hunt", vec!["line 4 of", "line 6 of", "line 7 of"]),
+        ("bounded", vec!["line 4 of", "line 6 of", "line 7 of"]),
+        ("census", vec!["line 4 of", "line 7 of"]),
+    ] {
+        let e = fails(
+            call_json(
+                &cx,
+                "search.start",
+                json!({"strategy": strategy, "spec": {"rules": "B3/S23 B3/S2y",
+                       "rules_file": file}}),
+            ),
+            ErrorKind::Invalid,
+        );
+        let m = e.message;
+        assert!(m.contains("rule 2 of `rules`: B3/S2y"), "{strategy}: {m}");
+        for b in &bad {
+            assert!(m.contains(b), "{strategy}: {b}: {m}");
+        }
+        assert!(
+            m.contains(&format!("{} rules cannot run", bad.len() + 1)),
+            "{m}"
+        );
+        // The V before the state count is read (#5); the stray one says where it goes.
+        assert!(!m.contains("line 3 of"), "{m}");
+        assert!(m.contains("B3/S234/C3V"), "{m}");
+    }
+    // No job was made.
+    let l = call_json(&cx, "jobs.list", json!({})).unwrap();
+    assert_eq!(l["jobs"].as_array().unwrap().len(), 0, "{l}");
+}

@@ -73,6 +73,7 @@ Useful hunt options:
 | Option | Effect |
 | --- | --- |
 | `--soups N` | Soups per rule and tiling (default 100,000); `--forever` runs until stopped |
+| `--rules-file FILE` | More rules, one per line (`#` starts a comment). Every rule is read before the job starts: one that cannot run stops the job from starting, and the error names its line |
 | `--size WxH`, `--density P`, `--shape rect\|disc` | The soups: 16 × 16 unit cells at 0.5 by default |
 | `--nb touch\|edge` | The neighbourhood for every rule (a `V` suffix in a rule means edge) |
 | `--gens N`, `--max-period N` | How long a soup may run before it is classed as it is, and the longest period looked for |
