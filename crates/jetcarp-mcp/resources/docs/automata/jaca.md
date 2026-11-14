@@ -55,7 +55,7 @@ far:
 <figure class="pair">
 <div><picture>
   <source srcset="../images/automata/jaca-hat-war-still.png" media="(prefers-reduced-motion: reduce)">
-  <img src="../images/automata/jaca-hat-war.webp" alt="JACA on the hat: green and orange armies meeting along a glowing front" width="304" loading="lazy">
+  <img src="../images/automata/jaca-hat-war.webp" alt="JACA on the hat: teal and coral armies meeting along a glowing front" width="304" loading="lazy">
 </picture></div>
 <div><picture>
   <source srcset="../images/automata/jaca-square-beads-still.png" media="(prefers-reduced-motion: reduce)">

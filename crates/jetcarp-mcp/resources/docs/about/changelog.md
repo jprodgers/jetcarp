@@ -28,6 +28,13 @@ that will declare them stable.
   runs to its end; a stop still takes effect within moments.
   ([#3](https://github.com/jprodgers/jetcarp/issues/3))
 
+- **The two signs of JACA looked alike once their territories went still.** JACA colours each sign
+  by age, and its default palettes, Tide and Ember, both end in nearly the same dark indigo, so old
+  cells of either sign showed the same colour. The −1 cells now default to Koi, whose reds stay apart
+  from Tide's blues at every age; so do the 13 Quick Start presets and the book's scenes that paired
+  Tide with Ember. A test keeps every JACA palette pair apart as cells age.
+  ([#6](https://github.com/jprodgers/jetcarp/issues/6))
+
 ### Changed
 
 - **Upgrading JETCARP upgrades its GNOME extension.** The background host, when it starts, and any

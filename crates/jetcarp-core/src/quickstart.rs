@@ -284,8 +284,8 @@ pub fn scene_for(e: &CatalogEntry) -> Result<Scene, String> {
                 density: 0.3,
                 negative: 0.5,
             }));
-            ca.palette = Some("Tide".into());
-            ca.palette_neg = Some("Ember".into());
+            ca.palette = Some(crate::world::DEFAULT_PALETTE_JACA.into());
+            ca.palette_neg = Some(crate::world::DEFAULT_PALETTE_NEG.into());
             rect("square", 180, 120, Boundary::Wrap)
         }
         Rule::Ltl(l) => {

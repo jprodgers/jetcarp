@@ -272,6 +272,14 @@ fn is_one_f(v: &f64) -> bool {
     *v == 1.0
 }
 
+/// JACA's default palettes: Tide for +1 cells and Koi for -1 cells. The two must stay apart at every
+/// age: cells that live on take the last colour, so a still territory of each sign shows its
+/// palette's last stop (Tide's dark indigo against Koi's red). Ember, the default until 0.4.2, ends
+/// in nearly Tide's indigo, and still territories of the two signs looked alike (issue #6).
+pub const DEFAULT_PALETTE_JACA: &str = "Tide";
+/// See [`DEFAULT_PALETTE_JACA`].
+pub const DEFAULT_PALETTE_NEG: &str = "Koi";
+
 /// A CA as saved in scenes. Missing fields take the rule's defaults.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CaSpec {
@@ -298,7 +306,7 @@ pub struct CaSpec {
     pub color_by: ColorBy,
     #[serde(default, skip_serializing_if = "is_bounce")]
     pub agent_edge: AgentEdge,
-    /// JACA: the palette of -1 cells (`palette` colours +1 cells).
+    /// JACA: the palette of -1 cells (`palette` colours +1 cells; default [`DEFAULT_PALETTE_NEG`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub palette_neg: Option<String>,
     /// JACA: draw a fading glow where cells were annihilated.
@@ -1580,8 +1588,11 @@ impl World {
             palette: spec
                 .palette
                 .clone()
-                .unwrap_or_else(|| if is_jaca { "Tide" } else { "Ember" }.into()),
-            palette_neg: spec.palette_neg.clone().unwrap_or_else(|| "Ember".into()),
+                .unwrap_or_else(|| if is_jaca { DEFAULT_PALETTE_JACA } else { "Ember" }.into()),
+            palette_neg: spec
+                .palette_neg
+                .clone()
+                .unwrap_or_else(|| DEFAULT_PALETTE_NEG.into()),
             glow: spec.glow,
             heat: None,
             seed: seed.clone(),

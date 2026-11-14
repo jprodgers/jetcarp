@@ -13,7 +13,7 @@
     {
       "enabled": true,
       "palette": "Tide",
-      "palette_neg": "Ember",
+      "palette_neg": "Koi",
       "rule": "JACA B27/S013",
       "seed": {
         "signed": {
