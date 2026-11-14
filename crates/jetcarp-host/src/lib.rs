@@ -25,7 +25,10 @@ mod saver_args;
 mod targets;
 #[cfg(any(windows, target_os = "macos"))]
 mod tray;
+pub mod tune;
 mod window;
+
+pub use tune::TuneArgs;
 
 use std::time::{Duration, Instant};
 

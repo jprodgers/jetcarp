@@ -93,6 +93,23 @@ impl Painter {
         cap: &CaptionSettings,
         now: f64,
     ) {
+        self.paint_timed(device, queue, target, size, scale, stage, cap, now, None);
+    }
+
+    /// The same, writing GPU timestamps at the start and end of the drawing (the tuner's).
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_timed(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &wgpu::TextureView,
+        size: [u32; 2],
+        scale: f32,
+        stage: &Stage,
+        cap: &CaptionSettings,
+        now: f64,
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) {
         let [w, h] = size;
         let draw = stage.draw(&mut self.views, 0, [w as f32, h as f32]);
         if let Some(d) = &draw {
@@ -132,7 +149,7 @@ impl Painter {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: timestamps,
                 occlusion_query_set: None,
                 multiview_mask: None,
             });

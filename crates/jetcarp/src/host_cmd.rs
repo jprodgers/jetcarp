@@ -176,6 +176,19 @@ pub enum HostCmd {
         #[arg(long)]
         rotation: Option<String>,
     },
+    /// Fit the desktop background to this computer: run each scene of the wallpaper's rotation at
+    /// its screen's size and keep, for each, the most cells that stay within the processor and GPU
+    /// limits at a smooth frame rate (saved). The rules and colours stay as they are. A running
+    /// host pauses while it runs, then shows the sizes found.
+    Tune(jetcarp_host::TuneArgs),
+    /// The scene a screen shows now, its grid's size included, as a scene file that replays it.
+    Scene {
+        #[arg(long)]
+        screen: Option<usize>,
+        /// Write it to this file (default: print it).
+        #[arg(long)]
+        save: Option<std::path::PathBuf>,
+    },
 }
 
 /// Saves `s` and tells a running host; no host running is fine.
@@ -215,7 +228,14 @@ fn status_lines(v: &Value) -> Vec<String> {
         let numbers = if st["building"] == true && st["cells"] == 0 {
             "starting".to_string()
         } else {
-            format!("generation {} · {} cells", st["generation"], st["cells"])
+            let mut n = format!("generation {} · {} cells", st["generation"], st["cells"]);
+            if let Some(px) = st["cell_px"].as_f64().filter(|p| *p > 0.0) {
+                n.push_str(&format!(" of {px} px"));
+                if st["tuned"] == true {
+                    n.push_str(" (tuned)");
+                }
+            }
+            n
         };
         let shown = if s["place"] == "wallpaper" {
             "wallpaper"
@@ -296,6 +316,21 @@ fn status_lines(v: &Value) -> Vec<String> {
         .collect();
     if !why.is_empty() {
         out.push(format!("paused: {}", why.join("; ")));
+    }
+    let t = &v["tuning"];
+    if t["running"] == true {
+        out.push(match t["progress"].as_str() {
+            Some(p) => format!("tuning: {p}"),
+            None => "tuning: a tune is running".into(),
+        });
+    } else if let Some(o) = t["last"]["outcome"].as_str() {
+        out.push(match o {
+            "failed" => format!(
+                "last tune: failed: {}",
+                t["last"]["error"].as_str().unwrap_or("?")
+            ),
+            other => format!("last tune: {other}"),
+        });
     }
     for line in v["log"].as_array().into_iter().flatten() {
         out.push(format!("note: {}", line.as_str().unwrap_or("")));
@@ -609,6 +644,29 @@ pub fn run(a: HostArgs) -> Result<()> {
             println!("{}", gnome::state().describe());
             Ok(())
         }
+        HostCmd::Tune(args) => jetcarp_host::tune::run(args, j).map_err(|e| anyhow!(e)),
+        HostCmd::Scene { screen, save } => {
+            let v = host_call(&json!({"action": "scene", "screen": screen})).map_err(|e| anyhow!(e))?;
+            let text = serde_json::to_string_pretty(&v["scene"])?;
+            match save {
+                Some(path) => {
+                    std::fs::write(&path, text + "\n")
+                        .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+                    println!(
+                        "saved {} ({}{}) to {}",
+                        v["label"].as_str().unwrap_or("the scene"),
+                        match v["grid"].as_array() {
+                            Some(g) if g.len() == 2 => format!("{} x {} cells", g[0], g[1]),
+                            _ => "its own size".into(),
+                        },
+                        if v["tuned"] == true { ", tuned" } else { "" },
+                        path.display()
+                    );
+                }
+                None => println!("{text}"),
+            }
+            Ok(())
+        }
         HostCmd::Saver { action, rotation } => {
             if let Some(name) = rotation {
                 let mut s = HostSettings::load().0;
@@ -664,7 +722,8 @@ mod tests {
     fn status_says_where_each_screen_is_the_caption_and_why_it_is_paused() {
         let stage = |label: &str, building: bool, cells: u64| {
             json!({"rotation": "A classic a day", "label": label, "number": 2, "count": 7,
-                "generation": 0, "cells": cells, "paused": true, "building": building})
+                "generation": 0, "cells": cells, "paused": true, "building": building,
+                "cell_px": if cells == 10 { 6.0 } else { 0.0 }, "tuned": cells == 10})
         };
         let v = json!({
             "pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "RTX",
@@ -692,6 +751,10 @@ mod tests {
             "{lines:?}"
         );
         assert!(lines[3].ends_with("· window · paused"), "{lines:?}");
+        assert!(
+            lines[3].contains("10 cells of 6 px (tuned) · window"),
+            "{lines:?}"
+        );
         let has = |l: &str| lines.iter().any(|x| x == l);
         assert!(has("caption: on, bottom left, 20 pt"), "{lines:?}");
         assert!(has("paused: on battery"), "{lines:?}");
@@ -701,5 +764,18 @@ mod tests {
         let lines = status_lines(&off);
         assert!(lines.iter().any(|l| l == "caption: off"));
         assert!(!lines.iter().any(|l| l.starts_with("paused:")));
+        // Tuning: under way, then how it ended.
+        let mut tuning = v.clone();
+        tuning["tuning"] = json!({"running": true, "progress": "screen 0, scene 2 of 7: Life at 4 px"});
+        let lines = status_lines(&tuning);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l == "tuning: screen 0, scene 2 of 7: Life at 4 px"),
+            "{lines:?}"
+        );
+        tuning["tuning"] = json!({"running": false, "last": {"outcome": "failed", "error": "no GPU"}});
+        let lines = status_lines(&tuning);
+        assert!(lines.iter().any(|l| l == "last tune: failed: no GPU"), "{lines:?}");
     }
 }
