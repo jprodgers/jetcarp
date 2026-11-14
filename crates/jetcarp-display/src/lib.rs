@@ -53,6 +53,7 @@ pub mod rotation;
 pub mod saver;
 pub mod simgpu;
 pub mod stage;
+pub mod tuning;
 pub mod view;
 pub mod wallpaper_store;
 pub mod winsaver;
