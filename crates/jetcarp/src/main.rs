@@ -369,6 +369,9 @@ fn without_json(cmd: &Cmd) -> Option<&'static str> {
 fn main() -> Result<()> {
     // A PastePattern naming a library pattern finds it in the default library.
     jetcarp_store::install();
+    // GPU self-test results are kept in the settings folder by the program, never by code that
+    // uses the GPU crate as a library (the test suites).
+    jetcarp_gpu::select::keep_checks(true);
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();

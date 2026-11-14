@@ -664,6 +664,17 @@ const TEST_VERSION: u32 = 1;
 
 static TESTED: Mutex<Option<HashMap<String, SelfTest>>> = Mutex::new(None);
 
+/// Whether self-test results are kept on disk ([`keep_checks`]); off until a program asks.
+static KEEP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Keep self-test results in the settings folder's `gpu-checks.json`, so a later run need not
+/// test the adapter again. The `jetcarp` program turns this on when it starts. Code that uses
+/// this crate as a library (the test suites among it) keeps results in memory only, so it never
+/// writes to the user's own settings folder.
+pub fn keep_checks(on: bool) {
+    KEEP.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// The self-test on this adapter, run once per adapter, driver, JETCARP version and shader set
 /// (kept in the settings folder's `gpu-checks.json`).
 pub fn self_test(adapter: &wgpu::Adapter) -> SelfTest {
@@ -712,6 +723,9 @@ fn test_key(info: &wgpu::AdapterInfo) -> String {
 }
 
 fn checks_file() -> Option<PathBuf> {
+    if !KEEP.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
     // Screenshot runs never touch the user's settings unless a folder is given.
     if std::env::var_os("JETCARP_CONFIG_DIR").is_none()
         && std::env::var_os("JETCARP_SCREENSHOT").is_some()
