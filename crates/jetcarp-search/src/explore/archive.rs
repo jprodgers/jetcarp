@@ -221,6 +221,21 @@ pub fn behaviour_bin(fate: Fate, f: &Features, gens: u32) -> u32 {
 /// How many runs each niche keeps.
 const PER_NICHE: usize = 3;
 
+/// The order of a niche's runs, best first: score high first, then id low first. Runs often tie
+/// (every run that dies at the same generation scores the same), and a tie went to whichever run
+/// came first. A live search takes in its runs as its GPU batches and CPU rounds finish, not in id
+/// order, so rebuilding the archive from the stored runs in id order (an imported search, a
+/// rescore) kept other elites, and lost confirmed ones (#54). Broken by id, the archive holds the
+/// same elites in whatever order its runs come.
+fn rank(a: &(i64, f32), b: &(i64, f32)) -> std::cmp::Ordering {
+    b.1.total_cmp(&a.1).then(a.0.cmp(&b.0))
+}
+
+/// `a` ranks above `b` ([`rank`]).
+fn beats(a: (i64, f32), b: (i64, f32)) -> bool {
+    rank(&a, &b) == std::cmp::Ordering::Less
+}
+
 /// A niche: rule family, tiling group, and behaviour.
 pub type Niche = (Fam, u8, u32);
 
@@ -252,7 +267,7 @@ impl Archive {
             }
         };
         list.push((id, ev.score));
-        list.sort_by(|a, b| b.1.total_cmp(&a.1));
+        list.sort_by(rank);
         self.groups.insert(id, group);
         self.runs.insert(id, ev);
     }
@@ -283,7 +298,8 @@ impl Archive {
             .collect()
     }
 
-    /// Try to place a run. Returns `true` if it became an elite.
+    /// Try to place a run. Returns `true` if it became an elite. Which runs a niche keeps does
+    /// not depend on the order they are offered in ([`rank`]).
     pub fn offer(&mut self, id: i64, ev: Eval, group: u8) -> bool {
         let fam = ev.cand.fam;
         let key: Niche = (fam, group, ev.bin);
@@ -302,7 +318,7 @@ impl Archive {
                 .is_some_and(|r| r.cand.rule == ev.cand.rule)
         });
         if let Some(p) = same_rule {
-            if list[p].1 >= score {
+            if !beats((id, score), list[p]) {
                 return false;
             }
             let (old, _) = list.remove(p);
@@ -310,11 +326,11 @@ impl Archive {
             self.groups.remove(&old);
             self.changes.push((old, false));
         }
-        if list.len() >= PER_NICHE && list.iter().all(|&(_, s)| s >= score) {
+        if list.len() >= PER_NICHE && list.iter().all(|&e| !beats((id, score), e)) {
             return false;
         }
         list.push((id, score));
-        list.sort_by(|a, b| b.1.total_cmp(&a.1));
+        list.sort_by(rank);
         while list.len() > PER_NICHE {
             let (old, _) = list.pop().unwrap();
             self.runs.remove(&old);
@@ -459,6 +475,53 @@ mod tests {
             score,
             bin,
         }
+    }
+
+    /// The elites are the same whatever order the runs come in, ties included: a live search
+    /// takes in its runs out of id order, and an imported search is rebuilt in id order (#54).
+    #[test]
+    fn the_order_runs_come_in_does_not_change_the_elites() {
+        // Two niches: one with ties between rules for its last places, one with a rule run
+        // twice to the same score, and ties to it.
+        let runs: Vec<(i64, Eval)> = vec![
+            (1, ev("B1/S", 0.5, 0)),
+            (2, ev("B2/S", 0.25, 0)),
+            (3, ev("B3/S", 0.25, 0)),
+            (4, ev("B4/S", 0.25, 0)),
+            (5, ev("B5/S", 0.75, 0)),
+            (6, ev("B6/S", 0.25, 0)),
+            (7, ev("B7/S", 1.0, 1)),
+            (8, ev("B7/S", 1.0, 1)),
+            (9, ev("B8/S", 1.0, 1)),
+            (10, ev("B7/S", 1.0, 1)),
+            (11, ev("B9/S", 0.5, 1)),
+            (12, ev("B9/S", 1.0, 1)),
+            (13, ev("B10/S", 1.0, 1)),
+        ];
+        let elites = |order: &[usize]| {
+            let mut a = Archive::default();
+            for &i in order {
+                let (id, e) = &runs[i];
+                a.offer(*id, e.clone(), 0);
+            }
+            let mut cells: Vec<(Niche, Vec<(i64, f32)>)> = a.cells.into_iter().collect();
+            cells.sort_by_key(|c| c.0.2);
+            cells
+        };
+        let forward: Vec<usize> = (0..runs.len()).collect();
+        let want = elites(&forward);
+        assert_eq!(want[0].1, vec![(5, 0.75), (1, 0.5), (2, 0.25)]);
+        assert_eq!(want[1].1, vec![(7, 1.0), (9, 1.0), (12, 1.0)]);
+        let mut rng = Rng::new(54);
+        let mut order = forward.clone();
+        for _ in 0..200 {
+            for i in (1..order.len()).rev() {
+                order.swap(i, rng.below(i as u64 + 1) as usize);
+            }
+            assert_eq!(elites(&order), want, "offered in the order {order:?}");
+        }
+        let backward: Vec<usize> = forward.iter().rev().copied().collect();
+        assert_eq!(elites(&backward), want);
     }
 
     /// Parents lean to the better niches but not only to them, and only ones `ok` accepts.

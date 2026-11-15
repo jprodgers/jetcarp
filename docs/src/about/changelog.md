@@ -175,6 +175,14 @@ that will declare them stable.
   window's *Render media*, which is for finds and picks the format itself. *File → Export animation
   (GIF or WebP)…* now records the view and the generations after it, as a GIF or a lossless WebP,
   in the background. ([#62](https://github.com/jprodgers/jetcarp/issues/62))
+- **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
+  often tie for a niche's last places (every run that dies at the same generation scores the same),
+  and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU
+  rounds finish, not in the order of their ids, while an import rebuilds the archive in id order, so
+  0.2–0.5% of the elites were other, unconfirmed runs of the same score. A tie now goes to the run
+  with the lower id, so the archive holds the same elites in whatever order its runs come. A search
+  made before keeps its elites until `jetcarp jobs rescore` picks them again from its runs.
+  ([#54](https://github.com/jprodgers/jetcarp/issues/54))
 
 ### Changed
 
