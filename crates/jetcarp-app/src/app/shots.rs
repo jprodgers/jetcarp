@@ -516,6 +516,7 @@ fn shots_desktop_pane_cards() {
                     cells,
                     cpu_percent: 0.1 + 2.0 * load,
                     gpu_percent: Some(0.8 + 3.0 * load),
+                    gpu_unmeasured: false,
                     p95_ms: 1.5 + 3.0 * load,
                     fps: 30.0,
                     on_gpu: cells >= 16_000,

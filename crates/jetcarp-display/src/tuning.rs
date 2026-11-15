@@ -13,7 +13,7 @@
 //! The background host runs the sweep on the real screen. With no host running, `jetcarp host
 //! tune` runs it off screen in a process of its own, which the app starts with [`TuneChild`].
 
-use crate::host_settings::{GpuTiming, Rung, Size, TuneLimits, TunedScene};
+use crate::host_settings::{GPU_UNMEASURED, GpuTiming, Rung, Size, TuneLimits, TunedScene};
 use crate::pace::Pacer;
 use jetcarp_core::{Command, Scene, SeedSpec};
 use serde::{Deserialize, Serialize};
@@ -73,10 +73,16 @@ impl Measure {
     /// The GPU share the limits judge: none from [`GpuTiming::Submission`], an upper bound that
     /// counts the work's time waiting in the driver's queue. On Windows it read about 90% for a
     /// scene the GPU spent 10% of its time on, so every size looked far over the limit (#38). Its
-    /// frames are still judged by their times.
+    /// frames are still judged by their times. Windows' own engine counters
+    /// ([`GpuTiming::Counters`]) are judged, as the kernel's count is on Linux (#72).
     pub fn judged_gpu(&self) -> Option<f64> {
-        self.gpu
-            .filter(|_| self.gpu_timing != GpuTiming::Submission)
+        self.gpu.filter(|_| !self.gpu_timing.unmeasured())
+    }
+
+    /// A GPU was there, but its share wasn't measured, so the GPU limit isn't applied: an unjudged
+    /// share, or a share the system's count failed to give.
+    pub fn gpu_unmeasured(&self) -> bool {
+        self.gpu_timing != GpuTiming::None && self.judged_gpu().is_none()
     }
 }
 
@@ -302,7 +308,9 @@ pub fn rung_of(size: Size, m: &Measure, l: &SceneLimits, own: bool) -> Rung {
         size,
         cells: m.cells,
         cpu_percent: (m.cpu * 100.0) as f32,
-        gpu_percent: m.gpu.map(|g| (g * 100.0) as f32),
+        // Only a measured share: an unjudged number would read as one (#72).
+        gpu_percent: m.judged_gpu().map(|g| (g * 100.0) as f32),
+        gpu_unmeasured: m.gpu_unmeasured(),
         p95_ms: (m.p95 * 1000.0) as f32,
         fps: m.fps as f32,
         on_gpu: m.on_gpu,
@@ -615,12 +623,26 @@ pub enum TuneEvent {
         /// How the GPU's time was measured.
         #[serde(default)]
         gpu_timing: GpuTiming,
+        /// [`GPU_UNMEASURED`], when the GPU share wasn't measured ([`TuneEvent::done`]).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gpu_note: Option<String>,
     },
     /// It stopped early.
     Failed { error: String },
 }
 
 impl TuneEvent {
+    /// The sweep's last line: saved to `saved` (None: not saved), `scenes` scenes, the GPU timed
+    /// by `gpu_timing`, saying so plainly when its share wasn't measured (#72).
+    pub fn done(saved: Option<String>, scenes: usize, gpu_timing: GpuTiming) -> TuneEvent {
+        TuneEvent::Done {
+            saved,
+            scenes,
+            gpu_timing,
+            gpu_note: gpu_timing.unmeasured().then(|| GPU_UNMEASURED.to_string()),
+        }
+    }
+
     /// One line for people.
     pub fn describe(&self) -> String {
         match self {
@@ -665,9 +687,11 @@ impl TuneEvent {
                 saved,
                 scenes,
                 gpu_timing,
+                ..
             } => {
                 let how = match gpu_timing {
                     GpuTiming::None => String::new(),
+                    t if t.unmeasured() => format!("; {GPU_UNMEASURED}"),
                     t => format!(" (GPU time from {})", t.describe()),
                 };
                 match saved {
@@ -705,9 +729,11 @@ pub fn fps_range(rates: impl IntoIterator<Item = f32>) -> (f32, Option<f32>) {
 
 /// A card's numbers, for people.
 pub fn rung_line(r: &Rung) -> String {
-    let gpu = r.gpu_percent.map_or(String::new(), |g| {
-        format!(", GPU {}", percent(g as f64 / 100.0))
-    });
+    let gpu = match r.gpu_percent {
+        Some(g) => format!(", GPU {}", percent(g as f64 / 100.0)),
+        None if r.gpu_unmeasured => ", GPU not measured".into(),
+        None => String::new(),
+    };
     format!(
         "{}, {} cells: processor {}{gpu}, {:.0} fps, frames {:.1} ms, on the {}{}{}",
         r.size.describe(),
@@ -1202,9 +1228,16 @@ mod tests {
         };
         assert!(fits(&m(GpuTiming::Submission), &l).is_ok());
         assert!(!far_over(&m(GpuTiming::Submission), &l));
-        for t in [GpuTiming::Timestamps, GpuTiming::Kernel] {
+        // Windows' engine counters are judged like Linux's count (#72).
+        for t in [
+            GpuTiming::Timestamps,
+            GpuTiming::Kernel,
+            GpuTiming::Counters,
+        ] {
             assert!(fits(&m(t), &l).unwrap_err().contains("GPU 90%"));
             assert!(far_over(&m(t), &l));
+            let r = rung_of(Size::px(3.0), &m(t), &l, false);
+            assert_eq!((r.gpu_percent, r.gpu_unmeasured), (Some(90.0), false));
         }
         // Slow frames still fail, whatever the clock.
         let slow = Measure {
@@ -1212,6 +1245,85 @@ mod tests {
             ..m(GpuTiming::Submission)
         };
         assert!(fits(&slow, &l).unwrap_err().contains("frames"));
+    }
+
+    /// Where the GPU share wasn't measured, the cards, the text and the JSON say so plainly, and
+    /// show the share as unknown, not as an unjudged number (#72).
+    #[test]
+    fn an_unmeasured_gpu_share_is_unknown_and_says_why() {
+        let l = SceneLimits {
+            cpu: 0.10,
+            gpu: 0.25,
+            fps: 60.0,
+        };
+        let m = Measure {
+            cpu: 0.02,
+            gpu: Some(0.90),
+            p95: 0.010,
+            fps: 60.0,
+            on_gpu: true,
+            gpu_timing: GpuTiming::Submission,
+            cells: 230_400,
+            ..Measure::default()
+        };
+        let r = rung_of(Size::px(3.0), &m, &l, true);
+        assert_eq!(
+            (r.gpu_percent, r.gpu_unmeasured, r.fits),
+            (None, true, true)
+        );
+        let line = rung_line(&r);
+        assert!(
+            line.contains("processor 2.0%, GPU not measured, 60 fps"),
+            "{line}"
+        );
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains(r#""gpu_unmeasured":true"#), "{json}");
+        assert!(!json.contains("gpu_percent"), "{json}");
+        // The counters failing to give a share is unmeasured too; no GPU at all is not.
+        let lost = Measure {
+            gpu: None,
+            gpu_timing: GpuTiming::Counters,
+            ..m
+        };
+        assert!(lost.gpu_unmeasured());
+        let cpu_only = Measure {
+            gpu: None,
+            gpu_timing: GpuTiming::None,
+            on_gpu: false,
+            ..m
+        };
+        assert!(!cpu_only.gpu_unmeasured());
+        let line = rung_line(&rung_of(Size::px(3.0), &cpu_only, &l, true));
+        assert!(!line.contains("GPU"), "{line}");
+        // The sweep's last line, for people and as JSON.
+        let done = TuneEvent::done(Some("host.json".into()), 3, GpuTiming::Submission);
+        assert_eq!(
+            done.describe(),
+            "swept 3 scene(s); GPU share not measured on this adapter (it has no GPU timestamps): \
+             the GPU limit isn't applied; saved to host.json"
+        );
+        let json = serde_json::to_string(&done).unwrap();
+        assert!(
+            json.contains(r#""gpu_note":"GPU share not measured"#),
+            "{json}"
+        );
+        let counted = TuneEvent::done(None, 3, GpuTiming::Counters);
+        assert_eq!(
+            counted.describe(),
+            "swept 3 scene(s) (GPU time from Windows' GPU engine counters for JETCARP's process); \
+             not saved"
+        );
+        assert!(
+            !serde_json::to_string(&counted)
+                .unwrap()
+                .contains("gpu_note")
+        );
+        // A line from a tuner before 0.4.2, with no note, still reads.
+        let old: TuneEvent = serde_json::from_str(
+            r#"{"event": "done", "saved": null, "scenes": 1, "gpu_timing": "submission"}"#,
+        )
+        .unwrap();
+        assert!(matches!(old, TuneEvent::Done { gpu_note: None, .. }));
     }
 
     #[test]

@@ -297,6 +297,15 @@ that will declare them stable.
   "Until it settles". The cards now show only the scenes of the rotation each screen shows, and
   *Use the recommended size for the rest* and *Use this size for every scene on this tiling* settle
   only those; the other sizes stay saved. ([#73](https://github.com/jprodgers/jetcarp/issues/73))
+- **Fit to this computer didn't apply the GPU limit on an adapter without GPU timestamps, and
+  didn't say so.** On the Acer's Intel UHD each frame was timed from its submission, an upper bound
+  3 to 10 times Windows' own count, which since #38 is not judged, so a size using 31% of the UHD
+  was recommended under a 25% limit. On Windows such an adapter is now measured by Windows' GPU
+  engine counters for JETCARP's process (the figures Task Manager shows), judged like Linux's count;
+  where they can't be read either, the cards show *GPU unknown* rather than the unjudged number, and
+  the pane and `host tune`'s last line say "GPU share not measured on this adapter (it has no GPU
+  timestamps): the GPU limit isn't applied" (with `--json`, `"gpu_unmeasured": true` on each card
+  and `gpu_note` on the last line). ([#72](https://github.com/jprodgers/jetcarp/issues/72))
 
 ### Changed
 

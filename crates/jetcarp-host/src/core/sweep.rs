@@ -9,6 +9,7 @@
 //! rate ([`scene_fps`]).
 
 use super::{Core, Place};
+use crate::gpu_engine::EngineMeter;
 use crate::power::ProcessMeter;
 use crate::tune::{
     BUILD_LIMIT, MAX_SCENES, ScenePlan, max_cells, save_crop, save_scene, scene_plan, showing,
@@ -34,7 +35,13 @@ enum Clock {
     None,
     /// The system's count of the host's own GPU time (Linux).
     Kernel,
-    /// From each frame's last submission until the GPU is done (the window side reports it).
+    /// Not known yet: Windows' engine counters, if the first size's warm-up shows they count the
+    /// host's work.
+    Undecided,
+    /// Windows' GPU engine counters for the host's process ([`EngineMeter`], #72).
+    Counters,
+    /// From each frame's last submission until the GPU is done (the window side reports it): an
+    /// upper bound, not judged.
     Submission,
 }
 
@@ -52,6 +59,9 @@ enum Phase {
         acc0: f64,
         gen0: u64,
         frames: Vec<f64>,
+        /// The first frame's time includes sampling Windows' engine counters, which is not the
+        /// scene's: it counts towards the frame rate, not the 95th percentile.
+        first_sampled: bool,
     },
 }
 
@@ -87,6 +97,8 @@ pub(crate) struct HostSweep {
     parked: Option<(usize, Stage)>,
     painter: Option<Painter>,
     clock: Clock,
+    /// Windows' GPU engine counters, for [`Clock::Undecided`] and [`Clock::Counters`].
+    engine: Option<EngineMeter>,
     /// GPU seconds the window side has reported, for [`Clock::Submission`].
     pub(crate) gpu_acc: Arc<Mutex<f64>>,
     saved: Option<String>,
@@ -114,11 +126,7 @@ impl HostSweep {
     }
 
     fn timing(&self) -> GpuTiming {
-        match self.clock {
-            Clock::None => GpuTiming::None,
-            Clock::Kernel => GpuTiming::Kernel,
-            Clock::Submission => GpuTiming::Submission,
-        }
+        sw_timing(self.clock)
     }
 
     /// Where it is, for `status`: the scene's number, how many, and what is on show.
@@ -186,7 +194,15 @@ impl Core {
         let clock = match &self.gpu {
             None => Clock::None,
             Some(_) if crate::power::process_gpu_time().is_some() => Clock::Kernel,
-            Some(_) => Clock::Submission,
+            Some(_) => Clock::Undecided,
+        };
+        // Windows' engine counters (#72); None elsewhere, or where they can't be read.
+        let engine = (clock == Clock::Undecided)
+            .then(EngineMeter::start)
+            .flatten();
+        let clock = match (clock, &engine) {
+            (Clock::Undecided, None) => Clock::Submission,
+            (c, _) => c,
         };
         let total = queue.len();
         let (fps, fps_max) = fps_range(queue.iter().filter_map(|&(i, k)| {
@@ -218,6 +234,7 @@ impl Core {
             parked: None,
             painter: None,
             clock,
+            engine,
             gpu_acc: Arc::new(Mutex::new(0.0)),
             saved: None,
         });
@@ -308,11 +325,8 @@ impl Core {
 
     fn finish_sweep(&mut self, mut sw: HostSweep) {
         self.restore(&mut sw);
-        self.sweep_events.push(TuneEvent::Done {
-            saved: sw.saved.clone(),
-            scenes: sw.total,
-            gpu_timing: sw.timing(),
-        });
+        self.sweep_events
+            .push(TuneEvent::done(sw.saved.clone(), sw.total, sw.timing()));
         self.sweep_last = Some(json!({"outcome": "done", "scenes": sw.total, "auto": sw.req.auto}));
         self.apply_pause();
         self.note(format!(
@@ -461,6 +475,12 @@ impl Core {
                         cur.phase = Phase::Warm {
                             until: now + warmup(sw.seconds),
                         };
+                        if sw.clock == Clock::Undecided
+                            && let Some(e) = &mut sw.engine
+                        {
+                            // The counters from here, to see whether they count the warm-up.
+                            let _ = e.share();
+                        }
                         Next::Stay
                     } else if screen.stage.paused() || now - *since > BUILD_LIMIT {
                         Next::Skip(if notes.is_empty() {
@@ -478,6 +498,28 @@ impl Core {
                 }
                 Phase::Warm { until } => {
                     if now >= *until {
+                        // Windows' counters: whether they counted the warm-up (the first time),
+                        // and their sample from here, taken before the processor meter starts so
+                        // PDH's own work is not counted as the host's.
+                        let sampled = match (sw.clock, sw.engine.as_mut()) {
+                            (Clock::Undecided, Some(e)) => {
+                                let counted = e.share().is_some_and(|s| s > 0.0);
+                                sw.clock = if counted {
+                                    Clock::Counters
+                                } else {
+                                    Clock::Submission
+                                };
+                                true
+                            }
+                            (Clock::Counters, Some(e)) => {
+                                let _ = e.share();
+                                true
+                            }
+                            _ => false,
+                        };
+                        if sw.clock != Clock::Counters {
+                            sw.engine = None;
+                        }
                         let acc0 = sw.gpu_acc.lock().map(|a| *a).unwrap_or(0.0);
                         cur.phase = Phase::Measure {
                             until: now + (sw.seconds - warmup(sw.seconds)),
@@ -487,6 +529,7 @@ impl Core {
                             acc0,
                             gen0: screen.stage.world().map_or(0, |w| w.generation),
                             frames: vec![],
+                            first_sampled: sampled,
                         };
                     }
                     Next::Stay
@@ -526,29 +569,40 @@ impl Core {
             acc0,
             gen0,
             frames,
+            first_sampled,
             ..
         } = &mut cur.phase
         else {
             return;
         };
         let wall = started.elapsed().as_secs_f64().max(1e-6);
+        // The processor first: the counters' sample below is PDH's work, not the host's.
+        let cpu = meter.as_ref().map_or(0.0, |m| m.share());
         let gpu = match clock {
             Clock::None => None,
             Clock::Kernel => match (*gpu0, crate::power::process_gpu_time()) {
                 (Some(a), Some(b)) => Some(b.saturating_sub(a).as_secs_f64() / wall),
                 _ => None,
             },
-            Clock::Submission => Some((acc - *acc0) / wall),
+            // None if they stopped answering: the share is then unknown, not zero.
+            Clock::Counters => sw.engine.as_mut().and_then(EngineMeter::share),
+            Clock::Undecided | Clock::Submission => Some((acc - *acc0) / wall),
         };
         let st = screen.stage.status();
         // The speed it runs at (in low power, at most the frame rate).
         let speed = screen.stage.pace().speed as f64;
         let mut times = std::mem::take(frames);
+        let frame_count = times.len();
+        let judged = if *first_sampled && times.len() > 1 {
+            &mut times[1..]
+        } else {
+            &mut times[..]
+        };
         let m = Measure {
-            cpu: meter.as_ref().map_or(0.0, |m| m.share()),
+            cpu,
             gpu: gpu.map(|g| g.clamp(0.0, 1.0)),
-            p95: p95(&mut times),
-            fps: times.len() as f64 / wall,
+            p95: p95(judged),
+            fps: frame_count as f64 / wall,
             gens_wanted: (speed > 0.0).then_some(speed * wall),
             gens_done: screen
                 .stage
@@ -666,7 +720,8 @@ fn sw_timing(c: Clock) -> GpuTiming {
     match c {
         Clock::None => GpuTiming::None,
         Clock::Kernel => GpuTiming::Kernel,
-        Clock::Submission => GpuTiming::Submission,
+        Clock::Counters => GpuTiming::Counters,
+        Clock::Undecided | Clock::Submission => GpuTiming::Submission,
     }
 }
 

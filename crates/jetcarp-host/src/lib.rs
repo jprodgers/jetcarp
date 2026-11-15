@@ -19,6 +19,7 @@ mod core;
 mod desktop_mac;
 #[cfg(windows)]
 mod desktop_win;
+mod gpu_engine;
 mod power;
 #[cfg(any(windows, test))]
 mod saver_args;

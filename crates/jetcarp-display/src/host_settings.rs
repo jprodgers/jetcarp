@@ -154,9 +154,18 @@ pub enum GpuTiming {
     /// bound for the step, whose span includes the processor's share of it).
     Timestamps,
     /// From handing the work to the GPU until it said it was done: an upper bound, used where the
-    /// GPU has no timestamp queries.
+    /// GPU has no timestamp queries and the system does not count JETCARP's GPU time. It counts the
+    /// time the work waits in the driver's queue (3 to 10 times Windows' own count on the Acer's
+    /// Intel UHD, #72), so the share it gives is not measured, and not judged.
     Submission,
+    /// Windows' GPU engine counters for JETCARP's process, the figures Task Manager shows: its 3D
+    /// engines' share of their time. Exact for its own work, like [`GpuTiming::Kernel`]; used on
+    /// Windows where the adapter has no timestamp queries (#72).
+    Counters,
 }
+
+/// What the cards and `host tune` say when the GPU share wasn't measured ([`GpuTiming::Submission`]).
+pub const GPU_UNMEASURED: &str = "GPU share not measured on this adapter (it has no GPU timestamps): the GPU limit isn't applied";
 
 impl GpuTiming {
     pub fn describe(self) -> &'static str {
@@ -164,8 +173,14 @@ impl GpuTiming {
             GpuTiming::None => "no GPU",
             GpuTiming::Kernel => "the system's count of JETCARP's GPU time",
             GpuTiming::Timestamps => "the GPU's timestamp queries",
-            GpuTiming::Submission => "submission to completion (an upper bound)",
+            GpuTiming::Submission => "submission to completion (an upper bound, not judged)",
+            GpuTiming::Counters => "Windows' GPU engine counters for JETCARP's process",
         }
+    }
+
+    /// Whether a GPU was there but its share wasn't measured, so the GPU limit isn't applied.
+    pub fn unmeasured(self) -> bool {
+        self == GpuTiming::Submission
     }
 }
 
@@ -226,6 +241,11 @@ pub struct Rung {
     /// Its share of the GPU's time, in percent (None: not measured).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gpu_percent: Option<f32>,
+    /// A GPU was there, but its share wasn't measured (no GPU timestamps, and no count of
+    /// JETCARP's GPU time from the system), so the GPU limit wasn't applied to this size: the card
+    /// shows the share as unknown ([`GPU_UNMEASURED`], #72).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub gpu_unmeasured: bool,
     /// The 95th percentile of the time a frame took, in milliseconds.
     pub p95_ms: f32,
     /// Frames drawn a second.
@@ -649,6 +669,7 @@ mod tests {
                     cells: 921_600,
                     cpu_percent: 2.5,
                     gpu_percent: Some(4.0),
+                    gpu_unmeasured: false,
                     p95_ms: 6.0,
                     fps: 30.0,
                     on_gpu: true,

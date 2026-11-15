@@ -10,6 +10,7 @@
 //! own, so the processor time it measures is its own.
 
 use crate::core::{STEP_SHARE, SharedGpu, load_rotation};
+use crate::gpu_engine::EngineMeter;
 use crate::power::ProcessMeter;
 use jetcarp_core::render::Image;
 use jetcarp_core::{SizeSpec, World};
@@ -557,11 +558,7 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
         let _ = host_call(&json!({"action": "reload"}));
     }
     drop(hold);
-    out.event(&TuneEvent::Done {
-        saved,
-        scenes: total,
-        gpu_timing: rig.gpu_timing(),
-    });
+    out.event(&TuneEvent::done(saved, total, rig.gpu_timing()));
     Ok(())
 }
 
@@ -839,6 +836,8 @@ impl Timer {
 struct Rig {
     gpu: Option<SharedGpu>,
     timer: Option<Timer>,
+    /// Windows' GPU engine counters, on an adapter without timestamps ([`Clock::Counters`]).
+    engine: Option<EngineMeter>,
     clock: Clock,
     sim: SimBackend,
     settings: HostSettings,
@@ -863,10 +862,19 @@ impl Rig {
             (None, _) => Clock::None,
             _ if cfg!(target_os = "linux") => Clock::Undecided,
             (Some(_), Some(_)) => Clock::Timestamps,
+            // Windows' engine counters, if they count this process's work: the first warm-up
+            // finds out (#72).
+            (Some(_), None) if cfg!(windows) => Clock::Undecided,
             (Some(_), None) => Clock::Submission,
+        };
+        // None off Windows, and where the counters can't be read.
+        let engine = match (&timer, clock) {
+            (None, Clock::Undecided) => EngineMeter::start(),
+            _ => None,
         };
         Rig {
             timer,
+            engine,
             clock,
             gpu,
             sim,
@@ -882,6 +890,7 @@ impl Rig {
             Clock::None => GpuTiming::None,
             Clock::Kernel => GpuTiming::Kernel,
             Clock::Timestamps => GpuTiming::Timestamps,
+            Clock::Counters => GpuTiming::Counters,
             Clock::Undecided | Clock::Submission => GpuTiming::Submission,
         }
     }
@@ -1024,7 +1033,7 @@ impl Rig {
                         gpu_secs = s + d;
                     }
                     // The system counts it; the frame is over once the GPU has done it.
-                    (None, Clock::Kernel) => {
+                    (None, Clock::Kernel | Clock::Counters) => {
                         let _ = g.device.poll(wgpu::PollType::wait_indefinitely());
                     }
                     (None, _) => {
@@ -1052,23 +1061,46 @@ impl Rig {
             (start.elapsed().as_secs_f64(), gpu_secs)
         };
         let k0 = crate::power::process_gpu_time();
+        let undecided = self.clock == Clock::Undecided;
+        if undecided && let Some(e) = &mut self.engine {
+            // Windows' counters from here, to see whether they count the warm-up's work.
+            let _ = e.share();
+        }
         let warm = Instant::now();
         let warm_for = warmup(seconds);
         while warm.elapsed().as_secs_f64() < warm_for {
             frame(&mut stage, &mut self.sim, self.clock);
         }
-        if self.clock == Clock::Undecided {
-            // The system's count, where it moved while the warm-up drew; else the GPU's clock.
+        if undecided {
+            // The system's count, where it moved while the warm-up drew; else the GPU's clock;
+            // else, on Windows, its engine counters where they counted the warm-up's work.
             let k1 = crate::power::process_gpu_time();
+            let mut counted = || {
+                self.engine
+                    .as_mut()
+                    .and_then(EngineMeter::share)
+                    .is_some_and(|s| s > 0.0)
+            };
             self.clock = match (k0, k1) {
                 (Some(a), Some(b)) if b > a => Clock::Kernel,
                 _ if self.timer.is_some() => Clock::Timestamps,
+                _ if counted() => Clock::Counters,
                 _ => Clock::Submission,
             };
+            if self.clock != Clock::Counters {
+                self.engine = None;
+            }
         }
         let clock = self.clock;
         notes.extend(stage.take_notes());
         let gen0 = stage.world().map_or(0, |w| w.generation);
+        if clock == Clock::Counters
+            && let Some(e) = &mut self.engine
+        {
+            // The counters' sample from here, taken before the processor meter starts, so PDH's
+            // own work is not counted as JETCARP's.
+            let _ = e.share();
+        }
         let meter = ProcessMeter::start();
         let counted0 = crate::power::process_gpu_time();
         let m0 = Instant::now();
@@ -1085,6 +1117,12 @@ impl Rig {
         {
             gpu_total = b.saturating_sub(a).as_secs_f64();
         }
+        // Read once the processor meter has stopped. None if they stopped answering: the share
+        // is then unknown, not zero.
+        let counted = match clock {
+            Clock::Counters => self.engine.as_mut().and_then(EngineMeter::share),
+            _ => None,
+        };
         let image = match (&self.gpu, &draw) {
             (Some(g), Some((_, tex, _))) => {
                 let size = crop_size(job.canvas);
@@ -1109,12 +1147,14 @@ impl Rig {
         let speed = pace.speed as f64;
         let on_gpu = matches!(self.sim.status(), SimStatus::Gpu(_));
         let gpu_timing = self.gpu_timing();
+        let gpu = match (&self.gpu, clock) {
+            (None, _) => None,
+            (Some(_), Clock::Counters) => counted,
+            (Some(_), _) => Some(gpu_total / wall),
+        };
         let m = Measure {
             cpu,
-            gpu: self
-                .gpu
-                .as_ref()
-                .map(|_| (gpu_total / wall).clamp(0.0, 1.0)),
+            gpu: gpu.map(|g| g.clamp(0.0, 1.0)),
             p95: p95(&mut times),
             fps: frames / wall.max(1e-9),
             gens_wanted: (speed > 0.0).then_some(speed * wall),
@@ -1132,12 +1172,15 @@ impl Rig {
 enum Clock {
     /// No GPU.
     None,
-    /// Not known yet: the first trial's warm-up finds out whether the system counts it.
+    /// Not known yet: the first trial's warm-up finds out whether the system counts it (Linux's
+    /// kernel, or Windows' engine counters where the adapter has no timestamps).
     Undecided,
     /// The system's count of this process's GPU time ([`crate::power::process_gpu_time`]).
     Kernel,
     /// Timestamp queries around each frame's step and drawing.
     Timestamps,
+    /// Windows' GPU engine counters for this process ([`EngineMeter`]).
+    Counters,
     /// From handing each frame's work to the GPU until it is done.
     Submission,
 }

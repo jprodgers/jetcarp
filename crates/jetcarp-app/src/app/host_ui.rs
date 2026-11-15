@@ -14,11 +14,11 @@ use egui_wgpu::wgpu;
 use jetcarp_display::autostart;
 use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome::{self, ExtensionState};
+use jetcarp_display::host_settings::{GPU_UNMEASURED, Rung, Size, crops_dir};
 use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Pacing, Place, ScreenSettings, TuneLimits,
     TunedScene, Tuning,
 };
-use jetcarp_display::host_settings::{Rung, Size, crops_dir};
 use jetcarp_display::pace::DEFAULT_MAX_FPS;
 use jetcarp_display::tuning::{self, TuneChild, TuneEvent, TuneRequest};
 use jetcarp_gpu::select::{self, Mode, Own};
@@ -1301,6 +1301,10 @@ fn performance_ui(
                 todo = Some(CardDo::RecommendedForRest);
             }
         });
+        // Said once for the screen; each card shows the share as unknown (#72).
+        if scenes.iter().any(|x| gpu_unmeasured(x)) {
+            ui.label(RichText::new(GPU_UNMEASURED).small().color(WARN));
+        }
         for scene in scenes {
             if view
                 .live
@@ -1322,6 +1326,9 @@ fn performance_ui(
             ..Default::default()
         };
         ui.label(RichText::new("Measuring…").small().weak());
+        if gpu_unmeasured(&scene) {
+            ui.label(RichText::new(GPU_UNMEASURED).small().color(WARN));
+        }
         let _ = scene_row(ui, &ctx, ppp, *i, &scene, false, crop);
     }
     if !any && !view.running {
@@ -1448,7 +1455,19 @@ fn scene_row(
                         && (r.size.same(&showing)
                             || (r.own && showing.level.is_none() && showing.px == scene.design_px));
                     let recommended = choosable && r.size.same(&scene.recommended);
-                    if card(ui, ctx, ppp, r, picked, recommended, choosable, crop) {
+                    // A sweep from before 0.4.2 kept the unjudged share as a number.
+                    let unknown = r.gpu_unmeasured || scene.gpu_timing.unmeasured();
+                    if card(
+                        ui,
+                        ctx,
+                        ppp,
+                        r,
+                        picked,
+                        recommended,
+                        unknown,
+                        choosable,
+                        crop,
+                    ) {
                         todo = Some(CardDo::Choose(screen, scene.scene.clone(), r.size));
                     }
                 }
@@ -1458,7 +1477,8 @@ fn scene_row(
 }
 
 /// One card: the picture at the screen's own pixels, the size and cells, the numbers, and whether
-/// it is within the limits. True when it was clicked.
+/// it is within the limits. `gpu_unknown`: its GPU share wasn't measured, so it shows as unknown
+/// (#72). True when it was clicked.
 #[allow(clippy::too_many_arguments)]
 fn card(
     ui: &mut egui::Ui,
@@ -1467,6 +1487,7 @@ fn card(
     r: &Rung,
     picked: bool,
     recommended: bool,
+    gpu_unknown: bool,
     choosable: bool,
     crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
 ) -> bool {
@@ -1504,10 +1525,12 @@ fn card(
                         .small()
                         .strong(),
                 );
-                let gpu = r.gpu_percent.map_or(String::new(), |g| {
-                    format!(" · GPU {}", tuning::percent(g as f64 / 100.0))
-                });
-                ui.label(
+                let gpu = match r.gpu_percent {
+                    _ if gpu_unknown => " · GPU unknown".to_string(),
+                    Some(g) => format!(" · GPU {}", tuning::percent(g as f64 / 100.0)),
+                    None => String::new(),
+                };
+                let numbers = ui.label(
                     RichText::new(format!(
                         "CPU {}{gpu} · {:.0} fps",
                         tuning::percent(r.cpu_percent as f64 / 100.0),
@@ -1515,6 +1538,9 @@ fn card(
                     ))
                     .small(),
                 );
+                if gpu_unknown {
+                    numbers.on_hover_text(GPU_UNMEASURED);
+                }
                 ui.horizontal(|ui| {
                     if r.fits {
                         ui.label(
@@ -1542,12 +1568,23 @@ fn card(
         return false;
     }
     let resp = resp.interact(egui::Sense::click()).on_hover_text(format!(
-        "{}; frames {:.1} ms (95th percentile); stepped on the {}. Click to choose",
+        "{}; frames {:.1} ms (95th percentile); stepped on the {}{}. Click to choose",
         r.size.describe(),
         r.p95_ms,
-        if r.on_gpu { "GPU" } else { "processor" }
+        if r.on_gpu { "GPU" } else { "processor" },
+        if gpu_unknown {
+            format!("; {GPU_UNMEASURED}")
+        } else {
+            String::new()
+        }
     ));
     resp.clicked()
+}
+
+/// Whether a scene's GPU share wasn't measured: its sweep's clock, or any of its cards (a scene
+/// still being measured has no clock yet) (#72).
+fn gpu_unmeasured(scene: &TunedScene) -> bool {
+    scene.gpu_timing.unmeasured() || scene.rungs.iter().any(|r| r.gpu_unmeasured)
 }
 
 /// A card's picture from the cache, read from the tuning folder (again when the file changes).
@@ -1592,5 +1629,24 @@ mod tests {
         let paused = json!({"screens": [], "paused": true, "paused_why": ["by hand"],
             "held": [], "held_why": []});
         assert_eq!(summary(&paused), "Paused: by hand.");
+    }
+
+    /// The cards say when a scene's GPU share wasn't measured: from its sweep's clock (a file
+    /// from rc.2 kept the unjudged share as a number), or from a card while it is measured (#72).
+    #[test]
+    fn the_cards_know_an_unmeasured_gpu_share() {
+        use jetcarp_display::host_settings::GpuTiming;
+        let scene = |gpu_timing, gpu_unmeasured| TunedScene {
+            gpu_timing,
+            rungs: vec![Rung {
+                gpu_unmeasured,
+                ..Rung::default()
+            }],
+            ..Default::default()
+        };
+        assert!(gpu_unmeasured(&scene(GpuTiming::Submission, false)));
+        assert!(gpu_unmeasured(&scene(GpuTiming::None, true)), "measuring");
+        assert!(!gpu_unmeasured(&scene(GpuTiming::Kernel, false)));
+        assert!(!gpu_unmeasured(&scene(GpuTiming::Counters, false)));
     }
 }

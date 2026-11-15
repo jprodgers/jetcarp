@@ -298,13 +298,14 @@ under 90% of the frame's time, and the scene keeps its speed. With several scree
 each gets an equal share. Sizes over the limits are shown too, marked, and you can still choose them.
 
 **The cards.** Each card has a picture of the screen at that size, shown at the screen's own pixels so
-a one-pixel cell looks as it will; the size and the number of cells; the processor, GPU and frame
-rate; and whether it is within the limits. *Recommended* marks the finest size within them, and each
-scene shows at its recommended size unless you click another card. A scene that is a pattern placed
-on an empty field (a glider gun, an ant from one cell) keeps its own size unless you choose another.
-*Use this size for every scene on this tiling* gives the card's size to the screen's other scenes on
-the same tiling, and *Use the recommended size for the rest* settles every scene you have not chosen.
-*Use the scenes' own sizes* forgets the sweep.
+a one-pixel cell looks as it will; the size and the number of cells; the processor, GPU (*unknown*
+where it could not be measured, see *What it measures* below) and frame rate; and whether it is
+within the limits. *Recommended* marks the finest size within them, and each scene shows at its
+recommended size unless you click another card. A scene that is a pattern placed on an empty field
+(a glider gun, an ant from one cell) keeps its own size unless you choose another. *Use this size
+for every scene on this tiling* gives the card's size to the screen's other scenes on the same
+tiling, and *Use the recommended size for the rest* settles every scene you have not chosen. *Use
+the scenes' own sizes* forgets the sweep.
 
 ```text
 $ jetcarp host tune --cpu-limit 1 --gpu-limit 3
@@ -323,11 +324,17 @@ swept 3 scene(s) (GPU time from the system's count of JETCARP's GPU time); saved
 
 **What it measures.** The processor time is JETCARP's own, on every thread. The GPU time is the
 system's own count of JETCARP's GPU time on Linux; elsewhere it comes from the GPU's timestamp
-queries, in the host's window and off screen alike, where the adapter has them. Failing both, each
-frame is timed from its submission until the GPU is done: an upper bound, which counts the time the
-work waits in the driver's queue (on Windows it read about 90% for a scene the GPU spent 10% of its
-time on), so the cards show it but it is not held to the GPU limit; the frame times still are. The
-summary says which. A world small enough that the
+queries, in the host's window and off screen alike, where the adapter has them. On Windows, an
+adapter without them (such as an Intel UHD) is measured by Windows' own GPU engine counters for
+JETCARP's process, the figures Task Manager shows, and held to the GPU limit like the others.
+Failing those, the GPU share is not measured: timing each frame from its submission until the GPU is
+done gives only an upper bound, which counts the time the work waits in the driver's queue (on
+Windows it read about 90% for a scene the GPU spent 10% of its time on). The cards then show the
+share as *GPU unknown*, and the pane and the sweep's last line say "GPU share not measured on this
+adapter (it has no GPU timestamps): the GPU limit isn't applied"; the frame times are still held to
+the frame rate. With `--json`, such a card has `"gpu_unmeasured": true` and no `gpu_percent`, and
+the last line has the same words as `gpu_note`. The summary says which clock it used. A world small
+enough that the
 [GPU setting](gpu.md) leaves it on the processor is tried there, and held to the processor limit like
 any other. On battery a sweep started by hand says that a computer on battery may measure slower than
 plugged in.
