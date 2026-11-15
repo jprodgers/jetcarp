@@ -168,7 +168,9 @@ impl JetcarpApp {
                         }
                     });
                     ui.end_row();
-                    ui.label("Connections");
+                    // The links open now, not a running total: "Connections 0" after a client had come
+                    // and gone read as if none ever had (#60).
+                    ui.label("Open connections");
                     ui.label(l.connection_count().to_string());
                     ui.end_row();
                     ui.label("Tool calls");

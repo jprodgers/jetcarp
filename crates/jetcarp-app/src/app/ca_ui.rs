@@ -44,9 +44,18 @@ impl JetcarpApp {
                 ui.horizontal(|ui| {
                     ui.label("Rule");
                     let text = self.rule_text.entry(id).or_insert_with(|| ca.notation());
-                    let r = ui.add(egui::TextEdit::singleline(text).desired_width(120.0).font(egui::TextStyle::Monospace));
-                    if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        cmds.push(Command::UpdateCa { id, change: CaChange { rule: Some(text.clone()), ..Default::default() } });
+                    let r = ui
+                        .add(egui::TextEdit::singleline(text).desired_width(120.0).font(egui::TextStyle::Monospace))
+                        .on_hover_text("This CA's rule. Press Enter, or click elsewhere, to apply it; Esc puts the current rule back.");
+                    // Applied when the box loses focus however that happens (Enter, a click elsewhere,
+                    // Tab), so a typed rule never sits in the box looking applied while the old one
+                    // runs (#61). Esc gives up the edit instead.
+                    if r.lost_focus() {
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            *text = ca.notation();
+                        } else if text.trim() != ca.notation() {
+                            cmds.push(Command::UpdateCa { id, change: CaChange { rule: Some(text.trim().to_string()), ..Default::default() } });
+                        }
                     }
                     egui::ComboBox::from_id_salt(("preset", id)).selected_text("Named…").width(90.0).show_ui(ui, |ui| {
                         if let Some(i) = rule_menu(ui, None) {
@@ -260,10 +269,16 @@ impl JetcarpApp {
             for (sign, label) in [(true, "+1 rule"), (false, "−1 rule")] {
                 ui.label(label);
                 let key = (id, sign);
-                let text = self.jaca_text.entry(key).or_insert_with(|| if sign { j.pos_bs() } else { j.neg_bs() });
+                let current = if sign { j.pos_bs() } else { j.neg_bs() };
+                let text = self.jaca_text.entry(key).or_insert_with(|| current.clone());
                 let r = ui.add(egui::TextEdit::singleline(text).desired_width(110.0).font(egui::TextStyle::Monospace))
-                    .on_hover_text("A B/S rule, counting only neighbours of this sign. Press Enter to apply.");
-                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    .on_hover_text("A B/S rule, counting only neighbours of this sign. Press Enter, or click elsewhere, to apply it; Esc puts the current rule back.");
+                // As the Rule box above: applied on losing focus, given up with Esc (#61).
+                let esc = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if esc {
+                    *text = current.clone();
+                }
+                if r.lost_focus() && !esc && text.trim() != current {
                     match Rule::parse(text.trim()) {
                         Ok((Rule::LifeLike { birth, survive }, _)) if birth & 1 == 0 => {
                             let mut n = j.clone();

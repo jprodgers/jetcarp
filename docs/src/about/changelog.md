@@ -143,6 +143,14 @@ that will declare them stable.
   for reuse rather than giving back. The search now gives its free memory back between steps, at
   most every 30 seconds. The grid cache's cap is about 3 GB, not the 2.2 GB its notes said: a grid
   costs about 90 bytes a cell. ([#53](https://github.com/jprodgers/jetcarp/issues/53))
+- **A rule typed into the app's Rule box stayed there, looking applied, while the old rule ran.**
+  The box applied a rule only on Enter, so a click elsewhere left the typed text in place, and a
+  saved scene kept the old rule. The Rule box and JACA's two rule boxes now apply a rule when they
+  lose focus, however that happens; Esc puts the current rule back.
+  ([#61](https://github.com/jprodgers/jetcarp/issues/61))
+- **The AI control window said "Connections 0" after a client had connected and left.** It counts
+  the links open at the moment, and now says so: *Open connections*.
+  ([#60](https://github.com/jprodgers/jetcarp/issues/60))
 
 ### Changed
 
