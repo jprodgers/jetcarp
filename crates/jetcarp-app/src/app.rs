@@ -129,6 +129,8 @@ pub struct JetcarpApp {
     // Tiling controls
     t_family: String,
     t_size: SizeChoice,
+    /// The graphics adapters found, listed once for Run → GPU adapter (#59).
+    gpu_adapters: Option<Vec<(String, &'static str)>>,
     t_boundary: Boundary,
     tile_json: String,
     // CA controls
@@ -266,6 +268,7 @@ impl JetcarpApp {
             last_painted: None,
             t_family: "square".into(),
             t_size: SizeChoice::Fill,
+            gpu_adapters: None,
             t_boundary: Boundary::Wrap,
             tile_json: String::new(),
             add_choice: 0,

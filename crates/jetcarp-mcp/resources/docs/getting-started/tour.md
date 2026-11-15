@@ -110,7 +110,7 @@ and *Window → Reset layout* puts everything back:
 | *File* | *Quick Start*, *New empty world*, *Open scene…* and *Save scene…*, the picture exports (*Export the world as PNG…*, *Export the view as PNG…*, *Export contact sheet…*, *Export wallpaper…*), *Quit* |
 | *Edit* | *Reset* (R: clear and seed every automaton again), *Clear every CA*, *Copy state hash*, *Paste a library pattern…* |
 | *View* | *Fit* and zoom, *Cell outlines*, the status bar and an auto-hiding menu bar, *Hide all panes*, *Pixel-exact zoom*, *Fill the canvas*, *Full screen*, *Show on outputs*, *Screensaver mode* and its settings, *Keep awake* |
-| *Run* | *Run / Pause*, *Step*, *Jump*, *Speed*, *Max speed*, *GPU simulation* |
+| *Run* | *Run / Pause*, *Step*, *Jump*, *Speed*, *Max speed*, *GPU simulation*, *GPU adapter* |
 | *Tiling* | The *Tiling* pane, *Family*, *Edges*, *Tiling catalog*, *Tile editor…*, *Unit cell editor…* |
 | *CA* | *Add from catalog*, *Add by notation…*, *Load rule table…*, the *CAs* and *Sequence* panes, *Palettes…* |
 | *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |

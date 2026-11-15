@@ -40,7 +40,11 @@ app, the background host, the command line and the MCP server all read it:
 - `gpu_adapter`, which is optional, picks the adapter: `integrated`, `discrete`, `software`, or part
   of an adapter's name.
 
-*Shared setting* under *GPU simulation* in the *Desktop background* pane writes it.
+*Shared setting* under *GPU simulation* in the *Desktop background* pane writes its mode, and *Run →
+GPU adapter* in the app its adapter: *Automatic* (the best one for each use), *Discrete*,
+*Integrated*, or one of the adapters this computer has, by name. On a laptop with two GPUs, this is
+how to move JETCARP from one to the other. The app picks its adapter when it starts, so it moves at
+its next start; the command line, the MCP server and the host follow at theirs.
 
 **The app and the background host each have a choice of their own,** over the shared setting:
 *Follow the shared setting* (the default), *On* or *Off*. So one setting serves both, and either can

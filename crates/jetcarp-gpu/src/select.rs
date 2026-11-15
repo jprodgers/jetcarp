@@ -1111,6 +1111,24 @@ pub struct ChoiceReport {
     pub problem: Option<String>,
 }
 
+/// The graphics adapters on this computer, by name, each once (an adapter reached through several
+/// backends, Vulkan and DirectX 12 say, is listed once), with its kind (`discrete`, `integrated`,
+/// `software`, ...), for a choice of adapter in the app (#59). A name chosen here is saved as
+/// [`Setting::gpu_adapter`], which matches by part of the name, as `JETCARP_GPU` does.
+pub fn adapter_names() -> Vec<(String, &'static str)> {
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+    let mut out: Vec<(String, &'static str)> = Vec::new();
+    for a in adapters {
+        let info = a.get_info();
+        if !out.iter().any(|(n, _)| *n == info.name) {
+            out.push((info.name.clone(), kind_name(info.device_type)));
+        }
+    }
+    out
+}
+
 /// The policy and each purpose's choice, with the self-test (run now if it has not been).
 pub fn report() -> (Policy, Vec<ChoiceReport>) {
     report_with(true)
@@ -1357,6 +1375,17 @@ mod tests {
             subgroup_max_size: 64,
             transient_saves_memory: None,
             limit_bucket: None,
+        }
+    }
+
+    /// The app's adapter list (#59) names each adapter once, however many backends reach it, and
+    /// every name it gives is one the setting's part-of-a-name match finds.
+    #[test]
+    fn adapter_names_list_each_adapter_once() {
+        let names = adapter_names();
+        for (i, (n, _)) in names.iter().enumerate() {
+            assert!(!names[..i].iter().any(|(m, _)| m == n), "{n} listed twice");
+            assert_eq!(Want::parse(n), Want::Named(n.trim().to_string()));
         }
     }
 

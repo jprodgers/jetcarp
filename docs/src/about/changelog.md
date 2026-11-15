@@ -161,6 +161,11 @@ that will declare them stable.
   only approximate cell counts and *Fill the view*. *Size* now has *Width × height*, in unit cells
   as `--size WxH` on the command line, and the jump's message says how to make such a grid.
   ([#58](https://github.com/jprodgers/jetcarp/issues/58))
+- **The app had no way to choose which GPU JETCARP uses.** The shared setting could name an
+  adapter, but only by editing `gpu.json` or setting `JETCARP_GPU`, so on a laptop with two GPUs the
+  app couldn't be moved from one to the other. *Run → GPU adapter* now lists *Automatic*,
+  *Discrete*, *Integrated* and each adapter found, and saves the choice to the shared setting; the
+  app moves at its next start. ([#59](https://github.com/jprodgers/jetcarp/issues/59))
 
 ### Changed
 

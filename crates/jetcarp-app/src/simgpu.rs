@@ -36,6 +36,30 @@ pub fn save_shared(mode: jetcarp_gpu::select::Mode) -> Result<(), String> {
     s.save().map(|_| ())
 }
 
+/// Saves the shared setting's adapter (`gpu_adapter` in `gpu.json`: `discrete`, `integrated`, part
+/// of an adapter's name, or `None` for the best one for each use), keeping its mode (#59). The app
+/// picks its adapter when it starts, so the app moves at its next start; the command line, the MCP
+/// server and the host follow at theirs.
+pub fn save_shared_adapter(adapter: Option<String>) -> Result<(), String> {
+    use jetcarp_gpu::select::Setting;
+    if std::env::var_os("JETCARP_CONFIG_DIR").is_none()
+        && std::env::var_os("JETCARP_SCREENSHOT").is_some()
+    {
+        return Ok(());
+    }
+    let mut s = Setting::load().ok().flatten().unwrap_or_default();
+    s.gpu_adapter = adapter;
+    s.save().map(|_| ())
+}
+
+/// The shared setting's adapter now (`None`: the best one for each use).
+pub fn shared_adapter() -> Option<String> {
+    jetcarp_gpu::select::Setting::load()
+        .ok()
+        .flatten()
+        .and_then(|s| s.gpu_adapter)
+}
+
 /// The shared setting's mode now (automatic when it is not saved).
 pub fn shared_mode() -> jetcarp_gpu::select::Mode {
     jetcarp_gpu::select::Setting::load()

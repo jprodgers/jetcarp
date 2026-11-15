@@ -732,6 +732,74 @@ impl JetcarpApp {
         self.sim.mode = crate::simgpu::app_policy(own).mode;
     }
 
+    /// Run → GPU adapter (#59): which adapter the shared setting names (`gpu_adapter` in
+    /// `gpu.json`), so a laptop with two GPUs can move JETCARP to the other one from the app. The
+    /// app picks its adapter when it starts, so it moves at its next start; the command line, the
+    /// MCP server and the background host follow at theirs.
+    fn gpu_adapter_menu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("GPU adapter", |ui| {
+            let now = crate::simgpu::shared_adapter();
+            let found = self
+                .gpu_adapters
+                .get_or_insert_with(jetcarp_gpu::select::adapter_names)
+                .clone();
+            let mut entries: Vec<(Option<String>, String)> = vec![
+                (None, "Automatic: the best one for each use".into()),
+                (Some("discrete".into()), "Discrete".into()),
+                (Some("integrated".into()), "Integrated".into()),
+            ];
+            for (name, kind) in &found {
+                entries.push((Some(name.clone()), format!("{name} ({kind})")));
+            }
+            let same = |a: &Option<String>, b: &Option<String>| {
+                a.as_deref().map(str::to_ascii_lowercase)
+                    == b.as_deref().map(str::to_ascii_lowercase)
+            };
+            // A name saved on another computer, or for an adapter that has gone, stays visible.
+            if now.is_some() && !entries.iter().any(|(v, _)| same(v, &now)) {
+                let n = now.clone().unwrap_or_default();
+                entries.push((now.clone(), format!("{n} (saved; not found here)")));
+            }
+            let mut picked = None;
+            for (i, (value, label)) in entries.iter().enumerate() {
+                if i == 3 {
+                    ui.separator();
+                }
+                if ui.radio(same(value, &now), label.as_str()).clicked() {
+                    picked = Some(value.clone());
+                    ui.close();
+                }
+            }
+            ui.label(
+                RichText::new(
+                    "Shared with the command line, the MCP server and the background host. The \
+                     app moves to it when it next starts; hover over GPU simulation for the \
+                     adapter it uses now.",
+                )
+                .small()
+                .weak(),
+            );
+            if let Ok(v) = std::env::var("JETCARP_GPU") {
+                ui.colored_label(
+                    egui::Color32::LIGHT_RED,
+                    format!("JETCARP_GPU={v} is set, and overrides this"),
+                );
+            }
+            if let Some(value) = picked {
+                let what = value.clone().unwrap_or_else(|| "automatic".into());
+                self.message = Some(match crate::simgpu::save_shared_adapter(value) {
+                    Ok(()) => (
+                        format!(
+                            "GPU adapter saved ({what}): the app moves to it when it next starts"
+                        ),
+                        false,
+                    ),
+                    Err(e) => (format!("GPU adapter not saved: {e}"), true),
+                });
+            }
+        });
+    }
+
     /// The shared GPU setting every part of JETCARP follows unless it has a choice of its own.
     pub(super) fn set_shared_gpu(&mut self, m: jetcarp_gpu::select::Mode) {
         match crate::simgpu::save_shared(m) {
@@ -1054,6 +1122,7 @@ impl JetcarpApp {
                     .response
                     .on_hover_text(hint);
                 });
+                self.gpu_adapter_menu(ui);
             }
             Custom::Boundary => {
                 ui.add_enabled_ui(sim && !self.aperiodic_family(), |ui| {
