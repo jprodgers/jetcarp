@@ -466,12 +466,14 @@ fn shots_desktop_pane_cards() {
         .is_some_and(|t| t.scenes.iter().any(|x| !x.rungs.is_empty()));
     if !swept {
         s.screens[0].place = Place::Wallpaper;
+        // The cards show only the scenes of the rotation shown (#73): these two are its first.
+        s.screens[0].rotation = "Until it settles".into();
         let dir = crops_dir().unwrap();
         std::fs::create_dir_all(&dir).unwrap();
         let mut scenes = vec![];
         for (k, (name, rule, own)) in [
-            ("profile Life", "B3/S23", 3.0f32),
-            ("profile HighLife", "B36/S23", 4.0),
+            ("Quick Start rule:B3/S23", "B3/S23", 3.0f32),
+            ("Quick Start rule:B36/S23", "B36/S23", 4.0),
         ]
         .into_iter()
         .enumerate()

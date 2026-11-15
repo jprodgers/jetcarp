@@ -16,7 +16,7 @@ use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome::{self, ExtensionState};
 use jetcarp_display::host_settings::{
     HostSettings, LockScreen, MAX_AWAKE_MINUTES, Pacing, Place, ScreenSettings, TuneLimits,
-    TunedScene,
+    TunedScene, Tuning,
 };
 use jetcarp_display::host_settings::{Rung, Size, crops_dir};
 use jetcarp_display::pace::DEFAULT_MAX_FPS;
@@ -55,6 +55,9 @@ pub(super) struct HostPanel {
     /// to say which it uses).
     adapter: Option<String>,
     adapter_rx: Option<Receiver<String>>,
+    /// Each rotation's scenes (its items' labels) by name, with the rotation they were expanded
+    /// from, for Fit's cards; emptied whenever the settings are read again.
+    scene_labels: std::collections::HashMap<String, (String, Vec<String>)>,
 }
 
 /// The caption's options. True when one changed.
@@ -266,6 +269,29 @@ fn monitor_label(names: &[String], m: Option<usize>) -> String {
 }
 
 impl JetcarpApp {
+    /// The scenes rotation `name` shows (its items' labels, as the host and the tuner name them),
+    /// from the rotation and profile stores, expanded again only when the rotation changes. None
+    /// for a rotation that can't be found here.
+    fn rotation_labels(&mut self, name: &str) -> Option<Vec<String>> {
+        let r = self.rotation_store().get(name)?;
+        let key = r.to_json();
+        if let Some((k, labels)) = self.display.host.scene_labels.get(name)
+            && *k == key
+        {
+            return Some(labels.clone());
+        }
+        let store = self.profile_store();
+        let (slots, _) = r.expand(&jetcarp_display::rotation::default_base(), &|n| {
+            store.get(n)
+        });
+        let labels: Vec<String> = slots.into_iter().map(|s| s.label).collect();
+        self.display
+            .host
+            .scene_labels
+            .insert(name.to_string(), (key, labels.clone()));
+        Some(labels)
+    }
+
     /// The monitors' names, from the host (whose numbering the settings use), else this window's.
     fn host_monitor_names(&self) -> Vec<String> {
         let from_host: Vec<String> = self
@@ -323,6 +349,10 @@ impl JetcarpApp {
             }));
         if cfg!(target_os = "linux") {
             h.poll_extension();
+        }
+        if h.settings.is_none() {
+            // Read again below, as are the rotations' scenes (a profile may have gone since).
+            h.scene_labels.clear();
         }
         let settings = h.settings.get_or_insert_with(|| HostSettings::load().0);
         let mut changed = false;
@@ -496,6 +526,15 @@ impl JetcarpApp {
             let ctx = ui.ctx().clone();
             changed |= self.rotation_do(super::rotation_ui::Target::Host(i), a, &ctx);
         }
+        // The scenes each screen's rotation shows now: only theirs get rows in Fit's cards (#73).
+        let screen_rotations: Vec<String> =
+            self.display.host.settings.as_ref().map_or(vec![], |s| {
+                s.screens.iter().map(|x| x.rotation.clone()).collect()
+            });
+        let shown: Vec<Option<Vec<String>>> = screen_rotations
+            .iter()
+            .map(|r| self.rotation_labels(r))
+            .collect();
         let h = &mut self.display.host;
         let settings = h.settings.as_mut().expect("loaded above");
         // ---------------------------------------------- the desktop
@@ -689,6 +728,7 @@ impl JetcarpApp {
             view,
             adapter.as_deref(),
             settings,
+            &shown,
             &mut changed,
             &mut crop,
         );
@@ -1048,12 +1088,14 @@ enum CardDo {
 
 /// The limits, *Fit to this computer*, and the cards. Returns whether to start a sweep, stop the
 /// one running, or forget the sizes found; a card chosen is put in `settings` (`changed`).
+/// `shown` gives the scenes each screen's rotation shows now: only they get rows (#73).
 #[allow(clippy::too_many_arguments)]
 fn performance_ui(
     ui: &mut egui::Ui,
     view: TuneView,
     adapter: Option<&str>,
     settings: &mut HostSettings,
+    shown: &[Option<Vec<String>>],
     changed: &mut bool,
     crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
 ) -> (bool, bool, bool) {
@@ -1234,7 +1276,11 @@ fn performance_ui(
         let Some(t) = s.tuning.as_ref().filter(|t| t.rotation == s.rotation) else {
             continue;
         };
-        if t.scenes.iter().all(|x| x.rungs.is_empty()) {
+        // Only the scenes of the rotation shown: a size fitted while another was shown stays
+        // saved, but is not one of these (#73).
+        let labels = shown.get(i).and_then(Option::as_deref);
+        let scenes: Vec<&TunedScene> = t.scenes_shown(labels).collect();
+        if scenes.iter().all(|x| x.rungs.is_empty()) {
             continue;
         }
         any = true;
@@ -1243,7 +1289,7 @@ fn performance_ui(
                 ui.label(RichText::new(format!("Screen {}", i + 1)).strong());
             }
             if !view.running
-                && t.scenes.iter().any(|x| !x.chosen)
+                && scenes.iter().any(|x| !x.chosen)
                 && ui
                     .small_button("Use the recommended size for the rest")
                     .on_hover_text(
@@ -1255,7 +1301,7 @@ fn performance_ui(
                 todo = Some(CardDo::RecommendedForRest);
             }
         });
-        for scene in &t.scenes {
+        for scene in scenes {
             if view
                 .live
                 .as_ref()
@@ -1300,9 +1346,13 @@ fn performance_ui(
             }
         }
         Some(CardDo::AllOnTiling(i, tiling, px)) => {
+            let labels = shown.get(i).and_then(Option::as_deref);
             if let Some(t) = settings.screens[i].tuning.as_mut() {
                 for scene in t.scenes.iter_mut().filter(|x| {
-                    x.tiling == tiling && x.level.is_none() && x.recommended.level.is_none()
+                    x.tiling == tiling
+                        && x.level.is_none()
+                        && x.recommended.level.is_none()
+                        && Tuning::shows(&x.scene, labels)
                 }) {
                     scene.set_size(Size::px(px));
                     scene.chosen = true;
@@ -1312,9 +1362,17 @@ fn performance_ui(
             }
         }
         Some(CardDo::RecommendedForRest) => {
-            for s in &mut settings.screens {
-                for scene in s.tuning.iter_mut().flat_map(|t| t.scenes.iter_mut()) {
-                    if !scene.chosen {
+            // The scenes with rows: those of the rotation each screen shows.
+            for (i, s) in settings.screens.iter_mut().enumerate() {
+                let labels = shown.get(i).and_then(Option::as_deref);
+                let rotation = &s.rotation;
+                let scenes = s
+                    .tuning
+                    .iter_mut()
+                    .filter(|t| t.rotation == *rotation)
+                    .flat_map(|t| t.scenes.iter_mut());
+                for scene in scenes {
+                    if !scene.chosen && Tuning::shows(&scene.scene, labels) {
                         let r = scene.recommended;
                         let own = scene.rungs.iter().any(|x| x.own && x.size.same(&r));
                         scene.set_size(if own { Size::px(scene.design_px) } else { r });

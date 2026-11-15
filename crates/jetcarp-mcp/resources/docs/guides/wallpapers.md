@@ -336,13 +336,16 @@ plugged in.
 at each screen's size, drawing and stepping the way the host does, and the cards are the same.
 
 **What is kept.** Each scene's cards and the size it shows at are saved in `host.json` as each scene's
-sweep ends, with whether you chose it, and the pictures in the `tune` folder beside it. A screen given
-another rotation shows its scenes at their own sizes until it is swept again; on a screen of another
-size, a lattice scene keeps its number of cells and a patch its level. With *Measure again by itself
-when the monitors change* (on by default), the host sweeps again once a swept screen's size changes
-and the monitors have stayed put for 15 seconds (not on battery, while the processor is busy, or
-while paused by hand). A size you chose is kept if it is still within the limits there; if not, the
-recommended one shows, with a note in the pane and in `jetcarp host status`.
+sweep ends, with whether you chose it, and the pictures in the `tune` folder beside it. The cards
+show only the scenes of the rotation each screen shows now: a size you chose for a scene of another
+rotation stays saved, and is kept while it fits should that scene come back, but gets no row. A
+screen given another rotation shows its scenes at their own sizes until it is swept again; on a
+screen of another size, a lattice scene keeps its number of cells and a patch its level. With
+*Measure again by itself when the monitors change* (on by default), the host sweeps again once a
+swept screen's size changes and the monitors have stayed put for 15 seconds (not on battery, while
+the processor is busy, or while paused by hand). A size you chose is kept if it is still within the
+limits there; if not, the recommended one shows, with a note in the pane and in `jetcarp host
+status`.
 
 **A tuned scene is still exactly reproducible**, since a scene's grid size is part of it. The host's
 status gives each screen's cell size and grid; `jetcarp host scene --save FILE` saves the scene a

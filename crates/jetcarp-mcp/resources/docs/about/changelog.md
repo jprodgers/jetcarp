@@ -291,6 +291,12 @@ that will declare them stable.
   desktop background's own setting`), `--json` gives each screen's `simulation` (`on`, `adapter`
   and `why`), and the log's GPU line is replaced when the setting changes.
   ([#75](https://github.com/jprodgers/jetcarp/issues/75))
+- **Fit's cards showed a row for a scene of another rotation.** A size chosen for a scene is kept
+  when the screen moves to another rotation, for when that scene comes back, so a hat-tiling scene
+  fitted by itself for a one-scene rotation showed as a fourth row under the three scenes of
+  "Until it settles". The cards now show only the scenes of the rotation each screen shows, and
+  *Use the recommended size for the rest* and *Use this size for every scene on this tiling* settle
+  only those; the other sizes stay saved. ([#73](https://github.com/jprodgers/jetcarp/issues/73))
 
 ### Changed
 

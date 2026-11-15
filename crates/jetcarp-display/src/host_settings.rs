@@ -371,6 +371,24 @@ impl Tuning {
     pub fn fits_canvas(&self, canvas: [f64; 2]) -> bool {
         self.canvas == [canvas[0].round() as u32, canvas[1].round() as u32]
     }
+
+    /// Whether the scene labelled `label` is one of `labels`, the scenes of the rotation its screen
+    /// shows now (None: not known, so every scene is). A size chosen while another rotation was
+    /// shown stays saved, for the sweep to keep while it fits should that scene come back, but it
+    /// is not one of this rotation's scenes, so it gets no row in the cards (#73).
+    pub fn shows(label: &str, labels: Option<&[String]>) -> bool {
+        labels.is_none_or(|l| l.iter().any(|x| x == label))
+    }
+
+    /// Its scenes that are among `labels` ([`Tuning::shows`]), in the order they were saved.
+    pub fn scenes_shown<'a>(
+        &'a self,
+        labels: Option<&'a [String]>,
+    ) -> impl Iterator<Item = &'a TunedScene> {
+        self.scenes
+            .iter()
+            .filter(move |s| Tuning::shows(&s.scene, labels))
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -672,6 +690,46 @@ mod tests {
             Some(Size::px(5.0))
         );
         assert!(!old.scenes[0].chosen && old.scenes[0].rungs.is_empty());
+    }
+
+    /// A size chosen under another rotation stays saved, but only the scenes of the rotation shown
+    /// now get rows in the cards: the Acer's hat scene, fitted by itself for a one-scene rotation,
+    /// showed under "Until it settles" (#73).
+    #[test]
+    fn only_the_rotation_shown_has_rows_in_the_cards() {
+        let scene = |name: &str, chosen: bool| TunedScene {
+            scene: name.into(),
+            chosen,
+            ..Default::default()
+        };
+        let t = Tuning {
+            rotation: "Until it settles".into(),
+            scenes: vec![
+                scene("JACA war on the hat tiling", true),
+                scene("Quick Start rule:B3/S23", false),
+                scene("Quick Start rule:B36/S23", false),
+            ],
+            ..Default::default()
+        };
+        let labels: Vec<String> = [
+            "Quick Start rule:B3/S23",
+            "Quick Start rule:B36/S23",
+            "Quick Start rule:B368/S245",
+        ]
+        .map(String::from)
+        .to_vec();
+        let shown: Vec<&str> = t
+            .scenes_shown(Some(&labels))
+            .map(|s| s.scene.as_str())
+            .collect();
+        assert_eq!(
+            shown,
+            ["Quick Start rule:B3/S23", "Quick Start rule:B36/S23"]
+        );
+        assert_eq!(t.scenes.len(), 3, "the other rotation's choice stays saved");
+        // A rotation that can't be read now: every scene, as before.
+        assert_eq!(t.scenes_shown(None).count(), 3);
+        assert!(!Tuning::shows("JACA war on the hat tiling", Some(&labels)));
     }
 
     /// Every generation is shown unless the file says low power (#42); the pacing is written by
