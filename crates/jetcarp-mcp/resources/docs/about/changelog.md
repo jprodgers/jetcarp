@@ -166,6 +166,11 @@ that will declare them stable.
   app couldn't be moved from one to the other. *Run → GPU adapter* now lists *Automatic*,
   *Discrete*, *Integrated* and each adapter found, and saves the choice to the shared setting; the
   app moves at its next start. ([#59](https://github.com/jprodgers/jetcarp/issues/59))
+- **A rating round of clips gave the runs nobody keeps as many slots as the rest.** `jobs clips`
+  shared its sample equally among the categories, so on a JACA search "Frozen at once", 12% of the
+  runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
+  *Static*, *Quiet rows*) now get a sixteenth of the sample each, at least 2, and the output says
+  how many clips each category got. ([#56](https://github.com/jprodgers/jetcarp/issues/56))
 
 ### Changed
 

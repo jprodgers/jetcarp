@@ -652,11 +652,22 @@ pub fn rows_on(
         .collect())
 }
 
+/// Categories a person almost never keeps (#56). A rating round shows a few of each, enough to
+/// teach the score they are poor, and spends the rest of its slots on the others.
+pub const RARELY_KEPT: [&str; 4] = ["Frozen at once", "Quick deaths", "Static", QUIET_ROWS];
+
+/// Slots a rarely kept category gets at most in a sample of `n`: a sixteenth, at least 2.
+pub fn rarely_kept_cap(n: usize) -> usize {
+    (n / 16).max(2)
+}
+
 /// A stratified sample of screened runs for a person to rate: spread over categories and
 /// families, half strong and half random (drawn with `seed`), so ratings can calibrate the score.
 /// One run per family and tiling first; when that falls short of `n` (a search on a few tilings,
 /// such as a JACA search from parents: #29), more runs of the same tilings, each with a rule of its
-/// own.
+/// own. The [`RARELY_KEPT`] categories get at most [`rarely_kept_cap`] slots each while the
+/// others have runs to give, so a round isn't spent on runs nobody keeps: an equal share had
+/// given "Frozen at once" 20 of 48 slots on a JACA search where it was 12% of the runs (#56).
 pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'static str)>, String> {
     let strong = db.rows(&db.ids(&RunFilter::default(), 12_000)?)?;
     let mut pool: Vec<i64> = db.scan(
@@ -698,10 +709,25 @@ pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'sta
     }
     let mut cats: Vec<&'static str> = by.keys().copied().collect();
     cats.sort_unstable();
-    let per = (n / cats.len().max(1)).max(1);
+    let rare = |c: &str| RARELY_KEPT.contains(&c);
+    let common = cats.iter().filter(|c| !rare(c)).count();
+    // The rarely kept categories' few slots first; the rest shared equally among the others. With
+    // no others, the rarely kept share everything.
+    let cap = if common == 0 {
+        usize::MAX
+    } else {
+        rarely_kept_cap(n)
+    };
+    let even = (n / cats.len().max(1)).max(1);
+    let rare_slots: usize = cats.iter().filter(|c| rare(c)).map(|_| cap.min(even)).sum();
+    let per_common = (n.saturating_sub(rare_slots) / common.max(1)).max(1);
+    let quota = |c: &str| {
+        if rare(c) { cap.min(even) } else { per_common }
+    };
     let mut seen: std::collections::HashSet<(Fam, String)> = Default::default();
     let mut out = Vec::new();
     for &c in &cats {
+        let per = quota(c);
         let (a, b) = by.get_mut(c).unwrap();
         let mut got = 0;
         for k in 0..per * 40 {
@@ -725,11 +751,28 @@ pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'sta
         .iter()
         .map(|(r, _)| (r.cand.fam, r.cand.tiling.clone(), r.cand.rule.clone()))
         .collect();
+    // Topping up: the categories other than the rarely kept ones while they have runs to give,
+    // then (a search of nothing else) the rarely kept ones too.
+    let mut turn: Vec<&'static str> = cats.iter().copied().filter(|c| !rare(c)).collect();
+    if turn.is_empty() {
+        turn = cats.clone();
+    }
     let (mut k, mut idle) = (0usize, 0usize);
-    while out.len() < n && idle < cats.len() {
-        let c = cats[k % cats.len()];
+    loop {
+        if out.len() >= n {
+            break;
+        }
+        if idle >= turn.len() {
+            if turn.len() == cats.len() {
+                break;
+            }
+            turn = cats.clone();
+            (k, idle) = (0, 0);
+            continue;
+        }
+        let c = turn[k % turn.len()];
         // Strong and random by turns, a round of the categories each.
-        let strong_turn = (k / cats.len()).is_multiple_of(2);
+        let strong_turn = (k / turn.len()).is_multiple_of(2);
         k += 1;
         let (a, b) = by.get_mut(c).unwrap();
         let v: &mut Vec<RunRow> = if (strong_turn && !a.is_empty()) || b.is_empty() {
@@ -803,6 +846,23 @@ pub fn clip(run: &RunRow, cat: &str, frames: u32, px: u32) -> Result<Vec<u8>, St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every name in [`RARELY_KEPT`] is one `categorize` gives, so renaming a category can't quietly
+    /// switch its cap off (#56), and the cap is a sixteenth of a round, at least 2.
+    #[test]
+    fn the_rarely_kept_categories_are_real_ones() {
+        let f = Features::default();
+        let gave = [
+            categorize("froze", &f, Fam::LifeLike, 1000),
+            categorize("died", &f, Fam::LifeLike, 1000),
+            categorize("running", &f, Fam::LifeLike, 1000),
+            categorize("running", &f, Fam::Wolfram, 1000),
+        ];
+        for c in RARELY_KEPT {
+            assert!(gave.contains(&c), "{c} is not a category categorize gives");
+        }
+        assert_eq!((rarely_kept_cap(48), rarely_kept_cap(24), rarely_kept_cap(400)), (3, 2, 25));
+    }
 
     #[test]
     fn seeding_shifts_the_atlas_score() {

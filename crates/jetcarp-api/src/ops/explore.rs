@@ -2017,6 +2017,17 @@ pub struct Clips {
 impl Report for Clips {
     fn text(&self) -> String {
         let mut s = format!("{} clips in {}\n", self.clips.len(), self.folder);
+        // How the round is made up (#56): the categories, most clips first.
+        let mut by: std::collections::BTreeMap<&str, usize> = Default::default();
+        for c in &self.clips {
+            *by.entry(c.category.as_str()).or_default() += 1;
+        }
+        let mut cats: Vec<(&str, usize)> = by.into_iter().collect();
+        cats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        if !cats.is_empty() {
+            let list: Vec<String> = cats.iter().map(|(c, k)| format!("{c} {k}")).collect();
+            let _ = writeln!(s, "categories: {}", list.join(", "));
+        }
         if let Some(p) = &self.page {
             let _ = writeln!(s, "rating page: {p}");
         }

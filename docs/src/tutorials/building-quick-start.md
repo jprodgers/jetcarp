@@ -119,6 +119,7 @@ $ jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.
 ```text
 $ jetcarp jobs clips --sample 24 --out clips --page
 24 clips in /home/ada/clips
+categories: Living textures 6, Oscillators 5, Waves & spirals 5, Growth 4, Frozen at once 2, Quick deaths 2
 rating page: /home/ada/clips/index.html
 ```
 

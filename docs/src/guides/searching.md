@@ -196,7 +196,10 @@ $ jetcarp jobs runs 7 --limit 5
   every measure, for a spreadsheet or a notebook.
 - `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye
   (`--sample N` of them: a run of each family and tiling first, then more runs of the same tilings,
-  each with a rule of its own, so a search on a few tilings gives as many as asked for);
+  each with a rule of its own, so a search on a few tilings gives as many as asked for; the
+  categories people seldom keep, *Frozen at once*, *Quick deaths*, *Static* and *Quiet rows*, get
+  only a few slots each, a sixteenth of the sample and at least 2, while the others have runs to
+  give, and the output says how many each category got);
   `--page` adds a page for rating them in a browser.
   `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, `jetcarp jobs runs JOB
   --reviewed keep` lists the runs given one, with each run's verdicts and star (`[keep ★]`), and
