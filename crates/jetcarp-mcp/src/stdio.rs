@@ -7,6 +7,9 @@
 //! stdin is read on a thread of its own, so a `notifications/cancelled` reaches the call it names
 //! while that call runs (here, or in the app: the cancellation is written to the app link at once),
 //! and the app's `notifications/progress` for a forwarded call are written to stdout as they come.
+//!
+//! When stdin closes (the client has gone), the searches running on the server's own threads are
+//! stopped at their next checkpoint, paused and resumable, before the server exits.
 
 use crate::link::{AppClient, EndpointInfo};
 use crate::{Server, Session, ToolOutput, protocol, tools};
@@ -152,7 +155,8 @@ fn use_app(link: &mut Link, session: &mut Session, args: &Value) -> ToolOutput {
     }
 }
 
-/// Serve MCP on stdin/stdout until stdin closes. `app`: start attached to the JETCARP app.
+/// Serve MCP on stdin/stdout until stdin closes, then stop the jobs running on the server's own
+/// threads ([`stop_own_jobs`]). `app`: start attached to the JETCARP app.
 pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), String> {
     let mut server = Server::new();
     server.extra_tools.push(use_app_definition());
@@ -243,5 +247,48 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
             out.flush().map_err(|e| e.to_string())?;
         }
     }
+    stop_own_jobs();
     Ok(())
+}
+
+/// How long the server waits, once its client has gone, for its own jobs to stop.
+const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// stdin has closed: the client has gone, and the server exits. The searches started on its own
+/// threads (`search_start` without `detach`) would end with it, left marked running with
+/// nothing running them (#64): stop each at its next checkpoint, as `job_stop` does, so it is
+/// left paused and resumable. Searches in processes of their own carry on.
+fn stop_own_jobs() {
+    let reg = tools::ctx().registry();
+    let running: Vec<i64> = {
+        let lib = tools::ctx().library();
+        reg.jobs(&lib)
+            .into_iter()
+            .filter(|j| reg.is_running(&lib, *j))
+            .collect()
+    };
+    if !running.is_empty() {
+        let ids: Vec<String> = running.iter().map(|j| j.to_string()).collect();
+        eprintln!(
+            "jetcarp mcp: the client has gone; stopping job {} at its next checkpoint",
+            ids.join(", ")
+        );
+    }
+    for (job, ended) in reg.stop_all(STOP_WAIT) {
+        if !running.contains(&job) {
+            continue;
+        }
+        match ended {
+            Some(Ok(o)) => eprintln!(
+                "jetcarp mcp: job {job} is {}",
+                jetcarp_search::jobs::status_name(o.status)
+            ),
+            Some(Err(e)) => eprintln!("jetcarp mcp: job {job} failed: {e}"),
+            None => eprintln!(
+                "jetcarp mcp: job {job} had not stopped after {} s; `jetcarp jobs resume {job}` \
+                 carries it on",
+                STOP_WAIT.as_secs()
+            ),
+        }
+    }
 }

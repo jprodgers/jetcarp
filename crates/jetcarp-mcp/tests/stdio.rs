@@ -246,3 +246,47 @@ fn a_whole_session_over_stdio() {
     let status = c.child.wait().unwrap();
     assert!(status.success());
 }
+
+/// A search on the server's own thread is stopped at its next checkpoint when the client goes
+/// (stdin closed), and left paused and resumable, not marked running with nothing running it
+/// (#64).
+#[test]
+fn the_server_stops_its_own_jobs_when_its_client_goes() {
+    let root = setup("stdio");
+    let mut c = Client::start(root, &root.join("out"));
+    c.request(
+        "initialize",
+        json!({"protocolVersion": "2025-06-18", "capabilities": {},
+               "clientInfo": {"name": "stdio-test", "version": "1"}}),
+    );
+    c.send(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    let h = json_of(&c.call(
+        "search_start",
+        json!({"hunt": {"rules": ["B3/S23"], "soups": 50_000_000}, "threads": 1}),
+    ));
+    assert_eq!(h["mode"], "background", "{h}");
+    let job = h["job"].as_i64().unwrap();
+    let t0 = Instant::now();
+    loop {
+        let s = last_json(&c.call("job_status", json!({"job": job})));
+        if s["done"].as_u64().unwrap_or(0) > 0 {
+            assert_eq!(s["status"], "running", "{s}");
+            break;
+        }
+        assert!(t0.elapsed() < Duration::from_secs(60), "no progress: {s}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    drop(c.stdin);
+    let t1 = Instant::now();
+    let status = c.child.wait().unwrap();
+    assert!(status.success());
+    assert!(t1.elapsed() < Duration::from_secs(30), "{:?}", t1.elapsed());
+    let cx = jetcarp_api::Ctx::new().with_library(Some(root.join("lib")));
+    let v = jetcarp_api::call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+    assert_eq!(
+        (&v["status"], &v["stale"]),
+        (&json!("paused"), &json!(false)),
+        "{v}"
+    );
+    assert!(v["done"].as_u64().unwrap() > 0, "{v}");
+}

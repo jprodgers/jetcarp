@@ -213,6 +213,12 @@ that will declare them stable.
   same end, saying so; once they are used up, a resume runs until stopped, as before, and says
   that. `--limit` still counts one session. Scripts and the MCP server's `search_start` resume the
   same way. ([#51](https://github.com/jprodgers/jetcarp/issues/51))
+- **A search on the MCP server's own thread was left running when the server exited.**
+  `search_start` without `detach` runs a search on a thread of the server, and said it stops when
+  the server exits; but when the client closed the server's input, the server exited at once and
+  the job stayed marked running until it went stale. The server now stops its own searches at their
+  next checkpoint, as `job_stop` does, waits for them (up to 30 seconds), and leaves them paused and
+  resumable. ([#64](https://github.com/jprodgers/jetcarp/issues/64))
 
 ### Changed
 

@@ -117,6 +117,34 @@ impl Registry {
         Some(h.wait())
     }
 
+    /// Stop every job running here at its next checkpoint, and wait up to `within` for them all
+    /// to end: for a process about to exit, whose jobs are then left paused and resumable rather
+    /// than marked running with nothing running them (the MCP server when its client goes,
+    /// #64). Each job with how its run ended, or `None` for one still ending when the time was
+    /// up (its thread is left to the process's exit).
+    pub fn stop_all(
+        &self,
+        within: std::time::Duration,
+    ) -> Vec<(i64, Option<Result<Outcome, String>>)> {
+        let handles: Vec<JobHandle> = self.0.lock().unwrap().drain().map(|(_, h)| h).collect();
+        for h in &handles {
+            h.stop();
+        }
+        let end = std::time::Instant::now() + within;
+        while std::time::Instant::now() < end && handles.iter().any(|h| !h.is_finished()) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let mut out: Vec<(i64, Option<Result<Outcome, String>>)> = handles
+            .into_iter()
+            .map(|h| {
+                let job = h.job();
+                (job, h.is_finished().then(|| h.wait()))
+            })
+            .collect();
+        out.sort_by_key(|o| o.0);
+        out
+    }
+
     /// The jobs of this catalog with a handle here.
     pub fn jobs(&self, lib: &Library) -> Vec<i64> {
         let cat = key(lib, 0).0;
