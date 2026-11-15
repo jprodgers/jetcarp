@@ -132,7 +132,7 @@ Every column is required (never null) except `parent` and the sign columns.
 | `rule` | string | The rule, in [rule notation](rule-notation.md) |
 | `seed` | string | The starting pattern, as JSON (a scene's seed) |
 | `seed_kind` | string | Its kind: `soup`, `mutated` (an elite's seed, changed), `blobs`, `symmetric`, `point` (one cell), `circuit` (WireWorld), `confirm` (a confirmation run), `transplant` (a transplanted pair's own seed), `balance` (a balance variant's, perhaps with more of the weaker sign), ... |
-| `cells` | int32 | About how many cells the grid has |
+| `cells` | int32 | The grid size asked for. The grid is the tiling's nearest fit, so it has about this many cells, and an aperiodic patch (the nearest level) can have half as many or twice as many. The measures use the real count |
 | `gens` | int32 | Generations run |
 | `steps` | int32 | Steps per generation |
 | `rng` | uint64 | The random seed: with the columns above it replays the run exactly |

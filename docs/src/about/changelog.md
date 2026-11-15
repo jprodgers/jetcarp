@@ -73,6 +73,20 @@ that will declare them stable.
   carried on from the wrong cells. The world is now put back as it was before the run, and the
   processor carries on from there to the same result. A failed readback no longer stops the program
   either. ([#13](https://github.com/jprodgers/jetcarp/issues/13))
+- **An explore search's progress read 0/s most of the time on a GPU.** Its rate was measured over a
+  few seconds, but the GPU's batches land a thousand runs at once, every 10 to 30 seconds on a
+  laptop's GPU, so most lines saw none. It is now the rate over the last minute.
+  ([#22](https://github.com/jprodgers/jetcarp/issues/22))
+- **"N confirmed" in an explore search's progress read like a running total.** It counts the elites
+  confirmed now, which falls when a better unconfirmed run takes a confirmed elite's niche. The line
+  now says "1,204 elites in 980 niches (75 of them confirmed)".
+  ([#24](https://github.com/jprodgers/jetcarp/issues/24))
+- **A switched-off GNOME extension was said to be starting.** GNOME reports an extension it loaded
+  at login but isn't enabled as state 6, which `jetcarp host gnome status` read as "it is
+  starting"; it now says it is switched off. ([#19](https://github.com/jprodgers/jetcarp/issues/19))
+- **The search runs reference said `cells` is about the grid's size.** It is the size asked for; an
+  aperiodic patch, sized by level, can have half as many cells or twice as many. The reference says
+  so. ([#27](https://github.com/jprodgers/jetcarp/issues/27))
 
 ### Changed
 

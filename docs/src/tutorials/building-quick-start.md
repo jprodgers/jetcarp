@@ -20,7 +20,7 @@ the Quick Start:
 $ jetcarp quickstart build --minutes 3
 explore search job 22 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches, 310 confirmed, 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
+Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches (310 of them confirmed), 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
   status done, 3 min 17 s run over every session, 1,041 confirmation runs, 29,454 candidates tried, 1.22 GB of memory
   threads: 20 for runs on the processor and 10 for the GPU's batches, of 32 cores (2 left free)
   …

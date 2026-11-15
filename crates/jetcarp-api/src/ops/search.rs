@@ -1580,6 +1580,11 @@ pub(crate) fn explore_run(
 ) -> Result<ExploreRun, ApiError> {
     let spec: ExploreSpec = serde_json::from_value(row.spec.clone())
         .map_err(|e| ApiError::engine(format!("job {}: {e}", row.id)))?;
+    if row.status != JobStatus::Done
+        && let Some(d) = jetcarp_search::explore::breed::describe(&spec.search.parents)
+    {
+        p.log(&format!("parents: {d}"));
+    }
     if !job_gpu(cx, gpu, saved_gpu(spec.gpu, spec.cpu), true) || row.status == JobStatus::Done {
         return Ok(ExploreRun::default());
     }

@@ -198,6 +198,30 @@ pub struct Parent {
     pub weaker: Option<Sign>,
 }
 
+/// The parents a search took from another job, in words: "500 JACA runs of explore job 2 (412
+/// keep, 88 maybe)", or its best runs when it had no reviews with the verdicts asked for.
+pub fn describe(parents: &[Parent]) -> Option<String> {
+    let first = parents.first()?;
+    let count = |w: &str| parents.iter().filter(|p| p.why == w).count();
+    let how = if count("best") == parents.len() {
+        "its best ones: it has no reviews with the verdicts asked for".to_string()
+    } else {
+        ["keep", "maybe", "drop", "best"]
+            .iter()
+            .map(|w| (count(w), w))
+            .filter(|(n, _)| *n > 0)
+            .map(|(n, w)| format!("{n} {w}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let strong = parents.iter().filter(|p| p.strong).count();
+    Some(format!(
+        "{} JACA runs of explore job {} ({how}); {strong} with both signs holding to the end",
+        parents.len(),
+        first.job
+    ))
+}
+
 impl Parent {
     /// A parent from a stored run.
     pub fn of(job: i64, run: i64, why: &str, ev: &Eval) -> Parent {

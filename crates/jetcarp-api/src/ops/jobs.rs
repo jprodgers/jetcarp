@@ -216,6 +216,9 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
                     digits(p.given_up)
                 );
             }
+            if let Some(d) = &p.parents {
+                let _ = writeln!(s, "  parents: {d}");
+            }
             if let Some(l) = &p.loaded {
                 let _ = writeln!(
                     s,

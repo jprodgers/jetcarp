@@ -137,7 +137,7 @@ pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
-Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); 9,980 runs (115/s), 2,994 elites in 1,664 niches, 122 confirmed, 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
+Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); 9,980 runs (115/s), 2,994 elites in 1,664 niches (122 of them confirmed), 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 ```

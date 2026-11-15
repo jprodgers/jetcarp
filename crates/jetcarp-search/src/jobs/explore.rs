@@ -247,6 +247,9 @@ pub struct ExploreProgress {
     /// A Quick Start build: its minutes in all, and what it published once they were spent.
     pub build_minutes: Option<f64>,
     pub published: Option<Published>,
+    /// The parents taken from another job (`--parents-from`), in words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parents: Option<String>,
     pub line: String,
 }
 
@@ -567,8 +570,7 @@ struct Running {
     gpu_error: Option<String>,
     note: Option<String>,
     rss: f64,
-    rate: (Instant, u64),
-    per_s: f64,
+    rate: Rate,
     /// A Quick Start build's atlas, once published.
     published: Option<Published>,
 }
@@ -635,7 +637,7 @@ fn step_publishing(
                 if cx.paused_elsewhere() {
                     halt.store(true, Ordering::SeqCst);
                 }
-                cx.publish(progress_of(r, backend, JobStatus::Running, true));
+                cx.publish(progress_of(r, backend, JobStatus::Running));
                 last = Instant::now();
             }
         }
@@ -646,18 +648,11 @@ fn step_publishing(
     })
 }
 
-/// The progress of a live run with this backend (its name) and status; `mid_step`: written
-/// part way through a step, its rate measured since the last one.
-fn progress_of(r: &Running, backend: &str, status: JobStatus, mid_step: bool) -> Value {
+/// The progress of a live run with this backend (its name) and status, part way through a step
+/// or at its end.
+fn progress_of(r: &Running, backend: &str, status: JobStatus) -> Value {
     let (elites, niches) = r.search.elites();
-    // Part way through a long step, the rate since the last one that measured it.
-    let (t, n) = r.rate;
-    let dt = t.elapsed().as_secs_f64();
-    let per_s = if mid_step && dt >= 5.0 {
-        r.search.screened().saturating_sub(n) as f64 / dt
-    } else {
-        r.per_s
-    };
+    let per_s = r.rate.per_s(r.search.screened());
     let gpu_threads = r.gpu_pool.as_ref().map_or(0, |p| p.current_num_threads());
     let mut p = ExploreProgress {
         job: r.job,
@@ -689,6 +684,7 @@ fn progress_of(r: &Running, backend: &str, status: JobStatus, mid_step: bool) ->
         error: None,
         build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
         published: r.published.clone(),
+        parents: crate::explore::breed::describe(&r.spec.search.parents),
         line: String::new(),
     };
     p.line = line(&p);
@@ -735,8 +731,7 @@ impl Strategy for ExploreRun {
             gpu_error: None,
             note: None,
             rss: rss_gb(),
-            rate: (Instant::now(), screened),
-            per_s: 0.0,
+            rate: Rate::new(screened),
             published: None,
         });
         Ok(())
@@ -833,15 +828,7 @@ impl Strategy for ExploreRun {
         d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
         r.runs.write(&d)?;
         r.runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
-        let (t, n) = r.rate;
-        let dt = t.elapsed().as_secs_f64();
-        if dt >= 5.0 {
-            let now = r.search.screened();
-            r.per_s = (now - n) as f64 / dt;
-            r.rate = (Instant::now(), now);
-        } else if r.per_s == 0.0 && dt > 0.0 {
-            r.per_s = (r.search.screened() - n) as f64 / dt;
-        }
+        r.rate.note(r.search.screened());
         Ok(Step::More)
     }
 
@@ -849,7 +836,7 @@ impl Strategy for ExploreRun {
         let Some(r) = &self.st else {
             return serde_json::json!({"status": super::status_name(status)});
         };
-        progress_of(r, &self.backend_name(), status, false)
+        progress_of(r, &self.backend_name(), status)
     }
 
     fn items(&self) -> u64 {
@@ -894,7 +881,47 @@ impl Strategy for ExploreRun {
     }
 }
 
-/// The progress as one line: `explore 7: 12,345 runs (230/s), 1,204 elites in 980 niches, ...`;
+/// How long the progress's runs a second are averaged over: a GPU batch lands a thousand runs at
+/// once, every 10 to 30 s on a laptop's GPU, so a shorter window reads 0/s between them (#22).
+const RATE_WINDOW: Duration = Duration::from_secs(60);
+
+/// Runs a second over about the last [`RATE_WINDOW`] (since the session started, before that):
+/// the runs screened, noted at the end of each step.
+struct Rate {
+    seen: std::collections::VecDeque<(Instant, u64)>,
+}
+
+impl Rate {
+    fn new(screened: u64) -> Rate {
+        Rate {
+            seen: [(Instant::now(), screened)].into(),
+        }
+    }
+
+    /// The runs screened now, at the end of a step.
+    fn note(&mut self, screened: u64) {
+        let now = Instant::now();
+        self.seen.push_back((now, screened));
+        // Keep the newest count from before the window, so the rate spans all of it.
+        while self.seen.len() > 2 && now.duration_since(self.seen[1].0) >= RATE_WINDOW {
+            self.seen.pop_front();
+        }
+    }
+
+    /// Runs a second from the oldest count kept to `screened` now.
+    fn per_s(&self, screened: u64) -> f64 {
+        let (t, n) = self.seen[0];
+        let dt = t.elapsed().as_secs_f64();
+        if dt <= 0.0 {
+            return 0.0;
+        }
+        screened.saturating_sub(n) as f64 / dt
+    }
+}
+
+/// The progress as one line: `explore 7: 12,345 runs (230/s), 1,204 elites in 980 niches (75 of
+/// them confirmed), ...`: the elites confirmed now, which falls when a better unconfirmed run takes
+/// a confirmed elite's niche;
 /// a Quick Start build's with its minutes, and once done what it published.
 pub fn line(p: &ExploreProgress) -> String {
     let d = crate::dashboard::digits;
@@ -917,7 +944,7 @@ pub fn line(p: &ExploreProgress) -> String {
         _ => format!("explore {}:", p.job),
     };
     format!(
-        "{head} {} runs ({:.0}/s), {} elites in {} niches, {} confirmed, {} of {} tilings; {}",
+        "{head} {} runs ({:.0}/s), {} elites in {} niches ({} of them confirmed), {} of {} tilings; {}",
         d(p.screened),
         p.per_s,
         d(p.elites),
