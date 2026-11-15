@@ -241,6 +241,90 @@ fn new_world_checks_tiling_size_and_cas() {
     .unwrap();
 }
 
+/// Width and height count unit cells; the cell limit counts the cells the world will have, so
+/// 4096 x 4096 is refused on the square grid and more so on trihex (three tiles in each unit
+/// cell), naming both numbers and sides that fit (#63). The same holds for a scene opened.
+#[test]
+fn a_grid_s_cells_are_counted_against_the_limit() {
+    let cx = Ctx::interactive();
+    let mut h = Session::new();
+    let run = |h: &mut Session, v: Value| {
+        WorldNew::run(&cx, h, serde_json::from_value(v).unwrap(), &Quiet)
+    };
+    let e = fails(
+        run(
+            &mut h,
+            json!({"tiling": "square", "width": 4096, "height": 4096, "cas": ["Life"]}),
+        ),
+        ErrorKind::Limit,
+    );
+    assert_eq!(
+        e.message,
+        "4096 x 4096 on square is 16,777,216 cells, over the limit of 4,000,000 cells (try 2000 x 2000)"
+    );
+    let e = fails(
+        run(
+            &mut h,
+            json!({"tiling": "square", "width": 1545, "height": 2589}),
+        ),
+        ErrorKind::Limit,
+    );
+    assert!(e.message.contains("4,000,005 cells"), "{e}");
+    let e = fails(
+        run(
+            &mut h,
+            json!({"tiling": "trihex", "width": 4096, "height": 4096}),
+        ),
+        ErrorKind::Limit,
+    );
+    assert!(
+        e.message
+            .starts_with("4096 x 4096 on trihex is 50,331,648 cells (3 in each unit cell)"),
+        "{e}"
+    );
+    // The sides it suggests fit.
+    let fit = e
+        .message
+        .rsplit("(try ")
+        .next()
+        .unwrap()
+        .trim_end_matches(')');
+    let (w, hh) = fit.split_once(" x ").unwrap();
+    let out = run(
+        &mut h,
+        json!({"tiling": "trihex", "width": w.parse::<u32>().unwrap(), "height": hh.parse::<u32>().unwrap()}),
+    )
+    .unwrap();
+    assert!(out.status.cells <= 4_000_000, "{}", out.status.cells);
+    // Exactly the limit is fine.
+    let out = run(
+        &mut h,
+        json!({"tiling": "square", "width": 2000, "height": 2000}),
+    )
+    .unwrap();
+    assert_eq!(out.status.cells, 4_000_000);
+    // A scene of a trihex grid over the limit is refused when opened.
+    let sc = jetcarp_core::Scene::new(TilingSpec::rect("trihex", 2000, 2000, Boundary::Wrap));
+    let e = fails(
+        WorldOpen::run(
+            &cx,
+            &mut h,
+            serde_json::from_value(json!({"scene": sc.to_json()})).unwrap(),
+            &Quiet,
+        ),
+        ErrorKind::Limit,
+    );
+    assert!(e.message.contains("12,000,000 cells"), "{e}");
+    // A trusted caller is not held to it.
+    assert!(
+        jetcarp_api::ops::world::check_grid_cells(
+            &TilingSpec::rect("trihex", 4096, 4096, Boundary::Wrap),
+            &Limits::NONE
+        )
+        .is_ok()
+    );
+}
+
 /// A scene file naming a palette this JETCARP does not know opens (and runs, and verifies) with a
 /// warning, keeping the name; a palette typed in an operation's arguments is refused.
 #[test]
@@ -645,7 +729,11 @@ fn reseed_render_save_and_open() {
         ),
         ErrorKind::Limit,
     );
-    assert!(e.message.contains("60 x 40 is too large"), "{e}");
+    assert!(
+        e.message
+            .starts_with("60 x 40 on square is 2,400 cells, over the limit of 1,000 cells"),
+        "{e}"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 

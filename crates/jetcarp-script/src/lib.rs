@@ -748,7 +748,14 @@ impl Ctx {
     pub fn check_tiling(&self, t: &jetcarp_core::TilingSpec) -> Result<(), String> {
         if let Some(max) = self.opts.limits.max_cells {
             let n = match t.size {
-                Some(jetcarp_core::SizeSpec::Rect { w, h }) => w as u64 * h as u64,
+                // Counted as the world will have them: some tilings have several tiles in each
+                // unit cell.
+                Some(jetcarp_core::SizeSpec::Rect { w, h }) => {
+                    jetcarp_core::Topology::cell_count(t)
+                        .ok()
+                        .flatten()
+                        .unwrap_or(w as u64 * h as u64)
+                }
                 Some(jetcarp_core::SizeSpec::Cells(c)) => c as u64,
                 _ => 0,
             };

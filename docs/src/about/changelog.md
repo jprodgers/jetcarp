@@ -229,6 +229,13 @@ that will declare them stable.
 - **The MCP tools resolve symbolic links before checking that a path is inside the folders they
   may use.** `files_list` also lists the folders given with `jetcarp mcp --allow`, as the other
   tools read and write there.
+- **MCP `world_new` given width and height skipped its 4,000,000-cell limit.** It checked each
+  side, not the cells the grid would have, so 4096 x 4096 (16.8 million cells, or 50 million on
+  trihex) was built. The limit now counts the world's cells, several to a unit cell on trihex and
+  the k-uniform tilings, for a new world, an opened scene and a script's world alike, and the
+  refusal names both numbers and sides that fit: "4096 x 4096 on square is 16,777,216 cells, over
+  the limit of 4,000,000 cells (try 2000 x 2000)".
+  ([#63](https://github.com/jprodgers/jetcarp/issues/63))
 
 ### Changed
 

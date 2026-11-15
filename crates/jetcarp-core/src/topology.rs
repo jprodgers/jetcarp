@@ -384,6 +384,33 @@ impl Topology {
         crate::pin::geometry_pin(spec)
     }
 
+    /// How many cells a periodic tiling of `spec` has, worked out without building it: its width
+    /// times its height in unit cells, times the tiles in each unit cell (one on the square grid,
+    /// three on trihex, more on the k-uniform tilings). None for an aperiodic tiling, whose size
+    /// is a level. A front end with a cell limit checks this first, so a world over its limit is
+    /// refused before its memory is taken.
+    pub fn cell_count(spec: &TilingSpec) -> Result<Option<u64>, String> {
+        let fam = families::family(&spec.family)
+            .ok_or_else(|| format!("unknown tiling family '{}'", spec.family))?;
+        if fam.kind == FamilyKind::Aperiodic {
+            return Ok(None);
+        }
+        let params = spec
+            .params
+            .clone()
+            .unwrap_or_else(|| families::init_params(fam.id));
+        let def = lattice_def(fam, &params)?;
+        let (w, h) = match spec.size {
+            Some(SizeSpec::Rect { w, h }) => (w, h),
+            Some(SizeSpec::Level(_)) => {
+                return Err("Level sizes apply only to aperiodic tilings".into());
+            }
+            Some(SizeSpec::Cells(c)) => def.dims_for(c),
+            None => def.dims_for(900),
+        };
+        Ok(Some(w as u64 * h as u64 * def.types.len() as u64))
+    }
+
     pub fn build(spec: &TilingSpec) -> Result<Topology, String> {
         let fam = families::family(&spec.family)
             .ok_or_else(|| format!("unknown tiling family '{}'", spec.family))?;

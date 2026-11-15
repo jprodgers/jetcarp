@@ -55,6 +55,57 @@ pub fn max_level(family: &str, max_cells: u64) -> u32 {
         .unwrap_or(lo)
 }
 
+/// `n` with its thousands grouped: `16,777,216`.
+fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// A grid of width x height unit cells against the cell limit. The cells are counted as the
+/// world will have them: trihex, the k-uniform tilings and others have several tiles in each
+/// unit cell, so the sides alone say too little. A grid over the limit is refused naming both
+/// numbers and sides that fit, before any of it is built.
+pub fn check_grid_cells(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
+    let Some(SizeSpec::Rect { w, h }) = spec.size else {
+        return Ok(());
+    };
+    if l.max_cells == u64::MAX {
+        return Ok(());
+    }
+    let Some(n) = Topology::cell_count(spec).map_err(ApiError::invalid)? else {
+        return Ok(());
+    };
+    if n <= l.max_cells {
+        return Ok(());
+    }
+    let per = (n / (w as u64 * h as u64)).max(1);
+    // Sides in the same proportions that fit.
+    let k = (l.max_cells as f64 / n as f64).sqrt();
+    let fit = |s: u32| ((s as f64 * k).floor() as u64).max(8);
+    let (mut fw, fh) = (fit(w), fit(h));
+    while fw > 8 && fw * fh * per > l.max_cells {
+        fw -= 1;
+    }
+    let each = if per > 1 {
+        format!(" ({per} in each unit cell)")
+    } else {
+        String::new()
+    };
+    Err(ApiError::limit(format!(
+        "{w} x {h} on {} is {} cells{each}, over the limit of {} cells (try {fw} x {fh})",
+        spec.family,
+        grouped(n),
+        grouped(l.max_cells)
+    )))
+}
+
 /// A tiling's size against the limits (an opened scene, `set_tiling`).
 pub fn check_tiling_size(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     match spec.size {
@@ -65,12 +116,7 @@ pub fn check_tiling_size(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> 
                     l.max_grid_side
                 )));
             }
-            if w as u64 * h as u64 > l.max_cells {
-                return Err(ApiError::limit(format!(
-                    "{w} x {h} is too large; keep width x height at most {}",
-                    l.max_cells
-                )));
-            }
+            check_grid_cells(spec, l)?;
         }
         Some(SizeSpec::Cells(n)) if n as u64 > l.max_cells => {
             return Err(ApiError::limit(format!("at most {} cells", l.max_cells)));
@@ -662,6 +708,7 @@ impl WorldOp for WorldNew {
     ) -> Result<NewWorldOut, ApiError> {
         let l = &cx.limits;
         let tiling = tiling_of(&a, l)?;
+        check_grid_cells(&tiling, l)?;
         let mut scene = Scene::new(tiling);
         scene.rng_state = a.rng_seed.unwrap_or(1);
         scene.name = a.name.clone().unwrap_or_default();

@@ -777,6 +777,33 @@ fn files_stay_inside_the_folder_rules() {
     assert!(!e.is_empty());
 }
 
+/// The 4,000,000-cell limit counts the cells a grid will have, from width and height too, and
+/// in scripts (#63).
+#[test]
+fn a_grid_over_the_cell_limit_is_refused() {
+    let (mut s, mut h) = new();
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"tiling": "square", "width": 4096, "height": 4096, "cas": ["Life"]}),
+    ));
+    assert!(
+        e.contains("16,777,216 cells, over the limit of 4,000,000 cells (try 2000 x 2000)"),
+        "{e}"
+    );
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "run_script",
+        json!({"script": "let w = world(#{ tiling: \"trihex\", size: [1500, 1500] });"}),
+    ));
+    assert!(
+        e.contains("6750000 cells is over this run's limit of 4000000"),
+        "{e}"
+    );
+}
+
 #[test]
 fn errors_are_useful_not_fatal() {
     let (mut s, mut h) = new();
