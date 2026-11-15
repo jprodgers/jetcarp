@@ -2184,6 +2184,72 @@ fn run_options(
     })
 }
 
+/// How long `detach` waits for the new process to take the job, and for a run in another
+/// process that was asked to stop to let go of it first.
+const DETACH_WAIT: Duration = Duration::from_secs(30);
+
+/// Hand a job to a process of its own (`jetcarp jobs resume JOB`, with `args`), and return once
+/// that process holds it. Until then the job is marked running but held by nobody, which a
+/// `jobs wait` straight after a `--detach` took for a run that had crashed (#50). A run of the
+/// job in another process that is letting go after a stop is waited for; one still running there
+/// refuses the call (the new process would only have failed to take it, unseen).
+fn detach(cx: &Ctx, lib: &Library, row: &JobRow, args: &[String]) -> Result<(), ApiError> {
+    let job = row.id;
+    let t0 = Instant::now();
+    while jobs::lock_held(lib, job) == Some(true) {
+        let now = lib.job(job).map_err(catalog_err)?;
+        if now.status == JobStatus::Running || t0.elapsed() >= DETACH_WAIT {
+            let who = now.owner.map(|o| format!(" (by {o})")).unwrap_or_default();
+            return Err(ApiError::conflict(format!(
+                "{} {job} is already being run in another process{who}",
+                noun(&row.kind)
+            ))
+            .hint("stop it there first (jobs stop), and wait for it to let go (jobs wait)"));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    // A run killed earlier left its name in the job's columns, which reads as a run that has
+    // gone: clear it, so the job reads as starting until the new process names itself.
+    let (owner, _) = lib.job_lease(job).map_err(catalog_err)?;
+    if owner.is_some() {
+        lib.set_job_lease(job, None, None, owner.as_deref())
+            .map_err(catalog_err)?;
+    }
+    // Marked running (and so written now) before the new process takes it, so a `jobs.wait` or
+    // `jobs.status` straight after sees it running.
+    lib.update_job(job, Some(JobStatus::Running), None, None)
+        .map_err(catalog_err)?;
+    // Put back as it was, or paused for one left running by a crash, if no process takes it.
+    let before = match row.status {
+        JobStatus::Running => JobStatus::Paused,
+        s => s,
+    };
+    if let Err(e) = cx.platform.spawn_job(lib.path(), job, args) {
+        let _ = lib.update_job(job, Some(before), None, None);
+        return Err(ApiError::engine(e));
+    }
+    // The new process names itself the job's owner once it holds the lock (and a very short run
+    // may already have ended).
+    let t0 = Instant::now();
+    while t0.elapsed() < DETACH_WAIT {
+        let now = lib.job(job).map_err(catalog_err)?;
+        if now.owner.is_some() || now.status != JobStatus::Running {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let _ = lib.update_job(job, Some(before), None, None);
+    Err(ApiError::engine(format!(
+        "the process started to run {} {job} did not take it within {} s, so the job is {} again",
+        noun(&row.kind),
+        DETACH_WAIT.as_secs(),
+        status_name(before)
+    ))
+    .hint(format!(
+        "`jetcarp jobs resume {job}` without --detach runs it here and shows what goes wrong"
+    )))
+}
+
 /// Run (or resume) a job as `how` says, and report on it.
 pub(crate) fn run_job(
     cx: &Ctx,
@@ -2255,18 +2321,7 @@ pub(crate) fn run_job(
         if let Some(n) = how.budget.items {
             args.extend(["--limit".to_string(), n.to_string()]);
         }
-        // Marked running before the new process takes it, so a `jobs.wait` or `jobs.status`
-        // straight after sees it running (a process that never starts leaves it to go stale).
-        if row.status != JobStatus::Running {
-            lib.update_job(job, Some(JobStatus::Running), None, None)
-                .map_err(catalog_err)?;
-        }
-        if let Err(e) = cx.platform.spawn_job(lib.path(), job, &args) {
-            if row.status != JobStatus::Running {
-                let _ = lib.update_job(job, Some(row.status), None, None);
-            }
-            return Err(ApiError::engine(e));
-        }
+        detach(cx, lib, &row, &args)?;
         out.mode = "detached".into();
         out.status = "running".into();
         out.progress = k.saved_progress(lib, &row);

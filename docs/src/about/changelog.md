@@ -189,6 +189,22 @@ that will declare them stable.
   left out. A running search is now refused whatever it has stored, and an export or publish that
   is refused no longer leaves its empty `--to` folder behind.
   ([#57](https://github.com/jprodgers/jetcarp/issues/57))
+- **A job whose process was killed read as running for up to five minutes.** `jetcarp jobs
+  status` called a job stale only once its progress and heartbeat were five minutes old, `jobs
+  wait` said it was gone after 45 seconds, and `jobs resume` could take it at once, so the three
+  disagreed. A runner holds its job's lock and names itself in the job's row, and the system lets
+  go of the lock when the process ends: a job that names a runner and whose lock is free is now
+  stale at once, in `jobs status`, `jobs list`, `jobs wait` and `jobs remove` alike. `jobs status`
+  says so in words (it printed `status running` and kept `stale` to its JSON), and so do the MCP
+  server's `job_status` and its list. `--status running` leaves stale jobs out, and `--status
+  stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
+  [#64](https://github.com/jprodgers/jetcarp/issues/64))
+- **`jobs wait` straight after `jobs resume --detach` said the job was gone.** The new process had
+  not taken the job yet, and the killed run's name was still in its row. `--detach` now clears it,
+  and returns only once the new process holds the job (within 30 seconds, or it says so and puts
+  the job back as it was). A `--detach` while another process still runs the job is refused, and
+  one just after a stop waits for that run to let go; both used to start a process that failed
+  unseen. ([#50](https://github.com/jprodgers/jetcarp/issues/50))
 
 ### Changed
 

@@ -34,7 +34,8 @@ struct Filters {
     /// Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore.
     #[arg(long)]
     kind: Option<String>,
-    /// Only jobs with this status: running, paused, done, failed.
+    /// Only jobs with this status: running, paused, done, failed, or stale (marked running, but no
+    /// process runs it; running leaves these out).
     #[arg(long)]
     status: Option<String>,
     /// Only jobs with this label.

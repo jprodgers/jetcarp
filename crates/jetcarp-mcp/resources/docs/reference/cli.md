@@ -718,7 +718,7 @@ Options:
       --json               Print the result as JSON instead of text (commands that report a result)
       --kind <KIND>        Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
-      --status <STATUS>    Only jobs with this status: running, paused, done, failed
+      --status <STATUS>    Only jobs with this status: running, paused, done, failed, or stale (marked running, but no process runs it; running leaves these out)
       --label <LABEL>      Only jobs with this label
       --prefix <PREFIX>    Only jobs whose label starts with this
       --limit <LIMIT>      At most this many (newest first)
@@ -741,7 +741,7 @@ Options:
       --wait <WAIT>        Wait up to this many seconds for a running job to stop running
       --finds <FINDS>      Show this many of its newest and rarest finds
       --kind <KIND>        Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore
-      --status <STATUS>    Only jobs with this status: running, paused, done, failed
+      --status <STATUS>    Only jobs with this status: running, paused, done, failed, or stale (marked running, but no process runs it; running leaves these out)
       --label <LABEL>      Only jobs with this label
       --prefix <PREFIX>    Only jobs whose label starts with this
       --limit <LIMIT>      At most this many (newest first)

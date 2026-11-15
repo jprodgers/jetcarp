@@ -682,3 +682,98 @@ fn waits_end_with_how_the_job_ended() {
         ErrorKind::NotFound,
     );
 }
+
+/// A platform whose "process of its own" is a thread that takes the job half a second after it
+/// is asked to, as a new `jetcarp jobs resume` process takes a moment to start.
+struct SlowStart;
+
+impl jetcarp_api::Platform for SlowStart {
+    fn can_detach(&self) -> bool {
+        true
+    }
+    fn spawn_job(&self, catalog: &std::path::Path, job: i64, _: &[String]) -> Result<(), String> {
+        use jetcarp_search::jobs::{RunOptions, Runner};
+        let catalog = catalog.to_path_buf();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            let o = RunOptions {
+                threads: 1,
+                ..Default::default()
+            };
+            let _ = Runner::new(jetcarp_store::Library::open(catalog)).run(job, &o);
+        });
+        Ok(())
+    }
+}
+
+/// A job whose process was killed reads as stale at once in every status, as `jobs resume` can
+/// take it at once (#49, #64); a `--detach` returns once its new process holds the job, so a
+/// `jobs wait` straight after waits for that run rather than calling the job gone (#50).
+#[test]
+fn a_killed_run_is_stale_at_once_and_a_detached_resume_is_waited_for() {
+    use jetcarp_search::hunt::HuntSpec;
+    use jetcarp_search::jobs::{self, JobSpec};
+    use jetcarp_store::{JobStatus, Library};
+    let dir = scratch("jobs-killed");
+    let cx = ctx(&dir).with_platform(std::sync::Arc::new(SlowStart));
+    // A hunt with no end, whose process is killed a moment ago: still marked running, its owner
+    // still named and its heartbeat fresh, but nothing holds its lock.
+    let lib = Library::open(Library::file_for(dir.join("lib")));
+    let spec = HuntSpec {
+        soups: None,
+        ..Default::default()
+    };
+    let js = JobSpec {
+        strategy: "hunt".into(),
+        spec: json!(spec),
+        label: None,
+        budget: Default::default(),
+    };
+    let job = jobs::create(&lib, &js).unwrap();
+    lib.update_job(job, Some(JobStatus::Running), None, None)
+        .unwrap();
+    let now = jetcarp_search::dashboard::now_seconds();
+    assert!(
+        lib.set_job_lease(job, Some("deadhost:4242"), Some(now - 2), None)
+            .unwrap()
+    );
+    let v = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+    assert_eq!(
+        (&v["status"], &v["stale"]),
+        (&json!("running"), &json!(true))
+    );
+    let text = jetcarp_api::call(&cx, "jobs.status", json!({"job": job}), &Lines::default())
+        .unwrap()
+        .text;
+    assert!(text.contains("stale: marked running"), "{text}");
+    let l = call_json(&cx, "jobs.list", json!({"status": "running"})).unwrap();
+    assert_eq!(l["jobs"], json!([]), "a stale job is not listed as running");
+    let l = call_json(&cx, "jobs.list", json!({"status": "stale"})).unwrap();
+    assert_eq!(l["jobs"][0]["job"], job, "{l}");
+    let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 5})).unwrap();
+    assert_eq!(w["ended"], "gone", "{w}");
+    // Resumed in a process of its own: running as soon as the call returns.
+    let t0 = Instant::now();
+    let d = call_json(&cx, "jobs.resume", json!({"job": job, "detach": true})).unwrap();
+    assert_eq!(
+        (&d["mode"], &d["status"]),
+        (&json!("detached"), &json!("running"))
+    );
+    assert!(
+        t0.elapsed() >= Duration::from_millis(400),
+        "returned before the new process took the job"
+    );
+    let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 0.5})).unwrap();
+    assert_eq!(w["ended"], "timeout", "{w}");
+    let v = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+    assert_eq!(v["stale"], false, "{v}");
+    // A second one is refused: the job is already being run.
+    let e = fails(
+        call_json(&cx, "jobs.resume", json!({"job": job, "detach": true})),
+        ErrorKind::Conflict,
+    );
+    assert!(e.message.contains("already being run"), "{e}");
+    call_json(&cx, "jobs.stop", json!({"job": job})).unwrap();
+    let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 60})).unwrap();
+    assert_eq!(w["ended"], "paused", "{w}");
+}

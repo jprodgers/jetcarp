@@ -295,6 +295,15 @@ fn jobs_typed<T: serde::de::DeserializeOwned + Default>(v: &Value) -> T {
     serde_json::from_value(v.clone()).unwrap_or_default()
 }
 
+/// Whether a job is stale: marked running, but no process runs it (its run crashed or was
+/// killed, [`jobs::run_gone`]), or silent for [`dashboard::STALE_S`] (`summary_stale`, the
+/// dashboard's own test) though a process holds it. Never a job that runs here. Every status
+/// (`jobs.list`, `jobs.status`, `jobs.wait`, and so every front end's) asks this, so they all
+/// agree with each other and with `jobs.resume`, which can take a stale job at once (#49, #64).
+pub(crate) fn is_stale(lib: &Library, row: &JobRow, summary_stale: bool, here: bool) -> bool {
+    !here && (summary_stale || jobs::run_gone(lib, row, dashboard::now_seconds()))
+}
+
 /// A job's progress: the live one when it runs in this process (or has just ended here), else
 /// the saved one. Also whether it runs here.
 pub(crate) fn live_progress(cx: &Ctx, lib: &Library, row: &JobRow) -> (Value, bool) {
@@ -319,7 +328,7 @@ pub struct ListIn {
     /// Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore (strategy aliases work too).
     #[serde(default)]
     pub kind: Option<String>,
-    /// Only jobs with this status: running, paused, done, failed.
+    /// Only jobs with this status: running, paused, done, failed, or stale (marked running, but no process runs it; `running` leaves these out).
     #[serde(default)]
     pub status: Option<String>,
     /// Only jobs with this label.
@@ -351,7 +360,7 @@ pub struct JobLine {
     pub unit: String,
     /// Running in this process.
     pub here: bool,
-    /// Running, but no progress or heartbeat for five minutes: resumable elsewhere.
+    /// Marked running, but no process runs it (it crashed or was killed), or silent for five minutes: resumable.
     pub stale: bool,
     pub created: String,
     pub updated: String,
@@ -404,12 +413,20 @@ fn kind_filter(k: &str) -> String {
 pub(crate) fn list(cx: &Ctx, a: &ListIn) -> Result<JobList, ApiError> {
     let lib = cx.library();
     if let Some(s) = &a.status
+        && s != "stale"
         && jobs::status_of(s).is_none()
     {
         return Err(ApiError::invalid(format!(
-            "`status` is running, paused, done, or failed, not {s}"
+            "`status` is running, paused, done, failed, or stale, not {s}"
         )));
     }
+    // A stale job is still marked running: the two are told apart once its line is read.
+    let want = a.status.as_deref();
+    let marked = |r: &JobRow| match want {
+        Some("stale") => r.status == JobStatus::Running,
+        Some(s) => status_name(r.status) == s,
+        None => true,
+    };
     let kind = a.kind.as_deref().map(kind_filter);
     let rows = lib.jobs().map_err(catalog_err)?;
     let now = dashboard::now_seconds();
@@ -418,9 +435,7 @@ pub(crate) fn list(cx: &Ctx, a: &ListIn) -> Result<JobList, ApiError> {
         if r.id == 0
             || r.kind == "manual"
             || kind.as_ref().is_some_and(|k| &r.kind != k)
-            || a.status
-                .as_ref()
-                .is_some_and(|s| status_name(r.status) != s)
+            || !marked(r)
             || a.label
                 .as_ref()
                 .is_some_and(|l| r.label() != Some(l.as_str()))
@@ -433,7 +448,12 @@ pub(crate) fn list(cx: &Ctx, a: &ListIn) -> Result<JobList, ApiError> {
         if a.limit.is_some_and(|n| out.len() >= n) {
             break;
         }
-        out.push(line_for(cx, &lib, r, now));
+        let l = line_for(cx, &lib, r, now);
+        match want {
+            Some("running") if l.stale => continue,
+            Some("stale") if !l.stale => continue,
+            _ => out.push(l),
+        }
     }
     Ok(JobList {
         catalog: lib.path().display().to_string(),
@@ -482,8 +502,8 @@ fn line_for(cx: &Ctx, lib: &Library, r: &JobRow, now: i64) -> JobLine {
         .unwrap_or_else(|| summary_of(r, &progress));
     if here && let Some(st) = progress.get("status").and_then(|v| v.as_str()) {
         s.status = st.into();
-        s.stale = false;
     }
+    s.stale = is_stale(lib, r, s.stale, here);
     JobLine {
         job: r.id,
         kind: r.kind.clone(),
@@ -583,7 +603,7 @@ pub struct JobView {
     pub status: String,
     /// Running in this process.
     pub here: bool,
-    /// Running, but no progress or heartbeat for five minutes: resumable elsewhere.
+    /// Marked running, but no process runs it (it crashed or was killed), or silent for five minutes: resumable.
     pub stale: bool,
     /// This program can carry it on.
     pub resumable: bool,
@@ -624,11 +644,26 @@ impl Report for JobView {
         // A pack's job never ran here: its line says so, and it has no counters to show.
         let imported = self.kind != jobs::explore::KIND_NAME
             && self.spec.get("imported_from").is_some_and(Value::is_string);
+        // A stale job's progress still says running, as its run last wrote it (#64).
+        let mut progress = self.progress.clone();
+        if self.stale {
+            if !progress.is_object() {
+                progress = serde_json::json!({});
+            }
+            progress["status"] = "stale".into();
+        }
         let mut s = if imported {
             format!("{}\n", self.line)
         } else {
-            progress_text(&self.kind, &self.progress, &self.line)
+            progress_text(&self.kind, &progress, &self.line)
         };
+        if self.stale {
+            let _ = writeln!(
+                s,
+                "  stale: marked running, but no process is running it (its process crashed, was \
+                 killed, or stopped answering)"
+            );
+        }
         if self.resumable
             && !self.here
             && (matches!(self.status.as_str(), "paused" | "failed") || self.stale)
@@ -709,9 +744,7 @@ pub(crate) fn view(
     } else {
         status_name(row.status).to_string()
     };
-    if here {
-        s.stale = false;
-    }
+    s.stale = is_stale(lib, &row, s.stale, here);
     let finds = match finds {
         Some(n) if n > 0 => {
             let f = k.finds(lib, &row, &[], n).map_err(catalog_err)?;
@@ -870,25 +903,6 @@ impl Report for WaitOut {
     }
 }
 
-/// A running job's run has gone (a crash, or a killed process): this process does not run it,
-/// and neither its heartbeat nor its progress has been written for longer than a heartbeat
-/// takes, or for [`dashboard::STALE_S`], and no process holds its lock (`now`: seconds since
-/// 1970).
-fn run_gone(lib: &Library, v: &JobView, now: i64) -> bool {
-    if v.status != "running" || v.here {
-        return false;
-    }
-    if v.stale {
-        return true;
-    }
-    let Ok(row) = lib.job(v.job) else {
-        return false;
-    };
-    let alive = dashboard::utc_seconds(&row.updated).max(row.heartbeat);
-    let quiet = alive.is_none_or(|t| now - t > jobs::HEARTBEAT_S as i64 + 15);
-    quiet && jobs::lock_held(lib, v.job) == Some(false)
-}
-
 /// A job no longer marked running whose run still holds it: asked to stop, it lets go at its
 /// next checkpoint. (A run in this process holds the job's lease the same way.)
 fn stopping(lib: &Library, v: &JobView) -> bool {
@@ -913,7 +927,7 @@ impl Op for JobsWait {
             let waited = t0.elapsed().as_secs_f64();
             let out_of_time = p.cancelled() || timeout.is_some_and(|t| waited >= t);
             let ended = match v.status.as_str() {
-                "running" if run_gone(&lib, &v, dashboard::now_seconds()) => Some("gone"),
+                "running" if v.stale => Some("gone"),
                 "running" if out_of_time => Some("timeout"),
                 "running" => None,
                 // A stop marks the job paused at once (that is how its process hears of it), but
@@ -1153,7 +1167,8 @@ impl Op for JobsRemove {
         let lib = cx.library();
         let row = lib.job(a.job).map_err(catalog_err)?;
         let s = dashboard::summaries(std::slice::from_ref(&row), dashboard::now_seconds());
-        let stale = s.first().is_some_and(|s| s.stale);
+        let here = cx.registry().is_running(&lib, a.job);
+        let stale = is_stale(&lib, &row, s.first().is_some_and(|s| s.stale), here);
         if row.status == JobStatus::Running && !stale {
             return Err(ApiError::conflict(format!(
                 "{} {} is running; stop it first (jobs.stop)",
@@ -1655,9 +1670,10 @@ fn report(
 mod tests {
     use super::*;
 
-    /// A job marked running is gone once nothing has been written for longer than a heartbeat
-    /// takes and no process holds its lock; a held lock keeps it alive however late its
-    /// heartbeat is.
+    /// A job marked running that no runner has taken yet is gone once nothing has been written
+    /// for longer than a heartbeat takes and no process holds its lock; a held lock keeps it
+    /// alive however late its heartbeat is. One a runner took (its owner named) is gone the
+    /// moment its lock is free, as a killed process leaves it (#49), and every status says so.
     #[test]
     fn a_running_job_nobody_holds_is_gone_once_its_heartbeat_is_late() {
         let dir = std::env::temp_dir().join(format!("jetcarp-api-wait-{}", std::process::id()));
@@ -1674,14 +1690,63 @@ mod tests {
         lib.update_job(job, Some(JobStatus::Running), None, None)
             .unwrap();
         let v = view(&cx, &lib, job, None).unwrap();
-        assert_eq!((v.status.as_str(), v.here), ("running", false));
+        assert_eq!(
+            (v.status.as_str(), v.here, v.stale),
+            ("running", false, false)
+        );
         let now = dashboard::now_seconds();
-        assert!(!run_gone(&lib, &v, now), "just written");
-        assert!(run_gone(&lib, &v, now + 120), "no lock file");
+        let gone = |at: i64| jobs::run_gone(&lib, &lib.job(job).unwrap(), at);
+        assert!(!gone(now), "just written");
+        assert!(gone(now + 120), "no lock file");
         let lease = jobs::Lease::acquire(&lib, job).unwrap();
-        assert!(!run_gone(&lib, &v, now + 120), "its lock is held");
+        assert!(!gone(now), "taken and held");
+        assert!(!gone(now + 120), "its lock is held");
+        assert!(!view(&cx, &lib, job, None).unwrap().stale);
         drop(lease);
-        assert!(run_gone(&lib, &v, now + 120), "let go without finishing");
+        assert!(gone(now + 120), "let go without finishing");
+        // A runner's process killed a moment ago: its owner is still named and its heartbeat is
+        // fresh, but the system has let go of the lock. Gone at once, in every status.
+        assert!(
+            lib.set_job_lease(job, Some("deadhost:4242"), Some(now - 2), None)
+                .unwrap()
+        );
+        assert!(gone(now), "owner named, lock free");
+        let v = view(&cx, &lib, job, None).unwrap();
+        assert!(v.stale, "{v:?}");
+        let text = v.text();
+        assert!(
+            text.contains("status stale") && text.contains("stale: marked running"),
+            "{text}"
+        );
+        let l = list(&cx, &ListIn::default()).unwrap();
+        assert!(
+            l.jobs[0].stale && l.text().contains("stale"),
+            "{}",
+            l.text()
+        );
+        let only = |s: &str| {
+            list(
+                &cx,
+                &ListIn {
+                    status: Some(s.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .jobs
+            .len()
+        };
+        assert_eq!((only("running"), only("stale")), (0, 1));
+        let w = JobsWait::run(
+            &cx,
+            WaitIn {
+                job,
+                timeout_s: Some(5.0),
+            },
+            &crate::op::Quiet,
+        )
+        .unwrap();
+        assert_eq!(w.ended, "gone", "{w:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -15,12 +15,17 @@
 //! and a step-based run writes only while the owner is still its own
 //! (`Library::job_step`).
 
-use jetcarp_store::Library;
+use jetcarp_store::library::JobRow;
+use jetcarp_store::{JobStatus, Library};
 use std::fs::{File, OpenOptions, TryLockError};
 use std::path::PathBuf;
 
 /// Seconds between heartbeats.
 pub const HEARTBEAT_S: u64 = 30;
+
+/// How long a job marked running may go with nothing written (no progress, no heartbeat) before
+/// [`run_gone`] calls it gone when its lock cannot settle it: a heartbeat and a margin.
+pub const GONE_QUIET_S: i64 = HEARTBEAT_S as i64 + 15;
 
 /// This process as a job owner: `host:pid`.
 pub fn owner_id() -> String {
@@ -44,9 +49,9 @@ pub fn lock_path(lib: &Library, job: i64) -> PathBuf {
 
 /// Whether a runner, in this process or another, holds `job`'s lock now (no lock file: no);
 /// `None` when it cannot be told (a file system without locks). The test takes a shared lock
-/// for a moment, so a runner taking the job at that very moment would be refused: ask only
-/// when the heartbeat says the runner may be gone (`jobs.wait` does, to tell a crashed run from
-/// a live one).
+/// for a moment, which a runner taking the job at that very moment would meet: [`Lease::acquire`]
+/// tries again for a little while, and [`run_gone`] asks only once a runner has taken the job or
+/// it has been quiet a while.
 pub fn lock_held(lib: &Library, job: i64) -> Option<bool> {
     let file = match File::open(lock_path(lib, job)) {
         Ok(f) => f,
@@ -57,6 +62,30 @@ pub fn lock_held(lib: &Library, job: i64) -> Option<bool> {
         Ok(()) => Some(false),
         Err(TryLockError::WouldBlock) => Some(true),
         Err(TryLockError::Error(_)) => None,
+    }
+}
+
+/// Whether a job marked running has no process running it any more: its run crashed or was
+/// killed, and a runner can take it over at once (`now`: seconds since 1970). A runner holds the
+/// job's lock while it runs and names itself in `jobs.owner`; the system lets go of the lock the
+/// moment the runner's process dies, so a job that names an owner and whose lock is free is gone
+/// straight away, as `jobs resume` sees it (it used to read as running for minutes, #49). A job
+/// marked running that names nobody has not been taken by a runner yet (a run handed to a new
+/// process with `--detach`, still starting): it is gone only once nothing has been written for
+/// [`GONE_QUIET_S`], and its lock is not tested before then, so the test never gets in the way of
+/// the runner taking it. On a file system without locks the heartbeat alone says.
+pub fn run_gone(lib: &Library, row: &JobRow, now: i64) -> bool {
+    if row.status != JobStatus::Running {
+        return false;
+    }
+    let alive = crate::dashboard::utc_seconds(&row.updated).max(row.heartbeat);
+    let quiet = alive.is_none_or(|t| now - t > GONE_QUIET_S);
+    if row.owner.is_none() && !quiet {
+        return false;
+    }
+    match lock_held(lib, row.id) {
+        Some(held) => !held,
+        None => quiet,
     }
 }
 
@@ -88,7 +117,19 @@ impl Lease {
             .write(true)
             .open(&path)
             .map_err(|e| format!("{}: {e}", path.display()))?;
-        match file.try_lock() {
+        let mut tries = 0;
+        let locked = loop {
+            match file.try_lock() {
+                // A status check holds a shared lock for a moment ([`lock_held`]): try again
+                // for a little while before calling the job taken.
+                Err(TryLockError::WouldBlock) if tries < 10 => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                r => break r,
+            }
+        };
+        match locked {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
                 let who = match (held_by, beat) {

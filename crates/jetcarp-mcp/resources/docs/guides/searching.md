@@ -99,8 +99,9 @@ $ jetcarp jobs list
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an
   uninterrupted run would have ended, at any thread count.
-- **In the background.** `--detach` runs a search in a process of its own and returns at once;
-  `jetcarp jobs status JOB` follows it, and `--label NAME` makes it easy to find.
+- **In the background.** `--detach` runs a search in a process of its own and returns as soon as
+  that process has taken the job; `jetcarp jobs status JOB` follows it, and `--label NAME` makes
+  it easy to find.
 - **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs. A job
   asked to stop is marked paused at once but lets go at its next checkpoint, and `jobs wait` waits
   for that too, so a `jetcarp jobs resume` straight after it finds the job free. Meanwhile it shows
@@ -126,9 +127,11 @@ $ jetcarp jobs list
 | 6 | is marked running, but no process runs it: its process crashed or was killed |
 
 Exit status 1 means the wait itself failed: there is no such job, or the library cannot be read.
-A crashed run is noticed within about a minute, once its heartbeat is late. `jetcarp jobs resume
-JOB` carries such a job on from its last checkpoint (an explore search from its archive), so a
-long search can be kept going through crashes until a deadline with a loop in the shell:
+A run whose process crashed or was killed is noticed at once: the system lets go of the job's lock
+when the process ends. `jetcarp jobs status` and `jetcarp jobs list` call such a job *stale*
+(`--status stale` lists them), and `jetcarp jobs resume JOB` carries it on from its last
+checkpoint (an explore search from its archive), so a long search can be kept going through
+crashes until a deadline with a loop in the shell:
 
 ```sh
 until jetcarp jobs resume 12 --until 1763200000; do sleep 15; done

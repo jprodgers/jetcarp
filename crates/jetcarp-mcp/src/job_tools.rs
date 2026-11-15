@@ -408,7 +408,8 @@ fn job_status(c: &mut Call) -> Res {
         .iter()
         .map(|j| {
             json!({
-                "job": j.job, "kind": j.kind, "status": j.status, "label": j.label,
+                "job": j.job, "kind": j.kind,
+                "status": if j.stale { "stale" } else { j.status.as_str() }, "label": j.label,
                 "line": j.line, "created": j.created, "updated": j.updated,
             })
         })

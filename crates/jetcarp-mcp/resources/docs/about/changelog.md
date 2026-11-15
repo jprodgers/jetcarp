@@ -175,6 +175,36 @@ that will declare them stable.
   window's *Render media*, which is for finds and picks the format itself. *File → Export animation
   (GIF or WebP)…* now records the view and the generations after it, as a GIF or a lossless WebP,
   in the background. ([#62](https://github.com/jprodgers/jetcarp/issues/62))
+- **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
+  often tie for a niche's last places (every run that dies at the same generation scores the same),
+  and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU
+  rounds finish, not in the order of their ids, while an import rebuilds the archive in id order, so
+  0.2–0.5% of the elites were other, unconfirmed runs of the same score. A tie now goes to the run
+  with the lower id, so the archive holds the same elites in whatever order its runs come. A search
+  made before keeps its elites until `jetcarp jobs rescore` picks them again from its runs.
+  ([#54](https://github.com/jprodgers/jetcarp/issues/54))
+- **An export took a running explore search without a word when it had no runs to seal yet.**
+  Publishing refused a running search only when it had runs not yet sealed, so one that had just
+  started, or had sealed every run, was packed as it stood while it went on storing runs the pack
+  left out. A running search is now refused whatever it has stored, and an export or publish that
+  is refused no longer leaves its empty `--to` folder behind.
+  ([#57](https://github.com/jprodgers/jetcarp/issues/57))
+- **A job whose process was killed read as running for up to five minutes.** `jetcarp jobs
+  status` called a job stale only once its progress and heartbeat were five minutes old, `jobs
+  wait` said it was gone after 45 seconds, and `jobs resume` could take it at once, so the three
+  disagreed. A runner holds its job's lock and names itself in the job's row, and the system lets
+  go of the lock when the process ends: a job that names a runner and whose lock is free is now
+  stale at once, in `jobs status`, `jobs list`, `jobs wait` and `jobs remove` alike. `jobs status`
+  says so in words (it printed `status running` and kept `stale` to its JSON), and so do the MCP
+  server's `job_status` and its list. `--status running` leaves stale jobs out, and `--status
+  stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
+  [#64](https://github.com/jprodgers/jetcarp/issues/64))
+- **`jobs wait` straight after `jobs resume --detach` said the job was gone.** The new process had
+  not taken the job yet, and the killed run's name was still in its row. `--detach` now clears it,
+  and returns only once the new process holds the job (within 30 seconds, or it says so and puts
+  the job back as it was). A `--detach` while another process still runs the job is refused, and
+  one just after a stop waits for that run to let go; both used to start a process that failed
+  unseen. ([#50](https://github.com/jprodgers/jetcarp/issues/50))
 
 ### Changed
 
