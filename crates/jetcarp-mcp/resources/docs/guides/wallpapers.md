@@ -158,6 +158,7 @@ until its world is built.
 | `jetcarp host next`, `previous` `[--screen N]` | The next or previous item, on every screen or one |
 | `jetcarp host rotation NAME [--screen N]` | Choose a screen's rotation |
 | `jetcarp host fps N` | The frame rate: every screen draws at least this often (1 to 240; default 30). See [below](#frame-rate-and-speed) |
+| `jetcarp host max-fps N\|refresh` | The most frames a second a screen showing every generation draws at (1 to 240; default 60), or `refresh` for its monitor's refresh rate however high. See [below](#frame-rate-and-speed) |
 | `jetcarp host pacing every-generation\|low-power` | Whether a faster scene draws faster, showing every generation (the default), or every screen draws at the frame rate and no scene runs faster (see [below](#frame-rate-and-speed)) |
 | `jetcarp host caption on\|off` | Show what is running in a corner, with `--corner`, `--size`, `--generation on\|off` and `--seconds` |
 | `jetcarp host battery on\|off` | Pause while the computer runs on battery (default on) |
@@ -190,10 +191,13 @@ also *Start JETCARP host* while it is stopped).
 
 Each scene runs at its own speed, in generations a second (a profile's *speed*, or a rotation's).
 By default every generation is shown: each screen draws as fast as its scene steps, at least the
-frame rate (`jetcarp host fps`, 30 unless you change it) and at most its monitor's refresh rate.
-Life at 60 generations a second draws 60 frames a second, one generation each. A scene slower than
-the frame rate, or one running as fast as it can, draws at the frame rate; one faster than the
-refresh draws at the refresh, several generations a frame. With several screens, each draws at its
+frame rate (`jetcarp host fps`, 30 unless you change it) and at most 60 frames a second (or the
+monitor's refresh rate, if lower). Life at 60 generations a second draws 60 frames a second, one
+generation each. A scene slower than the frame rate, or one running as fast as it can, draws at the
+frame rate; one faster than 60 a second draws at 60, several generations a frame.
+`jetcarp host max-fps` changes the most: `jetcarp host max-fps refresh` lets a screen draw at its
+monitor's full refresh rate, 144 frames a second on some laptops, for a faster scene drawn faster
+and a GPU that works harder (the pane's *Up to* choice is the same). With several screens, each draws at its
 own rate, so a scene of 60 a second on one monitor does not make a scene of 30 on another draw
 twice as often. A frame that comes late (a busy computer) still steps one generation: the scene
 falls a little behind its speed rather than skip one.

@@ -827,6 +827,7 @@ impl Core {
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
             "fps": self.settings.fps,
             "pacing": self.settings.pacing,
+            "max_fps": self.settings.max_fps,
             "tune": self.settings.tune,
             "tuning": self.tuning_status(),
             "caption": self.settings.caption,

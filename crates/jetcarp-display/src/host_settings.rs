@@ -2,8 +2,8 @@
 //! place they live. The app and the CLI write it, then tell a running host to read it again.
 
 use crate::caption::CaptionSettings;
-use crate::pace::Pacer;
 pub use crate::pace::Pacing;
+use crate::pace::{DEFAULT_MAX_FPS, Pacer};
 pub use jetcarp_gpu::select::Own;
 use jetcarp_gpu::select::Policy;
 use serde::{Deserialize, Serialize};
@@ -377,6 +377,9 @@ pub struct HostSettings {
     /// How a screen's frame rate follows its scene's speed. Files from before 0.4.2 show every
     /// generation.
     pub pacing: Pacing,
+    /// The most frames a second a screen showing every generation draws at (default
+    /// [`DEFAULT_MAX_FPS`]); `null`: up to its monitor's refresh rate, however high.
+    pub max_fps: Option<f32>,
     /// The desktop background's own GPU choice: follow JETCARP's shared setting (`gpu.json`,
     /// automatic by default), or on, or off whatever it says. `JETCARP_GPU` comes first. Older
     /// files' `true` reads as follow and `false` as off.
@@ -411,6 +414,7 @@ impl Default for HostSettings {
             screens: vec![ScreenSettings::default()],
             fps: 30.0,
             pacing: Pacing::default(),
+            max_fps: Some(DEFAULT_MAX_FPS),
             gpu: Own::Follow,
             caption: CaptionSettings::default(),
             max_memory_mb: 6144,
@@ -501,6 +505,7 @@ impl HostSettings {
             pacing: self.pacing,
             fps: self.fps,
             refresh,
+            max_fps: self.max_fps,
         }
     }
 
@@ -665,6 +670,22 @@ mod tests {
 
     /// Every generation is shown unless the file says low power (#42); the pacing is written by
     /// name, and a screen's pacer carries it with the frame rate and its monitor's refresh.
+    #[test]
+    fn the_most_frames_a_second_default_to_60_and_null_means_the_refresh() {
+        let s: HostSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(
+            s.max_fps,
+            Some(DEFAULT_MAX_FPS),
+            "files from before have it"
+        );
+        let full: HostSettings = serde_json::from_str(r#"{"max_fps": null}"#).unwrap();
+        assert_eq!(full.max_fps, None);
+        assert_eq!(full.pacer(Some(144.0)).pace(144.0).fps, 144.0);
+        assert_eq!(s.pacer(Some(144.0)).pace(144.0).fps, 60.0);
+        let text = serde_json::to_string(&full).unwrap();
+        assert!(text.contains(r#""max_fps":null"#), "{text}");
+    }
+
     #[test]
     fn the_pacing_defaults_to_every_generation_and_is_read_by_name() {
         let s: HostSettings = serde_json::from_str(r#"{"fps": 24}"#).unwrap();

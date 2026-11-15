@@ -67,6 +67,10 @@ impl Pacing {
 
 /// The refresh rate taken for a monitor whose own is not known (and for a host with no monitor).
 pub const DEFAULT_REFRESH: f32 = 60.0;
+/// The most frames a second showing every generation draws at, unless the settings say otherwise:
+/// enough for one generation a frame at 60 generations a second, without drawing a fast scene at a
+/// 144 Hz monitor's full rate. `max_fps: null` lets it go up to the refresh (Jimmie's call).
+pub const DEFAULT_MAX_FPS: f32 = 60.0;
 /// Generations owed when a world goes on show: half of one, so a frame that comes a little early
 /// or late still steps the same whole number of generations (see [`Pace::gens_due`]).
 pub const START_OWED: f64 = 0.5;
@@ -84,6 +88,9 @@ pub struct Pacer {
     pub fps: f32,
     /// The monitor's refresh rate (None: not known, taken as [`DEFAULT_REFRESH`]).
     pub refresh: Option<f32>,
+    /// The most frames a second a screen showing every generation draws at (None: up to the
+    /// refresh rate). The settings' default is [`DEFAULT_MAX_FPS`].
+    pub max_fps: Option<f32>,
 }
 
 impl Default for Pacer {
@@ -109,6 +116,7 @@ impl Pacer {
             pacing: Pacing::EveryGeneration,
             fps,
             refresh: Some(fps),
+            max_fps: None,
         }
     }
 
@@ -119,9 +127,18 @@ impl Pacer {
             .unwrap_or(DEFAULT_REFRESH)
     }
 
+    /// The most a screen showing every generation draws at: the refresh rate, or the settings'
+    /// maximum when that is lower.
+    pub fn top(&self) -> f32 {
+        let r = self.refresh();
+        self.max_fps
+            .filter(|m| m.is_finite() && *m >= 1.0)
+            .map_or(r, |m| m.min(r))
+    }
+
     /// The pace of a scene that asks for `speed` generations a second (0 or less: as fast as it
     /// can). Showing every generation, the screen draws at the scene's speed, at least the frame
-    /// rate and at most the refresh rate (a frame rate set above the refresh still holds), and the
+    /// rate and at most [`top`](Self::top) (a frame rate set above that still holds), and the
     /// scene keeps its speed. In low power it draws at the frame rate, and a scene runs no faster,
     /// one that runs as fast as it can included.
     pub fn pace(&self, speed: f32) -> Pace {
@@ -134,7 +151,7 @@ impl Pacer {
         match self.pacing {
             Pacing::EveryGeneration => Pace {
                 fps: if paced {
-                    speed.min(self.refresh()).max(fps)
+                    speed.min(self.top()).max(fps)
                 } else {
                     fps
                 },
@@ -222,11 +239,45 @@ mod tests {
 
     const BACKLOG: f64 = 0.25;
 
+    /// Showing every generation draws at most the settings' maximum (60 by default) where the
+    /// monitor refreshes faster; with none, up to the refresh: a 144 Hz monitor may draw Life at
+    /// 144 frames a second if someone wants it.
+    #[test]
+    fn the_most_a_screen_draws_at_is_the_maximum_or_the_refresh() {
+        let capped = Pacer {
+            max_fps: Some(DEFAULT_MAX_FPS),
+            ..pacer(Pacing::EveryGeneration, 30.0, Some(144.0))
+        };
+        assert_eq!(capped.pace(60.0).fps, 60.0, "one a frame at 60");
+        assert_eq!(capped.pace(144.0).fps, 60.0, "capped at 60");
+        assert_eq!(capped.pace(240.0).fps, 60.0);
+        assert_eq!(capped.pace(240.0).speed, 240.0, "the speed is kept");
+        assert_eq!(capped.pace(20.0).fps, 30.0, "at least the frame rate");
+        let full = Pacer {
+            max_fps: None,
+            ..capped
+        };
+        assert_eq!(full.pace(144.0).fps, 144.0);
+        assert_eq!(full.pace(240.0).fps, 144.0, "at most the refresh");
+        // A maximum above the refresh is the refresh; on a 60 Hz monitor the cap changes nothing.
+        let high = Pacer {
+            max_fps: Some(240.0),
+            ..capped
+        };
+        assert_eq!(high.pace(240.0).fps, 144.0);
+        let slow = Pacer {
+            refresh: Some(60.0),
+            ..full
+        };
+        assert_eq!(slow.pace(144.0).fps, 60.0);
+    }
+
     fn pacer(pacing: Pacing, fps: f32, refresh: Option<f32>) -> Pacer {
         Pacer {
             pacing,
             fps,
             refresh,
+            max_fps: None,
         }
     }
 

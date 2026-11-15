@@ -2416,6 +2416,7 @@ Commands:
   caption    Show or hide what is running, and how (saved)
   fps        Frames per second, at least (saved; default 30)
   pacing     Whether a faster scene draws faster, showing every generation (saved)
+  max-fps    The most frames per second a screen showing every generation draws at (saved; default 60)
   still      Leave a still of the scene as the desktop picture when the host stops, or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
   battery    Pause while the computer runs on battery (saved; on by default)
   busy       Pause while the whole processor stays at least this busy, in percent, as during research runs (saved; default 80, 0 never)
@@ -2609,6 +2610,27 @@ Arguments:
           Possible values:
           - every-generation: Show every generation: a screen draws as fast as its scene steps, at least `fps` and at most the monitor's refresh rate (the default)
           - low-power:        Low power: a screen draws at `fps`, and no scene runs faster (at most one generation a frame)
+
+Options:
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+#### `jetcarp host max-fps`
+
+```text
+The most frames per second a screen showing every generation draws at (saved; default 60).
+
+A number from 1 to 240, or `refresh` for the monitor's own refresh rate however high (a 144 Hz monitor then draws Life at 60 generations a second at 60 frames, and a faster scene at up to 144). Above the monitor's refresh it is the refresh. Low power ignores it.
+
+Usage: jetcarp host max-fps [OPTIONS] <RATE>
+
+Arguments:
+  <RATE>
+          1 to 240, or refresh
 
 Options:
       --json

@@ -121,8 +121,9 @@ that will declare them stable.
   every second generation, and an oscillator of period 2 showed nearly the same phase in every
   frame; frames that came a little late made even a scene of 30 a second step two generations now
   and then. Each screen now draws as fast as its scene steps, one generation a frame, at least the
-  frame rate and at most the monitor's refresh rate (a faster scene still draws several a frame),
-  and each screen keeps its own rate. *Low power*, in the *Desktop background* pane's *Performance*
+  frame rate and at most 60 frames a second, or the monitor's refresh rate if lower (a faster
+  scene still draws several a frame; `jetcarp host max-fps refresh` lets it draw at a fast
+  monitor's full rate), and each screen keeps its own rate. *Low power*, in the *Desktop background* pane's *Performance*
   group or `jetcarp host pacing low-power`, draws at the frame rate instead and caps each scene's
   speed there. *Fit to this computer* measures and judges each scene at the frame rate it draws
   at, and `jetcarp host status` gives each screen's frame rate and speed (see

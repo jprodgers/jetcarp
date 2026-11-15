@@ -19,6 +19,7 @@ use jetcarp_display::host_settings::{
     TunedScene,
 };
 use jetcarp_display::host_settings::{Rung, Size, crops_dir};
+use jetcarp_display::pace::DEFAULT_MAX_FPS;
 use jetcarp_display::tuning::{self, TuneChild, TuneEvent, TuneRequest};
 use jetcarp_gpu::select::{self, Mode, Own};
 use jetcarp_mcp::link::host_call;
@@ -1058,13 +1059,43 @@ fn performance_ui(
     .on_hover_text(
         "The adapter JETCARP's GPU setting picks for a display (jetcarp doctor shows why)",
     );
-    // How often each screen draws against its scene's speed (#42).
+    // How often each screen draws against its scene's speed (#42), and the most it draws at.
     for p in Pacing::ALL {
         *changed |= ui
             .radio_value(&mut settings.pacing, p, p.label())
             .on_hover_text(p.hint())
             .changed();
     }
+    ui.add_enabled_ui(settings.pacing == Pacing::EveryGeneration, |ui| {
+        ui.horizontal(|ui| {
+            ui.add_space(18.0);
+            ui.label("Up to");
+            let words = |m: Option<f32>| match m {
+                Some(r) => format!("{} frames a second", r.round()),
+                None => "the monitor's refresh rate".to_string(),
+            };
+            egui::ComboBox::from_id_salt("host-max-fps")
+                .selected_text(words(settings.max_fps))
+                .show_ui(ui, |ui| {
+                    let mut choices = vec![Some(DEFAULT_MAX_FPS), None];
+                    if !choices.contains(&settings.max_fps) {
+                        choices.insert(1, settings.max_fps);
+                    }
+                    for c in choices {
+                        *changed |= ui
+                            .selectable_value(&mut settings.max_fps, c, words(c))
+                            .changed();
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "The most frames a second a screen draws at. 60 shows every generation of a \
+                     scene up to 60 generations a second; the monitor's refresh rate (144 on some \
+                     laptops) draws faster scenes faster, and works the GPU harder \
+                     (jetcarp host max-fps sets any rate)",
+                );
+        });
+    });
     let l = &mut settings.tune;
     egui::Grid::new("host-tune-limits")
         .num_columns(2)

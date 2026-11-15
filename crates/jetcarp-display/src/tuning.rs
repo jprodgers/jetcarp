@@ -1076,6 +1076,7 @@ mod tests {
             pacing: Pacing::EveryGeneration,
             fps: 30.0,
             refresh: Some(60.0),
+            max_fps: None,
         };
         let low = Pacer {
             pacing: Pacing::LowPower,
@@ -1092,6 +1093,11 @@ mod tests {
             ..every
         };
         assert_eq!(scene_fps(&l, &fast, 240.0), 144.0);
+        let capped = Pacer {
+            max_fps: Some(60.0),
+            ..fast
+        };
+        assert_eq!(scene_fps(&l, &capped, 240.0), 60.0, "the settings' maximum");
         let asked = TuneLimits {
             fps: Some(24.0),
             ..l

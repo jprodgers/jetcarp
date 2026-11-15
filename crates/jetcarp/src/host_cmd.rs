@@ -165,6 +165,15 @@ pub enum HostCmd {
         #[arg(value_enum)]
         mode: PacingArg,
     },
+    /// The most frames per second a screen showing every generation draws at (saved; default 60).
+    ///
+    /// A number from 1 to 240, or `refresh` for the monitor's own refresh rate however high (a
+    /// 144 Hz monitor then draws Life at 60 generations a second at 60 frames, and a faster scene
+    /// at up to 144). Above the monitor's refresh it is the refresh. Low power ignores it.
+    MaxFps {
+        /// 1 to 240, or refresh.
+        rate: String,
+    },
     /// Leave a still of the scene as the desktop picture when the host stops, or while the live
     /// wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your
     /// own picture back.
@@ -351,9 +360,14 @@ fn status_lines(v: &Value) -> Vec<String> {
             "low_power" => format!(
                 "pacing: low power, {fps} fps (each scene at most {fps} generations a second)"
             ),
-            _ => format!(
-                "pacing: every generation (at least {fps} fps, up to the monitor's refresh rate)"
-            ),
+            _ => {
+                // None: `null` (up to the refresh), or a host from before max_fps.
+                let top = match v["max_fps"].as_f64() {
+                    Some(m) => format!("{} fps, or the monitor's refresh rate if lower", rate(m)),
+                    None => "the monitor's refresh rate".into(),
+                };
+                format!("pacing: every generation (at least {fps} fps, up to {top})")
+            }
         });
     }
     let why: Vec<&str> = v["paused_why"]
@@ -582,6 +596,22 @@ pub fn run(a: HostArgs) -> Result<()> {
             }
             let mut s = HostSettings::load().0;
             s.fps = fps;
+            match save(&s)? {
+                Some(v) => show(&v, j),
+                None => println!("saved; the host is not running"),
+            }
+            Ok(())
+        }
+        HostCmd::MaxFps { rate } => {
+            let max = match rate.trim().to_ascii_lowercase().as_str() {
+                "refresh" => None,
+                t => match t.parse::<f32>() {
+                    Ok(r) if (1.0..=240.0).contains(&r) => Some(r),
+                    _ => bail!("max-fps takes a number from 1 to 240, or refresh, not {rate:?}"),
+                },
+            };
+            let mut s = HostSettings::load().0;
+            s.max_fps = max;
             match save(&s)? {
                 Some(v) => show(&v, j),
                 None => println!("saved; the host is not running"),
@@ -844,6 +874,15 @@ mod tests {
         );
         assert!(has("caption: on, bottom left, 20 pt"), "{lines:?}");
         assert!(has("paused: on battery"), "{lines:?}");
+        let mut capped = v.clone();
+        capped["max_fps"] = json!(60.0);
+        let lines = status_lines(&capped);
+        assert!(
+            lines.iter().any(|l| l
+                == "pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's \
+                    refresh rate if lower)"),
+            "{lines:?}"
+        );
         let mut off = v.clone();
         off["caption"]["show"] = json!(false);
         off["paused_why"] = json!([]);
