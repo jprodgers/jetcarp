@@ -369,9 +369,12 @@ impl App {
         )
         .map_err(|e| format!("no graphics adapter: {e}"))?;
         let (adapter, fallback) = (choice.adapter, choice.fallback);
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&device_descriptor(&adapter)))
-                .map_err(|e| format!("no graphics device: {e}"))?;
+        // With timestamp queries where the adapter has them: Fit to this computer times the GPU
+        // with them where the system doesn't count JETCARP's GPU time (Windows, macOS; #38).
+        let mut desc = device_descriptor(&adapter);
+        desc.required_features |= adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
+        let (device, queue) = pollster::block_on(adapter.request_device(&desc))
+            .map_err(|e| format!("no graphics device: {e}"))?;
         let events = Arc::new(GpuEvents::default());
         let sink = events.clone();
         device.on_uncaptured_error(Arc::new(move |e| {

@@ -112,11 +112,16 @@ GPU: auto (automatic)
       why: the adapter driving the screen (automatic)
       limits: 1864135 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers
       self-test: passed (101 ms, kept from before): 59 world rules and 33 explore batches matched the CPU
-      the GPU simulation uses it
+      the app and the desktop background simulate on it
   compute: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the fastest adapter (automatic)
       ...
+      runs, searches and scripts simulate on it
 ```
+
+The app and the desktop background step their worlds on the adapter they draw with, the display
+one; runs, searches and scripts use the compute one. On a laptop with two GPUs these can differ: an
+Intel UHD driving the screen and an RTX for computing.
 
 `jetcarp doctor --json` gives the same as `gpu_policy`. A run's summary says where it ran, such as
 `backend: gpu (AMD Radeon 8060S Graphics …)` or `cpu (32 threads)`.

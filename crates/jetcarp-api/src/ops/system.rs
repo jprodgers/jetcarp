@@ -354,8 +354,15 @@ fn gpu_policy_text(p: &GpuPolicy) -> String {
                     "      not used, and not tested: the GPU simulation is off"
                 );
             }
+            // Who simulates there: the app and the host step their worlds on the device they
+            // draw with, the display adapter; runs, searches and scripts on the compute one (#40).
             None if c.adapter.is_some() => {
-                let _ = writeln!(s, "      the GPU simulation uses it");
+                let who = if c.purpose == "display" {
+                    "the app and the desktop background simulate on it"
+                } else {
+                    "runs, searches and scripts simulate on it"
+                };
+                let _ = writeln!(s, "      {who}");
             }
             None => {}
         }

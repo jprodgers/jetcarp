@@ -68,6 +68,17 @@ pub struct Measure {
     pub cells: u64,
 }
 
+impl Measure {
+    /// The GPU share the limits judge: none from [`GpuTiming::Submission`], an upper bound that
+    /// counts the work's time waiting in the driver's queue. On Windows it read about 90% for a
+    /// scene the GPU spent 10% of its time on, so every size looked far over the limit (#38). Its
+    /// frames are still judged by their times.
+    pub fn judged_gpu(&self) -> Option<f64> {
+        self.gpu
+            .filter(|_| self.gpu_timing != GpuTiming::Submission)
+    }
+}
+
 /// The limits one scene is held to: the user's, split among the screens shown at once.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct SceneLimits {
@@ -108,7 +119,7 @@ pub fn fits(m: &Measure, l: &SceneLimits) -> Result<(), String> {
             percent(l.cpu)
         ));
     }
-    if let Some(g) = m.gpu
+    if let Some(g) = m.judged_gpu()
         && g > l.gpu * margin
     {
         over.push(format!(
@@ -146,7 +157,7 @@ pub fn fits(m: &Measure, l: &SceneLimits) -> Result<(), String> {
 /// they would only crawl.
 pub fn far_over(m: &Measure, l: &SceneLimits) -> bool {
     m.cpu > l.cpu * FAR_OVER
-        || m.gpu.is_some_and(|g| g > l.gpu * FAR_OVER)
+        || m.judged_gpu().is_some_and(|g| g > l.gpu * FAR_OVER)
         || m.p95 > l.interval() * FAR_OVER
         || m.gens_wanted
             .is_some_and(|w| w > 0.0 && m.gens_done < w / FAR_OVER)
@@ -385,9 +396,10 @@ pub enum Pick {
     Recommended,
     /// The finest size shown, within the limits or not.
     Finest,
-    /// The scene's own size.
+    /// The scene's own size, shown in the sweep or not.
     Own,
-    /// This cell size in physical pixels (the nearest shown).
+    /// This cell size in physical pixels, shown in the sweep or not (an aperiodic patch: the
+    /// nearest level shown).
     Px(f32),
 }
 
@@ -422,18 +434,22 @@ impl Pick {
 }
 
 /// The size a scene shows at after its sweep, whether someone chose it, and a note when that needs
-/// saying. With `pick` given, it decides. Without, a size someone chose before is kept while it is
-/// still within the limits (as when the monitors change), else the recommended one.
+/// saying. With `pick` given, it decides: the scene's `own` size and a cell size in pixels are
+/// placed whether or not the sweep showed them, so a sweep that stopped early (or a failed one)
+/// can be undone (#39). Without, a size someone chose before is kept while it is still within the
+/// limits (as when the monitors change), else the recommended one.
 pub fn choose(
     cards: &[Rung],
     recommended: Size,
+    own: Size,
     pick: Option<Pick>,
     before: Option<&TunedScene>,
 ) -> (Size, bool, Option<String>) {
-    let nearest = |px: f32| {
+    // An aperiodic patch's sizes are its levels: the nearest one shown.
+    let nearest_level = |px: f32| {
         cards
             .iter()
-            .filter(|r| r.size.level.is_none())
+            .filter(|r| r.size.level.is_some())
             .min_by(|a, b| (a.size.px - px).abs().total_cmp(&(b.size.px - px).abs()))
             .map(|r| r.size)
     };
@@ -445,12 +461,14 @@ pub fn choose(
             }
         }
         Some(Pick::Own) => {
-            if let Some(r) = cards.iter().find(|r| r.own) {
-                return (r.size, true, None);
-            }
+            let size = cards.iter().find(|r| r.own).map_or(own, |r| r.size);
+            return (size, true, None);
         }
         Some(Pick::Px(px)) => {
-            if let Some(s) = nearest(px) {
+            if own.level.is_none() {
+                return (Size::px(px), true, None);
+            }
+            if let Some(s) = nearest_level(px) {
                 return (s, true, None);
             }
         }
@@ -491,7 +509,7 @@ pub fn tuned_scene(
 ) -> TunedScene {
     let cards = sweep.cards();
     let recommended = recommend(&cards, placed);
-    let (mut size, chosen, note) = choose(&cards, recommended, pick, before);
+    let (mut size, chosen, note) = choose(&cards, recommended, sweep.own, pick, before);
     // The scene's own size is kept as the scene has it, not as the size its cells came to.
     if cards.iter().any(|r| r.own && r.size.same(&size)) {
         size = Size::px(design_px);
@@ -974,6 +992,71 @@ mod tests {
         assert_eq!(sweep(canvas, 3.0, model(0.02, 0.03), &limits()), s);
     }
 
+    /// A sweep that stopped at its coarsest size (the Acer's Fit, #38) can be undone: the scene's
+    /// own size and a cell size in pixels are placed though the sweep never showed them (#39).
+    #[test]
+    fn a_pick_places_sizes_the_sweep_never_showed() {
+        let l = limits();
+        let mut s = SceneSweep::new(
+            [1.0, 2.0, 3.0, 4.0, 8.0, 16.0].map(Size::px).to_vec(),
+            Size::px(3.0),
+        );
+        let far = Measure {
+            cpu: 0.9,
+            p95: 0.020,
+            cells: 8040,
+            ..Measure::default()
+        };
+        s.record(Size::px(16.0), 16.0, &far, &l);
+        assert!(s.next_size().is_none(), "stopped after a size far over");
+        let pick = |p| {
+            tuned_scene(
+                "a",
+                "square",
+                3.0,
+                false,
+                &s,
+                GpuTiming::None,
+                Some(p),
+                None,
+            )
+        };
+        assert_eq!(pick(Pick::Recommended).size(), Size::px(16.0));
+        assert_eq!(pick(Pick::Own).size(), Size::px(3.0));
+        assert!(pick(Pick::Own).chosen);
+        assert_eq!(pick(Pick::Px(3.0)).size(), Size::px(3.0));
+    }
+
+    /// The submission clock's GPU share is an upper bound: it never fails a size or stops the
+    /// sweep, while the GPU's own clocks do (#38).
+    #[test]
+    fn only_a_real_gpu_clock_judges_the_gpu_limit() {
+        let l = SceneLimits {
+            cpu: 0.10,
+            gpu: 0.25,
+            fps: 30.0,
+        };
+        let m = |gpu_timing| Measure {
+            cpu: 0.01,
+            gpu: Some(0.90),
+            p95: 0.020,
+            gpu_timing,
+            ..Measure::default()
+        };
+        assert!(fits(&m(GpuTiming::Submission), &l).is_ok());
+        assert!(!far_over(&m(GpuTiming::Submission), &l));
+        for t in [GpuTiming::Timestamps, GpuTiming::Kernel] {
+            assert!(fits(&m(t), &l).unwrap_err().contains("GPU 90%"));
+            assert!(far_over(&m(t), &l));
+        }
+        // Slow frames still fail, whatever the clock.
+        let slow = Measure {
+            p95: 0.080,
+            ..m(GpuTiming::Submission)
+        };
+        assert!(fits(&slow, &l).unwrap_err().contains("frames"));
+    }
+
     #[test]
     fn the_sweep_coarsens_where_there_is_not_and_stops_going_finer_when_far_over() {
         // 0.4 of the machine per million cells: under 0.2 million cells fit, so 6 px (102,400)
@@ -1059,7 +1142,7 @@ mod tests {
         };
         assert_eq!(pick(Pick::Finest).size(), Size::px(1.0));
         assert_eq!(pick(Pick::Own).size(), Size::px(3.0));
-        assert_eq!(pick(Pick::Px(7.0)).size(), Size::px(6.0));
+        assert_eq!(pick(Pick::Px(7.0)).size(), Size::px(7.0));
         assert_eq!(
             (
                 pick(Pick::Recommended).size(),

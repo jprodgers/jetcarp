@@ -258,7 +258,7 @@ fn the_doctor_says_which_adapter_each_purpose_uses_and_why() {
         "  setting: no settings folder on this system\n",
         "  display: Intel UHD 630, Vulkan (integrated)\n      why: named UHD, as asked (JETCARP_GPU=UHD)\n",
         "      limits: 16 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers\n",
-        "      self-test: passed (80 ms, kept from before): 27 world rules and 33 explore batches matched the CPU\n      the GPU simulation uses it\n",
+        "      self-test: passed (80 ms, kept from before): 27 world rules and 33 explore batches matched the CPU\n      the app and the desktop background simulate on it\n",
         "  compute: none\n      why: JETCARP_GPU=UHD\n      the GPU simulation does not use it: no usable adapter\n",
         "  the app: auto, from JETCARP_GPU=UHD (its own choice: follow)\n",
         "  the desktop background: off, from the desktop background's own setting (its own choice: off)\n",
