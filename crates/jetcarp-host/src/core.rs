@@ -290,6 +290,19 @@ pub fn pause_reasons<'a>(
 /// The start of a wallpaper window's title; GNOME's extension looks for it.
 const WALLPAPER_TAG: &str = "@jetcarp-wallpaper";
 
+/// Give the memory allocator's free pages back to the system. glibc keeps the memory the host
+/// frees (a sweep's trial grids of up to millions of cells, a scene let go) in its arenas, which
+/// give memory back only from their top, so the host grew by about 100 MB with each Fit sweep and
+/// kept it (#69). Called after a sweep, and before the memory limit lets a scene go, so memory
+/// the host no longer holds is never counted against it. Elsewhere this does nothing.
+pub(crate) fn release_free_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: malloc_trim only returns free memory to the system; it is safe to call at any time.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 fn gnome_session() -> bool {
     cfg!(all(unix, not(target_os = "macos")))
         && std::env::var("XDG_CURRENT_DESKTOP")
@@ -785,7 +798,15 @@ impl Core {
         let Some(m) = memory_stats::memory_stats() else {
             return;
         };
-        let mb = (m.physical_mem / (1 << 20)) as u64;
+        let mut mb = (m.physical_mem / (1 << 20)) as u64;
+        if mb <= self.settings.max_memory_mb {
+            return;
+        }
+        // Over the limit: first give back what the allocator only keeps, and look again (#69).
+        release_free_memory();
+        if let Some(m) = memory_stats::memory_stats() {
+            mb = (m.physical_mem / (1 << 20)) as u64;
+        }
         if mb <= self.settings.max_memory_mb {
             return;
         }

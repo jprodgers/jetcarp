@@ -151,6 +151,11 @@ that will declare them stable.
 - **The AI control window said "Connections 0" after a client had connected and left.** It counts
   the links open at the moment, and now says so: *Open connections*.
   ([#60](https://github.com/jprodgers/jetcarp/issues/60))
+- **The background host grew by about 100 MB with each Fit sweep and kept it.** glibc kept the
+  memory of the sweep's trial grids for reuse. The host now gives it back after a sweep, and
+  before its memory limit lets a scene go, so memory it no longer holds never counts against it.
+  On Linux, three sweeps left the host at 157 MB instead of 376 MB.
+  ([#69](https://github.com/jprodgers/jetcarp/issues/69))
 
 ### Changed
 

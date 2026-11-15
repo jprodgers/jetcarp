@@ -242,6 +242,8 @@ impl Core {
         self.note(format!(
             "the sweep stopped ({why}); the scenes done are saved"
         ));
+        drop(sw);
+        super::release_free_memory();
         Ok(())
     }
 
@@ -327,6 +329,9 @@ impl Core {
         {
             self.note(e);
         }
+        // The trial stages go with `sw`; give their memory back (#69).
+        drop(sw);
+        super::release_free_memory();
     }
 
     /// A stage showing one scene of a screen's rotation, as a sweep's stand-in for it.
