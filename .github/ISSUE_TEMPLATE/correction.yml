@@ -1,0 +1,29 @@
+name: History or credit correction
+description: The book misses earlier work, credits something wrongly, or states a fact wrongly.
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. JETCARP corrects the page and credits the work.
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: A link to the page in the book (https://jprodgers.github.io/jetcarp), or its title.
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What should change
+      description: What the page says now, and what it should say.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: Links to the earlier work or other evidence, primary sources first.
+    validations:
+      required: true

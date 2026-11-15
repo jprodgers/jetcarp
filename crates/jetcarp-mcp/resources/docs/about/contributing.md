@@ -4,6 +4,18 @@ Contributions are welcome: bug reports, corrections to the history and credits, 
 code, and documentation. If you know of earlier work that this book has missed, please open an issue;
 we will correct the page and credit it.
 
+On GitHub, [new issues](https://github.com/jprodgers/jetcarp/issues/new/choose) offer forms for a bug
+report, a feature request, a new rule or tiling, and a history or credit correction, and a pull request
+starts from a short checklist. [CONTRIBUTING.md](https://github.com/jprodgers/jetcarp/blob/main/CONTRIBUTING.md)
+sums this page up, and everyone taking part agrees to the
+[Code of Conduct](https://github.com/jprodgers/jetcarp/blob/main/CODE_OF_CONDUCT.md). Security problems
+go by email, as [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
+
+**Pull requests:** small fixes can come straight as a pull request; for anything larger, open an issue
+first so we can agree on the approach. **AI-assisted contributions are welcome**, as JETCARP itself is
+written with an AI coding tool (see [How JETCARP was made](how-made.md)): say so in the pull request,
+and make sure you understand, have run and can explain every change.
+
 ## Building and testing
 
 JETCARP is a Rust workspace and needs Rust 1.95 or newer.

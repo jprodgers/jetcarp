@@ -69,6 +69,15 @@ All of these licences allow redistribution under JETCARP's terms.
 - **Licence:** MIT. Copyright (c) 2018 Bert Chan. Full text below. JETCARP's Lenia code itself is
   written from Chan's published formulas, with no code copied.
 
+### Code of Conduct
+
+- **File:** `CODE_OF_CONDUCT.md`
+- **Source:** the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1,
+  stewarded by the Organization for Ethical Source, with JETCARP's contact address filled in
+- **Licence:** Creative Commons Attribution 4.0 International
+  ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)); the attribution is at the end of the
+  file.
+
 ## Methods reimplemented without copying code
 
 These carry no licence obligation, but the work they are based on is credited here and in the

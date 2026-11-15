@@ -1,0 +1,36 @@
+name: New rule or tiling
+description: Propose a cellular automaton rule, a rule family or a tiling for JETCARP.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The book's [Contributing](https://jprodgers.github.io/jetcarp/about/contributing.html#proposing-a-rule-or-a-tiling) page says what JETCARP needs to know. Credit matters here: JETCARP names everyone whose work it uses.
+  - type: textarea
+    id: what
+    attributes:
+      label: What it is
+      description: The rule or tiling, with a scene or a picture that shows it if you have one.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Where it came from
+      description: Who devised it, and where and when it was first published or posted, with a link to the primary source. Secondary sources are welcome too, marked as such.
+    validations:
+      required: true
+  - type: textarea
+    id: licence
+    attributes:
+      label: Licence
+      description: Only if JETCARP would include code, data, rule files or text from elsewhere. Copyleft material (GPL code, LifeWiki text) can't be included; a rule written down in a publication can be implemented from the publication.
+    validations:
+      required: false
+  - type: textarea
+    id: tilings
+    attributes:
+      label: How it runs on other tilings
+      description: What it counts, measures or turns by, in terms of each cell's neighbours, or why it is tied to one grid.
+    validations:
+      required: false

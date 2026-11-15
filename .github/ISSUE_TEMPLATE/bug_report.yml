@@ -1,0 +1,75 @@
+name: Bug report
+description: Something doesn't work, gives a wrong result, or left you unsure what to do.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting this. A confusing moment counts as a bug too.
+        **Security problems:** please email instead, as [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Paste any error message in full.
+      placeholder: |
+        I ran `jetcarp run my-scene.json --gens 300 --gpu`.
+        I expected the same hash as with `--cpu`.
+        Instead …
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands, or the clicks in the app, from a fresh start if you can.
+      placeholder: |
+        1. Quick Start → Game of Life
+        2. …
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `jetcarp --version`.
+      placeholder: jetcarp 0.4.2
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed JETCARP
+      options:
+        - Homebrew
+        - Scoop
+        - PyPI (pip or pipx)
+        - cargo install
+        - A release archive from GitHub
+        - Built from source
+        - Something else (say below)
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Operating system and version, and your graphics card if it might matter.
+      placeholder: Windows 11, RTX 3050 Laptop
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `jetcarp doctor`
+      description: It lists your graphics adapters and JETCARP's folders. Shorten folder paths if you like.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: files
+    attributes:
+      label: Scene or files
+      description: If you can, attach the scene (*File → Save scene…* in the app, or `jetcarp run … --save FILE`) or anything else that shows the problem.
+    validations:
+      required: false

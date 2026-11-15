@@ -63,6 +63,13 @@ cargo build --release
 cargo test --workspace --release
 ```
 
+## Contributing
+
+Bug reports, corrections to the history and credits, rules, tilings, code and documentation are all
+welcome: see [CONTRIBUTING.md](https://github.com/jprodgers/jetcarp/blob/main/CONTRIBUTING.md) and the
+[Code of Conduct](https://github.com/jprodgers/jetcarp/blob/main/CODE_OF_CONDUCT.md). What changed in
+each release is in the [changelog](https://jprodgers.github.io/jetcarp/about/changelog.html).
+
 ## Licence
 
 JETCARP is dual-licensed under the [Unlicense](https://github.com/jprodgers/jetcarp/blob/main/UNLICENSE) and the [MIT licence](https://github.com/jprodgers/jetcarp/blob/main/LICENSE-MIT); use

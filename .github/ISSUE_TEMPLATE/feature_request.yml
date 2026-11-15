@@ -1,0 +1,25 @@
+name: Feature request
+description: Something JETCARP could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you are trying to do
+      description: The task or question behind the request, more than the feature itself.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you imagine it working, in the app, the command line, scripts or the MCP server.
+    validations:
+      required: false
+  - type: textarea
+    id: now
+    attributes:
+      label: What you do now
+      description: Any workaround you use today, or other tools that do this.
+    validations:
+      required: false
