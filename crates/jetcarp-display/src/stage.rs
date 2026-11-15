@@ -5,6 +5,7 @@
 use crate::caption::{self, Place};
 use crate::gpu::{Geometry, TileDraw};
 use crate::host_settings::{Size, Tuning};
+use crate::pace::{Pace, Pacer, START_OWED};
 use crate::profiles::{self, Profile};
 use crate::reseed_presets::blobs_mode;
 use crate::rotation::{Action, Clock, Observation, Player, Rotation, Slot};
@@ -97,6 +98,10 @@ pub struct StageStatus {
     /// The grid's width and height in cells, where the tiling has them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid: Option<[u32; 2]>,
+    /// Frames a second its screen draws at while it runs ([`Pace`]).
+    pub frame_rate: f32,
+    /// Generations a second the world on show runs at (0: as fast as it can, or nothing yet).
+    pub speed: f32,
     pub seconds_left: Option<f64>,
     pub caption: Vec<String>,
 }
@@ -116,8 +121,11 @@ pub struct Stage {
     load_pending: bool,
     resized_at: Option<f64>,
     paused: bool,
+    /// Generations owed (see [`Pace::gens_due`]).
     acc: f64,
     last_now: Option<f64>,
+    /// What its pace follows: the host's frame rate and pacing, and the monitor's refresh rate.
+    pacer: Pacer,
     /// Seconds spent not paused: the rotation's clock, so a pause does not use up an item's time.
     play_time: f64,
     epoch: u64,
@@ -180,8 +188,9 @@ impl Stage {
             load_pending: true,
             resized_at: None,
             paused: false,
-            acc: 0.0,
+            acc: START_OWED,
             last_now: None,
+            pacer: Pacer::default(),
             play_time: 0.0,
             epoch: 1,
             failures: 0,
@@ -222,6 +231,18 @@ impl Stage {
             Some(size) => (size, true),
             None => (Size::px(design), false),
         }
+    }
+
+    /// What its pace follows (the host sets it each frame; by default 30 frames a second, whatever
+    /// the speed).
+    pub fn set_pacer(&mut self, pacer: Pacer) {
+        self.pacer = pacer;
+    }
+
+    /// How fast it draws and its world runs: the world on show's speed under its pacer (before one
+    /// is on show, the frame rate).
+    pub fn pace(&self) -> Pace {
+        self.pacer.pace(self.show.as_ref().map_or(0.0, |s| s.speed))
     }
 
     /// Every item of its rotation.
@@ -438,7 +459,7 @@ impl Stage {
         // The size its cells show at (a patch fitted to the screen may show them larger).
         let shown_px = (zoom * view::cell_unit(&world)) as f32;
         self.failures = 0;
-        self.acc = 0.0;
+        self.acc = START_OWED;
         self.epoch += 1;
         self.builds += 1;
         self.show = Some(Show {
@@ -483,44 +504,34 @@ impl Stage {
     }
 
     fn step(&mut self, dt: f64, sim: &mut SimBackend, deadline: Instant) {
+        let pace = self.pace();
         let Some(s) = &mut self.show else { return };
         if s.world.cas.is_empty() {
             return;
         }
         sim.on = s.gpu;
-        let max_speed = s.speed <= 0.0;
+        let max_speed = pace.speed <= 0.0;
         let want = if max_speed {
             u64::MAX
         } else {
-            let speed = s.speed as f64;
-            self.acc = (self.acc + dt * speed).min(speed * MAX_BACKLOG + 1.0);
-            self.acc.floor() as u64
+            pace.gens_due(&mut self.acc, dt, MAX_BACKLOG)
         };
-        let mut stepped = false;
+        let mut done = 0;
         if want > 0 {
-            let done = sim.step(&mut s.world, want, deadline, !max_speed);
-            if done > 0 {
-                stepped = true;
-                self.acc = (self.acc - done as f64).max(0.0);
-            }
+            done = sim.step(&mut s.world, want, deadline, !max_speed);
         }
-        let notes = &mut self.notes;
-        let mut step_cpu = |world: &mut World| {
+        let mut stepped = done > 0;
+        // The rest on the CPU, after the GPU's turn (which uses the whole budget when it can run
+        // the rules).
+        while done < want && Instant::now() < deadline {
             stepped = true;
-            if let Err(e) = world.apply(Command::Step { gens: 1 }) {
-                notes.push(e);
+            if let Err(e) = s.world.apply(Command::Step { gens: 1 }) {
+                self.notes.push(e);
             }
-        };
-        // After the GPU's turn, which uses the whole budget when it can run the rules.
-        if max_speed {
-            while Instant::now() < deadline {
-                step_cpu(&mut s.world);
-            }
-        } else {
-            while self.acc >= 1.0 && Instant::now() < deadline {
-                step_cpu(&mut s.world);
-                self.acc -= 1.0;
-            }
+            done += 1;
+        }
+        if !max_speed {
+            self.acc = (self.acc - done as f64).max(0.0);
         }
         if stepped {
             self.epoch += 1;
@@ -678,6 +689,7 @@ impl Stage {
             Some(SizeSpec::Level(l)) => Some(l),
             _ => None,
         });
+        let pace = self.pace();
         StageStatus {
             rotation: self.rotation.clone(),
             label: self
@@ -697,6 +709,8 @@ impl Stage {
             tuned: shown.is_some_and(|s| s.tuned),
             grid,
             level,
+            frame_rate: pace.fps,
+            speed: pace.speed,
             seconds_left: self.player.seconds_left(self.play_time),
             caption: w
                 .map(|w| caption::lines(w, Some(self.place()), true))

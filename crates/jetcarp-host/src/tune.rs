@@ -6,8 +6,8 @@
 //! With the background host running, the host runs the sweep on the real screen and this command
 //! follows it. With no host running (or `--offscreen`), the sweep runs here, off screen, at each
 //! screen's size, the way the host runs a scene (the same stage, stepping and drawing, at the
-//! host's frame rate); it runs in a process of its own, so the processor time it measures is its
-//! own.
+//! frame rate the host would draw it at: [`jetcarp_display::pace`]); it runs in a process of its
+//! own, so the processor time it measures is its own.
 
 use crate::core::{STEP_SHARE, SharedGpu, load_rotation};
 use crate::power::ProcessMeter;
@@ -16,6 +16,7 @@ use jetcarp_core::{SizeSpec, World};
 use jetcarp_display::host_settings::{
     GpuTiming, HostSettings, Place, Size, TuneLimits, TunedScene, Tuning, crops_dir,
 };
+use jetcarp_display::pace::FrameClock;
 use jetcarp_display::painter::Painter;
 use jetcarp_display::profiles::{self, Profile};
 use jetcarp_display::rotation::{Rotation, Slot};
@@ -23,7 +24,8 @@ use jetcarp_display::simgpu::{SimBackend, SimStatus};
 use jetcarp_display::stage::{self, Lookup, Stage};
 use jetcarp_display::tuning::{
     self, Measure, Pick, RUNG_SECONDS, SWEEP_MAX_CELLS, SceneLimits, SceneSweep, TuneEvent,
-    TuneRequest, crop_name, crop_size, lattice_ladder, patch_ladder, tuned_scene, warmup,
+    TuneRequest, crop_name, crop_size, fps_range, lattice_ladder, patch_ladder, scene_fps,
+    tuned_scene, warmup,
 };
 use jetcarp_gpu::GpuSim;
 use jetcarp_gpu::select::Mode;
@@ -58,7 +60,7 @@ pub struct TuneArgs {
     #[arg(long, value_name = "PERCENT")]
     pub gpu_limit: Option<f32>,
     /// Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most
-    /// the host's frame rate).
+    /// the rate each scene draws at).
     #[arg(long)]
     pub fps: Option<f32>,
     /// Only this screen (counted from 0). Default: every screen on the desktop.
@@ -449,10 +451,19 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
     }
     let total: usize = jobs.iter().map(|j| j.slots.len()).sum();
     let limits = settings.tune;
+    // Each scene is held to the frame rate the host would draw it at.
+    let fps_of = |job: &Job, slot: &Slot| {
+        scene_fps(&limits, &settings.pacer(job.refresh), slot.profile.speed)
+    };
+    let (fps, fps_max) = fps_range(
+        jobs.iter()
+            .flat_map(|j| j.slots.iter().map(move |s| fps_of(j, s))),
+    );
     out.event(&TuneEvent::Start {
         screens: jobs.iter().map(|j| j.screen).collect(),
         scenes: total,
-        fps: limits.target_fps(jobs.first().and_then(|j| j.refresh), settings.fps),
+        fps,
+        fps_max,
         gpu: gpu.as_ref().map(|g| g.adapter.get_info().name),
     });
     let mut hold = Hold::start(status.is_some());
@@ -461,9 +472,9 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
     let mut number = 0;
     let mut saved = None;
     for job in &jobs {
-        let fps = limits.target_fps(job.refresh, settings.fps);
-        let scene_limits = SceneLimits::of(&limits, fps, jobs.len());
         for (k, slot) in job.slots.iter().enumerate() {
+            let fps = fps_of(job, slot);
+            let scene_limits = SceneLimits::of(&limits, fps, jobs.len());
             number += 1;
             let mut plan = scene_plan(slot, &rig.lookup, job.canvas, job.scale, most);
             let mut failed = None;
@@ -716,10 +727,14 @@ impl Drop for Hold {
 
 /// Whether a trial's world steps on the GPU, as the host would step it: the scene allows it, the
 /// host's GPU can run it, and the GPU policy says so (automatic: when the GPU is worth it for a
-/// world of this size, [`GpuSim::worth`]). A trial left on the processor is held to the
-/// processor limit like any other.
-pub(crate) fn steps_on_gpu(profile: &Profile, sim: &SimBackend, world: &World) -> bool {
-    let paced = profile.speed > 0.0;
+/// world of this size, [`GpuSim::worth`]; `paced`: it runs at a set speed). A trial left on the
+/// processor is held to the processor limit like any other.
+pub(crate) fn steps_on_gpu(
+    profile: &Profile,
+    paced: bool,
+    sim: &SimBackend,
+    world: &World,
+) -> bool {
     profile.gpu
         && sim.available()
         && match sim.mode {
@@ -902,9 +917,14 @@ impl Rig {
             plan.design,
             size,
         ));
-        let fps = self.settings.fps.max(1.0) as f64;
-        let interval = Duration::from_secs_f64(1.0 / fps);
-        let budget = Duration::from_secs_f64(STEP_SHARE as f64 / fps / self.screens.max(1) as f64);
+        // Paced as the host would pace it on this screen's monitor.
+        stage.set_pacer(self.settings.pacer(job.refresh));
+        let budget_at = |fps: f32| {
+            Duration::from_secs_f64(
+                STEP_SHARE as f64 / fps.max(1.0) as f64 / self.screens.max(1) as f64,
+            )
+        };
+        let budget = budget_at(self.settings.fps);
         let t0 = Instant::now();
         // Built on the stage's own thread, as in the host.
         let mut notes = vec![];
@@ -929,7 +949,10 @@ impl Rig {
         }
         let world = stage.world().expect("built");
         let cells = world.topo.len() as u64;
-        let on = steps_on_gpu(&slot.profile, &self.sim, world);
+        // Built: drawn at its scene's frame rate from here on.
+        let pace = stage.pace();
+        let budget = budget_at(pace.fps);
+        let on = steps_on_gpu(&slot.profile, pace.speed > 0.0, &self.sim, world);
         stage.set_world_gpu(on);
         let canvas = [job.canvas[0].round() as u32, job.canvas[1].round() as u32];
         let mut draw = self.gpu.as_ref().map(|g| {
@@ -950,7 +973,16 @@ impl Rig {
             let view = tex.create_view(&Default::default());
             (Painter::new(&g.device, FORMAT), tex, view)
         });
+        // Frames keep to the rate on their own clock, as the host's do.
+        let mut beat = FrameClock::default();
         let mut frame = |stage: &mut Stage, sim: &mut SimBackend, clock: Clock| -> (f64, f64) {
+            if let Some(due) = beat.next() {
+                let wait = due - t0.elapsed().as_secs_f64();
+                if wait > 0.0 {
+                    std::thread::sleep(Duration::from_secs_f64(wait));
+                }
+            }
+            beat.tick(t0.elapsed().as_secs_f64(), pace.fps);
             let start = Instant::now();
             let now = t0.elapsed().as_secs_f64();
             let gpu = self.gpu.as_ref();
@@ -1011,11 +1043,7 @@ impl Rig {
                     }
                 }
             }
-            let took = start.elapsed();
-            if let Some(rest) = interval.checked_sub(took) {
-                std::thread::sleep(rest);
-            }
-            (took.as_secs_f64(), gpu_secs)
+            (start.elapsed().as_secs_f64(), gpu_secs)
         };
         let k0 = crate::power::process_gpu_time();
         let warm = Instant::now();
@@ -1071,7 +1099,8 @@ impl Rig {
             .world()
             .map_or(0, |w| w.generation)
             .saturating_sub(gen0) as f64;
-        let speed = slot.profile.speed as f64;
+        // The speed it runs at (in low power, at most the frame rate).
+        let speed = pace.speed as f64;
         let on_gpu = matches!(self.sim.status(), SimStatus::Gpu(_));
         let gpu_timing = self.gpu_timing();
         let m = Measure {

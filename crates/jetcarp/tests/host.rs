@@ -521,6 +521,95 @@ fn a_tuned_size_is_applied_and_recorded() {
     assert_eq!(v["tuning"]["running"], false);
 }
 
+/// Generations stepped, frames drawn and seconds passed on screen 0 over about a second and a
+/// half, with the status at the end.
+fn paced(h: &Host) -> (u64, u64, f64, Value) {
+    let count = |v: &Value| {
+        (
+            Host::stage(v)["generation"].as_u64().unwrap(),
+            v["screens"][0]["frames"].as_u64().unwrap(),
+        )
+    };
+    let a = h.call(json!({"action": "status"})).unwrap();
+    let t = Instant::now();
+    std::thread::sleep(Duration::from_millis(1500));
+    let b = h.call(json!({"action": "status"})).unwrap();
+    let secs = t.elapsed().as_secs_f64();
+    let ((g0, f0), (g1, f1)) = (count(&a), count(&b));
+    (g1.saturating_sub(g0), f1.saturating_sub(f0), secs, b)
+}
+
+/// A scene of 60 generations a second draws 60 frames a second, a generation each (#42). The host
+/// drew 30, so every frame showed every second generation, and Life's blinkers stood still. In
+/// low power (`jetcarp host pacing low-power`, which tells the running host) it draws 30 frames
+/// a second, and the scene runs at 30 generations, still one a frame. The frame rates are the
+/// host's own figures; the counts allow for a slow machine (a frame that comes late steps no
+/// more than one generation, and the scene falls behind instead).
+#[test]
+fn a_screen_draws_every_generation_or_in_low_power_caps_the_speed() {
+    let dir = home("pace");
+    let rotation = json!({"name": "Sixty", "look": {"speed": 60.0}, "default_minutes": null,
+        "items": [{"source": {"kind": "series", "rules": "B3/S23"}}]});
+    std::fs::write(
+        dir.join("config/jetcarp/rotations/sixty.json"),
+        rotation.to_string(),
+    )
+    .unwrap();
+    let settings = json!({"screens": [{"rotation": "Sixty"}]});
+    std::fs::write(dir.join("config/jetcarp/host.json"), settings.to_string()).unwrap();
+    let child = spawn(&dir, &[]);
+    let h = Host { child, home: dir };
+    let v = h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(10),
+        "the scene to run",
+    );
+    assert_eq!(v["pacing"], "every_generation", "{v}");
+    let (gens, frames, secs, v) = paced(&h);
+    let s = Host::stage(&v);
+    assert_eq!(
+        (s["frame_rate"].as_f64(), s["speed"].as_f64()),
+        (Some(60.0), Some(60.0)),
+        "{s}"
+    );
+    let what = format!("{gens} generations in {frames} frames, {secs:.2} s");
+    assert!(
+        frames > 10 && gens <= frames + 1,
+        "one a frame at most: {what}"
+    );
+    assert!(gens * 4 >= frames * 3, "nearly one every frame: {what}");
+
+    // Low power, from the command line.
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args(["host", "pacing", "low-power"]).stdin(Stdio::null());
+    with_env(&mut c, &h.home);
+    let out = c.output().unwrap();
+    let said = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{said}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(said.contains("pacing: low power, 30 fps"), "{said}");
+    h.wait(
+        |v| v["pacing"] == "low_power" && Host::stage(v)["frame_rate"].as_f64() == Some(30.0),
+        "low power",
+    );
+    let (gens, frames, secs, v) = paced(&h);
+    let s = Host::stage(&v);
+    assert_eq!(
+        (s["frame_rate"].as_f64(), s["speed"].as_f64()),
+        (Some(30.0), Some(30.0)),
+        "{s}"
+    );
+    let what = format!("{gens} generations in {frames} frames, {secs:.2} s");
+    assert!(
+        frames > 5 && gens <= frames + 1,
+        "one a frame at most: {what}"
+    );
+    assert!(frames as f64 / secs < 45.0, "drawn at 30, not 60: {what}");
+    assert!(gens as f64 / secs < 45.0, "at most 30 a second: {what}");
+}
+
 /// A rotation of two rules, as the desktop background of the folders in `dir`.
 fn two_rules(dir: &Path) {
     let rotation = json!({"name": "Two rules",

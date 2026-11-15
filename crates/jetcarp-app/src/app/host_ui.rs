@@ -15,7 +15,8 @@ use jetcarp_display::autostart;
 use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome::{self, ExtensionState};
 use jetcarp_display::host_settings::{
-    HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings, TuneLimits, TunedScene,
+    HostSettings, LockScreen, MAX_AWAKE_MINUTES, Pacing, Place, ScreenSettings, TuneLimits,
+    TunedScene,
 };
 use jetcarp_display::host_settings::{Rung, Size, crops_dir};
 use jetcarp_display::tuning::{self, TuneChild, TuneEvent, TuneRequest};
@@ -219,6 +220,9 @@ fn summary(v: &Value) -> String {
             t.push_str(&format!(", {px} px cells"));
             if s["tuned"] == true {
                 t.push_str(" (tuned)");
+            }
+            if let Some(fps) = s["frame_rate"].as_f64() {
+                t.push_str(&format!(", {} fps", (fps * 100.0).round() / 100.0));
             }
         }
         if s["paused"] == true {
@@ -547,7 +551,10 @@ impl JetcarpApp {
         // ---------------------------------------------- how it runs
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label("Frames per second");
+            ui.label("Frames per second").on_hover_text(
+                "Every screen draws at least this often; how a faster scene draws is under \
+                 Performance below",
+            );
             egui::ComboBox::from_id_salt("host-fps")
                 .selected_text(format!("{}", settings.fps))
                 .show_ui(ui, |ui| {
@@ -1051,6 +1058,13 @@ fn performance_ui(
     .on_hover_text(
         "The adapter JETCARP's GPU setting picks for a display (jetcarp doctor shows why)",
     );
+    // How often each screen draws against its scene's speed (#42).
+    for p in Pacing::ALL {
+        *changed |= ui
+            .radio_value(&mut settings.pacing, p, p.label())
+            .on_hover_text(p.hint())
+            .changed();
+    }
     let l = &mut settings.tune;
     egui::Grid::new("host-tune-limits")
         .num_columns(2)
@@ -1088,7 +1102,7 @@ fn performance_ui(
                 if ui
                     .checkbox(&mut auto, "the monitor's rate")
                     .on_hover_text(
-                        "The monitor's refresh rate (or 60), at most the frames per second above",
+                        "The monitor's refresh rate (or 60), at most the rate each scene draws at",
                     )
                     .changed()
                 {

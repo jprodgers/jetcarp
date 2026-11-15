@@ -2,6 +2,8 @@
 //! place they live. The app and the CLI write it, then tell a running host to read it again.
 
 use crate::caption::CaptionSettings;
+use crate::pace::Pacer;
+pub use crate::pace::Pacing;
 pub use jetcarp_gpu::select::Own;
 use jetcarp_gpu::select::Policy;
 use serde::{Deserialize, Serialize};
@@ -84,8 +86,8 @@ pub struct TuneLimits {
     pub cpu_percent: f32,
     /// JETCARP's own share of the GPU's time, in percent.
     pub gpu_percent: f32,
-    /// Frames per second it must keep. None: the monitor's refresh rate, or 60, at most the
-    /// host's own frame rate.
+    /// Frames per second it must keep. None: the monitor's refresh rate, or 60, at most the rate
+    /// the scene draws at.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fps: Option<f32>,
     /// Tune again by itself when the monitors change (only once it has been tuned).
@@ -128,13 +130,13 @@ impl TuneLimits {
     }
 
     /// The frame rate to keep: the one asked for, else the monitor's refresh rate (or 60), and
-    /// never more than the host draws (`host_fps`).
-    pub fn target_fps(&self, refresh: Option<f32>, host_fps: f32) -> f32 {
+    /// never more than the scene is drawn at (`draws`, its [`crate::pace::Pace`]'s).
+    pub fn target_fps(&self, refresh: Option<f32>, draws: f32) -> f32 {
         let want = self
             .fps
             .or(refresh.filter(|r| r.is_finite() && *r >= 1.0))
             .unwrap_or(60.0);
-        want.min(host_fps).max(1.0)
+        want.min(draws).max(1.0)
     }
 }
 
@@ -314,7 +316,8 @@ pub struct Tuning {
     pub scale: f64,
     /// The limits it was found for (each screen's share of them).
     pub limits: TuneLimits,
-    /// The frame rate it kept.
+    /// The frame rate the scene saved last was held to (each scene is held to the rate it draws
+    /// at).
     pub fps: f32,
     pub scenes: Vec<TunedScene>,
 }
@@ -368,8 +371,12 @@ impl Tuning {
 #[serde(default)]
 pub struct HostSettings {
     pub screens: Vec<ScreenSettings>,
-    /// Frames per second, at most.
+    /// Frames per second: what every screen draws at least, and with [`Pacing::LowPower`], what
+    /// it draws at and the most generations a second a scene runs at.
     pub fps: f32,
+    /// How a screen's frame rate follows its scene's speed. Files from before 0.4.2 show every
+    /// generation.
+    pub pacing: Pacing,
     /// The desktop background's own GPU choice: follow JETCARP's shared setting (`gpu.json`,
     /// automatic by default), or on, or off whatever it says. `JETCARP_GPU` comes first. Older
     /// files' `true` reads as follow and `false` as off.
@@ -403,6 +410,7 @@ impl Default for HostSettings {
         HostSettings {
             screens: vec![ScreenSettings::default()],
             fps: 30.0,
+            pacing: Pacing::default(),
             gpu: Own::Follow,
             caption: CaptionSettings::default(),
             max_memory_mb: 6144,
@@ -486,6 +494,16 @@ impl HostSettings {
         Policy::load_for(self.gpu, OWNER)
     }
 
+    /// What a screen on a monitor refreshing `refresh` times a second (None: not known) is paced
+    /// by.
+    pub fn pacer(&self, refresh: Option<f32>) -> Pacer {
+        Pacer {
+            pacing: self.pacing,
+            fps: self.fps,
+            refresh,
+        }
+    }
+
     /// Whether any screen has been tuned.
     pub fn tuned(&self) -> bool {
         self.screens.iter().any(|s| s.tuning.is_some())
@@ -555,6 +573,7 @@ mod tests {
         assert_eq!(s.screens[0].rotation, "My wallpaper");
         assert!(s.still_picture);
         assert_eq!(s.tune, TuneLimits::default());
+        assert_eq!(s.pacing, Pacing::EveryGeneration, "0.4.1 showed no choice");
         assert_eq!(
             s.gpu,
             Own::Follow,
@@ -644,6 +663,29 @@ mod tests {
         assert!(!old.scenes[0].chosen && old.scenes[0].rungs.is_empty());
     }
 
+    /// Every generation is shown unless the file says low power (#42); the pacing is written by
+    /// name, and a screen's pacer carries it with the frame rate and its monitor's refresh.
+    #[test]
+    fn the_pacing_defaults_to_every_generation_and_is_read_by_name() {
+        let s: HostSettings = serde_json::from_str(r#"{"fps": 24}"#).unwrap();
+        assert_eq!(s.pacing, Pacing::EveryGeneration);
+        assert_eq!(HostSettings::default().pacing, Pacing::EveryGeneration);
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains(r#""pacing":"every_generation""#), "{text}");
+        let low: HostSettings = serde_json::from_str(r#"{"pacing": "low_power"}"#).unwrap();
+        assert_eq!(low.pacing, Pacing::LowPower);
+        let back: HostSettings =
+            serde_json::from_str(&serde_json::to_string(&low).unwrap()).unwrap();
+        assert_eq!(back, low);
+        let p = s.pacer(Some(144.0));
+        assert_eq!(
+            (p.pacing, p.fps, p.refresh),
+            (Pacing::EveryGeneration, 24.0, Some(144.0))
+        );
+        assert_eq!(p.pace(60.0).fps, 60.0);
+        assert_eq!(low.pacer(Some(144.0)).pace(60.0).fps, 30.0);
+    }
+
     #[test]
     fn a_tuned_size_applies_to_its_scene_and_keeps_the_cell_count_on_another_canvas() {
         let t = Tuning {
@@ -702,7 +744,11 @@ mod tests {
         assert!(Size::px(3.0).same(&Size::px(3.004)) && !Size::px(3.0).same(&patch));
         assert!(t.fits_canvas([2000.0, 1000.0]) && !t.fits_canvas([1920.0, 1080.0]));
         let l = TuneLimits::default();
-        assert_eq!(l.target_fps(Some(144.0), 30.0), 30.0, "at most the host's");
+        assert_eq!(
+            l.target_fps(Some(144.0), 30.0),
+            30.0,
+            "at most the rate the scene draws at"
+        );
         assert_eq!(l.target_fps(None, 120.0), 60.0);
         assert_eq!(l.target_fps(Some(75.0), 120.0), 75.0);
         let l = TuneLimits {

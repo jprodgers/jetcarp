@@ -47,6 +47,7 @@ pub mod gnome;
 pub mod gpu;
 pub mod host_settings;
 pub mod macsaver;
+pub mod pace;
 pub mod painter;
 pub mod profiles;
 pub mod reseed_presets;

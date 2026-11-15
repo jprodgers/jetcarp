@@ -2414,7 +2414,8 @@ Commands:
   resume     Carry on
   rotation   Choose the rotation for a screen (saved)
   caption    Show or hide what is running, and how (saved)
-  fps        Frames per second, at most (saved)
+  fps        Frames per second, at least (saved; default 30)
+  pacing     Whether a faster scene draws faster, showing every generation (saved)
   still      Leave a still of the scene as the desktop picture when the host stops, or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
   battery    Pause while the computer runs on battery (saved; on by default)
   busy       Pause while the whole processor stays at least this busy, in percent, as during research runs (saved; default 80, 0 never)
@@ -2576,16 +2577,45 @@ Options:
 #### `jetcarp host fps`
 
 ```text
-Frames per second, at most (saved)
+Frames per second, at least (saved; default 30).
+
+Every screen draws at least this often, and a faster scene faster, up to its monitor's refresh rate; with `pacing low-power`, every screen draws at this rate (see `pacing`).
 
 Usage: jetcarp host fps [OPTIONS] <FPS>
 
 Arguments:
-  <FPS>  
+  <FPS>
+          1 to 240
 
 Options:
-      --json  Print the host's reply as JSON
-  -h, --help  Print help
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+#### `jetcarp host pacing`
+
+```text
+Whether a faster scene draws faster, showing every generation (saved).
+
+every-generation (the default): a screen draws as fast as its scene steps, so Life at 60 generations a second draws 60 frames a second, one generation each. low-power: every screen draws at `fps`, and no scene runs faster.
+
+Usage: jetcarp host pacing [OPTIONS] <MODE>
+
+Arguments:
+  <MODE>
+          Possible values:
+          - every-generation: Show every generation: a screen draws as fast as its scene steps, at least `fps` and at most the monitor's refresh rate (the default)
+          - low-power:        Low power: a screen draws at `fps`, and no scene runs faster (at most one generation a frame)
+
+Options:
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp host still`
@@ -2739,7 +2769,7 @@ Usage: jetcarp host tune [OPTIONS]
 Options:
       --cpu-limit <PERCENT>            JETCARP's processor time, in percent of the whole machine, every core counted (saved; default 10)
       --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent (saved; default 25)
-      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the host's frame rate)
+      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the rate each scene draws at)
       --screen <SCREEN>                Only this screen (counted from 0). Default: every screen on the desktop
       --pick <WHICH>                   Which size each scene is left at: recommended (the finest within the limits; the default), finest (the finest shown), own (the scene's own), or a cell size in pixels. Without it, a size chosen before is kept while it is still within the limits
       --crops <DIR>                    Save each size's picture here as a PNG (they are kept beside the host's settings too)

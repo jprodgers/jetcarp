@@ -14,6 +14,7 @@
 //! tune` runs it off screen in a process of its own, which the app starts with [`TuneChild`].
 
 use crate::host_settings::{GpuTiming, Rung, Size, TuneLimits, TunedScene};
+use crate::pace::Pacer;
 use jetcarp_core::{Command, Scene, SeedSpec};
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
@@ -105,6 +106,13 @@ impl SceneLimits {
     pub fn interval(&self) -> f64 {
         1.0 / self.fps.max(1.0)
     }
+}
+
+/// The frame rate a scene asking for `speed` generations a second is held to: the one the limits
+/// ask for (else the monitor's refresh rate, or 60), at most the rate its screen will draw it at
+/// ([`Pacer::pace`]). So a scene drawn at 60 frames a second is not judged as if it drew 30 (#42).
+pub fn scene_fps(limits: &TuneLimits, pacer: &Pacer, speed: f32) -> f32 {
+    limits.target_fps(pacer.refresh, pacer.pace(speed).fps)
 }
 
 /// Whether a size stayed within the limits (with [`MARGIN`] to spare); Err says which it passed.
@@ -569,11 +577,14 @@ pub fn crop_size(canvas: [f64; 2]) -> [u32; 2] {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum TuneEvent {
-    /// The sweep has begun: this many scenes on these screens, at this frame rate.
+    /// The sweep has begun: this many scenes on these screens, at this frame rate (each scene is
+    /// held to the rate it draws at: with `fps_max`, from `fps` to that).
     Start {
         screens: Vec<usize>,
         scenes: usize,
         fps: f32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fps_max: Option<f32>,
         gpu: Option<String>,
     },
     /// A size is on show.
@@ -617,12 +628,17 @@ impl TuneEvent {
                 screens,
                 scenes,
                 fps,
+                fps_max,
                 gpu,
             } => format!(
-                "sweeping {scenes} scene{} on {} screen{} at {fps} frames a second, {}",
+                "sweeping {scenes} scene{} on {} screen{} at {} frames a second, {}",
                 if *scenes == 1 { "" } else { "s" },
                 screens.len(),
                 if screens.len() == 1 { "" } else { "s" },
+                match fps_max {
+                    Some(m) if *m > *fps => format!("{} to {}", round_fps(*fps), round_fps(*m)),
+                    _ => round_fps(*fps),
+                },
                 gpu.as_deref()
                     .map_or("on the processor".to_string(), |g| format!("on {g}"))
             ),
@@ -657,6 +673,29 @@ impl TuneEvent {
             TuneEvent::Failed { error } => format!("stopped: {error}"),
         }
     }
+}
+
+/// A frame rate as people read it: whole, or to a hundredth (59.94).
+pub fn round_fps(fps: f32) -> String {
+    if (fps - fps.round()).abs() < 0.005 {
+        format!("{}", fps.round())
+    } else {
+        format!("{fps:.2}")
+    }
+}
+
+/// The frame rates a sweep's scenes are held to, slowest and fastest (the fastest only when it
+/// differs), for [`TuneEvent::Start`].
+pub fn fps_range(rates: impl IntoIterator<Item = f32>) -> (f32, Option<f32>) {
+    let (lo, hi) = rates
+        .into_iter()
+        .fold((f32::INFINITY, 0.0f32), |(lo, hi), r| {
+            (lo.min(r), hi.max(r))
+        });
+    if !lo.is_finite() {
+        return (0.0, None);
+    }
+    (lo, (hi > lo).then_some(hi))
 }
 
 /// A card's numbers, for people.
@@ -1025,6 +1064,84 @@ mod tests {
         assert_eq!(pick(Pick::Own).size(), Size::px(3.0));
         assert!(pick(Pick::Own).chosen);
         assert_eq!(pick(Pick::Px(3.0)).size(), Size::px(3.0));
+    }
+
+    /// A scene is held to the frame rate it is drawn at (#42): Life at 60 generations a second
+    /// draws 60 frames a second, so its frames must take under 15 ms, not 30; in low power it draws
+    /// 30. A frame rate asked for still caps it.
+    #[test]
+    fn a_scene_is_judged_at_the_frame_rate_it_draws_at() {
+        use crate::pace::Pacing;
+        let every = Pacer {
+            pacing: Pacing::EveryGeneration,
+            fps: 30.0,
+            refresh: Some(60.0),
+        };
+        let low = Pacer {
+            pacing: Pacing::LowPower,
+            ..every
+        };
+        let l = TuneLimits::default();
+        assert_eq!(scene_fps(&l, &every, 60.0), 60.0);
+        assert_eq!(scene_fps(&l, &every, 240.0), 60.0, "at most the refresh");
+        assert_eq!(scene_fps(&l, &every, 20.0), 30.0, "at least the frame rate");
+        assert_eq!(scene_fps(&l, &every, 0.0), 30.0, "as fast as it can");
+        assert_eq!(scene_fps(&l, &low, 60.0), 30.0);
+        let fast = Pacer {
+            refresh: Some(144.0),
+            ..every
+        };
+        assert_eq!(scene_fps(&l, &fast, 240.0), 144.0);
+        let asked = TuneLimits {
+            fps: Some(24.0),
+            ..l
+        };
+        assert_eq!(scene_fps(&asked, &every, 60.0), 24.0);
+        // A 20 ms frame keeps 30 frames a second, not 60.
+        let m = Measure {
+            p95: 0.020,
+            ..Measure::default()
+        };
+        let at = |fps| SceneLimits::of(&l, fps, 1);
+        assert!(fits(&m, &at(scene_fps(&l, &low, 60.0))).is_ok());
+        let e = fits(&m, &at(scene_fps(&l, &every, 60.0))).unwrap_err();
+        assert!(e.contains("at 60 fps, 16.7 ms"), "{e}");
+        // The sweep's opening line gives the range.
+        assert_eq!(fps_range([60.0, 30.0, 30.0]), (30.0, Some(60.0)));
+        assert_eq!(fps_range([30.0, 30.0]), (30.0, None));
+        let start = |fps, fps_max| TuneEvent::Start {
+            screens: vec![0],
+            scenes: 3,
+            fps,
+            fps_max,
+            gpu: None,
+        };
+        assert!(
+            start(30.0, Some(59.94))
+                .describe()
+                .contains("at 30 to 59.94 frames a second")
+        );
+        assert!(
+            start(30.0, None)
+                .describe()
+                .contains("at 30 frames a second")
+        );
+        // An older tuner's line, with no `fps_max`, still reads.
+        let old: TuneEvent = serde_json::from_str(
+            r#"{"event": "start", "screens": [0], "scenes": 1, "fps": 30.0, "gpu": null}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            old,
+            TuneEvent::Start {
+                screens: vec![0],
+                scenes: 1,
+                fps: 30.0,
+                fps_max: None,
+                gpu: None,
+            }
+        );
+        assert!(!serde_json::to_string(&old).unwrap().contains("fps_max"));
     }
 
     /// The submission clock's GPU share is an upper bound: it never fails a size or stops the

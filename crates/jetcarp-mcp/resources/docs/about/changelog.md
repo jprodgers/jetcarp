@@ -116,6 +116,18 @@ that will declare them stable.
   both panes the editor has *Save* and *Close* above it as well as below. A running host now shows
   a rotation or profile saved again under the same name, where it carried on with the old one.
   ([#41](https://github.com/jprodgers/jetcarp/issues/41))
+- **Life's blinkers on the desktop background stood still, or blinked far too slowly.** The host
+  drew 30 frames a second whatever the scene's speed, so a scene of 60 generations a second showed
+  every second generation, and an oscillator of period 2 showed nearly the same phase in every
+  frame; frames that came a little late made even a scene of 30 a second step two generations now
+  and then. Each screen now draws as fast as its scene steps, one generation a frame, at least the
+  frame rate and at most the monitor's refresh rate (a faster scene still draws several a frame),
+  and each screen keeps its own rate. *Low power*, in the *Desktop background* pane's *Performance*
+  group or `jetcarp host pacing low-power`, draws at the frame rate instead and caps each scene's
+  speed there. *Fit to this computer* measures and judges each scene at the frame rate it draws
+  at, and `jetcarp host status` gives each screen's frame rate and speed (see
+  [Frame rate and speed](../guides/wallpapers.md#frame-rate-and-speed)).
+  ([#42](https://github.com/jprodgers/jetcarp/issues/42))
 
 ### Changed
 

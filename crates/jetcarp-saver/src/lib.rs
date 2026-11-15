@@ -311,6 +311,7 @@ impl Shared {
         let canvas = painter::shared_canvas(self.sizes.values().copied()).expect("one size");
         let scale = self.scales.values().copied().fold(1.0, f64::max);
         let now = self.now();
+        let fps = self.fps;
         match (&mut self.stage, self.baked.take()) {
             (Some(s), _) => s.resize(canvas, scale, now),
             (None, Some(b)) => {
@@ -327,6 +328,8 @@ impl Shared {
                 )?;
                 let mut s = s;
                 s.resize(canvas, scale, now);
+                // macOS times its frames, at the baked frame rate, whatever each scene's speed.
+                s.set_pacer(jetcarp_display::pace::Pacer::fixed(fps));
                 self.stage = Some(s);
             }
             (None, None) => return Err("the stage could not be made".into()),

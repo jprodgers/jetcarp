@@ -2,6 +2,7 @@
 
 use jetcarp_display::autostart;
 use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSettings};
+use jetcarp_display::pace::FrameClock;
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
@@ -17,7 +18,8 @@ use std::time::{Duration, Instant};
 
 /// Canvas until a surface says otherwise.
 const DEFAULT_CANVAS: [f64; 2] = [1280.0, 720.0];
-/// Frames per second while everything is paused.
+/// Frames per second of a paused screen, and how often the host looks at its link and its
+/// monitors at least.
 const PAUSED_FPS: f32 = 5.0;
 /// Share of a frame spent stepping; the rest is for drawing.
 pub(crate) const STEP_SHARE: f32 = 0.6;
@@ -98,6 +100,13 @@ pub struct Screen {
     /// The rotation and its items as the stage was built from them ([`made_from`]): a reload
     /// keeps the stage only while they are the same, so a rotation or profile saved since shows.
     made_from: String,
+    /// When its next frame is due: each screen draws at its own rate (its stage's pace, or
+    /// [`PAUSED_FPS`] while paused).
+    clock: FrameClock,
+    /// The last [`Core::tick`] stepped it: its surfaces draw this frame.
+    pub due: bool,
+    /// Frames it has drawn.
+    frames: u64,
 }
 
 /// A rotation and its expanded items, as text to compare.
@@ -107,6 +116,36 @@ fn made_from(r: &Rotation, slots: &[jetcarp_display::rotation::Slot]) -> String 
         r.to_json(),
         serde_json::to_string(slots).unwrap_or_default()
     )
+}
+
+impl Screen {
+    fn new(
+        stage: Stage,
+        sim: SimBackend,
+        monitor: Option<usize>,
+        place: Place,
+        made_from: String,
+    ) -> Screen {
+        Screen {
+            stage,
+            sim,
+            monitor,
+            place,
+            made_from,
+            clock: FrameClock::default(),
+            due: false,
+            frames: 0,
+        }
+    }
+
+    /// The frame rate it draws at now.
+    fn rate(&self) -> f32 {
+        if self.stage.paused() {
+            PAUSED_FPS
+        } else {
+            self.stage.pace().fps
+        }
+    }
 }
 
 pub struct Core {
@@ -451,16 +490,16 @@ impl Core {
                 continue;
             }
             match self.new_stage(&want, self.canvas) {
-                Ok((mut stage, made_from)) => out.push(Screen {
-                    stage: {
-                        stage.set_tuned(tuned);
-                        stage
-                    },
-                    sim: self.new_sim(),
-                    monitor,
-                    place,
-                    made_from,
-                }),
+                Ok((mut stage, made_from)) => {
+                    stage.set_tuned(tuned);
+                    out.push(Screen::new(
+                        stage,
+                        self.new_sim(),
+                        monitor,
+                        place,
+                        made_from,
+                    ));
+                }
                 Err(e) => {
                     self.note(format!("screen {}: {e}", i + 1));
                     first_error.get_or_insert(e);
@@ -650,16 +689,32 @@ impl Core {
         self.listener = None;
     }
 
-    pub fn frame_time(&self) -> Duration {
-        let fps = if self.all_paused() {
-            PAUSED_FPS
-        } else {
-            self.settings.fps
-        };
-        Duration::from_secs_f32(1.0 / fps.max(1.0))
+    /// When the next frame is due: the soonest of the screens' (each draws at its own rate), and
+    /// at least [`PAUSED_FPS`] times a second, so the link is answered while nothing draws.
+    pub fn next_frame(&self) -> Instant {
+        let now = self.now();
+        let soonest = self
+            .screens
+            .iter()
+            .filter(|s| !self.hidden(s))
+            .map(|s| s.clock.next().unwrap_or(now))
+            .fold(now + 1.0 / PAUSED_FPS as f64, f64::min);
+        self.started + Duration::from_secs_f64(soonest.max(0.0))
     }
 
-    /// One frame: answer the link, watch memory, run every screen.
+    /// The refresh rate of the monitor screen `i` shows on (the first monitor's for every
+    /// monitor).
+    fn screen_hz(&self, i: usize) -> Option<f32> {
+        let m = self.screens.get(i).and_then(|s| s.monitor).unwrap_or(0);
+        self.monitor_hz.get(m).copied().flatten()
+    }
+
+    /// One frame: answer the link, watch memory, and run each screen whose frame is due. Each
+    /// screen draws at its own rate: as fast as its scene steps, between the frame rate setting
+    /// and its monitor's refresh rate, or in low power at the frame rate (see
+    /// [`jetcarp_display::pace`]). A screen's frames keep to its rate on their own clock, and a
+    /// screen that is not due is neither stepped nor drawn, so one screen's 60 frames a second
+    /// do not make another's 30 draw 60.
     pub fn tick(&mut self) {
         let requests = self.listener.as_ref().map_or(vec![], |l| l.poll());
         for p in requests {
@@ -687,13 +742,25 @@ impl Core {
         self.sweep_step();
         self.watch_retune();
         let count = self.screens.len().max(1) as f32;
-        let budget = Duration::from_secs_f32(STEP_SHARE / self.settings.fps.max(1.0) / count);
+        let pacers: Vec<_> = (0..self.screens.len())
+            .map(|i| self.settings.pacer(self.screen_hz(i)))
+            .collect();
         let mut notes = vec![];
         let login = self.login;
-        for s in &mut self.screens {
+        for (s, pacer) in self.screens.iter_mut().zip(pacers) {
+            s.due = false;
             if login && s.place != Place::Wallpaper {
                 continue;
             }
+            s.stage.set_pacer(pacer);
+            let rate = s.rate();
+            if !s.clock.tick(now, rate) {
+                continue;
+            }
+            s.due = true;
+            s.frames += 1;
+            // Each screen's share of the time its frame leaves for stepping.
+            let budget = Duration::from_secs_f32(STEP_SHARE / rate / count);
             s.stage.tick(now, &mut s.sim, budget);
             notes.extend(s.stage.take_notes());
         }
@@ -759,6 +826,7 @@ impl Core {
             "monitor_hz": self.monitor_hz,
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
             "fps": self.settings.fps,
+            "pacing": self.settings.pacing,
             "tune": self.settings.tune,
             "tuning": self.tuning_status(),
             "caption": self.settings.caption,
@@ -769,6 +837,7 @@ impl Core {
                 "monitor": s.monitor,
                 "place": s.place,
                 "hidden": self.hidden(s),
+                "frames": s.frames,
                 "stage": s.stage.status(),
             })).collect::<Vec<_>>(),
             "log": self.log,

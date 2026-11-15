@@ -132,19 +132,22 @@ previous and next item), from its menu, or from the command line:
 ```text
 $ jetcarp host start --rotation "Wolfram series"
 running, pid 676359, up 0.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells of 4 px · window
+screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells of 4 px · 60 fps, 60 generations a second · window
 caption: off
+pacing: every generation (at least 30 fps, up to the monitor's refresh rate)
 $ jetcarp host next
 running, pid 676359, up 3.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: Wolfram series · W1 (2 of 256) · starting · window
 caption: off
+pacing: every generation (at least 30 fps, up to the monitor's refresh rate)
 $ jetcarp host stop
 stopped
 ```
 
 `status` (and every command that changes something) says what each screen shows and where (a window,
-or the desktop background on a monitor or on every monitor), the monitors, whether the caption is
-on, and, while it is paused, why: by hand, on battery, the processor is busy, or held by the desktop
+or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
+(see [below](#frame-rate-and-speed)), the monitors, whether the caption is on, and, while it is
+paused, why: by hand, on battery, the processor is busy, or held by the desktop
 (windows cover it, or the screen is locked or off). Just after `next` the new item is *starting*
 until its world is built.
 
@@ -154,7 +157,8 @@ until its world is built.
 | `jetcarp host stop`, `status`, `pause`, `resume` | Quit it, say what it shows, freeze it, carry on |
 | `jetcarp host next`, `previous` `[--screen N]` | The next or previous item, on every screen or one |
 | `jetcarp host rotation NAME [--screen N]` | Choose a screen's rotation |
-| `jetcarp host fps N` | The most frames per second it draws (1 to 240; default 30) |
+| `jetcarp host fps N` | The frame rate: every screen draws at least this often (1 to 240; default 30). See [below](#frame-rate-and-speed) |
+| `jetcarp host pacing every-generation\|low-power` | Whether a faster scene draws faster, showing every generation (the default), or every screen draws at the frame rate and no scene runs faster (see [below](#frame-rate-and-speed)) |
 | `jetcarp host caption on\|off` | Show what is running in a corner, with `--corner`, `--size`, `--generation on\|off` and `--seconds` |
 | `jetcarp host battery on\|off` | Pause while the computer runs on battery (default on) |
 | `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]` | Fit the desktop background to this computer (see [below](#fit-to-this-computer)) |
@@ -181,6 +185,28 @@ On Windows and macOS the host has an icon in the notification area or the menu b
 extension adds one to the top bar. Its menu names what is showing and has *Next*, *Previous*,
 *Paused*, *Show on the desktop*, *Rotation*, *Open JETCARP*, *Start at login* and *Quit* (on GNOME,
 also *Start JETCARP host* while it is stopped).
+
+## Frame rate and speed
+
+Each scene runs at its own speed, in generations a second (a profile's *speed*, or a rotation's).
+By default every generation is shown: each screen draws as fast as its scene steps, at least the
+frame rate (`jetcarp host fps`, 30 unless you change it) and at most its monitor's refresh rate.
+Life at 60 generations a second draws 60 frames a second, one generation each. A scene slower than
+the frame rate, or one running as fast as it can, draws at the frame rate; one faster than the
+refresh draws at the refresh, several generations a frame. With several screens, each draws at its
+own rate, so a scene of 60 a second on one monitor does not make a scene of 30 on another draw
+twice as often. A frame that comes late (a busy computer) still steps one generation: the scene
+falls a little behind its speed rather than skip one.
+
+*Low power* (`jetcarp host pacing low-power`, or the *Desktop background* pane's *Performance*
+group) draws every screen at the frame rate instead, and caps each scene's speed there, so no frame
+steps more than one generation: Life at 60 generations a second runs at 30, at 30 frames a second,
+for half the drawing. A scene that runs as fast as it can runs at the frame rate too.
+
+Drawing more slowly than a scene steps would show only every second or third generation, and an
+oscillator whose period divides that would seem to stand still or blink slowly: Life's blinkers did
+before 0.4.2. `jetcarp host status` gives each screen's frame rate and speed (`frame_rate` and
+`speed` in `--json`, and `frames`, the frames each screen has drawn).
 
 ## The Desktop background pane
 
@@ -211,8 +237,9 @@ about the host. The *Display* and *Screensaver* panes link to it.
 - **How it runs:** *Frames per second*, *GPU simulation* (the host's own choice) and the *Shared
   setting* it can follow (see [The GPU](gpu.md#the-setting)), the *Caption*, *Pause on battery*,
   *Pause while the processor is busier than* a share, and *Start at login*.
-- **Performance:** the GPU it uses, the limits, *Fit to this computer…*, and the cards it leaves
-  (see below).
+- **Performance:** the GPU it uses, *Show every generation* or *Low power* (see
+  [Frame rate and speed](#frame-rate-and-speed)), the limits, *Fit to this computer…*, and the
+  cards it leaves (see below).
 
 The settings are the host's own `host.json`, as before; the pane writes them and tells a running host.
 
@@ -236,9 +263,10 @@ it is the patch's levels, each fitted to the screen, whatever size that makes it
 scene's own. The rules, palettes and colouring stay as they are: only the number of cells changes.
 
 **The sweep** shows the coarsest size first and works finer, each size for two seconds, measured over
-the last one and a half. On the host it runs on the real screen (the other screens pause meanwhile);
-move your windows aside to watch. It stops going finer once a size is more than twice over a limit:
-anything finer would only crawl. Several scenes take a minute or two.
+the last one and a half, each scene at the frame rate it draws at (see
+[Frame rate and speed](#frame-rate-and-speed)). On the host it runs on the real screen (the other
+screens pause meanwhile); move your windows aside to watch. It stops going finer once a size is
+more than twice over a limit: anything finer would only crawl. Several scenes take a minute or two.
 
 **The limits** decide which cards are marked *within the limits*:
 
@@ -246,7 +274,8 @@ anything finer would only crawl. Several scenes take a minute or two.
   counted (default 10%).
 - **GPU limit:** JETCARP's own share of the graphics card's time (default 25%).
 - **Smooth at:** the frame rate it must keep (default the monitor's refresh rate, or 60, and never more
-  than the host's *Frames per second*, which is 30 unless you change it).
+  than the rate the scene draws at: Life at 60 generations a second must keep 60 frames a second, a
+  scene of 30 the host's *Frames per second*, which is 30 unless you change it).
 
 A size is within them when the processor and GPU stay under 80% of their limits, 95% of frames take
 under 90% of the frame's time, and the scene keeps its speed. With several screens on the desktop,
@@ -305,7 +334,7 @@ inside it, as every picture JETCARP writes does.
 | --- | --- |
 | `--cpu-limit P` | JETCARP's processor time, in percent of the whole machine (1 to 100; saved; default 10) |
 | `--gpu-limit P` | JETCARP's share of the GPU's time, in percent (1 to 100; saved; default 25) |
-| `--fps N` | The frame rate to keep (saved; default the monitor's refresh rate, or 60, at most the host's) |
+| `--fps N` | The frame rate to keep (saved; default the monitor's refresh rate, or 60, at most the rate each scene draws at) |
 | `--pick WHICH` | The size each scene is left at: `recommended` (the finest within the limits), `finest` (the finest shown), `own`, or a cell size in pixels. Without it, a size chosen before is kept while it fits, else the recommended one |
 | `--crops DIR` | Save each size's picture here as a PNG |
 | `--screen N` | Only this screen |

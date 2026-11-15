@@ -7,7 +7,7 @@ use jetcarp_display::autostart;
 use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome;
 use jetcarp_display::host_settings::{
-    HostSettings, LockScreen, MAX_AWAKE_MINUTES, Place, ScreenSettings,
+    HostSettings, LockScreen, MAX_AWAKE_MINUTES, Pacing, Place, ScreenSettings,
 };
 use jetcarp_display::saver;
 use jetcarp_mcp::link::{host_call, host_gone};
@@ -48,6 +48,25 @@ pub enum LockArg {
     Off,
     Live,
     Screensaver,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum PacingArg {
+    /// Show every generation: a screen draws as fast as its scene steps, at least `fps` and at
+    /// most the monitor's refresh rate (the default).
+    EveryGeneration,
+    /// Low power: a screen draws at `fps`, and no scene runs faster (at most one generation a
+    /// frame).
+    LowPower,
+}
+
+impl PacingArg {
+    fn pacing(self) -> Pacing {
+        match self {
+            PacingArg::EveryGeneration => Pacing::EveryGeneration,
+            PacingArg::LowPower => Pacing::LowPower,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -129,8 +148,23 @@ pub enum HostCmd {
         #[arg(long)]
         seconds: Option<f32>,
     },
-    /// Frames per second, at most (saved).
-    Fps { fps: f32 },
+    /// Frames per second, at least (saved; default 30).
+    ///
+    /// Every screen draws at least this often, and a faster scene faster, up to its monitor's
+    /// refresh rate; with `pacing low-power`, every screen draws at this rate (see `pacing`).
+    Fps {
+        /// 1 to 240.
+        fps: f32,
+    },
+    /// Whether a faster scene draws faster, showing every generation (saved).
+    ///
+    /// every-generation (the default): a screen draws as fast as its scene steps, so Life at 60
+    /// generations a second draws 60 frames a second, one generation each. low-power: every screen
+    /// draws at `fps`, and no scene runs faster.
+    Pacing {
+        #[arg(value_enum)]
+        mode: PacingArg,
+    },
     /// Leave a still of the scene as the desktop picture when the host stops, or while the live
     /// wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your
     /// own picture back.
@@ -235,6 +269,9 @@ fn status_lines(v: &Value) -> Vec<String> {
                     n.push_str(" (tuned)");
                 }
             }
+            if let Some(p) = pace_words(st) {
+                n.push_str(&format!(" · {p}"));
+            }
             n
         };
         let shown = if s["place"] == "wallpaper" {
@@ -308,6 +345,17 @@ fn status_lines(v: &Value) -> Vec<String> {
         }
         out.push(line);
     }
+    if let Some(p) = v["pacing"].as_str() {
+        let fps = v["fps"].as_f64().map_or("?".into(), rate);
+        out.push(match p {
+            "low_power" => format!(
+                "pacing: low power, {fps} fps (each scene at most {fps} generations a second)"
+            ),
+            _ => format!(
+                "pacing: every generation (at least {fps} fps, up to the monitor's refresh rate)"
+            ),
+        });
+    }
     let why: Vec<&str> = v["paused_why"]
         .as_array()
         .into_iter()
@@ -336,6 +384,27 @@ fn status_lines(v: &Value) -> Vec<String> {
         out.push(format!("note: {}", line.as_str().unwrap_or("")));
     }
     out
+}
+
+/// A rate as people read it: whole, or to a hundredth (59.94).
+fn rate(x: f64) -> String {
+    if (x - x.round()).abs() < 0.005 {
+        format!("{}", x.round())
+    } else {
+        format!("{x:.2}")
+    }
+}
+
+/// How fast a screen draws and its scene runs: `60 fps, 60 generations a second`, or
+/// `30 fps, as fast as it can` (None from a host before 0.4.2, which did not say).
+fn pace_words(st: &Value) -> Option<String> {
+    let fps = st["frame_rate"].as_f64()?;
+    let speed = st["speed"].as_f64().unwrap_or(0.0);
+    Some(if speed > 0.0 {
+        format!("{} fps, {} generations a second", rate(fps), rate(speed))
+    } else {
+        format!("{} fps, as fast as it can", rate(fps))
+    })
 }
 
 fn start(rotation: Option<&str>, headless: bool, json: bool) -> Result<()> {
@@ -513,6 +582,15 @@ pub fn run(a: HostArgs) -> Result<()> {
             }
             let mut s = HostSettings::load().0;
             s.fps = fps;
+            match save(&s)? {
+                Some(v) => show(&v, j),
+                None => println!("saved; the host is not running"),
+            }
+            Ok(())
+        }
+        HostCmd::Pacing { mode } => {
+            let mut s = HostSettings::load().0;
+            s.pacing = mode.pacing();
             match save(&s)? {
                 Some(v) => show(&v, j),
                 None => println!("saved; the host is not running"),
@@ -724,7 +802,9 @@ mod tests {
         let stage = |label: &str, building: bool, cells: u64| {
             json!({"rotation": "A classic a day", "label": label, "number": 2, "count": 7,
                 "generation": 0, "cells": cells, "paused": true, "building": building,
-                "cell_px": if cells == 10 { 6.0 } else { 0.0 }, "tuned": cells == 10})
+                "cell_px": if cells == 10 { 6.0 } else { 0.0 }, "tuned": cells == 10,
+                "frame_rate": if cells == 10 { 30.0 } else { 59.94 },
+                "speed": if cells == 10 { 0.0 } else { 60.0 }})
         };
         let v = json!({
             "pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "RTX",
@@ -738,12 +818,13 @@ mod tests {
             "caption": {"show": true, "corner": "BottomLeft", "size": 20.0,
                 "generation": false, "seconds": 0.0},
             "paused_why": ["on battery"],
+            "fps": 30.0, "pacing": "every_generation",
             "log": [],
         });
         let lines = status_lines(&v);
         assert!(
             lines[1].ends_with(
-                "generation 0 · 1000 cells · wallpaper on monitor 0 (DISPLAY1) · paused"
+                "generation 0 · 1000 cells · 59.94 fps, 60 generations a second · wallpaper on monitor 0 (DISPLAY1) · paused"
             ),
             "{lines:?}"
         );
@@ -753,17 +834,29 @@ mod tests {
         );
         assert!(lines[3].ends_with("· window · paused"), "{lines:?}");
         assert!(
-            lines[3].contains("10 cells of 6 px (tuned) · window"),
+            lines[3].contains("10 cells of 6 px (tuned) · 30 fps, as fast as it can · window"),
             "{lines:?}"
         );
         let has = |l: &str| lines.iter().any(|x| x == l);
+        assert!(
+            has("pacing: every generation (at least 30 fps, up to the monitor's refresh rate)"),
+            "{lines:?}"
+        );
         assert!(has("caption: on, bottom left, 20 pt"), "{lines:?}");
         assert!(has("paused: on battery"), "{lines:?}");
         let mut off = v.clone();
         off["caption"]["show"] = json!(false);
         off["paused_why"] = json!([]);
+        off["pacing"] = json!("low_power");
         let lines = status_lines(&off);
         assert!(lines.iter().any(|l| l == "caption: off"));
+        assert!(
+            lines
+                .iter()
+                .any(|l| l
+                    == "pacing: low power, 30 fps (each scene at most 30 generations a second)"),
+            "{lines:?}"
+        );
         assert!(!lines.iter().any(|l| l.starts_with("paused:")));
         // Tuning: under way, then how it ended.
         let mut tuning = v.clone();

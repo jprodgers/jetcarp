@@ -4,7 +4,9 @@
 //!
 //! While a screen is swept, its own stage is set aside and a stage showing one scene stands in;
 //! the other screens are paused, so the host's load is the swept scene's. The sweep runs a step
-//! each frame, from [`Core::tick`], and never blocks the frame.
+//! each frame, from [`Core::tick`], and never blocks the frame. Each scene is measured as it will
+//! run, at the frame rate its screen draws it at ([`jetcarp_display::pace`]), and held to that
+//! rate ([`scene_fps`]).
 
 use super::{Core, Place};
 use crate::power::ProcessMeter;
@@ -18,7 +20,8 @@ use jetcarp_display::rotation::{Rotation, Slot};
 use jetcarp_display::simgpu::SimStatus;
 use jetcarp_display::stage::Stage;
 use jetcarp_display::tuning::{
-    Measure, SceneLimits, TuneEvent, TuneRequest, crop_name, crop_size, tuned_scene, warmup,
+    Measure, SceneLimits, TuneEvent, TuneRequest, crop_name, crop_size, fps_range, scene_fps,
+    tuned_scene, warmup,
 };
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -186,12 +189,21 @@ impl Core {
             Some(_) => Clock::Submission,
         };
         let total = queue.len();
+        let (fps, fps_max) = fps_range(queue.iter().filter_map(|&(i, k)| {
+            let slot = self.screens[i].stage.slots().get(k)?;
+            Some(scene_fps(
+                &limits,
+                &self.settings.pacer(self.screen_hz(i)),
+                slot.profile.speed,
+            ))
+        }));
         self.sweep_events.clear();
         self.sweep_last = None;
         self.sweep_events.push(TuneEvent::Start {
             screens: which.clone(),
             scenes: total,
-            fps: limits.target_fps(self.screen_hz(which[0]), self.settings.fps),
+            fps,
+            fps_max,
             gpu: self.gpu.as_ref().map(|g| g.adapter.get_info().name),
         });
         self.sweep = Some(HostSweep {
@@ -233,15 +245,21 @@ impl Core {
         Ok(())
     }
 
-    /// The refresh rate of the monitor screen `i` shows on (the first monitor's for every
-    /// monitor).
-    fn screen_hz(&self, i: usize) -> Option<f32> {
-        let m = self.screens.get(i).and_then(|s| s.monitor).unwrap_or(0);
-        self.monitor_hz.get(m).copied().flatten()
+    /// Whether the last [`Core::tick`] drew the swept screen: only its frames are measured (the
+    /// paused screens draw a few frames a second, each on its own clock).
+    fn swept_due(&self) -> bool {
+        self.sweep
+            .as_ref()
+            .and_then(|s| s.screen())
+            .and_then(|i| self.screens.get(i))
+            .is_some_and(|s| s.due)
     }
 
     /// A frame's work took `secs` (the window side, or the headless loop, says after drawing).
     pub fn frame_done(&mut self, secs: f64) {
+        if !self.swept_due() {
+            return;
+        }
         if let Some(Current {
             phase: Phase::Measure { frames, .. },
             ..
@@ -255,7 +273,7 @@ impl Core {
     pub fn sweep_gpu_meter(&self) -> Option<Arc<Mutex<f64>>> {
         self.sweep
             .as_ref()
-            .filter(|s| s.clock == Clock::Submission && s.measuring())
+            .filter(|s| s.clock == Clock::Submission && s.measuring() && self.swept_due())
             .map(|s| s.gpu_acc.clone())
     }
 
@@ -363,7 +381,12 @@ impl Core {
             let scale = own.status().scale;
             let most = max_cells(&self.settings, self.gpu.as_ref());
             let plan = scene_plan(&slot, &self.lookup, canvas, scale, most);
-            let fps = sw.limits.target_fps(self.screen_hz(i), self.settings.fps);
+            // Held to the rate its screen will draw it at.
+            let fps = scene_fps(
+                &sw.limits,
+                &self.settings.pacer(self.screen_hz(i)),
+                slot.profile.speed,
+            );
             let limits = SceneLimits::of(&sw.limits, fps, sw.screens);
             let Some(size) = plan.sweep.next_size() else {
                 return Ok(Step::Going);
@@ -427,7 +450,8 @@ impl Core {
                         screen.stage.builds() > cur.builds && screen.stage.world().is_some();
                     if built {
                         let world = screen.stage.world().expect("built");
-                        let on = steps_on_gpu(&cur.slot.profile, &screen.sim, world);
+                        let paced = screen.stage.pace().speed > 0.0;
+                        let on = steps_on_gpu(&cur.slot.profile, paced, &screen.sim, world);
                         screen.stage.set_world_gpu(on);
                         cur.phase = Phase::Warm {
                             until: now + warmup(sw.seconds),
@@ -512,7 +536,8 @@ impl Core {
             Clock::Submission => Some((acc - *acc0) / wall),
         };
         let st = screen.stage.status();
-        let speed = cur.slot.profile.speed as f64;
+        // The speed it runs at (in low power, at most the frame rate).
+        let speed = screen.stage.pace().speed as f64;
         let mut times = std::mem::take(frames);
         let m = Measure {
             cpu: meter.as_ref().map_or(0.0, |m| m.share()),

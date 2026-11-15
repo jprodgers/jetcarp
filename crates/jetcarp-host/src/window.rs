@@ -937,7 +937,12 @@ impl ApplicationHandler for App {
             if hosting {
                 self.watch_monitors(el);
             }
+            // Each screen draws at its own rate: only those whose frame came this time.
             for i in 0..self.outputs.len() {
+                let screen = self.outputs[i].target.screen;
+                if !self.core.screens.get(screen).is_some_and(|s| s.due) {
+                    continue;
+                }
                 if self.outputs[i].target.wallpaper {
                     self.draw(i);
                 } else if let Some(w) = self.outputs[i].body.os() {
@@ -955,7 +960,7 @@ impl ApplicationHandler for App {
                     }
                 });
             }
-            self.next_frame = now + self.core.frame_time();
+            self.next_frame = self.core.next_frame();
         }
         el.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
     }
