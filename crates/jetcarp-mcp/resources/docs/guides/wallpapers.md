@@ -263,7 +263,7 @@ or `jetcarp host tune`, shows you: it sweeps each scene of the desktop backgroun
 of sizes, a couple of seconds each, on the desktop itself, measures each one, and then lets you
 choose from a row of cards.
 
-<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: Show every generation (chosen) or Low power, Up to 60 frames a second, the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each of three scenes. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate and within the limits, 1 px recommended; Penrose waves at its own size (2.6 px), level 5 and level 4, its own size recommended" width="700">
+<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: Show every generation (chosen) or Low power, Up to 60 frames a second, the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each scene. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate, all within the limits and 1 px recommended; Langton's ant, a placed pattern, at the same sizes drawn at 60 frames a second, 1 px over the limits and its own 4 px recommended" width="700">
 
 **The sizes.** On a lattice the ladder is 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48 and 64 pixels a cell,
 in the screen's own pixels (on a screen of two pixels a point, 2 px is one point), and the scene's own

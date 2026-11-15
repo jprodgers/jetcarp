@@ -175,7 +175,7 @@ feed's file in `refs/` names its newest version and is signed too.
 stopped search's newest runs are sealed first, and publishing says so:
 
 ```text
-explore job 2 (search 31d41ffc-54b5-4f13-b239-af2a4a447932): sealed its newest 4211 runs first, so the pack carries every run
+explore job 2 (search 31d41ffc-54b5-4f13-b239-af2a4a447932): sealed its newest 4,211 runs first, so the pack carries every run
 ```
 
 A search that is still running is refused, since its newest runs would be left out: stop it first

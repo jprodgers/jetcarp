@@ -888,6 +888,14 @@ impl Core {
         for s in &mut self.screens {
             s.sim.mode = mode;
         }
+        // The pacing at once, so the status a settings command answers with shows it (not only
+        // from the next frame).
+        let pacers: Vec<_> = (0..self.screens.len())
+            .map(|i| self.settings.pacer(self.screen_hz(i)))
+            .collect();
+        for (s, pacer) in self.screens.iter_mut().zip(pacers) {
+            s.stage.set_pacer(pacer);
+        }
         self.settle_still();
         built
     }

@@ -218,7 +218,10 @@ fn summary(v: &Value) -> String {
             s["count"]
         );
         if let Some(px) = s["cell_px"].as_f64().filter(|p| *p > 0.0) {
-            t.push_str(&format!(", {px} px cells"));
+            t.push_str(&format!(
+                ", {} px cells",
+                jetcarp_display::host_settings::round_px(px as f32)
+            ));
             if s["tuned"] == true {
                 t.push_str(" (tuned)");
             }

@@ -547,9 +547,12 @@ fn do_publish(
 /// segments, so a stopped search's unsealed runs (all of a search under a million runs) would be
 /// left out without a word (#35). A running search with unsealed runs is refused.
 fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiError> {
+    use jetcarp_search::dashboard::digits;
     use jetcarp_search::explore::runs::Runs;
     use jetcarp_search::jobs::Lease;
     let lib = cx.library();
+    // The searches the version takes that have runs not yet sealed.
+    let mut unsealed = Vec::new();
     for job in lib.jobs().map_err(ApiError::engine)? {
         if job.kind != "explore" {
             continue;
@@ -576,32 +579,53 @@ fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiE
         let n = Runs::open_read(&path)
             .and_then(|r| r.unsealed_now())
             .map_err(ApiError::engine)?;
-        if n == 0 {
-            continue;
+        if n > 0 {
+            unsealed.push((job.id, uuid.to_string(), path, n));
         }
-        let refuse = |why: String| {
-            ApiError::conflict(format!(
-                "explore job {} is running ({why}), and its newest {n} runs are not sealed yet, so \
-                 the pack would leave them out",
-                job.id
-            ))
-            .hint("stop it first (jobs stop), then publish")
-        };
-        let lease = Lease::acquire(&lib, job.id).map_err(refuse)?;
-        if cx.registry().is_running(&lib, job.id) {
-            lease.release(false);
-            return Err(refuse("here".into()));
-        }
-        let r = Runs::open(&path).and_then(|mut c| c.seal_all());
-        lease.release(false);
-        let sealed: u64 = r.map_err(ApiError::engine)?.iter().map(|s| s.rows).sum();
-        p.log(&format!(
-            "explore job {} (search {uuid}): sealed its newest {sealed} runs first, so the pack \
-             carries every run",
-            job.id
-        ));
     }
-    Ok(())
+    // Every one held before any is sealed: a running one refuses the publish with nothing changed.
+    let mut held = Vec::new();
+    for (id, _, _, n) in &unsealed {
+        let running = match Lease::acquire(&lib, *id) {
+            Ok(l) => {
+                held.push(l);
+                cx.registry().is_running(&lib, *id)
+            }
+            Err(_) => true,
+        };
+        if running {
+            for l in held {
+                l.release(false);
+            }
+            return Err(ApiError::conflict(format!(
+                "explore job {id} is running, and its newest {} runs are not sealed yet, so the \
+                 pack would leave them out",
+                digits(*n)
+            ))
+            .hint("stop it first (jobs stop), then publish"));
+        }
+    }
+    let mut result = Ok(());
+    for (id, uuid, path, _) in &unsealed {
+        match Runs::open(path).and_then(|mut c| c.seal_all()) {
+            Ok(done) => {
+                let sealed: u64 = done.iter().map(|s| s.rows).sum();
+                p.log(&format!(
+                    "explore job {id} (search {uuid}): sealed its newest {} runs first, so the \
+                     pack carries every run",
+                    digits(sealed)
+                ));
+            }
+            Err(e) => {
+                result = Err(ApiError::engine(e));
+                break;
+            }
+        }
+    }
+    for l in held {
+        l.release(false);
+    }
+    result
 }
 
 /// `pack.publish`.

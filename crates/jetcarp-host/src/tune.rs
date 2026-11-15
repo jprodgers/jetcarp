@@ -281,7 +281,9 @@ pub(crate) fn scene_plan(
     max_cells: u64,
 ) -> ScenePlan {
     let design = stage::cell_pixels(slot.profile.cell_px, scale);
-    let (p, scene, _) = profiles::resolve(&slot.profile, &**lookup);
+    // A source that can't be had (a Quick Start entry missing here) shows Life, as in the host:
+    // its cards say so (#45).
+    let (p, scene, missing) = profiles::resolve(&slot.profile, &**lookup);
     let own = Size::px(design);
     let (sizes, note) = if !profiles::is_lattice(&scene) {
         // Its own size (as the scene shows it, at its own level), and each other level fitted to
@@ -302,6 +304,10 @@ pub(crate) fn scene_plan(
             vec![own],
             Some("not rebuilt to fill the screen, so its cell count is the scene's own".into()),
         )
+    };
+    let note = match (missing, note) {
+        (Some(m), Some(n)) => Some(format!("{m}; {n}")),
+        (m, n) => m.or(n),
     };
     ScenePlan {
         label: slot.label.clone(),
@@ -1149,6 +1155,31 @@ fn p95(times: &mut [f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Quick Start entry missing here shows Life, in the sweep as in the host, and its cards say
+    /// so (#45).
+    #[test]
+    fn a_missing_quick_start_entry_is_named_in_the_plan() {
+        let slot = jetcarp_display::rotation::Slot {
+            label: "Quick Start rule:nope".into(),
+            profile: profiles::Profile {
+                show: profiles::Show::QuickStart { id: "nope".into() },
+                ..Default::default()
+            },
+            stored: false,
+            end: vec![],
+            hold_s: 0.0,
+            schedule: None,
+            n: None,
+        };
+        let lookup: Lookup = Arc::new(|_: &str| None);
+        let plan = scene_plan(&slot, &lookup, [1280.0, 720.0], 1.0, 4_000_000);
+        let note = plan.note.unwrap_or_default();
+        assert!(
+            note.contains("no Quick Start entry nope; showing Life"),
+            "{note}"
+        );
+    }
 
     #[test]
     fn the_95th_percentile_and_monitor_canvases() {

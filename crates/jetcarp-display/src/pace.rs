@@ -5,7 +5,8 @@
 //! seem to stand still: Life's blinkers at 60 generations a second, drawn at 30 frames a second,
 //! show the same phase in every frame. So by default a screen draws as fast as its scene steps
 //! ([`Pacing::EveryGeneration`]): at the scene's speed, at least the host's frame rate, and at most
-//! the monitor's refresh rate. [`Pacing::LowPower`] instead caps each scene's speed at the frame
+//! 60 frames a second ([`DEFAULT_MAX_FPS`], or the monitor's refresh rate if lower; the settings'
+//! `max_fps` changes it). [`Pacing::LowPower`] instead caps each scene's speed at the frame
 //! rate, so a screen never steps more than one generation a frame.
 //!
 //! [`FrameClock`] says when each screen's next frame is due, and [`Pace::gens_due`] how many
@@ -19,8 +20,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum Pacing {
     /// Every generation is shown: a screen draws as fast as its scene steps, at least the host's
-    /// frame rate and at most the monitor's refresh rate. A scene faster than the refresh draws
-    /// several generations a frame.
+    /// frame rate and at most [`Pacer::top`] (60 frames a second by default, or the monitor's
+    /// refresh rate if lower). A faster scene draws several generations a frame.
     #[default]
     EveryGeneration,
     /// A scene's speed is capped at the host's frame rate, and its screen draws at that rate: at
@@ -34,7 +35,7 @@ impl Pacing {
     /// The app's words for it.
     pub fn label(self) -> &'static str {
         match self {
-            Pacing::EveryGeneration => "Show every generation (draws up to the monitor's refresh)",
+            Pacing::EveryGeneration => "Show every generation",
             Pacing::LowPower => "Low power: cap the speed at the frame rate",
         }
     }
@@ -44,9 +45,9 @@ impl Pacing {
         match self {
             Pacing::EveryGeneration => {
                 "Each screen draws as fast as its scene steps: at least the frames per second \
-                 above, at most the monitor's refresh rate. Life at 60 generations a second draws \
-                 60 frames a second, one generation a frame; a scene faster than the refresh draws \
-                 several generations a frame"
+                 above, at most the Up to choice below (60 frames a second, or the monitor's \
+                 refresh rate if lower). Life at 60 generations a second draws 60 frames a second, \
+                 one generation a frame; a faster scene draws several generations a frame"
             }
             Pacing::LowPower => {
                 "Each screen draws at the frames per second above, and no scene runs faster: at \

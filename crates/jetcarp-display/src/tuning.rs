@@ -652,7 +652,12 @@ impl TuneEvent {
                 rungs,
             } => format!(
                 "screen {screen}, scene {number} of {of}: {scene} at {} (size {rung} of up to {rungs})",
-                size.describe()
+                // A patch's tiles come to whatever size fits it to the screen: its level alone,
+                // until the measured line says how big they are.
+                match size.level {
+                    Some(l) => format!("level {l}"),
+                    None => size.describe(),
+                }
             ),
             TuneEvent::Measured { rung, .. } => format!("  {}", rung_line(rung)),
             TuneEvent::Scene { screen, result } => scene_line(*screen, result),
@@ -721,12 +726,14 @@ pub fn rung_line(r: &Rung) -> String {
 
 /// One scene's result, for people.
 pub fn scene_line(screen: usize, t: &TunedScene) -> String {
+    // As its cells show (a scene kept at its own size shows at its own rung's).
+    let shows = t.rung().map_or(t.size(), |r| r.size);
     let mut s = format!(
         "screen {screen}: {}: {} sizes; recommended {}; shows at {}{}",
         t.scene,
         t.rungs.len(),
         t.recommended.describe(),
-        t.size().describe(),
+        shows.describe(),
         if t.chosen { " (chosen)" } else { "" }
     );
     if let Some(r) = t.rung() {
@@ -1150,6 +1157,33 @@ mod tests {
         assert!(!serde_json::to_string(&old).unwrap().contains("fps_max"));
     }
 
+    /// A scene left at its own size is kept at the size it asks for (2.4 px) while its cells came
+    /// to another (2.6 px): its line names its own rung's size and cells, not two sizes and none.
+    #[test]
+    fn a_scene_at_its_own_size_reports_the_size_its_cells_show_at() {
+        let own = Rung {
+            size: Size::px(2.6),
+            cells: 1234,
+            fits: true,
+            own: true,
+            ..Rung::default()
+        };
+        let mut t = TunedScene {
+            scene: "Penrose waves".into(),
+            design_px: 2.4,
+            recommended: Size::px(2.6),
+            rungs: vec![own],
+            ..Default::default()
+        };
+        t.set_size(Size::px(2.4));
+        assert_eq!(t.rung().map(|r| r.cells), Some(1234));
+        let line = scene_line(0, &t);
+        assert!(
+            line.contains("recommended 2.6 px; shows at 2.6 px, 1,234 cells"),
+            "{line}"
+        );
+    }
+
     /// The submission clock's GPU share is an upper bound: it never fails a size or stops the
     /// sweep, while the GPU's own clocks do (#38).
     #[test]
@@ -1350,6 +1384,24 @@ mod tests {
             rung: 1,
             rungs: 9,
         };
+        // A patch's heading names its level only; its tiles' size is known once it is built.
+        let patch = TuneEvent::Rung {
+            screen: 0,
+            number: 2,
+            of: 7,
+            scene: "Penrose waves".into(),
+            size: Size {
+                px: 20.2,
+                level: Some(4),
+            },
+            rung: 1,
+            rungs: 3,
+        };
+        assert!(
+            patch.describe().contains("at level 4 (size 1"),
+            "{}",
+            patch.describe()
+        );
         let line = serde_json::to_string(&e).unwrap();
         assert!(line.contains(r#""event":"rung""#), "{line}");
         assert_eq!(serde_json::from_str::<TuneEvent>(&line).unwrap(), e);

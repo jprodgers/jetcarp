@@ -53,7 +53,7 @@ pub enum LockArg {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum PacingArg {
     /// Show every generation: a screen draws as fast as its scene steps, at least `fps` and at
-    /// most the monitor's refresh rate (the default).
+    /// most `max-fps` (60, or the monitor's refresh rate if lower) (the default).
     EveryGeneration,
     /// Low power: a screen draws at `fps`, and no scene runs faster (at most one generation a
     /// frame).
@@ -150,8 +150,9 @@ pub enum HostCmd {
     },
     /// Frames per second, at least (saved; default 30).
     ///
-    /// Every screen draws at least this often, and a faster scene faster, up to its monitor's
-    /// refresh rate; with `pacing low-power`, every screen draws at this rate (see `pacing`).
+    /// Every screen draws at least this often, and a faster scene faster, up to `max-fps` (60, or
+    /// the monitor's refresh rate if lower); with `pacing low-power`, every screen draws at this
+    /// rate (see `pacing`).
     Fps {
         /// 1 to 240.
         fps: f32,
@@ -273,7 +274,10 @@ fn status_lines(v: &Value) -> Vec<String> {
         } else {
             let mut n = format!("generation {} · {} cells", st["generation"], st["cells"]);
             if let Some(px) = st["cell_px"].as_f64().filter(|p| *p > 0.0) {
-                n.push_str(&format!(" of {px} px"));
+                n.push_str(&format!(
+                    " of {} px",
+                    jetcarp_display::host_settings::round_px(px as f32)
+                ));
                 if st["tuned"] == true {
                     n.push_str(" (tuned)");
                 }

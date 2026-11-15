@@ -118,13 +118,13 @@ $ jetcarp host rotation "My wallpaper"
 saved; the host is not running
 $ jetcarp host start
 running, pid 862859, up 0.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.815265655517578 px · 30 fps, 30 generations a second · window
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · window
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host wallpaper on
 running, pid 862859, up 4.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.815265655517578 px · 30 fps, 30 generations a second · wallpaper
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · wallpaper
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)

@@ -291,10 +291,16 @@ impl TunedScene {
         self.level = size.level;
     }
 
-    /// The rung at the size it shows at.
+    /// The rung at the size it shows at. A scene left at its own size is kept at the size it
+    /// asks for, not the size its cells came to (a patch's tiles fit it to the screen), so that is
+    /// its own rung.
     pub fn rung(&self) -> Option<&Rung> {
         let s = self.size();
-        self.rungs.iter().find(|r| r.size.same(&s))
+        self.rungs.iter().find(|r| r.size.same(&s)).or_else(|| {
+            (s.level.is_none() && (s.px - self.design_px).abs() < 0.01)
+                .then(|| self.rungs.iter().find(|r| r.own))
+                .flatten()
+        })
     }
 }
 

@@ -2580,7 +2580,7 @@ Options:
 ```text
 Frames per second, at least (saved; default 30).
 
-Every screen draws at least this often, and a faster scene faster, up to its monitor's refresh rate; with `pacing low-power`, every screen draws at this rate (see `pacing`).
+Every screen draws at least this often, and a faster scene faster, up to `max-fps` (60, or the monitor's refresh rate if lower); with `pacing low-power`, every screen draws at this rate (see `pacing`).
 
 Usage: jetcarp host fps [OPTIONS] <FPS>
 
@@ -2608,7 +2608,7 @@ Usage: jetcarp host pacing [OPTIONS] <MODE>
 Arguments:
   <MODE>
           Possible values:
-          - every-generation: Show every generation: a screen draws as fast as its scene steps, at least `fps` and at most the monitor's refresh rate (the default)
+          - every-generation: Show every generation: a screen draws as fast as its scene steps, at least `fps` and at most `max-fps` (60, or the monitor's refresh rate if lower) (the default)
           - low-power:        Low power: a screen draws at `fps`, and no scene runs faster (at most one generation a frame)
 
 Options:
