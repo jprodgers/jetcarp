@@ -1,0 +1,36 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "Hodgepodge machine",
+  "description": "Gerhardt-Schuster infection model; spiral waves.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 180,
+        "h": 120
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": "8358382839418910785",
+  "cas": [
+    {
+      "id": 1,
+      "name": "Hodgepodge machine",
+      "rule": "Hodgepodge 200/3/3/28",
+      "neighborhood": "touch",
+      "enabled": true,
+      "affects_others": false,
+      "steps_per_gen": 1,
+      "palette": "Tide",
+      "seed": "random_states"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "313637049f65b90f",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": false
+  }
+}

@@ -4,6 +4,15 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24191765.svg)](https://doi.org/10.5281/zenodo.24191765)
 
+<picture>
+  <source srcset="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/readme/six-worlds-still.webp" media="(prefers-reduced-motion: reduce)">
+  <img src="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/readme/six-worlds.webp" width="906" alt="Six cellular automata on six tilings, each growing from its starting pattern: a rainbow tree of a layered rule spreading across the aperiodic spectre tiling; a cyclic automaton on squares turning noise into one large rainbow spiral; JACA's two signs sorting into blue and magenta territories with bright fronts on the Cairo pentagon tiling; Hodgepodge's blue and white spirals on squares; JACA on a 2-uniform tiling of triangles, squares, hexagons and dodecagons, its territories joined by rope-like fronts; and JACA's green and orange territories on a patch of Penrose rhombs.">
+</picture>
+
+*Six of JETCARP's built-in scenes, each run from its starting pattern: a layered rule on the
+aperiodic spectre tiling, a cyclic automaton and Hodgepodge on squares, and JACA, JETCARP's
+two-sign automaton, on the Cairo pentagons, a 2-uniform tiling and Penrose rhombs.*
+
 JETCARP runs cellular automata on almost any tiling of the plane: squares and hexagons, all eleven
 Archimedean tilings, the 1,248 k-uniform tilings up to k = 6, 81 isohedral tile types, tiles you
 draw yourself, and the aperiodic Penrose, hat and spectre tilings. Several automata can run at
@@ -11,8 +20,14 @@ once, on shared or separate cell fields. It has a graphical app, a command line,
 language, and a Model Context Protocol (MCP) server, plus tools that search for spaceships,
 oscillators and other patterns and keep verified catalogues of what they find.
 
-> **Status:** 0.4.0 is the first public release. Before 1.0, a release may still change the scene
-> format, the command line, the scripting API and the MCP tools.
+<img src="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/getting-started/tour-quick-start.webp" width="906" alt="The JETCARP app's Quick Start: a grid of running examples (JACA battles on Penrose rhombs, cyclic and rock-paper-scissors spirals, a WireWorld adder, forest fire, Lenia, Hodgepodge, turmites and layered rules), with a sidebar of categories, sources, tilings and rule families, a search box and a count of 1,249 entries.">
+
+*The app opens on the Quick Start: over a thousand running examples, by category, tiling and rule
+family. The [book](https://jprodgers.github.io/jetcarp/) has the guides, tutorials and
+references.*
+
+> **Status:** before 1.0, a release may still change the scene format, the command line, the
+> scripting API and the MCP tools.
 
 ## Installing
 

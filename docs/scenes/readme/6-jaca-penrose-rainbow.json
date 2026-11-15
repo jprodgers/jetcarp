@@ -1,0 +1,39 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "JACA rainbow fronts (Penrose rhombs)",
+  "description": "Still territories and rainbow fronts on Penrose rhombs. Found by a JACA rule search.",
+  "tiling": {
+    "family": "penrose-rhomb",
+    "size": {
+      "level": 5
+    },
+    "boundary": "dead"
+  },
+  "rng_state": 28,
+  "cas": [
+    {
+      "id": 1,
+      "name": "JACA B267/S1,3,4,6,7,8,9,10",
+      "rule": "JACA B267/S1,3,4,6,7,8,9,10",
+      "neighborhood": "touch",
+      "enabled": true,
+      "affects_others": false,
+      "steps_per_gen": 1,
+      "palette": "Moss",
+      "seed": {
+        "signed": {
+          "density": 0.2,
+          "negative": 0.5
+        }
+      },
+      "palette_neg": "Autumn"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "22f7a44aa667048e",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": true
+  }
+}

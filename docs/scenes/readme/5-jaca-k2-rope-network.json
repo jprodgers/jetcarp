@@ -1,0 +1,45 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "JACA glowing rope network (2-uniform)",
+  "description": "Fronts become a network of bright ropes over dark, still territories. Found by a JACA rule search.",
+  "tiling": {
+    "family": "periodic",
+    "params": {
+      "catalog": "k2-001"
+    },
+    "size": {
+      "rect": {
+        "w": 51,
+        "h": 39
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 32,
+  "cas": [
+    {
+      "id": 1,
+      "name": "JACA B23/S01346",
+      "rule": "JACA B23/S01346",
+      "neighborhood": "touch",
+      "enabled": true,
+      "affects_others": false,
+      "steps_per_gen": 1,
+      "palette": "Aurora",
+      "seed": {
+        "signed": {
+          "density": 0.2,
+          "negative": 0.5
+        }
+      },
+      "palette_neg": "Lava"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "f2f2ff6e1c1ffc0b",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": false
+  }
+}

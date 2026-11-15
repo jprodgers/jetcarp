@@ -1,0 +1,36 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "Cyclic CA",
+  "description": "16 colours; each advances when a neighbour holds the next one. Grows spirals (edge neighbours).",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 180,
+        "h": 120
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": "17637529629041916505",
+  "cas": [
+    {
+      "id": 1,
+      "name": "Cyclic CA",
+      "rule": "Cyclic 16/1",
+      "neighborhood": "edge",
+      "enabled": true,
+      "affects_others": false,
+      "steps_per_gen": 1,
+      "palette": "Prism",
+      "seed": "random_states"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "1b8563409a8524c7",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": false
+  }
+}

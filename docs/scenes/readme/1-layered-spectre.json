@@ -1,0 +1,34 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "Layered parity on the Spectre",
+  "description": "A Wolfram-style rule grown outward in layers from one tile: each tile is the XOR of its parents in the previous layer. Layers are distance from the seed, so this runs on any tiling, here the aperiodic Spectre.",
+  "tiling": {
+    "family": "spectre",
+    "size": {
+      "level": 5
+    },
+    "boundary": "dead"
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "id": 1,
+      "name": "Layered parity",
+      "rule": "Layer 2/01",
+      "neighborhood": "touch",
+      "enabled": true,
+      "affects_others": true,
+      "steps_per_gen": 1,
+      "palette": "Prism",
+      "seed": "center",
+      "color_by": "row"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "4515e355d1827aae",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": true
+  }
+}

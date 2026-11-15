@@ -1,0 +1,42 @@
+{
+  "jetcarp_version": "0.4.2-rc.1",
+  "format": 1,
+  "name": "JACA rainbow fronts (Cairo)",
+  "description": "Still, aging territories with rainbow fronts on the Cairo pentagon tiling. Found by a JACA rule search.",
+  "tiling": {
+    "family": "cairo",
+    "size": {
+      "rect": {
+        "w": 95,
+        "h": 63
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 28,
+  "cas": [
+    {
+      "id": 1,
+      "name": "JACA B27/S03456",
+      "rule": "JACA B27/S03456",
+      "neighborhood": "touch",
+      "enabled": true,
+      "affects_others": false,
+      "steps_per_gen": 1,
+      "palette": "Deep Sea",
+      "seed": {
+        "signed": {
+          "density": 0.45,
+          "negative": 0.5
+        }
+      },
+      "palette_neg": "Thermal"
+    }
+  ],
+  "record": {
+    "generation": 0,
+    "hash": "c37fe45e61b236d7",
+    "jetcarp_version": "0.4.2-rc.1",
+    "dead_boundary": false
+  }
+}
