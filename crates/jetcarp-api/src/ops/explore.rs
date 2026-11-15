@@ -43,7 +43,7 @@ use jetcarp_store::library::JobRow;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -115,6 +115,10 @@ pub struct RunLine {
     /// measures for other families, or for runs stored before them and not replayed since).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measures: Option<BTreeMap<String, Option<f64>>>,
+    /// Listed by review (`reviewed`): its verdicts (one per rater, keep first), and a star when
+    /// one was given: `keep ★`, `maybe, drop`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review: Option<String>,
 }
 
 /// The measures `search.runs` lists on request, in order.
@@ -229,6 +233,7 @@ impl RunLine {
             smooth: f.smooth,
             category: atlas::categorize(&r.fate, &f, r.cand.fam, r.cand.gens).into(),
             measures: None,
+            review: None,
         }
     }
 
@@ -424,9 +429,14 @@ impl Report for RunList {
                     );
                 }
                 _ => {
+                    let review = r
+                        .review
+                        .as_ref()
+                        .map(|v| format!("  [{v}]"))
+                        .unwrap_or_default();
                     let _ = writeln!(
                         s,
-                        "{:>9}  {:>5.2}  {:<7} {:<18} {:<16} {}",
+                        "{:>9}  {:>5.2}  {:<7} {:<18} {:<16} {}{review}",
                         r.id, r.score, r.fate, r.family, r.tiling, r.rule
                     );
                 }
@@ -547,6 +557,38 @@ fn with_replays(db: &std::path::Path, rows: &mut [RunRow]) -> Result<(), ApiErro
     Ok(())
 }
 
+/// Each listed run's verdicts (one per rater, keep first) and its star, in words (#33).
+fn review_words(lib: &Library, search: &str, runs: &mut [RunLine]) -> Result<(), ApiError> {
+    let mut verdicts: HashMap<i64, Vec<String>> = HashMap::new();
+    for r in lib.run_reviews(search).map_err(ApiError::engine)? {
+        let v = verdicts.entry(r.run).or_default();
+        if !v.contains(&r.verdict) {
+            v.push(r.verdict);
+        }
+    }
+    let starred: HashSet<i64> = lib
+        .run_stars(search)
+        .map_err(ApiError::engine)?
+        .iter()
+        .map(|s| s.run)
+        .collect();
+    let rank = |v: &str| reviews::VERDICTS.iter().position(|x| *x == v).unwrap_or(9);
+    for l in runs {
+        let mut v = verdicts.remove(&l.id).unwrap_or_default();
+        v.sort_by_key(|x| rank(x));
+        let mut text = v.join(", ");
+        if starred.contains(&l.id) {
+            text = if text.is_empty() {
+                "★".into()
+            } else {
+                format!("{text} ★")
+            };
+        }
+        l.review = (!text.is_empty()).then_some(text);
+    }
+    Ok(())
+}
+
 /// The runs a filter names, in order, at most `limit` (`reviewed` read from the library).
 fn find(lib: &Library, c: &Db, f: &RunFilter, limit: usize) -> Result<Vec<RunRow>, ApiError> {
     let mut f = f.clone();
@@ -596,10 +638,14 @@ impl Op for SearchRuns {
             rs.retain(|r| feat_from_blob(&r.feats).movers >= m);
         }
         rs.truncate(limit);
+        let mut runs: Vec<RunLine> = rs.iter().map(|r| RunLine::with(r, &names)).collect();
+        if a.reviewed.is_some() {
+            review_words(&lib, &c.uuid(), &mut runs)?;
+        }
         Ok(RunList {
             job: row.id,
             db: path.display().to_string(),
-            runs: rs.iter().map(|r| RunLine::with(r, &names)).collect(),
+            runs,
             csv: None,
             written: None,
             measures: names,
@@ -1200,6 +1246,7 @@ fn gpu_of(be: &mut Option<Box<dyn Backend>>) -> Option<&mut dyn Backend> {
 /// The GPU batch stepper for replays, when asked for (or the GPU setting says so) and there is
 /// one (a note when there is none).
 fn replay_backend(cx: &Ctx, gpu: Option<bool>, p: &dyn Progress) -> Option<Box<dyn Backend>> {
+    super::search::note_gpu_off(cx, gpu, None, p);
     if !super::search::job_gpu(cx, gpu, None, true) {
         return None;
     }
@@ -1323,19 +1370,7 @@ fn spec_model(row: &JobRow) -> Result<Option<ScoreModel>, ApiError> {
 
 /// What a score is called in reports.
 fn model_name(m: Option<&ScoreModel>) -> String {
-    match m {
-        None => "the built-in score".into(),
-        Some(m) => {
-            let fam = m
-                .family
-                .as_deref()
-                .map_or(String::new(), |f| format!(" (for {f} runs)"));
-            match &m.name {
-                Some(n) => format!("the score model '{n}'{fam}"),
-                None => format!("a fitted score model{fam}"),
-            }
-        }
-    }
+    m.map_or("the built-in score".into(), ScoreModel::describe)
 }
 
 /// What rescoring did.
@@ -1495,9 +1530,14 @@ impl Op for SearchRescore {
         let r = r?;
         // The saved progress shows the rebuilt archive at the job's next run; say so now.
         let mut prog = row.progress.clone();
-        if prog.is_object() {
-            prog["elites"] = r.elites.into();
-            prog["niches"] = r.niches.into();
+        if let Some(o) = prog.as_object_mut() {
+            o.insert("elites".into(), r.elites.into());
+            o.insert("niches".into(), r.niches.into());
+            // The score its runs have now (a model given here, else the one it had).
+            match &model {
+                Some(m) => o.insert("score".into(), m.describe().into()),
+                None => o.remove("score"),
+            };
             let _ = lib.update_job(row.id, None, Some(&prog), None);
         }
         Ok(Rescored {

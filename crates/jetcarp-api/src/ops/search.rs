@@ -1561,6 +1561,14 @@ pub(crate) fn job_gpu(cx: &Ctx, run: Option<bool>, saved: Option<bool>, auto: bo
         })
 }
 
+/// Logs why a run or job that asked for the GPU runs on the processor when `JETCARP_GPU=off`
+/// overrides the request (#31).
+pub(crate) fn note_gpu_off(cx: &Ctx, run: Option<bool>, saved: Option<bool>, p: &dyn Progress) {
+    if run.or(saved) == Some(true) && cx.platform.gpu_forced() == Some(GpuMode::Off) {
+        p.log("the GPU was asked for, but JETCARP_GPU=off: running on the processor");
+    }
+}
+
 /// A saved spec's request: `gpu` true, `cpu` true, or neither.
 fn saved_gpu(gpu: bool, cpu: bool) -> Option<bool> {
     match (gpu, cpu) {
@@ -1584,6 +1592,14 @@ pub(crate) fn explore_run(
         && let Some(d) = jetcarp_search::explore::breed::describe(&spec.search.parents)
     {
         p.log(&format!("parents: {d}"));
+    }
+    if row.status != JobStatus::Done
+        && let Some(m) = &spec.search.score
+    {
+        p.log(&format!("score: {}", m.describe()));
+    }
+    if row.status != JobStatus::Done {
+        note_gpu_off(cx, gpu, saved_gpu(spec.gpu, spec.cpu), p);
     }
     if !job_gpu(cx, gpu, saved_gpu(spec.gpu, spec.cpu), true) || row.status == JobStatus::Done {
         return Ok(ExploreRun::default());
@@ -2109,6 +2125,9 @@ fn pile_toppler(
     let js: PileJobSpec = serde_json::from_value(row.spec.clone())
         .map_err(|e| ApiError::engine(format!("job {}: {e}", row.id)))?;
     let big = js.pile.grains >= pile::GPU_PILE_GRAINS;
+    if row.status != JobStatus::Done {
+        note_gpu_off(cx, how.gpu, saved_gpu(js.gpu, js.cpu), p);
+    }
     if row.status == JobStatus::Done || !job_gpu(cx, how.gpu, saved_gpu(js.gpu, js.cpu), big) {
         return Ok(None);
     }
@@ -2139,6 +2158,9 @@ fn run_options(
     how: &How,
     p: &dyn Progress,
 ) -> Result<RunOptions, ApiError> {
+    if row.kind == "hunt" {
+        note_gpu_off(cx, how.gpu, None, p);
+    }
     let gpu = if row.kind == "hunt" && job_gpu(cx, how.gpu, None, true) {
         // Without a usable GPU the hunt runs on the CPU, with the same finds.
         match cx.platform.soup_batcher() {

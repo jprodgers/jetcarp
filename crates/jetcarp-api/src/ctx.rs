@@ -466,6 +466,10 @@ pub fn step_world(
     if gens > 0 {
         w.apply(jetcarp_core::Command::Step { gens })?;
     }
+    // A request for the GPU that JETCARP_GPU=off overrode says so (#31).
+    if asked == Some(true) && platform.gpu_forced() == Some(GpuMode::Off) {
+        return Ok(format!("{cpu}; the GPU was asked for, but JETCARP_GPU=off"));
+    }
     Ok(cpu)
 }
 

@@ -654,6 +654,9 @@ pub fn rows_on(
 
 /// A stratified sample of screened runs for a person to rate: spread over categories and
 /// families, half strong and half random (drawn with `seed`), so ratings can calibrate the score.
+/// One run per family and tiling first; when that falls short of `n` (a search on a few tilings,
+/// such as a JACA search from parents: #29), more runs of the same tilings, each with a rule of its
+/// own.
 pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'static str)>, String> {
     let strong = db.rows(&db.ids(&RunFilter::default(), 12_000)?)?;
     let mut pool: Vec<i64> = db.scan(
@@ -698,7 +701,7 @@ pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'sta
     let per = (n / cats.len().max(1)).max(1);
     let mut seen: std::collections::HashSet<(Fam, String)> = Default::default();
     let mut out = Vec::new();
-    for c in cats {
+    for &c in &cats {
         let (a, b) = by.get_mut(c).unwrap();
         let mut got = 0;
         for k in 0..per * 40 {
@@ -717,6 +720,34 @@ pub fn taste_sample(db: &Runs, n: usize, seed: u64) -> Result<Vec<(RunRow, &'sta
             out.push((r, c));
             got += 1;
         }
+    }
+    let mut rules: std::collections::HashSet<(Fam, String, String)> = out
+        .iter()
+        .map(|(r, _)| (r.cand.fam, r.cand.tiling.clone(), r.cand.rule.clone()))
+        .collect();
+    let (mut k, mut idle) = (0usize, 0usize);
+    while out.len() < n && idle < cats.len() {
+        let c = cats[k % cats.len()];
+        // Strong and random by turns, a round of the categories each.
+        let strong_turn = (k / cats.len()).is_multiple_of(2);
+        k += 1;
+        let (a, b) = by.get_mut(c).unwrap();
+        let v: &mut Vec<RunRow> = if (strong_turn && !a.is_empty()) || b.is_empty() {
+            a
+        } else {
+            b
+        };
+        let mut picked = false;
+        while !v.is_empty() {
+            let i = rng.below(v.len() as u64) as usize;
+            let r = v.swap_remove(i);
+            if rules.insert((r.cand.fam, r.cand.tiling.clone(), r.cand.rule.clone())) {
+                out.push((r, c));
+                picked = true;
+                break;
+            }
+        }
+        idle = if picked { 0 } else { idle + 1 };
     }
     Ok(out)
 }

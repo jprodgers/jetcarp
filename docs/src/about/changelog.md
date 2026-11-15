@@ -87,6 +87,13 @@ that will declare them stable.
 - **The search runs reference said `cells` is about the grid's size.** It is the size asked for; an
   aperiodic patch, sized by level, can have half as many cells or twice as many. The reference says
   so. ([#27](https://github.com/jprodgers/jetcarp/issues/27))
+- **`jobs clips --sample` gave one clip per tiling at most.** Its sample took one run per family
+  and tiling, so a search on few tilings (a JACA search from parents gave 13 for any number asked)
+  had too few clips to rate. It now takes more runs of the same tilings, each with a rule of its
+  own, once every family and tiling has one. ([#29](https://github.com/jprodgers/jetcarp/issues/29))
+- **`jobs runs --reviewed` didn't show the verdicts.** It now gives each listed run's verdicts and
+  star (`[keep ★]`, `[maybe, drop]`; `review` in the JSON).
+  ([#33](https://github.com/jprodgers/jetcarp/issues/33))
 
 ### Changed
 

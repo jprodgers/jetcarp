@@ -250,6 +250,10 @@ pub struct ExploreProgress {
     /// The parents taken from another job (`--parents-from`), in words.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parents: Option<String>,
+    /// The score model its runs are scored by (`--score`, or the last rescore), in words; none:
+    /// the built-in score.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<String>,
     pub line: String,
 }
 
@@ -685,6 +689,7 @@ fn progress_of(r: &Running, backend: &str, status: JobStatus) -> Value {
         build_minutes: r.spec.build.as_ref().map(|b| b.minutes),
         published: r.published.clone(),
         parents: crate::explore::breed::describe(&r.spec.search.parents),
+        score: r.spec.search.score.as_ref().map(|m| m.describe()),
         line: String::new(),
     };
     p.line = line(&p);

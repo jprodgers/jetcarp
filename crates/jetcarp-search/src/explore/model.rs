@@ -255,6 +255,18 @@ fn known_term(name: &str) -> bool {
 }
 
 impl ScoreModel {
+    /// The model in words: "the score model 'Jimmie, jaca on explore job 2' (for jaca runs)".
+    pub fn describe(&self) -> String {
+        let fam = self
+            .family
+            .as_deref()
+            .map_or(String::new(), |f| format!(" (for {f} runs)"));
+        match &self.name {
+            Some(n) => format!("the score model '{n}'{fam}"),
+            None => format!("a fitted score model{fam}"),
+        }
+    }
+
     /// Read a model from JSON text, checked.
     pub fn from_json(text: &str) -> Result<ScoreModel, String> {
         let m: ScoreModel =

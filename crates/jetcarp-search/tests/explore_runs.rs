@@ -360,6 +360,27 @@ fn queries_over_segments_match_the_same_runs_unsealed() {
         .collect();
     assert!(!ta.is_empty());
     assert_eq!(ta, tb);
+    // More than one per family and tiling when asked for more (12 such pairs here; #29): each a
+    // run of its own with a rule of its own, after one of every pair.
+    let more = atlas::taste_sample(&a, 40, 5).unwrap();
+    assert_eq!(more.len(), 40);
+    let ids: std::collections::HashSet<i64> = more.iter().map(|x| x.0.id).collect();
+    assert_eq!(ids.len(), 40);
+    let keys: std::collections::HashSet<(String, String, String)> = more
+        .iter()
+        .map(|x| {
+            let c = &x.0.cand;
+            (c.fam.name().to_string(), c.tiling.clone(), c.rule.clone())
+        })
+        .collect();
+    assert_eq!(keys.len(), 40);
+    let pairs = |v: &[(jetcarp_search::explore::sheet::RunRow, &str)]| -> std::collections::HashSet<(String, String)> {
+        v.iter()
+            .map(|x| (x.0.cand.fam.name().to_string(), x.0.cand.tiling.clone()))
+            .collect()
+    };
+    let first = atlas::taste_sample(&a, 24, 5).unwrap();
+    assert!(pairs(&more).is_superset(&pairs(&first)));
     let opts = atlas::AtlasOpts {
         min_score: 0.0,
         ..Default::default()

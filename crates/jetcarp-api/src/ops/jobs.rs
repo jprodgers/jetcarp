@@ -219,6 +219,9 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
             if let Some(d) = &p.parents {
                 let _ = writeln!(s, "  parents: {d}");
             }
+            if let Some(m) = &p.score {
+                let _ = writeln!(s, "  score: {m}");
+            }
             if let Some(l) = &p.loaded {
                 let _ = writeln!(
                     s,
@@ -904,6 +907,7 @@ impl Op for JobsWait {
         let lib = cx.library();
         let t0 = Instant::now();
         let timeout = a.timeout_s.map(|t| t.max(0.0));
+        let mut last = String::new();
         loop {
             let v = view(cx, &lib, a.job, None)?;
             let waited = t0.elapsed().as_secs_f64();
@@ -939,7 +943,12 @@ impl Op for JobsWait {
                     error: v.error.clone().or_else(|| text("error")),
                 });
             }
-            p.report(v.done, v.total, &v.line);
+            // Only a line that changed: a run in another process writes every few seconds, and a
+            // stopping one not at all (#32).
+            if v.line != last {
+                p.report(v.done, v.total, &v.line);
+                last = v.line.clone();
+            }
             // A run here is followed closely; one in another process writes every few seconds.
             std::thread::sleep(Duration::from_millis(if v.here { 200 } else { 500 }));
         }
