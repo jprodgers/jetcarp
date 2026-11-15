@@ -156,6 +156,12 @@ pub struct Core {
     /// None in a screen saver, which nothing controls.
     listener: Option<Listener>,
     gpu: Option<SharedGpu>,
+    /// The desktop background's GPU policy as last read (its own choice, the shared setting, or
+    /// `JETCARP_GPU`), read again with the settings, so `status` says what each screen steps on
+    /// now and why (#75).
+    policy: select::Policy,
+    /// The log line naming the GPU and the policy, taken back when the policy changes.
+    gpu_note: Option<String>,
     lookup: Lookup,
     started: Instant,
     last_memory_check: f64,
@@ -372,12 +378,15 @@ impl Core {
         listener: Option<Listener>,
     ) -> Result<Core, String> {
         let lookup = jetcarp_display::stage::library_lookup();
+        let policy = settings.gpu_policy();
         let mut core = Core {
             settings,
             screens: vec![],
             rotation_override: rotation,
             listener,
             gpu: None,
+            policy,
+            gpu_note: None,
             lookup,
             started: Instant::now(),
             last_memory_check: 0.0,
@@ -443,7 +452,7 @@ impl Core {
                 &g.adapter,
                 g.device.clone(),
                 g.queue.clone(),
-                self.settings.gpu_policy(),
+                self.policy.clone(),
             ),
             None => SimBackend::unavailable("no GPU".into()),
         }
@@ -531,22 +540,32 @@ impl Core {
 
     /// The GPU is ready: stages step on it from now on.
     pub fn attach_gpu(&mut self, gpu: Option<SharedGpu>) {
-        match &gpu {
-            None => self.note("no GPU found; running on the CPU"),
-            Some(g) => {
-                let fallback = g.fallback.as_ref().map(|f| format!(" ({f})"));
-                self.note(format!(
-                    "GPU: {}{}; GPU simulation {}",
-                    jetcarp_gpu::describe(&g.adapter.get_info()),
-                    fallback.unwrap_or_default(),
-                    self.settings.gpu_policy().describe()
-                ));
-            }
+        if gpu.is_none() {
+            self.note("no GPU found; running on the CPU");
         }
         self.gpu = gpu;
+        self.note_gpu();
         for i in 0..self.screens.len() {
             self.screens[i].sim = self.new_sim();
         }
+    }
+
+    /// Notes the GPU and the policy it steps by, in place of the line noted before: the policy
+    /// changes when its settings do, and the start-up line would go on saying the old one (#75).
+    fn note_gpu(&mut self) {
+        let Some(g) = &self.gpu else { return };
+        let fallback = g.fallback.as_ref().map(|f| format!(" ({f})"));
+        let line = format!(
+            "GPU: {}{}; GPU simulation {}",
+            jetcarp_gpu::describe(&g.adapter.get_info()),
+            fallback.unwrap_or_default(),
+            self.policy.describe()
+        );
+        if let Some(old) = self.gpu_note.take() {
+            self.retract(&old);
+        }
+        self.gpu_note = Some(line.clone());
+        self.note(line);
     }
 
     /// The GPU was lost (a driver reset, sometimes after sleep): every world is built again, and
@@ -868,6 +887,9 @@ impl Core {
                 "hidden": self.hidden(s),
                 "frames": s.frames,
                 "stage": s.stage.status(),
+                // What its world steps on now, and why, as the settings say since they last
+                // changed (#75).
+                "simulation": s.sim.report(&self.policy.origin()),
             })).collect::<Vec<_>>(),
             "log": self.log,
         })
@@ -910,9 +932,16 @@ impl Core {
             self.note(w);
         }
         self.settings = settings;
+        // The GPU choice may have changed: its own, or the shared setting it follows. Read before
+        // the screens are built, so a new screen's simulator steps by it too.
+        let policy = self.settings.gpu_policy();
+        let changed = policy != self.policy;
+        self.policy = policy;
+        if changed {
+            self.note_gpu();
+        }
         let built = self.build_screens();
-        // The GPU choice may have changed: its own, or the shared setting it follows.
-        let mode = self.settings.gpu_policy().mode;
+        let mode = self.policy.mode;
         for s in &mut self.screens {
             s.sim.mode = mode;
         }

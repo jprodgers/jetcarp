@@ -297,6 +297,47 @@ fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
     assert_eq!(saved["screens"][0]["place"], "wallpaper");
 }
 
+/// `status` says what each screen's world steps on now, and follows the GPU setting when it
+/// changes: the desktop background's own choice, off, puts it on the processor and says whose
+/// choice that was, and the log's GPU line is the new one, not the one from start-up (#75).
+#[test]
+fn status_follows_the_gpu_setting() {
+    let h = Host::start("simulation", Some("Wolfram series"));
+    let v = h.wait(
+        |v| v["screens"][0]["simulation"]["on"].is_string(),
+        "the screen's simulation",
+    );
+    let gpu = v["gpu"].as_str().map(str::to_string);
+    let settings = json!({"gpu": "off", "screens": [{"rotation": "Wolfram series"}]});
+    std::fs::write(
+        h.home.join("config/jetcarp/host.json"),
+        settings.to_string(),
+    )
+    .unwrap();
+    let v = h.call(json!({"action": "reload"})).unwrap();
+    let sim = &v["screens"][0]["simulation"];
+    assert_eq!(sim["on"], "cpu", "{v}");
+    let log = v["log"].to_string();
+    match gpu {
+        Some(_) => {
+            assert_eq!(
+                sim["why"],
+                "GPU simulation off, from the desktop background's own setting"
+            );
+            assert!(
+                log.contains("GPU simulation off (the desktop background's own setting)"),
+                "{log}"
+            );
+            assert_eq!(
+                log.matches("GPU simulation").count(),
+                1,
+                "the start-up line is taken back: {log}"
+            );
+        }
+        None => assert_eq!(sim["why"], "GPU simulation unavailable: no GPU"),
+    }
+}
+
 /// `jetcarp host start` with its output captured, as `| tee`, `$(...)` and CI steps do: the output
 /// ends when the command does, not when the host it started stops, because the host gets none of
 /// the command's handles.

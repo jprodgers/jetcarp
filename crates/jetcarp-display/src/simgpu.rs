@@ -200,6 +200,80 @@ impl SimBackend {
             (Last::Idle, true) => SimStatus::Waiting,
         }
     }
+
+    /// What the world steps on now, and why, for a status report (the background host's, #75).
+    /// `origin` says where the GPU policy came from (`the desktop background's own setting`,
+    /// [`Policy::origin`]), for when it is off. It follows the mode as soon as it changes: a
+    /// world the policy has just turned off reads as on the processor before its next step.
+    pub fn report(&self, origin: &str) -> SimReport {
+        let cpu = |why: String| SimReport {
+            on: "cpu",
+            adapter: None,
+            why: Some(why),
+        };
+        let name = || Some(self.name()).filter(|n| !n.is_empty());
+        if let Some(e) = &self.unavailable {
+            return cpu(format!("GPU simulation unavailable: {e}"));
+        }
+        if !self.available() {
+            return cpu("no GPU".into());
+        }
+        if self.mode == Mode::Off {
+            return cpu(format!("GPU simulation off, from {origin}"));
+        }
+        if !self.on {
+            return cpu(
+                "the scene keeps to the processor (its profile's GPU switch is off)".into(),
+            );
+        }
+        match &self.last {
+            Last::Gpu => SimReport {
+                on: "gpu",
+                adapter: name(),
+                why: None,
+            },
+            Last::Small => cpu("automatic, and the world is too small to be worth the GPU".into()),
+            Last::Cpu(why) => cpu(format!("the GPU can't step this world: {why}")),
+            Last::Idle => SimReport {
+                on: "waiting",
+                adapter: name(),
+                why: Some(format!(
+                    "not stepped yet (GPU simulation {})",
+                    self.mode.name()
+                )),
+            },
+        }
+    }
+}
+
+/// What a world steps on now, and why ([`SimBackend::report`]): `host status`'s `simulation`.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SimReport {
+    /// `gpu`, `cpu`, or `waiting`: the GPU is wanted and nothing has been stepped yet.
+    pub on: &'static str,
+    /// The adapter, on the GPU or waiting for it.
+    pub adapter: Option<String>,
+    /// Why it is on the processor, or waiting.
+    pub why: Option<String>,
+}
+
+impl SimReport {
+    /// `GPU (Intel(R) UHD Graphics)`, `CPU: GPU simulation off, from the desktop background's own
+    /// setting`.
+    pub fn words(&self) -> String {
+        report_words(self.on, self.adapter.as_deref(), self.why.as_deref())
+    }
+}
+
+/// A [`SimReport`]'s words from its fields, as `host status` reads them from the host's JSON.
+pub fn report_words(on: &str, adapter: Option<&str>, why: Option<&str>) -> String {
+    let adapter = adapter.unwrap_or("the GPU");
+    let why = why.unwrap_or("why is not known");
+    match on {
+        "gpu" => format!("GPU ({adapter})"),
+        "waiting" => format!("{why}, on {adapter}"),
+        _ => format!("CPU: {why}"),
+    }
 }
 
 /// `16,000`.
@@ -234,6 +308,9 @@ mod tests {
         assert_eq!(s.step(&mut w, 5, Instant::now(), true), 0);
         assert_eq!(s.status(), SimStatus::Cpu);
         assert!(s.hint().contains("no GPU"));
+        let r = s.report("the setting in gpu.json");
+        assert_eq!((r.on, r.adapter.as_deref()), ("cpu", None));
+        assert_eq!(r.words(), "CPU: GPU simulation unavailable: no GPU");
     }
 
     #[test]

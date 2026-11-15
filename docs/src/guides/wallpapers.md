@@ -132,13 +132,13 @@ previous and next item), from its menu, or from the command line:
 ```text
 $ jetcarp host start --rotation "Wolfram series"
 running, pid 863629, up 0.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 5 · 57600 cells of 4 px · 60 fps, 60 generations a second · window
+screen 0: Wolfram series · W0 (1 of 256) · generation 5 · 57600 cells of 4 px · 60 fps, 60 generations a second · window · simulation: GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan)
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host next
 running, pid 863629, up 3.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W1 (2 of 256) · starting · window
+screen 0: Wolfram series · W1 (2 of 256) · starting · window · simulation: GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan)
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
@@ -148,12 +148,14 @@ stopped
 
 `status` (and every command that changes something) says what each screen shows and where (a window,
 or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
-(see [below](#frame-rate-and-speed)), the monitors, whether the caption is on, how the screens are
-paced, and, while it is paused by hand, `paused: by hand`. A hold is told apart from a pause, as it
-passes by itself: `held: on battery (resumes by itself)`, or the processor is busy, or held by the
-desktop (windows cover it, or the screen is locked or off), or a sweep of *Fit to this computer*.
-Its `note:` lines are the host's recent messages, such as the GPU it took. Just after `next` the new
-item is *starting* until its world is built.
+(see [below](#frame-rate-and-speed)), what its world steps on now (`simulation: GPU (…)` with the
+adapter, or `simulation: CPU:` and why, such as `GPU simulation off, from the desktop background's
+own setting`, or a world too small to be worth the GPU), the monitors, whether the caption is on,
+how the screens are paced, and, while it is paused by hand, `paused: by hand`. A hold passes by
+itself, so it is told apart from a pause: `held: on battery (resumes by itself)`, and likewise while
+the processor is busy, while the desktop holds it (windows cover it, or the screen is locked or off)
+and during a sweep of *Fit to this computer*. Its `note:` lines are the host's recent messages, such
+as the GPU it took. Just after `next` the new item is *starting* until its world is built.
 
 | Command | Effect |
 | --- | --- |

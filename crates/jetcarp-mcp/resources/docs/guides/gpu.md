@@ -51,7 +51,11 @@ its next start; the command line, the MCP server and the host follow at theirs.
 be set apart, for example the GPU on for the wallpaper and off for the app. The app's is *Run → GPU
 simulation* (`gpu` in `app.json`; also `jetcarp app display --gpu follow|on|off` and the MCP
 `app_display` tool); the host's is *GPU simulation* in the *Desktop background* pane (`gpu` in
-`host.json`, which older files held as `true`, now read as follow, or `false`, now off).
+`host.json`, which older files held as `true`, now read as follow, or `false`, now off). Either
+choice, and the shared setting, take effect at once in a running host, and `jetcarp host status`
+says what each screen steps on now, as `jetcarp doctor` names the choice: `simulation: GPU (…)`
+with the adapter, or `simulation: CPU: GPU simulation off, from the desktop background's own
+setting` (with `--json`, each screen's `simulation`: `on`, `adapter` and `why`).
 
 `JETCARP_GPU` overrides all of it while it is set. It takes `off`, `auto` or `on` (or `0` and `1`),
 or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of a name. On a

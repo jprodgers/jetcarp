@@ -417,11 +417,26 @@ fn gpu_stepping_matches_the_cpu_without_a_window_toolkit() {
     let mut sim = SimBackend::from_device(&g.adapter, g.device.clone(), g.queue.clone());
     assert!(sim.available(), "{}", sim.hint());
     sim.on = true;
+    // What the host's status says of a screen (#75): waiting before its first step.
+    let origin = "the desktop background's own setting";
+    sim.mode = Mode::On;
+    assert_eq!(sim.report(origin).on, "waiting");
     // Automatic leaves a world this small on the CPU.
     sim.mode = Mode::Auto;
     let deadline = Instant::now() + Duration::from_secs(5);
     assert_eq!(sim.step(&mut on_gpu, 5, deadline, true), 0);
     assert_eq!(sim.status(), SimStatus::Small);
+    let r = sim.report(origin);
+    assert_eq!(
+        r.words(),
+        "CPU: automatic, and the world is too small to be worth the GPU"
+    );
+    // Turned off, it says so at once, before another step, and whose setting it was.
+    sim.mode = Mode::Off;
+    assert_eq!(
+        sim.report(origin).words(),
+        "CPU: GPU simulation off, from the desktop background's own setting"
+    );
     sim.mode = Mode::On;
     let mut done = 0;
     while done < 20 {
@@ -434,6 +449,17 @@ fn gpu_stepping_matches_the_cpu_without_a_window_toolkit() {
         matches!(sim.status(), SimStatus::Gpu(_)),
         "{:?}",
         sim.status()
+    );
+    let r = sim.report(origin);
+    assert_eq!((r.on, r.why.as_deref()), ("gpu", None));
+    let name = r.adapter.clone().expect("the adapter's name");
+    assert_eq!(r.words(), format!("GPU ({name})"));
+    // A scene whose profile keeps it off the GPU.
+    sim.on = false;
+    assert!(
+        sim.report(origin)
+            .words()
+            .contains("keeps to the processor")
     );
     on_cpu.apply(Command::Step { gens: 20 }).expect("step");
     let all: Vec<u32> = (0..on_cpu.topo.len() as u32).collect();

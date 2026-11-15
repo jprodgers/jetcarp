@@ -283,6 +283,14 @@ that will declare them stable.
   reasons are in a new `held_why`, beside `held`, the holds' names. The text status and the
   *Desktop background* pane say "held: the processor is busy (resumes by itself)".
   ([#76](https://github.com/jprodgers/jetcarp/issues/76))
+- **`host status` kept its start-up GPU note after the GPU setting changed.** Turning the desktop
+  background's GPU simulation off, on or back to follow, or the shared setting, took effect at once,
+  but the status went on saying "GPU simulation auto (the setting in gpu.json)" and had no field for
+  what each screen steps on. Each screen's line now ends with what its world steps on now and why
+  (`simulation: GPU (Intel(R) UHD Graphics …)`, or `simulation: CPU: GPU simulation off, from the
+  desktop background's own setting`), `--json` gives each screen's `simulation` (`on`, `adapter`
+  and `why`), and the log's GPU line is replaced when the setting changes.
+  ([#75](https://github.com/jprodgers/jetcarp/issues/75))
 
 ### Changed
 

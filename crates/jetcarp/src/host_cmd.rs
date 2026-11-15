@@ -306,8 +306,21 @@ fn status_lines(v: &Value) -> Vec<String> {
             }
             None => shown.into(),
         };
+        // What its world steps on now, and why (#75; a host before 0.4.2 doesn't say).
+        let sim = &s["simulation"];
+        let simulation = match sim["on"].as_str() {
+            Some(on) => format!(
+                " · simulation: {}",
+                jetcarp_display::simgpu::report_words(
+                    on,
+                    sim["adapter"].as_str(),
+                    sim["why"].as_str()
+                )
+            ),
+            None => String::new(),
+        };
         out.push(format!(
-            "screen {i}: {} · {} ({} of {}) · {numbers} · {place}{}",
+            "screen {i}: {} · {} ({} of {}) · {numbers} · {place}{simulation}{}",
             st["rotation"].as_str().unwrap_or("?"),
             st["label"].as_str().unwrap_or("?"),
             st["number"],
@@ -925,6 +938,36 @@ mod tests {
         let lines = status_lines(&tuning);
         assert!(
             lines.iter().any(|l| l == "last tune: failed: no GPU"),
+            "{lines:?}"
+        );
+    }
+
+    /// Each screen says what its world steps on now, and why (#75).
+    #[test]
+    fn status_says_what_each_screen_steps_on() {
+        let stage = json!({"rotation": "Until it settles", "label": "Life", "number": 1,
+            "count": 3, "generation": 5, "cells": 230400, "cell_px": 3.0});
+        let v = json!({
+            "pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "UHD",
+            "screens": [
+                {"place": "wallpaper", "stage": stage,
+                 "simulation": {"on": "gpu", "adapter": "Intel(R) UHD Graphics", "why": null}},
+                {"place": "window", "stage": stage,
+                 "simulation": {"on": "cpu", "adapter": null,
+                    "why": "GPU simulation off, from the desktop background's own setting"}},
+            ],
+            "log": [],
+        });
+        let lines = status_lines(&v);
+        assert!(
+            lines[1].ends_with("· wallpaper · simulation: GPU (Intel(R) UHD Graphics)"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[2].ends_with(
+                "· window · simulation: CPU: GPU simulation off, from the desktop background's \
+                 own setting"
+            ),
             "{lines:?}"
         );
     }

@@ -118,13 +118,13 @@ $ jetcarp host rotation "My wallpaper"
 saved; the host is not running
 $ jetcarp host start
 running, pid 862859, up 0.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · window
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · window · simulation: CPU: automatic, and the world is too small to be worth the GPU
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host wallpaper on
 running, pid 862859, up 4.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · wallpaper
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
@@ -143,11 +143,11 @@ Move on to the next item, and turn the caption on:
 ```text
 $ jetcarp host next
 running, pid 862859, up 6.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting · wallpaper
+screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 …
 $ jetcarp host caption on
 running, pid 862859, up 9.0s, 100 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.734655380249023 px · 30 fps, 30 generations a second · wallpaper
+screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.734655380249023 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: on, bottom left, 20 pt
 …
