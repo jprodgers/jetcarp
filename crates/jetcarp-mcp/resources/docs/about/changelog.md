@@ -194,10 +194,10 @@ that will declare them stable.
   wait` said it was gone after 45 seconds, and `jobs resume` could take it at once, so the three
   disagreed. A runner holds its job's lock and names itself in the job's row, and the system lets
   go of the lock when the process ends: a job that names a runner and whose lock is free is now
-  stale at once, in `jobs status`, `jobs list`, `jobs wait` and `jobs remove` alike. `jobs status`
-  says so in words (it printed `status running` and kept `stale` to its JSON), and so do the MCP
-  server's `job_status` and its list. `--status running` leaves stale jobs out, and `--status
-  stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
+  stale at once, in `jobs status`, `jobs list`, `jobs wait`, `jobs remove` and the app's *Hunts…*
+  window alike. `jobs status` says so in words (it printed `status running` and kept `stale` to
+  its JSON), and so do the MCP server's `job_status` and its list. `--status running` leaves stale
+  jobs out, and `--status stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
   [#64](https://github.com/jprodgers/jetcarp/issues/64))
 - **`jobs wait` straight after `jobs resume --detach` said the job was gone.** The new process had
   not taken the job yet, and the killed run's name was still in its row. `--detach` now clears it,

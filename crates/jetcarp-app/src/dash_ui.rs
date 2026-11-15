@@ -468,6 +468,17 @@ impl Worker {
                 }
             }
         }
+        // A running job whose runner's process has gone is stale at once, as `jetcarp jobs
+        // status` says (#49); the summaries' own test waits five minutes.
+        let now = dashboard::now_seconds();
+        for s in sums
+            .iter_mut()
+            .filter(|s| !s.here && !s.stale && s.status == "running")
+        {
+            if let Some(r) = rows.iter().find(|r| r.id == s.id) {
+                s.stale = jobs::run_gone(&self.lib, r, now);
+            }
+        }
         let mut sh = self.shared.lock().unwrap();
         sh.jobs = sums;
         sh.loaded = true;
