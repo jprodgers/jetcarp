@@ -302,7 +302,7 @@ Options:
       --until <UNTIL>
           Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
       --limit <LIMIT>
-          Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+          Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>
           Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach
@@ -369,7 +369,7 @@ Options:
       --resume <JOB>               Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
@@ -406,7 +406,7 @@ Options:
       --resume <JOB>             Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                    No progress on stderr
@@ -441,7 +441,7 @@ Options:
       --resume <JOB>               Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                      No progress on stderr
@@ -485,7 +485,7 @@ Options:
       --resume <JOB>                 Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>            Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>                Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>                Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>            Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                       Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                        No progress on stderr
@@ -520,7 +520,7 @@ Options:
       --resume <JOB>       Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet              No progress on stderr
@@ -559,7 +559,7 @@ Options:
       --resume <JOB>                   Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                          No progress on stderr
@@ -595,7 +595,7 @@ Options:
       --resume <JOB>             Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                    No progress on stderr
@@ -631,7 +631,7 @@ Options:
       --resume <JOB>                   Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet                          No progress on stderr
@@ -800,7 +800,7 @@ Options:
       --cpu                  Use only the CPU, whatever the GPU setting says
       --minutes <MINUTES>    Stop at the next checkpoint after this many minutes
       --until <UNTIL>        Stop at the next checkpoint after this Unix time (seconds since 1970)
-      --limit <LIMIT>        Stop after this many units in this session
+      --limit <LIMIT>        Stop after this many units in this session (an explore search finishes the step it is in, so it may run past it)
       --detach               Run in a process of its own and return at once
       --json-out <JSON_OUT>  When it ends: the full report as JSON
       --csv <CSV>            When it ends: a census's or a collision's table as CSV
@@ -1032,7 +1032,7 @@ Options:
       --resume <JOB>       Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
       --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
-      --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable
+      --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
       --quiet              No progress on stderr

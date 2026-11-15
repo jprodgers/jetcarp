@@ -92,7 +92,8 @@ enum JobsCmd {
         /// Stop at the next checkpoint after this Unix time (seconds since 1970).
         #[arg(long)]
         until: Option<u64>,
-        /// Stop after this many units in this session.
+        /// Stop after this many units in this session (an explore search finishes the step it
+        /// is in, so it may run past it).
         #[arg(long)]
         limit: Option<u64>,
         /// Run in a process of its own and return at once.

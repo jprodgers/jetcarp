@@ -642,7 +642,8 @@ fn is_warp(info: &wgpu::AdapterInfo) -> bool {
 }
 
 /// What the simulation needs of an adapter apart from the self-test. `want` lets a software
-/// adapter through when it asks for one (or names one), and any kind when it names one.
+/// adapter through when it asks for one, and any kind when it names that adapter (a name that
+/// matches another adapter lets nothing else through, so doctor never tests one it can't use).
 pub fn requirements(
     info: &wgpu::AdapterInfo,
     limits: &wgpu::Limits,
@@ -657,14 +658,14 @@ pub fn requirements(
     }
     match (info.device_type, want) {
         (D::DiscreteGpu | D::IntegratedGpu, _) => {}
-        (D::Cpu, Want::Software | Want::Named(_)) => {}
+        (D::Cpu, Want::Software) => {}
+        (_, Want::Named(_)) if want.matches(info) => {}
         (D::Cpu, _) => {
             return Err(
                 "software adapter: the GPU simulation uses it only with JETCARP_GPU=software"
                     .into(),
             );
         }
-        (_, Want::Named(_)) => {}
         (k, _) => {
             return Err(format!(
                 "neither discrete nor integrated (the system says {}): the GPU simulation uses it \
@@ -1379,6 +1380,12 @@ mod tests {
             );
             assert!(ok(&soft, &Want::Software).is_ok());
             assert!(ok(&soft, &Want::Named("llvmpipe".into())).is_ok());
+            // A name that matches another adapter lets no other software or odd adapter in
+            // (#48: JETCARP_GPU=llvmpipe had doctor self-test the Radeon's GL adapter).
+            assert!(ok(&soft, &Want::Named("radeon".into())).is_err());
+            let gl = info("AMD Radeon 8060S Graphics (radeonsi)", D::Other, B::Gl);
+            assert!(ok(&gl, &Want::Named("llvmpipe".into())).is_err());
+            assert!(ok(&gl, &Want::Named("radeonsi".into())).is_ok());
             let warp = info("Microsoft Basic Render Driver", D::Cpu, B::Dx12);
             assert!(ok(&warp, &Want::Software).unwrap_err().contains("WARP"));
             assert!(ok(&warp, &Want::Named("Microsoft".into())).is_err());

@@ -129,6 +129,15 @@ that will declare them stable.
   at, and `jetcarp host status` gives each screen's frame rate and speed (see
   [Frame rate and speed](../guides/wallpapers.md#frame-rate-and-speed)).
   ([#42](https://github.com/jprodgers/jetcarp/issues/42))
+- **`--limit`'s help promised an exact stop that an explore search can't make.** An explore
+  search checks the limit between its steps of a few seconds, so `--limit 20` could run 240 runs.
+  The help for `search` and `jobs resume` now says so; use `--minutes` for an explore budget.
+  ([#47](https://github.com/jprodgers/jetcarp/issues/47))
+- **`jetcarp doctor` with `JETCARP_GPU` set tested adapters the setting didn't name.** Naming
+  any adapter let every software and "other" adapter pass the requirements, so with
+  `JETCARP_GPU=llvmpipe` doctor self-tested a Radeon's OpenGL adapter and showed its failure.
+  The name now has to match, as it always did for the choice itself.
+  ([#48](https://github.com/jprodgers/jetcarp/issues/48))
 
 ### Changed
 

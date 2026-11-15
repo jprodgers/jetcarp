@@ -89,7 +89,8 @@ pub struct JobFlags {
     #[arg(long)]
     until: Option<u64>,
     /// Stop after this many units in this session (soups per rule and tiling, runs, rules,
-    /// generations); the job stays resumable.
+    /// generations); the job stays resumable. An explore search checks it between steps, so it
+    /// finishes the step it is in and may run past it.
     #[arg(long)]
     limit: Option<u64>,
     /// Worker threads (default: all cores; an explore search leaves two free). Results do not
