@@ -142,6 +142,7 @@ impl JetcarpApp {
         }
         self.palette_window(ctx);
         self.wallpaper_window(ctx);
+        self.anim_export_window(ctx);
         for a in self
             .editor
             .show(ctx)

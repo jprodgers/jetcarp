@@ -171,6 +171,10 @@ that will declare them stable.
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
   *Static*, *Quiet rows*) now get a sixteenth of the sample each, at least 2, and the output says
   how many clips each category got. ([#56](https://github.com/jprodgers/jetcarp/issues/56))
+- **The app couldn't export an animation of the world.** Its only animation export was the hunts
+  window's *Render media*, which is for finds and picks the format itself. *File → Export animation
+  (GIF or WebP)…* now records the view and the generations after it, as a GIF or a lossless WebP,
+  in the background. ([#62](https://github.com/jprodgers/jetcarp/issues/62))
 
 ### Changed
 

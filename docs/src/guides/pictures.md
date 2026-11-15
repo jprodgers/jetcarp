@@ -10,7 +10,7 @@ it (see [Scenes](scenes.md#get-the-scene-back-from-a-picture)).
 | --- | --- | --- | --- |
 | A picture of the world | *File → Export the world as PNG…*, *File → Export the view as PNG…* | `jetcarp run --png` | `w.save_png(path)` |
 | Desktop wallpapers | *File → Export wallpaper…* | `jetcarp wallpaper` | `jetcarp("wallpaper.export", #{…})` |
-| An animation | | `jetcarp media render` | `w.media(#{…})`, `media(#{…})` |
+| An animation | *File → Export animation (GIF or WebP)…* | `jetcarp media render` | `w.media(#{…})`, `media(#{…})` |
 | A contact sheet | *File → Export contact sheet…* | `jetcarp sheet`, `jetcarp quickstart --sheet`, `jetcarp isohedral --png` | `sweep(#{…})` writes one picture per run |
 
 ## A picture of the world
@@ -25,6 +25,12 @@ outlines are drawn where tiles are at least 7 pixels across.
 *File → Export the view as PNG…* saves what the grid shows now instead: the same centre and zoom, at
 the screen's resolution (the grid's size in pixels, or the outputs' span when the grid is shown on
 outputs), with tile outlines as *View → Cell outlines* has them.
+
+*File → Export animation (GIF or WebP)…* records the view as it is now and the generations after
+it: choose how many generations, a frame every how many, the longer side in pixels and the format
+(GIF, or lossless WebP for worlds with more than 256 colours), then *Export…*. It steps a copy of
+the world on the processor in the background, so the app runs on meanwhile, and the frames play at
+the world's speed. (The hunts window's *Render media* makes animations of its finds instead.)
 
 **On the command line**, `jetcarp run` writes a picture of the state it ends in:
 

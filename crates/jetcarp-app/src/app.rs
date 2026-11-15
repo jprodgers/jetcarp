@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 /// Opt-in local endpoint for AI control (MCP). A child module so it can use `try_exec`.
 mod ai_control;
+mod anim_export;
 mod autoshot;
 mod build;
 mod ca_ui;
@@ -155,6 +156,8 @@ pub struct JetcarpApp {
     pal_name: String,
     pal_stops: Vec<[u8; 3]>,
     pending_sheet: Option<(jetcarp_core::sheet::SheetKind, u64, String, bool)>,
+    /// *File → Export animation…* (#62).
+    anim: anim_export::AnimExport,
     autoshot: Option<autoshot::Autoshot>,
     ai: ai_control::AiControl,
     /// Rhai scripts and sweeps (runs in the background).
@@ -280,6 +283,7 @@ impl JetcarpApp {
             script_edit: None,
             script_dirty: false,
             pending_sheet: None,
+            anim: Default::default(),
             pal_open: false,
             export_px: 0.0,
             jump_gens: "1000".into(),

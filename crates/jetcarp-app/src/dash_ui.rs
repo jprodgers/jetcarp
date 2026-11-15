@@ -1605,8 +1605,9 @@ impl DashWindow {
                 .collect();
             if !targets.is_empty()
                 && ui
-                    .small_button("Render media")
-                    .on_hover_text("Write frames, an animation, a poster, and a thumbnail for these finds (media module), in the background, in the colours picked here")
+                    // A full-size button: as a small one beside the heading it went unseen (#62).
+                    .button("Render media (animations of these finds)")
+                    .on_hover_text("Write frames, an animation (GIF, or WebP when too big for a GIF), a poster, and a thumbnail for these finds, in the background, in the colours picked here. For an animation of the world itself: File → Export animation")
                     .clicked()
             {
                 cmd = Some(Cmd::RenderMedia(targets, self.palette.clone()));

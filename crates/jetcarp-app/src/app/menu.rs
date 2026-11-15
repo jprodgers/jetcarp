@@ -135,6 +135,7 @@ pub(super) enum Action {
     SaveScene,
     ExportPng,
     ExportView,
+    ExportAnim,
     ExportSheet,
     Quit,
     Reset,
@@ -208,6 +209,7 @@ impl Action {
             SaveScene,
             ExportPng,
             ExportView,
+            ExportAnim,
             ExportSheet,
             Quit,
             Reset,
@@ -258,6 +260,7 @@ impl Action {
             SaveScene => "Save scene…".into(),
             ExportPng => "Export the world as PNG…".into(),
             ExportView => "Export the view as PNG…".into(),
+            ExportAnim => "Export animation (GIF or WebP)…".into(),
             ExportSheet => "Export contact sheet…".into(),
             Quit => "Quit".into(),
             Reset => "Reset".into(),
@@ -309,6 +312,7 @@ impl Action {
                 "The whole tiling, framed to fit, whatever the view shows (Export size sets its scale); large images are written in strips"
             }
             ExportView => "What the grid shows now, at the screen's resolution",
+            ExportAnim => "The view now and the generations after it, as an animated GIF or WebP",
             ExportSheet => "A labelled PNG of the first elementary CA's rule and the ones after it",
             Reset => "Clear and reseed every CA",
             CopyHash => "Copy the world's state hash",
@@ -427,6 +431,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             A(A_::ExportPng),
             C(Custom::ExportSize),
             A(A_::ExportView),
+            A(A_::ExportAnim),
             A(A_::ExportSheet),
             A(A_::Tool(ToolWin::Wallpaper)),
             Sep,
@@ -689,9 +694,10 @@ impl JetcarpApp {
         use Action::*;
         let sim = self.screen == Screen::Sim;
         match a {
-            SaveScene | ExportPng | ExportView | Reset | ClearAll | CopyHash | Fit | ZoomIn
-            | ZoomOut | RunPause | Step | SeedAll | RandomAll | SweepThisWorld | AddByNotation
-            | LoadRuleTable | TileJson | Pane(_) | PixelZoom | FillCanvas | AutoReseed => sim,
+            SaveScene | ExportPng | ExportView | ExportAnim | Reset | ClearAll | CopyHash | Fit
+            | ZoomIn | ZoomOut | RunPause | Step | SeedAll | RandomAll | SweepThisWorld
+            | AddByNotation | LoadRuleTable | TileJson | Pane(_) | PixelZoom | FillCanvas
+            | AutoReseed => sim,
             ExportSheet => sim && self.sheet_ca().is_some(),
             StopPasting => self.paste.is_some(),
             GpuSim => self.sim.available(),
@@ -824,6 +830,7 @@ impl JetcarpApp {
             SaveScene => self.save_scene(),
             ExportPng => self.export_png(),
             ExportView => self.export_view(),
+            ExportAnim => self.anim.open = true,
             ExportSheet => {
                 if let Some(ca) = self.sheet_ca()
                     && let Some((kind, n)) = jetcarp_core::sheet::SheetKind::of_rule(&ca.rule)
