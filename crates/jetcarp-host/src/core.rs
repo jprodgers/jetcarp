@@ -254,20 +254,24 @@ fn still_screen<'a>(
         .copied()
 }
 
-/// Why the screens are paused, in words, for `status` (empty while they run): by hand, then each
-/// hold, and when neither, that nothing in the rotation can be shown.
-pub fn pause_reasons<'a>(
-    by_hand: bool,
-    holds: impl Iterator<Item = &'a str>,
-    all_paused: bool,
-) -> Vec<String> {
-    if !by_hand && !all_paused {
-        return vec![];
-    }
-    let mut why: Vec<String> = vec![];
+/// Why the screens are paused, in words, for `status`'s `paused_why`: by hand, or, with nothing
+/// holding them, that nothing in the rotation can be shown. Both have to be resumed. Empty while
+/// they run or are only held, so it agrees with `paused` (#76); a hold is in `held_why`.
+pub fn pause_reasons(by_hand: bool, held: bool, all_paused: bool) -> Vec<String> {
     if by_hand {
-        why.push("by hand".into());
+        vec!["by hand".into()]
+    } else if !held && all_paused {
+        vec!["nothing in the rotation can be shown".into()]
+    } else {
+        vec![]
     }
+}
+
+/// What holds the screens, in words, for `status`'s `held_why` (empty when nothing does). A hold
+/// passes by itself: the screens carry on once the battery, the busy processor, the covered or
+/// dark screen, or the tuner, has gone.
+pub fn hold_reasons<'a>(holds: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut why: Vec<String> = vec![];
     for h in holds {
         let words = match h {
             "battery" => "on battery".to_string(),
@@ -280,9 +284,6 @@ pub fn pause_reasons<'a>(
         if !why.contains(&words) {
             why.push(words);
         }
-    }
-    if why.is_empty() {
-        why.push("nothing in the rotation can be shown".into());
     }
     why
 }
@@ -582,6 +583,14 @@ impl Core {
         !self.holds.is_empty() || !self.local_holds.is_empty()
     }
 
+    /// The holds' names: GNOME's extension's, then the host's own.
+    fn hold_names(&self) -> impl Iterator<Item = &str> {
+        self.holds
+            .iter()
+            .map(String::as_str)
+            .chain(self.local_holds.iter().copied())
+    }
+
     /// Something the host noticed for itself means nothing need be drawn, or no longer does.
     pub fn set_local_hold(&mut self, name: &'static str, on: bool) {
         let changed = if on {
@@ -830,15 +839,13 @@ impl Core {
             "pid": std::process::id(),
             "uptime_s": now.round(),
             "memory_mb": memory_stats::memory_stats().map(|m| m.physical_mem / (1 << 20)),
-            // Paused as the user sees it: a hold passes by itself, but a rotation with nothing it
-            // can show has to be resumed.
+            // Paused as the user sees it: by hand, or a rotation with nothing it can show, both of
+            // which have to be resumed. A hold (`held`, the holds' names, and `held_why`, the
+            // same in words) passes by itself, so it is not a pause: each pair agrees (#76).
             "paused": self.user_paused || (!self.held() && self.all_paused()),
-            "held": self.holds.iter().map(String::as_str).chain(self.local_holds.iter().copied()).collect::<Vec<_>>(),
-            "paused_why": pause_reasons(
-                self.user_paused,
-                self.holds.iter().map(String::as_str).chain(self.local_holds.iter().copied()),
-                self.all_paused(),
-            ),
+            "paused_why": pause_reasons(self.user_paused, self.held(), self.all_paused()),
+            "held": self.hold_names().collect::<Vec<_>>(),
+            "held_why": hold_reasons(self.hold_names()),
             "desktop_layout": self.desktop_layout,
             "wallpaper": self.wants_wallpaper(),
             "extension": self.shell() == Shell::Alive,
@@ -1224,7 +1231,7 @@ fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>,
 
 #[cfg(test)]
 mod tests {
-    use super::{made_from, pause_reasons, retune_wanted};
+    use super::{hold_reasons, made_from, pause_reasons, retune_wanted};
     use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
     use jetcarp_display::{profiles, rotation};
 
@@ -1292,31 +1299,36 @@ mod tests {
         assert!(retune_wanted(&s, &moved).is_empty());
     }
 
+    /// A pause (by hand, or nothing to show) and a hold are told apart, so `paused` and
+    /// `paused_why` agree, and `held` and `held_why` do (#76): a busy processor is a hold, not a
+    /// pause.
     #[test]
-    fn status_says_why_it_is_paused() {
-        let none = std::iter::empty();
-        assert!(pause_reasons(false, none, false).is_empty(), "running");
-        assert_eq!(pause_reasons(true, std::iter::empty(), true), ["by hand"]);
+    fn status_says_why_it_is_paused_and_what_holds_it() {
+        assert!(pause_reasons(false, false, false).is_empty(), "running");
+        assert_eq!(pause_reasons(true, false, true), ["by hand"]);
+        assert_eq!(pause_reasons(true, true, true), ["by hand"], "and held");
+        assert!(
+            pause_reasons(false, true, true).is_empty(),
+            "only held: not paused"
+        );
         assert_eq!(
-            pause_reasons(false, ["battery", "busy"].into_iter(), true),
+            pause_reasons(false, false, true),
+            ["nothing in the rotation can be shown"]
+        );
+        assert!(hold_reasons(std::iter::empty()).is_empty());
+        assert_eq!(
+            hold_reasons(["battery", "busy"].into_iter()),
             ["on battery", "the processor is busy"]
         );
         assert_eq!(
-            pause_reasons(true, ["covered", "dark"].into_iter(), true),
+            hold_reasons(["covered", "dark", "tuning"].into_iter()),
             [
-                "by hand",
                 "held by the desktop: windows cover it",
-                "held by the desktop: the screen is locked or off"
+                "held by the desktop: the screen is locked or off",
+                "tuning the desktop background for this computer"
             ]
         );
         // The host's own "covered" and GNOME's say the same once.
-        assert_eq!(
-            pause_reasons(false, ["covered", "covered"].into_iter(), true).len(),
-            1
-        );
-        assert_eq!(
-            pause_reasons(false, std::iter::empty(), true),
-            ["nothing in the rotation can be shown"]
-        );
+        assert_eq!(hold_reasons(["covered", "covered"].into_iter()).len(), 1);
     }
 }

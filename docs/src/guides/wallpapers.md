@@ -149,10 +149,11 @@ stopped
 `status` (and every command that changes something) says what each screen shows and where (a window,
 or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
 (see [below](#frame-rate-and-speed)), the monitors, whether the caption is on, how the screens are
-paced, and, while it is paused, why: by hand, on battery, the processor is busy, or held by the
-desktop (windows cover it, or the screen is locked or off). Its `note:` lines are the host's recent
-messages, such as the GPU it took. Just after `next` the new item is *starting* until its world is
-built.
+paced, and, while it is paused by hand, `paused: by hand`. A hold is told apart from a pause, as it
+passes by itself: `held: on battery (resumes by itself)`, or the processor is busy, or held by the
+desktop (windows cover it, or the screen is locked or off), or a sweep of *Fit to this computer*.
+Its `note:` lines are the host's recent messages, such as the GPU it took. Just after `next` the new
+item is *starting* until its world is built.
 
 | Command | Effect |
 | --- | --- |
@@ -176,7 +177,10 @@ the next time it starts (*saved; the host is not running*). When the host reads 
 whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
 is completely hidden behind other windows and while the screen is locked and dark. `jetcarp host
-status --json` shows what it is holding for, under `held`.
+status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
+carries on) with `paused_why`, and apart from it what the host is holding for, which passes by
+itself: `held` (`battery`, `busy`, `covered`, `dark` or `tuning`) with `held_why`, the same in
+words.
 
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has

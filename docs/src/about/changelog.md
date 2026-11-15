@@ -277,6 +277,12 @@ that will declare them stable.
   and publishing a pack no longer advises `jetcarp jobs seal`, which no MCP tool runs: it seals
   first, and a note now appears only if runs are still unsealed.
   ([#68](https://github.com/jprodgers/jetcarp/issues/68))
+- **`host status --json` said `"paused": false` while `paused_why` gave a reason.** A hold (on
+  battery, a busy processor, the desktop covered or dark, a tuner) was listed in `paused_why`,
+  though `paused` means paused by hand. `paused_why` now gives only why it is paused, and a hold's
+  reasons are in a new `held_why`, beside `held`, the holds' names. The text status and the
+  *Desktop background* pane say "held: the processor is busy (resumes by itself)".
+  ([#76](https://github.com/jprodgers/jetcarp/issues/76))
 
 ### Changed
 

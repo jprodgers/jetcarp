@@ -270,7 +270,11 @@ fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
     assert_eq!(reply["ok"], true);
     let v = h.wait(|v| Host::stage(v)["paused"] == true, "the hold to pause it");
     assert_eq!(v["held"][0], "covered");
-    assert_eq!(v["paused"], false);
+    assert_eq!(v["held_why"][0], "held by the desktop: windows cover it");
+    assert_eq!(
+        (&v["paused"], &v["paused_why"]),
+        (&json!(false), &json!([]))
+    );
     assert_eq!(v["extension"], true);
 
     // Pausing by hand outlasts the hold.
@@ -509,11 +513,16 @@ fn a_tuned_size_is_applied_and_recorded() {
     assert_eq!(reply["ok"], true);
     let v = h.wait(|v| Host::stage(v)["paused"] == true, "the tuning hold");
     assert!(v["held"].to_string().contains("tuning"), "{v}");
+    // A hold, not a pause: `paused` and `paused_why` agree that it isn't paused (#76).
     assert!(
-        v["paused_why"]
+        v["held_why"]
             .to_string()
             .contains("tuning the desktop background"),
         "{v}"
+    );
+    assert_eq!(
+        (&v["paused"], &v["paused_why"]),
+        (&json!(false), &json!([]))
     );
     assert_eq!(v["tuning"]["running"], true);
     h.call(json!({"action": "tuning", "on": false})).unwrap();

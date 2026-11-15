@@ -374,14 +374,22 @@ fn status_lines(v: &Value) -> Vec<String> {
             }
         });
     }
-    let why: Vec<&str> = v["paused_why"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .collect();
+    let words = |key: &str| -> Vec<&str> {
+        v[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect()
+    };
+    let why = words("paused_why");
     if !why.is_empty() {
         out.push(format!("paused: {}", why.join("; ")));
+    }
+    // A hold passes by itself, unlike a pause (#76).
+    let held = words("held_why");
+    if !held.is_empty() {
+        out.push(format!("held: {} (resumes by itself)", held.join("; ")));
     }
     let t = &v["tuning"];
     if t["running"] == true {
@@ -917,6 +925,37 @@ mod tests {
         let lines = status_lines(&tuning);
         assert!(
             lines.iter().any(|l| l == "last tune: failed: no GPU"),
+            "{lines:?}"
+        );
+    }
+
+    /// A hold is not a pause: the status says what holds the host, and that it resumes by itself,
+    /// apart from a pause by hand (#76).
+    #[test]
+    fn status_tells_a_hold_from_a_pause() {
+        let v = json!({
+            "pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "UHD", "screens": [],
+            "paused": false, "paused_why": [],
+            "held": ["busy"], "held_why": ["the processor is busy"],
+            "log": [],
+        });
+        let lines = status_lines(&v);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l == "held: the processor is busy (resumes by itself)"),
+            "{lines:?}"
+        );
+        assert!(!lines.iter().any(|l| l.starts_with("paused:")), "{lines:?}");
+        let mut both = v.clone();
+        both["paused"] = json!(true);
+        both["paused_why"] = json!(["by hand"]);
+        both["held_why"] = json!(["on battery", "the processor is busy"]);
+        let lines = status_lines(&both);
+        let has = |l: &str| lines.iter().any(|x| x == l);
+        assert!(has("paused: by hand"), "{lines:?}");
+        assert!(
+            has("held: on battery; the processor is busy (resumes by itself)"),
             "{lines:?}"
         );
     }

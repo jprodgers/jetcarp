@@ -234,14 +234,22 @@ fn summary(v: &Value) -> String {
         }
         lines.push(t);
     }
-    let why: Vec<&str> = v["paused_why"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .collect();
+    let words = |key: &str| -> Vec<&str> {
+        v[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect()
+    };
+    let why = words("paused_why");
     if !why.is_empty() {
         lines.push(format!("Paused: {}.", why.join("; ")));
+    }
+    // A hold passes by itself; Resume is for a pause (#76).
+    let held = words("held_why");
+    if !held.is_empty() {
+        lines.push(format!("Held: {} (resumes by itself).", held.join("; ")));
     }
     lines.join("\n")
 }
@@ -1507,4 +1515,24 @@ fn crop_texture(
     let tex = ctx.load_texture(format!("crop-{name}"), color, egui::TextureOptions::NEAREST);
     cache.insert(name.to_string(), (modified, tex.clone()));
     Some(tex)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The pane tells a hold from a pause, as `host status` does: a busy processor holds the host,
+    /// which resumes by itself, and Resume is for a pause (#76).
+    #[test]
+    fn the_summary_tells_a_hold_from_a_pause() {
+        let held = json!({"screens": [], "paused": false, "paused_why": [],
+            "held": ["busy"], "held_why": ["the processor is busy"]});
+        assert_eq!(
+            summary(&held),
+            "Held: the processor is busy (resumes by itself)."
+        );
+        let paused = json!({"screens": [], "paused": true, "paused_why": ["by hand"],
+            "held": [], "held_why": []});
+        assert_eq!(summary(&paused), "Paused: by hand.");
+    }
 }
