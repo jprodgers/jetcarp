@@ -404,10 +404,10 @@ mod tests {
             "only {used:?} of about 600 ms"
         );
         let share = meter.share();
-        let cores = std::thread::available_parallelism().map_or(1, |n| n.get()) as f64;
-        // About two cores' worth of the machine, give or take.
+        // A share of the whole machine. Not bounded above by the two threads here: the meter
+        // counts this whole process, and the test harness runs other tests in it meanwhile (on
+        // CI's Windows runner, 3 of 4 cores' worth).
         assert!(share > 0.0 && share <= 1.0, "{share}");
-        assert!(share * cores <= 2.5, "{share} of {cores} cores");
     }
 
     #[test]

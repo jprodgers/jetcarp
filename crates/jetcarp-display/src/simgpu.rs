@@ -85,7 +85,9 @@ impl SimBackend {
 
     /// No GPU simulation, for this reason.
     pub fn unavailable(why: String) -> SimBackend {
-        SimBackend::with(Some(why), Mode::Off)
+        // Automatic until a policy says otherwise: with no device nothing steps on the GPU
+        // anyway, and `report` reads Off as someone's choice (#75).
+        SimBackend::with(Some(why), Mode::Auto)
     }
 
     fn with(unavailable: Option<String>, mode: Mode) -> SimBackend {
@@ -212,14 +214,16 @@ impl SimBackend {
             why: Some(why),
         };
         let name = || Some(self.name()).filter(|n| !n.is_empty());
+        // The user's own choice first: with the GPU simulation off, that is why, whether or not
+        // there is a GPU it could have used.
+        if self.mode == Mode::Off {
+            return cpu(format!("GPU simulation off, from {origin}"));
+        }
         if let Some(e) = &self.unavailable {
             return cpu(format!("GPU simulation unavailable: {e}"));
         }
         if !self.available() {
             return cpu("no GPU".into());
-        }
-        if self.mode == Mode::Off {
-            return cpu(format!("GPU simulation off, from {origin}"));
         }
         if !self.on {
             return cpu(
