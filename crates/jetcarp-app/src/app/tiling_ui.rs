@@ -24,6 +24,7 @@ impl JetcarpApp {
             SizeChoice::Cells(c) => SizeSpec::Cells(c),
             SizeChoice::Level(_) => SizeSpec::Cells(900),
             SizeChoice::Fill => self.fill_size(&spec),
+            SizeChoice::Rect(w, h) => SizeSpec::Rect { w, h },
         });
         spec
     }
@@ -42,8 +43,8 @@ impl JetcarpApp {
             .is_some_and(|f| f.kind == FamilyKind::Aperiodic);
         if aperiodic {
             SizeChoice::Level(aperiodic::default_level(&self.t_family))
-        } else if self.t_size == SizeChoice::Fill {
-            SizeChoice::Fill
+        } else if matches!(self.t_size, SizeChoice::Fill | SizeChoice::Rect(..)) {
+            self.t_size
         } else {
             SizeChoice::Cells(900)
         }
@@ -148,6 +149,16 @@ impl JetcarpApp {
                     .map(|p| p.1.to_string())
                     .unwrap_or(format!("About {c}")),
                 SizeChoice::Fill => "Fill the view".into(),
+                SizeChoice::Rect(..) => "Width × height".into(),
+            };
+            // Width × height starts from the world's own sides when it has a lattice.
+            let rect = match self.t_size {
+                SizeChoice::Rect(w, h) => SizeChoice::Rect(w, h),
+                _ => self
+                    .world
+                    .topo
+                    .lattice()
+                    .map_or(SizeChoice::Rect(64, 64), |g| SizeChoice::Rect(g.w, g.h)),
             };
             egui::ComboBox::from_id_salt("size")
                 .selected_text(text)
@@ -168,9 +179,36 @@ impl JetcarpApp {
                         changed |= ui
                             .selectable_value(&mut self.t_size, SizeChoice::Fill, "Fill the view")
                             .changed();
+                        changed |= ui
+                            .selectable_value(&mut self.t_size, rect, "Width × height")
+                            .on_hover_text(
+                                "Exactly so many unit cells across and down, as `--size WxH` gives",
+                            )
+                            .changed();
                     }
                 });
         });
+        if let SizeChoice::Rect(mut w, mut h) = self.t_size
+            && !aperiodic
+        {
+            ui.horizontal(|ui| {
+                fn side(v: &mut u32) -> egui::DragValue<'_> {
+                    egui::DragValue::new(v).range(1..=16384).speed(1.0)
+                }
+                let rw = ui.add(side(&mut w)).on_hover_text("Unit cells across");
+                ui.label("×");
+                let rh = ui.add(side(&mut h)).on_hover_text("Unit cells down");
+                ui.label("unit cells").on_hover_text(
+                    "A unit cell is the tiling's repeating block: one cell on the square, hexagon and \
+                     triangle grids' own units, several on others. HashLife's jump in place needs \
+                     wrap edges and sides that are powers of two (64, 128, 256 …).",
+                );
+                self.t_size = SizeChoice::Rect(w, h);
+                // Rebuilt when a drag ends or a typed number is entered, not on every step.
+                changed |= rw.drag_stopped() || (rw.changed() && !rw.dragged());
+                changed |= rh.drag_stopped() || (rh.changed() && !rh.dragged());
+            });
+        }
         if self.t_size == SizeChoice::Fill && !aperiodic {
             ui.horizontal(|ui| {
                 ui.label("Cell size");

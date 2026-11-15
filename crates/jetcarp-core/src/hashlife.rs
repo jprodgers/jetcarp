@@ -1466,7 +1466,9 @@ fn torus_shape(w: &World) -> Result<(FieldPrograms, u64, u64), String> {
     let (gw, gh) = (g.w as u64, g.h as u64);
     if !gw.is_power_of_two() || !gh.is_power_of_two() {
         return Err(format!(
-            "HashLife needs a torus whose sides are powers of two (this one is {gw} × {gh} unit cells)"
+            "HashLife needs a torus whose sides are powers of two (this one is {gw} × {gh} unit cells): \
+             make one with sides like 256 × 256 (the app's Tiling pane: Size, Width × height; \
+             the command line: --size 256x256), with wrap edges"
         ));
     }
     let shift = (g.wrap_shift as i64).rem_euclid(gw as i64) as u64;

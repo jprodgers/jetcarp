@@ -156,6 +156,11 @@ that will declare them stable.
   before its memory limit lets a scene go, so memory it no longer holds never counts against it.
   On Linux, three sweeps left the host at 157 MB instead of 376 MB.
   ([#69](https://github.com/jprodgers/jetcarp/issues/69))
+- **The app couldn't make a grid of a set width and height, so HashLife's jump in place was out of
+  reach.** The jump needs a wrapping grid whose sides are powers of two, and the Tiling pane offered
+  only approximate cell counts and *Fill the view*. *Size* now has *Width × height*, in unit cells
+  as `--size WxH` on the command line, and the jump's message says how to make such a grid.
+  ([#58](https://github.com/jprodgers/jetcarp/issues/58))
 
 ### Changed
 

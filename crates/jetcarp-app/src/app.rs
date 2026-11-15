@@ -72,6 +72,9 @@ enum SizeChoice {
     Cells(u32),
     Fill,
     Level(u32),
+    /// Exactly this many lattice unit cells across and down (#58): what HashLife's jump in place
+    /// needs (sides that are powers of two), and what `--size WxH` gives on the command line.
+    Rect(u32, u32),
 }
 
 const CELL_PRESETS: [(u32, &str); 10] = [
@@ -392,6 +395,11 @@ impl JetcarpApp {
         self.t_size = match spec.size {
             Some(SizeSpec::Level(l)) => SizeChoice::Level(l),
             Some(SizeSpec::Cells(c)) => SizeChoice::Cells(c),
+            // A world built from Width × height keeps showing its sides; other rectangles come
+            // from Fill (or a scene) and read as Fill, as before.
+            Some(SizeSpec::Rect { w, h }) if matches!(self.t_size, SizeChoice::Rect(..)) => {
+                SizeChoice::Rect(w, h)
+            }
             Some(SizeSpec::Rect { .. }) => SizeChoice::Fill,
             None if self.world.topo.family.kind == FamilyKind::Aperiodic => {
                 SizeChoice::Level(aperiodic::default_level(&spec.family))

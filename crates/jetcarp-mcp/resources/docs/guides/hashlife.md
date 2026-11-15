@@ -53,7 +53,8 @@ sequence installed, cannot be jumped in place.
 
 - **Jump ahead (HashLife)** jumps the world in place. When the world does not qualify, the button is
   greyed out and hovering over it says why (for example, *HashLife needs a torus whose sides are powers
-  of two (this one is 200 × 140 unit cells)*).
+  of two (this one is 200 × 140 unit cells)*). To make one, set the Tiling pane's *Size* to *Width ×
+  height*, type sides such as 256 × 256 (in unit cells), and choose *Wrap* edges.
 - **On the unbounded plane** shows the same frame after that many generations on the plane, as a new
   world named after the old one (*… +1000000 (HashLife plane)*).
 - **HashLife view…** opens the pattern on the plane in a window of its own, also under *Tools →
