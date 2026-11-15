@@ -534,12 +534,74 @@ fn do_publish(
     let mut book = RaterBook::load(&bp).map_err(ApiError::io)?;
     let before = book.clone();
     let o = options(cx, a, to)?;
+    seal_searches(cx, &o.selection, p)?;
     let out = ppub::publish(&cx.library(), &pubr, &mut book, &o, &|l| p.log(l))
         .map_err(ApiError::invalid)?;
     if book != before {
         book.save(&bp).map_err(ApiError::io)?;
     }
     Ok(out)
+}
+
+/// Seals the newest runs of the explore searches a version takes: a pack carries only sealed
+/// segments, so a stopped search's unsealed runs (all of a search under a million runs) would be
+/// left out without a word (#35). A running search with unsealed runs is refused.
+fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiError> {
+    use jetcarp_search::explore::runs::Runs;
+    use jetcarp_search::jobs::Lease;
+    let lib = cx.library();
+    for job in lib.jobs().map_err(ApiError::engine)? {
+        if job.kind != "explore" {
+            continue;
+        }
+        let Some(uuid) = job.spec.get("uuid").and_then(Value::as_str) else {
+            continue;
+        };
+        if !jetcarp_pack::read::safe_uuid(uuid)
+            || sel
+                .searches
+                .as_ref()
+                .is_some_and(|l| !l.iter().any(|u| u == uuid))
+        {
+            continue;
+        }
+        let path = lib
+            .folder()
+            .join("searches")
+            .join(uuid)
+            .join("search.sqlite");
+        if !path.is_file() {
+            continue;
+        }
+        let n = Runs::open_read(&path)
+            .and_then(|r| r.unsealed_now())
+            .map_err(ApiError::engine)?;
+        if n == 0 {
+            continue;
+        }
+        let refuse = |why: String| {
+            ApiError::conflict(format!(
+                "explore job {} is running ({why}), and its newest {n} runs are not sealed yet, so \
+                 the pack would leave them out",
+                job.id
+            ))
+            .hint("stop it first (jobs stop), then publish")
+        };
+        let lease = Lease::acquire(&lib, job.id).map_err(refuse)?;
+        if cx.registry().is_running(&lib, job.id) {
+            lease.release(false);
+            return Err(refuse("here".into()));
+        }
+        let r = Runs::open(&path).and_then(|mut c| c.seal_all());
+        lease.release(false);
+        let sealed: u64 = r.map_err(ApiError::engine)?.iter().map(|s| s.rows).sum();
+        p.log(&format!(
+            "explore job {} (search {uuid}): sealed its newest {sealed} runs first, so the pack \
+             carries every run",
+            job.id
+        ));
+    }
+    Ok(())
 }
 
 /// `pack.publish`.

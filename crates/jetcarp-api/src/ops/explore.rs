@@ -37,6 +37,7 @@ use jetcarp_search::explore::runs::{RunFilter, Runs};
 use jetcarp_search::explore::sheet::{self, RunRow};
 use jetcarp_search::explore::store::{self, feat_from_blob};
 use jetcarp_search::explore::{model, remeasure, runs, segments};
+use jetcarp_search::jobs::explore::ExploreProgress;
 use jetcarp_search::jobs::{self, Lease};
 use jetcarp_store::Library;
 use jetcarp_store::library::JobRow;
@@ -1529,16 +1530,19 @@ impl Op for SearchRescore {
         lease.release(false);
         let r = r?;
         // The saved progress shows the rebuilt archive at the job's next run; say so now.
-        let mut prog = row.progress.clone();
-        if let Some(o) = prog.as_object_mut() {
-            o.insert("elites".into(), r.elites.into());
-            o.insert("niches".into(), r.niches.into());
+        // With its line, which `jobs status` and `jobs list` show (#36).
+        if let Ok(mut ep) = serde_json::from_value::<ExploreProgress>(row.progress.clone())
+            && row.progress.is_object()
+        {
+            ep.elites = r.elites;
+            ep.niches = r.niches;
+            ep.confirmed_elites = r.confirmed_elites;
             // The score its runs have now (a model given here, else the one it had).
-            match &model {
-                Some(m) => o.insert("score".into(), m.describe().into()),
-                None => o.remove("score"),
-            };
-            let _ = lib.update_job(row.id, None, Some(&prog), None);
+            ep.score = model.as_ref().map(ScoreModel::describe);
+            ep.line = jetcarp_search::jobs::explore::line(&ep);
+            if let Ok(v) = serde_json::to_value(&ep) {
+                let _ = lib.update_job(row.id, None, Some(&v), None);
+            }
         }
         Ok(Rescored {
             job: row.id,

@@ -364,7 +364,8 @@ pub fn rebuild(lib: &Library, job: i64) -> Result<Rebuilt, String> {
         families: search.families(),
         folder: folder.display().to_string(),
         note: Some("its working database was rebuilt from its sealed runs".into()),
-        backend: "cpu only".into(),
+        // Nothing has run here yet (#37).
+        backend: "not run here yet".into(),
         ..Default::default()
     };
     p.line = line(&p);

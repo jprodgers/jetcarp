@@ -94,6 +94,17 @@ that will declare them stable.
 - **`jobs runs --reviewed` didn't show the verdicts.** It now gives each listed run's verdicts and
   star (`[keep ★]`, `[maybe, drop]`; `review` in the JSON).
   ([#33](https://github.com/jprodgers/jetcarp/issues/33))
+- **A pack of an explore search that was never sealed carried no runs.** A search seals its runs
+  into segments every million runs (or with `jobs seal`), and a pack carries only sealed segments,
+  so a smaller search was exported as an empty one, without a word. Publishing now seals a stopped
+  search's newest runs first and says so; a running one is refused until it is stopped.
+  ([#35](https://github.com/jprodgers/jetcarp/issues/35))
+- **After a rescore, a job's status kept its confirmed count from before.** A rescore picks new
+  elites by the new scores; it now counts how many of them are confirmed and rewrites the job's
+  line. ([#36](https://github.com/jprodgers/jetcarp/issues/36))
+- **An explore search imported from a pack said "cpu only"** though nothing had run in the
+  importing library; it now says "not run here yet".
+  ([#37](https://github.com/jprodgers/jetcarp/issues/37))
 
 ### Changed
 

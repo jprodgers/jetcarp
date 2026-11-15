@@ -602,6 +602,97 @@ fn explore_runs_with_measures_as_csv_and_json() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A pack carries every run of a stopped explore search that never sealed (one under a million
+/// runs keeps them all in its working database): publishing seals them first (#35), and the
+/// imported library lists them.
+#[test]
+fn a_pack_carries_the_runs_of_a_search_never_sealed() {
+    let dir = out_root().join(format!("cli-pack-search-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = |name: &str| dir.join(name).display().to_string();
+    let l = p("lib");
+    let e = json_of(&[
+        "search",
+        "explore",
+        "--library",
+        &l,
+        "--families",
+        "jaca",
+        "--tilings",
+        "square",
+        "--screen-cells",
+        "400",
+        "--screen-gens",
+        "64",
+        "--confirm-cells",
+        "400",
+        "--confirm-gens",
+        "64",
+        "--limit",
+        "40",
+        "--threads",
+        "2",
+        "--quiet",
+        "--json",
+    ]);
+    let pr = &e["progress"];
+    let ran = pr["screened"].as_u64().unwrap_or(0) + pr["confirmed"].as_u64().unwrap_or(0);
+    assert!(ran >= 40, "{e}");
+    json_of(&["--json", "pack", "key", "--name", "Test Publisher"]);
+    let o = jetcarp(&[
+        "pack",
+        "--library",
+        &l,
+        "publish",
+        "--feed",
+        "cli-search",
+        "--to",
+        &p("store"),
+        "--no-media",
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("sealed its newest"),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    json_of(&[
+        "--json",
+        "pack",
+        "--library",
+        &p("lib2"),
+        "import",
+        &p("store"),
+    ]);
+    let jobs = json_of(&["--json", "jobs", "--library", &p("lib2"), "list"]);
+    let job = jobs["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|j| j["kind"] == "explore")
+        .unwrap_or_else(|| panic!("no explore job in {jobs}"));
+    let id = job["job"].to_string();
+    let o = jetcarp(&[
+        "jobs",
+        "--library",
+        &p("lib2"),
+        "runs",
+        &id,
+        "--limit",
+        "0",
+        "--format",
+        "csv",
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let n = String::from_utf8(o.stdout).unwrap().lines().count() - 1;
+    assert_eq!(
+        n as u64, ran,
+        "every run of the search, in the imported library"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 // `jetcarp pack`: a key, a publish of a small library, a check and an import, through the
 // program, with the tests' own settings folder (the key is made there, never in ~/.ssh).
 #[test]

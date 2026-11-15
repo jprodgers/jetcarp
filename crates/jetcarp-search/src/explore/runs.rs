@@ -463,6 +463,8 @@ pub struct Rescored {
     pub changed: u64,
     pub elites: u64,
     pub niches: u64,
+    /// Elites confirmed, of the archive the rescore left.
+    pub confirmed_elites: u64,
     /// Score sidecars written (one per sealed segment with a changed score), and the rescore's
     /// version (0 when none were needed).
     pub sidecars: u64,
@@ -710,6 +712,19 @@ impl Runs {
     /// Runs in the working database (not yet sealed).
     pub fn unsealed(&self) -> u64 {
         self.unsealed
+    }
+
+    /// Runs not yet sealed, counted now: works on a search opened for reading too, whose
+    /// [`unsealed`](Self::unsealed) is not kept.
+    pub fn unsealed_now(&self) -> Result<u64, String> {
+        self.db
+            .query_row(
+                "SELECT COUNT(*) FROM runs WHERE id > ?1",
+                [self.manifest.last_id()],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n as u64)
+            .map_err(e)
     }
 
     /// Seal while at least `every` runs are unsealed, `every` at a time.
@@ -1586,6 +1601,14 @@ impl Runs {
         }
         tx.commit().map_err(e)?;
         out.niches = arch.cells.len() as u64;
+        let confirmed: std::collections::HashSet<i64> = {
+            let mut st = self.db.prepare("SELECT id FROM confirmed").map_err(e)?;
+            st.query_map([], |r| r.get::<_, i64>(0))
+                .map_err(e)?
+                .collect::<Result<_, _>>()
+                .map_err(e)?
+        };
+        out.confirmed_elites = arch.runs.keys().filter(|id| confirmed.contains(id)).count() as u64;
         if !files.is_empty() {
             out.sidecars = files.len() as u64;
             out.version = version;
