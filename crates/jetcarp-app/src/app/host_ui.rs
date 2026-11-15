@@ -6,7 +6,8 @@
 //!
 //! The host is its own program, so all of this works over the link and the settings file
 //! (`host.json`); closing this window leaves it running. Rotations and profiles are shared with
-//! the screensaver and edited in its pane.
+//! the screensaver. Profiles are edited in its pane; rotations there or here, under each screen
+//! (*Edit*, *New*, and *Show just this scene*: see `rotation_ui.rs`).
 
 use super::*;
 use egui_wgpu::wgpu;
@@ -156,8 +157,13 @@ impl HostPanel {
         }
     }
 
-    fn running(&self) -> Option<&Value> {
+    pub(super) fn running(&self) -> Option<&Value> {
         self.status.as_ref()?.as_ref().ok()
+    }
+
+    /// The host's settings as the pane shows them (read from `host.json` when not yet).
+    pub(super) fn settings_mut(&mut self) -> &mut HostSettings {
+        self.settings.get_or_insert_with(|| HostSettings::load().0)
     }
 
     /// The GPU the desktop background draws and steps on: the running host's, else the one the
@@ -279,6 +285,12 @@ impl JetcarpApp {
             .weak(),
         );
         let rotations = self.rotation_store().names();
+        let profile_names = match self.display.host_rotation_ui.host_screen() {
+            Some(_) => self.profile_store().names(),
+            None => vec![],
+        };
+        let scene = (self.screen == Screen::Sim && !self.world.cas.is_empty())
+            .then(|| self.profile_base_name());
         let monitors = self.host_monitor_names();
         let shared_was = crate::simgpu::shared_mode();
         let mut shared = shared_was;
@@ -351,6 +363,13 @@ impl JetcarpApp {
         }
         let mut remove = None;
         let count = settings.screens.len();
+        // The screen whose rotation is open in the editor, which shows under it.
+        let editing = self
+            .display
+            .host_rotation_ui
+            .host_screen()
+            .filter(|&i| i < count);
+        let mut rotation_do = None;
         for (i, screen) in settings.screens.iter_mut().enumerate() {
             ui.horizontal_wrapped(|ui| {
                 if count > 1 {
@@ -400,9 +419,28 @@ impl JetcarpApp {
                     remove = Some(i);
                 }
             });
+            let listed = rotations.contains(&screen.rotation);
+            let rot = &mut self.display.host_rotation_ui;
+            if let Some(a) = super::rotation_ui::host_rotation_buttons(
+                ui,
+                listed,
+                scene.as_deref(),
+                editing.is_some(),
+            ) {
+                rotation_do = Some((i, a));
+            }
+            if editing == Some(i) {
+                let tip = "Save it, and show it on this screen";
+                if let Some(a) = super::rotation_ui::editor_block(ui, rot, &profile_names, tip) {
+                    rotation_do = Some((i, a));
+                }
+                ui.separator();
+            }
         }
+        self.display.host_rotation_ui.note_ui(ui);
         if let Some(i) = remove {
             settings.screens.remove(i);
+            self.display.host_rotation_ui.screen_removed(i);
             changed = true;
         }
         ui.horizontal_wrapped(|ui| {
@@ -425,15 +463,25 @@ impl JetcarpApp {
         let mut edit_rotations = false;
         ui.horizontal_wrapped(|ui| {
             ui.label(
-                RichText::new("Rotations and profiles are shared with the screensaver:")
-                    .small()
-                    .weak(),
+                RichText::new(
+                    "Rotations and profiles are shared with the screensaver. Profiles are made \
+                     and edited in its pane:",
+                )
+                .small()
+                .weak(),
             );
             edit_rotations = ui
                 .small_button("Screensaver pane…")
-                .on_hover_text("Edit rotations and profiles (View → Screensaver settings…)")
+                .on_hover_text("Make and edit profiles (View → Screensaver settings…)")
                 .clicked();
         });
+        // A rotation edited, made or chosen here: saved, and chosen for its screen.
+        if let Some((i, a)) = rotation_do {
+            let ctx = ui.ctx().clone();
+            changed |= self.rotation_do(super::rotation_ui::Target::Host(i), a, &ctx);
+        }
+        let h = &mut self.display.host;
+        let settings = h.settings.as_mut().expect("loaded above");
         // ---------------------------------------------- the desktop
         ui.add_enabled_ui(on, |ui| {
             changed |= ui

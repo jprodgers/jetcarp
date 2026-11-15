@@ -54,6 +54,11 @@ your profile in it:
    box for a Quick Start entry and press Enter.
 3. Press *Save*.
 
+(*Edit* and *New* under the screen's rotation in the *Desktop background* pane open the same editor
+there, and its *Save* chooses the rotation for that screen. To show just the one scene, *Show just
+this scene* there does it all in one press: it saves the scene open in the app as a profile and as a
+rotation of just that profile, and chooses that rotation for the screen.)
+
 Then open the *Desktop background* pane: *View → Desktop background settings…*, or *Desktop
 background settings…* under *While it runs*. Everything about the host is there:
 

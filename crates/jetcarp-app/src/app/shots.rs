@@ -561,6 +561,171 @@ fn shots_desktop_pane_cards() {
     h.shot("desktop-pane-cards");
 }
 
+/// Issue #41: rotations from the Desktop background pane. With a scene open in the app (the one the
+/// Windows test had, JACA rainbow fronts on Cairo pentagons), the pane before and after *Show just
+/// this scene*: the scene saved as a profile and as a rotation of just that profile, the screen
+/// running it, the screensaver's choice untouched; pressed again, nothing more is made. Then the
+/// editor opened from the pane, with Save and Close above it, and a new rotation saved there,
+/// chosen for the screen alone. Pictures: `desktop-just-*.png`.
+#[test]
+#[ignore]
+fn shots_desktop_show_just_this_scene() {
+    use jetcarp_display::host_settings::HostSettings;
+    use jetcarp_display::rotation::RotationStore;
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    let q = jetcarp_core::quickstart::jaca_presets()
+        .into_iter()
+        .find(|q| q.scene.name == "JACA rainbow fronts (Cairo)")
+        .expect("the JACA preset");
+    h.app.load_scene_bg(&q.scene);
+    h.built();
+    h.run(2.0, 0.05, |_| false);
+    let name = h.app.scene_name.clone();
+    assert_eq!(name, "JACA rainbow fronts (Cairo)");
+    let saver = h.app.shell.display.screensaver.clone();
+    h.app
+        .display
+        .host
+        .test_extension(jetcarp_display::gnome::ExtensionState::NotInstalled);
+    h.action(menu::Action::Pane("desktop"));
+    h.column(0.4, 0.94);
+    h.frame_with(0.05, vec![]);
+    let pane = egui::Rect::from_min_max(
+        egui::pos2(0.0, 0.0),
+        egui::pos2(0.4 * h.o.size()[0] as f32 + 8.0, h.o.size()[1] as f32),
+    );
+    h.find("Show just this scene");
+    h.steady();
+    h.shot_part("desktop-just-before", pane);
+    // Its explanation, as the pointer rests on it.
+    h.hover_on("Show just this scene");
+    h.run(1.5, 0.05, |_| false);
+    h.shot_part("desktop-just-hover", pane);
+
+    // One press: a profile and a rotation of just it, chosen for the (only) screen.
+    h.click("Show just this scene");
+    h.run(0.5, 0.05, |_| false);
+    let rotations = RotationStore::dir_for_settings(h.app.shell.store.path()).unwrap();
+    let file = rotations.join("jaca-rainbow-fronts-cairo.json");
+    assert!(file.exists(), "{} was written", file.display());
+    let r = h.app.rotation_store().get(&name).expect("the rotation");
+    assert_eq!(r.just_profile(), Some(name.as_str()));
+    assert!(h.app.profile_store().listed(&name).unwrap().file.is_some());
+    assert_eq!(HostSettings::load().0.screens[0].rotation, name, "on disk");
+    assert_eq!(
+        h.app.shell.display.screensaver, saver,
+        "the screensaver's own"
+    );
+    h.steady();
+    h.shot_part("desktop-just-after", pane);
+    h.shot("desktop-just-after-window");
+
+    // Again: the same profile and rotation, updated, not "2".
+    let files = std::fs::read_dir(&rotations).unwrap().count();
+    h.click("Show just this scene");
+    h.run(0.5, 0.05, |_| false);
+    assert_eq!(std::fs::read_dir(&rotations).unwrap().count(), files);
+    let twos = format!("{name} 2");
+    assert!(!h.app.rotation_store().names().contains(&twos));
+    assert!(!h.app.profile_store().names().contains(&twos));
+    assert_eq!(h.app.shell.display.screensaver, saver);
+
+    // Edit, beside it: the editor opens under the screen, Save and Close at its top.
+    let row = h.find("Show just this scene");
+    let on_row = |h: &Harness, text: &str| {
+        h.o.widgets
+            .iter()
+            .filter(|w| w.0 == text && w.1.min.y < row.max.y && w.1.max.y > row.min.y)
+            .map(|w| w.1)
+            .next()
+            .unwrap_or_else(|| panic!("no {text:?} beside Show just this scene"))
+    };
+    let edit = on_row(&h, "Edit");
+    h.click_at(edit.center(), egui::PointerButton::Primary);
+    assert_eq!(h.app.display.host_rotation_ui.host_screen(), Some(0));
+    // The top one of each pair of buttons.
+    let top = |h: &Harness, text: &str| {
+        h.o.widgets
+            .iter()
+            .filter(|w| w.0 == text)
+            .map(|w| w.1)
+            .min_by(|a, b| a.min.y.total_cmp(&b.min.y))
+            .unwrap_or_else(|| panic!("no {text:?}"))
+    };
+    assert!(
+        top(&h, "Save").max.y < top(&h, "Name").min.y,
+        "Save above the name"
+    );
+    h.steady();
+    h.shot_part("desktop-just-editor", pane);
+    let close = top(&h, "Close");
+    h.click_at(close.center(), egui::PointerButton::Primary);
+    assert_eq!(h.app.display.host_rotation_ui.host_screen(), None);
+
+    // New, then Save at the top: chosen for the screen, the screensaver's choice as it was.
+    let new = on_row(&h, "New");
+    h.click_at(new.center(), egui::PointerButton::Primary);
+    assert_eq!(h.app.display.host_rotation_ui.host_screen(), Some(0));
+    let save = top(&h, "Save");
+    h.click_at(save.center(), egui::PointerButton::Primary);
+    h.run(0.5, 0.05, |_| false);
+    let chosen = HostSettings::load().0.screens[0].rotation.clone();
+    assert!(chosen.starts_with("My rotation"), "chose {chosen:?}");
+    assert!(
+        h.app
+            .rotation_store()
+            .listed(&chosen)
+            .unwrap()
+            .file
+            .is_some()
+    );
+    assert_eq!(
+        h.app.shell.display.screensaver, saver,
+        "still the screensaver's own"
+    );
+    h.steady();
+    h.shot_part("desktop-just-new-saved", pane);
+
+    // The Screensaver pane's editor, Save at its top too: saving there chooses the rotation for
+    // the screensaver and leaves the screen's as it is.
+    h.action(menu::Action::Pane("screensaver"));
+    h.app.shell.display.screensaver.source = super::display::SaverSource::Rotation;
+    h.app.shell.display.screensaver.rotation = name.clone();
+    h.frame_with(0.05, vec![]);
+    let below_menus = |h: &Harness, text: &str| {
+        h.o.widgets
+            .iter()
+            .filter(|w| w.0 == text && w.1.min.y > 30.0)
+            .map(|w| w.1)
+            .min_by(|a, b| a.min.y.total_cmp(&b.min.y))
+            .unwrap_or_else(|| panic!("no {text:?}"))
+    };
+    let edit = below_menus(&h, "Edit");
+    h.click_at(edit.center(), egui::PointerButton::Primary);
+    assert!(
+        top(&h, "Save").max.y < top(&h, "Name").min.y,
+        "Save above the name"
+    );
+    h.find("Save and start");
+    h.steady();
+    h.shot_part("saver-rotation-editor", pane);
+    let save = top(&h, "Save");
+    h.click_at(save.center(), egui::PointerButton::Primary);
+    h.run(0.5, 0.05, |_| false);
+    let s = &h.app.shell.display.screensaver;
+    assert_eq!(
+        (s.rotation.as_str(), s.source),
+        (name.as_str(), super::display::SaverSource::Rotation)
+    );
+    assert_eq!(
+        HostSettings::load().0.screens[0].rotation,
+        chosen,
+        "the screen's as it was"
+    );
+}
+
 /// Tutorial 2 (`tutorials/life-on-a-new-tiling.md`): a new empty world, the 2-uniform tiling
 /// k2-007 from the tiling catalog, Life from *CA → Add from catalog*, run; the Objects pane's
 /// census with the ships highlighted. Prints the world's hash (the tutorial's command line

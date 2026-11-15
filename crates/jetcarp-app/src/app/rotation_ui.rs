@@ -1,13 +1,29 @@
-//! The rotation chooser and editor in the Screensaver pane.
+//! The rotation editor: in the Screensaver pane for the screensaver's rotation, and in the Desktop
+//! background pane for each screen's. Saving chooses the rotation for the one it was opened from.
+//! And *Show just this scene*, in the Desktop background pane: the scene open in the app saved as
+//! a profile and a rotation of just that profile, chosen for a screen.
 
 use super::*;
+use jetcarp_display::host_settings::{HostSettings, ScreenSettings};
 use jetcarp_display::rotation::{
     DAY_NAMES, End, Item, Look, Order, Rotation, RotationStore, Schedule, Source,
 };
 
-/// The rotation being edited.
+/// What a rotation saved in the editor is chosen for.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub(super) enum Target {
+    /// The screensaver (the Screensaver pane).
+    #[default]
+    Saver,
+    /// Screen `i` of the desktop background (the Desktop background pane).
+    Host(usize),
+}
+
+/// The rotation being edited in one pane.
 #[derive(Default)]
 pub(super) struct RotationUi {
+    /// What saving chooses it for.
+    target: Target,
     draft: Option<Rotation>,
     /// The result of the last save or check.
     note: Option<(String, bool)>,
@@ -16,7 +32,37 @@ pub(super) struct RotationUi {
     quick_start_id: String,
 }
 
-enum Do {
+impl RotationUi {
+    /// The desktop background screen whose rotation is open in the editor.
+    pub(super) fn host_screen(&self) -> Option<usize> {
+        match (self.target, &self.draft) {
+            (Target::Host(i), Some(_)) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// Desktop background screen `i` was removed: its editor closes, and the screens after it
+    /// move up.
+    pub(super) fn screen_removed(&mut self, i: usize) {
+        if let Target::Host(j) = self.target {
+            if j == i {
+                self.draft = None;
+                self.script_error = None;
+            } else if j > i {
+                self.target = Target::Host(j - 1);
+            }
+        }
+    }
+
+    /// The last note, when the editor (which shows it by its buttons) is closed.
+    pub(super) fn note_ui(&self, ui: &mut egui::Ui) {
+        if self.draft.is_none() {
+            note_ui(ui, &self.note);
+        }
+    }
+}
+
+pub(super) enum Do {
     Edit,
     New,
     Duplicate,
@@ -24,6 +70,8 @@ enum Do {
     Save,
     Close,
     Start,
+    /// *Show just this scene* (a desktop background screen).
+    Just,
 }
 
 const STARTER_SCRIPT: &str = r#"// Runs about once a second. `s` describes what is showing, `state` keeps
@@ -31,6 +79,27 @@ const STARTER_SCRIPT: &str = r#"// Runs about once a second. `s` describes what 
 // an item number, or #{item: "label"}. Anything else just continues.
 if s.generation > 20000 { "next" }
 "#;
+
+/// Chooses rotation `name` for `target`: the screensaver's rotation (and *A rotation* as what it
+/// shows), or desktop background screen `i`'s. Nothing else changes. True when it was for a
+/// screen that exists, whose settings are then saved and told to the host (which shows the
+/// rotation as saved, even under the same name).
+fn choose(target: Target, name: &str, saver: &mut SaverSettings, host: &mut HostSettings) -> bool {
+    match target {
+        Target::Saver => {
+            saver.rotation = name.to_string();
+            saver.source = SaverSource::Rotation;
+            false
+        }
+        Target::Host(i) => match host.screens.get_mut(i) {
+            Some(s) => {
+                s.rotation = name.to_string();
+                true
+            }
+            None => false,
+        },
+    }
+}
 
 impl JetcarpApp {
     pub(super) fn rotation_store(&mut self) -> &mut RotationStore {
@@ -41,13 +110,36 @@ impl JetcarpApp {
         &mut self.display.rotations
     }
 
-    /// Open the chosen rotation in the editor.
+    /// The editor's state for `target`: the Screensaver pane's or the Desktop background pane's.
+    fn rotation_state(&mut self, target: Target) -> &mut RotationUi {
+        match target {
+            Target::Saver => &mut self.display.rotation_ui,
+            Target::Host(_) => &mut self.display.host_rotation_ui,
+        }
+    }
+
+    /// The rotation chosen for `target` now.
+    fn rotation_chosen(&mut self, target: Target) -> String {
+        match target {
+            Target::Saver => self.shell.display.screensaver.rotation.clone(),
+            Target::Host(i) => self
+                .display
+                .host
+                .settings_mut()
+                .screens
+                .get(i)
+                .map(|s| s.rotation.clone())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Open the screensaver's rotation in the editor.
     pub(super) fn rotation_edit_chosen(&mut self) {
         let name = self.shell.display.screensaver.rotation.clone();
         self.display.rotation_ui.draft = self.rotation_store().get(&name);
     }
 
-    /// Choose a rotation, and edit it.
+    /// The Screensaver pane's rotation: choose one, and edit it.
     pub(super) fn rotation_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let current = self.shell.display.screensaver.rotation.clone();
         let store = self.rotation_store();
@@ -106,41 +198,23 @@ impl JetcarpApp {
             }
         });
         let state = &mut self.display.rotation_ui;
-        if let Some(r) = &mut state.draft {
-            ui.separator();
-            let qs = &mut state.quick_start_id;
-            let script_error = &mut state.script_error;
-            editor(ui, r, &profile_names, qs, script_error);
-            ui.horizontal(|ui| {
-                if ui.button(RichText::new("Save").strong()).clicked() {
-                    action = Some(Do::Save);
-                }
-                if ui
-                    .button("Save and start")
-                    .on_hover_text("Save, then run the screensaver on this rotation")
-                    .clicked()
-                {
-                    action = Some(Do::Start);
-                }
-                if ui.button("Close").on_hover_text("Discard edits").clicked() {
-                    action = Some(Do::Close);
-                }
-            });
+        if let Some(a) = editor_block(
+            ui,
+            state,
+            &profile_names,
+            "Save it, and choose it for the screensaver",
+        ) {
+            action = Some(a);
         }
-        if let Some((t, err)) = &state.note {
-            let color = if *err {
-                Color32::from_rgb(255, 110, 110)
-            } else {
-                ui.visuals().weak_text_color()
-            };
-            ui.label(RichText::new(t).small().color(color));
-        }
+        state.note_ui(ui);
         if let Some(a) = action {
-            self.rotation_do(a, chosen.map(|l| l.rotation), ctx);
+            self.rotation_do(Target::Saver, a, ctx);
         }
     }
 
-    fn rotation_do(&mut self, a: Do, chosen: Option<Rotation>, ctx: &egui::Context) {
+    /// Does an editor action for `target`. True when it chose a rotation for a desktop
+    /// background screen: the Desktop background pane then saves its settings and tells the host.
+    pub(super) fn rotation_do(&mut self, target: Target, a: Do, ctx: &egui::Context) -> bool {
         let free_name = |store: &RotationStore, base: &str| {
             let names = store.names();
             if !names.iter().any(|n| n == base) {
@@ -151,61 +225,252 @@ impl JetcarpApp {
                 .find(|n| !names.contains(n))
                 .expect("a free name")
         };
+        let chosen_name = self.rotation_chosen(target);
+        let chosen = self
+            .rotation_store()
+            .listed(&chosen_name)
+            .map(|l| l.rotation);
+        let open = |s: &mut RotationUi, draft: Option<Rotation>| {
+            s.target = target;
+            s.draft = draft;
+            s.note = None;
+            s.script_error = None;
+        };
         match a {
-            Do::Edit => {
-                self.display.rotation_ui.draft = chosen;
-                self.display.rotation_ui.note = None;
-            }
+            Do::Edit => open(self.rotation_state(target), chosen),
             Do::New => {
                 let name = free_name(self.rotation_store(), "My rotation");
-                self.display.rotation_ui.draft = Some(Rotation {
+                let r = Rotation {
                     name,
                     items: vec![Item::new(Source::Profile {
                         name: "Life".into(),
                     })],
                     ..Default::default()
-                });
-                self.display.rotation_ui.note = None;
+                };
+                open(self.rotation_state(target), Some(r));
             }
             Do::Duplicate => {
                 if let Some(mut r) = chosen {
                     r.name = free_name(self.rotation_store(), &format!("{} copy", r.name));
-                    self.display.rotation_ui.draft = Some(r);
-                    self.display.rotation_ui.note = None;
+                    open(self.rotation_state(target), Some(r));
                 }
             }
             Do::Delete => {
-                let name = self.shell.display.screensaver.rotation.clone();
-                let res = self.rotation_store().delete(&name);
-                self.display.rotation_ui.note = res.err().map(|e| (e, true));
-                if self.rotation_store().get(&name).is_none() {
-                    self.shell.display.screensaver.rotation = SaverSettings::default().rotation;
+                let res = self.rotation_store().delete(&chosen_name);
+                self.rotation_state(target).note = res.err().map(|e| (e, true));
+                if self.rotation_store().get(&chosen_name).is_none() {
+                    match target {
+                        Target::Saver => {
+                            self.shell.display.screensaver.rotation =
+                                SaverSettings::default().rotation;
+                        }
+                        Target::Host(_) => {
+                            let s = &mut self.shell.display.screensaver;
+                            let default = ScreenSettings::default().rotation;
+                            return choose(target, &default, s, self.display.host.settings_mut());
+                        }
+                    }
                 }
             }
             Do::Close => {
-                self.display.rotation_ui.draft = None;
-                self.display.rotation_ui.note = None;
-                self.display.rotation_ui.script_error = None;
+                let s = self.rotation_state(target);
+                s.draft = None;
+                s.note = None;
+                s.script_error = None;
             }
             Do::Save | Do::Start => {
-                let Some(r) = self.display.rotation_ui.draft.clone() else {
-                    return;
+                let Some(r) = self.rotation_state(target).draft.clone() else {
+                    return false;
                 };
                 match self.rotation_store().save(&r) {
                     Ok(p) => {
-                        self.display.rotation_ui.note =
+                        self.rotation_state(target).note =
                             Some((format!("Saved to {}.", p.display()), false));
                         let s = &mut self.shell.display.screensaver;
-                        s.rotation = r.name;
-                        s.source = SaverSource::Rotation;
-                        if matches!(a, Do::Start) {
+                        let changed = choose(target, &r.name, s, self.display.host.settings_mut());
+                        if matches!(a, Do::Start) && target == Target::Saver {
                             self.saver_restart(ctx);
                         }
+                        return changed;
                     }
-                    Err(e) => self.display.rotation_ui.note = Some((e, true)),
+                    Err(e) => self.rotation_state(target).note = Some((e, true)),
                 }
             }
+            Do::Just => {
+                let Target::Host(i) = target else {
+                    return false;
+                };
+                let done = self.show_just_this_scene(i);
+                let ok = done.is_ok();
+                self.rotation_state(target).note = Some(match done {
+                    Ok(t) => (t, false),
+                    Err(e) => (e, true),
+                });
+                return ok;
+            }
         }
+        false
+    }
+
+    /// *Show just this scene* for desktop background screen `i`: the world open in the app saved
+    /// as a profile named after its scene (as *Save current world as profile* does; a profile of
+    /// your own of that name, saved by an earlier press, is updated from the world instead, as
+    /// *Update from the current world* does), a rotation of just that profile (likewise made once,
+    /// then kept), and that rotation chosen for the screen. Returns what it did, in words.
+    pub(super) fn show_just_this_scene(&mut self, i: usize) -> Result<String, String> {
+        if self.screen != Screen::Sim || self.world.cas.is_empty() {
+            return Err("Open a scene first: this shows the scene open in the app.".into());
+        }
+        let base = self.profile_base_name();
+        self.saver_ui_flush(true);
+        let name = self.profile_store().own_or_free_name(&base);
+        if self.profile_store().listed(&name).is_some() {
+            self.profile_update_from_world(&name)?;
+        } else {
+            let p = self.profile_from_world(&name);
+            self.profile_store().save(&p)?;
+        }
+        let (r, path) = self.rotation_store().save_just(&name, &name)?;
+        let host = self.display.host.settings_mut();
+        let count = host.screens.len();
+        choose(
+            Target::Host(i),
+            &r.name,
+            &mut self.shell.display.screensaver,
+            host,
+        );
+        let screen = if count > 1 {
+            format!("screen {}", i + 1)
+        } else {
+            "the desktop background".into()
+        };
+        let mut t = format!(
+            "Saved the scene as the profile {name:?} and the rotation {:?} ({}), and chose it \
+             for {screen}.",
+            r.name,
+            path.display()
+        );
+        if self.display.host.running().is_none() {
+            t.push_str(" Press Start to show it.");
+        }
+        Ok(t)
+    }
+}
+
+/// A desktop background screen's buttons, under its rotation: *Edit* (when `listed`, the
+/// rotation exists) and *New* while the editor is closed, and *Show just this scene* (`scene`: the
+/// scene open in the app, if any).
+pub(super) fn host_rotation_buttons(
+    ui: &mut egui::Ui,
+    listed: bool,
+    scene: Option<&str>,
+    editing: bool,
+) -> Option<Do> {
+    let mut action = None;
+    ui.horizontal_wrapped(|ui| {
+        if !editing {
+            if ui
+                .add_enabled(listed, egui::Button::new("Edit").small())
+                .on_hover_text("Edit this rotation here. Save shows it on this screen")
+                .clicked()
+            {
+                action = Some(Do::Edit);
+            }
+            if ui
+                .small_button("New")
+                .on_hover_text("Make a rotation here. Save shows it on this screen")
+                .clicked()
+            {
+                action = Some(Do::New);
+            }
+        }
+        let tip = format!(
+            "Show {:?}, the scene open in the app, and nothing else on this screen: it is saved \
+             as a profile and as a rotation of just that profile, which this screen then runs. \
+             Pressing it again for the same scene updates them",
+            scene.unwrap_or_default()
+        );
+        if ui
+            .add_enabled(
+                scene.is_some(),
+                egui::Button::new("Show just this scene").small(),
+            )
+            .on_hover_text(tip)
+            .on_disabled_hover_text("Open a scene in the app first: this shows it on this screen")
+            .clicked()
+        {
+            action = Some(Do::Just);
+        }
+    });
+    action
+}
+
+/// The editor, with *Save* and *Close* both above and below it so they show without scrolling
+/// down a long rotation, and the last note under each. Nothing while no rotation is open.
+pub(super) fn editor_block(
+    ui: &mut egui::Ui,
+    state: &mut RotationUi,
+    profile_names: &[String],
+    save_tip: &str,
+) -> Option<Do> {
+    let RotationUi {
+        target,
+        draft,
+        note,
+        script_error,
+        quick_start_id,
+    } = state;
+    let r = draft.as_mut()?;
+    let target = *target;
+    let mut action = None;
+    ui.push_id(("rotation-editor", target), |ui| {
+        ui.separator();
+        if let Some(a) = editor_buttons(ui, target, save_tip) {
+            action = Some(a);
+        }
+        note_ui(ui, note);
+        editor(ui, r, profile_names, quick_start_id, script_error);
+        if let Some(a) = editor_buttons(ui, target, save_tip) {
+            action = Some(a);
+        }
+        note_ui(ui, note);
+    });
+    action
+}
+
+fn editor_buttons(ui: &mut egui::Ui, target: Target, save_tip: &str) -> Option<Do> {
+    let mut action = None;
+    ui.horizontal(|ui| {
+        if ui
+            .button(RichText::new("Save").strong())
+            .on_hover_text(save_tip)
+            .clicked()
+        {
+            action = Some(Do::Save);
+        }
+        if target == Target::Saver
+            && ui
+                .button("Save and start")
+                .on_hover_text("Save, then run the screensaver on this rotation")
+                .clicked()
+        {
+            action = Some(Do::Start);
+        }
+        if ui.button("Close").on_hover_text("Discard edits").clicked() {
+            action = Some(Do::Close);
+        }
+    });
+    action
+}
+
+fn note_ui(ui: &mut egui::Ui, note: &Option<(String, bool)>) {
+    if let Some((t, err)) = note {
+        let color = if *err {
+            Color32::from_rgb(255, 110, 110)
+        } else {
+            ui.visuals().weak_text_color()
+        };
+        ui.label(RichText::new(t).small().color(color));
     }
 }
 
@@ -628,4 +893,68 @@ fn look_ui(ui: &mut egui::Ui, id: &str, l: &mut Look, title: &str) {
                 }
             });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Saving in the Desktop background pane chooses the rotation for that screen and leaves the
+    /// screensaver alone; saving in the Screensaver pane chooses it for the screensaver and
+    /// leaves the desktop background alone (issue #41: it set the screensaver's either way).
+    #[test]
+    fn saving_chooses_the_rotation_for_where_it_was_edited_only() {
+        let saver = SaverSettings {
+            source: SaverSource::Profile,
+            rotation: "Wolfram series".into(),
+            ..Default::default()
+        };
+        let host = HostSettings {
+            screens: vec![ScreenSettings::default(), ScreenSettings::default()],
+            ..Default::default()
+        };
+
+        let (mut s, mut h) = (saver.clone(), host.clone());
+        assert!(choose(Target::Host(1), "Mine", &mut s, &mut h));
+        assert_eq!(s, saver, "the screensaver's settings are untouched");
+        assert_eq!(h.screens[1].rotation, "Mine");
+        assert_eq!(h.screens[0], host.screens[0], "and the other screen's");
+        assert!(
+            !choose(Target::Host(2), "Mine", &mut s, &mut h),
+            "no such screen"
+        );
+        assert_eq!((&s, h.screens.len()), (&saver, 2));
+
+        let (mut s, mut h) = (saver.clone(), host.clone());
+        assert!(!choose(Target::Saver, "Mine", &mut s, &mut h));
+        assert_eq!(s.rotation, "Mine");
+        assert_eq!(s.source, SaverSource::Rotation);
+        assert_eq!(h, host, "the desktop background's settings are untouched");
+    }
+
+    #[test]
+    fn removing_a_screen_closes_its_editor_and_moves_later_ones_up() {
+        let open = |i| RotationUi {
+            target: Target::Host(i),
+            draft: Some(Rotation::just("Mine", "Life")),
+            ..Default::default()
+        };
+        let mut ui = open(1);
+        ui.screen_removed(2);
+        assert_eq!(ui.host_screen(), Some(1));
+        ui.screen_removed(0);
+        assert_eq!(ui.host_screen(), Some(0));
+        ui.screen_removed(0);
+        assert_eq!(ui.host_screen(), None, "closed");
+        assert_eq!(RotationUi::default().host_screen(), None);
+        let mut saver = RotationUi {
+            draft: Some(Rotation::just("Mine", "Life")),
+            ..Default::default()
+        };
+        saver.screen_removed(0);
+        assert!(
+            saver.draft.is_some(),
+            "the Screensaver pane's is not a screen's"
+        );
+    }
 }

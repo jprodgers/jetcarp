@@ -22,7 +22,10 @@ built-in rotations, using one, and making your own.
   under *Rotation*, or start the app with `jetcarp --screensaver --rotation "Wolfram series"`.
 - **The background host:** choose it under *Rotation* in the *Desktop background* pane, or run
   `jetcarp host rotation "Classics, hourly"` (add `--screen N` for one screen of several).
-  `jetcarp host start --rotation NAME` runs one for that run only.
+  `jetcarp host start --rotation NAME` runs one for that run only. *Show just this scene*, under a
+  screen's rotation in the pane, makes a rotation of just the scene open in the app and chooses it
+  for that screen (see
+  [The Desktop background pane](wallpapers.md#the-desktop-background-pane)).
 - **The system's screen saver:** `jetcarp host saver install --rotation NAME`, or *System screen saver
   runs* in the *Screensaver* pane. On macOS the rotation is copied into the screen saver, so install it again after changing
   the rotation (see [Wallpapers](wallpapers.md#the-systems-screen-saver)).
@@ -59,7 +62,8 @@ all hour), and a program started again shows the same item:
 
 In the *Screensaver* pane, set *Show* to *A rotation*. Under the rotation's name are *Edit*, *New*,
 *Duplicate* and, for one of your own, *Delete* (for an edited built-in rotation, *Revert to built-in*).
-The editor has:
+In the *Desktop background* pane, each screen has *Edit* and *New* under its rotation, which open the
+same editor under that screen. The editor has:
 
 - **Name**, and **Order**: *In order*, *Shuffled* (a new random order each time through), *One a
   day* (one item per calendar day, the next one tomorrow) or *One an hour* (one item per hour of the
@@ -85,8 +89,11 @@ The editor has:
     the **Tiling**, **From** and **To**, and the **Seed**.
 - **Script:** *Add a script* (see [below](#a-rotations-script)).
 
-*Save* keeps it, *Save and start* runs the screensaver on it at once, and *Close* discards the edits.
-Editing a built-in rotation saves your own copy under the same name.
+*Save* keeps it and chooses it where the editor was opened: for the screensaver in the *Screensaver*
+pane, for that screen in the *Desktop background* pane (a running host shows it at once, edits and
+all), each leaving the other's choice as it was. *Save and start* (in the *Screensaver* pane) runs
+the screensaver on it at once, and *Close* discards the edits. *Save* and *Close* are both above the
+editor and below it. Editing a built-in rotation saves your own copy under the same name.
 
 ## Rotation files
 

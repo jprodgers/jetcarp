@@ -105,6 +105,17 @@ that will declare them stable.
 - **An explore search imported from a pack said "cpu only"** though nothing had run in the
   importing library; it now says "not run here yet".
   ([#37](https://github.com/jprodgers/jetcarp/issues/37))
+- **The desktop background's pane could not make a rotation, and the rotation editor's *Save* was
+  out of sight.** A rotation was made in the *Screensaver* pane, with *Show* set to *A rotation*,
+  where *Save* sat below the whole editor in a scrolling pane, and saving there chose the rotation
+  for the screensaver, not the desktop. The *Desktop background* pane now has, under each screen's
+  rotation, *Show just this scene*, which saves the scene open in the app as a profile and as a
+  rotation of just that profile and chooses it for the screen (pressed again for the same scene, it
+  updates them rather than adding more), and *Edit* and *New*, which open the rotation editor in the
+  pane; its *Save* chooses the rotation for that screen and leaves the screensaver's as it was. In
+  both panes the editor has *Save* and *Close* above it as well as below. A running host now shows
+  a rotation or profile saved again under the same name, where it carried on with the old one.
+  ([#41](https://github.com/jprodgers/jetcarp/issues/41))
 
 ### Changed
 

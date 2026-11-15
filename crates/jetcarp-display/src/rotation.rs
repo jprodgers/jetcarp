@@ -481,6 +481,33 @@ impl Rotation {
         serde_json::to_string_pretty(self).expect("a rotation serializes")
     }
 
+    /// A rotation called `name` of just the stored profile `profile`, which runs until something
+    /// else moves on (as *Show just this scene* makes).
+    pub fn just(name: &str, profile: &str) -> Rotation {
+        Rotation {
+            name: name.to_string(),
+            description: format!("Just {profile:?}, made by Show just this scene."),
+            default_minutes: None,
+            items: vec![Item::new(Source::Profile {
+                name: profile.to_string(),
+            })],
+            ..Default::default()
+        }
+    }
+
+    /// The stored profile this rotation shows, when that is all it shows (one item).
+    pub fn just_profile(&self) -> Option<&str> {
+        match self.items.as_slice() {
+            [
+                Item {
+                    source: Source::Profile { name },
+                    ..
+                },
+            ] => Some(name),
+            _ => None,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.name.trim().is_empty() {
             return Err("a rotation needs a name".into());
@@ -1379,6 +1406,31 @@ impl RotationStore {
             None => self.user.push((path.clone(), r.clone())),
         }
         Ok(path)
+    }
+
+    /// Save a rotation of just the stored profile `profile` (*Show just this scene*), called
+    /// `base`, else `base 2`, `base 3` … past names taken by anything else: a built-in (or your
+    /// copy of one), or a rotation of your own that shows more or another profile. One of your own
+    /// that already shows just this profile is kept as it is and saved again, so doing this twice
+    /// for a scene leaves one rotation. Returns the rotation and its file.
+    pub fn save_just(&mut self, base: &str, profile: &str) -> Result<(Rotation, PathBuf), String> {
+        let base = match base.trim() {
+            "" => "My scene",
+            b => b,
+        };
+        let list = self.list();
+        let r = std::iter::once(base.to_string())
+            .chain((2..).map(|k| format!("{base} {k}")))
+            .find_map(|n| match list.iter().find(|l| l.rotation.name == n) {
+                None => Some(Rotation::just(&n, profile)),
+                Some(l) if !l.builtin && l.rotation.just_profile() == Some(profile) => {
+                    Some(l.rotation.clone())
+                }
+                Some(_) => None,
+            })
+            .expect("a free name");
+        let path = self.save(&r)?;
+        Ok((r, path))
     }
 
     /// Delete a user rotation's file (for a built-in's user copy: back to the built-in).

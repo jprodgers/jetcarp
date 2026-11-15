@@ -95,6 +95,18 @@ pub struct Screen {
     /// The monitor this screen belongs on.
     pub monitor: Option<usize>,
     pub place: Place,
+    /// The rotation and its items as the stage was built from them ([`made_from`]): a reload
+    /// keeps the stage only while they are the same, so a rotation or profile saved since shows.
+    made_from: String,
+}
+
+/// A rotation and its expanded items, as text to compare.
+fn made_from(r: &Rotation, slots: &[jetcarp_display::rotation::Slot]) -> String {
+    format!(
+        "{}\n{}",
+        r.to_json(),
+        serde_json::to_string(slots).unwrap_or_default()
+    )
 }
 
 pub struct Core {
@@ -384,8 +396,10 @@ impl Core {
         }
     }
 
-    fn new_stage(&self, name: &str, canvas: [f64; 2]) -> Result<Stage, String> {
+    /// A stage running the rotation called `name`, as it is now, and what it is made from.
+    fn new_stage(&self, name: &str, canvas: [f64; 2]) -> Result<(Stage, String), String> {
         let (r, slots) = load_rotation(name)?;
+        let from = made_from(&r, &slots);
         let mut stage = Stage::new(
             &r,
             slots,
@@ -395,7 +409,7 @@ impl Core {
             self.settings.max_cells,
         )?;
         stage.resize(canvas, self.scale, self.now());
-        Ok(stage)
+        Ok((stage, from))
     }
 
     fn wanted_rotation(&self, i: usize) -> String {
@@ -405,7 +419,8 @@ impl Core {
         }
     }
 
-    /// Makes the running screens match the settings, keeping those that did not change.
+    /// Makes the running screens match the settings, keeping those that did not change: the same
+    /// rotation, with the same items and profiles (one saved since is shown afresh).
     fn build_screens(&mut self) -> Result<(), String> {
         let mut old: Vec<Option<Screen>> = std::mem::take(&mut self.screens)
             .into_iter()
@@ -421,7 +436,14 @@ impl Core {
             );
             let tuned = self.settings.tuning_for(i, &want).cloned();
             let kept = old.get_mut(i).and_then(Option::take);
-            if let Some(mut s) = kept.filter(|s| s.stage.rotation() == want) {
+            // One that can no longer be read keeps going as it is.
+            let unchanged = |s: &Screen| {
+                s.stage.rotation() == want
+                    && jetcarp_display::rotation::load_stored(&want)
+                        .ok()
+                        .is_none_or(|(r, slots, _)| made_from(&r, &slots) == s.made_from)
+            };
+            if let Some(mut s) = kept.filter(unchanged) {
                 s.monitor = monitor;
                 s.place = place;
                 s.stage.set_tuned(tuned);
@@ -429,7 +451,7 @@ impl Core {
                 continue;
             }
             match self.new_stage(&want, self.canvas) {
-                Ok(mut stage) => out.push(Screen {
+                Ok((mut stage, made_from)) => out.push(Screen {
                     stage: {
                         stage.set_tuned(tuned);
                         stage
@@ -437,6 +459,7 @@ impl Core {
                     sim: self.new_sim(),
                     monitor,
                     place,
+                    made_from,
                 }),
                 Err(e) => {
                     self.note(format!("screen {}: {e}", i + 1));
@@ -1102,8 +1125,35 @@ fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>,
 
 #[cfg(test)]
 mod tests {
-    use super::{pause_reasons, retune_wanted};
+    use super::{made_from, pause_reasons, retune_wanted};
     use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
+    use jetcarp_display::{profiles, rotation};
+
+    /// A reload keeps a screen's stage only while its rotation is made from the same things, so
+    /// a profile saved again (*Show just this scene* pressed again) or an edited rotation shows.
+    #[test]
+    fn a_rotation_or_profile_saved_since_is_built_again() {
+        let mut builtins = profiles::builtins();
+        let r = rotation::Rotation::just("Mine", "Life");
+        let made = |r: &rotation::Rotation, ps: &[profiles::Profile]| {
+            let (slots, _) = r.expand(&rotation::default_base(), &|n| {
+                ps.iter().find(|p| p.name == n).cloned()
+            });
+            made_from(r, &slots)
+        };
+        let before = made(&r, &builtins);
+        assert_eq!(made(&r, &builtins), before, "the same twice");
+        builtins[0].palette = Some("Aurora".into());
+        assert_eq!(builtins[0].name, "Life");
+        assert_ne!(made(&r, &builtins), before, "its profile changed");
+        let mut edited = r.clone();
+        edited.default_minutes = Some(3.0);
+        assert_ne!(
+            made(&edited, &profiles::builtins()),
+            before,
+            "the rotation changed"
+        );
+    }
 
     #[test]
     fn a_tuned_desktop_screen_of_another_size_wants_tuning_again() {

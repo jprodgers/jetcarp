@@ -1139,6 +1139,25 @@ impl ProfileStore {
             .find(|n| !names.contains(n))
             .expect("a free name")
     }
+
+    /// A name like `base`, `base 2`, `base 3` that is free or one of your own profiles (not a
+    /// built-in, nor your copy of one): where *Show just this scene* saves a scene, updating the
+    /// profile it saved before rather than adding another.
+    pub fn own_or_free_name(&self, base: &str) -> String {
+        let base = match base.trim() {
+            "" => "My profile",
+            b => b,
+        };
+        let list = self.list();
+        std::iter::once(base.to_string())
+            .chain((2..).map(|k| format!("{base} {k}")))
+            .find(|n| {
+                list.iter()
+                    .find(|l| &l.profile.name == n)
+                    .is_none_or(|l| !l.builtin)
+            })
+            .expect("a free name")
+    }
 }
 
 #[cfg(test)]
@@ -1405,6 +1424,53 @@ mod tests {
         assert!(none.save(&p).is_err());
         assert_eq!(slug("  Day & Night "), "day-night");
         assert_eq!(slug("!!"), "profile");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// *Show just this scene* saves a scene under its own name, then updates that profile when
+    /// pressed again, and never writes over a built-in.
+    #[test]
+    fn show_just_this_scene_reuses_its_own_profile_and_spares_built_ins() {
+        let dir = scratch("own-or-free");
+        let mut st = ProfileStore::at(Some(dir.clone()));
+        assert_eq!(
+            st.own_or_free_name("JACA rainbow fronts (Cairo)"),
+            "JACA rainbow fronts (Cairo)"
+        );
+        assert_eq!(st.own_or_free_name("  "), "My profile");
+        let p = Profile {
+            name: "JACA rainbow fronts (Cairo)".into(),
+            ..Default::default()
+        };
+        st.save(&p).unwrap();
+        assert_eq!(
+            st.own_or_free_name("JACA rainbow fronts (Cairo)"),
+            "JACA rainbow fronts (Cairo)",
+            "your own profile of that name: updated, not another"
+        );
+        assert_eq!(
+            st.own_or_free_name("Life"),
+            "Life 2",
+            "a built-in is passed over"
+        );
+        let mut life = st.get("Life").unwrap();
+        life.speed = 60.0;
+        st.save(&life).unwrap();
+        assert_eq!(
+            st.own_or_free_name("Life"),
+            "Life 2",
+            "and so is your copy of one"
+        );
+        st.save(&Profile {
+            name: "Life 2".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(
+            st.own_or_free_name("Life"),
+            "Life 2",
+            "the one saved before"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

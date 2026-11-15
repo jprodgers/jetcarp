@@ -199,6 +199,15 @@ impl JetcarpApp {
         }
     }
 
+    /// The name a profile of the world now starts from: its scene's.
+    pub(super) fn profile_base_name(&self) -> String {
+        if self.scene_name.trim().is_empty() {
+            "My profile".to_string()
+        } else {
+            self.scene_name.clone()
+        }
+    }
+
     /// The world now as a new profile: its setup (with palette and reseed policies), the cell
     /// size it shows at, the speed, and the GPU choice.
     pub(super) fn profile_from_world(&self, name: &str) -> Profile {
@@ -264,7 +273,7 @@ impl JetcarpApp {
     }
 
     /// Save the draft if its edits are due (or now, with `force`).
-    fn saver_ui_flush(&mut self, force: bool) {
+    pub(super) fn saver_ui_flush(&mut self, force: bool) {
         let Some(t) = self.display.saver_ui.dirty_at else {
             return;
         };
@@ -607,11 +616,7 @@ impl JetcarpApp {
                 )
                 .clicked()
             {
-                let base = if self.scene_name.trim().is_empty() {
-                    "My profile".to_string()
-                } else {
-                    self.scene_name.clone()
-                };
+                let base = self.profile_base_name();
                 let name = self.profile_store().free_name(&base);
                 let p = self.profile_from_world(&name);
                 self.saver_ui_flush(true);

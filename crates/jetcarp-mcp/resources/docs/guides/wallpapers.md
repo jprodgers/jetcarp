@@ -83,7 +83,8 @@ monitors chosen in the *Display* pane.
 
 The background host, which runs the desktop background, has a pane of its own (see
 [below](#the-desktop-background-pane)); a link under *While it runs* opens it. Profiles and rotations
-are shared: the desktop background runs the same ones, and they are edited here.
+are shared: the desktop background runs the same ones. Profiles are edited here, and rotations here
+or in the *Desktop background* pane.
 
 The app can also start straight into screensaver mode, for example from a desktop shortcut:
 
@@ -163,10 +164,11 @@ until its world is built.
 
 The settings are saved in `host.json` in the settings folder. The app and the command line both write
 it and tell a running host to read it again, so a setting changed while the host is stopped applies
-the next time it starts (*saved; the host is not running*). Besides pausing on battery and when busy,
-the host also pauses by itself while its desktop background is completely hidden behind other windows
-and while the screen is locked and dark. `jetcarp host status --json` shows what it is holding for,
-under `held`.
+the next time it starts (*saved; the host is not running*). When the host reads it again, a screen
+whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
+Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
+is completely hidden behind other windows and while the screen is locked and dark. `jetcarp host
+status --json` shows what it is holding for, under `held`.
 
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
@@ -190,8 +192,20 @@ about the host. The *Display* and *Screensaver* panes link to it.
 - **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too, and
   whether tuning chose it), or why it is paused.
 - **Where:** *Show on the desktop*, and for each screen its rotation and its monitor (*Every monitor*,
-  or one of them). *Add a screen* puts another rotation on another monitor. Rotations and profiles are
-  edited in the *Screensaver* pane, which the link beside them opens.
+  or one of them). *Add a screen* puts another rotation on another monitor. Under each screen's
+  rotation:
+  - *Show just this scene* shows the scene open in the app on that screen, and nothing else. It
+    saves the scene as a profile named after it (as *Save current world as profile* does) and a
+    rotation of just that profile, of the same name, and chooses that rotation for the screen; a
+    note under the buttons says what it saved and where. Pressed again for the same scene, it
+    updates that profile from the world and keeps the rotation, rather than adding more. (A
+    built-in profile, or a rotation of that name that shows something else, is left alone, and the
+    new ones take the next free name: *Life 2*.)
+  - *Edit* and *New* open the [rotation editor](rotations.md#make-a-rotation-in-the-app) under the
+    screen. *Save* there chooses the rotation for that screen and leaves the screensaver's rotation
+    as it was.
+
+  Profiles are made and edited in the *Screensaver* pane, which the link below opens.
 - **The desktop:** *Leave a still picture when it stops*, and on GNOME *On the lock screen*, how long
   the screen stays lit while locked, and the extension's state with an *Install* button.
 - **How it runs:** *Frames per second*, *GPU simulation* (the host's own choice) and the *Shared

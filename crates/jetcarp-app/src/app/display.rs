@@ -296,7 +296,10 @@ pub(super) struct DisplayRt {
     pub profiles: profiles::ProfileStore,
     /// Rotations: the files and the built-ins (read on first use).
     pub rotations: jetcarp_display::rotation::RotationStore,
+    /// The rotation editor in the Screensaver pane (the screensaver's rotation).
     pub rotation_ui: super::rotation_ui::RotationUi,
+    /// The rotation editor in the Desktop background pane (a screen's rotation).
+    pub host_rotation_ui: super::rotation_ui::RotationUi,
     /// The Screensaver pane's state.
     pub saver_ui: super::saver_ui::SaverUi,
     pub host: super::host_ui::HostPanel,

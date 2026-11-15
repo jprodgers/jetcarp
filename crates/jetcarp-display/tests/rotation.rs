@@ -557,3 +557,71 @@ fn the_store_saves_overrides_built_ins_and_follows_renamed_profiles() {
     again.delete("Mine").unwrap();
     std::fs::remove_dir(&dir).unwrap();
 }
+
+/// *Show just this scene*: a rotation of one profile, named after it, made once and found again
+/// when pressed again; a name taken by a built-in or by a rotation of your own that shows something
+/// else is passed over, and that rotation left alone.
+#[test]
+fn show_just_this_scene_makes_one_rotation_and_finds_it_again() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-rotations-just-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut store = RotationStore::at(Some(dir.clone()));
+    let builtin_count = store.names().len();
+    let name = "JACA rainbow fronts (Cairo)";
+
+    let (r, path) = store.save_just(name, name).unwrap();
+    assert_eq!(r.name, name);
+    assert_eq!(r.just_profile(), Some(name));
+    assert_eq!(
+        r.default_minutes, None,
+        "it runs until something else moves on"
+    );
+    assert_eq!(path, dir.join("jaca-rainbow-fronts-cairo.json"));
+    assert!(path.exists());
+    assert_eq!(
+        RotationStore::at(Some(dir.clone())).get(name).as_ref(),
+        Some(&r),
+        "on disk"
+    );
+
+    // Again: the same rotation, no "2".
+    let (again, path2) = store.save_just(name, name).unwrap();
+    assert_eq!((again.name.as_str(), &path2), (name, &path));
+    assert_eq!(store.names().len(), builtin_count + 1);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+
+    // Edits made to it since are kept.
+    let mut edited = again.clone();
+    edited.items[0].look.cell_px = Some(2.0);
+    store.save(&edited).unwrap();
+    let (kept, _) = store.save_just(name, name).unwrap();
+    assert_eq!(kept.items[0].look.cell_px, Some(2.0));
+
+    // A rotation of your own of that name that shows more is not touched.
+    let mut mine = rotation(vec![
+        Item::new(Source::Profile {
+            name: "Mine".into(),
+        }),
+        Item::new(Source::Profile {
+            name: "Life".into(),
+        }),
+    ]);
+    mine.name = "Mine".into();
+    store.save(&mine).unwrap();
+    let (other, _) = store.save_just("Mine", "Mine").unwrap();
+    assert_eq!(other.name, "Mine 2");
+    assert_eq!(store.get("Mine").unwrap(), mine);
+    let (other_again, _) = store.save_just("Mine", "Mine").unwrap();
+    assert_eq!(other_again.name, "Mine 2", "found again");
+
+    // Nor is a built-in, and a blank name has a stand-in.
+    let (w, _) = store.save_just("Wolfram series", "Wolfram series").unwrap();
+    assert_eq!(w.name, "Wolfram series 2");
+    assert!(store.listed("Wolfram series").unwrap().file.is_none());
+    assert_eq!(store.save_just(" ", "Life").unwrap().0.name, "My scene");
+
+    // Without a settings folder nothing is saved.
+    assert!(RotationStore::at(None).save_just(name, name).is_err());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
