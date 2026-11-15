@@ -789,15 +789,17 @@ fn the_host_sweeps_its_own_screen_and_shows_the_recommended_size() {
         (1, 2, 1),
         "{stdout}"
     );
-    // Each scene from its own 4 px, finer while there is room: on CI's slow virtual GPUs the
-    // first size can already be far over (its frames too slow to keep the speed), and the sweep
-    // rightly goes no finer.
+    // Each scene from its own 4 px, finer while there is room: on CI's slow virtual GPUs a size
+    // can already be far over (its frames too slow to keep the speed), and the sweep rightly goes
+    // no finer, so it may stop after any size that did not fit.
     let stopped_early = |scene: &str| {
         let measured: Vec<&Value> = events
             .iter()
             .filter(|e| e["event"] == "measured" && e["scene"] == scene)
             .collect();
-        measured.len() == 1 && measured[0]["rung"]["fits"] == false
+        measured
+            .last()
+            .is_some_and(|last| last["rung"]["fits"] == false)
     };
     let results = swept(&h.home);
     assert_eq!(results.len(), 2);
