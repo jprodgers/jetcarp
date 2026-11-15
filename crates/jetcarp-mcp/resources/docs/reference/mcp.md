@@ -41,8 +41,8 @@ as long as it runs.
 
 - **Files.** The tools read and write files only in JETCARP's output folder (`JETCARP_OUT`, else
   `<Pictures>/JETCARP`), the library's folder, and folders given with `--allow`; they also read the
-  packs that came with JETCARP. Relative paths start in the output folder. A path outside these is
-  refused with an error that names the folders. See
+  packs that came with JETCARP. Relative paths start in the output folder. A path outside these,
+  once its symbolic links are followed, is refused with an error that names the folders. See
   [Folders and environment variables](folders.md).
 - **Limits per call.** Worlds of at most 4 million cells; at most 1,000,000 generations and 2
   billion cell updates (cells times generations) per `world_step`; scripts of at most 600 seconds
@@ -891,7 +891,7 @@ Example:
 
 ### `files_list`
 
-**List output files.** Lists what JETCARP wrote, read only: the output folder (root "out", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root "catalog": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {"path": "piles"}, {"file": "piles/hex-1000000/pile.json"}.
+**List output files.** Lists what JETCARP wrote, read only: the output folder (root "out", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root "catalog": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (inside a root or an --allow folder). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {"path": "piles"}, {"file": "piles/hex-1000000/pile.json"}.
 
 *reads only*
 

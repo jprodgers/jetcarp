@@ -1,15 +1,17 @@
 //! `files.list`: a read-only look into JETCARP's output folders (script runs, sweeps, piles,
 //! media, website exports) and the catalog's folder, so a caller can find what a run wrote.
 //!
-//! Only two roots are visible: the output root (`JETCARP_OUT`, else `<Pictures>/JETCARP`) and the
-//! folder holding the catalog (`JETCARP_LIBRARY`'s folder). A path may be relative to a root or an
-//! absolute path inside one; it is resolved (symbolic links and `..` included) and refused when it
-//! leaves its root. Nothing is ever written or deleted. Small text files (JSON, CSV, text, at most
+//! Two roots are named: the output root (`JETCARP_OUT`, else `<Pictures>/JETCARP`) and the folder
+//! holding the catalog (`JETCARP_LIBRARY`'s folder). A path may be relative to a root or an
+//! absolute path inside one, or inside a folder the caller may write in (the MCP server's
+//! `--allow` folders); it is resolved (symbolic links and `..` included) and refused when it
+//! leaves them. Nothing is ever written or deleted. Small text files (JSON, CSV, text, at most
 //! 64 KB shown) can be read with `file`.
 
 use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report, to_pretty};
+use crate::out::Guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -109,18 +111,34 @@ impl Report for FilesOut {
     }
 }
 
-fn roots(cx: &Ctx) -> Vec<(&'static str, PathBuf)> {
-    vec![
+/// The roots by name, then the other folders the caller may write in (the MCP server's
+/// `--allow` folders), which are listed too when a path inside one is given.
+fn roots(cx: &Ctx) -> (Vec<(&'static str, PathBuf)>, Vec<PathBuf>) {
+    let named = vec![
         ("out", cx.output_root()),
         ("catalog", cx.library().folder()),
-    ]
+    ];
+    let named_guard = Guard {
+        roots: named.iter().map(|(_, r)| r.clone()).collect(),
+    };
+    let more = cx
+        .fs
+        .write
+        .iter()
+        .flat_map(|g| g.roots.iter())
+        .filter(|r| !named_guard.allows(r))
+        .cloned()
+        .collect();
+    (named, more)
 }
 
 /// Resolve `p` (relative to the root named `root_name`, or absolute) and check it stays inside a
-/// root. Returns the path and the root it is in.
+/// root or an allowed folder, with its symbolic links followed ([`crate::out::resolve`]). Returns
+/// the path and the folder it is in. A path outside is refused naming the path as given, the
+/// same whether or not it exists.
 pub fn resolve(cx: &Ctx, root_name: &str, p: Option<&str>) -> Result<(PathBuf, PathBuf), ApiError> {
-    let all = roots(cx);
-    let base = all
+    let (named, more) = roots(cx);
+    let base = named
         .iter()
         .find(|(n, _)| *n == root_name)
         .map(|(_, r)| r.clone())
@@ -130,22 +148,36 @@ pub fn resolve(cx: &Ctx, root_name: &str, p: Option<&str>) -> Result<(PathBuf, P
         Some(s) if Path::new(s).is_absolute() => PathBuf::from(s),
         Some(s) => base.join(s),
     };
-    let real = want
-        .canonicalize()
-        .map_err(|_| ApiError::not_found(format!("{} does not exist", want.display())))?;
-    for (_, r) in &all {
-        if let Ok(rr) = r.canonicalize()
-            && real.starts_with(&rr)
-        {
-            return Ok((real, rr));
+    let guard = Guard {
+        roots: named
+            .iter()
+            .map(|(_, r)| r.clone())
+            .chain(more.iter().cloned())
+            .collect(),
+    };
+    let Some((path, root)) = guard.locate(&want) else {
+        let mut folders = vec![
+            format!("JETCARP's output folder ({})", named[0].1.display()),
+            format!("the catalog's folder ({})", named[1].1.display()),
+        ];
+        if !more.is_empty() {
+            let more: Vec<String> = more.iter().map(|r| r.display().to_string()).collect();
+            folders.push(format!("the allowed folders ({})", more.join(", ")));
         }
+        let last = folders.pop().unwrap_or_default();
+        return Err(ApiError::io(format!(
+            "{} is outside {} and {last}; files_list only reads those",
+            crate::out::absolute(&want).display(),
+            folders.join(", ")
+        )));
+    };
+    if !path.exists() {
+        return Err(ApiError::not_found(format!(
+            "{} does not exist",
+            crate::out::absolute(&want).display()
+        )));
     }
-    Err(ApiError::io(format!(
-        "{} is outside JETCARP's output folder ({}) and the catalog's folder ({}); files_list only reads those",
-        real.display(),
-        all[0].1.display(),
-        all[1].1.display()
-    )))
+    Ok((path, root))
 }
 
 fn modified(m: &std::fs::Metadata) -> (u64, String) {

@@ -479,3 +479,33 @@ fn files_list_reads_inside_its_roots_only() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Under folder rules, a pack exported into the output folder itself does not publish its
+/// scratch store beside that folder, outside the rules.
+#[test]
+fn an_export_s_scratch_store_stays_inside_the_folder_rules() {
+    use jetcarp_api::FsPolicy;
+    use jetcarp_api::ops::pack::{ExportIn, PackExport, PublishIn};
+    let dir = scratch("export-beside");
+    let out = dir.join("out");
+    std::fs::create_dir_all(&out).unwrap();
+    let cx = Ctx::new()
+        .with_fs(FsPolicy::guarded(out.clone(), vec![out.clone()], true))
+        .with_out_root(Some(out.clone()))
+        .with_library(Some(out.join("lib")));
+    let e = fails(
+        PackExport::run(
+            &cx,
+            ExportIn {
+                to: ".".into(),
+                publish: Some(PublishIn::default()),
+                ..Default::default()
+            },
+            &Quiet,
+        ),
+        ErrorKind::Io,
+    );
+    assert!(e.message.contains("may only write inside"), "{e}");
+    assert!(!dir.join(".out.store").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -2,10 +2,11 @@
 //! media, wallpapers, website exports) and the library's folder, so a model can find what a run
 //! wrote (`files.list`).
 //!
-//! Only two roots are visible: the output folder (`JETCARP_OUT`, else `<Pictures>/JETCARP`) and
-//! the folder holding the library. A path may be relative to a root or an absolute path inside
-//! one; it is resolved (symbolic links and `..` included) and refused when it leaves its root.
-//! Nothing is ever written or deleted. Small text files can be read with `file`.
+//! Two roots are named: the output folder (`JETCARP_OUT`, else `<Pictures>/JETCARP`) and the
+//! folder holding the library. A path may be relative to a root or an absolute path inside one,
+//! or inside a folder given with `jetcarp mcp --allow`, as the other tools allow; it is resolved
+//! (symbolic links and `..` included) and refused when it leaves them. Nothing is ever written or
+//! deleted. Small text files can be read with `file`.
 
 use crate::schema::{self, object};
 use crate::tools::{Call, Res, Tool, ToolOutput, ctx, err};
@@ -20,7 +21,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         read_only: true,
         destructive: false,
         description: || {
-            "Lists what JETCARP wrote, read only: the output folder (root \"out\", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root \"catalog\": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (it must be inside a root). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.".into()
+            "Lists what JETCARP wrote, read only: the output folder (root \"out\", the default: script runs, sweep folders, piles/, wallpapers/, media of scenes) or the library's folder (root \"catalog\": library.sqlite, media/, search folders). `path` is a folder relative to the root, or an absolute folder from another tool's output (inside a root or an --allow folder). Each entry has its name, kind, size, modified time, and for folders what marks them (manifest.json: a sweep or export; pile.json: a pile). `file` returns a small text file (JSON, CSV, text, Markdown, Rhai; the first 64 KB). Examples: {}, {\"path\": \"piles\"}, {\"file\": \"piles/hex-1000000/pile.json\"}.".into()
         },
         schema: || object(schema::props(&input_schema::<FilesIn>()), &[]),
         run: files_list,

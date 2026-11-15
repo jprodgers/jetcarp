@@ -768,8 +768,13 @@ fn export(cx: &Ctx, a: &ExportIn, to: &Path, p: &dyn Progress) -> Result<ExportO
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
             // The store the library is published into first, kept (hidden, beside the
-            // export) so the feed's later versions are published into it.
-            let scratch = to.with_file_name(format!(".{name}.store"));
+            // export) so the feed's later versions are published into it. Beside is not
+            // inside, so it is checked too.
+            let scratch = cx.fs.writable_dir(
+                &to.with_file_name(format!(".{name}.store"))
+                    .display()
+                    .to_string(),
+            )?;
             do_publish(cx, &pi, scratch.clone(), p)?;
             (scratch.clone(), Some(scratch))
         }

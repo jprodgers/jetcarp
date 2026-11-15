@@ -226,6 +226,9 @@ that will declare them stable.
   the counters of the step before the last; it now waits, as `jobs wait` does, until the run has
   written its last checkpoint and let go, so `jetcarp jobs status --wait` gives the final counters
   too. ([#68](https://github.com/jprodgers/jetcarp/issues/68))
+- **The MCP tools resolve symbolic links before checking that a path is inside the folders they
+  may use.** `files_list` also lists the folders given with `jetcarp mcp --allow`, as the other
+  tools read and write there.
 
 ### Changed
 

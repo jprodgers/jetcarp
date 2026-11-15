@@ -805,11 +805,15 @@ impl Ctx {
         Ok(dir)
     }
 
-    /// A file path a script may read.
+    /// A file path a script may read. A run that restricts reads checks the path with its
+    /// symbolic links followed (`Guard::inside`), and refuses it the same way whether or not it
+    /// exists.
     pub fn readable(&self, path: &str) -> Result<PathBuf, String> {
+        let restrict = self.opts.limits.restrict_reads;
+        let guard = self.guard.lock().unwrap().clone();
         let p = Path::new(path);
         let p = if p.is_absolute() {
-            out::absolute(p)
+            p.to_path_buf()
         } else {
             let base = self
                 .opts
@@ -817,20 +821,24 @@ impl Ctx {
                 .as_ref()
                 .and_then(|s| s.parent().map(Path::to_path_buf))
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-            let first = out::absolute(&base.join(p));
-            if first.exists() {
+            let first = base.join(p);
+            // Next to the script first, but only where this run may read: a file that exists
+            // outside must not change the answer.
+            if first.exists() && (!restrict || guard.allows(&first)) {
                 first
             } else {
-                out::absolute(&self.base().join(p))
+                self.base().join(p)
             }
         };
-        if self.opts.limits.restrict_reads && !self.guard.lock().unwrap().allows(&p) {
-            return Err(format!(
-                "this run may only read inside the output folders, not {}",
-                p.display()
-            ));
+        if !restrict {
+            return Ok(out::absolute(&p));
         }
-        Ok(p)
+        guard.inside(&p).ok_or_else(|| {
+            format!(
+                "this run may only read inside the output folders, not {}",
+                out::absolute(&p).display()
+            )
+        })
     }
 
     pub fn params_json(&self) -> Value {

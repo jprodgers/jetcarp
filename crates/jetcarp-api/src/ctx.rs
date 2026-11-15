@@ -174,29 +174,35 @@ impl FsPolicy {
         Ok(dir)
     }
 
-    /// A file `path` may be read from (relative paths start at the base).
+    /// A file `path` may be read from (relative paths start at the base). With read rules, the
+    /// path is checked with its symbolic links followed ([`Guard::inside`]), and refused naming
+    /// the path as given, the same whether or not it exists.
     pub fn readable(&self, path: &str) -> Result<PathBuf, ApiError> {
         let p = Path::new(path);
-        let p = match &self.base {
-            Some(b) if !p.is_absolute() => out::absolute(&b.join(p)),
+        let given = match &self.base {
+            Some(b) if !p.is_absolute() => b.join(p),
             _ => p.to_path_buf(),
         };
-        if let Some(g) = &self.read
-            && !g.allows(&p)
-        {
-            return Err(ApiError::io(match &self.who {
+        let Some(g) = &self.read else {
+            return Ok(match &self.base {
+                Some(_) if !p.is_absolute() => out::absolute(&given),
+                _ => given,
+            });
+        };
+        g.inside(&given).ok_or_else(|| {
+            let shown = out::absolute(&given);
+            ApiError::io(match &self.who {
                 Some(who) => format!(
                     "{who} may only read inside {}, not {}",
                     roots_text(g),
-                    p.display()
+                    shown.display()
                 ),
                 None => format!(
                     "this run may only read inside the output folders, not {}",
-                    p.display()
+                    shown.display()
                 ),
-            }));
-        }
-        Ok(p)
+            })
+        })
     }
 }
 

@@ -3,7 +3,7 @@
 //! Everything JETCARP writes for people goes under the output root (`<Pictures>/JETCARP`,
 //! `JETCARP_OUT`, or the host's override), in a folder per run ([`make_out_dir`]). Scripts write
 //! only inside that root and folders the user named (`--out`, `jetcarp_script::RunOptions`'s
-//! `allow_dirs`): [`Guard`] checks every path.
+//! `allow_dirs`): [`Guard`] checks every path, with its symbolic links followed ([`resolve`]).
 
 use jetcarp_core::render::Image;
 use std::path::{Component, Path, PathBuf};
@@ -85,6 +85,74 @@ pub fn absolute(p: &Path) -> PathBuf {
     out
 }
 
+/// Most symbolic links one path may pass through (Linux's own limit), so that a loop of links
+/// ends instead of being followed for ever.
+const MAX_LINKS: u32 = 40;
+
+/// `p` as the file system will see it when a file is opened or made there: made absolute, the
+/// deepest part of it that exists resolved with every symbolic link followed
+/// ([`std::fs::canonicalize`]), and the rest, which does not exist yet, joined on with its `.`
+/// and `..` worked out.
+///
+/// The folder rules ([`Guard`]) check this path rather than the path's text, because a link
+/// inside an allowed folder may point anywhere. A link whose target does not exist is followed by
+/// hand: `canonicalize` refuses it, but a write through it would make the target. `..` follows
+/// the system's rule, so on Unix `link/..` is the folder holding the link's target, not the
+/// folder holding the link.
+pub fn resolve(p: &Path) -> std::io::Result<PathBuf> {
+    resolve_links(&std::path::absolute(p)?, 0)
+}
+
+/// [`resolve`] for an absolute path, `links` links into it.
+fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
+    let parts: Vec<Component> = p.components().collect();
+    let mut k = parts.len();
+    let mut real = PathBuf::new();
+    while k > 0 {
+        let head: PathBuf = parts[..k].iter().collect();
+        if let Ok(r) = std::fs::canonicalize(&head) {
+            real = r;
+            break;
+        }
+        if matches!(parts[k - 1], Component::Normal(_))
+            && std::fs::symlink_metadata(&head).is_ok_and(|m| m.file_type().is_symlink())
+        {
+            if links >= MAX_LINKS {
+                return Err(std::io::Error::other(format!(
+                    "{}: too many symbolic links",
+                    p.display()
+                )));
+            }
+            // A relative target starts in the folder that holds the link.
+            let mut next = head
+                .parent()
+                .unwrap_or(Path::new(""))
+                .join(std::fs::read_link(&head)?);
+            next.extend(&parts[k..]);
+            return resolve_links(&std::path::absolute(&next)?, links + 1);
+        }
+        k -= 1;
+    }
+    // What is left does not exist, so it holds no links; but a `..` in it can step back into
+    // what does exist (`new/../link`), so then the result is resolved again.
+    let mut stepped_back = false;
+    for c in &parts[k..] {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                real.pop();
+                stepped_back = true;
+            }
+            c => real.push(c.as_os_str()),
+        }
+    }
+    if stepped_back {
+        resolve_links(&real, links)
+    } else {
+        Ok(real)
+    }
+}
+
 /// Where a script may write.
 #[derive(Clone, Debug, Default)]
 pub struct Guard {
@@ -92,27 +160,52 @@ pub struct Guard {
 }
 
 impl Guard {
-    pub fn allows(&self, p: &Path) -> bool {
-        let p = absolute(p);
-        self.roots.iter().any(|r| p.starts_with(absolute(r)))
+    /// `p` (absolute, or relative to the working directory) if it is inside one of the folders
+    /// once both are resolved ([`resolve`]), else None (also when it cannot be resolved: a loop
+    /// of links). The path returned is the folder as the guard holds it followed by the rest of
+    /// the resolved path, so it shows the folder as its user named it, and opening it opens the
+    /// file that was checked, whatever links lie on the way.
+    pub fn inside(&self, p: &Path) -> Option<PathBuf> {
+        self.locate(p).map(|(path, _)| path)
     }
+
+    /// [`Guard::inside`], with the folder the path is in.
+    pub fn locate(&self, p: &Path) -> Option<(PathBuf, PathBuf)> {
+        let real = resolve(p).ok()?;
+        self.roots.iter().find_map(|r| {
+            let r = absolute(r);
+            let rest = real.strip_prefix(resolve(&r).ok()?).ok()?;
+            let path = if rest.as_os_str().is_empty() {
+                r.clone()
+            } else {
+                r.join(rest)
+            };
+            Some((path, r))
+        })
+    }
+
+    /// `p` is inside one of the folders once resolved ([`Guard::inside`]).
+    pub fn allows(&self, p: &Path) -> bool {
+        self.inside(p).is_some()
+    }
+
     /// Resolve `path` (relative paths are relative to `base`) and check it may be written.
     /// Creates the parent folder.
     pub fn writable(&self, base: &Path, path: &str) -> Result<PathBuf, String> {
-        let p = Path::new(path);
-        let p = if p.is_absolute() {
-            absolute(p)
+        let given = Path::new(path);
+        let given = if given.is_absolute() {
+            given.to_path_buf()
         } else {
-            absolute(&base.join(p))
+            base.join(given)
         };
-        if !self.allows(&p) {
+        let Some(p) = self.inside(&given) else {
             let roots: Vec<String> = self.roots.iter().map(|r| r.display().to_string()).collect();
             return Err(format!(
                 "scripts may only write inside {} (got {}); use out_dir(\"label\") for a new output folder",
                 roots.join(" or "),
-                p.display()
+                absolute(&given).display()
             ));
-        }
+        };
         if let Some(parent) = p.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
@@ -285,6 +378,57 @@ mod tests {
         assert!(g.allows(Path::new("/tmp/jetcarp-out/a/b.png")));
         assert!(!g.allows(Path::new("/tmp/jetcarp-out/../etc/passwd")));
         assert!(!g.allows(Path::new("/tmp/jetcarp-outx/a.png")));
+    }
+
+    /// A fresh scratch folder for one test.
+    #[cfg(unix)]
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("jetcarp-guard-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("out/sub")).unwrap();
+        std::fs::create_dir_all(d.join("outside")).unwrap();
+        d
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_guard_follows_links_before_it_checks() {
+        use std::os::unix::fs::symlink;
+        let d = scratch("links");
+        let out = d.join("out");
+        let g = Guard {
+            roots: vec![out.clone()],
+        };
+        // A linked folder, a linked file, and a link to a file that does not exist yet.
+        symlink(d.join("outside"), out.join("dir")).unwrap();
+        std::fs::write(d.join("outside/f.txt"), "x").unwrap();
+        symlink(d.join("outside/f.txt"), out.join("file.txt")).unwrap();
+        symlink(d.join("outside/new.txt"), out.join("dangling.txt")).unwrap();
+        for p in ["dir/a.png", "dir", "file.txt", "dangling.txt"] {
+            assert!(!g.allows(&out.join(p)), "{p}");
+            assert!(g.writable(&out, p).is_err(), "{p}");
+        }
+        assert!(!d.join("outside/new.txt").exists());
+        // `..` after a link is worked out from where the link leads.
+        symlink(d.join("outside"), out.join("sub/up")).unwrap();
+        assert!(!g.allows(&out.join("sub/up/../x")));
+        assert_eq!(
+            resolve(&out.join("sub/up/../x")).unwrap(),
+            std::fs::canonicalize(&d).unwrap().join("x")
+        );
+        // A link that stays inside is followed, and the path keeps the folder's own name.
+        symlink(out.join("sub"), out.join("alias")).unwrap();
+        assert_eq!(
+            g.inside(&out.join("alias/a.png")),
+            Some(out.join("sub/a.png"))
+        );
+        assert_eq!(g.inside(&out.join("new/../sub")), Some(out.join("sub")));
+        // A loop of links ends, and is refused.
+        symlink(out.join("loop-b"), out.join("loop-a")).unwrap();
+        symlink(out.join("loop-a"), out.join("loop-b")).unwrap();
+        assert!(resolve(&out.join("loop-a/x")).is_err());
+        assert!(!g.allows(&out.join("loop-a/x")));
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

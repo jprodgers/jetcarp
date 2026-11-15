@@ -278,7 +278,8 @@ impl WorldOp for WallpaperExport {
                          meta: &[(&str, String)],
                          monitor: Option<String>|
          -> Result<(), ApiError> {
-            let path = dir.join(&file);
+            // The file is checked too, not only its folder: `out` may name a link to elsewhere.
+            let path = cx.fs.writable(&dir.join(&file).display().to_string())?;
             jetcarp_core::render::write_png(&path, img, meta).map_err(ApiError::io)?;
             shown.push(shown_dir.join(&file));
             files.push(WallpaperFile {
