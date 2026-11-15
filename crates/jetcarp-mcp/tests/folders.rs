@@ -2,9 +2,10 @@
 //! followed before the rules are checked, so a linked folder, a linked file (whether its target
 //! exists or not) and `..` after a link cannot reach outside; a refusal reads the same whether or
 //! not the path outside exists; and a folder given with `--allow` is read, written and listed
-//! (`files_list` too).
+//! (`files_list` too). A folder the tools may use but cannot write in says "Permission denied",
+//! and a refusal names the path asked for, not a file inside it (#65).
 //!
-//! The allowed folder is set before this binary's first tool call, which is why these tests have
+//! The allowed folders are set before this binary's first tool call, which is why these tests have
 //! a binary of their own.
 
 mod common;
@@ -15,16 +16,16 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// The scratch folder, with `allowed/` given to the tools as `--allow` would, and `outside/`
-/// that they may not touch.
+/// The scratch folder, with `allowed/` and `read-only/` given to the tools as `--allow` would,
+/// and `outside/` that they may not touch.
 fn root() -> &'static Path {
     static R: OnceLock<PathBuf> = OnceLock::new();
     R.get_or_init(|| {
         let root = setup("folders").to_path_buf();
-        for d in ["allowed", "outside/dir"] {
+        for d in ["allowed", "read-only", "outside/dir"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
-        jetcarp_mcp::tools::allow_dirs(vec![root.join("allowed")]);
+        jetcarp_mcp::tools::allow_dirs(vec![root.join("allowed"), root.join("read-only")]);
         root
     })
 }
@@ -269,4 +270,79 @@ fn an_allowed_folder_is_written_read_and_listed() {
         json!({"save_path": path_json(&root.join("outside/x.json"))}),
     ));
     assert!(e.contains("may only write inside"), "{e}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_folder_that_cannot_be_written_says_permission_denied() {
+    use std::os::unix::fs::PermissionsExt;
+    let (mut s, mut h, root) = new();
+    let ro = root.join("read-only");
+    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // Someone who may write anyway (root) cannot see this.
+    if std::fs::write(ro.join("probe"), "").is_ok() {
+        let _ = std::fs::remove_file(ro.join("probe"));
+        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+        eprintln!("skipped: this user can write in a read-only folder");
+        return;
+    }
+    let at = |p: &str| path_json(&ro.join(p));
+    for (tool, args, folder) in [
+        (
+            "world_render",
+            json!({"wallpaper": {"size": "320x200", "out": at("walls")}}),
+            "walls",
+        ),
+        (
+            "media_render",
+            json!({"quickstart": "life", "out": at("media")}),
+            "media",
+        ),
+        ("pack", json!({"site": {"to": at("site")}}), "site"),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(
+            e.contains(&format!(
+                "could not create folder {}",
+                ro.join(folder).display()
+            )) && e.contains("Permission denied"),
+            "{tool} {args}: {e}"
+        );
+        assert!(!e.contains("may only write") && !e.contains(".keep"), "{e}");
+    }
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"save_path": at("scene.json")}),
+    ));
+    assert!(e.contains("Permission denied"), "{e}");
+    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn a_refusal_names_the_path_asked_for() {
+    let (mut s, mut h, root) = new();
+    let wall = root.join("outside").join("wall.png");
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "world_render",
+        json!({"wallpaper": {"size": "320x200", "out": path_json(&wall)}}),
+    ));
+    assert!(e.contains(&format!("(got {})", wall.display())), "{e}");
+    let store = root.join("outside").join("store");
+    for (tool, args) in [
+        (
+            "media_render",
+            json!({"quickstart": "life", "out": path_json(&store)}),
+        ),
+        ("pack", json!({"site": {"to": path_json(&store)}})),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(
+            e.contains(&format!("(got {})", store.display())),
+            "{tool} {args}: {e}"
+        );
+    }
 }

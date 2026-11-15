@@ -806,10 +806,7 @@ impl Ctx {
 
     /// A folder a script may write into (created).
     pub fn writable_dir(&self, path: &str) -> Result<PathBuf, String> {
-        let p = self.writable(&format!("{}/.keep", path.trim_end_matches(['/', '\\'])))?;
-        let dir = p.parent().unwrap().to_path_buf();
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        Ok(dir)
+        self.guard.lock().unwrap().writable_dir(&self.base(), path)
     }
 
     /// A file path a script may read. A run that restricts reads checks the path with its

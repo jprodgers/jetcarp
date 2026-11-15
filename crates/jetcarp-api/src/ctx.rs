@@ -135,42 +135,41 @@ impl FsPolicy {
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
     }
 
-    /// A file `path` may be written to: made absolute, checked, and its folder created.
-    pub fn writable(&self, path: &str) -> Result<PathBuf, ApiError> {
-        if let Some(g) = &self.write {
-            return g.writable(&self.base(), path).map_err(|e| match &self.who {
-                Some(who) => ApiError::io(format!(
-                    "{who} may only write inside {} (got {})",
-                    roots_text(g),
-                    out::absolute(&self.base().join(path.trim())).display()
-                )),
-                None => ApiError::io(e),
-            });
-        }
+    /// `path` made absolute (relative paths start at the base) and, under write rules, checked
+    /// with its symbolic links followed. Nothing is created, so a folder that cannot be made is
+    /// reported as that, never as the rules.
+    fn write_target(&self, path: &str) -> Result<PathBuf, ApiError> {
         let p = path.trim();
         if p.is_empty() {
             return Err(ApiError::invalid("the path is empty"));
+        }
+        if let Some(g) = &self.write {
+            return g
+                .check(&self.base(), p, self.who.as_deref())
+                .map_err(ApiError::io);
         }
         let p = match &self.base {
             Some(b) if !Path::new(p).is_absolute() => b.join(p),
             _ => PathBuf::from(p),
         };
-        let path = std::path::absolute(&p)
-            .map_err(|e| ApiError::invalid(format!("bad path {}: {e}", p.display())))?;
+        std::path::absolute(&p)
+            .map_err(|e| ApiError::invalid(format!("bad path {}: {e}", p.display())))
+    }
+
+    /// A file `path` may be written to: made absolute, checked, and its folder created.
+    pub fn writable(&self, path: &str) -> Result<PathBuf, ApiError> {
+        let path = self.write_target(path)?;
         if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| {
-                ApiError::io(format!("could not create folder {}: {e}", dir.display()))
-            })?;
+            out::create_folder(dir).map_err(ApiError::io)?;
         }
         Ok(path)
     }
 
-    /// A folder `path` may be written into: made absolute, checked, and created.
+    /// A folder `path` may be written into: made absolute, checked, and created. A refusal names
+    /// the folder as given.
     pub fn writable_dir(&self, path: &str) -> Result<PathBuf, ApiError> {
-        let p = self.writable(&format!("{}/.keep", path.trim_end_matches(['/', '\\'])))?;
-        let dir = p.parent().map(Path::to_path_buf).unwrap_or(p);
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| ApiError::io(format!("{}: {e}", dir.display())))?;
+        let dir = self.write_target(path)?;
+        out::create_folder(&dir).map_err(ApiError::io)?;
         Ok(dir)
     }
 

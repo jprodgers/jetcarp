@@ -236,6 +236,12 @@ that will declare them stable.
   refusal names both numbers and sides that fit: "4096 x 4096 on square is 16,777,216 cells, over
   the limit of 4,000,000 cells (try 2000 x 2000)".
   ([#63](https://github.com/jprodgers/jetcarp/issues/63))
+- **With a read-only output folder, four MCP tools blamed the folder rules.** A wallpaper, a
+  scene's media, a pack published and the website export each checked their folder by way of a
+  file in it, `.keep`, and reported a folder they could not create as a path outside the folders
+  they may use, naming that file. They now say "could not create folder …: Permission denied",
+  and a refusal names the path that was asked for (a wallpaper's file, or the folder).
+  ([#65](https://github.com/jprodgers/jetcarp/issues/65))
 
 ### Changed
 

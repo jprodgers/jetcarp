@@ -189,29 +189,59 @@ impl Guard {
         self.inside(p).is_some()
     }
 
-    /// Resolve `path` (relative paths are relative to `base`) and check it may be written.
-    /// Creates the parent folder.
-    pub fn writable(&self, base: &Path, path: &str) -> Result<PathBuf, String> {
+    /// `path` (relative paths start at `base`) resolved and checked, nothing created. A path
+    /// outside is refused naming the path as given, in the words of `who` (`the MCP tools`), or
+    /// the script's words when there is none.
+    pub fn check(&self, base: &Path, path: &str, who: Option<&str>) -> Result<PathBuf, String> {
         let given = Path::new(path);
         let given = if given.is_absolute() {
             given.to_path_buf()
         } else {
             base.join(given)
         };
-        let Some(p) = self.inside(&given) else {
+        self.inside(&given).ok_or_else(|| {
             let roots: Vec<String> = self.roots.iter().map(|r| r.display().to_string()).collect();
-            return Err(format!(
-                "scripts may only write inside {} (got {}); use out_dir(\"label\") for a new output folder",
-                roots.join(" or "),
-                absolute(&given).display()
-            ));
-        };
+            let got = absolute(&given);
+            match who {
+                Some(who) => format!(
+                    "{who} may only write inside {} (got {})",
+                    roots.join(" or "),
+                    got.display()
+                ),
+                None => format!(
+                    "scripts may only write inside {} (got {}); use out_dir(\"label\") for a new output folder",
+                    roots.join(" or "),
+                    got.display()
+                ),
+            }
+        })
+    }
+
+    /// Resolve `path` (relative paths are relative to `base`) and check it may be written.
+    /// Creates the parent folder.
+    pub fn writable(&self, base: &Path, path: &str) -> Result<PathBuf, String> {
+        let p = self.check(base, path, None)?;
         if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+            create_folder(parent)?;
         }
         Ok(p)
     }
+
+    /// Resolve the folder `path` (relative paths are relative to `base`), check it may be
+    /// written into, and create it. A refusal names the folder, not a file in it.
+    pub fn writable_dir(&self, base: &Path, path: &str) -> Result<PathBuf, String> {
+        let dir = self.check(base, path, None)?;
+        create_folder(&dir)?;
+        Ok(dir)
+    }
+}
+
+/// Create a folder and those above it. A folder that cannot be made (a read-only output folder)
+/// is named with the system's reason, such as "Permission denied", so it is not mistaken for the
+/// folder rules.
+pub fn create_folder(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("could not create folder {}: {e}", dir.display()))
 }
 
 /// Encode a PNG with text chunks. Images with at most 256 colours are written as indexed PNGs.

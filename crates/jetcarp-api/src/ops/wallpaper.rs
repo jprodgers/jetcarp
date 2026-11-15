@@ -262,10 +262,14 @@ impl WorldOp for WallpaperExport {
             Some(p) => (PathBuf::from(p), None),
             None => (cx.output_root().join("wallpapers"), None),
         };
-        let dir = if shown_dir.as_os_str().is_empty() {
-            cx.fs.writable_dir(".")?
-        } else {
-            cx.fs.writable_dir(&shown_dir.display().to_string())?
+        let dir = match &a.out {
+            // A file named: it is checked itself, so a refusal names it rather than its folder.
+            Some(p) if stem.is_some() => {
+                let file = cx.fs.writable(p)?;
+                file.parent().map(Path::to_path_buf).unwrap_or(file)
+            }
+            _ if shown_dir.as_os_str().is_empty() => cx.fs.writable_dir(".")?,
+            _ => cx.fs.writable_dir(&shown_dir.display().to_string())?,
         };
         let mut meta = jetcarp_core::render::png_metadata(w);
         meta.push((
