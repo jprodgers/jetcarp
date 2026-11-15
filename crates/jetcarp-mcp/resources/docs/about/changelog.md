@@ -242,6 +242,12 @@ that will declare them stable.
   they may use, naming that file. They now say "could not create folder …: Permission denied",
   and a refusal names the path that was asked for (a wallpaper's file, or the folder).
   ([#65](https://github.com/jprodgers/jetcarp/issues/65))
+- **`pack info` called a pack changed after signing "not signed".** A version whose signature is
+  there but does not verify now reads "signed, but a signature does not verify: the version was
+  changed after it was signed, or the signature is damaged", with the reason. The refusal of an
+  unsigned version names the option, `--allow-unsigned` on the command line and `allow_unsigned`
+  through MCP, and says "check" when it was a check, not "import".
+  ([#66](https://github.com/jprodgers/jetcarp/issues/66))
 
 ### Changed
 

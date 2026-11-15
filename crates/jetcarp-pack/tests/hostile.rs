@@ -407,6 +407,20 @@ fn unsigned_and_badly_signed_versions_are_refused() {
         import::import(&lib, &o, &|_| {}),
         "not signed by its publisher",
     );
+    // The refusal names the option on each front end, and what was being done (#66).
+    let e = import::import(&lib, &o, &|_| {}).unwrap_err();
+    assert!(
+        e.contains("to import it anyway")
+            && e.contains("--allow-unsigned")
+            && e.contains("allow_unsigned"),
+        "{e}"
+    );
+    let check = import::Options {
+        dry_run: true,
+        ..o.clone()
+    };
+    let e = import::import(&lib, &check, &|_| {}).unwrap_err();
+    assert!(e.contains("to check it anyway"), "{e}");
     // The original's signature copied onto it does not verify: always refused.
     let sig = std::fs::read_dir(st.sig_dir(&h).unwrap())
         .unwrap()

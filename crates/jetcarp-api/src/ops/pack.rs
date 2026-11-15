@@ -1072,20 +1072,24 @@ impl Report for InfoOut {
         if !self.description.is_empty() {
             let _ = writeln!(s, "  {}", self.description);
         }
+        // A signature that does not verify is not a missing one: the version was changed after
+        // it was signed (or the signature was damaged), and checking or importing it is refused.
+        let signature = match self.bad_signatures.first() {
+            Some(b) => format!(
+                "signed, but a signature does not verify: the version was changed after it was signed, or the signature is damaged ({b})"
+            ),
+            None if self.signed => "signed by its publisher".into(),
+            None => "not signed by its publisher".into(),
+        };
         let _ = writeln!(
             s,
-            "  publisher {}{}, {}",
+            "  publisher {}{}, {signature}",
             self.publisher,
             if self.publisher_name.is_empty() {
                 String::new()
             } else {
                 format!(" ({})", self.publisher_name)
             },
-            if self.signed {
-                "signed by its publisher"
-            } else {
-                "not signed by its publisher"
-            }
         );
         let _ = writeln!(s, "  created {}, licence {}", self.created, self.licence);
         for (k, t) in &self.tables {
@@ -1188,5 +1192,56 @@ impl Op for PackCheck {
         exists(&o.path)?;
         let r = pimport::import(&cx.library(), &o, &|l| p.log(l)).map_err(ApiError::invalid)?;
         Ok(import_out(r))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A version's summary for the signature tests.
+    fn info(signed: bool, bad: &[&str]) -> InfoOut {
+        InfoOut {
+            kind: "store".into(),
+            feeds: vec![],
+            manifest: "sha256:00".into(),
+            feed: "f".into(),
+            title: String::new(),
+            description: String::new(),
+            version_label: String::new(),
+            created: String::new(),
+            licence: String::new(),
+            publisher: "SHA256:abc".into(),
+            publisher_name: String::new(),
+            signed,
+            bad_signatures: bad.iter().map(|b| b.to_string()).collect(),
+            tables: Default::default(),
+            searches: vec![],
+            retracts: 0,
+            parents: vec![],
+            stats: Default::default(),
+        }
+    }
+
+    /// A signature that does not verify reads as that, not as no signature at all (#66).
+    #[test]
+    fn a_signature_that_does_not_verify_is_not_called_missing() {
+        assert!(
+            info(true, &[])
+                .text()
+                .contains(", signed by its publisher\n")
+        );
+        assert!(
+            info(false, &[])
+                .text()
+                .contains(", not signed by its publisher\n")
+        );
+        let t = info(false, &["sigs/x.sig: signature does not verify"]).text();
+        assert!(
+            t.contains("a signature does not verify: the version was changed after it was signed")
+                && t.contains("(sigs/x.sig: signature does not verify)")
+                && !t.contains("not signed"),
+            "{t}"
+        );
     }
 }

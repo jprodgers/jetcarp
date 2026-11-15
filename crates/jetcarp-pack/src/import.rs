@@ -237,9 +237,11 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     } else if opts.allow_unsigned {
         "unsigned".into()
     } else {
+        // Named for every front end, since this does not know which one asked.
         return Err(format!(
-            "this version is not signed by its publisher {} (allow unsigned packs to import it anyway)",
-            m.publisher
+            "this version is not signed by its publisher {}; to {} it anyway, allow unsigned packs (--allow-unsigned on the command line, allow_unsigned through MCP)",
+            m.publisher,
+            if opts.dry_run { "check" } else { "import" }
         ));
     };
     log(&format!(
