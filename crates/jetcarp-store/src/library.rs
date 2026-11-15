@@ -825,6 +825,14 @@ impl Library {
     ) -> Result<R, String> {
         let mut g = self.guard(true)?.unwrap();
         let c = g.as_mut().unwrap();
+        // Opened to be read only (its file or folder cannot be written): say so, naming the file,
+        // rather than SQLite's "attempt to write a readonly database".
+        if c.is_readonly(rusqlite::MAIN_DB).unwrap_or(false) {
+            return Err(format!(
+                "{} is read-only (its file or its folder cannot be written), so nothing can be saved in it; use a copy you can write, or another library (JETCARP_LIBRARY)",
+                self.path.display()
+            ));
+        }
         let tx = c
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(e)?;

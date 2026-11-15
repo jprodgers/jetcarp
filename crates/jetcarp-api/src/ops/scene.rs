@@ -48,6 +48,15 @@ pub fn read_scene(cx: &Ctx, scene: Option<&Value>, path: Option<&str>) -> Result
     }
 }
 
+/// A scene's world that could not be made, its error naming the file the scene came from (if
+/// it came from one), since the engine's message says only what in the scene is wrong.
+pub fn in_file(path: Option<&str>, e: String) -> ApiError {
+    match path {
+        Some(p) => ApiError::engine(format!("{p}: {e}")),
+        None => ApiError::engine(e),
+    }
+}
+
 /// A scene, from JSON or a file.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -189,7 +198,7 @@ impl Op for SceneVerify {
         let Some(rec) = sc.record.clone() else {
             return Err(ApiError::invalid("scene has no recorded hash"));
         };
-        let w = World::from_scene(&sc)?;
+        let w = World::from_scene(&sc).map_err(|e| in_file(a.path.as_deref(), e))?;
         if w.generation != rec.generation || w.hash_hex() != rec.hash {
             return Err(ApiError::conflict(format!(
                 "MISMATCH: recorded gen {} hash {}, replayed gen {} hash {}",
@@ -337,7 +346,7 @@ impl Op for SceneRun {
 fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiError> {
     let sc = read_scene(cx, None, Some(&a.scene))?;
     let t0 = std::time::Instant::now();
-    let mut w = World::from_scene(&sc)?;
+    let mut w = World::from_scene(&sc).map_err(|e| in_file(Some(&a.scene), e))?;
     if let Some(v) = &a.reseed {
         let policies = crate::args::reseed_policies(v)
             .map_err(|e| ApiError::invalid(format!("not a reseed policy: {e}")))?;

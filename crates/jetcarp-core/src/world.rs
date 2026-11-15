@@ -971,8 +971,15 @@ impl World {
         w.base.tables = scene.tables.clone();
         w.palettes = scene.palettes.clone();
         w.base.palettes = scene.palettes.clone();
-        for spec in &scene.cas {
-            w.add_ca_as(spec.clone(), Palettes::Keep)?;
+        // A scene can hold many CAs, so a CA that cannot be made says which it is.
+        for (i, spec) in scene.cas.iter().enumerate() {
+            w.add_ca_as(spec.clone(), Palettes::Keep).map_err(|e| {
+                let id = spec.id.unwrap_or(i as u32 + 1);
+                match spec.name.as_deref().filter(|n| !n.is_empty()) {
+                    Some(name) => format!("CA {id} '{name}': {e}"),
+                    None => format!("CA {id}: {e}"),
+                }
+            })?;
         }
         w.base.cas = w.cas.iter().map(|c| c.spec()).collect();
         if let Some(sc) = &scene.script {
@@ -1529,7 +1536,16 @@ impl World {
     }
 
     fn add_ca_as(&mut self, spec: CaSpec, palettes: Palettes) -> Result<u32, String> {
-        let (rule, nb_from_text) = Rule::parse(&spec.rule)?;
+        // Some of the parser's messages say what is wrong without quoting the rule
+        // ("Generations need a state count"); the rule is put in front of those.
+        let (rule, nb_from_text) = Rule::parse(&spec.rule).map_err(|e| {
+            let text = spec.rule.trim();
+            if e.contains(text) {
+                e
+            } else {
+                format!("rule '{text}': {e}")
+            }
+        })?;
         self.check_rule(&rule)?;
         // A misspelt palette is refused rather than quietly drawn in the default.
         for p in [&spec.palette, &spec.palette_neg].into_iter().flatten() {

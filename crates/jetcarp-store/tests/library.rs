@@ -774,3 +774,56 @@ fn paste_at_cell_uses_grid_columns_on_multi_type_tilings() {
     // Row 7, unit cell 31 / 3 = 10 within the row, tile type 0.
     assert_eq!((u, j, k), (10, 7, 0), "cell {}", live[0]);
 }
+
+/// A library that cannot be written (its file, its folder, or both read-only, as on read-only
+/// media) is read as usual, and a write says the file is read-only, naming it (#67).
+#[cfg(unix)]
+#[test]
+fn a_read_only_library_is_read_and_a_write_says_so() {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |p: &std::path::Path, m: u32| {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).unwrap()
+    };
+    for (case, file_mode, dir_mode) in [
+        ("file", 0o444, 0o755),
+        ("folder", 0o644, 0o555),
+        ("both", 0o444, 0o555),
+    ] {
+        let dir = temp_dir(&format!("read-only-{case}"));
+        {
+            let lib = Library::open(&dir);
+            for r in records_of(&life_world(LIFE_SET), "test") {
+                lib.add(r).unwrap();
+            }
+        }
+        let file = dir.join("library.sqlite");
+        Library::checkpoint(&file).unwrap();
+        for side in ["library.sqlite-wal", "library.sqlite-shm"] {
+            let _ = std::fs::remove_file(dir.join(side));
+        }
+        mode(&file, file_mode);
+        mode(&dir, dir_mode);
+        // Someone who may write anyway (root) cannot see this.
+        let bypass = if case == "file" {
+            std::fs::OpenOptions::new().append(true).open(&file).is_ok()
+        } else {
+            std::fs::write(dir.join("probe"), "").is_ok()
+        };
+        if bypass {
+            eprintln!("skipped {case}: this user can write what is read-only");
+        } else {
+            let lib = Library::open(&dir);
+            assert_eq!(lib.list().unwrap().len(), 5, "{case}");
+            let e = lib
+                .add(records_of(&life_world(&[("ooo", 2, 12)]), "test").remove(0))
+                .unwrap_err();
+            assert!(
+                e.contains(&file.display().to_string()) && e.contains("is read-only"),
+                "{case}: {e}"
+            );
+        }
+        mode(&dir, 0o755);
+        mode(&file, 0o644);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

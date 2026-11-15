@@ -848,7 +848,8 @@ impl WorldOp for WorldOpen {
             generation: r.generation,
             hash: r.hash.clone(),
         });
-        host.replace(scene)?;
+        host.replace(scene)
+            .map_err(|e| crate::ops::scene::in_file(a.path.as_deref(), e))?;
         let w = host.world();
         let replayed = recorded
             .as_ref()

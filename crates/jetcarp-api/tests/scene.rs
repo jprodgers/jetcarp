@@ -254,3 +254,41 @@ fn run_checks_expectations_reseeds_and_falls_back_to_the_cpu() {
     assert!(e.message.contains("nope.json"), "{e}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A rule in a scene that cannot be read says which rule, which CA and which file (#67).
+#[test]
+fn a_malformed_rule_names_itself_its_ca_and_its_file() {
+    let dir = scratch("scene-bad-rule");
+    let mut sc = life_scene();
+    sc.cas[0].rule = "B3/S23/Q9 Frobnicate".into();
+    sc.cas[0].name = Some("Life".into());
+    let path = dir.join("unknown-rule.json");
+    std::fs::write(&path, sc.to_json()).unwrap();
+    let e = fails(
+        SceneRun::run(&Ctx::new(), run_in(&path), &Quiet),
+        ErrorKind::Engine,
+    );
+    assert_eq!(
+        e.message,
+        format!(
+            "{}: CA 1 'Life': rule 'B3/S23/Q9 Frobnicate': Generations need a state count, like B2/S/C3",
+            path.display()
+        )
+    );
+    // A message that quotes the rule already is not given it twice.
+    sc.cas[0].rule = "Frobnicator".into();
+    sc.cas[0].name = None;
+    std::fs::write(&path, sc.to_json()).unwrap();
+    let e = fails(
+        SceneRun::run(&Ctx::new(), run_in(&path), &Quiet),
+        ErrorKind::Engine,
+    );
+    assert!(
+        e.message.starts_with(&format!(
+            "{}: CA 1: 'Frobnicator' is not a rule.",
+            path.display()
+        )),
+        "{e}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

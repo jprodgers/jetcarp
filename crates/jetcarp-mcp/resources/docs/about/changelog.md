@@ -248,6 +248,14 @@ that will declare them stable.
   unsigned version names the option, `--allow-unsigned` on the command line and `allow_unsigned`
   through MCP, and says "check" when it was a check, not "import".
   ([#66](https://github.com/jprodgers/jetcarp/issues/66))
+- **A malformed rule in a scene, and a read-only library, gave errors that didn't say what they
+  were about.** A rule the parser could not read said only "Generations need a state count, like
+  B2/S/C3"; it now quotes the rule and names the CA and the scene's file:
+  `unknown-rule.json: CA 1 'Life': rule 'B3/S23/Q9 Frobnicate': Generations need a state count,
+  like B2/S/C3`. A library whose file or folder cannot be written (read-only media, or a library
+  shared to be read) could not even be listed ("attempt to write a readonly database"); it now
+  opens to be read, and a command that would write to it says the library's file is read-only.
+  ([#67](https://github.com/jprodgers/jetcarp/issues/67))
 
 ### Changed
 

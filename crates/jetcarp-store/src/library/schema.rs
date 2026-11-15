@@ -602,20 +602,91 @@ fn create_or_check(c: &mut Connection) -> Result<(), String> {
     tx.commit().map_err(e)
 }
 
+/// A library file opened to be written: WAL, a 30 s busy timeout, foreign keys.
+fn open_writable(path: &std::path::Path) -> rusqlite::Result<Connection> {
+    let c = Connection::open(path)?;
+    c.busy_timeout(std::time::Duration::from_secs(30))?;
+    c.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))?;
+    c.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
+    Ok(c)
+}
+
+/// Whether an error opening a library says it cannot be written (a read-only file or folder,
+/// read-only media, a library shared to be read), rather than that something else went wrong.
+fn cannot_write(x: &rusqlite::Error) -> bool {
+    use rusqlite::ErrorCode::*;
+    matches!(
+        x.sqlite_error_code(),
+        Some(ReadOnly | CannotOpen | PermissionDenied)
+    )
+}
+
+/// The `file:` URI of a library read as immutable.
+fn immutable_uri(path: &std::path::Path) -> String {
+    let p = path.to_string_lossy().replace('\\', "/");
+    let mut uri = String::from("file:");
+    if !p.starts_with('/') {
+        uri.push('/');
+    }
+    for ch in p.chars() {
+        match ch {
+            '%' => uri.push_str("%25"),
+            '?' => uri.push_str("%3f"),
+            '#' => uri.push_str("%23"),
+            c => uri.push(c),
+        }
+    }
+    uri + "?immutable=1"
+}
+
+/// A library file that cannot be written, opened to be read. A library in WAL mode needs its
+/// shared-memory file to be read, which a folder that cannot be written cannot have made; then
+/// it is read as immutable, as it is now (nothing here can change it).
+fn open_read_only(path: &std::path::Path) -> rusqlite::Result<Connection> {
+    use rusqlite::OpenFlags;
+    let c = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    c.busy_timeout(std::time::Duration::from_secs(30))?;
+    let readable = c
+        .query_row("SELECT count(*) FROM sqlite_master", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .is_ok();
+    let c = if readable {
+        c
+    } else {
+        Connection::open_with_flags(
+            immutable_uri(path),
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+        )?
+    };
+    c.execute_batch("PRAGMA foreign_keys = ON;")?;
+    Ok(c)
+}
+
 /// Open (creating if new) a library file: WAL, a 30 s busy timeout, foreign keys, the schema
-/// made or checked, then the geometry pins checked ([`check_pins`]).
+/// made or checked, then the geometry pins checked ([`check_pins`]). A library that exists but
+/// cannot be written is opened to be read: reading it works, and a write says it is read-only
+/// ([`Library::write`]).
 pub(super) fn open_db(path: &std::path::Path) -> Result<Connection, String> {
     if let Some(d) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(d).map_err(|x| format!("creating {}: {x}", d.display()))?;
     }
-    let mut c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
-    c.busy_timeout(std::time::Duration::from_secs(30))
-        .map_err(e)?;
-    c.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))
-        .map_err(e)?;
-    c.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")
-        .map_err(e)?;
-    create_or_check(&mut c).map_err(|x| format!("{}: {x}", path.display()))?;
+    let mut c = match open_writable(path) {
+        Ok(c) => c,
+        Err(x) if path.is_file() && cannot_write(&x) => open_read_only(path)
+            .map_err(|y| format!("{}: {x}; reading it only: {y}", path.display()))?,
+        Err(x) => return Err(format!("{}: {x}", path.display())),
+    };
+    create_or_check(&mut c).map_err(|x| {
+        if c.is_readonly(rusqlite::MAIN_DB).unwrap_or(false) {
+            format!(
+                "{}: {x} (the library is read-only here, so it cannot be brought up to date; open it once with a JETCARP that can write it)",
+                path.display()
+            )
+        } else {
+            format!("{}: {x}", path.display())
+        }
+    })?;
     if let Err(x) = check_pins(&mut c) {
         // A library that cannot be written (a read-only file) still opens for reading; its
         // stale records cannot be flagged in it, and `library reverify` will say why.
