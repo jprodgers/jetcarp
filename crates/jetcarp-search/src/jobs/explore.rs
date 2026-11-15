@@ -73,6 +73,22 @@ pub const PUBLISH_S: f64 = 2.0;
 /// count.
 pub const FREE_CORES: usize = 2;
 
+/// Seconds between returns of the memory allocator's free pages to the system
+/// ([`release_free_memory`]).
+pub const RELEASE_S: f64 = 30.0;
+
+/// Give the memory allocator's free pages back to the system. glibc keeps what the search frees
+/// (each GPU batch's frames, a few hundred MB, and the grids the cache lets go) in its arenas,
+/// which give memory back only from their top, so a long search's memory grew with the tilings
+/// it reached, though what it holds is capped (#53). Elsewhere this does nothing.
+fn release_free_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: malloc_trim only returns free memory; it is safe to call at any time.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 /// The computer's cores (logical processors this process may use).
 pub fn cores() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
@@ -575,6 +591,8 @@ struct Running {
     gpu_error: Option<String>,
     note: Option<String>,
     rss: f64,
+    /// When the allocator's free pages were last given back ([`release_free_memory`]).
+    released: Instant,
     rate: Rate,
     /// A Quick Start build's atlas, once published.
     published: Option<Published>,
@@ -737,6 +755,7 @@ impl Strategy for ExploreRun {
             gpu_error: None,
             note: None,
             rss: rss_gb(),
+            released: Instant::now(),
             rate: Rate::new(screened),
             published: None,
         });
@@ -835,6 +854,11 @@ impl Strategy for ExploreRun {
         r.runs.write(&d)?;
         r.runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
         r.rate.note(r.search.screened());
+        // Between steps no run is under way, so nothing waits on the allocator meanwhile.
+        if r.released.elapsed().as_secs_f64() >= RELEASE_S {
+            release_free_memory();
+            r.released = Instant::now();
+        }
         Ok(Step::More)
     }
 

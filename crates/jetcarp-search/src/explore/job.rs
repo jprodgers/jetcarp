@@ -57,13 +57,14 @@ fn d_batch() -> usize {
     1024
 }
 
-/// Cells the search's cache of grids holds at most, in all. A grid costs about 72 bytes a cell
-/// (a 16,000-cell screening grid about 1.1 MB, a 64,000-cell confirming one about 4.3 MB), so
-/// every tiling's grids at both default sizes, as an unbounded cache ends up holding, come to
-/// about 109 million cells and 7.2 GB (the 1,359 tilings measured on Linux: 1.48 GB at 16,000
-/// cells, 5.0 GB for 1,187 of them at 64,000). This keeps the most recently used, about 2.2 GB,
-/// which holds every screening grid with room for the confirming grids in use; a grid let go is
-/// built again in about 25 ms (16,000 cells) or 0.1 to 0.2 s (64,000 cells).
+/// Cells the search's cache of grids holds at most, in all. A grid costs about 87 bytes a cell
+/// (the 1,359 tilings' grids counted by allocation: 1.91 GB for 21.8 million cells at 16,000,
+/// 7.47 GB for 86.8 million at 64,000; 67 to 125 bytes a cell on periodic tilings, 200 to 320 on
+/// the aperiodic patches, which have 35,000 cells at both sizes), and about 94 with the cache's
+/// own share, so every tiling's grids at both default sizes, as an unbounded cache ends up
+/// holding, come to about 109 million cells and 9.4 GB. This keeps the most recently used, about
+/// 3 GB, which holds every screening grid with room for the confirming grids in use; a grid let
+/// go is built again in about 25 ms (16,000 cells) or 0.1 to 0.2 s (64,000 cells).
 pub const GRID_CACHE_CELLS: usize = 32_000_000;
 
 /// The grids a search has built, by tiling and size, up to [`GRID_CACHE_CELLS`] cells; past

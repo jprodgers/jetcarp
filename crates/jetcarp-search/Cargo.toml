@@ -23,6 +23,10 @@ memory-stats = "1.2.0"
 parquet.workspace = true
 bytes.workspace = true
 
+# malloc_trim: a long explore search gives glibc's free pages back to the system (#53).
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+libc = "0.2.191"
+
 [dev-dependencies]
 # The GPU strategies' tests: a hunt and an explore search on the GPU equal the CPU's.
 jetcarp-gpu.workspace = true

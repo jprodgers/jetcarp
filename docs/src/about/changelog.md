@@ -138,6 +138,11 @@ that will declare them stable.
   `JETCARP_GPU=llvmpipe` doctor self-tested a Radeon's OpenGL adapter and showed its failure.
   The name now has to match, as it always did for the choice itself.
   ([#48](https://github.com/jprodgers/jetcarp/issues/48))
+- **A long explore search's memory kept growing on Linux, to 7 GB or more after four hours.** What
+  the search holds is capped, but each GPU batch frees a few hundred megabytes, which glibc kept
+  for reuse rather than giving back. The search now gives its free memory back between steps, at
+  most every 30 seconds. The grid cache's cap is about 3 GB, not the 2.2 GB its notes said: a grid
+  costs about 90 bytes a cell. ([#53](https://github.com/jprodgers/jetcarp/issues/53))
 
 ### Changed
 

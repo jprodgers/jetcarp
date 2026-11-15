@@ -2580,6 +2580,7 @@ dependencies = [
  "jetcarp-core",
  "jetcarp-gpu",
  "jetcarp-store",
+ "libc",
  "memory-stats",
  "parquet",
  "rayon",
