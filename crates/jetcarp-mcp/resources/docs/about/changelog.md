@@ -180,6 +180,10 @@ that will declare them stable.
   for the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does
   the same when it is dropped, and a wait for the GPU over 60 seconds counts as a failure, so the
   processor carries on. ([#52](https://github.com/jprodgers/jetcarp/issues/52))
+- **A rotation's Quick Start entry could only be added by typing its handle.** The rotation editor's
+  box now searches the built-in Quick Start entries by title, rule or handle as you type, and adds
+  the one you click; a handle and Enter still work, for entries of your own.
+  ([#74](https://github.com/jprodgers/jetcarp/issues/74))
 - **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
   often tie for a niche's last places (every run that dies at the same generation scores the same),
   and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU

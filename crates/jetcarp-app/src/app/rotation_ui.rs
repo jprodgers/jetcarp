@@ -599,11 +599,16 @@ fn editor(
                 .hold(3.0),
             );
         }
-        let e = ui.add(
-            egui::TextEdit::singleline(quick_start_id)
-                .desired_width(120.0)
-                .hint_text("Quick Start id"),
-        );
+        let e = ui
+            .add(
+                egui::TextEdit::singleline(quick_start_id)
+                    .desired_width(180.0)
+                    .hint_text("Add Quick Start: search"),
+            )
+            .on_hover_text(
+                "Type part of a Quick Start entry's title, rule or id, and pick it below; or type \
+                 an id (as `jetcarp quickstart` lists them) and press Enter",
+            );
         if e.lost_focus()
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && !quick_start_id.trim().is_empty()
@@ -614,6 +619,41 @@ fn editor(
             quick_start_id.clear();
         }
     });
+    // The Quick Start picker (#74): the entries matching what is typed, to click instead of
+    // knowing an id, which `jetcarp quickstart` alone listed.
+    let q = quick_start_id.trim().to_lowercase();
+    if !q.is_empty() {
+        let hits: Vec<&(String, String, String)> = quick_start_list()
+            .iter()
+            .filter(|(id, title, rule)| {
+                id.to_lowercase().contains(&q)
+                    || title.to_lowercase().contains(&q)
+                    || rule.to_lowercase().contains(&q)
+            })
+            .take(12)
+            .collect();
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            if hits.is_empty() {
+                ui.label(RichText::new("No Quick Start entry matches").weak());
+            }
+            for (id, title, rule) in hits {
+                let label = if title.is_empty() {
+                    id.clone()
+                } else {
+                    format!("{title}  ({rule})")
+                };
+                if ui
+                    .selectable_label(false, label)
+                    .on_hover_text(id.as_str())
+                    .clicked()
+                {
+                    r.items
+                        .push(Item::new(Source::QuickStart { id: id.clone() }));
+                    quick_start_id.clear();
+                }
+            }
+        });
+    }
 
     egui::CollapsingHeader::new("Script")
         .id_salt("rotation-script")
@@ -647,6 +687,18 @@ fn editor(
                 .weak(),
             );
         });
+}
+
+/// The built-in Quick Start entries as the rotation editor's picker lists them: id, title and
+/// rule, read once (#74).
+fn quick_start_list() -> &'static [(String, String, String)] {
+    static LIST: std::sync::OnceLock<Vec<(String, String, String)>> = std::sync::OnceLock::new();
+    LIST.get_or_init(|| {
+        jetcarp_core::quickstart::entries()
+            .into_iter()
+            .map(|q| (q.id, q.scene.name, q.rule))
+            .collect()
+    })
 }
 
 fn item_ui(ui: &mut egui::Ui, it: &mut Item) {
