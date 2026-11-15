@@ -824,8 +824,14 @@ impl Op for JobsStatus {
         let t0 = Instant::now();
         let wait = a.wait_s.unwrap_or(0.0).max(0.0);
         loop {
+            // A stop marks the job paused at once, but its run writes its last counters at its
+            // next checkpoint, when it lets go: a wait answered at once gave the counters of the
+            // step before (#68). Wait for that too, as `jobs.wait` does. (The lock is asked
+            // before the job is read, so a view read after it was let go has those counters.)
+            let marked = lib.job(job).is_ok_and(|r| r.status == JobStatus::Running);
+            let held = wait > 0.0 && !marked && jobs::lock_held(&lib, job) == Some(true);
             let mut v = view(cx, &lib, job, a.finds)?;
-            let running = v.status == "running" && !v.stale;
+            let running = (v.status == "running" && !v.stale) || (held && v.status != "running");
             if wait <= 0.0 || !running || p.cancelled() || t0.elapsed().as_secs_f64() >= wait {
                 if wait > 0.0 {
                     v.waited_s = Some(t0.elapsed().as_secs_f64());
@@ -1790,6 +1796,72 @@ mod tests {
         drop(lease);
         let w = wait(5.0);
         assert_eq!(w.ended, "paused", "let go");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `jobs.status` with a wait, after a stop, answers once the run has let go, with the
+    /// counters of its last checkpoint (#68: the stop marks the job paused at once, and the wait
+    /// answered then, with the counters of the step before).
+    #[test]
+    fn a_status_wait_after_a_stop_gives_the_last_counters() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-api-stopstat-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cx = Ctx::new().with_library(Some(dir.join("lib")));
+        let lib = cx.library();
+        let js = jobs::JobSpec {
+            strategy: "hunt".into(),
+            spec: serde_json::json!(jetcarp_search::hunt::HuntSpec::default()),
+            label: None,
+            budget: Default::default(),
+        };
+        let job = jobs::create(&lib, &js).unwrap();
+        let counted = |n: u64, status: &str| {
+            serde_json::to_value(jetcarp_search::hunt::HuntProgress {
+                status: status.into(),
+                soups_done: n,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        lib.update_job(
+            job,
+            Some(JobStatus::Running),
+            Some(&counted(81_685, "running")),
+            None,
+        )
+        .unwrap();
+        // Another process runs it; asked to stop, it writes its last step a moment later and
+        // lets go.
+        let lease = jobs::Lease::acquire(&lib, job).unwrap();
+        jobs::request_stop(&lib, job).unwrap();
+        let other = lib.clone();
+        let run = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(400));
+            other
+                .update_job(job, None, Some(&counted(84_100, "paused")), None)
+                .unwrap();
+            drop(lease);
+        });
+        let status = |wait_s: f64| {
+            let a = StatusIn {
+                job: Some(job),
+                wait_s: Some(wait_s),
+                ..Default::default()
+            };
+            match JobsStatus::run(&cx, a, &crate::op::Quiet).unwrap() {
+                StatusOut::One(v) => v,
+                StatusOut::List(_) => panic!("a list"),
+            }
+        };
+        let v = status(10.0);
+        assert_eq!(v.status, "paused");
+        assert_eq!(v.done, 84_100, "the last checkpoint's counters: {}", v.line);
+        assert!(v.waited_s.unwrap() >= 0.3, "{:?}", v.waited_s);
+        run.join().unwrap();
+        // Not running: a wait answers at once.
+        let t0 = Instant::now();
+        assert_eq!(status(10.0).done, 84_100);
+        assert!(t0.elapsed() < Duration::from_secs(2));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

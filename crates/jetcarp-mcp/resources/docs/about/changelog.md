@@ -219,6 +219,13 @@ that will declare them stable.
   the job stayed marked running until it went stale. The server now stops its own searches at their
   next checkpoint, as `job_stop` does, waits for them (up to 30 seconds), and leaves them paused and
   resumable. ([#64](https://github.com/jprodgers/jetcarp/issues/64))
+- **Two MCP answers misled about jobs that had stopped.** `search_start {"resume": N}` on a
+  finished job answered with a note that the job ran in the background and how to stop it; it now
+  says the job is already done, with nothing to carry on, and how to see its finds and report.
+  `job_status` with `wait_s` after a stop answered as soon as the stop marked the job paused, with
+  the counters of the step before the last; it now waits, as `jobs wait` does, until the run has
+  written its last checkpoint and let go, so `jetcarp jobs status --wait` gives the final counters
+  too. ([#68](https://github.com/jprodgers/jetcarp/issues/68))
 
 ### Changed
 

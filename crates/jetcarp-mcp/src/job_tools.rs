@@ -300,6 +300,23 @@ fn search_start(c: &mut Call) -> Res {
     };
     let out = SearchStart::run(cx, input, &Quiet).map_err(err)?;
     let wait = number(a, "wait_s")?.unwrap_or(0.0).min(MAX_WAIT_S);
+    if out.mode == "none" {
+        // A finished job is given as it is: nothing runs, and there is nothing to wait for or
+        // stop (#68: the note said the job ran in the background, and how to stop it).
+        let j = out.job;
+        return Ok(ToolOutput::json(&json!({
+            "job": j,
+            "kind": out.kind,
+            "started": false,
+            "mode": out.mode,
+            "status": out.status,
+            "line": out.line,
+            "folder": out.progress.get("folder"),
+            "note": format!(
+                "Job {j} is already done, so there is nothing to carry on: job_status {{\"job\": {j}, \"finds\": 10}} shows its finds, and {{\"job\": {j}, \"report\": true}} reports what it searched and found."
+            ),
+        })));
+    }
     if wait > 0.0 {
         let t0 = std::time::Instant::now();
         if out.mode == "detached" {

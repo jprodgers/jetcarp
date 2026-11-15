@@ -32,6 +32,23 @@ fn every_strategy_runs_in_the_background() {
         json!({"ants": {"rules": ["RL"]}, "wait_s": 120}),
     );
     assert_eq!(ants["kind"], "ants");
+    // Carried on once it is done: nothing runs, and the note says so (#68), with a wait too.
+    for args in [
+        json!({"resume": ants["job"]}),
+        json!({"resume": ants["job"], "wait_s": 30}),
+    ] {
+        let again = json_of(&call(&mut s, &mut h, "search_start", args));
+        assert_eq!(
+            (&again["mode"], &again["status"], &again["started"]),
+            (&json!("none"), &json!("done"), &json!(false)),
+            "{again}"
+        );
+        let note = again["note"].as_str().unwrap();
+        assert!(
+            note.contains("already done") && !note.contains("job_stop"),
+            "{note}"
+        );
+    }
     let pile = run(
         &mut s,
         &mut h,
