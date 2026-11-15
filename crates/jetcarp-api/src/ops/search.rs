@@ -1704,7 +1704,7 @@ fn build(
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BudgetIn {
-    /// Stop at the next checkpoint after this many minutes.
+    /// Stop at the next checkpoint after this many minutes. A job started with them keeps them: a resume given no budget runs what is left of them (time run over every session counts).
     #[serde(default)]
     pub minutes: Option<f64>,
     /// Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed.
@@ -1772,7 +1772,7 @@ pub struct SearchStartIn {
     /// Carry on this job (stopped, paused, or cut off) instead of starting one.
     #[serde(default)]
     pub resume: Option<i64>,
-    /// This run's budget; the job stays resumable past it.
+    /// This run's budget; the job stays resumable past it. A new job keeps its minutes and `until`, and a resume given no budget runs what is left of them.
     #[serde(default)]
     pub budget: Option<BudgetIn>,
     /// Worker threads (default 0: all cores, and all but two for an explore search; results do not depend on them).
@@ -1823,6 +1823,10 @@ pub struct SearchStarted {
     pub files: Vec<String>,
     /// Seconds this call took.
     pub seconds: f64,
+    /// A resume given no budget of its own: what it kept of the budget the job was started
+    /// with, or that it has none left (so this run has no end).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_note: Option<String>,
 }
 
 impl SearchStarted {
@@ -1940,6 +1944,9 @@ impl Op for SearchStart {
                             budget: Budget::default(),
                         };
                         let j = jobs::create(&lib, &js).map_err(ApiError::invalid)?;
+                        if let Some(b) = a.budget {
+                            keep_started_with(&lib, j, b.budget())?;
+                        }
                         (j, true)
                     }
                 },
@@ -2250,6 +2257,83 @@ fn detach(cx: &Ctx, lib: &Library, row: &JobRow, args: &[String]) -> Result<(), 
     )))
 }
 
+/// Keep the time budget a new job is started with (its minutes and `until`, as
+/// `spec.started_with`), so a resume given no budget of its own runs what is left of it
+/// ([`carried_budget`]). The job runner's own `spec.budget` (applied whole to every run that
+/// gives none) is left alone.
+fn keep_started_with(lib: &Library, job: i64, b: Budget) -> Result<(), ApiError> {
+    let kept = Budget { items: None, ..b };
+    if kept.is_empty() {
+        return Ok(());
+    }
+    let mut row = lib.job(job).map_err(catalog_err)?;
+    row.spec["started_with"] =
+        serde_json::to_value(kept).map_err(|e| ApiError::engine(e.to_string()))?;
+    lib.set_job_spec(job, &row.spec).map_err(catalog_err)
+}
+
+/// The budget of a run given none of its own: what is left of the time budget its job was
+/// started with (`spec.started_with`, [`keep_started_with`]), and a note saying so. A job
+/// started with `--minutes 120` and killed an hour in used to carry on with no end when resumed
+/// (#51); it now runs the hour left, by the time it has run over every session (its progress's
+/// `elapsed_s`), and a job started with `until` keeps that end. Once that budget is used up (the
+/// job paused at it), a resume runs on with no end, as it always did, and the note says so. A
+/// budget of `items` belongs to its session and is not kept. `now`: seconds since 1970.
+pub(crate) fn carried_budget(
+    k: &dyn jobs::StrategyKind,
+    row: &JobRow,
+    now: i64,
+) -> (Budget, Option<String>) {
+    use jetcarp_search::dashboard::duration;
+    let first: Budget = match row.spec.get("started_with") {
+        Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+        None => Budget::default(),
+    };
+    if first.minutes.is_none() && first.until.is_none() {
+        return (Budget::default(), None);
+    }
+    let mut b = Budget::default();
+    let mut kept = Vec::new();
+    let mut had = Vec::new();
+    if let Some(m) = first.minutes {
+        let run = k.summary(row).elapsed_s.max(0.0);
+        let left = m * 60.0 - run;
+        had.push(format!("{} of running", duration(m * 60.0)));
+        // Less than a second left counts as used up (a run stops only at a checkpoint, and so
+        // may have run a little past its minutes).
+        if left >= 1.0 {
+            b.minutes = Some(left / 60.0);
+            kept.push(format!(
+                "{} left of its {} of running",
+                duration(left),
+                duration(m * 60.0)
+            ));
+        }
+    }
+    if let Some(u) = first.until {
+        had.push(format!("an end at Unix time {u}"));
+        if u as i64 > now {
+            b.until = Some(u);
+            kept.push(format!("its end at Unix time {u}"));
+        }
+    }
+    let what = format!("{} {}", super::jobs::noun(&row.kind), row.id);
+    let note = if b.is_empty() {
+        format!(
+            "{what} has used up the budget it was started with ({}), so this run has no end; give \
+             it a budget of its own to end it",
+            had.join(", ")
+        )
+    } else {
+        format!(
+            "{what} keeps the budget it was started with: {} (give this run a budget of its own to \
+             change that)",
+            kept.join(", ")
+        )
+    };
+    (b, Some(note))
+}
+
 /// Run (or resume) a job as `how` says, and report on it.
 pub(crate) fn run_job(
     cx: &Ctx,
@@ -2278,6 +2362,7 @@ pub(crate) fn run_job(
         result: None,
         files: vec![],
         seconds: 0.0,
+        budget_note: None,
     };
     if row.status == JobStatus::Done {
         // Nothing to run: the job as it is.
@@ -2302,6 +2387,17 @@ pub(crate) fn run_job(
             noun(&row.kind)
         )));
     }
+    // This run's budget: its own, else what is left of the one the job was started with.
+    let budget = if how.budget.is_empty() {
+        let (b, note) = carried_budget(k, &row, jetcarp_search::dashboard::now_seconds());
+        if let Some(n) = &note {
+            p.log(n);
+        }
+        out.budget_note = note;
+        b
+    } else {
+        how.budget
+    };
     if how.detach {
         let mut args = Vec::new();
         if how.threads > 0 {
@@ -2312,13 +2408,13 @@ pub(crate) fn run_job(
             Some(false) => args.push("--cpu".into()),
             None => {}
         }
-        if let Some(m) = how.budget.minutes {
+        if let Some(m) = budget.minutes {
             args.extend(["--minutes".to_string(), m.to_string()]);
         }
-        if let Some(u) = how.budget.until {
+        if let Some(u) = budget.until {
             args.extend(["--until".to_string(), u.to_string()]);
         }
-        if let Some(n) = how.budget.items {
+        if let Some(n) = budget.items {
             args.extend(["--limit".to_string(), n.to_string()]);
         }
         detach(cx, lib, &row, &args)?;
@@ -2328,7 +2424,8 @@ pub(crate) fn run_job(
         out.line = line_of(k, &row, &out.progress);
         return Ok(out);
     }
-    let o = run_options(cx, &row, how, p)?;
+    let mut o = run_options(cx, &row, how, p)?;
+    o.budget = budget;
     if how.background {
         // A catalog handle of its own, so the run's writes never wait on the caller's reads.
         let own = Library::open(lib.path());
@@ -3077,5 +3174,65 @@ pub(crate) fn census_text(s: &mut String, r: &CensusReport) {
             "... {} more rules (see the CSV or JSON file)",
             r.rules.len() - show
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A paused hunt that has run `elapsed_s` over every session, started with `started_with`.
+    fn row(started_with: Value, elapsed_s: f64) -> JobRow {
+        let progress = jetcarp_search::hunt::HuntProgress {
+            status: "paused".into(),
+            elapsed_s,
+            ..Default::default()
+        };
+        JobRow {
+            id: 7,
+            kind: "hunt".into(),
+            spec: json!({"rules": ["B3/S23"], "started_with": started_with}),
+            status: JobStatus::Paused,
+            progress: serde_json::to_value(progress).unwrap(),
+            has_checkpoint: false,
+            created: String::new(),
+            updated: String::new(),
+            finished: None,
+            owner: None,
+            heartbeat: None,
+            uuid: String::new(),
+        }
+    }
+
+    /// A resume given no budget runs what is left of the minutes its job was started with, and
+    /// keeps its `until`; with none left it has no end, and says so (#51).
+    #[test]
+    fn a_resume_keeps_what_is_left_of_the_budget_the_job_was_started_with() {
+        let k = jobs::kind("hunt");
+        let now = 1_800_000_000;
+        let (b, note) = carried_budget(k, &row(json!({"minutes": 120.0}), 3600.0), now);
+        assert_eq!((b.minutes, b.until, b.items), (Some(60.0), None, None));
+        let note = note.unwrap();
+        assert!(
+            note.contains("hunt 7 keeps the budget it was started with: 1 h 0 min left of its 2 h 0 min of running"),
+            "{note}"
+        );
+        let (b, note) = carried_budget(k, &row(json!({"minutes": 120.0}), 7203.0), now);
+        assert!(b.is_empty());
+        assert!(note.unwrap().contains("used up"));
+        let (b, note) = carried_budget(k, &row(json!({"until": now + 600}), 0.0), now);
+        assert_eq!(b.until, Some(now as u64 + 600));
+        assert!(note.unwrap().contains("its end at Unix time"));
+        let (b, _) = carried_budget(k, &row(json!({"until": now - 1}), 0.0), now);
+        assert!(b.is_empty());
+        // Both: the minutes left and the end.
+        let both = json!({"minutes": 10.0, "until": now + 60});
+        let (b, _) = carried_budget(k, &row(both, 300.0), now);
+        assert_eq!((b.minutes, b.until), (Some(5.0), Some(now as u64 + 60)));
+        // Started with no budget (or before jobs kept one): nothing, and nothing said.
+        let mut r = row(json!(null), 0.0);
+        r.spec = json!({"rules": ["B3/S23"]});
+        assert_eq!(carried_budget(k, &r, now), (Budget::default(), None));
     }
 }

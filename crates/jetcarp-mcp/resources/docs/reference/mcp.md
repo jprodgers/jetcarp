@@ -490,9 +490,9 @@ Example:
 | `ants.symmetry` | boolean | Test for mirror-symmetric growth (default true). |
 | `ants.tables` | array or integer or string | Turmite tables: [states, colours] or "2x2". |
 | `ants.tilings` | array or string | Periodic tilings: ids, catalog ids, vertex configurations, or sets (default square). |
-| `budget` | object | This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable. Settings: `jetcarp://schema/search_start/budget`. |
+| `budget` | object | This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable. A new job keeps its `minutes` and `until`: a `resume` given no budget runs what is left of them. Settings: `jetcarp://schema/search_start/budget`. |
 | `budget.items` | integer | Stop at the next checkpoint after this many units in this run: soups (per rule and tiling for hunts), runs, rules, or generations. |
-| `budget.minutes` | number | Stop at the next checkpoint after this many minutes. |
+| `budget.minutes` | number | Stop at the next checkpoint after this many minutes. A job started with them keeps them: a resume given no budget runs what is left of them (time run over every session counts). |
 | `budget.until` | integer | Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed. |
 | `census` | object | Rules classed by what their soups do (die, freeze, oscillate, grow, ...), with a table and a contact sheet. Settings: `jetcarp://schema/search_start/census`. |
 | `census.all` | boolean | Every B/S rule over `birth` and `survive` (with `rules` too: added to them). |

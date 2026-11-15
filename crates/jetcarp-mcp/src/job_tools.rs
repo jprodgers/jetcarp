@@ -98,7 +98,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                     p.insert(k.into(), start[k].clone());
                 }
                 p["budget"]["description"] = json!(
-                    "This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable."
+                    "This run's budget: `minutes`, `items` or `until`. It ends at the next checkpoint after it; the job stays resumable. A new job keeps its `minutes` and `until`: a `resume` given no budget runs what is left of them."
                 );
                 let mut gpu = start["gpu"].clone();
                 gpu["description"] = json!(
@@ -311,14 +311,27 @@ fn search_start(c: &mut Call) -> Res {
         o.content.insert(
             0,
             json!({"type": "text", "text": format!(
-                "{} job {} {} ({}).",
+                "{} job {} {} ({}).{}",
                 out.kind_label,
                 out.job,
                 if out.created { "started" } else { "resumed" },
-                out.mode
+                out.mode,
+                out.budget_note.as_ref().map(|n| format!(" {}", mcp_budget(n))).unwrap_or_default()
             )}),
         );
         return Ok(o);
+    }
+    let j = out.job;
+    let mut note = format!(
+        "The job runs {}: job_status {{\"job\": {j}, \"wait_s\": 300}} waits for it, job_stop {{\"job\": {j}}} stops it, search_start {{\"resume\": {j}}} carries it on.",
+        if out.mode == "detached" {
+            "in a process of its own"
+        } else {
+            "in the background"
+        },
+    );
+    if let Some(n) = &out.budget_note {
+        note = format!("{} {note}", mcp_budget(n));
     }
     Ok(ToolOutput::json(&json!({
         "job": out.job,
@@ -328,12 +341,19 @@ fn search_start(c: &mut Call) -> Res {
         "status": out.status,
         "line": out.line,
         "folder": out.progress.get("folder"),
-        "note": format!(
-            "The job runs {}: job_status {{\"job\": {j}, \"wait_s\": 300}} waits for it, job_stop {{\"job\": {j}}} stops it, search_start {{\"resume\": {j}}} carries it on.",
-            if out.mode == "detached" { "in a process of its own" } else { "in the background" },
-            j = out.job
-        ),
+        "note": note,
     })))
+}
+
+/// A budget note ([`SearchStarted::budget_note`](jetcarp_api::ops::search::SearchStarted)) as a
+/// sentence, its first letter a capital.
+fn mcp_budget(n: &str) -> String {
+    let mut c = n.chars();
+    let s = match c.next() {
+        Some(f) => f.to_uppercase().chain(c).collect(),
+        None => String::new(),
+    };
+    format!("{}.", s.trim_end_matches('.'))
 }
 
 /// Wait (up to `max_s`, or until the client cancels) for a job handed to another process to be

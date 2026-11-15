@@ -81,11 +81,12 @@ pub struct JobFlags {
     /// ignored). Piles: a job id or the pile's run folder.
     #[arg(long, value_name = "JOB")]
     resume: Option<String>,
-    /// Stop at the next checkpoint after this many minutes; the job stays resumable.
+    /// Stop at the next checkpoint after this many minutes of running; the job stays resumable.
+    /// The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left.
     #[arg(long)]
     minutes: Option<f64>,
     /// Stop at the next checkpoint after this Unix time (seconds since 1970): the same end
-    /// however often the job is resumed.
+    /// however often the job is resumed (the job keeps it).
     #[arg(long)]
     until: Option<u64>,
     /// Stop after this many units in this session (soups per rule and tiling, runs, rules,

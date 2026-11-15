@@ -205,6 +205,14 @@ that will declare them stable.
   the job back as it was). A `--detach` while another process still runs the job is refused, and
   one just after a stop waits for that run to let go; both used to start a process that failed
   unseen. ([#50](https://github.com/jprodgers/jetcarp/issues/50))
+- **A search resumed without `--minutes` ran with no end, though it was started with them.**
+  `--minutes` belonged to the session it was given to, so a search started with `--minutes 120`,
+  cut off after an hour and resumed with a plain `jetcarp jobs resume`, ran until stopped by hand.
+  A job now keeps the minutes and the `--until` it was started with, and a resume given no budget
+  of its own runs the minutes left (counting the time it has run in every session) and keeps the
+  same end, saying so; once they are used up, a resume runs until stopped, as before, and says
+  that. `--limit` still counts one session. Scripts and the MCP server's `search_start` resume the
+  same way. ([#51](https://github.com/jprodgers/jetcarp/issues/51))
 
 ### Changed
 

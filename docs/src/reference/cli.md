@@ -298,9 +298,9 @@ Options:
       --resume <JOB>
           Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
       --minutes <MINUTES>
-          Stop at the next checkpoint after this many minutes; the job stays resumable
+          Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
       --until <UNTIL>
-          Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+          Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>
           Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>
@@ -367,8 +367,8 @@ Options:
       --library <LIBRARY>          Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>              A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>               Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>          Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -404,8 +404,8 @@ Options:
       --library <LIBRARY>        Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>            A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>             Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>        Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -439,8 +439,8 @@ Options:
       --library <LIBRARY>          Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>              A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>               Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>          Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>          Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>              Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>              Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>          Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                     Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -483,8 +483,8 @@ Options:
       --library <LIBRARY>            Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>                A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>                 Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>            Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>                Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>            Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>                Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>                Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>            Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                       Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -518,8 +518,8 @@ Options:
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>      A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>       Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>  Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -557,8 +557,8 @@ Options:
       --library <LIBRARY>              Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>                  A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>                   Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>              Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -593,8 +593,8 @@ Options:
       --library <LIBRARY>        Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>            A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>             Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>        Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>        Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>            Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>            Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>        Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                   Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -629,8 +629,8 @@ Options:
       --library <LIBRARY>              Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>                  A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>                   Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>              Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>              Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>                  Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>                  Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>              Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach                         Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)
@@ -798,7 +798,7 @@ Options:
       --threads <THREADS>    Worker threads (default: all cores; an explore search leaves two free)
       --gpu                  Use the GPU where the rules allow it, whatever the GPU setting says (results are identical). Default: as the GPU setting says (automatic: the GPU once the work is large enough to gain)
       --cpu                  Use only the CPU, whatever the GPU setting says
-      --minutes <MINUTES>    Stop at the next checkpoint after this many minutes
+      --minutes <MINUTES>    Stop at the next checkpoint after this many minutes. Without --minutes, --until or --limit, the job runs what is left of the --minutes and --until it was started with (it says so), and with none left, until it is stopped
       --until <UNTIL>        Stop at the next checkpoint after this Unix time (seconds since 1970)
       --limit <LIMIT>        Stop after this many units in this session (an explore search finishes the step it is in, so it may run past it)
       --detach               Run in a process of its own and return at once
@@ -1030,8 +1030,8 @@ Options:
       --library <LIBRARY>  Catalog: a .sqlite file, or a folder holding library.sqlite (default: $JETCARP_LIBRARY, else <data>/library.sqlite)
       --label <LABEL>      A name to find the job by (`jetcarp jobs list --label`)
       --resume <JOB>       Carry on this job instead of starting one (its spec is kept; the other options are ignored). Piles: a job id or the pile's run folder
-      --minutes <MINUTES>  Stop at the next checkpoint after this many minutes; the job stays resumable
-      --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed
+      --minutes <MINUTES>  Stop at the next checkpoint after this many minutes of running; the job stays resumable. The job keeps them: `jetcarp jobs resume` given no budget runs the minutes left
+      --until <UNTIL>      Stop at the next checkpoint after this Unix time (seconds since 1970): the same end however often the job is resumed (the job keeps it)
       --limit <LIMIT>      Stop after this many units in this session (soups per rule and tiling, runs, rules, generations); the job stays resumable. An explore search checks it between steps, so it finishes the step it is in and may run past it
       --threads <THREADS>  Worker threads (default: all cores; an explore search leaves two free). Results do not depend on this
       --detach             Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it)

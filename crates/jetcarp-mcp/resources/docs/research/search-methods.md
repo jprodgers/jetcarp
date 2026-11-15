@@ -31,7 +31,8 @@ exception: it is not deterministic, so a stopped one continues from its saved ar
 
 The options shared by every strategy: `--minutes N`, `--until TIME` (a Unix time, the same end however
 often the job is resumed) and `--limit N` stop the job, still resumable, after a time or a number of
-items; `--resume JOB` carries one on; `--label` names it; `--detach` runs
+items (the job keeps its minutes and its end, and a resume given no budget runs what is left of
+them); `--resume JOB` carries one on; `--label` names it; `--detach` runs
 it in a process of its own; `--threads` sets the worker threads; `--library` picks the catalogue. The
 jobs themselves are managed with `jetcarp jobs list`, `status`, `stop`, `resume`, `report` (a Markdown
 summary of what a job searched and found) and `remove`. Ctrl-C stops a job at its next checkpoint.

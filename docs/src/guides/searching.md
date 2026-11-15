@@ -91,7 +91,11 @@ $ jetcarp jobs list
 
 - **Budgets.** `--minutes M` or `--until UNIX-TIME` stops a search, still resumable, at its next
   checkpoint after that time (the exploratory search ends at that time; see below), and `--limit N`
-  after N items.
+  after N items in that session. The job keeps its minutes and its end: `jetcarp jobs resume JOB`
+  given no budget of its own runs the minutes left, counting the time it has run in every session,
+  and keeps the same end, so a search started with `--minutes 120` and cut off after an hour runs
+  one more hour. Once they are used up, a resume runs until it is stopped. Either way it says
+  which.
 - **Memory.** `--max-rss-gb GB` pauses a hunt, a bounded search or an explore search, still
   resumable, once JETCARP uses more memory than that. The job keeps the cap, so a resumed run keeps
   to it too, and `jetcarp jobs status JOB` says why it paused.

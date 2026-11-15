@@ -87,7 +87,9 @@ enum JobsCmd {
         threads: Option<usize>,
         #[command(flatten)]
         gpu: crate::platform::GpuFlags,
-        /// Stop at the next checkpoint after this many minutes.
+        /// Stop at the next checkpoint after this many minutes. Without --minutes, --until or
+        /// --limit, the job runs what is left of the --minutes and --until it was started with
+        /// (it says so), and with none left, until it is stopped.
         #[arg(long)]
         minutes: Option<f64>,
         /// Stop at the next checkpoint after this Unix time (seconds since 1970).

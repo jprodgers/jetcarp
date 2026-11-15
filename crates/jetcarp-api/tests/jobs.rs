@@ -777,3 +777,64 @@ fn a_killed_run_is_stale_at_once_and_a_detached_resume_is_waited_for() {
     let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 60})).unwrap();
     assert_eq!(w["ended"], "paused", "{w}");
 }
+
+/// A job keeps the minutes it was started with: stopped part way (as a crash would leave it), a
+/// resume given no budget runs the rest and says so; once they are used up, a resume has no end,
+/// and says that (#51).
+#[test]
+fn a_resume_runs_what_is_left_of_the_minutes_the_job_was_started_with() {
+    let dir = scratch("jobs-budget-left");
+    let cx = ctx(&dir);
+    let r = start(
+        &cx,
+        json!({"strategy": "hunt", "spec": {"soups": 0}, "threads": 1, "background": true,
+               "budget": {"minutes": 0.15}}),
+    );
+    let job = r["job"].as_i64().unwrap();
+    assert_eq!(r.get("budget_note"), None, "a new job's own budget: {r}");
+    let elapsed = |v: &Value| v["progress"]["elapsed_s"].as_f64().unwrap_or(0.0);
+    let t0 = Instant::now();
+    loop {
+        let v = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+        assert_eq!(v["spec"]["started_with"], json!({"minutes": 0.15}), "{v}");
+        if elapsed(&v) > 0.0 {
+            break;
+        }
+        assert!(t0.elapsed() < Duration::from_secs(60), "no progress: {v}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    call_json(&cx, "jobs.stop", json!({"job": job})).unwrap();
+    let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 60})).unwrap();
+    assert_eq!(w["ended"], "paused", "{w}");
+    // Resumed with no budget: the rest of its 9 s.
+    let lines = Lines::default();
+    let c = jetcarp_api::call(
+        &cx,
+        "jobs.resume",
+        json!({"job": job, "threads": 1}),
+        &lines,
+    )
+    .unwrap()
+    .value;
+    assert_eq!(
+        (&c["status"], &c["stopped"]),
+        (&json!("paused"), &json!("budget")),
+        "{c}"
+    );
+    let note = c["budget_note"].as_str().unwrap_or_default();
+    assert!(note.contains("left of its 9 s of running"), "{c}");
+    assert_eq!(lines.with("keeps the budget it was started with"), 1);
+    assert!(elapsed(&c) >= 8.0, "it ran its 9 s in all: {c}");
+    // Used up: this run has no end (stopped here from the background).
+    let r = call_json(
+        &cx,
+        "jobs.resume",
+        json!({"job": job, "threads": 1, "background": true}),
+    )
+    .unwrap();
+    let note = r["budget_note"].as_str().unwrap_or_default();
+    assert!(note.contains("used up") && note.contains("no end"), "{r}");
+    call_json(&cx, "jobs.stop", json!({"job": job})).unwrap();
+    let w = call_json(&cx, "jobs.wait", json!({"job": job, "timeout_s": 60})).unwrap();
+    assert_eq!(w["ended"], "paused", "{w}");
+}

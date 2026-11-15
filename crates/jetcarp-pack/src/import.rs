@@ -1158,6 +1158,11 @@ fn import_search(
     crate::store::write_atomic(&mf, text.as_bytes())?;
     let explore = ix.kind == jetcarp_search::jobs::explore::KIND_NAME;
     let mut spec = ix.spec.clone();
+    // The budgets the publisher's runs had are theirs: a resume here runs as long as asked.
+    if let Value::Object(m) = &mut spec {
+        m.remove("budget");
+        m.remove("started_with");
+    }
     if explore {
         // The settings' numbers as numbers again (a pack's documents write decimals as
         // strings), every other member kept as it came (its label among them).

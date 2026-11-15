@@ -1050,7 +1050,7 @@ impl Op for JobsStop {
 pub struct ResumeIn {
     /// The job id.
     pub job: i64,
-    /// This run's budget; the job stays resumable past it.
+    /// This run's budget; the job stays resumable past it. Default: what is left of the minutes and `until` the job was started with (none left, or none given: no end).
     #[serde(default)]
     pub budget: Option<super::search::BudgetIn>,
     /// Worker threads (default 0: all cores, and all but two for an explore search).
