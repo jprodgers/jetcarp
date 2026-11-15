@@ -573,8 +573,9 @@ fn swept(dir: &Path) -> Vec<(String, Vec<f64>, f64, bool)> {
 }
 
 /// `jetcarp host tune` with no host running: the sweep runs off screen. On a 160 x 120 screen a
-/// 4 px scene shows at 1 and 2 px (the coarsest keeps 60 cells across) and at its own 4 px, each
-/// size's numbers come as JSON lines, `--pick own` leaves each scene at its own size, and the
+/// 4 px scene shows at 1 and 2 px (the coarsest keeps 60 cells across) and at its own 4 px,
+/// coarsest first, stopping early only after a size far over the limits (CI's slow virtual GPUs);
+/// each size's numbers come as JSON lines, `--pick own` leaves each scene at its own size, and the
 /// pictures land in `--crops` and beside the settings.
 #[test]
 fn host_tune_sweeps_off_screen_with_no_host() {
@@ -609,19 +610,31 @@ fn host_tune_sweeps_off_screen_with_no_host() {
     assert_eq!(events[0]["event"], "start", "{stdout}");
     assert_eq!(events[0]["scenes"], 2);
     let count = |kind: &str| events.iter().filter(|e| e["event"] == kind).count();
-    assert_eq!(
-        (count("rung"), count("measured"), count("scene")),
-        (6, 6, 2),
-        "{stdout}"
-    );
-    // Coarsest first; every size's numbers.
-    let shown: Vec<f64> = events
-        .iter()
-        .filter(|e| e["event"] == "measured")
-        .take(3)
-        .map(|e| e["rung"]["size"]["px"].as_f64().unwrap())
-        .collect();
-    assert_eq!(shown, [4.0, 2.0, 1.0]);
+    assert_eq!(count("scene"), 2, "{stdout}");
+    assert_eq!(count("rung"), count("measured"), "{stdout}");
+    // Coarsest first, each scene's sizes a run of 4, 2, 1 px that ends early only after a size
+    // that does not fit; every size's numbers.
+    for scene in ["B3/S23", "B36/S23"] {
+        let measured: Vec<&Value> = events
+            .iter()
+            .filter(|e| e["event"] == "measured" && e["scene"] == scene)
+            .collect();
+        let shown: Vec<f64> = measured
+            .iter()
+            .map(|e| e["rung"]["size"]["px"].as_f64().unwrap())
+            .collect();
+        assert!(
+            !shown.is_empty() && [4.0, 2.0, 1.0].starts_with(&shown),
+            "{scene}: {shown:?}\n{stdout}"
+        );
+        if shown.len() < 3 {
+            assert_eq!(
+                measured.last().unwrap()["rung"]["fits"],
+                false,
+                "{scene} stopped early\n{stdout}"
+            );
+        }
+    }
     let m = events.iter().find(|e| e["event"] == "measured").unwrap();
     for k in ["cells", "cpu_percent", "p95_ms", "fps", "fits"] {
         assert!(!m["rung"][k].is_null(), "{k} in {m}");
@@ -631,7 +644,7 @@ fn host_tune_sweeps_off_screen_with_no_host() {
     assert_eq!(saved_limit(&dir), 50.0, "the limit given is saved");
     for (scene, sizes, shows, chosen) in swept(&dir) {
         assert!(scene == "B3/S23" || scene == "B36/S23", "{scene}");
-        assert_eq!(sizes, [1.0, 2.0, 4.0], "finest first");
+        assert!([1.0, 2.0, 4.0].ends_with(&sizes), "finest first: {sizes:?}");
         assert_eq!((shows, chosen), (4.0, true), "--pick own");
     }
     // Pictures, where there was a GPU to draw them.
