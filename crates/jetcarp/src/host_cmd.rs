@@ -175,9 +175,9 @@ pub enum HostCmd {
         /// 1 to 240, or refresh.
         rate: String,
     },
-    /// Leave a still of the scene as the desktop picture when the host stops, or while the live
-    /// wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your
-    /// own picture back.
+    /// Leave a still of the scene as the desktop picture when the host stops (a crash leaves your own
+    /// picture), or while the live wallpaper can't be shown (saved; off by default). Turning it or
+    /// the wallpaper off puts your own picture back.
     Still { state: Switch },
     /// Pause while the computer runs on battery (saved; on by default).
     Battery { state: Switch },

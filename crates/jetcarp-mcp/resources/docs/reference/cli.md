@@ -2417,7 +2417,7 @@ Commands:
   fps        Frames per second, at least (saved; default 30)
   pacing     Whether a faster scene draws faster, showing every generation (saved)
   max-fps    The most frames per second a screen showing every generation draws at (saved; default 60)
-  still      Leave a still of the scene as the desktop picture when the host stops, or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
+  still      Leave a still of the scene as the desktop picture when the host stops (a crash leaves your own picture), or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
   battery    Pause while the computer runs on battery (saved; on by default)
   busy       Pause while the whole processor stays at least this busy, in percent, as during research runs (saved; default 80, 0 never)
   login      Start the host at login, or stop doing that
@@ -2643,7 +2643,7 @@ Options:
 #### `jetcarp host still`
 
 ```text
-Leave a still of the scene as the desktop picture when the host stops, or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
+Leave a still of the scene as the desktop picture when the host stops (a crash leaves your own picture), or while the live wallpaper can't be shown (saved; off by default). Turning it or the wallpaper off puts your own picture back
 
 Usage: jetcarp host still [OPTIONS] <STATE>
 
