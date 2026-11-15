@@ -657,6 +657,16 @@ fn a_pack_carries_the_runs_of_a_search_never_sealed() {
         "{}",
         String::from_utf8_lossy(&o.stderr)
     );
+    // Sealed first, so no note asks for a seal that was made, or names a command MCP lacks (#68).
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(
+        !all.contains("jobs seal") && !all.contains("not sealed yet"),
+        "{all}"
+    );
     json_of(&[
         "--json",
         "pack",

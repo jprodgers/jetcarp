@@ -866,6 +866,96 @@ fn errors_are_useful_not_fatal() {
     assert_eq!(h.world.generation, 0);
 }
 
+/// A wrong-typed argument is named with what to give, not as a Rust type; a value below the
+/// schema's minimum, or of the wrong type where a tool would have ignored it, is refused; and
+/// world_read's formats are all named (#68).
+#[test]
+fn wrong_arguments_are_named_with_what_to_give() {
+    let (mut s, mut h) = new();
+    for (tool, args, want) in [
+        (
+            "world_new",
+            json!({"width": "abc", "height": 10}),
+            "world_new: `width` must be a whole number (got \"abc\")",
+        ),
+        (
+            "world_read",
+            json!({"x": "a"}),
+            "world_read: `x` must be a whole number (got \"a\")",
+        ),
+        (
+            "library_query",
+            json!({"limit": "x"}),
+            "library_query: `limit` must be a whole number (got \"x\")",
+        ),
+        (
+            "files_list",
+            json!({"limit": -3}),
+            "files_list: `limit` must be at least 0 (got -3)",
+        ),
+        (
+            "job_stop",
+            json!({"job": null}),
+            "job_stop: `job` must be a whole number (got null)",
+        ),
+        (
+            "world_render",
+            json!({"wallpaper": "4K"}),
+            "world_render: `wallpaper` must be an object (got \"4K\") (the settings: jetcarp://schema/world_render/wallpaper)",
+        ),
+        (
+            "world_render",
+            json!({"wallpaper": {"size": 5}}),
+            "world_render: `wallpaper.size` must be text (got 5)",
+        ),
+        (
+            "help",
+            json!({"topic": 5}),
+            "help: `topic` must be text (got 5)",
+        ),
+        (
+            "reference",
+            json!({"family": 7}),
+            "reference: `family` must be text (got 7)",
+        ),
+        (
+            "reference",
+            json!({"what": "tilings", "limit": "abc"}),
+            "reference: `limit` must be a whole number (got \"abc\")",
+        ),
+        (
+            "search_start",
+            json!({"hunt": {"soups": 10}, "threads": -1}),
+            "search_start: `threads` must be at least 0 (got -1)",
+        ),
+        (
+            "world_read",
+            json!({"format": "nope"}),
+            "world_read: format must be picture, list or objects, got nope",
+        ),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(e.starts_with(want), "{tool} {args}: {e}");
+        assert!(
+            !e.contains("expected i64") && !e.contains("expected u"),
+            "{e}"
+        );
+    }
+    // What small models send still works: numbers as text.
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_new",
+        json!({"width": "16", "height": "16", "cas": ["Life"]}),
+    ));
+    ok(&call(
+        &mut s,
+        &mut h,
+        "reference",
+        json!({"what": "tilings", "limit": "3"}),
+    ));
+}
+
 #[test]
 fn sandpile_settles_and_reports() {
     let (mut s, mut h) = new();

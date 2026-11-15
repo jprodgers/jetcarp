@@ -256,6 +256,14 @@ that will declare them stable.
   shared to be read) could not even be listed ("attempt to write a readonly database"); it now
   opens to be read, and a command that would write to it says the library's file is read-only.
   ([#67](https://github.com/jprodgers/jetcarp/issues/67))
+- **Some MCP argument errors named a Rust type, and some wrong values passed silently.** A
+  wrong-typed argument now says which and what to give ("`width` must be a whole number (got
+  "abc")", not "expected i64"), and a value of the wrong type that a tool would have ignored
+  (`help {"topic": 5}`, `reference {"family": 7}`) or one below the schema's minimum
+  (`"threads": -1`) is refused. `world_read`'s refusal of an unknown format names `objects` too,
+  and publishing a pack no longer advises `jetcarp jobs seal`, which no MCP tool runs: it seals
+  first, and a note now appears only if runs are still unsealed.
+  ([#68](https://github.com/jprodgers/jetcarp/issues/68))
 
 ### Changed
 

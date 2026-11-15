@@ -231,6 +231,117 @@ pub fn coerce(schema: &Value, v: &mut Value) {
     }
 }
 
+/// What a JSON Schema type is called in an error.
+fn type_words(t: &str) -> &'static str {
+    match t {
+        "integer" => "a whole number",
+        "number" => "a number",
+        "string" => "text",
+        "boolean" => "true or false",
+        "array" => "a list",
+        "object" => "an object",
+        _ => "something else",
+    }
+}
+
+/// Whether `v` is of the JSON Schema type `t`.
+fn fits(t: &str, v: &Value) -> bool {
+    match t {
+        "integer" => v.as_i64().is_some() || v.as_u64().is_some(),
+        "number" => v.is_number(),
+        "string" => v.is_string(),
+        "boolean" => v.is_boolean(),
+        "array" => v.is_array(),
+        "object" => v.is_object(),
+        "null" => v.is_null(),
+        _ => true,
+    }
+}
+
+/// A value as an error shows it, cut short.
+fn shown(v: &Value) -> String {
+    let s = v.to_string();
+    if s.chars().count() > 60 {
+        format!("{}...", s.chars().take(57).collect::<String>())
+    } else {
+        s
+    }
+}
+
+/// Check the arguments `v` of `tool` (coerced first: see [`coerce`]) against its schema: each
+/// argument's type, and the least value a number may take. Serde would refuse a wrong type too,
+/// but in the Rust type's words (`invalid type: string "abc", expected i64`), which tell a model
+/// neither which argument nor what to give; this names both: "`width` must be a whole number
+/// (got "abc")". Arguments inside an argument's object are checked as `wallpaper.size`. A
+/// `null` counts as left out, unless the argument is required.
+pub fn check_types(tool: &str, schema: &Value, v: &Value) -> Result<(), String> {
+    let mut v = v.clone();
+    coerce(schema, &mut v);
+    check_at(tool, "", schema, &v)
+}
+
+fn check_at(tool: &str, path: &str, schema: &Value, v: &Value) -> Result<(), String> {
+    let (Some(props), Some(o)) = (
+        schema.get("properties").and_then(Value::as_object),
+        v.as_object(),
+    ) else {
+        return Ok(());
+    };
+    let required = |k: &str| {
+        schema
+            .get("required")
+            .and_then(Value::as_array)
+            .is_some_and(|r| r.iter().any(|x| x == k))
+    };
+    for (k, x) in o {
+        let Some(ps) = props.get(k) else {
+            continue;
+        };
+        if x.is_null() && !required(k) {
+            continue;
+        }
+        let name = if path.is_empty() {
+            k.clone()
+        } else {
+            format!("{path}.{k}")
+        };
+        // The settings resource of the argument this is in, if it has one.
+        let top = path
+            .split('.')
+            .next()
+            .filter(|p| !p.is_empty())
+            .unwrap_or(k);
+        let refuse = |e: String| with_settings(&format!("{tool} {top}"), format!("{tool}: {e}"));
+        let types: Vec<&str> = match ps.get("type") {
+            Some(Value::String(t)) => vec![t.as_str()],
+            Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).collect(),
+            _ => vec![],
+        };
+        if !types.is_empty() && !types.iter().any(|t| fits(t, x)) {
+            let want: Vec<&str> = types
+                .iter()
+                .filter(|t| **t != "null")
+                .map(|t| type_words(t))
+                .collect();
+            return Err(refuse(format!(
+                "`{name}` must be {} (got {})",
+                want.join(" or "),
+                shown(x)
+            )));
+        }
+        if let (Some(n), Some(min)) = (x.as_f64(), ps.get("minimum").and_then(Value::as_f64))
+            && n < min
+        {
+            return Err(refuse(format!(
+                "`{name}` must be at least {min} (got {})",
+                shown(x)
+            )));
+        }
+        check_at(tool, &name, ps, x)?;
+    }
+    Ok(())
+}
+
 /// Read `v` (coerced to `schema` first; `null` counts as `{}`) into an operation's input type.
 /// `what` names the part in the error (`world_edit cells`).
 /// When `what` is a tool argument whose settings are a resource of their own (`pack publish`),

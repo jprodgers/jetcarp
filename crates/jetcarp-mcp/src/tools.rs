@@ -311,7 +311,9 @@ pub fn call_ctx(
     let r = match registry().iter().find(|t| t.name == name) {
         Some(t) => {
             let schema = (t.schema)();
-            match schema::check_known(name, &schema, args) {
+            match schema::check_known(name, &schema, args)
+                .and_then(|()| schema::check_types(name, &schema, args))
+            {
                 Ok(()) => (t.run)(&mut Call {
                     host,
                     args,

@@ -301,6 +301,14 @@ fn world_read(c: &mut Call) -> Res {
         let out = WorldInspect::run(ctx(), c.host, input, &Quiet).map_err(err)?;
         return Ok(ToolOutput::json(&op::to_value(&out)));
     }
+    // The operation behind the picture and the list knows only those two; objects is another.
+    if let Some(f) = a.get("format").and_then(Value::as_str)
+        && !["picture", "list", "objects"].contains(&f)
+    {
+        return Err(format!(
+            "world_read: format must be picture, list or objects, got {f}"
+        ));
+    }
     if a.get("format").and_then(Value::as_str) == Some("objects") {
         let others: Vec<&str> = ["x", "y", "width", "height"]
             .into_iter()

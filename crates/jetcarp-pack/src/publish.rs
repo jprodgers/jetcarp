@@ -1432,9 +1432,20 @@ fn search_index(store: &Store, dir: &Path, uuid: &str) -> Result<(String, Vec<St
             parts: ps,
         });
     }
-    if dir.join("search.sqlite").is_file() {
+    // Publishing seals a stopped search's runs first (`pack.publish`), so this says something
+    // only when runs are still unsealed: a search that went on running, or a publish made
+    // without that step. Stopping the search and publishing again works from every front end.
+    let db = dir.join("search.sqlite");
+    let unsealed = if db.is_file() {
+        jetcarp_search::explore::runs::Runs::open_read(&db)
+            .and_then(|r| r.unsealed_now())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    if unsealed > 0 {
         notes.push(format!(
-            "search {uuid}: only its sealed segments are published; any runs its working database still holds are not (`jetcarp jobs seal` first)"
+            "search {uuid}: its newest {unsealed} runs are not sealed yet, so this version leaves them out; stop the search and publish again, which seals them first"
         ));
     }
     let clean = |v: Value| json::sanitize(crate::paths::strip_json(v));
