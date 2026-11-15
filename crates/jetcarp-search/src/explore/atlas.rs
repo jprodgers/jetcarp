@@ -861,7 +861,14 @@ mod tests {
         for c in RARELY_KEPT {
             assert!(gave.contains(&c), "{c} is not a category categorize gives");
         }
-        assert_eq!((rarely_kept_cap(48), rarely_kept_cap(24), rarely_kept_cap(400)), (3, 2, 25));
+        assert_eq!(
+            (
+                rarely_kept_cap(48),
+                rarely_kept_cap(24),
+                rarely_kept_cap(400)
+            ),
+            (3, 2, 25)
+        );
     }
 
     #[test]
