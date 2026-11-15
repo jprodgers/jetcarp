@@ -184,6 +184,10 @@ that will declare them stable.
   box now searches the built-in Quick Start entries by title, rule or handle as you type, and adds
   the one you click; a handle and Enter still work, for entries of your own.
   ([#74](https://github.com/jprodgers/jetcarp/issues/74))
+- **At login on Windows, the desktop background host started later than it needed to.** JETCARP's
+  launcher waited for the host it started, so Windows, which runs the login entries one at a time,
+  waited on it too. At login the launcher now starts the host and exits.
+  ([#78](https://github.com/jprodgers/jetcarp/issues/78))
 - **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
   often tie for a niche's last places (every run that dies at the same generation scores the same),
   and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU

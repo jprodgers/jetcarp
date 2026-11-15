@@ -2,7 +2,8 @@
 //!
 //! `jetcarp.exe` is a console program, so starting it from a shortcut, at login, or as a screen
 //! saver would open a console window. This launcher is a GUI-subsystem program that runs
-//! `jetcarp.exe` with the same arguments and no console, waits for it, and returns its exit code.
+//! `jetcarp.exe` with the same arguments and no console, waits for it, and returns its exit code;
+//! at login (`--login`) it starts it and exits at once, so Windows needn't wait on it (#78).
 //!
 //! Copied as `JETCARP.scr`, it is the screen saver: Windows starts it with `/s`, `/p <hwnd>` or
 //! `/c`, and it runs `jetcarp.exe host scr <those arguments>`.
@@ -62,6 +63,16 @@ fn main() -> ExitCode {
     }
     c.args(std::env::args_os().skip(1));
     no_console(&mut c);
+    // At login (the Run value is `jetcarpw.exe host serve --login`), start the host and go:
+    // Windows runs the Run entries one at a time and waits on each, so a launcher waiting on the
+    // host kept Windows waiting too (#78). A screen saver and a shortcut still wait, for the exit
+    // code.
+    if std::env::args_os().any(|a| a == "--login") {
+        return match c.spawn() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
     match c.status() {
         // The program's own code, whole: Windows codes are 32-bit, and a crash (0xC0000005)
         // is negative as an i32, so it must not be clamped into 0..=255 (it would read as 0).

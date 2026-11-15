@@ -111,7 +111,10 @@ relative paths they are given start in the output folder.
 **Runtime.** One more, small folder holds the files through which the running app and the background
 host accept local control (their port and access token): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
-the folder is kept readable by you only (mode 0700) and the files too (0600).
+the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
+every copy of JETCARP you run, whatever folders the others point at, so there is one background
+host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
+one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own.
 
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).
@@ -145,6 +148,10 @@ export JETCARP_OUT=/scratch/jetcarp/out
 export JETCARP_LIBRARY=/scratch/jetcarp/library
 jetcarp paths
 ```
+
+To run a background host or the app beside your everyday one as well, set `JETCARP_RUNTIME_DIR`
+to a scratch folder too: otherwise the two share the runtime folder, and with it one host's lock
+and control files.
 
 ### For development and debugging
 
