@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security problem
-    url: https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md
-    about: Please report security problems by email, not in a public issue.
+    url: https://github.com/jprodgers/jetcarp/security/advisories/new
+    about: Please report security problems privately here (or by email, as SECURITY.md says), not in a public issue.
   - name: The JETCARP book
     url: https://jprodgers.github.io/jetcarp
     about: Guides, the command line and MCP reference, and the encyclopedia of rules and tilings.

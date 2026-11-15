@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thank you for reporting this. A confusing moment counts as a bug too.
-        **Security problems:** please email instead, as [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
+        **Security problems:** please [report them privately](https://github.com/jprodgers/jetcarp/security/advisories/new) instead, as [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
   - type: textarea
     id: what
     attributes:

@@ -24,7 +24,8 @@ Everyone taking part agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 A confusing moment counts too: if the app or the command line left you unsure what to do, that is a
 bug worth reporting.
 
-**Security problems** go by email, not in a public issue: see [SECURITY.md](SECURITY.md).
+**Security problems** are reported privately (the Security tab's *Report a vulnerability*, or
+email), not in a public issue: see [SECURITY.md](SECURITY.md).
 
 ## Suggesting a feature, a rule or a tiling, or a correction
 
@@ -60,6 +61,8 @@ bug worth reporting.
   anything a user would notice.
 - **AI-assisted contributions are welcome**, as JETCARP itself is written with an AI coding tool.
   Say so in the pull request, and make sure you understand, have run and can explain every change.
+- **Every contribution is verified, whoever or whatever wrote it:** reviewed in depth with AI tools,
+  then tested heavily before it is merged. We do not trust, but we verify.
 
 ## Licence of contributions
 

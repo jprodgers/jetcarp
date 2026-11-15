@@ -2,9 +2,10 @@
 
 ## Reporting a problem
 
-If you find a security problem in JETCARP, please email Jimmie Rodgers at
-<jimmie@jimmieprodgers.com> rather than opening a public issue, and give Jimmie a chance to fix it
-before you make it public. Say which version you use (`jetcarp --version`), on which system, and
+If you find a security problem in JETCARP, please report it privately rather than opening a public
+issue: either with **Report a vulnerability** on the repository's
+[Security tab](https://github.com/jprodgers/jetcarp/security/advisories/new), or by email to Jimmie
+Rodgers at <jimmie@jimmieprodgers.com>. Give Jimmie a chance to fix it before you make it public. Say which version you use (`jetcarp --version`), on which system, and
 how to reproduce the problem. Fixes go into the next release, with credit to you if you would like
 it. JETCARP is research software maintained by one person: there is no bug bounty, and only the
 newest release gets fixes.

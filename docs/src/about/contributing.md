@@ -9,12 +9,15 @@ report, a feature request, a new rule or tiling, and a history or credit correct
 starts from a short checklist. [CONTRIBUTING.md](https://github.com/jprodgers/jetcarp/blob/main/CONTRIBUTING.md)
 sums this page up, and everyone taking part agrees to the
 [Code of Conduct](https://github.com/jprodgers/jetcarp/blob/main/CODE_OF_CONDUCT.md). Security problems
-go by email, as [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
+are reported privately, with the Security tab's *Report a vulnerability* or by email, as
+[SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says.
 
 **Pull requests:** small fixes can come straight as a pull request; for anything larger, open an issue
 first so we can agree on the approach. **AI-assisted contributions are welcome**, as JETCARP itself is
 written with an AI coding tool (see [How JETCARP was made](how-made.md)): say so in the pull request,
-and make sure you understand, have run and can explain every change.
+and make sure you understand, have run and can explain every change. Every contribution, whoever or
+whatever wrote it, is reviewed in depth with AI tools and then tested heavily before it is merged: we
+do not trust, but we verify.
 
 ## Building and testing
 

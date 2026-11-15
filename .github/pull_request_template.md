@@ -12,4 +12,6 @@
 - [ ] Any material from elsewhere has its licence and a notice in `THIRD_PARTY_NOTICES.md`
 - [ ] If an AI tool helped, I say so here, and I have run and understand every change
 
+Every pull request, whoever or whatever wrote it, is reviewed with AI tools and tested heavily before it is merged.
+
 By opening this pull request, I offer my contribution under JETCARP's terms: the Unlicense, or the MIT licence where that is not recognised.
