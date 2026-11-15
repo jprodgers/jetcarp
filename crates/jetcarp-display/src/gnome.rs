@@ -59,7 +59,7 @@ impl ExtensionState {
             ExtensionState::Inactive(why) => format!("The GNOME extension is not running: {why}."),
             ExtensionState::Active => "The GNOME extension is running.".into(),
             ExtensionState::Outdated(v) => format!(
-                "The GNOME extension was updated to JETCARP {}'s, but GNOME is still running {}. Log out and back in once to load it.",
+                "The GNOME extension was updated to JETCARP {}'s, but GNOME still has {} loaded. Log out and back in once to load the new one.",
                 env!("CARGO_PKG_VERSION"),
                 v.as_deref()
                     .map_or("an older version".to_string(), |v| format!("JETCARP {v}'s"))
@@ -114,7 +114,9 @@ fn state_word(n: f64) -> &'static str {
         2 => "it is switched off",
         3 => "it failed with an error; see the journal",
         4 => "this version of GNOME is not supported",
-        5 | 6 => "it is starting",
+        5 => "it is being downloaded",
+        // Loaded at login but never switched on (it isn't in GNOME's list of enabled ones).
+        6 => "it is switched off",
         7 => "it is stopping",
         8 => "it is starting",
         _ => "its state is unknown",
@@ -145,14 +147,26 @@ pub fn state() -> ExtensionState {
         return ExtensionState::NoGnome;
     };
     let reply = String::from_utf8_lossy(&out.stdout);
-    match parse_state(&reply) {
-        Some(1.0) => match parse_version_name(&reply) {
-            Some(v) if v == env!("CARGO_PKG_VERSION") => ExtensionState::Active,
-            // Files of another version on disk than GNOME loaded: one login loads them. (Files
-            // left from an older JETCARP that nothing refreshed are what GNOME runs, and fine.)
-            v if !stale() => ExtensionState::Outdated(v),
-            _ => ExtensionState::Active,
-        },
+    state_from(&reply, files, stale())
+}
+
+/// [`state`] from GNOME's `GetExtensionInfo` reply, whether the extension's files are installed,
+/// and whether they differ from this program's (`stale`).
+fn state_from(reply: &str, files: bool, stale: bool) -> ExtensionState {
+    let loaded = parse_version_name(reply);
+    let current = loaded.as_deref() == Some(env!("CARGO_PKG_VERSION"));
+    match parse_state(reply) {
+        Some(1.0) if current => ExtensionState::Active,
+        // Files of another version on disk than GNOME loaded: one login loads them. (Files left
+        // from an older JETCARP that nothing refreshed are what GNOME runs, and fine.)
+        Some(1.0) if !stale => ExtensionState::Outdated(loaded),
+        Some(1.0) => ExtensionState::Active,
+        // GNOME refused the copy it loaded at login (an error, or out of date for this GNOME, as
+        // 0.4.1's extension is on GNOME 51), but the files are now this program's: the next login
+        // loads them, so say that rather than GNOME's reason, which no longer applies.
+        Some(n) if (n == 3.0 || n == 4.0) && !current && files && !stale => {
+            ExtensionState::Outdated(loaded)
+        }
         Some(n) => ExtensionState::Inactive(state_word(n).into()),
         None if files => ExtensionState::NeedsLogin,
         None => ExtensionState::NotInstalled,
@@ -315,6 +329,55 @@ mod tests {
         assert_eq!(m["uuid"], UUID);
         assert_eq!(m["session-modes"][1], "unlock-dialog");
         assert_eq!(m["version-name"], env!("CARGO_PKG_VERSION"));
+    }
+
+    /// What the state says in each case, the upgrade from 0.4.1 on GNOME 51 among them (GNOME
+    /// loaded 0.4.1's copy, out of date for it, before the host refreshed the files).
+    #[test]
+    fn the_state_after_a_refresh_says_to_log_in_again() {
+        let me = env!("CARGO_PKG_VERSION");
+        let reply = |state: f64, version: Option<&str>| match version {
+            Some(v) => {
+                format!("({{'uuid': <'x'>, 'version-name': <'{v}'>, 'state': <{state:.1}>}},)")
+            }
+            None => format!("({{'uuid': <'x'>, 'state': <{state:.1}>}},)"),
+        };
+        // Running this version.
+        assert_eq!(
+            state_from(&reply(1.0, Some(me)), true, false),
+            ExtensionState::Active
+        );
+        // Running an older one, files refreshed.
+        assert_eq!(
+            state_from(&reply(1.0, Some("0.4.0")), true, false),
+            ExtensionState::Outdated(Some("0.4.0".into()))
+        );
+        // 0.4.1's copy, out of date for this GNOME (state 4), files refreshed: log in again.
+        assert_eq!(
+            state_from(&reply(4.0, None), true, false),
+            ExtensionState::Outdated(None)
+        );
+        // The same before anything refreshed the files: GNOME's own reason.
+        assert!(matches!(
+            state_from(&reply(4.0, None), true, true),
+            ExtensionState::Inactive(_)
+        ));
+        // Switched off by the user (state 2, or 6 when it was off at login): "switched off".
+        for st in [2.0, 6.0] {
+            assert_eq!(
+                state_from(&reply(st, Some(me)), true, false),
+                ExtensionState::Inactive("it is switched off".into())
+            );
+        }
+        // Not known to GNOME yet.
+        assert_eq!(
+            state_from("(@a{sv} {},)", true, false),
+            ExtensionState::NeedsLogin
+        );
+        assert_eq!(
+            state_from("(@a{sv} {},)", false, false),
+            ExtensionState::NotInstalled
+        );
     }
 
     #[test]
