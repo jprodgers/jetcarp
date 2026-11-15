@@ -826,7 +826,9 @@ segments of schema `jetcarp-explore-runs 2` or `1`, score sidecars `jetcarp-expl
   its random states again from its seed (the identities tried keep it from repeating a candidate).
 - `children` lists further search indexes of the same search whose `parts` and `scores` add to these
   (the same limits as table indexes).
-- Every object a search index names is Parquet (`.parquet`). Runs not yet sealed are never in a pack.
+- Every object a search index names is Parquet (`.parquet`). Runs not yet sealed are never in a pack:
+  JETCARP seals a stopped search's newest runs before publishing it, and refuses to publish a
+  search that is still running.
 - Ratings of a search's runs are `ratings` rows with targets `search_run:<uuid>:<run id>`.
 
 ## Importing

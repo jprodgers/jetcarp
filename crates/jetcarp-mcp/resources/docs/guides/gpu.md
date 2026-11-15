@@ -63,8 +63,11 @@ setting decides. An explore search or a pile made with `--gpu` or `--cpu` keeps 
 later runs.
 
 In all, first to last: `JETCARP_GPU` (when it names off, auto or on), a command's `--gpu` or `--cpu`,
-the app's or host's own choice, the shared setting, and automatic. An adapter that failed its
-self-test is never used. `jetcarp doctor` says what the app and the host each do, and why:
+the app's or host's own choice, the shared setting, and automatic. A run or search given `--gpu`
+while `JETCARP_GPU=off` runs on the processor and says why: its log has `the GPU was asked for, but
+JETCARP_GPU=off: running on the processor`, and a run's summary `backend: cpu (32 threads); the GPU
+was asked for, but JETCARP_GPU=off`. An adapter that failed its self-test is never used. `jetcarp
+doctor` says what the app and the host each do, and why:
 
 ```text
 GPU: auto (automatic)
@@ -97,8 +100,14 @@ The first time JETCARP uses an adapter, it steps one rule of every family the GP
 lattice, a lattice of several tile types and a Spectre patch, and runs the same rules as explore
 batches. It compares every hash with the processor's. This takes about a tenth of a second (more on
 a software adapter). The result is kept in `gpu-checks.json` in the settings folder, for that
-adapter, driver and JETCARP version, so it runs again only after an update. An adapter whose results
-differ is never used, and `jetcarp doctor` says why.
+adapter, driver and JETCARP version, so it runs again only after an update; on a fresh install,
+JETCARP makes the settings folder for it. An adapter whose results differ is never used, and
+`jetcarp doctor` says why.
+
+`jetcarp doctor` gives the result with its time, and *kept from before* when it was read from
+`gpu-checks.json` rather than run just now. With the GPU simulation off for both the app and the
+desktop background, doctor tests no adapter, and says under each `not used, and not tested: the GPU
+simulation is off`.
 
 ## Checking
 
@@ -122,6 +131,9 @@ GPU: auto (automatic)
 The app and the desktop background step their worlds on the adapter they draw with, the display
 one; runs, searches and scripts use the compute one. On a laptop with two GPUs these can differ: an
 Intel UHD driving the screen and an RTX for computing.
+
+Its *Environment* list, at the end, shows `JETCARP_GPU` and wgpu's own variables, such as
+`WGPU_BACKEND`, when they are set, since they change which adapters it finds.
 
 `jetcarp doctor --json` gives the same as `gpu_policy`. A run's summary says where it ran, such as
 `backend: gpu (AMD Radeon 8060S Graphics …)` or `cpu (32 threads)`.

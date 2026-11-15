@@ -60,10 +60,15 @@ all hour), and a program started again shows the same item:
 
 ## Make a rotation in the app
 
-In the *Screensaver* pane, set *Show* to *A rotation*. Under the rotation's name are *Edit*, *New*,
-*Duplicate* and, for one of your own, *Delete* (for an edited built-in rotation, *Revert to built-in*).
-In the *Desktop background* pane, each screen has *Edit* and *New* under its rotation, which open the
-same editor under that screen. The editor has:
+For the desktop background, open the *Desktop background* pane (*View → Desktop background
+settings…*): each screen has *Edit* and *New* under its rotation, which open the editor under that
+screen. For the screensaver, set *Show* to *A rotation* in the *Screensaver* pane: under the
+rotation's name are *Edit*, *New*, *Duplicate* and, for one of your own, *Delete* (for an edited
+built-in rotation, *Revert to built-in*). It is the same editor in both:
+
+<img src="../images/guides/rotation-editor-desktop-pane.webp" alt="The Desktop background pane with the rotation editor open under the screen's rotation, JACA rainbow fronts (Cairo): Save and Close at the top; Name; Order In order, Default unticked; Settings for every item; the one item, JACA rainbow fronts (Cairo), with its remove and move buttons; Add profile, Add scene…, Add series and a box for a Quick Start id; Script; and Save and Close again at the foot" width="568">
+
+The editor has:
 
 - **Name**, and **Order**: *In order*, *Shuffled* (a new random order each time through), *One a
   day* (one item per calendar day, the next one tomorrow) or *One an hour* (one item per hour of the
@@ -94,6 +99,12 @@ pane, for that screen in the *Desktop background* pane (a running host shows it 
 all), each leaving the other's choice as it was. *Save and start* (in the *Screensaver* pane) runs
 the screensaver on it at once, and *Close* discards the edits. *Save* and *Close* are both above the
 editor and below it. Editing a built-in rotation saves your own copy under the same name.
+
+To show only the scene open in the app, no editor is needed: *Show just this scene*, beside *Edit*
+and *New* in the *Desktop background* pane, saves it as a profile and as a rotation of just that
+profile, and chooses the rotation for that screen (see
+[The Desktop background pane](wallpapers.md#the-desktop-background-pane)). The picture above is of
+such a rotation, opened with *Edit*.
 
 ## Rotation files
 

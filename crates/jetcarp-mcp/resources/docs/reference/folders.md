@@ -20,7 +20,8 @@ reads and never writes; it says `(no packs came with the program)` when there is
 
 `jetcarp paths --json` prints the same as JSON (the last as `bundled_packs`, `null` when there is
 none). `jetcarp doctor` adds the catalog file, how much data is in use, the starter pack's size (or
-where it looked for one), and every `JETCARP_…` variable that is set, which makes it the thing to
+where it looked for one), and every `JETCARP_…` variable that is set, with wgpu's `WGPU_…` ones
+(such as `WGPU_BACKEND`), which change the graphics adapters it finds. That makes it the thing to
 paste into a bug report.
 
 ## The three folders
@@ -63,9 +64,10 @@ to an empty value counts as not set.
 when, and the jobs it started; its being there is what tells the app that setup has run), and
 `paths.json` a data folder chosen in setup. `gpu.json` is the [GPU setting](../guides/gpu.md#the-setting)
 that every part of JETCARP shares (automatic, on or off, and which adapter), and `gpu-checks.json`
-keeps the GPU self-test's result for each adapter, driver and version (it is written only where the
-settings folder already exists). Screensaver profiles are in `screensavers/` and rotations in
-`rotations/`, one JSON file each. The host records the command that starts it in `host-program`, for
+keeps the GPU self-test's result for each adapter, driver and version (the `jetcarp` program writes
+it, making the settings folder on a fresh install, so an adapter is tested once, not at every
+start). Screensaver profiles are in `screensavers/` and rotations in `rotations/`, one JSON file
+each. The host records the command that starts it in `host-program`, for
 GNOME's menu and the Windows screen saver; while it shows a still picture as your desktop background
 it keeps the stills in `desktop-pictures/` and remembers your own picture in `desktop-picture.json`,
 so that it can put it back. On macOS, installing the screen saver records the screen saver macOS had

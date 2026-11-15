@@ -27,8 +27,9 @@ runs are waiting there, the oldest million are *sealed*: written to the next **s
 its newest runs, fewer than a million, stay in the working database and the next session adds to
 them, so every segment but the last holds a million runs however often the search is stopped and
 continued. `jetcarp jobs seal JOB` (a stopped job) seals the rest, so that the folder holds every run
-in Parquet; do that before sharing a folder. A search folder from before JETCARP 0.4's segments is
-sealed the first time it is opened.
+in Parquet; do that before sharing a folder by hand. Publishing a [pack](../guides/packs.md) does it
+for you: it seals a stopped search's newest runs first, and refuses a search that is still running.
+A search folder from before JETCARP 0.4's segments is sealed the first time it is opened.
 
 **A run's id** is its place in one sequence that never restarts: segment 1 holds the lowest ids,
 segment 2 the next, and the working database the newest. Elites, confirmation runs (`parent`) and
@@ -236,9 +237,10 @@ sidecars and manifest; the pack holds no working database. JETCARP rebuilds one 
 (the archive of elites offered in id order with each run's newest score, coverage, family totals,
 the identities tried, and the elites confirmed by the confirmation runs) and makes the search a
 paused job with its own settings, so `jetcarp jobs status`, `jobs runs`, `jobs report` and
-`quickstart publish` read it as a stopped search, and `jetcarp jobs resume` carries it on. What a
-pack does not carry starts again: the time it ran (0) and its random states (from its seed; the
-identities tried keep it from repeating a candidate).
+`quickstart publish` read it as a stopped search, and `jetcarp jobs resume` carries it on. Until
+then, its progress line ends with *not run here yet*, where a search's line names what ran it (the
+GPU, or `cpu only`). What a pack does not carry starts again: the time it ran (0) and its random
+states (from its seed; the identities tried keep it from repeating a candidate).
 
 ## Reading the runs
 

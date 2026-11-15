@@ -85,7 +85,13 @@ What happens to each kind of record:
   same sample. `--verify full` runs every new pattern, `--verify none` skips this step,
   `--sample N` changes the sample size, and `--verify-seconds S` caps the time (600 by default).
 - **Search runs** become a paused explore job, so `jetcarp jobs status`, `jobs runs` and the atlas
-  work on them as on a search you ran yourself, and `jetcarp jobs resume` continues it.
+  work on them as on a search you ran yourself, and `jetcarp jobs resume` continues it. Until then
+  its line says that nothing has run in your library yet:
+
+  ```text
+  $ jetcarp jobs list
+      2  explore  paused   2026-11-15T03:47:43Z  explore 2: 4,211 runs (0/s), 1,736 elites in 1,048 niches (0 of them confirmed), 10 of 1,359 tilings; not run here yet
+  ```
 - **Quick Start entries** appear in the Quick Start menu. A newer version of a pack you imported
   before (the same feed, from the same publisher) replaces that pack's entries: those the new version
   no longer has leave the Quick Start, unless you hid or rated them, and the report says how many
@@ -163,6 +169,17 @@ feed's file in `refs/` names its newest version and is signed too.
 | `--query JSON` | Only the patterns a library query finds, such as `'{"class":"spaceship"}'` |
 | `--search UUID` | Only these explore searches (repeat it). Without it, every search goes in, or none when `--id` or `--query` chose the records |
 | `--no-searches`, `--no-ants`, `--no-quickstart`, `--no-media`, `--no-ratings` | Leave that kind out |
+
+**Explore searches go in with every run.** A pack carries a search's sealed run files (see
+[Search runs](../reference/search-runs.md)), and a search seals its runs a million at a time, so a
+stopped search's newest runs are sealed first, and publishing says so:
+
+```text
+explore job 2 (search 31d41ffc-54b5-4f13-b239-af2a4a447932): sealed its newest 4211 runs first, so the pack carries every run
+```
+
+A search that is still running is refused, since its newest runs would be left out: stop it first
+(`jetcarp jobs stop JOB`, then `jetcarp jobs wait JOB`), then publish.
 
 **Describe it:** `--title`, `--description` and `--version-label` (free text such as `2026.11`)
 go into the manifest and the export's README. `--licence` takes an SPDX id; the default is

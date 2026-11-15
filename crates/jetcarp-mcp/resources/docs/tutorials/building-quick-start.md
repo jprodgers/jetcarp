@@ -118,7 +118,7 @@ $ jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.
 
 ```text
 $ jetcarp jobs clips --sample 24 --out clips --page
-18 clips in /home/ada/clips
+24 clips in /home/ada/clips
 rating page: /home/ada/clips/index.html
 ```
 
@@ -139,13 +139,13 @@ The rater is the name typed on the page; `--rater NAME` records another. Reading
 records only what is new in it.
 
 **Reviews** record your verdict on a run, `keep`, `maybe` or `drop`, and `--reviewed` lists runs by
-it:
+it, with each run's verdicts (one per rater, keep first) and a ★ if it has one:
 
 ```text
 $ jetcarp jobs review 22 11856 keep
 recorded 1 review(s); job 22 has keep 1
 $ jetcarp jobs runs --reviewed keep
-    11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2
+    11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2  [keep]
 1 run(s) of explore job 22
 ```
 
@@ -245,7 +245,9 @@ The folder `my-finds-2026.11` is the pack: zip it and send it, and the other per
 (*Researcher* and *Everything*). With `--id`, your explore searches stay out unless you name some
 with `--search`. Without `--id`, the export holds your whole library but its hidden entries: every
 pattern, ant run and Quick Start entry, the starter pack's included, and every explore search.
-`--query` chooses patterns by a library query.
+`--query` chooses patterns by a library query. A search goes in with every run it has made: a
+stopped one's newest runs are sealed into its run files first, and the export says so; one still
+running is refused until you stop it (`jetcarp jobs stop JOB`).
 
 ## 7. Longer searches
 

@@ -5,6 +5,11 @@
 //! (`JETCARP_CONFIG_DIR`, `JETCARP_DATA_DIR`, `JETCARP_LIBRARY`, `JETCARP_OUT`,
 //! `JETCARP_RUNTIME_DIR`). Run them one at a time:
 //! `cargo test -p jetcarp-app --release shots -- --ignored --test-threads 1`.
+//!
+//! The Screensaver pane prints the settings folder, so the book's pictures were made with the test
+//! binary run from a scratch folder and `JETCARP_CONFIG_DIR='~/.config/jetcarp'` (relative: a folder
+//! named `~` in the scratch folder), which reads as the usual place rather than a scratch path. The
+//! book has them as lossless WebP (`cwebp -lossless -z 9`).
 
 use super::*;
 use crate::offscreen::Offscreen;
@@ -432,6 +437,9 @@ fn shots_wallpaper() {
         .host
         .test_extension(jetcarp_display::gnome::ExtensionState::NotInstalled);
     h.action(menu::Action::Pane("desktop"));
+    // Tall enough for the whole pane, down to the Performance group's Fit to this computer.
+    h.column(0.36, 0.94);
+    h.frame_with(0.05, vec![]);
     h.find("Fit to this computer…");
     h.steady();
     h.shot("wallpaper-desktop-pane");
@@ -447,7 +455,8 @@ fn shots_desktop_pane_cards() {
     use jetcarp_display::host_settings::{
         GpuTiming, HostSettings, Place, Rung, Size, TunedScene, Tuning, crops_dir,
     };
-    let Some(mut h) = Harness::new(1600, 1000) else {
+    // Tall enough for the Performance group and three scenes' cards below it.
+    let Some(mut h) = Harness::new(1600, 1100) else {
         return;
     };
     let (mut s, _) = HostSettings::load();
@@ -556,6 +565,9 @@ fn shots_desktop_pane_cards() {
         }
         h.scroll(pane, 60.0);
     }
+    // The pointer off the pane, so no hover text covers it.
+    let [w, ht] = h.o.size();
+    h.hover(egui::pos2(w as f32 - 2.0, ht as f32 - 2.0));
     h.find("Recommended");
     h.steady();
     h.shot("desktop-pane-cards");
@@ -566,7 +578,8 @@ fn shots_desktop_pane_cards() {
 /// this scene*: the scene saved as a profile and as a rotation of just that profile, the screen
 /// running it, the screensaver's choice untouched; pressed again, nothing more is made. Then the
 /// editor opened from the pane, with Save and Close above it, and a new rotation saved there,
-/// chosen for the screen alone. Pictures: `desktop-just-*.png`.
+/// chosen for the screen alone. Pictures: `desktop-just-*.png`; `desktop-just-editor.png` is the
+/// book's `guides/rotation-editor-desktop-pane.webp` (`guides/rotations.md`).
 #[test]
 #[ignore]
 fn shots_desktop_show_just_this_scene() {

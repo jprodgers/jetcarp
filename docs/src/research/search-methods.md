@@ -403,7 +403,9 @@ least-tried, 10% catalogue rules).
   of another job that were reviewed `keep` or `maybe` (`--reviewed` chooses the verdicts), or that
   job's best JACA runs when it has no such reviews, and transplants and tunes them first: while there
   are any, three transplant or balance picks in four come from them, keeps first. They are kept in
-  the job's spec, so a resumed search has them still.
+  the job's spec, so a resumed search has them still, and its log and `jetcarp jobs status` say what
+  it took: `parents: 3 JACA runs of explore job 1 (2 keep, 1 maybe); 3 with both signs holding to the
+  end`.
 
 **Your taste as the score.** `jetcarp jobs refit` fits a score model to the keep, maybe and drop
 reviews recorded for a job's runs, all raters' or one's (`--rater`). It is a ridge logistic
@@ -420,8 +422,11 @@ atlas's thresholds behave. A model does not extrapolate: it records each measure
 runs it was fitted to, from their 1st to their 99th percentile, and clamps a run's measures to it
 before scoring, so a run beyond anything rated scores as the nearest rated runs would. `jetcarp search explore --score FILE` searches with a model, and `jetcarp jobs
 rescore JOB --score FILE` applies one to a job's stored runs. Either way the job keeps a copy in its
-spec, so a resumed search goes on with it. A model fitted with `--family` scores only that family;
-the others keep the built-in score, and row rules always do.
+spec, so a resumed search goes on with it, and its log and `jetcarp jobs status` name it (`score: the
+score model 'Ada, jaca on explore job 2' (for jaca runs)`). A rescore picks the elites again by the
+new scores and counts how many of them are confirmed, so the job's line is up to date. A model
+fitted with `--family` scores only that family; the others keep the built-in score, and row rules
+always do.
 
 Fitted to Jimmie Rodgers's 227 ratings of runs of a JACA-only search (48 keep, 98 maybe, 81 drop),
 a JACA model reached a held-out AUC of 0.90 with the rule for a lost sign, against 0.74 for the

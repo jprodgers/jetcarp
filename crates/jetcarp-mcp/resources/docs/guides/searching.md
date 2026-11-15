@@ -101,8 +101,11 @@ $ jetcarp jobs list
   uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns at once;
   `jetcarp jobs status JOB` follows it, and `--label NAME` makes it easy to find.
-- **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs, and
-  `--timeout S` gives up after S seconds. Its exit status says how the job ended (see below).
+- **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs. A job
+  asked to stop is marked paused at once but lets go at its next checkpoint, and `jobs wait` waits
+  for that too, so a `jetcarp jobs resume` straight after it finds the job free. Meanwhile it shows
+  the job's progress line each time the line changes (`--quiet` for none), and `--timeout S` gives
+  up after S seconds. Its exit status says how the job ended (see below).
 - **Reports.** `jetcarp jobs report JOB` writes a Markdown report of what a job searched, for how
   long, and what it found: one table per hunted rule, with its spaceships, guns, puffers and
   longest oscillators.
@@ -191,13 +194,19 @@ $ jetcarp jobs runs 7 --limit 5
 - `jetcarp jobs scene JOB RUN` gives a scene that replays a run, to open in the app.
 - `jetcarp jobs runs JOB --measures all --format csv --limit 0 > runs.csv` writes every run with
   every measure, for a spreadsheet or a notebook.
-- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye;
+- `jetcarp jobs clips JOB --out DIR` renders short clips of a sample of runs, to rate by eye
+  (`--sample N` of them: a run of each family and tiling first, then more runs of the same tilings,
+  each with a rule of its own, so a search on a few tilings gives as many as asked for);
   `--page` adds a page for rating them in a browser.
-  `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, and
-  `jetcarp jobs rescore JOB` scores the runs again after the score changes.
+  `jetcarp jobs review JOB RUN keep|maybe|drop` records a verdict, `jetcarp jobs runs JOB
+  --reviewed keep` lists the runs given one, with each run's verdicts and star (`[keep ★]`), and
+  `jetcarp jobs rescore JOB` scores the runs again after the score changes. A rescore picks the
+  elites again by the new scores, and the job's line counts how many of them are confirmed.
 - `jetcarp jobs refit JOB --out taste.json` fits a score model to your verdicts and says how well
   it ranks runs it did not see. `jetcarp jobs rescore JOB --score taste.json` scores the job's runs
-  with it, and `jetcarp search explore --score taste.json` searches with it.
+  with it, and `jetcarp search explore --score taste.json` searches with it. The job keeps the
+  model, and `jetcarp jobs status` names it: `score: the score model 'Ada, jaca on explore job 2'
+  (for jaca runs)`.
 - `jetcarp quickstart publish JOB` puts the search's best confirmed runs, a few per category, rule
   family and tiling, into your Quick Start menu as its *atlas*.
 

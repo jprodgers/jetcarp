@@ -131,25 +131,28 @@ previous and next item), from its menu, or from the command line:
 
 ```text
 $ jetcarp host start --rotation "Wolfram series"
-running, pid 676359, up 0.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: Wolfram series · W0 (1 of 256) · generation 4 · 57600 cells of 4 px · 60 fps, 60 generations a second · window
+running, pid 863629, up 0.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+screen 0: Wolfram series · W0 (1 of 256) · generation 5 · 57600 cells of 4 px · 60 fps, 60 generations a second · window
 caption: off
-pacing: every generation (at least 30 fps, up to the monitor's refresh rate)
+pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
+note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host next
-running, pid 676359, up 3.0s, 90 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+running, pid 863629, up 3.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: Wolfram series · W1 (2 of 256) · starting · window
 caption: off
-pacing: every generation (at least 30 fps, up to the monitor's refresh rate)
+pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
+note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host stop
 stopped
 ```
 
 `status` (and every command that changes something) says what each screen shows and where (a window,
 or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
-(see [below](#frame-rate-and-speed)), the monitors, whether the caption is on, and, while it is
-paused, why: by hand, on battery, the processor is busy, or held by the desktop
-(windows cover it, or the screen is locked or off). Just after `next` the new item is *starting*
-until its world is built.
+(see [below](#frame-rate-and-speed)), the monitors, whether the caption is on, how the screens are
+paced, and, while it is paused, why: by hand, on battery, the processor is busy, or held by the
+desktop (windows cover it, or the screen is locked or off). Its `note:` lines are the host's recent
+messages, such as the GPU it took. Just after `next` the new item is *starting* until its world is
+built.
 
 | Command | Effect |
 | --- | --- |
@@ -210,14 +213,17 @@ for half the drawing. A scene that runs as fast as it can runs at the frame rate
 Drawing more slowly than a scene steps would show only every second or third generation, and an
 oscillator whose period divides that would seem to stand still or blink slowly: Life's blinkers did
 before 0.4.2. `jetcarp host status` gives each screen's frame rate and speed (`frame_rate` and
-`speed` in `--json`, and `frames`, the frames each screen has drawn).
+`speed` in `--json`, and `frames`, the frames each screen has drawn), and its *pacing* line the
+choice and its rates: `pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's
+refresh rate if lower)`, or `pacing: low power, 30 fps (each scene at most 30 generations a
+second)` (`pacing`, `fps` and `max_fps` in `--json`; `max_fps` is `null` with `max-fps refresh`).
 
 ## The Desktop background pane
 
 *View → Desktop background settings…* opens the *Desktop background* pane, which holds everything
 about the host. The *Display* and *Screensaver* panes link to it.
 
-<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane: Start; Show on the desktop; Rotation A classic a day on Every monitor, Add a screen, and a link to the Screensaver pane for rotations and profiles; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, Fit to this computer…, and Measure again by itself when the monitors change" width="700">
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane, where profiles are made; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second 30, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, Fit to this computer…, and Measure again by itself when the monitors change" width="700">
 
 - **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too, and
   whether tuning chose it), or why it is paused.
@@ -241,9 +247,9 @@ about the host. The *Display* and *Screensaver* panes link to it.
 - **How it runs:** *Frames per second*, *GPU simulation* (the host's own choice) and the *Shared
   setting* it can follow (see [The GPU](gpu.md#the-setting)), the *Caption*, *Pause on battery*,
   *Pause while the processor is busier than* a share, and *Start at login*.
-- **Performance:** the GPU it uses, *Show every generation* or *Low power* (see
-  [Frame rate and speed](#frame-rate-and-speed)), the limits, *Fit to this computer…*, and the
-  cards it leaves (see below).
+- **Performance:** the GPU it uses, *Show every generation* or *Low power*, and *Up to* (60 frames a
+  second or the monitor's refresh rate; see [Frame rate and speed](#frame-rate-and-speed)), the
+  limits, *Fit to this computer…*, and the cards it leaves (see below).
 
 The settings are the host's own `host.json`, as before; the pane writes them and tells a running host.
 
@@ -257,7 +263,7 @@ or `jetcarp host tune`, shows you: it sweeps each scene of the desktop backgroun
 of sizes, a couple of seconds each, on the desktop itself, measures each one, and then lets you
 choose from a row of cards.
 
-<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each of three scenes. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate and within the limits, 1 px recommended and chosen; Penrose waves at its own size, level 5 and level 4, its own size recommended" width="700">
+<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: Show every generation (chosen) or Low power, Up to 60 frames a second, the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each of three scenes. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate and within the limits, 1 px recommended; Penrose waves at its own size (2.6 px), level 5 and level 4, its own size recommended" width="700">
 
 **The sizes.** On a lattice the ladder is 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48 and 64 pixels a cell,
 in the screen's own pixels (on a screen of two pixels a point, 2 px is one point), and the scene's own
@@ -310,9 +316,12 @@ swept 3 scene(s) (GPU time from the system's count of JETCARP's GPU time); saved
 ```
 
 **What it measures.** The processor time is JETCARP's own, on every thread. The GPU time is the
-system's own count of JETCARP's GPU time on Linux; elsewhere the host times each frame from its last
-submission until the GPU is done (an upper bound), and a sweep off screen uses the GPU's timestamp
-queries where it has them. The summary says which. A world small enough that the
+system's own count of JETCARP's GPU time on Linux; elsewhere it comes from the GPU's timestamp
+queries, in the host's window and off screen alike, where the adapter has them. Failing both, each
+frame is timed from its submission until the GPU is done: an upper bound, which counts the time the
+work waits in the driver's queue (on Windows it read about 90% for a scene the GPU spent 10% of its
+time on), so the cards show it but it is not held to the GPU limit; the frame times still are. The
+summary says which. A world small enough that the
 [GPU setting](gpu.md) leaves it on the processor is tried there, and held to the processor limit like
 any other. On battery a sweep started by hand says that a computer on battery may measure slower than
 plugged in.
@@ -339,7 +348,7 @@ inside it, as every picture JETCARP writes does.
 | `--cpu-limit P` | JETCARP's processor time, in percent of the whole machine (1 to 100; saved; default 10) |
 | `--gpu-limit P` | JETCARP's share of the GPU's time, in percent (1 to 100; saved; default 25) |
 | `--fps N` | The frame rate to keep (saved; default the monitor's refresh rate, or 60, at most the rate each scene draws at) |
-| `--pick WHICH` | The size each scene is left at: `recommended` (the finest within the limits), `finest` (the finest shown), `own`, or a cell size in pixels. Without it, a size chosen before is kept while it fits, else the recommended one |
+| `--pick WHICH` | The size each scene is left at: `recommended` (the finest within the limits), `finest` (the finest shown), `own`, or a cell size in pixels. `own` and a size in pixels are placed whether or not the sweep showed them, so a pick undoes a sweep that stopped early (on an aperiodic patch, a size in pixels takes the nearest level shown). Without it, a size chosen before is kept while it fits, else the recommended one |
 | `--crops DIR` | Save each size's picture here as a PNG |
 | `--screen N` | Only this screen |
 | `--canvas WxH` | The screen's size, when no host is running to say (else the size it was swept for before, else its monitor's) |
@@ -379,7 +388,9 @@ jetcarp host gnome remove
 Upgrading JETCARP upgrades the extension: the host, when it starts, and any `jetcarp host` command
 bring an installed extension up to the program's version, and leave it switched off if you switched it
 off. GNOME reads extensions at login, so log out and back in once after upgrading; until then
-`jetcarp host gnome status` says that GNOME is still running the older version.
+`jetcarp host gnome status` says so: *The GNOME extension was updated to JETCARP 0.4.2's, but GNOME
+still has JETCARP 0.4.1's loaded. Log out and back in once to load the new one.* An extension you
+switched off reads *The GNOME extension is not running: it is switched off.*
 
 The *Desktop background* pane shows the same status, with an *Install* button. Without the extension
 the host shows a plain window and says why, so nothing is left covering the desktop. The extension

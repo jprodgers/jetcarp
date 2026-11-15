@@ -45,29 +45,29 @@ screen with your profile. (*Show → The current world* runs whatever world is o
 ## 4. Make it the desktop background
 
 A live wallpaper is run by the *background host*, a separate JETCARP program that keeps going when
-the app closes. The host shows a *rotation*: a list of items, each shown for a while. Make one with
-your profile in it:
+the app closes. Everything about it is in the *Desktop background* pane: choose *View → Desktop
+background settings…*, or *Desktop background settings…* under *While it runs*:
 
-1. In the *Screensaver* pane, set *Show* to *A rotation* and press *New*.
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, Show every generation or Low power, Up to 60 frames a second, the processor and GPU limits and Fit to this computer…" width="700">
+
+The host shows a *rotation*: a list of items, each shown for a while. Make one with your profile in
+it, here in the pane:
+
+1. Under *Rotation*, press *New*. The rotation editor opens below it.
 2. Name it `My wallpaper`, and under its items choose *Add profile → Brian's Brain on Penrose rhombs*.
    For a second item, type `tiling:penrose-kd` (Brian's Brain on Penrose kites and darts) in the
    box for a Quick Start entry and press Enter.
-3. Press *Save*.
-
-(*Edit* and *New* under the screen's rotation in the *Desktop background* pane open the same editor
-there, and its *Save* chooses the rotation for that screen. To show just the one scene, *Show just
-this scene* there does it all in one press: it saves the scene open in the app as a profile and as a
-rotation of just that profile, and chooses that rotation for the screen.)
-
-Then open the *Desktop background* pane: *View → Desktop background settings…*, or *Desktop
-background settings…* under *While it runs*. Everything about the host is there:
-
-<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor; Add a screen; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, the processor and GPU limits and Fit to this computer…" width="700">
-
-1. Set its *Rotation* to *My wallpaper*.
-2. Press *Start*. The host starts in a window of its own.
-3. Tick *Show on the desktop*. The host's window moves behind your other windows and becomes the
+3. Press *Save*, at the top of the editor or at its foot. The rotation is saved, and *Rotation* now
+   says *My wallpaper*.
+4. Press *Start*. The host starts in a window of its own.
+5. Tick *Show on the desktop*. The host's window moves behind your other windows and becomes the
    desktop background.
+
+(To show just the one scene, *Show just this scene*, beside *New*, does it all in one press: it
+saves the scene open in the app as a profile and as a rotation of just that profile, and chooses
+that rotation for the screen. The *Screensaver* pane has the same editor, with *Show* set to *A
+rotation*; its *Save* chooses the rotation for the screensaver instead. See
+[Rotations](../guides/rotations.md#make-a-rotation-in-the-app).)
 
 On Windows the host sits under the desktop icons, and on macOS behind them, on every Space. On
 GNOME it needs JETCARP's GNOME Shell extension: press *Install* beside *The GNOME extension is not
@@ -117,33 +117,40 @@ host, and put it on the desktop:
 $ jetcarp host rotation "My wallpaper"
 saved; the host is not running
 $ jetcarp host start
-running, pid 3429677, up 0.0s, 94 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 3 · 4000 cells of 4 px · window
+running, pid 862859, up 0.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.815265655517578 px · 30 fps, 30 generations a second · window
 caption: off
+pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
+note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 $ jetcarp host wallpaper on
-running, pid 3429677, up 4.0s, 95 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 4 px · wallpaper
+running, pid 862859, up 4.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.815265655517578 px · 30 fps, 30 generations a second · wallpaper
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: off
+pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
+note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 ```
 
-Each command answers with what the host shows now. The output here comes from a host started with
-`--headless` (no window) on a Linux computer without the GNOME extension, so its wallpaper waits for
-the extension (`jetcarp host gnome install` installs it). On Windows and macOS, and on GNOME with
-the extension, the wallpaper shows at once.
+Each command answers with what the host shows now: the scene, its cells, and how fast it draws and
+runs (here 30 frames a second, one generation each; see
+[Frame rate and speed](../guides/wallpapers.md#frame-rate-and-speed)). The output here comes from a
+host started with `--headless` (no window) on a Linux computer without the GNOME extension, so its
+wallpaper waits for the extension (`jetcarp host gnome install` installs it). On Windows and macOS,
+and on GNOME with the extension, the wallpaper shows at once.
 
 Move on to the next item, and turn the caption on:
 
 ```text
 $ jetcarp host next
-running, pid 3429677, up 6.0s, 95 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+running, pid 862859, up 6.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting · wallpaper
 …
 $ jetcarp host caption on
-running, pid 3429677, up 8.0s, 99 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 33 · 4000 cells of 4 px · wallpaper
+running, pid 862859, up 9.0s, 100 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
+screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.734655380249023 px · 30 fps, 30 generations a second · wallpaper
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: on, bottom left, 20 pt
+…
 ```
 
 `jetcarp host status` says the same at any time, `previous` goes back, and `pause` and `resume`
