@@ -330,7 +330,7 @@ impl JetcarpApp {
             let p = self.profile_from_world(&name);
             self.profile_store().save(&p)?;
         }
-        let (r, path) = self.rotation_store().save_just(&name, &name)?;
+        let (r, _) = self.rotation_store().save_just(&name, &name)?;
         let host = self.display.host.settings_mut();
         let count = host.screens.len();
         choose(
@@ -344,12 +344,17 @@ impl JetcarpApp {
         } else {
             "the desktop background".into()
         };
-        let mut t = format!(
-            "Saved the scene as the profile {name:?} and the rotation {:?} ({}), and chose it \
-             for {screen}.",
-            r.name,
-            path.display()
-        );
+        let mut t = if r.name == name {
+            format!(
+                "Saved the scene as the profile and the rotation {name:?}, and chose it for {screen}."
+            )
+        } else {
+            format!(
+                "Saved the scene as the profile {name:?} and the rotation {:?}, and chose it for \
+                 {screen}.",
+                r.name
+            )
+        };
         if self.display.host.running().is_none() {
             t.push_str(" Press Start to show it.");
         }
