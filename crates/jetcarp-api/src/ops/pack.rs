@@ -545,14 +545,16 @@ fn do_publish(
 
 /// Seals the newest runs of the explore searches a version takes: a pack carries only sealed
 /// segments, so a stopped search's unsealed runs (all of a search under a million runs) would be
-/// left out without a word (#35). A running search with unsealed runs is refused.
+/// left out without a word (#35). A running search is refused, whatever it has stored so far:
+/// every run it stores after the publish is left out just the same (#57).
 fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiError> {
     use jetcarp_search::dashboard::digits;
     use jetcarp_search::explore::runs::Runs;
     use jetcarp_search::jobs::Lease;
+    use jetcarp_store::JobStatus;
     let lib = cx.library();
-    // The searches the version takes that have runs not yet sealed.
-    let mut unsealed = Vec::new();
+    // The searches the version takes that are marked running or have runs not yet sealed.
+    let mut taken = Vec::new();
     for job in lib.jobs().map_err(ApiError::engine)? {
         if job.kind != "explore" {
             continue;
@@ -573,19 +575,22 @@ fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiE
             .join("searches")
             .join(uuid)
             .join("search.sqlite");
-        if !path.is_file() {
-            continue;
-        }
-        let n = Runs::open_read(&path)
-            .and_then(|r| r.unsealed_now())
-            .map_err(ApiError::engine)?;
-        if n > 0 {
-            unsealed.push((job.id, uuid.to_string(), path, n));
+        let n = if path.is_file() {
+            Runs::open_read(&path)
+                .and_then(|r| r.unsealed_now())
+                .map_err(ApiError::engine)?
+        } else {
+            0
+        };
+        if n > 0 || job.status == JobStatus::Running {
+            taken.push((job.id, uuid.to_string(), path, n));
         }
     }
-    // Every one held before any is sealed: a running one refuses the publish with nothing changed.
+    // Every one held before any is sealed: a running one refuses the publish with nothing
+    // changed. (One marked running whose process is gone is free to take, and is packed as it
+    // stands.)
     let mut held = Vec::new();
-    for (id, _, _, n) in &unsealed {
+    for (id, _, _, n) in &taken {
         let running = match Lease::acquire(&lib, *id) {
             Ok(l) => {
                 held.push(l);
@@ -597,16 +602,22 @@ fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiE
             for l in held {
                 l.release(false);
             }
-            return Err(ApiError::conflict(format!(
-                "explore job {id} is running, and its newest {} runs are not sealed yet, so the \
-                 pack would leave them out",
-                digits(*n)
-            ))
-            .hint("stop it first (jobs stop), then publish"));
+            let what = if *n > 0 {
+                format!(
+                    "its newest {} runs are not sealed yet, so the pack would leave them out",
+                    digits(*n)
+                )
+            } else {
+                "the pack would leave out every run it stores from now on".to_string()
+            };
+            return Err(
+                ApiError::conflict(format!("explore job {id} is running, and {what}"))
+                    .hint("stop it first (jobs stop), then publish"),
+            );
         }
     }
     let mut result = Ok(());
-    for (id, uuid, path, _) in &unsealed {
+    for (id, uuid, path, _) in taken.iter().filter(|t| t.3 > 0) {
         match Runs::open(path).and_then(|mut c| c.seal_all()) {
             Ok(done) => {
                 let sealed: u64 = done.iter().map(|s| s.rows).sum();
@@ -628,6 +639,27 @@ fn seal_searches(cx: &Ctx, sel: &Selection, p: &dyn Progress) -> Result<(), ApiE
     result
 }
 
+/// The folder `path` names, made if it is not there, and whether this call made it (so a call
+/// that fails can take it away again, [`unmake_dir`]).
+fn make_dir(cx: &Ctx, path: &str) -> Result<(PathBuf, bool), ApiError> {
+    // The folder's own path (`writable` makes only the folders above it).
+    let made = cx
+        .fs
+        .writable(path.trim_end_matches(['/', '\\']))
+        .is_ok_and(|d| !d.exists());
+    Ok((cx.fs.writable_dir(path)?, made))
+}
+
+/// Take away a folder [`make_dir`] made for a call that then failed, when it is still empty (a
+/// refused export left an empty `--to` folder behind, #57).
+fn unmake_dir<T>(r: Result<T, ApiError>, dir: &Path, made: bool) -> Result<T, ApiError> {
+    if r.is_err() && made {
+        // `remove_dir` takes only an empty folder: anything written into it stays.
+        let _ = std::fs::remove_dir(dir);
+    }
+    r
+}
+
 /// `pack.publish`.
 pub struct PackPublish;
 impl Op for PackPublish {
@@ -638,8 +670,8 @@ impl Op for PackPublish {
     type In = PublishIn;
     type Out = PublishOut;
     fn run(cx: &Ctx, a: PublishIn, p: &dyn Progress) -> Result<PublishOut, ApiError> {
-        let to = cx.fs.writable_dir(&a.to)?;
-        let out = do_publish(cx, &a, to, p)?;
+        let (to, made) = make_dir(cx, &a.to)?;
+        let out = unmake_dir(do_publish(cx, &a, to.clone(), p), &to, made)?;
         let (pubr, _) = publisher(a.key.as_deref(), cx)?;
         Ok(PublishOut {
             store: out.store.clone(),
@@ -718,42 +750,44 @@ impl Op for PackExport {
     type In = ExportIn;
     type Out = ExportOut;
     fn run(cx: &Ctx, a: ExportIn, p: &dyn Progress) -> Result<ExportOut, ApiError> {
-        let to = cx.fs.writable_dir(&a.to)?;
-        let (src_dir, scratch) = match &a.from {
-            Some(f) => (cx.fs.readable(f)?, None),
-            None => {
-                let pi = a.publish.clone().ok_or_else(|| {
-                    ApiError::invalid("give a store to export from, or what to publish")
-                })?;
-                let name = to
-                    .file_name()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                // The store the library is published into first, kept (hidden, beside the
-                // export) so the feed's later versions are published into it.
-                let scratch = to.with_file_name(format!(".{name}.store"));
-                do_publish(cx, &pi, scratch.clone(), p)?;
-                (scratch.clone(), Some(scratch))
-            }
-        };
-        let r = (|| -> Result<ExportOut, ApiError> {
-            let src = Source::open(&src_dir).map_err(ApiError::invalid)?;
-            let h = match &a.manifest {
-                Some(h) => h.clone(),
-                None => src.default_manifest(None).map_err(ApiError::invalid)?,
-            };
-            let v = src.version(&h).map_err(ApiError::invalid)?;
-            let e = jetcarp_pack::export::export(&src, &v, &to).map_err(ApiError::io)?;
-            Ok(ExportOut {
-                to: e.to,
-                manifest: e.manifest,
-                files: e.files,
-                bytes: e.bytes,
-                store: scratch.as_ref().map(|s| s.display().to_string()),
-            })
-        })();
-        r
+        let (to, made) = make_dir(cx, &a.to)?;
+        unmake_dir(export(cx, &a, &to, p), &to, made)
     }
+}
+
+/// [`PackExport`] into the folder `to`.
+fn export(cx: &Ctx, a: &ExportIn, to: &Path, p: &dyn Progress) -> Result<ExportOut, ApiError> {
+    let (src_dir, scratch) = match &a.from {
+        Some(f) => (cx.fs.readable(f)?, None),
+        None => {
+            let pi = a.publish.clone().ok_or_else(|| {
+                ApiError::invalid("give a store to export from, or what to publish")
+            })?;
+            let name = to
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            // The store the library is published into first, kept (hidden, beside the
+            // export) so the feed's later versions are published into it.
+            let scratch = to.with_file_name(format!(".{name}.store"));
+            do_publish(cx, &pi, scratch.clone(), p)?;
+            (scratch.clone(), Some(scratch))
+        }
+    };
+    let src = Source::open(&src_dir).map_err(ApiError::invalid)?;
+    let h = match &a.manifest {
+        Some(h) => h.clone(),
+        None => src.default_manifest(None).map_err(ApiError::invalid)?,
+    };
+    let v = src.version(&h).map_err(ApiError::invalid)?;
+    let e = jetcarp_pack::export::export(&src, &v, to).map_err(ApiError::io)?;
+    Ok(ExportOut {
+        to: e.to,
+        manifest: e.manifest,
+        files: e.files,
+        bytes: e.bytes,
+        store: scratch.as_ref().map(|s| s.display().to_string()),
+    })
 }
 
 // ---------------------------------------------------------------------------------------------

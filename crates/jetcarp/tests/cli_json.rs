@@ -693,6 +693,87 @@ fn a_pack_carries_the_runs_of_a_search_never_sealed() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A running explore search is refused by an export, even when every run it has stored is
+/// sealed (or it has stored none yet): whatever it stores next would be left out (#57). The
+/// refused export leaves no `--to` folder behind, and once the search stops it exports.
+#[test]
+fn an_export_refuses_a_running_search_and_leaves_no_folder() {
+    use jetcarp_search::jobs::Lease;
+    use jetcarp_store::{JobStatus, Library};
+    let dir = out_root().join(format!("cli-pack-running-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = |name: &str| dir.join(name).display().to_string();
+    let l = p("lib");
+    let e = json_of(&[
+        "search",
+        "explore",
+        "--library",
+        &l,
+        "--families",
+        "life_like",
+        "--tilings",
+        "square",
+        "--screen-cells",
+        "400",
+        "--screen-gens",
+        "32",
+        "--confirm-cells",
+        "400",
+        "--confirm-gens",
+        "32",
+        "--limit",
+        "10",
+        "--threads",
+        "2",
+        "--cpu",
+        "--quiet",
+        "--json",
+    ]);
+    let job = e["job"].as_i64().unwrap();
+    let o = jetcarp(&["jobs", "--library", &l, "seal", &job.to_string()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    json_of(&["--json", "pack", "key", "--name", "Test Publisher"]);
+    // Another process runs it now: it holds the job's lock, and the job is marked running.
+    let lib = Library::open(Library::file_for(dir.join("lib")));
+    let lease = Lease::acquire(&lib, job).unwrap();
+    lib.update_job(job, Some(JobStatus::Running), None, None)
+        .unwrap();
+    let export = || {
+        jetcarp(&[
+            "pack",
+            "--library",
+            &l,
+            "export",
+            "--to",
+            &p("export"),
+            "--feed",
+            "cli-running",
+            "--no-media",
+        ])
+    };
+    let o = export();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(!o.status.success(), "a running search exported: {err}");
+    assert!(
+        err.contains(&format!("explore job {job} is running"))
+            && err.contains("every run it stores from now on"),
+        "{err}"
+    );
+    assert!(
+        !dir.join("export").exists(),
+        "the refused export left its folder"
+    );
+    // Stopped, it exports.
+    lib.update_job(job, Some(JobStatus::Paused), None, None)
+        .unwrap();
+    lease.release(false);
+    let o = export();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(dir.join("export").join("pack.json").is_file());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 // `jetcarp pack`: a key, a publish of a small library, a check and an import, through the
 // program, with the tests' own settings folder (the key is made there, never in ~/.ssh).
 #[test]

@@ -183,6 +183,12 @@ that will declare them stable.
   with the lower id, so the archive holds the same elites in whatever order its runs come. A search
   made before keeps its elites until `jetcarp jobs rescore` picks them again from its runs.
   ([#54](https://github.com/jprodgers/jetcarp/issues/54))
+- **An export took a running explore search without a word when it had no runs to seal yet.**
+  Publishing refused a running search only when it had runs not yet sealed, so one that had just
+  started, or had sealed every run, was packed as it stood while it went on storing runs the pack
+  left out. A running search is now refused whatever it has stored, and an export or publish that
+  is refused no longer leaves its empty `--to` folder behind.
+  ([#57](https://github.com/jprodgers/jetcarp/issues/57))
 
 ### Changed
 
