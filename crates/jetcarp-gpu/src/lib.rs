@@ -467,6 +467,13 @@ pub struct GpuSim {
     fault: Option<(u32, bool)>,
 }
 
+impl Drop for GpuSim {
+    /// Nothing of this stepper's goes while the GPU still has its work in flight (#52).
+    fn drop(&mut self) {
+        let _ = wait_for_gpu(&self.device);
+    }
+}
+
 /// What a world was when a run began, so that a run failing part way puts it back (#13): its
 /// generation, log, period watch, script and reseed state, CAs and every field as they were. The
 /// fields' cells are not copied up front, since the GPU leaves the world's copies alone until the
@@ -934,6 +941,10 @@ impl GpuSim {
         let before = self.before.take().expect("taken at the start");
         if let Err(e) = &out {
             before.restore(world);
+            // Let what was submitted finish (or fail) before its buffers go: a failing batch
+            // returns straight after its submission, and dropping resources with work in flight
+            // crashed the recovery test on Windows (0xC0000005 on the RTX 3050, #52).
+            let _ = wait_for_gpu(&self.device);
             self.res = None;
             self.broken = Some(format!("the GPU failed earlier ({e})"));
         }
@@ -1780,9 +1791,7 @@ impl GpuSim {
         slice.map_async(wgpu::MapMode::Read, move |r| {
             let _ = tx.send(r);
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|e| format!("GPU poll: {e}"))?;
+        wait_for_gpu(&self.device)?;
         rx.recv()
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("GPU readback: {e}"))?;
@@ -1891,6 +1900,23 @@ fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
     }
 }
 
+/// The longest a wait for the GPU may take before it counts as the GPU failing (the run is put
+/// back and the processor carries on). Operating systems reset a GPU that spends more than a few
+/// seconds on one submission, so a wait this long means the device has hung: a readback that
+/// waited for ever hung a test on the Intel UHD (#52).
+pub(crate) const GPU_WAIT: Duration = Duration::from_secs(60);
+
+/// Wait for the work submitted so far, at most [`GPU_WAIT`].
+pub(crate) fn wait_for_gpu(device: &wgpu::Device) -> Result<(), String> {
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(GPU_WAIT),
+        })
+        .map(|_| ())
+        .map_err(|e| format!("GPU poll: {e}"))
+}
+
 fn map_read<T: bytemuck::Pod>(
     device: &wgpu::Device,
     buf: &wgpu::Buffer,
@@ -1901,9 +1927,7 @@ fn map_read<T: bytemuck::Pod>(
     slice.map_async(wgpu::MapMode::Read, move |r| {
         let _ = tx.send(r);
     });
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| format!("GPU poll: {e}"))?;
+    wait_for_gpu(device)?;
     rx.recv()
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("GPU readback: {e}"))?;

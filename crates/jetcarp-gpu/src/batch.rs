@@ -586,9 +586,7 @@ impl BatchSim {
         slice.map_async(wgpu::MapMode::Read, move |r| {
             let _ = tx.send(r);
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|e| format!("GPU poll: {e}"))?;
+        crate::wait_for_gpu(&self.device)?;
         rx.recv()
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("GPU readback: {e}"))?;
@@ -600,11 +598,9 @@ impl BatchSim {
         Ok(out)
     }
 
+    /// Wait for the work submitted so far, at most [`crate::GPU_WAIT`] (#52).
     fn poll(&self) -> Result<(), String> {
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map(|_| ())
-            .map_err(|e| format!("GPU poll: {e}"))
+        crate::wait_for_gpu(&self.device)
     }
 
     /// Step every world of the job and measure it.

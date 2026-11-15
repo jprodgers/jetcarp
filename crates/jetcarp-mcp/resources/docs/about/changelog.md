@@ -175,6 +175,11 @@ that will declare them stable.
   window's *Render media*, which is for finds and picks the format itself. *File → Export animation
   (GIF or WebP)…* now records the view and the generations after it, as a GIF or a lossless WebP,
   in the background. ([#62](https://github.com/jprodgers/jetcarp/issues/62))
+- **A GPU failing part way could crash or hang the process on Windows.** After a failed batch,
+  the stepper let go of its buffers while the GPU still had work in flight, and a readback waited
+  for the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does
+  the same when it is dropped, and a wait for the GPU over 60 seconds counts as a failure, so the
+  processor carries on. ([#52](https://github.com/jprodgers/jetcarp/issues/52))
 - **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
   often tie for a niche's last places (every run that dies at the same generation scores the same),
   and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU

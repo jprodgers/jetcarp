@@ -444,9 +444,7 @@ fn map_read(device: &wgpu::Device, buf: &wgpu::Buffer, bytes: u64) -> Result<Vec
     slice.map_async(wgpu::MapMode::Read, move |r| {
         let _ = tx.send(r);
     });
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| format!("GPU poll: {e}"))?;
+    crate::wait_for_gpu(device)?;
     rx.recv()
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("GPU readback: {e}"))?;
