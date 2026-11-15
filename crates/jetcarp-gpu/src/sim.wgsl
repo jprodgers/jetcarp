@@ -273,10 +273,14 @@ fn below64(x: vec2<u32>, t: vec2<u32>) -> bool {
 }
 
 // Sandpiles: a cell's grains, with this generation's drop on the centre cell (saturating).
+// The host gives the limit, thresh = 0xffffffff - drop: written in the shader as
+// `select(h + p.k1, 0xffffffffu, h > 0xffffffffu - p.k1)`, a saturating add Intel's UHD compiler
+// gets wrong on Vulkan and DX12 (#20).
 fn grains(j: u32) -> u32 {
   let h = src[j];
   if (p.k1 != 0u && j == p.k2) {
-    return select(h + p.k1, 0xffffffffu, h > 0xffffffffu - p.k1);
+    if (h > p.thresh) { return 0xffffffffu; }
+    return h + p.k1;
   }
   return h;
 }

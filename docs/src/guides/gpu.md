@@ -52,7 +52,9 @@ simulation* (`gpu` in `app.json`; also `jetcarp app display --gpu follow|on|off`
 `JETCARP_GPU` overrides all of it while it is set. It takes `off`, `auto` or `on` (or `0` and `1`),
 or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of a name. On a
 laptop with an Intel UHD and an RTX 3050, `JETCARP_GPU=UHD` uses the Intel one (and leaves on or off
-to the rest).
+to the rest). When the adapter asked for isn't there, the best one is used, and wherever the adapter
+is named it says so: `gpu (Intel(R) UHD Graphics …, Dx12; no RTX adapter was found, so the best
+one)`.
 
 A command's own choice comes next: `--gpu` uses the GPU, `--cpu` only the processor (`jetcarp run`,
 `jetcarp wallpaper`, `jetcarp search hunt|explore`, `jetcarp pile`, `jetcarp jobs resume`, `jetcarp
@@ -109,7 +111,7 @@ GPU: auto (automatic)
   display: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the adapter driving the screen (automatic)
       limits: 1864135 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers
-      self-test: passed (101 ms, kept from before): 53 world rules and 33 explore batches matched the CPU
+      self-test: passed (101 ms, kept from before): 59 world rules and 33 explore batches matched the CPU
       the GPU simulation uses it
   compute: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the fastest adapter (automatic)

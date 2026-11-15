@@ -82,10 +82,11 @@ pub fn human_bytes(bytes: u64) -> String {
     }
 }
 
-/// `JETCARP_*` environment variables, sorted.
+/// `JETCARP_*` environment variables, and wgpu's that change which adapters the GPU block lists
+/// (`WGPU_BACKEND`, ...), sorted.
 fn jetcarp_env() -> Vec<(String, String)> {
     let mut v: Vec<(String, String)> = std::env::vars()
-        .filter(|(k, _)| k.starts_with("JETCARP_"))
+        .filter(|(k, _)| k.starts_with("JETCARP_") || k.starts_with("WGPU_"))
         .collect();
     v.sort();
     v
@@ -162,7 +163,7 @@ pub struct DoctorReport {
     /// The GPU policy, and the adapter each purpose uses and why (none: no GPU support here).
     pub gpu_policy: Option<GpuPolicy>,
     pub desktop: Desktop,
-    /// `JETCARP_*` variables as `[name, value]`.
+    /// `JETCARP_*` and `WGPU_*` variables as `[name, value]`.
     pub environment: Vec<(String, String)>,
 }
 

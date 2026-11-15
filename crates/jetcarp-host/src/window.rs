@@ -362,13 +362,13 @@ impl App {
             return Ok(g.clone());
         }
         // The adapter driving the screen, under the GPU policy (the same choice as the app's).
-        let adapter = jetcarp_gpu::select::pick(
+        let choice = jetcarp_gpu::select::pick(
             &self.instance,
             jetcarp_gpu::select::Purpose::Display,
             Some(surface),
         )
-        .map_err(|e| format!("no graphics adapter: {e}"))?
-        .adapter;
+        .map_err(|e| format!("no graphics adapter: {e}"))?;
+        let (adapter, fallback) = (choice.adapter, choice.fallback);
         let (device, queue) =
             pollster::block_on(adapter.request_device(&device_descriptor(&adapter)))
                 .map_err(|e| format!("no graphics device: {e}"))?;
@@ -391,6 +391,7 @@ impl App {
             adapter,
             device,
             queue,
+            fallback,
         };
         self.gpu = Some(g.clone());
         self.core.attach_gpu(Some(g.clone()));

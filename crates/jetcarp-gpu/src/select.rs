@@ -452,6 +452,20 @@ pub struct Choice {
     pub usable: Result<(), String>,
     /// The self-test, when it ran for this choice.
     pub test: Option<SelfTest>,
+    /// The adapter asked for when it was not there, so another was chosen ("no RTX adapter, so
+    /// the best one"): shown wherever the adapter is named, not only by `doctor` (#21).
+    pub fallback: Option<String>,
+}
+
+impl Choice {
+    /// The adapter as people see it named: [`describe`](crate::describe), and the adapter asked
+    /// for when it was not found.
+    pub fn label(&self) -> String {
+        match &self.fallback {
+            Some(f) => format!("{}; {f}", crate::describe(&self.info)),
+            None => crate::describe(&self.info),
+        }
+    }
 }
 
 /// Choose an adapter of `instance` for `purpose` under the saved policy. A display choice needs
@@ -513,7 +527,7 @@ fn pick_tested(
         w => (
             Want::Best,
             Some(format!(
-                "no {} adapter, so the best one",
+                "no {} adapter was found, so the best one",
                 w.text().unwrap_or_default()
             )),
         ),
@@ -553,6 +567,7 @@ fn pick_tested(
             purpose,
             usable: Ok(()),
             test: None,
+            fallback: fallback.clone(),
         };
         if purpose == Purpose::Compute && test {
             let t = self_test(a);
@@ -595,6 +610,7 @@ fn pick_tested(
                 purpose,
                 usable: Err(reason),
                 test: None,
+                fallback: fallback.clone(),
             })
         }
     }
@@ -761,7 +777,7 @@ pub fn compute_device(label: &'static str) -> Result<(wgpu::Device, wgpu::Queue,
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let c = pick(&instance, Purpose::Compute, None)?;
     let (device, queue) = open_device(&c.adapter, label)?;
-    Ok((device, queue, describe(&c.info)))
+    Ok((device, queue, c.label()))
 }
 
 /// The outcome of the self-test on one adapter.
@@ -785,7 +801,7 @@ const TEST_GENS: u64 = 24;
 /// Draws of a family's rules until one runs on the GPU.
 const TEST_DRAWS: usize = 64;
 /// Changes when the self-test itself changes, so results are taken again.
-const TEST_VERSION: u32 = 1;
+const TEST_VERSION: u32 = 2;
 
 static TESTED: Mutex<Option<HashMap<String, SelfTest>>> = Mutex::new(None);
 
@@ -835,14 +851,17 @@ fn test_key(info: &wgpu::AdapterInfo) -> String {
             h = (h ^ b as u64).wrapping_mul(0x100_0000_01b3);
         }
     }
+    let driver = [info.driver.as_str(), info.driver_info.as_str()]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
     format!(
-        "{} | {:?} | {:04x}:{:04x} | {} {} | {} | {h:016x}.{TEST_VERSION}",
+        "{} | {:?} | {:04x}:{:04x} | {driver} | {} | {h:016x}.{TEST_VERSION}",
         info.name,
         info.backend,
         info.vendor,
         info.device,
-        info.driver,
-        info.driver_info,
         jetcarp_core::VERSION
     )
 }
@@ -946,39 +965,50 @@ pub fn test_rules(grid: &Grid, runs: impl Fn(&Rule) -> bool) -> Vec<(Rule, Nb)> 
 }
 
 /// A world of one CA with `rule`, seeded with random states the same way every time.
-fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec) -> Option<World> {
+fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec, drop: u32) -> Option<World> {
     let mut w = World::on_topology(grid.topo.clone(), 0x5eed);
-    w.add_ca(CaSpec::new(&rule.notation()).nb(nb).seed(seed.clone()))
-        .ok()?;
+    let mut ca = CaSpec::new(&rule.notation()).nb(nb).seed(seed.clone());
+    ca.drop_per_gen = drop;
+    w.add_ca(ca).ok()?;
     Some(w)
 }
 
 /// Kernels a family's random draws may miss, always checked where they run: a B0 rule, JACA with
-/// a blast, Margolus blocks (square grids), Larger than Life, forest fire and a sandpile, each with
-/// a seed that sets it going. Add a line here for a variant the draws may not reach.
-fn extra_rules() -> Vec<(&'static str, SeedSpec)> {
+/// a blast, Margolus blocks (square grids), Larger than Life, forest fire and sandpiles (one with
+/// no drop, one dropping grains, one whose drop saturates the centre cell: #20), each with a seed
+/// that sets it going and its grains dropped per generation. Add a line here for a variant the
+/// draws may not reach.
+fn extra_rules() -> Vec<(&'static str, SeedSpec, u32)> {
     vec![
-        ("B013/S1", SeedSpec::Random { density: 0.35 }),
-        ("JACA B3/S23 blast 2", SeedSpec::Halves { density: 0.35 }),
-        ("Margolus Critters", SeedSpec::Random { density: 0.3 }),
-        ("R2,C3,S5-9,B7-8", SeedSpec::Random { density: 0.4 }),
-        ("ForestFire 0.05/0.001", SeedSpec::RandomStates),
-        ("Sandpile", SeedSpec::Pile { grains: 2_000 }),
+        ("B013/S1", SeedSpec::Random { density: 0.35 }, 0),
+        ("JACA B3/S23 blast 2", SeedSpec::Halves { density: 0.35 }, 0),
+        ("Margolus Critters", SeedSpec::Random { density: 0.3 }, 0),
+        ("R2,C3,S5-9,B7-8", SeedSpec::Random { density: 0.4 }, 0),
+        ("ForestFire 0.05/0.001", SeedSpec::RandomStates, 0),
+        ("Sandpile", SeedSpec::Pile { grains: 2_000 }, 0),
+        ("Sandpile", SeedSpec::Pile { grains: 2_000 }, 3),
+        (
+            "Sandpile",
+            SeedSpec::Pile {
+                grains: 4_294_967_000,
+            },
+            500,
+        ),
     ]
 }
 
 /// The world rules the self-test steps on a grid: one drawn from each family the GPU runs, then
-/// the [`extra_rules`] the GPU runs, with their seeds.
-fn world_rules(grid: &Grid) -> Vec<(Rule, Nb, SeedSpec)> {
-    let mut v: Vec<(Rule, Nb, SeedSpec)> = test_rules(grid, crate::supports_rule)
+/// the [`extra_rules`] the GPU runs, with their seeds and drops.
+fn world_rules(grid: &Grid) -> Vec<(Rule, Nb, SeedSpec, u32)> {
+    let mut v: Vec<(Rule, Nb, SeedSpec, u32)> = test_rules(grid, crate::supports_rule)
         .into_iter()
-        .map(|(r, nb)| (r, nb, SeedSpec::RandomStates))
+        .map(|(r, nb)| (r, nb, SeedSpec::RandomStates, 0))
         .collect();
-    for (text, seed) in extra_rules() {
+    for (text, seed, drop) in extra_rules() {
         if let Ok((rule, nb)) = Rule::parse(text)
             && crate::supports_rule(&rule)
         {
-            v.push((rule, nb.unwrap_or_default(), seed));
+            v.push((rule, nb.unwrap_or_default(), seed, drop));
         }
     }
     v
@@ -990,10 +1020,10 @@ fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String>
     for (key, cells) in TEST_GRIDS {
         let grid = Grid::build(key, cells)?;
         let at = |rule: &Rule| format!("{} on {key}", rule.notation());
-        for (rule, nb, seed) in world_rules(&grid) {
+        for (rule, nb, seed, drop) in world_rules(&grid) {
             let (Some(mut cpu), Some(mut gpu)) = (
-                test_world(&grid, &rule, nb, &seed),
-                test_world(&grid, &rule, nb, &seed),
+                test_world(&grid, &rule, nb, &seed, drop),
+                test_world(&grid, &rule, nb, &seed, drop),
             ) else {
                 continue;
             };
@@ -1017,7 +1047,7 @@ fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String>
         // One batch per neighbourhood (Larger than Life: per hood and range), as a search has.
         let mut jobs: BTreeMap<String, BatchJob> = BTreeMap::new();
         for (rule, nb) in test_rules(&grid, BatchSim::supports) {
-            let Some(w) = test_world(&grid, &rule, nb, &SeedSpec::RandomStates) else {
+            let Some(w) = test_world(&grid, &rule, nb, &SeedSpec::RandomStates, 0) else {
                 continue;
             };
             let group = match &rule {
@@ -1403,7 +1433,7 @@ mod tests {
         for (key, cells) in TEST_GRIDS {
             let grid = Grid::build(key, cells).unwrap();
             let rules = world_rules(&grid);
-            let picked: Vec<Fam> = rules.iter().map(|(r, _, _)| Fam::of(r)).collect();
+            let picked: Vec<Fam> = rules.iter().map(|(r, _, _, _)| Fam::of(r)).collect();
             let mut want = vec![
                 Fam::LifeLike,
                 Fam::Generations,
@@ -1425,7 +1455,7 @@ mod tests {
             for fam in want {
                 assert!(picked.contains(&fam), "{fam:?} on {key}: {picked:?}");
             }
-            let names: Vec<String> = rules.iter().map(|(r, _, _)| r.notation()).collect();
+            let names: Vec<String> = rules.iter().map(|(r, _, _, _)| r.notation()).collect();
             for extra in ["B013/S1", "JACA B3/S23 blast 2"] {
                 assert!(
                     names.iter().any(|n| n == extra),

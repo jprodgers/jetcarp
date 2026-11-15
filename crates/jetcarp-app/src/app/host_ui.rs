@@ -176,7 +176,7 @@ impl HostPanel {
                         wgpu::InstanceDescriptor::new_without_display_handle_from_env(),
                     );
                     let name = match select::pick(&instance, select::Purpose::Display, None) {
-                        Ok(c) => jetcarp_gpu::describe(&c.info),
+                        Ok(c) => c.label(),
                         Err(e) => format!("none ({e})"),
                     };
                     let _ = tx.send(name);

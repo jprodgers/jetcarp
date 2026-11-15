@@ -52,6 +52,8 @@ pub struct SharedGpu {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    /// The adapter asked for, when it was not found and this one was chosen instead.
+    pub fallback: Option<String>,
 }
 
 pub use jetcarp_display::painter::device_descriptor;
@@ -68,7 +70,9 @@ impl SharedGpu {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let choice = select::pick(&instance, select::Purpose::Display, None).ok()?;
-        SharedGpu::on_with(choice.adapter, optional)
+        let mut g = SharedGpu::on_with(choice.adapter, optional)?;
+        g.fallback = choice.fallback;
+        Some(g)
     }
 
     /// A device on this adapter, with those of `optional` it has.
@@ -80,6 +84,7 @@ impl SharedGpu {
             adapter,
             device,
             queue,
+            fallback: None,
         })
     }
 }
@@ -453,9 +458,11 @@ impl Core {
         match &gpu {
             None => self.note("no GPU found; running on the CPU"),
             Some(g) => {
+                let fallback = g.fallback.as_ref().map(|f| format!(" ({f})"));
                 self.note(format!(
-                    "GPU: {}; GPU simulation {}",
+                    "GPU: {}{}; GPU simulation {}",
                     jetcarp_gpu::describe(&g.adapter.get_info()),
+                    fallback.unwrap_or_default(),
                     self.settings.gpu_policy().describe()
                 ));
             }

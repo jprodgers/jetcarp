@@ -1406,8 +1406,10 @@ impl GpuSim {
                         (p.table[0][0], p.table[0][1]) = (key as u32, (key >> 32) as u32);
                     }
                     R_SANDPILE => {
-                        // Grains drop on the first step of a generation.
+                        // Grains drop on the first step of a generation, saturating past
+                        // thresh (`grains` in sim.wgsl).
                         p.k1 = if s == 0 { ca.drop_per_gen } else { 0 };
+                        p.thresh = u32::MAX - p.k1;
                         p.stat = stats.len() as u32;
                         stats.push((g, ei));
                     }
