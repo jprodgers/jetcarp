@@ -387,6 +387,12 @@ that will declare them stable.
   block, because the script stopped with `throw`. A refusal is now its one line and exit code 1. CI
   now parses the installer with Windows PowerShell and checks a refusal.
   ([#117](https://github.com/jprodgers/jetcarp/issues/117))
+- **Small corrections from the book audit.** The AI control window named its command with literal
+  backticks; it now points to the command's own row. *Help → Keyboard shortcuts* lists ⌘M on macOS.
+  `jetcarp host login --help` says that on macOS `off` unloads launchd's job, and `setup --help`
+  says that `--seizure-warning` without `--profile` saves only the answer when setup can't ask the
+  rest (with `--yes`, or without a terminal).
+  ([#118](https://github.com/jprodgers/jetcarp/issues/118))
 - **Progress lines wider than the terminal left pieces behind.** A job's progress, redrawn in place
   on standard error, wrapped in a narrow window, and each redraw went back only to the start of its
   last row, leaving the rest ("newest: p3 oscillatohunt 1: 192/5,000 soups, ..."). A progress line

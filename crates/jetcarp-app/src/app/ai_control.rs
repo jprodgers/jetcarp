@@ -137,9 +137,9 @@ impl JetcarpApp {
         crate::popout::tool_window(ctx, spec, &mut open, |ui| {
             ui.label(
                 "Lets an AI assistant drive the world in this window. Connect the assistant to \
-                          JETCARP's MCP server, `jetcarp mcp --app` (or `jetcarp mcp` and its use_app \
-                          tool), as the book's MCP tutorial shows. Every change it makes is a \
-                          command, shown in the command log.",
+                          JETCARP's MCP server with the command below (or plain jetcarp mcp, and its \
+                          use_app tool), as the book's MCP tutorial shows. Every change it makes is \
+                          a command, shown in the command log.",
             );
             ui.horizontal(|ui| {
                 ui.label(RichText::new("jetcarp mcp --app").monospace());
@@ -190,7 +190,7 @@ impl JetcarpApp {
                     ui.end_row();
                 });
                 ui.label(RichText::new(
-                        "The address is the private link `jetcarp mcp --app` uses to reach this window, \
+                        "The address is the private link that command uses to reach this window, \
                          not an MCP endpoint for HTTP clients: it speaks JETCARP's own protocol. The \
                          server finds the port and token by itself (they are stored in a file only you \
                          can read). Switching off closes it.",

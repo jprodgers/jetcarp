@@ -44,7 +44,8 @@ pub struct SetupArgs {
     yes: bool,
     /// Answer the photosensitive seizure warning without being asked (saved in the settings
     /// folder). Setup asks it first in a terminal; with --yes, or no terminal, it needs this the
-    /// first time. With no --profile, only the answer is saved.
+    /// first time. With no --profile, only the answer is saved, unless setup can go on to ask the
+    /// rest (in a terminal, without --yes).
     #[arg(long, value_enum, value_name = "ANSWER")]
     seizure_warning: Option<WarningAnswer>,
     /// Only show where things stand: whether setup has run, the folders, the packs that came

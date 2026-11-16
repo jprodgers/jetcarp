@@ -2717,7 +2717,7 @@ Options:
 ```text
 Start the host at login, or stop doing that.
 
-On macOS, `on` also registers it with launchd, which starts the host now unless one is running.
+On macOS, `on` also registers it with launchd, which starts the host now unless one is running, and `off` also unloads launchd's job, unless the host it started is running.
 
 Usage: jetcarp host login [OPTIONS] <STATE>
 
@@ -2932,7 +2932,7 @@ Options:
           Ask nothing: do what the profile does (the desktop offers are only printed). The photosensitive seizure warning must have been answered before, or with --seizure-warning
 
       --seizure-warning <ANSWER>
-          Answer the photosensitive seizure warning without being asked (saved in the settings folder). Setup asks it first in a terminal; with --yes, or no terminal, it needs this the first time. With no --profile, only the answer is saved
+          Answer the photosensitive seizure warning without being asked (saved in the settings folder). Setup asks it first in a terminal; with --yes, or no terminal, it needs this the first time. With no --profile, only the answer is saved, unless setup can go on to ask the rest (in a terminal, without --yes)
 
           Possible values:
           - no-disorder: You don't have epilepsy or a seizure disorder

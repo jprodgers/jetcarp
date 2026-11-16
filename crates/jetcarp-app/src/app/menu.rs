@@ -1369,6 +1369,13 @@ impl JetcarpApp {
                             ui.label(a.label());
                             ui.end_row();
                         }
+                        // macOS's Minimise, handled outside the action table (#98).
+                        if cfg!(target_os = "macos") {
+                            let k = KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M);
+                            ui.label(RichText::new(ctx.format_shortcut(&k)).monospace());
+                            ui.label("Minimise the window");
+                            ui.end_row();
+                        }
                         ui.label(RichText::new("Alt").monospace());
                         ui.label("Show the auto-hidden menu bar");
                         ui.end_row();

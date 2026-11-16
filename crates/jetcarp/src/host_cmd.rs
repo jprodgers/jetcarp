@@ -193,7 +193,7 @@ pub enum HostCmd {
     /// Start the host at login, or stop doing that.
     ///
     /// On macOS, `on` also registers it with launchd, which starts the host now unless one is
-    /// running.
+    /// running, and `off` also unloads launchd's job, unless the host it started is running.
     Login { state: Switch },
     /// Show screens as the desktop background (saved). On GNOME this needs the extension.
     Wallpaper {

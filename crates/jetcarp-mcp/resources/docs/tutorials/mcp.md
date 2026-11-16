@@ -237,7 +237,7 @@ window instead:
    so point the assistant at `jetcarp mcp` (or `jetcarp mcp --app`, which the window shows with a
    *Copy* button), never at the address.
 
-   <img src="../images/tutorials/mcp-ai-control.webp" alt="The AI control window: a line on connecting an assistant to jetcarp mcp --app, the command jetcarp mcp --app with a Copy button, Allow AI control (127.0.0.1 only) ticked, the address 127.0.0.1:47811, the start of the token with a Copy button, Open connections 0, Tool calls 0, and a note that the address is the private link jetcarp mcp --app uses to reach the window, not an MCP endpoint for HTTP clients" width="404">
+   <img src="../images/tutorials/mcp-ai-control.webp" alt="The AI control window: a line on connecting an assistant to JETCARP's MCP server with the command below it, the command jetcarp mcp --app with a Copy button, Allow AI control (127.0.0.1 only) ticked, the address 127.0.0.1:47811, the start of the token with a Copy button, Open connections 0, Tool calls 0, and a note that the address is the private link that command uses to reach the window, not an MCP endpoint for HTTP clients" width="404">
 
 2. Ask the assistant to use the app. It calls `use_app`, which finds the app's port and token in
    JETCARP's runtime folder and attaches; from then on the world tools act on the window you are
