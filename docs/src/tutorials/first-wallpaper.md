@@ -285,5 +285,8 @@ wallpaper off.
   [Rotations](../guides/rotations.md).
 - **Reseeding** keeps a wallpaper from dying out: see [Reseeding](../guides/reseeding.md).
 - **Start at login:** *Start at login* in the *Desktop background* pane, or `jetcarp host login on`,
-  writes the entry that starts the host when you log in. Logging in with it has been tried only on
-  Windows so far (see [What has been tested](../guides/wallpapers.md#what-has-been-tested)).
+  writes the entry that starts the host when you log in. Logging in with it has been tried on
+  Windows and macOS so far, not yet on Linux (see
+  [What has been tested](../guides/wallpapers.md#what-has-been-tested)). On macOS, after upgrading
+  JETCARP, open the app or run `jetcarp host start` once before you next log in (see
+  [Start at login](../guides/wallpapers.md#start-at-login)).

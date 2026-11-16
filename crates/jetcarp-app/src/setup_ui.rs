@@ -1333,20 +1333,12 @@ mod tests {
         ctx.set_fonts(fonts);
     }
 
-    /// Every page of the setup wizard drawn headlessly, as PNGs in `JETCARP_OFFSCREEN_OUT`
-    /// (the book's first-run page uses them). Its folders come from the environment, which
-    /// must point at scratch folders: `JETCARP_CONFIG_DIR`, `JETCARP_DATA_DIR`,
-    /// `JETCARP_LIBRARY`, `JETCARP_OUT`, `JETCARP_BUNDLED_PACKS` (the packs shown as having come
-    /// with JETCARP), and `JETCARP_OFFSCREEN_PACKS` (a folder of packs added on the Researcher's
-    /// pack page). The folders shown are replaced by an example user's, so no local path is in
-    /// a picture. The last pictures are an Explorer setup (with a one-minute build) running, then
-    /// done.
-    #[test]
-    #[ignore]
-    fn offscreen_setup_wizard() {
-        let Some(dir) = std::env::var_os("JETCARP_OFFSCREEN_OUT").map(PathBuf::from) else {
-            return;
-        };
+    /// What the wizard's pictures need: their folder (`JETCARP_OFFSCREEN_OUT`), a device of the
+    /// window's size with the app's fonts, a context maker, and the status with the folders
+    /// shown replaced by an example user's, so no local path is in a picture. `None` without
+    /// `JETCARP_OFFSCREEN_OUT` or a GPU.
+    fn wizard_pictures() -> Option<(PathBuf, Offscreen, MakeCtx, SetupStatus)> {
+        let dir = std::env::var_os("JETCARP_OFFSCREEN_OUT").map(PathBuf::from)?;
         std::fs::create_dir_all(&dir).unwrap();
         for v in [
             "JETCARP_CONFIG_DIR",
@@ -1355,26 +1347,40 @@ mod tests {
         ] {
             assert!(std::env::var_os(v).is_some(), "set {v}");
         }
-        let Some(mut o) = Offscreen::new(690, 640) else {
+        let Some(o) = Offscreen::new(690, 640) else {
             eprintln!("no GPU adapter");
-            return;
+            return None;
         };
         app_fonts(&o.ctx);
         let mk: MakeCtx =
             Arc::new(|| Ctx::new().with_platform(Arc::new(crate::window_job::AppPlatform)));
-        let shown = |mut st: SetupStatus| {
-            st.folders.data = PathBuf::from("/home/ada/.local/share/jetcarp");
-            st.library = "/home/ada/.local/share/jetcarp/library.sqlite".into();
-            st
+        let mut status = setup::status(&mk());
+        status.folders.data = PathBuf::from("/home/ada/.local/share/jetcarp");
+        status.library = "/home/ada/.local/share/jetcarp/library.sqlite".into();
+        Some((dir, o, mk, status))
+    }
+
+    /// A wizard open at its first page, with this status.
+    fn fresh_wizard(mk: &MakeCtx, status: &SetupStatus) -> Wizard {
+        let mut w = Wizard::new(mk.clone(), Box::new(RealDesktop));
+        w.set_status(status.clone());
+        w.open = true;
+        w
+    }
+
+    /// Every page of the setup wizard before it starts, drawn headlessly as PNGs in
+    /// `JETCARP_OFFSCREEN_OUT` (the book's first-run page uses them). Its folders come from the
+    /// environment, which must point at scratch folders: `JETCARP_CONFIG_DIR`,
+    /// `JETCARP_DATA_DIR`, `JETCARP_LIBRARY`, `JETCARP_OUT`, `JETCARP_BUNDLED_PACKS` (the packs
+    /// shown as having come with JETCARP), and `JETCARP_OFFSCREEN_PACKS` (a folder of packs added
+    /// on the Researcher's pack page). [`offscreen_setup_wizard_running`] draws the pages after.
+    #[test]
+    #[ignore]
+    fn offscreen_setup_wizard() {
+        let Some((dir, mut o, mk, status)) = wizard_pictures() else {
+            return;
         };
-        let status = shown(setup::status(&mk()));
-        let fresh = |status: &SetupStatus| {
-            let mut w = Wizard::new(mk.clone(), Box::new(RealDesktop));
-            w.set_status(status.clone());
-            w.open = true;
-            w
-        };
-        let mut w = fresh(&status);
+        let mut w = fresh_wizard(&mk, &status);
         shot(&mut o, &mut w, &dir, "setup-1-welcome");
         w.next();
         w.choose(Profile::Explorer);
@@ -1404,8 +1410,18 @@ mod tests {
         w.choose(Profile::Explorer);
         w.go_to(Page::Summary);
         shot(&mut o, &mut w, &dir, "setup-6-summary");
-        // A real Explorer setup with a one-minute build, in the scratch folders.
-        let mut w = fresh(&status);
+    }
+
+    /// The setup wizard's last pages, as [`offscreen_setup_wizard`] draws the first: a real
+    /// Explorer setup with a one-minute Quick Start build in the scratch folders (an explore
+    /// search on the GPU when there is one), running, then done.
+    #[test]
+    #[ignore]
+    fn offscreen_setup_wizard_running() {
+        let Some((dir, mut o, mk, status)) = wizard_pictures() else {
+            return;
+        };
+        let mut w = fresh_wizard(&mk, &status);
         w.choose(Profile::Explorer);
         w.minutes = 1.0;
         w.go_to(Page::Summary);

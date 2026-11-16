@@ -74,10 +74,11 @@ one.) The world opens running, with the grid on the right and the panes on the l
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
   live cells and its tiles.
 - **More room:** Tab hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
-  F12 starts screensaver mode (Esc leaves it).
+  F12 starts screensaver mode (Esc leaves it). On macOS, ⌘M minimises the window, and the world
+  and [AI control](../tutorials/mcp.md) keep running while it is minimised or covered.
 
-*File → Quick Start* (Ctrl+Shift+H, ⌘⇧H on macOS) goes back to the Quick Start screen, and *File → New empty world*
-(Ctrl+N) starts a square grid with no automata on it, ready for your own
+*File → Quick Start* (Ctrl+Shift+H, ⇧⌘H on macOS) goes back to the Quick Start screen, and
+*File → New empty world* (Ctrl+N) starts a square grid with no automata on it, ready for your own
 ([Life on a new tiling](../tutorials/life-on-a-new-tiling.md) starts there).
 
 ## The panes
@@ -121,8 +122,8 @@ and *Window → Reset layout* puts everything back:
 | *Window* | Every pane and tool window, *Hide all panes*, *Reset layout*, *Displays* |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
 
-*Help → Keyboard shortcuts…* lists every shortcut. Single-key shortcuts such as Space and R work
-while no text box has the keyboard.
+*Help → Keyboard shortcuts…* lists the menus' shortcuts. Single-key shortcuts such as Space and R
+work while no text box has the keyboard.
 
 ## The tool windows
 

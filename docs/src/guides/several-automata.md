@@ -64,9 +64,10 @@ and the format is in [Scene file format](../reference/scene-format.md#script-and
   [notation](../reference/rule-notation.md) such as `B36/S23` or `Ant RLR`), or *CA → Load rule
   table…*.
 - **The CAs pane** has one card per automaton. Its header has the checkbox that runs it, its name and
-  notation, and *Remove*. Inside are the rule (a box: type another rule and press Enter, or click
-  elsewhere, to apply it; Esc puts the current one back; a JACA card has a box for each sign's
-  rule), the neighbourhood (*Touching* or *Edge*), the
+  notation, and *Remove*. Inside are the rule (a box: type another rule and press Enter, click
+  elsewhere or switch to another window to apply it, and *Save scene* applies a rule still being
+  typed first; Esc puts the current one back; a JACA card has a box for each sign's rule), the
+  neighbourhood (*Touching* or *Edge*), the
   *Affects others* checkbox with the field it is on (for example *field 0 · shared binary · 3 CAs*),
   *Steps per generation*, *Colour by*, *Palette*, and the *Seed*, *Random* and *Clear* buttons. Ant
   cards add *+ Ant* and what ants do at a dead edge (*Edge: bounce* or *Edge: fall off*).

@@ -169,8 +169,9 @@ pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refres
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 ```
 
-A screen whose world can't keep up with its scene's speed says what it reaches instead, as in
-`30 fps, 3.90 of 30 generations a second` (`measured_speed` in `--json`).
+A screen whose world falls more than a tenth short of its scene's speed says what it reaches, as in
+`30 fps, 3.90 of 30 generations a second`, and a scene that runs as fast as it can says how fast
+that is: `30 fps, as fast as it can (412 generations a second)` (`measured_speed` in `--json`).
 
 Move on to the next item:
 
@@ -239,13 +240,16 @@ the next time it starts (*saved; the host is not running*). When the host reads 
 whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
 Should the host's memory pass `max_memory_mb` in `host.json` (6,144 MB by default), it gives up the
 biggest scene it shows for the next item, with a note; on Linux it first gives back the memory it
-has freed but kept.
+has freed but kept. On macOS its memory is its physical footprint, the figure Activity Monitor
+shows.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
 is completely hidden behind other windows, while the screen is locked, and while the display is
-asleep (on macOS, whether locked or not). `jetcarp host
+asleep. On macOS it holds whenever a wallpaper is wanted and none of it can be seen: the session
+locked, every display asleep (locked or not), or no wallpaper window there at all. `jetcarp host
 status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
-carries on) with `paused_why`, and apart from it what the host is holding for, which passes by
-itself: `held` (`battery`, `busy`, `covered` or `dark`) with `held_why`, the same in words.
+carries on) with `paused_why`, and apart from it what the host is holding for: `held` (`battery`,
+`busy`, `covered` or `dark`, which pass by themselves, and `warning` until the photosensitive
+seizure warning has been answered) with `held_why`, the same in words.
 
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
@@ -479,7 +483,8 @@ no console window opens) at the path the program has now. Windows runs these ent
 and waits for each, so at login `jetcarpw.exe` starts the host and exits at once, rather than
 waiting for it as it does from a shortcut. If you move the program, turn the setting off and on
 again. A host already running is left alone, except on macOS one that launchd started from the
-entry, which `host login on` restarts.
+entry, which `host login on` restarts. Turning it off removes the entry, and on macOS also unloads
+it from launchd, unless the host it started is still running: that host is left running.
 
 On macOS, launchd refuses at login a program that has changed since the entry was registered, and
 each Homebrew build is signed on its own, so after an upgrade the desktop background would not come

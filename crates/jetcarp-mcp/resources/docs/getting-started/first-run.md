@@ -167,7 +167,7 @@ The outputs on this page come from Linux; on macOS and Windows the folders in th
 | `--quickstart-minutes N` | The build's minutes instead of the profile's; `0` for none |
 | `--packs DIR` | Import the packs in this folder too (repeatable) |
 | `--yes` | Ask nothing. The desktop offers are only printed, as the commands that do them |
-| `--seizure-warning ANSWER` | Answer the [photosensitive seizure warning](photosensitivity.md) without being asked: `no-disorder` (you don't have epilepsy or a seizure disorder) or `at-risk` (you have, or may have, one, and go on at your own risk). `--yes` needs it the first time; with no `--profile`, only the answer is saved |
+| `--seizure-warning ANSWER` | Answer the [photosensitive seizure warning](photosensitivity.md) without being asked: `no-disorder` (you don't have epilepsy or a seizure disorder) or `at-risk` (you have, or may have, one, and go on at your own risk). `--yes` needs it the first time; with `--yes` and no `--profile`, only the answer is saved |
 | `--no-gpu` | Build on the processor even when there is a GPU |
 | `--status` | Only show where things stand (below) |
 

@@ -144,6 +144,25 @@ impl Harness {
         self.frame_with(0.05, vec![]);
     }
 
+    /// The left button pressed at `from`, the pointer moved to `to` in steps, and let go there (a
+    /// window dragged by its title bar).
+    fn drag(&mut self, from: egui::Pos2, to: egui::Pos2) {
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        self.frame_with(0.05, vec![egui::Event::PointerMoved(from)]);
+        self.frame_with(0.05, vec![button(from, true)]);
+        for i in 1..=8 {
+            let p = from + (to - from) * (i as f32 / 8.0);
+            self.frame_with(0.05, vec![egui::Event::PointerMoved(p)]);
+        }
+        self.frame_with(0.05, vec![button(to, false)]);
+        self.frame_with(0.05, vec![]);
+    }
+
     /// Where the widget with this text is (see [`Offscreen::find`]); panics if it is not drawn.
     fn find(&self, text: &str) -> egui::Rect {
         self.o.find(text).unwrap_or_else(|| {
@@ -416,6 +435,33 @@ fn ai_control_window_on_the_quick_start() {
     h.click("Allow AI control (127.0.0.1 only)");
     assert!(h.app.ai_port().is_none(), "and closed again");
     assert!(h.app.screen == Screen::Start);
+}
+
+/// The AI control window with AI control allowed (`tutorials/mcp.md`, #114): how to connect an
+/// assistant (`jetcarp mcp --app`, with its Copy button), the address and token, and the note that
+/// the address is the MCP server's private link to the app, not an endpoint for HTTP clients. Over
+/// the Quick Start, so it needs no library of its own.
+#[test]
+#[ignore]
+fn shots_ai_control() {
+    let Some(mut h) = Harness::new(1200, 800) else {
+        return;
+    };
+    h.action(menu::Action::Tool(menu::ToolWin::AiControl));
+    h.run(1.0, 0.05, |_| false);
+    h.click("Allow AI control (127.0.0.1 only)");
+    assert!(h.app.ai_port().is_some(), "the endpoint opened");
+    // Down from the menu bar by its title bar ("AI control" is the whole window), so the picture
+    // shows the window alone, and the pointer out of it, so nothing in it is highlighted.
+    let win = h.find("AI control");
+    let bar = egui::pos2(win.center().x, win.min.y + 10.0);
+    h.drag(bar, bar + egui::vec2(0.0, 140.0));
+    h.hover(egui::pos2(2.0, 798.0));
+    let win = h.find("AI control");
+    assert!(win.min.y > 100.0, "the window was dragged down: {win:?}");
+    h.shot_part("mcp-ai-control", Harness::around(&[win], 2.0));
+    h.click("Allow AI control (127.0.0.1 only)");
+    assert!(h.app.ai_port().is_none(), "and closed again");
 }
 
 /// Tutorial 1 (`tutorials/first-wallpaper.md`): a Quick Start entry opened, its palette list

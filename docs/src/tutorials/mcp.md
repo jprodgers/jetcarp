@@ -234,17 +234,29 @@ window instead:
    `jetcarp --control`). The app now listens on `127.0.0.1` only, for programs that know the token
    it has just made. The address the window shows is the private link through which JETCARP's MCP
    server reaches the app, not an MCP endpoint of its own: it speaks JETCARP's protocol, not HTTP,
-   so point the assistant at `jetcarp mcp` (or `jetcarp mcp --app`), never at the address.
+   so point the assistant at `jetcarp mcp` (or `jetcarp mcp --app`, which the window shows with a
+   *Copy* button), never at the address.
+
+   <img src="../images/tutorials/mcp-ai-control.webp" alt="The AI control window: a line on connecting an assistant to jetcarp mcp --app, the command jetcarp mcp --app with a Copy button, Allow AI control (127.0.0.1 only) ticked, the address 127.0.0.1:47811, the start of the token with a Copy button, Open connections 0, Tool calls 0, and a note that the address is the private link jetcarp mcp --app uses to reach the window, not an MCP endpoint for HTTP clients" width="404">
+
 2. Ask the assistant to use the app. It calls `use_app`, which finds the app's port and token in
    JETCARP's runtime folder and attaches; from then on the world tools act on the window you are
    watching, and every change shows up in its command log. `use_app {"attach": false}` goes back to
    the private world.
 
-To start attached every time, register the server with `--app`
-(`claude mcp add --scope user jetcarp-app -- jetcarp mcp --app`). Attached to the app, the assistant also gets
-`app_display`: where the grid shows (window, full screen, a span of monitors), the screensaver and
-its profiles, the cell size and keep-awake. Ask *"Show Hodgepodge as the screensaver"*, and it
-calls `app_display {"screensaver": true, "profile": "Hodgepodge"}`.
+The app goes on answering while its window is minimised, covered or on another desktop, so you can
+set the assistant a task and switch to something else.
+
+To start attached every time, register the server with `--app` as well:
+
+```sh
+claude mcp add --scope user jetcarp-app -- jetcarp mcp --app
+```
+
+Attached to the app, the assistant also gets `app_display`: where the grid shows (window, full
+screen, a span of monitors), the screensaver and its profiles, the cell size and keep-awake. Ask
+*"Show Hodgepodge as the screensaver"*, and it calls
+`app_display {"screensaver": true, "profile": "Hodgepodge"}`.
 
 The [background host](../guides/wallpapers.md), which keeps scenes running as wallpapers without
 the app, has a tool of its own, `host_control`: its status, the next or previous item, pause and

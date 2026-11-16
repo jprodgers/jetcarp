@@ -3,7 +3,7 @@
 JETCARP keeps its files in three folders: one for settings, one for data and one for output. Each has
 an environment variable that moves it, so tests, scripts and portable installs can keep JETCARP away
 from your own folders. `jetcarp paths` prints the three folders as JETCARP sees them, with any
-overrides applied:
+overrides applied, and two more: the packs that came with the program, and the runtime folder:
 
 ```sh
 jetcarp paths

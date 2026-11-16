@@ -112,6 +112,9 @@ It prints:
     1  hunt     done     2026-11-12T07:02:04Z  hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects …
 ```
 
+- **Progress.** In a terminal, a search's progress line is redrawn in place on standard error, cut
+  to the terminal's width: its least important part, such as a hunt's *newest:*, goes first.
+  Written to a file or a pipe, each line is whole.
 - **Budgets.** `--minutes M` or `--until UNIX-TIME` stops a search, still resumable, at its next
   checkpoint after that time (the exploratory search ends at that time; see below), and `--limit N`
   after N items in that session (an explore search checks it between its steps of a few seconds, so

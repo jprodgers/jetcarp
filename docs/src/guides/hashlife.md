@@ -49,7 +49,8 @@ sequence installed, cannot be jumped in place.
 ## In the app
 
 *Run → Jump* opens a small menu with a *Generations* box, which takes a number or a form such as
-`2^40` or `1e6`, and three choices:
+`2^40` or `1e6` (the menu stays open while you type, until you choose or click outside it), and
+three choices:
 
 - **Jump ahead (HashLife)** jumps the world in place. When the world does not qualify, the button is
   greyed out and hovering over it says why, and what to do (for example, *HashLife needs a torus
