@@ -625,7 +625,10 @@ impl App {
             let showing = !walls.is_empty();
             let covered = showing && walls.iter().all(|w| !d::visible(w));
             self.core.set_local_hold("covered", covered);
-            self.core.set_local_hold("dark", showing && d::locked());
+            // Locked, or the displays asleep: a locked Mac whose display sleeps reads as neither
+            // locked nor covered (#95).
+            self.core
+                .set_local_hold("dark", showing && (d::locked() || d::displays_asleep()));
         }
         self.watch_starving();
         let geometry: Vec<_> = el

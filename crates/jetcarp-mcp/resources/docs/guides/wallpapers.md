@@ -187,7 +187,8 @@ Should the host's memory pass `max_memory_mb` in `host.json` (6,144 MB by defaul
 biggest scene it shows for the next item, with a note; on Linux it first gives back the memory it
 has freed but kept, as it also does after each sweep of *Fit to this computer*.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
-is completely hidden behind other windows and while the screen is locked and dark. `jetcarp host
+is completely hidden behind other windows, while the screen is locked, and while the display is
+asleep (on macOS, whether locked or not). `jetcarp host
 status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
 carries on) with `paused_why`, and apart from it what the host is holding for, which passes by
 itself: `held` (`battery`, `busy`, `covered`, `dark` or `tuning`) with `held_why`, the same in

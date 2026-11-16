@@ -21,6 +21,8 @@ const POLICY_ACCESSORY: isize = 1;
 unsafe extern "C" {
     fn CGWindowLevelForKey(key: i32) -> i32;
     fn CGSessionCopyCurrentDictionary() -> *const c_void;
+    fn CGGetOnlineDisplayList(max: u32, displays: *mut u32, count: *mut u32) -> i32;
+    fn CGDisplayIsAsleep(display: u32) -> u32;
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
@@ -87,6 +89,23 @@ pub fn locked() -> bool {
         CFRelease(dict);
         on
     }
+}
+
+/// Whether every display is asleep (the screen is off). While a locked Mac's display sleeps, the
+/// session no longer reads as locked and the lock screen no longer covers the wallpaper, so this is
+/// what keeps the host held then (#95); it also holds it while an unlocked display sleeps.
+pub fn displays_asleep() -> bool {
+    let mut ids = [0u32; 16];
+    let mut count = 0u32;
+    // SAFETY: a buffer of 16 display ids and a count, as CGGetOnlineDisplayList takes.
+    let err = unsafe { CGGetOnlineDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
+    if err != 0 || count == 0 {
+        return false;
+    }
+    ids[..count.min(16) as usize]
+        .iter()
+        // SAFETY: an online display's id.
+        .all(|&d| unsafe { CGDisplayIsAsleep(d) } != 0)
 }
 
 /// Keeps the host out of the Dock and the app switcher: it lives in the menu bar (its tray menu),
