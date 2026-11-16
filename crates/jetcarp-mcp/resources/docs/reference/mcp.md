@@ -44,11 +44,13 @@ as long as it runs.
   packs that came with JETCARP. Relative paths start in the output folder. A path outside these,
   once its symbolic links are followed, is refused with an error that names the folders. See
   [Folders and environment variables](folders.md).
-- **Limits per call.** Worlds of at most 4 million cells; at most 1,000,000 generations and 2
-  billion cell updates (cells times generations) per `world_step`; scripts of at most 600 seconds
-  (60 by default); waits for a job of at most 600 seconds. Long searches run as background jobs
-  instead, with no such limits: they stop when the server exits and stay resumable, or run in a
-  process of their own with `detach`.
+- **Limits per call.** Worlds of at most 4 million cells, counting every cell, several to a unit
+  cell on trihex and the k-uniform tilings (a refusal names sides that fit); at most 1,000,000
+  generations and 2 billion cell updates (cells times generations) per `world_step`; scripts of at
+  most 600 seconds (60 by default); waits for a job of at most 600 seconds. Long searches run as
+  background jobs instead, with no such limits. When the client goes, the server stops the searches
+  on its own threads at their next checkpoint, waits up to 30 seconds for them, and leaves them
+  paused and resumable; a search started with `detach` runs in a process of its own and carries on.
 - **What is not offered.** Making the publisher's signing key (`jetcarp pack key`) and recording a
   rater's consent to publish their ratings (`jetcarp pack rater`) are for people only, at a command
   line.
@@ -58,7 +60,8 @@ as long as it runs.
 Every tool's arguments come from the input types of the operations it calls, the same ones the
 command line and scripts read, so the three cannot drift apart. Small models' habits are forgiven:
 a number or `true` given as text, a list as comma-separated text, or an action's options as JSON
-text are read as meant.
+text are read as meant. Anything else of the wrong type, and a number under the schema's minimum,
+is refused, naming the argument and what to give: "`width` must be a whole number (got "abc")".
 
 A client hands the whole tool list to the model with every request, so the list stays short
 (about 45 KB): an argument with many settings, such as each of `search_start`'s strategies or

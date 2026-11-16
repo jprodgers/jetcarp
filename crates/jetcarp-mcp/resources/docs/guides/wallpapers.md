@@ -58,7 +58,13 @@ on these machines again, except as the Fedora 45 line says.
   runs, removal), sleep with the lid closed, the still picture on one screen, and the pauses on battery
   and when busy.
 
-Not tested yet: starting at a real login on any of the three (the entries are written and removed
+Starting at a real login has been tried only on the Windows laptop, with JETCARP 0.4.2-rc.2: after
+signing out and in, the host started with its saved rotation, 97 seconds after sign-in, once the
+login entries before it had had their turn. JETCARP's launcher then kept Windows waiting on it too,
+which held up the entries after it ([#78](https://github.com/jprodgers/jetcarp/issues/78)); the
+launcher now starts the host and exits at once, which has not been tried at a real login yet.
+
+Not tested yet: starting at a real login on Linux and macOS (the entries are written and removed
 correctly, but no one has logged in with them), a fresh boot on Windows, Linux desktops other than
 GNOME, Intel Macs, and any other versions of these systems.
 
@@ -177,6 +183,9 @@ The settings are saved in `host.json` in the settings folder. The app and the co
 it and tell a running host to read it again, so a setting changed while the host is stopped applies
 the next time it starts (*saved; the host is not running*). When the host reads it again, a screen
 whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
+Should the host's memory pass `max_memory_mb` in `host.json` (6,144 MB by default), it gives up the
+biggest scene it shows for the next item, with a note; on Linux it first gives back the memory it
+has freed but kept, as it also does after each sweep of *Fit to this computer*.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
 is completely hidden behind other windows and while the screen is locked and dark. `jetcarp host
 status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
@@ -232,7 +241,8 @@ about the host. The *Display* and *Screensaver* panes link to it.
 <img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane, where profiles are made; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second 30, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, Fit to this computer…, and Measure again by itself when the monitors change" width="700">
 
 - **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too, and
-  whether tuning chose it), or why it is paused.
+  whether tuning chose it), why it is paused (*Paused: by hand.*), and what holds it, which passes
+  by itself (*Held: the processor is busy (resumes by itself).*).
 - **Where:** *Show on the desktop*, and for each screen its rotation and its monitor (*Every monitor*,
   or one of them). *Add a screen* puts another rotation on another monitor. Under each screen's
   rotation:
@@ -330,14 +340,15 @@ JETCARP's process, the figures Task Manager shows, and held to the GPU limit lik
 Failing those, the GPU share is not measured: timing each frame from its submission until the GPU is
 done gives only an upper bound, which counts the time the work waits in the driver's queue (on
 Windows it read about 90% for a scene the GPU spent 10% of its time on). The cards then show the
-share as *GPU unknown*, and the pane and the sweep's last line say "GPU share not measured on this
-adapter (it has no GPU timestamps): the GPU limit isn't applied"; the frame times are still held to
-the frame rate. With `--json`, such a card has `"gpu_unmeasured": true` and no `gpu_percent`, and
-the last line has the same words as `gpu_note`. The summary says which clock it used. A world small
-enough that the
-[GPU setting](gpu.md) leaves it on the processor is tried there, and held to the processor limit like
-any other. On battery a sweep started by hand says that a computer on battery may measure slower than
-plugged in.
+share as *GPU unknown*, each size's line from `jetcarp host tune` has `GPU not measured`, and the
+pane and the sweep's last line say "GPU share not measured on this adapter (it has no GPU
+timestamps): the GPU limit isn't applied"; the frame times are still held to the frame rate. With
+`--json`, such a card has `"gpu_unmeasured": true` and no `gpu_percent`, and the last line has the
+same words as `gpu_note`. The summary says which clock it used (with `--json`, `gpu_timing`:
+`kernel`, `timestamps`, `counters` for Windows' engine counters, or `submission`). A world small
+enough that the [GPU setting](gpu.md) leaves it on the processor is tried there, and held to the
+processor limit like any other. On battery a sweep started by hand says that a computer on battery
+may measure slower than plugged in.
 
 **With the host stopped**, `jetcarp host tune` (and the pane) sweep off screen in a program of their own,
 at each screen's size, drawing and stepping the way the host does, and the cards are the same.
@@ -477,9 +488,11 @@ you log in; `jetcarp host login off` stops that. It uses each system's own per-u
 | macOS | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` (it takes effect at the next login) |
 | Windows | The value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 
-The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` when it is there, so no
-console window opens) at the path the program has now. If you move the program, turn the setting off
-and on again. A host already running is left alone.
+The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` when it is there, so
+no console window opens) at the path the program has now. Windows runs these entries one at a time
+and waits for each, so at login `jetcarpw.exe` starts the host and exits at once, rather than
+waiting for it as it does from a shortcut. If you move the program, turn the setting off and on
+again. A host already running is left alone.
 
 Started at login, the host shows only the screens placed on the desktop, and opens no windows: a
 screen in a window (after `jetcarp host wallpaper off`, say) waits unseen, and with no desktop screens

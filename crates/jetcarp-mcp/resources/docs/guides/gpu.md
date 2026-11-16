@@ -6,9 +6,11 @@ the processor. Only the speed differs.
 
 ## What runs on the GPU
 
-- **Worlds** of Life-like, Generations, WireWorld, cyclic, rock-paper-scissors, Greenberg–Hastings,
-  hodgepodge, Spectre-glider and priority rules, on lattices and on aperiodic patches. Other rules
-  step on the processor, and a world that mixes them moves between the two as it needs.
+- **Worlds** of Life-like (B0 rules too), Generations, WireWorld, cyclic, rock-paper-scissors,
+  Greenberg–Hastings, hodgepodge, JACA, Larger than Life, forest fire, sandpile, Spectre-glider and
+  priority rules, on lattices and on aperiodic patches, and Margolus block rules on a tiling with
+  rows. Other rules step on the processor, and a world that mixes them moves between the two as it
+  needs.
 - **Explore searches**: the rules a GPU can run go there in batches.
 - **Hunts**: the start of each soup.
 - **Large sandpiles** on periodic tilings.
@@ -97,8 +99,10 @@ Each part of JETCARP asks for an adapter in the same way, for one of two purpose
 An adapter must be decent to simulate on: a discrete or integrated GPU, with compute shaders, at
 least 9 storage buffers per shader stage, storage bindings of at least 128 MiB, and a passed
 self-test. Software adapters (llvmpipe, lavapipe, SwiftShader) are slow and used only when asked
-for, with `software` or by name. Windows' software renderer (WARP) is never used. With no decent
-adapter, everything runs on the processor, and windows still draw on whatever adapter can.
+for, with `software` or by name, and so is an adapter the system calls neither discrete nor
+integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) is never used. With
+no decent adapter, everything runs on the processor, and windows still draw on whatever adapter
+can.
 
 Worlds too large for an adapter's buffers step on the processor; `jetcarp doctor` shows the limits.
 
@@ -113,9 +117,10 @@ JETCARP makes the settings folder for it. An adapter whose results differ is nev
 `jetcarp doctor` says why.
 
 `jetcarp doctor` gives the result with its time, and *kept from before* when it was read from
-`gpu-checks.json` rather than run just now. With the GPU simulation off for both the app and the
-desktop background, doctor tests no adapter, and says under each `not used, and not tested: the GPU
-simulation is off`.
+`gpu-checks.json` rather than run just now. It tests only the adapters the setting could choose:
+with `JETCARP_GPU=llvmpipe`, not another software or OpenGL adapter. With the GPU simulation off for
+both the app and the desktop background, doctor tests no adapter, and says under each `not used, and
+not tested: the GPU simulation is off`.
 
 ## Checking
 

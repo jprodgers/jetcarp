@@ -258,8 +258,9 @@ The tools are made so that an assistant cannot do much harm by mistake, and cann
   1,000,000 generations or 2 billion cell updates. `run_script` runs a Rhai script for 60 seconds
   by default and 600 at most, writes only inside the output folder and reads only there. Waits for
   a job last ten minutes at most. When the assistant cancels a request, the call stops soon.
-- **Searches.** A search runs on a thread of the server and stops when the session ends; it stays
-  resumable (`search_start {"resume": job}`), from the app, the command line or a later session.
+- **Searches.** A search runs on a thread of the server; when the session ends, the server stops it
+  at its next checkpoint and leaves it paused and resumable (`search_start {"resume": job}`), from
+  the app, the command line or a later session.
   Explore searches, which run for hours, start in a process of their own that outlives the session
   (under `jetcarp mcp`); `job_stop` stops any job, wherever it runs.
 - **What it cannot do.** It cannot make your pack-signing key or record anyone's consent to publish

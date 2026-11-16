@@ -55,8 +55,9 @@ it, here in the pane:
 
 1. Under *Rotation*, press *New*. The rotation editor opens below it.
 2. Name it `My wallpaper`, and under its items choose *Add profile → Brian's Brain on Penrose rhombs*.
-   For a second item, type `tiling:penrose-kd` (Brian's Brain on Penrose kites and darts) in the
-   box for a Quick Start entry and press Enter.
+   For a second item, type `kites` in the *Add Quick Start* box and click *Brian's Brain on Penrose
+   kites and darts (P2)* in the list that appears. (Typing its handle, `tiling:penrose-kd`, and
+   pressing Enter does the same.)
 3. Press *Save*, at the top of the editor or at its foot. The rotation is saved, and *Rotation* now
    says *My wallpaper*.
 4. Press *Start*. The host starts in a window of its own.
@@ -75,10 +76,11 @@ installed*, then log out and back in once. Without the extension, and on Linux d
 GNOME, the host shows its plain window instead. Its menu, in the notification area (Windows), the
 menu bar (macOS) or GNOME's top bar, has *Next*, *Previous*, *Paused* and *Quit*.
 
-*Show what is running* adds a caption naming the rule and the tiling. The host pauses by itself
-while the computer runs on battery, while the processor is busy (during a long search, say), and
-while its wallpaper is hidden behind windows. The guide's
-[background host](../guides/wallpapers.md#the-background-host) section has every setting.
+*Show what is running* adds a caption naming the rule and the tiling. The host holds by itself while
+the computer runs on battery, while the processor is busy (during a long search, say), and while its
+wallpaper is hidden behind windows; the pane then says why, as in *Held: the processor is busy
+(resumes by itself).* The guide's [background host](../guides/wallpapers.md#the-background-host)
+section has every setting.
 
 Then press *Fit to this computer…* under *Performance*. The host shows each scene of the rotation
 on the desktop at a ladder of sizes, from big cells to one pixel a cell, a couple of seconds each
@@ -147,7 +149,7 @@ screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting 
 …
 $ jetcarp host caption on
 running, pid 862859, up 9.0s, 100 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.734655380249023 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
+screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.7 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 wallpaper: waiting for the GNOME extension · lock screen: live
 caption: on, bottom left, 20 pt
 …
@@ -225,5 +227,5 @@ wallpaper off.
   [Rotations](../guides/rotations.md).
 - **Reseeding** keeps a wallpaper from dying out: see [Reseeding](../guides/reseeding.md).
 - **Start at login:** *Start at login* in the *Desktop background* pane, or `jetcarp host login on`,
-  writes the entry that starts the host when you log in. Logging in with it has not been tested on
-  a real machine yet (see [Start at login](../guides/wallpapers.md#start-at-login)).
+  writes the entry that starts the host when you log in. Logging in with it has been tried only on
+  Windows so far (see [What has been tested](../guides/wallpapers.md#what-has-been-tested)).
