@@ -769,13 +769,14 @@ fn export(cx: &Ctx, a: &ExportIn, to: &Path, p: &dyn Progress) -> Result<ExportO
                 .unwrap_or_default();
             // The store the library is published into first, kept (hidden, beside the
             // export) so the feed's later versions are published into it. Beside is not
-            // inside, so it is checked too.
-            let scratch = cx.fs.writable_dir(
+            // inside, so it is checked too; a refused publish takes away the folder it made.
+            let (scratch, made) = make_dir(
+                cx,
                 &to.with_file_name(format!(".{name}.store"))
                     .display()
                     .to_string(),
             )?;
-            do_publish(cx, &pi, scratch.clone(), p)?;
+            unmake_dir(do_publish(cx, &pi, scratch.clone(), p), &scratch, made)?;
             (scratch.clone(), Some(scratch))
         }
     };

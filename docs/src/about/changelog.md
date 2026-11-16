@@ -182,8 +182,8 @@ that will declare them stable.
   Publishing refused a running search only when it had runs not yet sealed, so one that had just
   started, or had sealed every run, was packed as it stood while it went on storing runs the pack
   left out. A running search is now refused whatever it has stored, and an export or publish that
-  is refused no longer leaves its empty `--to` folder behind.
-  ([#57](https://github.com/jprodgers/jetcarp/issues/57))
+  is refused no longer leaves its empty `--to` folder behind, nor an export the hidden store
+  beside it. ([#57](https://github.com/jprodgers/jetcarp/issues/57))
 - **A job whose process was killed read as running for up to five minutes.** `jetcarp jobs status`
   called a job stale only once its progress and heartbeat were five minutes old, `jobs wait` said it
   was gone after 45 seconds, and `jobs resume` could take it at once, so the three disagreed. A

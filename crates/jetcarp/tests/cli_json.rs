@@ -705,7 +705,8 @@ fn a_pack_carries_the_runs_of_a_search_never_sealed() {
 
 /// A running explore search is refused by an export, even when every run it has stored is
 /// sealed (or it has stored none yet): whatever it stores next would be left out (#57). The
-/// refused export leaves no `--to` folder behind, and once the search stops it exports.
+/// refused export leaves no `--to` folder behind, nor the hidden store beside it, and once the
+/// search stops it exports.
 #[test]
 fn an_export_refuses_a_running_search_and_leaves_no_folder() {
     use jetcarp_search::jobs::Lease;
@@ -773,6 +774,10 @@ fn an_export_refuses_a_running_search_and_leaves_no_folder() {
     assert!(
         !dir.join("export").exists(),
         "the refused export left its folder"
+    );
+    assert!(
+        !dir.join(".export.store").exists(),
+        "the refused export left its hidden store beside it"
     );
     // Stopped, it exports.
     lib.update_job(job, Some(JobStatus::Paused), None, None)
