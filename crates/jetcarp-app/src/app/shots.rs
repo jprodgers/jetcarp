@@ -923,3 +923,39 @@ fn jump_field_takes_typing() {
     );
     assert_eq!(h.app.jump_gens, "2^20");
 }
+
+/// Issue #90: a rule typed in a CA's Rule box, the box still focused (no Enter, no click
+/// elsewhere), is applied by Save's first step, so the scene saved has the rule the box shows.
+#[test]
+#[ignore]
+fn a_rule_being_typed_applies_before_save() {
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    h.app.empty_world();
+    h.app.exec(Command::AddCa {
+        ca: CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 }),
+    });
+    for _ in 0..4 {
+        h.frame_with(0.05, vec![]);
+    }
+    h.click_right_of("Rule");
+    let ctrl_a = |pressed| egui::Event::Key {
+        key: egui::Key::A,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    };
+    h.frame_with(0.05, vec![ctrl_a(true), ctrl_a(false)]);
+    h.frame_with(0.05, vec![egui::Event::Text("B36/S23".into())]);
+    h.frame_with(0.05, vec![]);
+    assert_eq!(
+        h.app.world.cas[0].notation(),
+        "B3/S23",
+        "applied before Save"
+    );
+    let app = &mut h.app;
+    h.o.frame_with(0.05, vec![], |ctx| app.commit_rule_edit(ctx));
+    assert_eq!(h.app.world.cas[0].notation(), "B36/S23");
+}

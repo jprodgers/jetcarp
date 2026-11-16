@@ -197,6 +197,15 @@ const fn key(k: Key) -> KeyboardShortcut {
 const fn ctrl(k: Key) -> KeyboardShortcut {
     KeyboardShortcut::new(Modifiers::COMMAND, k)
 }
+/// Ctrl+Shift (⌘⇧ on macOS) and a key.
+const fn ctrl_shift(k: Key) -> KeyboardShortcut {
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), k)
+}
+/// ⌃⌘ and a key: macOS's own full-screen shortcut is ⌃⌘F. It never matches elsewhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const fn ctrl_cmd(k: Key) -> KeyboardShortcut {
+    KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::MAC_CMD), k)
+}
 
 impl Action {
     /// Every action without a parameter, then every pane and tool window.
@@ -365,7 +374,9 @@ impl Action {
     pub fn keys(self) -> &'static [KeyboardShortcut] {
         use Action::*;
         match self {
-            QuickStart => ks!(ctrl(Key::H)),
+            // ⌘H hides the app on macOS, so Quick Start is Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H
+            // still working where the system leaves it alone (#91).
+            QuickStart => ks!(ctrl_shift(Key::H), ctrl(Key::H)),
             NewEmpty => ks!(ctrl(Key::N)),
             OpenScene => ks!(ctrl(Key::O)),
             SaveScene => ks!(ctrl(Key::S)),
@@ -380,7 +391,14 @@ impl Action {
             RunPause => ks!(key(Key::Space)),
             Step => ks!(key(Key::S), key(Key::ArrowRight)),
             AutoHideMenu => ks!(key(Key::F10)),
-            FullScreen => ks!(key(Key::F11)),
+            // F11 shows the desktop on macOS; its own full-screen key is ⌃⌘F (#91).
+            FullScreen => {
+                if cfg!(target_os = "macos") {
+                    ks!(ctrl_cmd(Key::F), key(Key::F11))
+                } else {
+                    ks!(key(Key::F11))
+                }
+            }
             Screensaver => ks!(key(Key::F12)),
             PixelZoom => ks!(ctrl(Key::Num1)),
             Tool(ToolWin::Shortcuts) => ks!(key(Key::F1)),
@@ -827,7 +845,10 @@ impl JetcarpApp {
             }
             NewEmpty => self.empty_world(),
             OpenScene => self.open_scene(),
-            SaveScene => self.save_scene(),
+            SaveScene => {
+                self.commit_rule_edit(ctx);
+                self.save_scene()
+            }
             ExportPng => self.export_png(),
             ExportView => self.export_view(),
             ExportAnim => self.anim.open = true,
@@ -1503,13 +1524,13 @@ mod tests {
 
     #[test]
     fn shortcuts_are_unique_and_tool_keys_distinct() {
-        let mut seen = std::collections::HashSet::new();
+        // No two actions share a key. Shift is left out, as egui's matching ignores an extra Shift,
+        // so one action may have Ctrl+Shift+H and Ctrl+H (#91).
+        let mut seen = std::collections::HashMap::new();
         for a in Action::all() {
             for k in a.keys() {
-                assert!(
-                    seen.insert((k.modifiers.command, k.logical_key)),
-                    "{a:?} reuses {k:?}"
-                );
+                let was = seen.insert((k.modifiers.command, k.modifiers.mac_cmd, k.logical_key), a);
+                assert!(was.is_none_or(|b| b == a), "{a:?} reuses {k:?}");
             }
         }
         let mut keys = std::collections::HashSet::new();

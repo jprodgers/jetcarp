@@ -73,10 +73,10 @@ one.) The world opens running, with the grid on the right and the panes on the l
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
   live cells and its tiles.
-- **More room:** Tab hides the panes and brings them back, F11 fills the screen, and F12 starts
-  screensaver mode (Esc leaves it).
+- **More room:** Tab hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
+  F12 starts screensaver mode (Esc leaves it).
 
-*File → Quick Start* (Ctrl+H) goes back to the Quick Start screen, and *File → New empty world*
+*File → Quick Start* (Ctrl+Shift+H, ⌘⇧H on macOS) goes back to the Quick Start screen, and *File → New empty world*
 (Ctrl+N) starts a square grid with no automata on it, ready for your own
 ([Life on a new tiling](../tutorials/life-on-a-new-tiling.md) starts there).
 

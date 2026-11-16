@@ -120,6 +120,8 @@ pub struct JetcarpApp {
     /// The running world's clock: seconds from it, not egui's input time, which stands still
     /// while the window is hidden and only [`eframe::App::logic`] runs (#87).
     started: std::time::Instant,
+    /// Whether the window had the keyboard last frame (#90).
+    window_focused: bool,
     // Camera: world point at the view centre and points per world unit.
     cam: [f64; 2],
     zoom: f64,
@@ -265,6 +267,7 @@ impl JetcarpApp {
             acc: 0.0,
             last_time: 0.0,
             started: std::time::Instant::now(),
+            window_focused: true,
             cam: [0.0, 0.0],
             zoom: 8.0,
             fit_pending: true,
@@ -511,6 +514,16 @@ impl eframe::App for JetcarpApp {
             self.screen = Screen::Sim;
             self.hlview.open_env(&self.world, &s);
         }
+        // Leaving the window ends a text edit: a rule typed in a Rule box then applies as it does
+        // on a click elsewhere, rather than waiting, unapplied, while the window is away (#90).
+        let window_focused = ctx.input(|i| i.viewport().focused) != Some(false);
+        if self.window_focused
+            && !window_focused
+            && let Some(f) = ctx.memory(|m| m.focused())
+        {
+            ctx.memory_mut(|m| m.surrender_focus(f));
+        }
+        self.window_focused = window_focused;
         self.shortcuts(&ctx);
         // AI control and the world's steps ran in `logic`, just before this.
         if self.screen == Screen::Sim {

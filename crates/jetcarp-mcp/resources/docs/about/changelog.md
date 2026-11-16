@@ -174,6 +174,15 @@ that will declare them stable.
   showed again. Both now run in eframe's logic passes, which go on while the window is hidden, so
   tasks set up through AI control keep running when you switch away.
   ([#87](https://github.com/jprodgers/jetcarp/issues/87))
+- **A rule typed in the Rule box could be saved unapplied.** The box applies a typed rule when it
+  loses focus, but leaving the window, or saving, didn't take focus from it, so the scene could be
+  saved with the old rule while the box showed the new one. Leaving the window now ends the edit,
+  and Save applies a rule still being typed first.
+  ([#90](https://github.com/jprodgers/jetcarp/issues/90))
+- **On macOS, ⌘H (Quick Start) hid the app and F11 (Full screen) showed the desktop**, both taken
+  by the system. Quick Start is now Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H still working where the
+  system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept.
+  ([#91](https://github.com/jprodgers/jetcarp/issues/91))
 - **Run → Jump's Generations field closed the menu when clicked**, so only the default 1,000
   generations could be jumped in place. The menu now closes only on a click outside it.
   ([#88](https://github.com/jprodgers/jetcarp/issues/88))

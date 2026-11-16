@@ -2,7 +2,40 @@
 
 use super::*;
 
+/// The Rule box of CA `ca`, by a fixed id, so Save can find a rule still being typed (#90).
+pub(super) fn rule_box_id(ca: u32) -> egui::Id {
+    egui::Id::unique(("jetcarp-rule-box", ca))
+}
+
 impl JetcarpApp {
+    /// A rule still being typed in a Rule box (it has keyboard focus) is applied now, as a click
+    /// elsewhere would apply it, so Save never writes the old rule while the box shows a new one
+    /// (#90). Nothing happens unless a Rule box has focus.
+    pub(super) fn commit_rule_edit(&mut self, ctx: &egui::Context) {
+        let Some(focused) = ctx.memory(|m| m.focused()) else {
+            return;
+        };
+        let Some(ca) = self.world.cas.iter().find(|c| rule_box_id(c.id) == focused) else {
+            return;
+        };
+        let (id, now) = (ca.id, ca.notation());
+        ctx.memory_mut(|m| m.surrender_focus(focused));
+        let Some(text) = self.rule_text.get(&id).map(|t| t.trim().to_string()) else {
+            return;
+        };
+        if text != now {
+            self.exec(Command::UpdateCa {
+                id,
+                change: CaChange {
+                    rule: Some(text),
+                    ..Default::default()
+                },
+            });
+            self.rule_text.clear();
+            self.jaca_text.clear();
+        }
+    }
+
     pub(super) fn cas_ui(&mut self, ui: &mut egui::Ui) {
         if self.world.cas.is_empty() {
             ui.label(
@@ -45,7 +78,7 @@ impl JetcarpApp {
                     ui.label("Rule");
                     let text = self.rule_text.entry(id).or_insert_with(|| ca.notation());
                     let r = ui
-                        .add(egui::TextEdit::singleline(text).desired_width(120.0).font(egui::TextStyle::Monospace))
+                        .add(egui::TextEdit::singleline(text).id(rule_box_id(id)).desired_width(120.0).font(egui::TextStyle::Monospace))
                         .on_hover_text("This CA's rule. Press Enter, or click elsewhere, to apply it; Esc puts the current rule back.");
                     // Applied when the box loses focus however that happens (Enter, a click elsewhere,
                     // Tab), so a typed rule never sits in the box looking applied while the old one
