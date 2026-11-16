@@ -954,6 +954,12 @@ impl JetcarpApp {
 
     /// Keyboard shortcuts, from the action table.
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
+        // macOS's Minimise: the app has no Window menu for the system's shortcut to act on (#98).
+        #[cfg(target_os = "macos")]
+        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M)))
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
         let typing = ctx.egui_wants_keyboard_input();
         for a in Action::all() {
             for k in a.keys() {

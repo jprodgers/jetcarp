@@ -187,8 +187,9 @@ that will declare them stable.
   ([#90](https://github.com/jprodgers/jetcarp/issues/90))
 - **On macOS, ⌘H (Quick Start) hid the app and F11 (Full screen) showed the desktop**, both taken
   by the system. Quick Start is now Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H still working where the
-  system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept.
-  ([#91](https://github.com/jprodgers/jetcarp/issues/91))
+  system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept. ⌘M, which
+  did nothing, now minimises the window.
+  ([#91](https://github.com/jprodgers/jetcarp/issues/91), [#98](https://github.com/jprodgers/jetcarp/issues/98))
 - **Run → Jump's Generations field closed the menu when clicked**, so only the default 1,000
   generations could be jumped in place. The menu now closes only on a click outside it.
   ([#88](https://github.com/jprodgers/jetcarp/issues/88))
