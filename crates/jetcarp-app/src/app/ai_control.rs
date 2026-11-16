@@ -132,14 +132,21 @@ impl JetcarpApp {
         }
         let mut open = true;
         let spec = crate::popout::Spec::new(super::menu::ToolWin::AiControl.key(), "AI control")
-            .size(380.0, 220.0)
+            .size(400.0, 260.0)
             .configure(|w| w.resizable(false));
         crate::popout::tool_window(ctx, spec, &mut open, |ui| {
             ui.label(
-                "Lets an AI model drive the world in this window through the MCP server: \
-                          `jetcarp mcp --app`, or `jetcarp mcp` and its use_app tool. \
-                          Every change it makes is a command, shown in the command log.",
+                "Lets an AI assistant drive the world in this window. Connect the assistant to \
+                          JETCARP's MCP server, `jetcarp mcp --app` (or `jetcarp mcp` and its use_app \
+                          tool), as the book's MCP tutorial shows. Every change it makes is a \
+                          command, shown in the command log.",
             );
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("jetcarp mcp --app").monospace());
+                if ui.small_button("Copy").clicked() {
+                    ui.ctx().copy_text("jetcarp mcp --app".into());
+                }
+            });
             ui.add_space(4.0);
             let mut on = self.ai.listener.is_some();
             if ui
@@ -183,8 +190,10 @@ impl JetcarpApp {
                     ui.end_row();
                 });
                 ui.label(RichText::new(
-                        "The CLI finds the port and token automatically (they are stored in a file only you can read). \
-                         Switching off closes the endpoint.",
+                        "The address is the private link `jetcarp mcp --app` uses to reach this window, \
+                         not an MCP endpoint for HTTP clients: it speaks JETCARP's own protocol. The \
+                         server finds the port and token by itself (they are stored in a file only you \
+                         can read). Switching off closes it.",
                     ).small());
             }
         });

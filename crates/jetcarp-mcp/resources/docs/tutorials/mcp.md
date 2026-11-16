@@ -232,7 +232,9 @@ window instead:
 
 1. In the app, open *Tools → AI control…* and tick *Allow AI control* (or start the app with
    `jetcarp --control`). The app now listens on `127.0.0.1` only, for programs that know the token
-   it has just made.
+   it has just made. The address the window shows is the private link through which JETCARP's MCP
+   server reaches the app, not an MCP endpoint of its own: it speaks JETCARP's protocol, not HTTP,
+   so point the assistant at `jetcarp mcp` (or `jetcarp mcp --app`), never at the address.
 2. Ask the assistant to use the app. It calls `use_app`, which finds the app's port and token in
    JETCARP's runtime folder and attaches; from then on the world tools act on the window you are
    watching, and every change shows up in its command log. `use_app {"attach": false}` goes back to

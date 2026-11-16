@@ -190,6 +190,12 @@ that will declare them stable.
   system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept. ⌘M, which
   did nothing, now minimises the window.
   ([#91](https://github.com/jprodgers/jetcarp/issues/91), [#98](https://github.com/jprodgers/jetcarp/issues/98))
+- **The app's Copy buttons and Paste did nothing.** JETCARP built its window toolkit without
+  clipboard support, so copying a rule, an id, the world's hash or the AI control token, and pasting
+  into a text box, never reached the system clipboard. The AI control window also now says how to
+  connect an assistant (`jetcarp mcp --app`, with a Copy button), and that its address is the MCP
+  server's private link to the app, not an HTTP endpoint.
+  ([#114](https://github.com/jprodgers/jetcarp/issues/114))
 - **Run → Jump's Generations field closed the menu when clicked**, so only the default 1,000
   generations could be jumped in place. The menu now closes only on a click outside it.
   ([#88](https://github.com/jprodgers/jetcarp/issues/88))
