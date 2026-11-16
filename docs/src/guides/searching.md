@@ -91,21 +91,26 @@ $ jetcarp jobs list
 
 - **Budgets.** `--minutes M` or `--until UNIX-TIME` stops a search, still resumable, at its next
   checkpoint after that time (the exploratory search ends at that time; see below), and `--limit N`
-  after N items in that session. The job keeps its minutes and its end: `jetcarp jobs resume JOB`
-  given no budget of its own runs the minutes left, counting the time it has run in every session,
-  and keeps the same end, so a search started with `--minutes 120` and cut off after an hour runs
-  one more hour. Once they are used up, a resume runs until it is stopped. Either way it says
-  which.
+  after N items in that session (an explore search checks it between its steps of a few seconds, so
+  it finishes the step it is in: `--limit 20` can give 240 runs, and `--minutes` suits it better).
+  The job keeps its minutes and its end: `jetcarp jobs resume JOB` given no budget of its own runs
+  the minutes left, counting the time it has run in every session, and keeps the same end, so a
+  search started with `--minutes 120` and cut off after an hour runs one more hour. Once they are
+  used up, a resume runs until it is stopped. Either way it says which.
 - **Memory.** `--max-rss-gb GB` pauses a hunt, a bounded search or an explore search, still
   resumable, once JETCARP uses more memory than that. The job keeps the cap, so a resumed run keeps
-  to it too, and `jetcarp jobs status JOB` says why it paused.
+  to it too, and `jetcarp jobs status JOB` says why it paused. An explore search keeps the grids it
+  has built for reuse, up to about 3 GB, so over hours its memory grows towards that as it reaches
+  more tilings; on Linux it gives the memory it has freed back to the system between its steps.
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an
   uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns as soon as
-  that process has taken the job; `jetcarp jobs status JOB` follows it, and `--label NAME` makes
-  it easy to find.
+  that process has taken the job (it says so if the process has not taken it within 30 seconds);
+  `jetcarp jobs status JOB` follows it, and `--label NAME` makes it easy to find. `jetcarp jobs
+  resume JOB --detach` waits for a run that is letting go after a stop, and is refused while
+  another process still runs the job.
 - **Waiting.** `jetcarp jobs wait JOB` returns once a job stops running, wherever it runs. A job
   asked to stop is marked paused at once but lets go at its next checkpoint, and `jobs wait` waits
   for that too, so a `jetcarp jobs resume` straight after it finds the job free. Meanwhile it shows
@@ -115,8 +120,8 @@ $ jetcarp jobs list
   long, and what it found: one table per hunted rule, with its spaceships, guns, puffers and
   longest oscillators.
 
-`jetcarp jobs remove JOB` deletes a job that has finished or stopped, with its sightings;
-`--delete-results` also deletes the patterns only it found.
+`jetcarp jobs remove JOB` deletes a job that has finished or stopped, or whose process has gone
+(*stale*, below), with its sightings; `--delete-results` also deletes the patterns only it found.
 
 ### Waiting in a script
 
@@ -229,4 +234,7 @@ saved archive rather than replaying run for run.
 and finds. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do the same for their
 strategies, *Tools → Catalog tools…* runs collisions and the evolutionary search, and
 *Tools → Pattern library…* browses what all of them found. A job started in the app can be stopped
-or resumed from the command line, and the other way round.
+or resumed from the command line, and the other way round. In the *Hunts* window, a job whose
+process has gone shows as *stalled* at once, and *Render media (animations of these finds)*, beside
+a job's finds, writes each find's animation, poster and thumbnail in the background (see
+[Pictures and animations](pictures.md#animations)).

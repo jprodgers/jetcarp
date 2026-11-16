@@ -99,7 +99,7 @@ enum JobsCmd {
         /// is in, so it may run past it).
         #[arg(long)]
         limit: Option<u64>,
-        /// Run in a process of its own and return at once.
+        /// Run in a process of its own, and return once that process has taken the job.
         #[arg(long)]
         detach: bool,
         /// When it ends: the full report as JSON.

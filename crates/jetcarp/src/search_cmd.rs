@@ -98,7 +98,8 @@ pub struct JobFlags {
     /// depend on this.
     #[arg(long)]
     threads: Option<usize>,
-    /// Run in a process of its own and return at once (`jetcarp jobs status JOB` follows it).
+    /// Run in a process of its own, and return once that process has taken the job (`jetcarp jobs
+    /// status JOB` follows it).
     #[arg(long)]
     detach: bool,
     /// No progress on stderr.

@@ -10,7 +10,9 @@ best to your Quick Start menu, and share it in [packs](packs.md) or as a
 
 The library is one file, `library.sqlite`, in JETCARP's data folder (see
 [Folders](../reference/folders.md)). `--library FILE` on any command, or the environment variable
-`JETCARP_LIBRARY`, uses another one.
+`JETCARP_LIBRARY`, uses another one. A library whose file or folder cannot be written (on read-only
+media, or shared to be read) opens to be read: listing and querying it work, and a command that
+would change it says that the library's file is read-only.
 
 ```text
 $ jetcarp library info

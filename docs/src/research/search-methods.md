@@ -320,7 +320,12 @@ long cycle, still running), when it settled, how dense and how active it was lat
 shape of what it left (dust, clusters, large structures, smooth regions), and whether anything moved.
 A JACA run's niche also has its sign state: both signs kept to the end, one lost in the second half,
 or one lost in the first half, so runs that turned into a plain Life-like run do not compete with
-battles for a place. Each niche keeps up to three runs, at most one per rule. New candidates are mostly fresh random draws,
+battles for a place. Each niche keeps up to three runs, at most one per rule; of runs that score
+the same (every run that dies at the same generation does), the one with the lower id ranks first,
+so the archive holds the same elites whatever order its runs come in (a search takes them in as its
+batches finish, an imported or rescored one in id order). A search made before 0.4.2 broke ties by
+arrival, and keeps its elites until `jetcarp jobs rescore` picks them again. New candidates are
+mostly fresh random draws,
 variations of an elite's rule, or an elite's rule from a new starting pattern, with some effort kept
 for the starting patterns and tilings tried least. An elite is taken as a parent in proportion to its
 quality: four picks in five are a tournament of four niches drawn at random, won by the niche whose

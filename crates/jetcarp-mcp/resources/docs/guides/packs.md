@@ -49,12 +49,14 @@ If any file was changed, the check fails and says which:
 Error: part sha256:d7762c49… is altered or truncated
 ```
 
-A pack that its publisher didn't sign is refused unless you add `--allow-unsigned`. A store with
-several feeds needs `--feed NAME`, and `--manifest sha256:…` picks a version other than the newest.
+A pack that its publisher didn't sign is refused unless you add `--allow-unsigned` (the refusal
+names it). A store with several feeds needs `--feed NAME`, and `--manifest sha256:…` picks a version
+other than the newest.
 
 To see what a pack holds before checking all of it, `jetcarp pack info` reads only its manifest
-and signatures: the title and description, the publisher and whether they signed it, and the rows,
-parts and bytes of each table.
+and signatures: the title and description, the publisher and whether they signed it (or that a
+signature is there but does not verify: the version was changed after it was signed, or the
+signature is damaged), and the rows, parts and bytes of each table.
 
 ## Import a pack
 
@@ -178,8 +180,9 @@ stopped search's newest runs are sealed first, and publishing says so:
 explore job 2 (search 31d41ffc-54b5-4f13-b239-af2a4a447932): sealed its newest 4,211 runs first, so the pack carries every run
 ```
 
-A search that is still running is refused, since its newest runs would be left out: stop it first
-(`jetcarp jobs stop JOB`, then `jetcarp jobs wait JOB`), then publish.
+A search that is still running is refused, however few runs it has stored, since the runs it stores
+after would be left out: stop it first (`jetcarp jobs stop JOB`, then `jetcarp jobs wait JOB`), then
+publish. A refused publish or export changes nothing: a `--to` folder it made is taken away again.
 
 **Describe it:** `--title`, `--description` and `--version-label` (free text such as `2026.11`)
 go into the manifest and the export's README. `--licence` takes an SPDX id; the default is

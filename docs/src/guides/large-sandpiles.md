@@ -104,8 +104,8 @@ $ jetcarp jobs list
   the pile's settings (its picture options too, until it is finished: see [Colours](#colours)).
   A pile made with `--gpu` or `--cpu` keeps that choice; `--gpu` or `--cpu` on the resume decides
   for that run.
-- `--detach` runs the pile in a process of its own and returns at once, so `jetcarp jobs status JOB`
-  can follow it.
+- `--detach` runs the pile in a process of its own and returns as soon as that process has taken
+  the job, so `jetcarp jobs status JOB` can follow it.
 
 A step stopped part way keeps its work. The last few steps of a billion-grain pile each take
 minutes, so a stop, or the end of a run's `--minutes`, usually comes in the middle of one. The pile

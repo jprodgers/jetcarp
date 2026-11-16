@@ -239,8 +239,12 @@ the identities tried, and the elites confirmed by the confirmation runs) and mak
 paused job with its own settings, so `jetcarp jobs status`, `jobs runs`, `jobs report` and
 `quickstart publish` read it as a stopped search, and `jetcarp jobs resume` carries it on. Until
 then, its progress line ends with *not run here yet*, where a search's line names what ran it (the
-GPU, or `cpu only`). What a pack does not carry starts again: the time it ran (0) and its random
-states (from its seed; the identities tried keep it from repeating a candidate).
+GPU, or `cpu only`). Ties for a niche go to the run with the lower id, in a search and in the
+rebuild alike, so the rebuilt archive holds the search's own elites (for a search made before
+0.4.2, once `jetcarp jobs rescore` has picked them again there). What a pack does not carry
+starts again: the time it ran (0), its random states (from its seed; the identities tried keep it
+from repeating a candidate), and the minutes or end it was started with, so a resume runs as long
+as it is asked to.
 
 ## Reading the runs
 
