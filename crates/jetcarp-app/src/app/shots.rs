@@ -61,11 +61,15 @@ impl Harness {
         })
     }
 
-    /// One frame, `dt` seconds after the last, with these input events.
+    /// One frame, `dt` seconds after the last, with these input events: `logic` then `ui`, as
+    /// eframe runs them.
     fn frame_with(&mut self, dt: f64, events: Vec<egui::Event>) -> Vec<u8> {
         let (app, frame) = (&mut self.app, &mut self.frame);
         self.o.frame_with(dt, events, |ctx| {
-            ctx.root_ui(|ui| eframe::App::ui(app, ui, frame))
+            ctx.root_ui(|ui| {
+                eframe::App::logic(app, ui.ctx(), frame);
+                eframe::App::ui(app, ui, frame)
+            })
         })
     }
 
@@ -882,4 +886,40 @@ fn shots_quick_start_atlas() {
     h.run(8.0, 0.05, |_| false);
     h.steady();
     h.shot("quickstart-atlas");
+}
+
+/// Issue #88: Run → Jump's Generations field takes a click and typing, the menu staying open (a
+/// click inside it closed the menu, so only the default 1,000 could be jumped). No picture.
+#[test]
+#[ignore]
+fn jump_field_takes_typing() {
+    let Some(mut h) = Harness::new(1200, 800) else {
+        return;
+    };
+    h.app.empty_world();
+    for _ in 0..3 {
+        h.frame_with(0.05, vec![]);
+    }
+    h.click("Run");
+    h.hover_on("Jump");
+    h.find("Generations");
+    h.click_right_of("Generations");
+    // Select what is there, then type a new number over it.
+    let ctrl_a = |pressed| egui::Event::Key {
+        key: egui::Key::A,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    };
+    h.frame_with(0.05, vec![ctrl_a(true), ctrl_a(false)]);
+    h.frame_with(0.05, vec![egui::Event::Text("2^20".into())]);
+    for _ in 0..3 {
+        h.frame_with(0.05, vec![]);
+    }
+    assert!(
+        h.o.find("Jump ahead (HashLife)").is_some(),
+        "the Jump menu closed when its field was clicked"
+    );
+    assert_eq!(h.app.jump_gens, "2^20");
 }

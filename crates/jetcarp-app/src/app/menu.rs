@@ -1049,12 +1049,22 @@ impl JetcarpApp {
             Custom::Jump => {
                 let mut jump = None;
                 ui.add_enabled_ui(sim, |ui| {
-                    ui.menu_button("Jump", |ui| {
+                    // The menu holds a text field (the generations), so a click inside it must
+                    // not close it, or the number can't be typed (#88); its buttons close it.
+                    use egui::containers::menu;
+                    let cfg = menu::MenuConfig::new()
+                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+                    let body = |ui: &mut egui::Ui| {
                         jump = crate::jump_ui::menu(ui, &self.world, &mut self.jump_gens);
                         if jump.is_some() {
                             ui.close();
                         }
-                    });
+                    };
+                    if menu::is_in_menu(ui) {
+                        menu::SubMenuButton::new("Jump").config(cfg).ui(ui, body);
+                    } else {
+                        menu::MenuButton::new("Jump").config(cfg).ui(ui, body);
+                    }
                 });
                 if let Some(j) = jump {
                     self.do_jump(j);

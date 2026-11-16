@@ -168,6 +168,18 @@ that will declare them stable.
 - **`jetcarp paths` didn't name the runtime folder**, where the host's lock and the app's and
   host's control files live. It now prints a `runtime:` line (`runtime` in `--json`), and doctor's
   Folders section names it too. ([#85](https://github.com/jprodgers/jetcarp/issues/85))
+- **On macOS the app stopped while its window was hidden.** Minimised, covered by another
+  window or on another desktop, the app got no frames, and it answered AI control and stepped its
+  world only in a frame: the world nearly stopped, and `jetcarp mcp --app` waited until the window
+  showed again. Both now run in eframe's logic passes, which go on while the window is hidden, so
+  tasks set up through AI control keep running when you switch away.
+  ([#87](https://github.com/jprodgers/jetcarp/issues/87))
+- **Run → Jump's Generations field closed the menu when clicked**, so only the default 1,000
+  generations could be jumped in place. The menu now closes only on a click outside it.
+  ([#88](https://github.com/jprodgers/jetcarp/issues/88))
+- **View → Keep awake did nothing on macOS** ("not available on this system yet"). It now takes a
+  power assertion that the display may not sleep, as `caffeinate -d` does.
+  ([#89](https://github.com/jprodgers/jetcarp/issues/89))
 - **Every JACA run that didn't die was a "Battle", settled ones too.** A JACA run that had settled
   into a cycle, or froze late, was put with the battles still being fought, so a clip round on a
   JACA search was one category, full of runs that look static, and the caps for the categories

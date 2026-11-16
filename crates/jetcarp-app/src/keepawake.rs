@@ -5,8 +5,9 @@
 //! flags suspend | idle; it works inside Flatpak too, and the inhibition lasts until its request
 //! object is closed or the connection ends), then `org.freedesktop.ScreenSaver.Inhibit`, then
 //! `org.gnome.SessionManager.Inhibit`. Windows uses `SetThreadExecutionState` (held by the thread
-//! that took it, so a small thread of its own holds it). Other systems report that keep-awake is
-//! not available.
+//! that took it, so a small thread of its own holds it). macOS takes an IOKit power assertion
+//! that the display may not sleep (`IOPMAssertionCreateWithName`, as `caffeinate -d` does; #89),
+//! which also keeps the system awake. Other systems report that keep-awake is not available.
 //!
 //! Taking and releasing are blocking D-Bus calls with a three-second timeout; they run when the
 //! user or a screensaver asks, not every frame.
@@ -26,6 +27,9 @@ pub enum Backend {
     /// `SetThreadExecutionState` (Windows).
     #[cfg_attr(not(windows), allow(dead_code))]
     Windows,
+    /// An IOKit power assertion (macOS).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    MacAssertion,
 }
 
 impl Backend {
@@ -35,6 +39,7 @@ impl Backend {
             Backend::ScreenSaver => "org.freedesktop.ScreenSaver",
             Backend::GnomeSession => "org.gnome.SessionManager",
             Backend::Windows => "SetThreadExecutionState",
+            Backend::MacAssertion => "IOKit power assertion (IOPMAssertionCreateWithName)",
         }
     }
     pub fn id(self) -> &'static str {
@@ -43,6 +48,7 @@ impl Backend {
             Backend::ScreenSaver => "screensaver",
             Backend::GnomeSession => "gnome-session",
             Backend::Windows => "windows",
+            Backend::MacAssertion => "iokit",
         }
     }
 }
@@ -302,7 +308,94 @@ mod imp {
     }
 }
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::Backend;
+    use std::ffi::{CString, c_char, c_void};
+
+    type CFStringRef = *const c_void;
+    type IOPMAssertionID = u32;
+    const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+    const K_IOPM_ASSERTION_LEVEL_ON: u32 = 255;
+    const K_IO_RETURN_SUCCESS: i32 = 0;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            c_str: *const c_char,
+            encoding: u32,
+        ) -> CFStringRef;
+        fn CFRelease(cf: *const c_void);
+    }
+
+    #[link(name = "IOKit", kind = "framework")]
+    unsafe extern "C" {
+        fn IOPMAssertionCreateWithName(
+            assertion_type: CFStringRef,
+            level: u32,
+            name: CFStringRef,
+            id: *mut IOPMAssertionID,
+        ) -> i32;
+        fn IOPMAssertionRelease(id: IOPMAssertionID) -> i32;
+    }
+
+    /// A CFString of `s` (none if it has a NUL or CoreFoundation refuses it); released by the
+    /// caller.
+    fn cf_string(s: &str) -> Option<CFStringRef> {
+        let c = CString::new(s).ok()?;
+        // SAFETY: a valid NUL-terminated string and the default allocator (null).
+        let r = unsafe {
+            CFStringCreateWithCString(std::ptr::null(), c.as_ptr(), K_CF_STRING_ENCODING_UTF8)
+        };
+        (!r.is_null()).then_some(r)
+    }
+
+    /// The assertion, released when let go.
+    pub struct Held(IOPMAssertionID);
+
+    impl Held {
+        pub fn backend(&self) -> Backend {
+            Backend::MacAssertion
+        }
+        pub fn release(self) -> Result<(), String> {
+            // SAFETY: an id IOPMAssertionCreateWithName gave, released once (self is moved).
+            match unsafe { IOPMAssertionRelease(self.0) } {
+                K_IO_RETURN_SUCCESS => Ok(()),
+                e => Err(format!("IOPMAssertionRelease failed ({e:#x})")),
+            }
+        }
+    }
+
+    /// "The display may not sleep" (kIOPMAssertionTypeNoDisplaySleep, which keeps the system
+    /// awake too), named by `reason` in Activity Monitor and `pmset -g assertions`.
+    pub fn take(reason: &str) -> Result<Held, String> {
+        let kind = cf_string("NoDisplaySleepAssertion").ok_or("CFString failed")?;
+        let name = match cf_string(if reason.is_empty() { "JETCARP" } else { reason }) {
+            Some(n) => n,
+            None => {
+                // SAFETY: made above, released once.
+                unsafe { CFRelease(kind) };
+                return Err("CFString failed".into());
+            }
+        };
+        let mut id: IOPMAssertionID = 0;
+        // SAFETY: two valid CFStrings and a place for the id; both strings released after.
+        let r = unsafe {
+            let r = IOPMAssertionCreateWithName(kind, K_IOPM_ASSERTION_LEVEL_ON, name, &mut id);
+            CFRelease(name);
+            CFRelease(kind);
+            r
+        };
+        if r == K_IO_RETURN_SUCCESS {
+            Ok(Held(id))
+        } else {
+            Err(format!("IOPMAssertionCreateWithName failed ({r:#x})"))
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
 mod imp {
     use super::Backend;
 

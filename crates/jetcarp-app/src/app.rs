@@ -117,6 +117,9 @@ pub struct JetcarpApp {
     max_speed: bool,
     acc: f64,
     last_time: f64,
+    /// The running world's clock: seconds from it, not egui's input time, which stands still
+    /// while the window is hidden and only [`eframe::App::logic`] runs (#87).
+    started: std::time::Instant,
     // Camera: world point at the view centre and points per world unit.
     cam: [f64; 2],
     zoom: f64,
@@ -261,6 +264,7 @@ impl JetcarpApp {
             max_speed: false,
             acc: 0.0,
             last_time: 0.0,
+            started: std::time::Instant::now(),
             cam: [0.0, 0.0],
             zoom: 8.0,
             fit_pending: true,
@@ -465,6 +469,28 @@ impl eframe::App for JetcarpApp {
         jetcarp_display::exit::end_process(0);
     }
 
+    /// Before every frame, and on its own while the window is hidden (minimised, covered, or on
+    /// another desktop: macOS, Wayland and Windows give such a window no frames): AI control is
+    /// answered and the running world steps here, so both go on behind a hidden window (#87).
+    /// eframe runs these passes when a repaint is asked for: the AI control link asks for one
+    /// with each request, and a running world with each pass. While hidden they come every 100
+    /// to 250 ms, and a pass steps that long's worth of generations (`run_steps` takes up to a
+    /// quarter of a second at a time), so the world keeps its speed. Nothing here draws.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.ai_poll(ctx);
+        if self.screen == Screen::Sim {
+            let now = self.started.elapsed().as_secs_f64();
+            let t0 = std::time::Instant::now();
+            self.run_steps(now);
+            if let Some(f) = &mut self.frametime {
+                f.add_step(t0.elapsed().as_secs_f64() * 1e3);
+            }
+            if self.playing {
+                ctx.request_repaint();
+            }
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let dt = ctx.input(|i| i.stable_dt).max(1e-3);
@@ -477,7 +503,6 @@ impl eframe::App for JetcarpApp {
         self.poll_build(&ctx);
         self.saver_zoom();
         self.autoshot_tick(&ctx);
-        self.ai_poll(&ctx);
         self.display_frame(&ctx);
         self.saver_tick(&ctx);
         if self.building.is_none()
@@ -487,13 +512,8 @@ impl eframe::App for JetcarpApp {
             self.hlview.open_env(&self.world, &s);
         }
         self.shortcuts(&ctx);
+        // AI control and the world's steps ran in `logic`, just before this.
         if self.screen == Screen::Sim {
-            let now = ctx.input(|i| i.time);
-            let t0 = std::time::Instant::now();
-            self.run_steps(now);
-            if let Some(f) = &mut self.frametime {
-                f.add_step(t0.elapsed().as_secs_f64() * 1e3);
-            }
             self.refresh_stats();
         }
         self.shell_ui(ui);
