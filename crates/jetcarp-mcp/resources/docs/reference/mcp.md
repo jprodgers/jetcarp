@@ -11,7 +11,8 @@ see [Driving JETCARP from an AI assistant](../tutorials/mcp.md).
 The server runs over standard input and output: the assistant starts `jetcarp mcp` and talks to it
 as long as it runs.
 
-- **Claude Code:** `claude mcp add jetcarp -- jetcarp mcp`
+- **Claude Code:** `claude mcp add --scope user jetcarp -- jetcarp mcp` (for every folder; check
+  it with `/mcp`, remove it with `claude mcp remove jetcarp`)
 - **Claude Desktop:** add JETCARP to `claude_desktop_config.json` (Settings, Developer, Edit
   Config) and restart Claude Desktop:
 
