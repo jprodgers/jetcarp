@@ -23,11 +23,21 @@ do not trust, but we verify. [How JETCARP is tested](testing.md) says how.
 
 JETCARP is a Rust workspace and needs Rust 1.95 or newer.
 
-```bash
+```sh
 cargo build --release
 cargo test --workspace --release
-cargo run --release -p jetcarp            # the app
-cargo run --release -p jetcarp -- --help  # the command line
+```
+
+The app:
+
+```sh
+cargo run --release -p jetcarp
+```
+
+The command line:
+
+```sh
+cargo run --release -p jetcarp -- --help
 ```
 
 On Linux the app needs the usual windowing libraries; on Debian and Ubuntu, continuous integration
@@ -102,19 +112,29 @@ with evidence from a prior-art search; otherwise "to our knowledge…" or nothin
 
 The book is an [mdBook](https://rust-lang.github.io/mdBook/) in `docs/`:
 
-```bash
-mdbook build docs                  # or: mdbook serve docs
-python3 docs/tools/check-links.py  # every internal link and #anchor must resolve
+```sh
+mdbook build docs
 ```
 
-Every picture is made by JETCARP from a scene in `docs/scenes/`, and its caption names the scene.
+(`mdbook serve docs` serves it as you edit.) Every internal link and `#anchor` must resolve:
+
+```sh
+python3 docs/tools/check-links.py
+```
+
+Every picture of a world is made by JETCARP from a scene in `docs/scenes/`, and its caption names
+the scene; the pictures of the app are drawn offscreen by ignored tests, in
+`crates/jetcarp-app/src/app/shots.rs` (the setup window's in `setup_ui.rs`).
 `docs/tools/render-figures.sh` renders the stills and `docs/tools/render-animations.sh` the animations
 (it needs Python with NumPy and Pillow; set `PYTHON=` if your default Python lacks them). Both use
 `target/release/jetcarp` unless `JETCARP=` names another binary, and both take a filter to render only
 some figures. Some pages are generated, and say so at the top: edit their sources and run
-`docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py` or
-`gen-scripting.py` instead of editing the page. `gen-scripting.py` also fails if the Rhai help and
-the functions the engine registers disagree.
+`docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py`,
+`gen-scripting.py`, `gen-cli.py` or `gen-mcp.py` instead of editing the page (the last two read a
+freshly built `target/release/jetcarp`). `gen-scripting.py` also fails if the Rhai help and the
+functions the engine registers disagree. The MCP server's crate keeps a copy of the book for its
+crates.io package, which `docs/tools/copy-mcp-resources.py` brings up to date; the release
+workflow checks it.
 
 The writing style is plain and direct, in British spelling ("colour", "neighbour"), and the book never
 claims more than its evidence: novelty only as set out in
