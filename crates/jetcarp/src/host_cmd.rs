@@ -191,6 +191,9 @@ pub enum HostCmd {
     /// runs (saved; default 80, 0 never).
     Busy { percent: u8 },
     /// Start the host at login, or stop doing that.
+    ///
+    /// On macOS, `on` also registers it with launchd, which starts the host now unless one is
+    /// running.
     Login { state: Switch },
     /// Show screens as the desktop background (saved). On GNOME this needs the extension.
     Wallpaper {
@@ -472,9 +475,61 @@ fn pace_words(st: &Value) -> Option<String> {
     })
 }
 
+/// After an upgrade on macOS, brings the login item up to this program, so that launchd still
+/// starts it at login (#99), and says what it did. Whether it registered the item with launchd
+/// again, or tried to, which may have stopped a host launchd had started from it. Nothing to do
+/// on other systems.
+fn refresh_login_item() -> bool {
+    match autostart::refresh() {
+        Ok(None) => false,
+        Ok(Some(note)) => {
+            eprintln!("{note}");
+            true
+        }
+        Err(e) => {
+            eprintln!("the login item could not be registered with launchd again: {e}");
+            true
+        }
+    }
+}
+
+/// The host once launchd has the login item again: its status within 10 seconds, and whether it
+/// is the one that ran before (`before`, its pid). launchd stops a host it started from the item
+/// and starts the item again, a new host, unless one is running already: that one holds the
+/// host's single-instance lock, so the item's ends at once and the one running carries on.
+fn host_after_registering(before: Option<u64>) -> Option<(Value, bool)> {
+    let t0 = Instant::now();
+    loop {
+        if let Ok(v) = host_call(&json!({"action": "status"})) {
+            let same = before.is_some() && v["pid"].as_u64() == before;
+            return Some((v, same));
+        }
+        if t0.elapsed() >= Duration::from_secs(10) {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 fn start(rotation: Option<&str>, headless: bool, json: bool) -> Result<()> {
-    if host_call(&serde_json::json!({"action": "status"})).is_ok() {
-        bail!("the host is already running");
+    let mut refreshed = false;
+    if let Ok(v) = host_call(&serde_json::json!({"action": "status"})) {
+        // After an upgrade the host running may be the old program, started at login: bringing
+        // the login item up to this one has launchd start this one in its place (macOS, #99).
+        refreshed = refresh_login_item();
+        match refreshed.then(|| host_after_registering(v["pid"].as_u64())) {
+            Some(Some((v, false))) => {
+                eprintln!(
+                    "launchd restarted the host as JETCARP {}",
+                    env!("CARGO_PKG_VERSION")
+                );
+                show(&v, json);
+                return Ok(());
+            }
+            // The old host stopped and launchd started none: start one here.
+            Some(None) => {}
+            _ => bail!("the host is already running"),
+        }
     }
     let mut cmd = autostart::host_command().map_err(|e| anyhow!(e))?;
     if let Some(r) = rotation {
@@ -490,6 +545,11 @@ fn start(rotation: Option<&str>, headless: bool, json: bool) -> Result<()> {
         match host_call(&serde_json::json!({"action": "status"})) {
             Ok(v) => {
                 show(&v, json);
+                // Then the login item, after an upgrade (macOS). launchd starts it as it takes
+                // it, and it ends at once, since this host holds the single-instance lock.
+                if !refreshed {
+                    refresh_login_item();
+                }
                 return Ok(());
             }
             Err(_) if t0.elapsed() < Duration::from_secs(10) => {}
@@ -707,15 +767,40 @@ pub fn run(a: HostArgs) -> Result<()> {
                 warned("start the background host at login")?;
             }
             let cmd = autostart::login_command().map_err(|e| anyhow!(e))?;
-            autostart::set(state.b(), &cmd).map_err(|e| anyhow!(e))?;
-            println!(
-                "{}",
-                if state.b() {
-                    format!("{} starts at login", cmd.command_line())
-                } else {
-                    "the host no longer starts at login".to_string()
-                }
-            );
+            if !state.b() {
+                autostart::set(false, &cmd).map_err(|e| anyhow!(e))?;
+                println!("the host no longer starts at login");
+                return Ok(());
+            }
+            let before = host_call(&json!({"action": "status"}))
+                .ok()
+                .map(|v| v["pid"].as_u64());
+            let launchd = autostart::enable(&cmd).map_err(|e| anyhow!(e))?;
+            println!("{} starts at login", cmd.command_line());
+            match launchd {
+                autostart::Launchd::NotUsed => {}
+                autostart::Launchd::Skipped(why) => eprintln!("{why}"),
+                // launchd starts the item as it takes it: never a second host (see
+                // `host_after_registering`).
+                autostart::Launchd::Registered => match host_after_registering(before.flatten()) {
+                    Some((_, true)) => {
+                        println!("registered with launchd; the host already running carries on")
+                    }
+                    Some((v, false)) => println!(
+                        "registered with launchd, which {} the host (pid {})",
+                        if before.is_some() {
+                            "restarted"
+                        } else {
+                            "started"
+                        },
+                        v["pid"]
+                    ),
+                    None => bail!(
+                        "registered with launchd, but no host answered within 10 seconds; \
+                         `launchctl print gui/$(id -u)/com.jimmieprodgers.jetcarp.host` says why"
+                    ),
+                },
+            }
             Ok(())
         }
         HostCmd::Wallpaper {
@@ -758,12 +843,26 @@ pub fn run(a: HostArgs) -> Result<()> {
                     eprintln!("{}", st.describe());
                 }
             }
-            match save(&s)? {
+            let running = save(&s)?;
+            let before = running.as_ref().and_then(|v| v["pid"].as_u64());
+            match running {
                 Some(v) => show(&v, j),
                 None => {
                     println!("saved; the host is not running");
                     settle_picture(&s);
                 }
+            }
+            // After an upgrade (macOS) the login item too, which has launchd start this program
+            // in place of a host it started from the item, or start one.
+            if state.b()
+                && refresh_login_item()
+                && let Some((v, false)) = host_after_registering(before)
+            {
+                eprintln!(
+                    "launchd started the host as JETCARP {} (pid {})",
+                    env!("CARGO_PKG_VERSION"),
+                    v["pid"]
+                );
             }
             Ok(())
         }

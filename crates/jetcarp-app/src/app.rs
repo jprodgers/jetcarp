@@ -514,6 +514,8 @@ impl eframe::App for JetcarpApp {
         // The library's connections aren't closed either, so fold its write-ahead log into the
         // file first: a copy of library.sqlite alone then holds everything.
         let _ = jetcarp_store::Library::checkpoint(&jetcarp_store::Library::default_path());
+        // A login item being registered with launchd (macOS, #99) finishes first.
+        crate::desktop_offers::finish_login_item();
         jetcarp_display::exit::end_process(0);
     }
 

@@ -2716,16 +2716,22 @@ Options:
 #### `jetcarp host login`
 
 ```text
-Start the host at login, or stop doing that
+Start the host at login, or stop doing that.
+
+On macOS, `on` also registers it with launchd, which starts the host now unless one is running.
 
 Usage: jetcarp host login [OPTIONS] <STATE>
 
 Arguments:
-  <STATE>  [possible values: on, off]
+  <STATE>
+          [possible values: on, off]
 
 Options:
-      --json  Print the host's reply as JSON
-  -h, --help  Print help
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp host wallpaper`

@@ -2460,6 +2460,7 @@ dependencies = [
  "jetcarp-gpu",
  "jetcarp-script",
  "jetcarp-store",
+ "libc",
  "objc2 0.6.5",
  "pollster 0.4.0",
  "rhai",

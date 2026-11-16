@@ -43,6 +43,9 @@ pub use cli::LaunchArgs;
 pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // On macOS the application menu takes its name from the process: JETCARP, not `jetcarp`.
     jetcarp_display::set_process_name("JETCARP");
+    // After an upgrade on macOS, launchd refuses at login the login item's changed program until
+    // it is registered again (#99): that happens here, beside the window.
+    desktop_offers::refresh_login_item();
     // Scripts run from the app step large worlds on the GPU as the GPU setting says.
     jetcarp_api::ctx::set_gpu_platform(std::sync::Arc::new(gpu_info::GpuOnly));
     // Scripts run from the app may ask for GPU toppling of large sandpiles.

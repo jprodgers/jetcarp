@@ -70,10 +70,13 @@ Starting at a real login has been tried only on the Windows laptop, with JETCARP
 signing out and in, the host started with its saved rotation, 97 seconds after sign-in, once the
 login entries before it had had their turn. JETCARP's launcher then kept Windows waiting on it too,
 which held up the entries after it ([#78](https://github.com/jprodgers/jetcarp/issues/78)); the
-launcher now starts the host and exits at once, which has not been tried at a real login yet.
+launcher now starts the host and exits at once, which has not been tried at a real login yet. On
+the Mac, with 0.4.2-rc.3 put in place of 0.4.1, the first login after the upgrade did not start the
+host ([#99](https://github.com/jprodgers/jetcarp/issues/99), fixed since, which has not been tried
+at a real login yet); once launchd had started the new program by hand, the next login did.
 
-Not tested yet: starting at a real login on Linux and macOS (the entries are written and removed
-correctly, but no one has logged in with them), a fresh boot on Windows, Linux desktops other than
+Not tested yet: starting at a real login on Linux (the entry is written and removed correctly, but
+no one has logged in with it), a fresh boot on Windows, Linux desktops other than
 GNOME, Intel Macs, and any other versions of these systems.
 
 ## Screensaver mode in the app
@@ -509,14 +512,23 @@ you log in; `jetcarp host login off` stops that. Turning it on waits for the
 | System | What is written |
 | --- | --- |
 | Linux | `~/.config/autostart/jetcarp-host.desktop` |
-| macOS | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` (it takes effect at the next login) |
+| macOS | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist`, registered with launchd at once, which starts the host unless one is running |
 | Windows | The value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 
 The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` when it is there, so
 no console window opens) at the path the program has now. Windows runs these entries one at a time
 and waits for each, so at login `jetcarpw.exe` starts the host and exits at once, rather than
 waiting for it as it does from a shortcut. If you move the program, turn the setting off and on
-again. A host already running is left alone.
+again. A host already running is left alone, except on macOS one that launchd started from the
+entry, which `host login on` restarts.
+
+On macOS, launchd refuses at login a program that has changed since the entry was registered, and
+each Homebrew build is signed on its own, so after an upgrade the desktop background would not come
+back at your next login ([#99](https://github.com/jprodgers/jetcarp/issues/99)). JETCARP registers
+the entry again for the new version the first time the app opens, `jetcarp host start` runs or
+`jetcarp host wallpaper on` runs; a host that launchd started from the old version is stopped and
+the new version started in its place. So after upgrading, open the app or run `jetcarp host start`
+once before you next log in.
 
 Started at login, the host shows only the screens placed on the desktop, and opens no windows: a
 screen in a window (after `jetcarp host wallpaper off`, say) waits unseen, and with no desktop screens

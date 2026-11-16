@@ -83,6 +83,7 @@ impl Offer {
             Offer::Login => {
                 let cmd = autostart::login_command()?;
                 autostart::set(true, &cmd)?;
+                refresh_login_item();
                 Ok("the background host starts at login".into())
             }
             Offer::Saver => {
@@ -94,6 +95,37 @@ impl Offer {
                 Ok(s)
             }
         }
+    }
+}
+
+/// On macOS, registers the login item with launchd when it was written by another version of
+/// JETCARP or by none (`autostart::refresh`), on a thread of its own, since launchctl can take
+/// seconds: after an upgrade launchd refuses at login a program that has changed since it was
+/// registered (#99). Says what it did on standard error. Nothing to do on other systems.
+pub fn refresh_login_item() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let t = std::thread::spawn(|| match autostart::refresh() {
+        Ok(Some(note)) => eprintln!("JETCARP: {note}"),
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!("JETCARP: the login item could not be registered with launchd again: {e}")
+        }
+    });
+    REFRESHING.lock().unwrap_or_else(|e| e.into_inner()).push(t);
+}
+
+/// The registrations [`refresh_login_item`] started.
+static REFRESHING: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Waits for the registrations still under way, so that ending the app doesn't cut one short
+/// between launchd letting the old host go and starting this program.
+pub fn finish_login_item() {
+    let threads = std::mem::take(&mut *REFRESHING.lock().unwrap_or_else(|e| e.into_inner()));
+    for t in threads {
+        let _ = t.join();
     }
 }
 

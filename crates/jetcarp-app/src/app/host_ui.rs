@@ -721,7 +721,13 @@ impl JetcarpApp {
         if ui.checkbox(&mut login, "Start at login").changed() {
             let result = autostart::login_command().and_then(|cmd| autostart::set(login, &cmd));
             match result {
-                Ok(()) => h.login = Some(login),
+                Ok(()) => {
+                    h.login = Some(login);
+                    // And registered with launchd now, on macOS, as `host login on` does.
+                    if login {
+                        crate::desktop_offers::refresh_login_item();
+                    }
+                }
                 Err(e) => h.note = Some(e),
             }
         }

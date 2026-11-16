@@ -47,10 +47,16 @@ class Jetcarp < Formula
     prefix.install "COPYING", "UNLICENSE", "LICENSE-MIT"
   end
 
+  # No post_install step registers the login item with launchd: Homebrew may run it in a sandbox.
+  # The program does it itself when the app or the host starts.
   def caveats
     <<~EOS
       Before `brew uninstall jetcarp`, run `jetcarp uninstall` to undo what JETCARP set up
       outside its folders (the background host, login item and screen saver).
+
+      On macOS, after `brew upgrade jetcarp`: if the desktop background starts at login, open
+      the JETCARP app or run `jetcarp host start` once, so that macOS accepts the new version
+      at login.
     EOS
   end
 

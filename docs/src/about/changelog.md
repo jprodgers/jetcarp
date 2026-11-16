@@ -348,6 +348,16 @@ that will declare them stable.
   explore search showed 5.6 GB where Activity Monitor's figure, its physical footprint, was 533 MB.
   The status lines, `--max-rss-gb` and the background host's memory limit now use the physical
   footprint on macOS. ([#80](https://github.com/jprodgers/jetcarp/issues/80))
+- **On macOS, after an upgrade, the desktop background didn't come back at login.** launchd keeps
+  the code requirement of the program a login item runs, and refused the new `jetcarp` at the first
+  login (`OS_REASON_CODESIGNING`), since each Homebrew build is signed on its own. The login item
+  now records the version that registered it with launchd, and when another version's is found,
+  the app (as it opens), `host start` and `host wallpaper on` write it again for this program and
+  register it with launchd again, which stops a host launchd started from the old version and
+  starts the new one. `host login on`, *Start at login* and setup's offer register it at once, so
+  the host starts then rather than at the next login; a host already running holds its lock, so
+  there is never a second one. Homebrew's notes after an upgrade say to open the app or run
+  `jetcarp host start` once. ([#99](https://github.com/jprodgers/jetcarp/issues/99))
 
 ### Changed
 

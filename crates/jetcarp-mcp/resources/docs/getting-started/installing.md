@@ -105,7 +105,9 @@ archive; nothing is compiled. The starter pack is in `$(brew --prefix)/share/jet
 
 To upgrade, run `brew update` before `brew upgrade jetcarp`. Homebrew looks at taps again only
 once a day on its own, so for a day after you last used it, `brew upgrade` alone can miss a new
-release.
+release. On macOS, if the desktop background starts at login, open the app or run
+`jetcarp host start` once after upgrading, so that macOS accepts the new version at login (see
+[Start at login](../guides/wallpapers.md#start-at-login)).
 
 ## With Scoop
 
