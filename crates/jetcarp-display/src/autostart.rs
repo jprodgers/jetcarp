@@ -482,12 +482,20 @@ pub fn set(on: bool, cmd: &ProgramCommand) -> Result<(), String> {
     {
         let path = entry_file().ok_or("no home folder on this system")?;
         if !on {
-            return match std::fs::remove_file(&path) {
+            match std::fs::remove_file(&path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                    Err(format!("{}: {e}", path.display()))
+                    return Err(format!("{}: {e}", path.display()));
                 }
-                _ => Ok(()),
-            };
+                _ => {}
+            }
+            // launchd keeps a registered job loaded after its file goes, until logout: unload it
+            // too, unless the host it started is running, which turning login off leaves alone
+            // (the uninstall stops the host first, so there it always goes).
+            #[cfg(target_os = "macos")]
+            if let Ok(domain) = launchctl::domain() {
+                let _ = launchctl::unregister(&domain);
+            }
+            return Ok(());
         }
         let dir = path.parent().expect("a folder");
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -743,6 +751,66 @@ mod launchctl {
         register_with(domain, plist, &mut run, &mut std::thread::sleep)
     }
 
+    /// What launchctl printed, or its exit status and what it said.
+    pub type Printed = Result<String, (i32, String)>;
+
+    /// What became of the job when the login item was turned off.
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum JobLeft {
+        /// launchd didn't have it.
+        NotLoaded,
+        /// Unloaded (`bootout`).
+        Unloaded,
+        /// Left loaded: the host launchd started from it is running, and goes at logout.
+        Running,
+    }
+
+    /// Unloads the job from launchd in `domain` once its LaunchAgent has gone, through
+    /// `launchctl_out` (which gives what launchctl printed): `print` says whether it is loaded
+    /// and running; a job that is loaded and not running is booted out, and one whose host runs is
+    /// left (booting it out would stop that host).
+    pub fn unregister_with(
+        domain: &str,
+        launchctl_out: &mut dyn FnMut(&[&str]) -> Printed,
+    ) -> Result<JobLeft, String> {
+        let job = format!("{domain}/{LAUNCH_LABEL}");
+        let Ok(printed) = launchctl_out(&["print", &job]) else {
+            return Ok(JobLeft::NotLoaded);
+        };
+        let running = printed.lines().any(|l| l.trim() == "state = running");
+        if running {
+            return Ok(JobLeft::Running);
+        }
+        match launchctl_out(&["bootout", &job]) {
+            Ok(_) | Err((3 | 36 | 113, _)) => Ok(JobLeft::Unloaded),
+            Err((code, said)) => Err(format!("`launchctl bootout {job}` failed ({code}): {said}")),
+        }
+    }
+
+    /// [`unregister_with`] this system's launchctl.
+    #[cfg(target_os = "macos")]
+    pub fn unregister(domain: &str) -> Result<JobLeft, String> {
+        unregister_with(domain, &mut run_out)
+    }
+
+    /// launchctl, and what it printed when it succeeded.
+    #[cfg(target_os = "macos")]
+    fn run_out(args: &[&str]) -> Printed {
+        let out = std::process::Command::new("/bin/launchctl")
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| (-1, format!("/bin/launchctl: {e}")))?;
+        if out.status.success() {
+            return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+        }
+        let mut said = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if said.is_empty() {
+            said = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        }
+        Err((out.status.code().unwrap_or(-1), said))
+    }
+
     #[cfg(target_os = "macos")]
     fn run(args: &[&str]) -> Answer {
         let out = std::process::Command::new("/bin/launchctl")
@@ -770,6 +838,37 @@ mod tests {
             program: PathBuf::from(program),
             args: vec!["host".into(), "serve".into()],
         }
+    }
+
+    /// Turning login off unloads launchd's job when it is loaded and idle, leaves it when its host
+    /// runs, and does nothing when launchd doesn't have it.
+    #[test]
+    fn login_off_unloads_an_idle_job_only() {
+        use launchctl::{JobLeft, Printed, unregister_with};
+        let job = "gui/501/com.jimmieprodgers.jetcarp.host";
+        let mut calls = vec![];
+        let mut idle = |a: &[&str]| -> Printed {
+            calls.push(a.join(" "));
+            Ok(match a[0] {
+                "print" => format!("{job} = {{\n\tstate = not running\n\tpath = x\n}}\n"),
+                _ => String::new(),
+            })
+        };
+        assert_eq!(unregister_with("gui/501", &mut idle), Ok(JobLeft::Unloaded));
+        assert_eq!(calls, [format!("print {job}"), format!("bootout {job}")]);
+        let mut running = |a: &[&str]| -> Printed {
+            assert_eq!(a[0], "print", "a running host's job must not be booted out");
+            Ok("\tstate = running\n\tpid = 22464\n".into())
+        };
+        assert_eq!(
+            unregister_with("gui/501", &mut running),
+            Ok(JobLeft::Running)
+        );
+        let mut missing = |_: &[&str]| -> Printed { Err((113, "Could not find".into())) };
+        assert_eq!(
+            unregister_with("gui/501", &mut missing),
+            Ok(JobLeft::NotLoaded)
+        );
     }
 
     #[test]

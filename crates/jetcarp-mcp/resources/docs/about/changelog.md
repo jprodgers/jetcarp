@@ -357,7 +357,9 @@ that will declare them stable.
   starts the new one. `host login on`, *Start at login* and setup's offer register it at once, so
   the host starts then rather than at the next login; a host already running holds its lock, so
   there is never a second one. Homebrew's notes after an upgrade say to open the app or run
-  `jetcarp host start` once. ([#99](https://github.com/jprodgers/jetcarp/issues/99))
+  `jetcarp host start` once. Turning start at login off (or `jetcarp uninstall`) now also unloads
+  the job from launchd, which had kept it until logout, unless the host it started is running.
+  ([#99](https://github.com/jprodgers/jetcarp/issues/99))
 - **The book's first hour didn't work as written.** Its command blocks held a `$` prompt, the
   command and its output together, so copying a block, or pressing its copy button, pasted all
   three and nothing ran. Each command is now in a block of its own with no prompt, and its output in
