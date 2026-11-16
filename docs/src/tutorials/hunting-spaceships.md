@@ -21,8 +21,13 @@ with two kinds of vertex, `3³.4²` and `3².4.3.4`. The
 
 ## 2. Run a hunt
 
+```sh
+jetcarp search hunt --tilings k2-017 --soups 5000 --label k2-017
+```
+
+It prints:
+
 ```text
-$ jetcarp search hunt --tilings k2-017 --soups 5000 --label k2-017
 hunt job 1 in /home/ada/.local/share/jetcarp/library.sqlite
   status done, 2 s run, 3357 settled, 788 died, 703 exploded, 152 unsettled
   B3/S23 on [3^3.4^2; 3^2.4.3.4] #2 (k2-017): 5000 soups, 13674 objects (oscillator 5824, spaceship 6900, still life 950), 20 distinct, 20 new
@@ -31,20 +36,31 @@ hunt job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 The hunt dropped 5,000 small random soups on an unbounded plane of this tiling and ran each until
 it settled, died, exploded or ran out of time. It classed the 13,674 objects left behind, and
 6,900 of them were spaceships. Every new pattern was verified exactly before it was stored in
-your [pattern library](../guides/pattern-library.md).
+your [pattern library](../guides/pattern-library.md). The library is in JETCARP's data folder,
+which differs by system (see [Folders](../reference/folders.md#the-three-folders)).
 
 ## 3. Look at the ship
 
+```sh
+jetcarp library list --class spaceship
+```
+
+It prints:
+
 ```text
-$ jetcarp library list --class spaceship
 16bc37c99a1397bc3ab3656a351b6008  c/4 orthogonal spaceship 6c #16bc37  B3/S23  [3^3.4^2; 3^2.4.3.4] #2 (k2-017)  p4  6c  seen 6900  …
 ```
 
 All 6,900 spaceships were one ship. `jetcarp library show` gives its record; any unique start of
 the id will do:
 
+```sh
+jetcarp library show 16bc37
+```
+
+It prints:
+
 ```text
-$ jetcarp library show 16bc37
 id:          16bc37c99a1397bc3ab3656a351b6008
 label:       c/4 orthogonal spaceship 6c #16bc37
 rule:        B3/S23 (Touch neighbours, 1 step(s) per generation)
@@ -72,15 +88,15 @@ Read it from the top:
 
 Draw its phases, larger than the default:
 
-```text
-$ jetcarp library render 16bc37 --png ship.png --px 240
+```sh
+jetcarp library render 16bc37 --png ship.png --px 240
 ```
 
 To watch it move, make a scene with it in the middle and open that in the app:
 
-```text
-$ jetcarp library paste 16bc37 --size 120x40 --out ship.json
-$ jetcarp --scene ship.json
+```sh
+jetcarp library paste 16bc37 --size 120x40 --out ship.json
+jetcarp --scene ship.json
 ```
 
 ## 4. Is it new?
@@ -108,8 +124,13 @@ script's `w.get(x, y)`, while `--size` counts unit cells: the 120 × 40 unit-cel
 in tiles. Put one ship a third of the way across, facing right (`o1`), and another two thirds
 across, facing left:
 
+```sh
+jetcarp library paste 16bc37@480,20,o1 16bc37@960,20 --size 120x40 --boundary dead --out meet.json
+```
+
+It prints:
+
 ```text
-$ jetcarp library paste 16bc37@480,20,o1 16bc37@960,20 --size 120x40 --boundary dead --out meet.json
 scene: meet.json (2 patterns, 1 CA(s), hash 65c7546103b51c38)
 grid:  1440 x 40 tiles: x 0 to 1439 (tile columns, 12 to a unit cell), y 0 to 39 (rows)
 ```
@@ -118,11 +139,26 @@ grid:  1440 x 40 tiles: x 0 to 1439 (tile columns, 12 to a unit cell), y 0 to 39
 
 Run it and look at the population as they close in:
 
+```sh
+jetcarp run meet.json --gens 70
+```
+
+It ends with:
+
 ```text
-$ jetcarp run meet.json --gens 70
 …
 field 0:    shared binary, 12 live: Life [B3/S23]
-$ jetcarp run meet.json --gens 80
+```
+
+Ten generations further:
+
+```sh
+jetcarp run meet.json --gens 80
+```
+
+It ends with:
+
+```text
 …
 status:     Empty
 field 0:    shared binary, 0 live: Life [B3/S23]
@@ -136,8 +172,13 @@ JETCARP can also try the collisions for you. This runs one ship into another at 
 −2 to 2 in each direction, and draws every outcome on one contact sheet; it takes under a
 second:
 
+```sh
+jetcarp search collide 16bc37 16bc37 --offsets -2..2 --phases 0 --gens 256 --sheet hits.png
+```
+
+It prints:
+
 ```text
-$ jetcarp search collide 16bc37 16bc37 --offsets -2..2 --phases 0 --gens 256 --sheet hits.png
 outcomes: both_die 2, both_survive 10, new_objects 2, overlap 11
 products: 1 distinct verified object(s), 0 new to the library
   8d1704ebc63a9486c11ef219d24376d1  still life 6c #8d1704 (from 2 run(s))

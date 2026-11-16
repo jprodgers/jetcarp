@@ -11,8 +11,13 @@ make a [pack](packs.md) instead.
 
 ## Export
 
+```sh
+jetcarp site export --to site
+```
+
+It prints:
+
 ```text
-$ jetcarp site export --to site
 wrote   patterns/21e9bac2df7b770a5ff0f34bd68a514a.json
 wrote   media/pattern/21e9bac2df7b770a5ff0f34bd68a514a/anim.gif
 wrote   media/pattern/21e9bac2df7b770a5ff0f34bd68a514a/poster.png
@@ -30,8 +35,13 @@ only the media that already exist. They are the same files `jetcarp media render
 
 Run the same command again and it compares each file's hash with the copy already in the folder:
 
+```sh
+jetcarp site export --to site
+```
+
+It prints:
+
 ```text
-$ jetcarp site export --to site
 site: 2 patterns, 0 Quick Start entries, 0 ants; 0 files written, 0 deleted, 2 items unchanged, 0 media rendered
 ```
 
@@ -69,8 +79,8 @@ To narrow it further:
 Browsers don't let a page read files from a `file://` address, so serve the folder over HTTP to look
 at it on your own computer:
 
-```text
-$ python3 -m http.server -d site 8000
+```sh
+python3 -m http.server -d site 8000
 ```
 
 Then open `http://localhost:8000/`. The page shows every item's animation in a grid, with filters by

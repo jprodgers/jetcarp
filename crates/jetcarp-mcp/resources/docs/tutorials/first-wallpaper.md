@@ -118,19 +118,43 @@ settings folder:
 ```
 
 `penrose-rhomb-brain` is the entry's id; `jetcarp --json quickstart` lists the built-in ones.
-[Rotations](../guides/rotations.md#rotation-files) describes the file. Choose the rotation, start the
-host, and put it on the desktop:
+[Rotations](../guides/rotations.md#rotation-files) describes the file. Choose the rotation:
+
+```sh
+jetcarp host rotation "My wallpaper"
+```
+
+It prints:
 
 ```text
-$ jetcarp host rotation "My wallpaper"
 saved; the host is not running
-$ jetcarp host start
+```
+
+Start the host:
+
+```sh
+jetcarp host start
+```
+
+It prints:
+
+```text
 running, pid 862859, up 0.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 2 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · window · simulation: CPU: automatic, and the world is too small to be worth the GPU
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
-$ jetcarp host wallpaper on
+```
+
+And put it on the desktop:
+
+```sh
+jetcarp host wallpaper on
+```
+
+It prints:
+
+```text
 running, pid 862859, up 4.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: My wallpaper · Brian's Brain on rhombs (1 of 2) · generation 127 · 4000 cells of 10.8 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 wallpaper: waiting for the GNOME extension · lock screen: live
@@ -146,14 +170,29 @@ host started with `--headless` (no window) on a Linux computer without the GNOME
 wallpaper waits for the extension (`jetcarp host gnome install` installs it). On Windows and macOS,
 and on GNOME with the extension, the wallpaper shows at once.
 
-Move on to the next item, and turn the caption on:
+Move on to the next item:
+
+```sh
+jetcarp host next
+```
+
+It prints:
 
 ```text
-$ jetcarp host next
 running, pid 862859, up 6.0s, 96 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · starting · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 …
-$ jetcarp host caption on
+```
+
+Turn the caption on:
+
+```sh
+jetcarp host caption on
+```
+
+It prints:
+
+```text
 running, pid 862859, up 9.0s, 100 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: My wallpaper · Brian's Brain on kites and darts (2 of 2) · generation 62 · 4000 cells of 10.7 px · 30 fps, 30 generations a second · wallpaper · simulation: CPU: automatic, and the world is too small to be worth the GPU
 wallpaper: waiting for the GNOME extension · lock screen: live
@@ -170,12 +209,18 @@ gives a monitor a rotation of its own.
 
 A still picture at your monitor's size needs no host at all:
 
+```sh
+jetcarp wallpaper penrose-rhomb-brain --palette Aurora --gens 200
+```
+
+It prints:
+
 ```text
-$ jetcarp wallpaper penrose-rhomb-brain --palette Aurora --gens 200
 /home/ada/Pictures/JETCARP/wallpapers/Brian-s-Brain-on-Penrose-rhombs-3840x2160-2026-11-12_07-13-31.png (3840 x 2160)
 ```
 
-It runs the entry 200 generations and draws it at 3840 × 2160, filling the picture (`--fit contain`
+The picture goes in the `wallpapers` folder of JETCARP's output folder, which differs by system (see
+[Folders](../reference/folders.md#the-three-folders)). It runs the entry 200 generations and draws it at 3840 × 2160, filling the picture (`--fit contain`
 shows the whole round patch instead). `--size QHD` or `--size 2560x1440` sets another size, and
 `--monitors` makes one picture spanning several monitors (with `--split`, one for each). Set the
 file as your background in your system's settings. In the app, *File → Export wallpaper…* does the
@@ -185,8 +230,8 @@ same for the world you have open (see [Pictures and animations](../guides/pictur
 
 **On Windows and macOS** JETCARP can join the system's own list of screen savers:
 
-```text
-$ jetcarp host saver install --rotation "My wallpaper"
+```sh
+jetcarp host saver install --rotation "My wallpaper"
 ```
 
 This installs it and opens the system's screen saver settings, where you choose *JETCARP*. On
@@ -197,8 +242,13 @@ button. `jetcarp host saver status` says whether it is installed.
 
 **On Linux** there is no such list, and the command says so:
 
+```sh
+jetcarp host saver install
+```
+
+It prints:
+
 ```text
-$ jetcarp host saver install
 Error: this system has no screen saver list; on GNOME, use `jetcarp host lock screensaver`
 ```
 
@@ -208,12 +258,17 @@ behind the clock by default, or sharp and lit until you reach for the password b
 
 ## 8. Turn it all off
 
+```sh
+jetcarp host stop
+jetcarp host wallpaper off
+jetcarp host caption off
+```
+
+They print, one line each:
+
 ```text
-$ jetcarp host stop
 stopped
-$ jetcarp host wallpaper off
 saved; the host is not running
-$ jetcarp host caption off
 saved; the host is not running
 ```
 

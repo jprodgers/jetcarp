@@ -9,8 +9,13 @@ builds a tower of N grains, but doubles a smaller pile again and again) is expla
 
 ## Build a pile
 
+```sh
+jetcarp pile --grains 1e6
+```
+
+It prints:
+
 ```text
-$ jetcarp pile --grains 1e6
 pile job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 pile 1: 1000000 grains on square, step 16/20 (62500 grains), 4.633e7 topplings, 2.8 s; step 17 running 3.0 s
 pile 1: 1000000 grains on square, step 18/20 (250000 grains), 7.321e8 topplings, 7.0 s; step 19 running 4.0 s
@@ -21,6 +26,9 @@ preview: /home/ada/Pictures/JETCARP/piles/2026-11-11_21-20-08_square-1000000/pre
 folder:  /home/ada/Pictures/JETCARP/piles/2026-11-11_21-20-08_square-1000000
 job:     1
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 A million grains take 20 steps, one for each binary digit of 1,000,000, and each step is about four
 times the work of the one before. N can be written `1000000`, `1e7` or `2^30`.
@@ -87,13 +95,27 @@ these colours*.
 
 Every pile is a job in your library, like a search, so the usual job commands work on it:
 
+```sh
+jetcarp pile --grains 1e9 --gpu --minutes 0.25 --label big
+```
+
+It ends with:
+
 ```text
-$ jetcarp pile --grains 1e9 --gpu --minutes 0.25 --label big
 …
 pile 5: 1000000000 grains on square, step 22/30 (3906250 grains), 1.750e11 topplings, 13.5 s
 pile 5 paused (at its budget); `jetcarp jobs resume 5` resumes it exactly
+```
 
-$ jetcarp jobs list
+and it is listed with the other jobs:
+
+```sh
+jetcarp jobs list
+```
+
+It prints:
+
+```text
     5  pile     paused   2026-11-12T02:21:08Z  pile 5: 1000000000 grains on square, step 22/30 (3906250 grains), 1.750e11 topplings, 13.5 s
     …
 ```

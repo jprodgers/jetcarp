@@ -13,8 +13,13 @@ find what they found. How each strategy works, and how its finds are checked, is
 The *soup hunt* drops small random soups on an unbounded plane, runs each until it settles, and
 classes every object left behind. With no options it hunts Conway's Life on squares:
 
+```sh
+jetcarp search hunt --soups 20000
+```
+
+It prints:
+
 ```text
-$ jetcarp search hunt --soups 20000
 hunt job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects (ships 38,188, osc 124,582, still 267,614), 50 distinct, 50 new | newest: still life 12c #bf73c4 (B3/S23)
   status done, 3 s run, 19892 settled, 52 died, 56 exploded, 0 unsettled
@@ -23,6 +28,9 @@ hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects (ships 38,188, osc 12
     bf73c46c186561ca3b75a3884d0b5ab5  still life 12c #bf73c4             B3/S23     Square soup 17973  (new to the catalog)
     …
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 Each soup is 16 × 16 cells at half density. Of 20,000 soups, 19,892 settled, 52 died out and 56
 grew past the hunt's limit. The 430,384 objects they left are 50 distinct patterns. Every new one
@@ -36,8 +44,13 @@ that do act on each other, such as a pair of ships bound together, stay one obje
 
 Look at what it found:
 
+```sh
+jetcarp library list --class spaceship
+```
+
+It prints:
+
 ```text
-$ jetcarp library list --class spaceship
 5a080db389c0cab3caf884d2596a1e70  glider   B3/S23  Square  p4   5c  seen 38120  score 74.5  new  c/4 diagonal
 6dd55e69689ba784aff448b7dbbc9328  LWSS     B3/S23  Square  p4   9c  seen 51     …
 77364004b6d2c23cba74126b8aeb6ca3  MWSS     B3/S23  Square  p4  11c  seen 13     …
@@ -55,8 +68,13 @@ text drawing of its phases, and `jetcarp library render ID` draws it. The
 `--tilings` takes tiling ids such as `trihex` or `k2-001` (`catalog:k2-001` works too) or whole
 sets: `archimedean`, `kuniform:2`, `isohedral`, `all-periodic`. A short hunt of Life on the kagome tiling:
 
+```sh
+jetcarp search hunt --tilings trihex --soups 5000 --label kagome
+```
+
+It ends with:
+
 ```text
-$ jetcarp search hunt --tilings trihex --soups 5000 --label kagome
   status done, 27 s run, 31 settled, 14 died, 4954 exploded, 1 unsettled
   B3/S23 on 3.6.3.6 trihexagonal: 5000 soups, 15192 objects (oscillator 4, spaceship 15140, still life 48), 24 distinct, 17 new
 ```
@@ -83,8 +101,13 @@ Useful hunt options:
 
 Every search is a job in your library:
 
+```sh
+jetcarp jobs list
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs list
     2  hunt     done     2026-11-12T07:02:17Z  hunt 2: 5,000/5,000 soups, 187 soups/s, 15,192 objects (ships 15,140, osc 4, still 48), 24 distinct, 17 new
     1  hunt     done     2026-11-12T07:02:04Z  hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects …
 ```
@@ -184,8 +207,8 @@ It runs until stopped, keeps every run in the job's own folder, and is best give
 runs on the GPU when there is a usable one, as the [GPU setting](gpu.md) says; `--cpu` keeps a
 search on the processor and `--gpu` on the GPU whatever the setting, in this and later runs:
 
-```text
-$ jetcarp search explore --minutes 60 --label first-look
+```sh
+jetcarp search explore --minutes 60 --label first-look
 ```
 
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
@@ -196,8 +219,13 @@ seconds. Unless given `--threads`, it leaves two of the computer's cores free fo
 third of the rest prepare the GPU's batches; `jetcarp jobs status` says how many. A search of a few
 minutes sees only a handful of tilings. While it runs, or once it has stopped:
 
+```sh
+jetcarp jobs runs 7 --limit 5
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs runs 7 --limit 5
      1836   2.43  cycle   greenberg_hastings snubhex          GH 20/2
       984   2.37  cycle   hodgepodge         square           Hodgepodge 117/2/2/24
      3879   2.21  cycle   hodgepodge         hat              Hodgepodge 130/1/4/47

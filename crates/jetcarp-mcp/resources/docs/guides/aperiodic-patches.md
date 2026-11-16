@@ -72,13 +72,21 @@ in plane units. There are two ways to follow one.
 
 **On a sliding window**, as a resumable job, with `jetcarp search mover`:
 
+```sh
+jetcarp search mover --rule SpectreGlider --tiling spectre --rings 200 --store
+```
+
+It prints:
+
 ```text
-$ jetcarp search mover --rule SpectreGlider --tiling spectre --rings 200 --store
 mover job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 start: 4071:1,4097:3
 mover 1: 200 rings of 200 (634 units) after 404 of 40000 generations, 11757 gens/s, 5821 rings/s, level 7, 603 tiles | verified to distance 200 edge rings (200 touching-neighbour steps, 633.6 units) over 404 generations on a sliding window of spectre (supertile level 7, at most 1009 tiles), population 2-12; stopped at the requested distance
 library: 4b70f6b289a68075
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 The window never held more than about a thousand tiles. This is how JETCARP followed James Edmond's
 Spectre glider pair for 10 million rings of tiles, and the hat glider for a million (see
@@ -88,8 +96,13 @@ Spectre glider pair for 10 million rings of tiles, and the hat glider for a mill
 each patch from `--level` up to `--max-level` (7 on the spectre by default, where 8 is on request; the
 largest elsewhere) and checks that each level agrees with the one before:
 
+```sh
+jetcarp library movers track --rule SpectreGlider --tiling spectre --gens 3000
+```
+
+It prints:
+
 ```text
-$ jetcarp library movers track --rule SpectreGlider --tiling spectre --gens 3000
 start: 4071:1,4097:3
 verified to distance 224 edge rings (224 touching-neighbour steps, 708.2 units) over 451 generations on spectre level 7 (2147679 tiles), population 2-12; stopped at the edge of the largest patch
   level 4 (4401 tiles): 35 generations, Edge, 16 rings, population 2-12, 0.0s

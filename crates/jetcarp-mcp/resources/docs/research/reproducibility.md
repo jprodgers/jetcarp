@@ -35,13 +35,29 @@ the ants' cells and headings; and the progress of any script or reseed policy. J
 hexadecimal digits. Two worlds with the same hash are, for practical purposes, in the same state.
 
 Every generation is computed from the previous state alone, in parallel over cells, so the hash does
-not depend on the thread count:
+not depend on the thread count. On one thread, in a copy of JETCARP's repository (which holds this
+scene):
+
+```sh
+jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100 --threads 1
+```
+
+It ends with:
 
 ```text
-$ jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100 --threads 1
 ...
 hash:       1adf6e3234b7f199
-$ jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100
+```
+
+On every core:
+
+```sh
+jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100
+```
+
+It ends with the same hash:
+
+```text
 ...
 hash:       1adf6e3234b7f199
 ```

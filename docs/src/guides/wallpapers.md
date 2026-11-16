@@ -105,11 +105,18 @@ The background host, which runs the desktop background, has a pane of its own (s
 are shared: the desktop background runs the same ones. Profiles are edited here, and rotations here
 or in the *Desktop background* pane.
 
-The app can also start straight into screensaver mode, for example from a desktop shortcut:
+The app can also start straight into screensaver mode, for example from a desktop shortcut. Each of
+these does so:
 
-```text
+```sh
 jetcarp --screensaver --rotation "Wolfram series" --quit-on-exit
+```
+
+```sh
 jetcarp --screensaver --profile Life --monitors 0,1 --span --cell-px 3 --caption
+```
+
+```sh
 jetcarp --screensaver --quickstart rule:B3/S23 --keep-awake
 ```
 
@@ -148,20 +155,45 @@ as the desktop background, on a chosen monitor or across all of them.
 **Start and stop it** from the *Desktop background* pane (*Start*, *Stop*, *Pause*, and ◀ ▶ for the
 previous and next item), from its menu, or from the command line:
 
+```sh
+jetcarp host start --rotation "Wolfram series"
+```
+
+It prints:
+
 ```text
-$ jetcarp host start --rotation "Wolfram series"
 running, pid 863629, up 0.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: Wolfram series · W0 (1 of 256) · generation 5 · 57600 cells of 4 px · 60 fps, 60 generations a second · window · simulation: GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan)
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
-$ jetcarp host next
+```
+
+Move on to the next item:
+
+```sh
+jetcarp host next
+```
+
+It prints:
+
+```text
 running, pid 863629, up 3.0s, 81 MB, GPU AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0: Wolfram series · W1 (2 of 256) · starting · window · simulation: GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan)
 caption: off
 pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refresh rate if lower)
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
-$ jetcarp host stop
+```
+
+And stop it:
+
+```sh
+jetcarp host stop
+```
+
+It prints:
+
+```text
 stopped
 ```
 
@@ -338,8 +370,13 @@ for every scene on this tiling* gives the card's size to the screen's other scen
 tiling, and *Use the recommended size for the rest* settles every scene you have not chosen. *Use
 the scenes' own sizes* forgets the sweep.
 
+```sh
+jetcarp host tune --cpu-limit 1 --gpu-limit 3
+```
+
+It prints:
+
 ```text
-$ jetcarp host tune --cpu-limit 1 --gpu-limit 3
 sweeping 3 scenes on 1 screen at 30 frames a second, on AMD Radeon 8060S Graphics (RADV STRIX_HALO)
 screen 0, scene 1 of 3: profile Life at 24 px (size 1 of up to 9)
   24 px, 6,360 cells: processor 0.1%, GPU 0.8%, 30 fps, frames 2.3 ms, on the processor — within the limits
@@ -414,7 +451,7 @@ status shows the progress under `tuning`; `{"action": "scene"}` gives a screen's
 Tick *Show on the desktop* in the *Desktop background* pane, or run `jetcarp host wallpaper on`. To
 put different rotations on different monitors, set up one screen per monitor:
 
-```text
+```sh
 jetcarp host wallpaper on --screen 0 --monitor 0
 jetcarp host wallpaper on --screen 1 --monitor 1 --rotation "Classics, hourly"
 ```
@@ -427,11 +464,17 @@ other screen claims, and `jetcarp host wallpaper off` turns the screens back int
 windows as the background of the desktop, the overview and the lock screen, and adds the top-bar menu.
 It supports GNOME Shell 50 and 51.
 
-```text
-jetcarp host gnome install    # copy it into place and switch it on; log out and back in once
-jetcarp host gnome status     # "The GNOME extension is running."
-jetcarp host gnome remove
+```sh
+jetcarp host gnome install
 ```
+
+copies it into place and switches it on; log out and back in once to load it. Then
+
+```sh
+jetcarp host gnome status
+```
+
+says *The GNOME extension is running.*, and `jetcarp host gnome remove` removes it.
 
 Upgrading JETCARP upgrades the extension: the host, when it starts, and any `jetcarp host` command
 bring an installed extension up to the program's version, and leave it switched off if you switched it

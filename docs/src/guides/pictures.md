@@ -36,13 +36,14 @@ finds, makes animations of the finds instead, as `jetcarp media render` does.)
 
 **On the command line**, `jetcarp run` writes a picture of the state it ends in:
 
-```text
-jetcarp run scene.json --gens 500 --png out.png                # 1600 pixels on the longer side
+```sh
+jetcarp run scene.json --gens 500 --png out.png
 jetcarp run scene.json --gens 500 --png big.png --max-side 8000
-jetcarp run scene.json --gens 500 --png exact.png --scale 6    # 6 pixels per world unit
+jetcarp run scene.json --gens 500 --png exact.png --scale 6
 ```
 
-A tile edge is about one world unit, so `--scale 6` gives tiles about six pixels across. Very large
+The first picture is 1,600 pixels on its longer side, the default; `--max-side` sets another length,
+and `--scale 6` draws six pixels per world unit instead. A tile edge is about one world unit, so `--scale 6` gives tiles about six pixels across. Very large
 pictures (a small scale on a huge grid) are streamed in strips too.
 
 **In a script**, `w.save_png(path)` draws the world at the screen size given by `--screen` (1920 × 1080
@@ -75,13 +76,31 @@ while the app keeps running:
 
 **On the command line**, `jetcarp wallpaper` takes a scene file or a Quick Start id:
 
+```sh
+jetcarp wallpaper life --size HD --gens 200 -o life.png
+```
+
+It prints:
+
 ```text
-$ jetcarp wallpaper life --size HD --gens 200 -o life.png
 life.png (1920 x 1080)
-$ jetcarp wallpaper life --monitors 2560x1440+0+0,1920x1080+2560+180 --split --gens 100 --palette Glacier
+```
+
+One picture for each of two monitors side by side:
+
+```sh
+jetcarp wallpaper life --monitors 2560x1440+0+0,1920x1080+2560+180 --split --gens 100 --palette Glacier
+```
+
+It prints:
+
+```text
 /home/ada/Pictures/JETCARP/wallpapers/Life-on-the-square-grid-1-2560x1440-2026-11-10_18-28-08.png (2560 x 1440)
 /home/ada/Pictures/JETCARP/wallpapers/Life-on-the-square-grid-2-1920x1080-2026-11-10_18-28-08.png (1920 x 1080)
 ```
+
+Without `-o`, the pictures go in the `wallpapers` folder of JETCARP's output folder, which differs by
+system (see [Folders](../reference/folders.md#the-three-folders)).
 
 | Option | Effect |
 | --- | --- |
@@ -101,10 +120,15 @@ moves, see [Wallpapers, screensavers and the background host](wallpapers.md).
 ## Animations
 
 `jetcarp media render` makes a set of media: a PNG frame for every step, an animation, a poster frame
-and a thumbnail.
+and a thumbnail. Here with one of the book's scenes, in a copy of JETCARP's repository:
+
+```sh
+jetcarp media render --scene docs/scenes/automata/turmite-llrr.json --gens 120 --every 2 --no-frames --out llrr
+```
+
+It prints:
 
 ```text
-$ jetcarp media render --scene docs/scenes/automata/turmite-llrr.json --gens 120 --every 2 --no-frames --out llrr
 webp   llrr/anim.webp
 poster llrr/poster.png
 thumb  llrr/thumb.png

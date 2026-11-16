@@ -13,6 +13,9 @@ same program. Pick the one that suits the tools you already use:
 | [A release archive](#from-a-release-archive) | Linux, macOS, Windows | yes | downloading the next one |
 | [cargo](#with-cargo) | anywhere Rust runs | no | `cargo install jetcarp` again |
 
+Testing a release candidate? See [Release candidates](#release-candidates) below. Once JETCARP is
+installed, [open the app](#open-the-app) by running `jetcarp`.
+
 Release builds are made for Linux on x86_64 and ARM (aarch64), Windows on x86_64, and macOS on
 Apple silicon and Intel. Linux on ARM and Intel Macs are built by the same release workflow but have
 not been tried by hand. On anything else, [cargo](#with-cargo) builds JETCARP from source.
@@ -76,13 +79,21 @@ pipx or cargo.
 ## With pipx, uv or pip
 
 JETCARP's Python package contains the program and the starter pack, and no Python code. It installs
-the program onto your `PATH` like any Python tool:
+the program onto your `PATH` like any Python tool, with pipx:
 
 ```bash
 pipx install jetcarp
-# or
+```
+
+or with uv:
+
+```bash
 uv tool install jetcarp
-# or, inside a virtual environment
+```
+
+or with pip, inside a virtual environment:
+
+```bash
 pip install jetcarp
 ```
 
@@ -155,21 +166,27 @@ runs.
 
 ## Release candidates
 
-Before a release, its candidates (`0.4.0-rc.1`, `0.4.0-rc.2` and so on) are published on GitHub as
-pre-releases, for testing. They are not on PyPI, crates.io, Homebrew or Scoop, and they are never
-GitHub's "latest" release, so name the one you want. Use the installer attached to it:
+Before a release `X.Y.Z`, its candidates (`X.Y.Z-rc.1`, `X.Y.Z-rc.2` and so on) are published on
+GitHub as pre-releases, for testing. They are not on PyPI, crates.io, Homebrew or Scoop, and they
+are never GitHub's "latest" release, so the installers above, which take the latest, do not install
+them: name the one you want.
+
+The [releases page](https://github.com/jprodgers/jetcarp/releases) lists the candidates, each
+marked *Pre-release*. A candidate's tag is its version with a `v` in front, such as `v0.4.2-rc.4`,
+and is in its page's title and address. Use the installer attached to it, putting the tag in place
+of `vX.Y.Z-rc.N` in these lines:
 
 ```bash
-curl -LsSf https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/jetcarp-installer.sh | sh
+curl -LsSf https://github.com/jprodgers/jetcarp/releases/download/vX.Y.Z-rc.N/jetcarp-installer.sh | sh
 ```
 
 ```powershell
-Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/download/v0.4.0-rc.1/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/download/vX.Y.Z-rc.N/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
 powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
 ```
 
-or any installer with `--version 0.4.0-rc.1` (`-Version 0.4.0-rc.1` in PowerShell). Installing
-the release itself later replaces the candidate.
+Or run any installer with `--version X.Y.Z-rc.N` (`-Version X.Y.Z-rc.N` in PowerShell), the
+version without the `v`. Installing the release itself later replaces the candidate.
 
 ## On each system
 
@@ -264,11 +281,16 @@ pack's folder.
 
 Each release has a `SHA256SUMS` file listing the SHA-256 of every file in it. The installers check
 the archive they download against it; to check a file you downloaded yourself, put `SHA256SUMS` in
-the same folder and run
+the same folder and run, on Linux:
 
 ```bash
-sha256sum --check --ignore-missing SHA256SUMS                      # Linux
-grep jetcarp-0.4.0-aarch64-apple-darwin.tar.gz SHA256SUMS | shasum -a 256 --check   # macOS
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+on macOS, with your archive's name:
+
+```bash
+grep jetcarp-0.4.0-aarch64-apple-darwin.tar.gz SHA256SUMS | shasum -a 256 --check
 ```
 
 or, in PowerShell, compare `(Get-FileHash jetcarp-0.4.0-x86_64-pc-windows-msvc.zip).Hash` with the
@@ -293,3 +315,20 @@ reach it only when you give them to it.
 Run `jetcarp uninstall` first, while the program is still there, to undo what JETCARP set up outside
 its folders; then remove the program the way you installed it. [Uninstalling](../guides/uninstalling.md)
 has the details.
+
+## Open the app
+
+With JETCARP installed, run `jetcarp` with no arguments in a terminal. This opens the app, on Linux,
+macOS and Windows alike:
+
+```bash
+jetcarp
+```
+
+On Windows, open a new terminal after installing, so that it sees the new `PATH`. With Scoop, the
+*JETCARP* entry it adds to the Start menu opens the app too, without a console window. From a
+release archive that is not on your `PATH`, run the program in its folder (`./jetcarp`, or
+`.\jetcarp.exe` on Windows).
+
+The first time, the app shows the [photosensitive seizure warning](photosensitivity.md), then asks a
+few questions to set itself up: see [First run and setup](first-run.md).

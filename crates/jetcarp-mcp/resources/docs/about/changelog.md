@@ -358,6 +358,21 @@ that will declare them stable.
   the host starts then rather than at the next login; a host already running holds its lock, so
   there is never a second one. Homebrew's notes after an upgrade say to open the app or run
   `jetcarp host start` once. ([#99](https://github.com/jprodgers/jetcarp/issues/99))
+- **The book's first hour didn't work as written.** Its command blocks held a `$` prompt, the
+  command and its output together, so copying a block, or pressing its copy button, pasted all
+  three and nothing ran. Each command is now in a block of its own with no prompt, and its output in
+  a separate block after it; pages whose output shows Linux folders say that the folders differ by
+  system, and commands lost the trailing `#` comments that zsh, the Mac's shell, does not read as
+  comments. *Installing* points testers to *Release candidates* near its top, where the example is
+  a placeholder (`vX.Y.Z-rc.N`) and the page says where to find a candidate's tag, and it ends with
+  how to open the app: `jetcarp`, on every system, or on Windows the Start menu entry Scoop adds.
+  *First run* says so too, before the seizure warning and setup. The MCP tutorial's
+  `claude mcp add` registered JETCARP for the folder it was run in only, Claude Code's default; it
+  is now `claude mcp add --scope user jetcarp -- jetcarp mcp`, with `/mcp` to check it and
+  `claude mcp remove jetcarp` to remove it.
+  ([#100](https://github.com/jprodgers/jetcarp/issues/100),
+  [#101](https://github.com/jprodgers/jetcarp/issues/101),
+  [#102](https://github.com/jprodgers/jetcarp/issues/102))
 
 ### Changed
 

@@ -27,8 +27,13 @@ print(`generation ${w.generation()}, ${w.population()} live cells, hash ${w.hash
 
 and run it:
 
+```sh
+jetcarp script first.rhai
+```
+
+It prints:
+
 ```text
-$ jetcarp script first.rhai
 generation 300, 1527 live cells, hash 8c936c690b20f095
 output: /home/ada/Pictures/JETCARP/2026-11-11_21-27-33_cairo-life
 time:   0.10s
@@ -69,8 +74,15 @@ let s = sweep(#{
 print(`${s.runs} runs, ${s.images} pictures`);
 ```
 
+and run it:
+
+```sh
+jetcarp script sweep.rhai
+```
+
+It prints:
+
 ```text
-$ jetcarp script sweep.rhai
 sweep done: 64 of 64 runs, 50 images, 50 kept, 0 errors in 1.4s
 64 runs, 50 pictures
 output: /home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen
@@ -112,10 +124,16 @@ for r in rows {
 }
 ```
 
-and give it the sweep's folder with `--set`:
+and give it the sweep's folder with `--set`. Here and below, put the folder your own sweep printed
+after `output:` in place of this one, since its name has the time in it:
+
+```sh
+jetcarp script pick.rhai --set folder=/home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen
+```
+
+It prints:
 
 ```text
-$ jetcarp script pick.rhai --set folder=/home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen
 #53  B234/S1234/C4  7581 cells
 #7  B24/S234/C4  7116 cells
 #58  B23/S134/C4  7095 cells
@@ -145,9 +163,14 @@ run records, start a new folder instead.
 
 `jetcarp sheet` lays chosen runs out on one picture, each labelled with its index and rule:
 
-```text
-$ jetcarp sheet --folder /home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen \
+```sh
+jetcarp sheet --folder /home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen \
     --runs "#1,#2,#3,#4,#7" --cols 5 --thumb 240 --png favourites.png
+```
+
+It prints:
+
+```text
 sheet: favourites.png (1248x194)
 ```
 
@@ -158,8 +181,13 @@ numbered family by their number (`n=588`).
 
 When a run is worth coming back to, put it in your Quick Start menu:
 
+```sh
+jetcarp library promote-run /home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen "#3" --title "Cairo worms"
+```
+
+It prints:
+
 ```text
-$ jetcarp library promote-run /home/ada/Pictures/JETCARP/2026-11-11_21-29-35_cairo-gen "#3" --title "Cairo worms"
 promoted: B23/S1/C4 as "Cairo worms" (run #3)
 ```
 

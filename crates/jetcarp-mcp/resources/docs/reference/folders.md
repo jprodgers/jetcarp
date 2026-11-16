@@ -5,8 +5,13 @@ an environment variable that moves it, so tests, scripts and portable installs c
 from your own folders. `jetcarp paths` prints the three folders as JETCARP sees them, with any
 overrides applied:
 
+```sh
+jetcarp paths
+```
+
+On Linux it prints (the [table below](#the-three-folders) gives the folders on each system):
+
 ```text
-$ jetcarp paths
 settings: /home/ada/.config/jetcarp
 data:     /home/ada/.local/share/jetcarp
 output:   /home/ada/Pictures/JETCARP

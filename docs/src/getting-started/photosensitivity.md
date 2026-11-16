@@ -71,8 +71,13 @@ with `--yes`, it needs the answer given as `--seizure-warning`, unless it was an
 
 With no `--profile`, only the answer is saved:
 
+```sh
+jetcarp setup --yes --seizure-warning no-disorder
+```
+
+It prints:
+
 ```text
-$ jetcarp setup --yes --seizure-warning no-disorder
 saved your answer to the photosensitive seizure warning: no epilepsy or seizure disorder
 ```
 

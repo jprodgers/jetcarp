@@ -63,11 +63,17 @@ counting quiet generations only once it is over.
 
 Policies run independently of each other, and that can surprise you: a frequent `every` policy keeps
 the world busy, so a `settled` policy beside it may never see it settle. Here Life ran for 3,000
-generations with blobs when settled and ten drops of rain every 500 generations:
+generations with blobs when settled and ten drops of rain every 500 generations (in a copy of
+JETCARP's repository, which holds the scene):
+
+```sh
+jetcarp run crates/jetcarp-core/data/scenes/life.json --gens 3000 \
+    --reseed '[{"mode":"blobs","when":"settled","cooldown":200},{"mode":{"kind":"rain","drops":10},"when":{"kind":"every","gens":500}}]'
+```
+
+It ends with:
 
 ```text
-$ jetcarp run crates/jetcarp-core/data/scenes/life.json --gens 3000 \
-    --reseed '[{"mode":"blobs","when":"settled","cooldown":200},{"mode":{"kind":"rain","drops":10},"when":{"kind":"every","gens":500}}]'
 ...
 reseed:     blobs when settled: fired 0 times, last at -
 reseed:     rain every 500: fired 6 times, last at 3000

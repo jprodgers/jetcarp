@@ -1,12 +1,15 @@
 # First run and setup
 
-Before anything else, the app shows the
+To open the app, run `jetcarp` with no arguments in a terminal, on any system. On Windows, the
+*JETCARP* entry that Scoop adds to the Start menu opens it too (see
+[Installing](installing.md#open-the-app)).
+
+The first time you open the app, before anything else, it shows the
 [photosensitive seizure warning](photosensitivity.md), which asks whether you have epilepsy or a
 seizure disorder. It shows once; setup comes after it.
 
-The first time you open the app, JETCARP asks a few questions in a small *Set up JETCARP* window: what
-you would like it for, where its data should go, which packs to import and whether to use it on your
-desktop. Your answers choose a *setup profile*. Setup then imports packs and searches for Quick
+Then JETCARP asks a few questions in a small *Set up JETCARP* window: what you would like it for,
+where its data should go, which packs to import and whether to use it on your desktop. Your answers choose a *setup profile*. Setup then imports packs and searches for Quick
 Start entries of your own, as background jobs, while you use the app. Nothing is downloaded:
 everything comes with JETCARP or stays on your computer.
 
@@ -132,8 +135,13 @@ you tick it:
 and the first time it needs the warning answered with `--seizure-warning`. Either way it says what
 it will do, then does it, with the jobs' progress on a line below. Here with a one-minute build:
 
+```sh
+jetcarp setup --profile explorer --yes --quickstart-minutes 1 --seizure-warning no-disorder
+```
+
+It prints:
+
 ```text
-$ jetcarp setup --profile explorer --yes --quickstart-minutes 1 --seizure-warning no-disorder
 saved your answer to the photosensitive seizure warning: no epilepsy or seizure disorder
 
 setting up JETCARP as Explorer:
@@ -148,6 +156,9 @@ Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 | Option | Does |
 | --- | --- |
@@ -165,8 +176,13 @@ free space, the packs that came with JETCARP, whether the build can use a GPU, t
 (its Quick Start entries by where they came from), setup's jobs, and what each profile would take
 here. After the setup above:
 
+```sh
+jetcarp setup --status
+```
+
+It prints:
+
 ```text
-$ jetcarp setup --status
 setup: Explorer on 2026-11-12 11:57 UTC (JETCARP 0.4.0)
   settings: /home/ada/.config/jetcarp
   data:     /home/ada/.local/share/jetcarp, 7.4 TB free

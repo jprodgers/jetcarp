@@ -14,19 +14,32 @@ The library is one file, `library.sqlite`, in JETCARP's data folder (see
 media, or shared to be read) opens to be read: listing and querying it work, and a command that
 would change it says that the library's file is read-only.
 
+```sh
+jetcarp library info
+```
+
+It prints:
+
 ```text
-$ jetcarp library info
 catalog:        /home/ada/.local/share/jetcarp/library.sqlite
 schema version: 3
 patterns 149, rules 1, pattern rules 149, sightings 149 (446483 copies), jobs 8, Quick Start 364, ratings 0, media 0, ants 98
 ```
 
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
+
 ## Browse
 
 `jetcarp library list` shows patterns, the highest *interest score* first:
 
+```sh
+jetcarp library list --works-in B36/S23 --class oscillator --limit 4
+```
+
+It prints:
+
 ```text
-$ jetcarp library list --works-in B36/S23 --class oscillator --limit 4
 89afce3a64a4c19cb274f4f1e2bf254e  p26 oscillator 6c #89afce   B3/S23  Hat     p26   6c  seen 1    score 68.4  new
 6d445584e8b5cb1686a80ec55492af9f  p4 oscillator 15c #6d4455   B3/S23  Hat     p4   15c  seen 1    score 47.9  new
 45b218dae7cb76eb193a78cb14981562  p2 oscillator 3c #45b218    B3/S23  Hat     p2    3c  seen 22   score 26.1  new
@@ -70,8 +83,13 @@ again and gives the N that made the most copies of the find, then the most space
 beside the first (`soup.json`, `soup-2.json`, ...). `--soups K` says how many soups to run: by
 default as many as the hunt ran, at most 10,000.
 
+```sh
+jetcarp library soup 5a080db3 --best 3 --save glider.json
+```
+
+It prints:
+
 ```text
-$ jetcarp library soup 5a080db3 --best 3 --save glider.json
 glider (B3/S23 on Square): 16x16 rect soups at density 0.5, hunt job 1
   the best 3 of 400 soups run again:
   soup 28 (rng state 807013244984872251): 17 copies, 17 ships; settled at generation 6406; scene: /home/ada/glider.json
@@ -88,8 +106,13 @@ job was removed, gives its own soup only.
 
 ## Curate
 
+```sh
+jetcarp library update 47fc3f --name "kagome glider" --tags kagome,known --rating 5 --state reviewed
+```
+
+It prints:
+
 ```text
-$ jetcarp library update 47fc3f --name "kagome glider" --tags kagome,known --rating 5 --state reviewed
 updated 47fc3f43aae9ab4683227d5fdb7cfde0 (kagome glider), state reviewed
 ```
 
@@ -102,8 +125,13 @@ updated 47fc3f43aae9ab4683227d5fdb7cfde0 (kagome glider), state reviewed
 
 **Promote a find** to your Quick Start menu:
 
+```sh
+jetcarp library promote 47fc3f
+```
+
+It prints:
+
 ```text
-$ jetcarp library promote 47fc3f
 promoted: kagome glider
 entry:    find:47fc3f43aae9ab4683227d5fdb7cfde0 in /home/ada/.local/share/jetcarp/library.sqlite
 It appears in the app's Quick Start under "My finds".
@@ -119,8 +147,13 @@ the entries that aren't built in, and hides, shows or removes one.
 
 Ant and turmite runs are kept apart from patterns, under `jetcarp library ants`:
 
+```sh
+jetcarp library ants show 6ab5f5
+```
+
+It prints:
+
 ```text
-$ jetcarp library ants show 6ab5f5
 ant-6ab5f538561ff2d8c7d09af7889d4ce4 L2L2L Hexagon: highway p1940 d(5,-6) from step 367643
   rule Turmite L2L2L (1 states, 3 colours), tiling Hexagon, start empty
   436940 steps, 3125 coloured cells, score 93.7, state new
@@ -143,8 +176,13 @@ again:
 - **`jetcarp library verify`** runs stored patterns again with this build: by default every
   pattern off squares and hexagons, with `--all` every one, and `--drop` deletes those that fail.
 
+  ```sh
+  jetcarp library verify
+  ```
+
+  It prints:
+
   ```text
-  $ jetcarp library verify
   149 patterns verified (50 of them on squares and hexagons) in 1 s: 0 failed
   ```
 

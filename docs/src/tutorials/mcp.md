@@ -17,12 +17,18 @@ input and output for as long as the session lasts. There is nothing to keep runn
 
 **Claude Code.** In a terminal:
 
-```text
-$ claude mcp add jetcarp -- jetcarp mcp
+```sh
+claude mcp add --scope user jetcarp -- jetcarp mcp
 ```
 
-That adds JETCARP to the project you are in; add `--scope user` before `jetcarp` to have it in
-every project. `claude mcp list` shows it, and in a session `/mcp` shows its tools.
+`--scope user` adds JETCARP for every folder you start Claude Code in. Without it, Claude Code adds
+it only for the folder you ran the command in, and a session started anywhere else does not have it.
+To check, start a new session and type `/mcp`: JETCARP is listed, with its tools. `claude mcp list`
+lists it too. To remove it again:
+
+```sh
+claude mcp remove jetcarp
+```
 
 **Claude Desktop.** Add JETCARP to its `claude_desktop_config.json` and restart Claude Desktop. The
 file is in Claude's settings folder (`~/Library/Application Support/Claude/` on macOS,
@@ -233,7 +239,7 @@ window instead:
    the private world.
 
 To start attached every time, register the server with `--app`
-(`claude mcp add jetcarp-app -- jetcarp mcp --app`). Attached to the app, the assistant also gets
+(`claude mcp add --scope user jetcarp-app -- jetcarp mcp --app`). Attached to the app, the assistant also gets
 `app_display`: where the grid shows (window, full screen, a span of monitors), the screensaver and
 its profiles, the cell size and keep-awake. Ask *"Show Hodgepodge as the screensaver"*, and it
 calls `app_display {"screensaver": true, "profile": "Hodgepodge"}`.

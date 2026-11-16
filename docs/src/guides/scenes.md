@@ -33,10 +33,15 @@ while they run.
 ## Run a scene from the command line
 
 `jetcarp run` loads a scene, replays its log, runs more generations if asked, and reports where it
-ended:
+ended. Here with a scene from JETCARP's repository, run in a copy of it:
+
+```sh
+jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100 --png out.png --save out.json
+```
+
+It prints:
 
 ```text
-$ jetcarp run crates/jetcarp-core/data/scenes/rule30-life-ants.json --gens 100 --png out.png --save out.json
 scene:      crates/jetcarp-core/data/scenes/rule30-life-ants.json
 tiling:     Square (parallelogram) (square): 38400 cells, 240x160 unit cells, 1 tile type(s), storage dense, edges dead
 backend:    cpu (32 threads)
@@ -69,8 +74,13 @@ time:       0.03s on 32 threads
 `jetcarp verify` replays a saved scene and compares the generation and hash it reaches with the ones
 it recorded:
 
+```sh
+jetcarp verify out.json
+```
+
+It prints:
+
 ```text
-$ jetcarp verify out.json
 ok: generation 100 hash 1adf6e3234b7f199
 ```
 
@@ -141,8 +151,15 @@ from PIL import Image
 open("scene.json", "w").write(Image.open("out.png").text["jetcarp:scene"])
 ```
 
+The scene taken out replays to the same hash:
+
+```sh
+jetcarp verify scene.json
+```
+
+It prints:
+
 ```text
-$ jetcarp verify scene.json
 ok: generation 100 hash 1adf6e3234b7f199
 ```
 

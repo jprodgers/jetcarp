@@ -122,8 +122,13 @@ The steps above, as a scene file. Save this as `life-k2-007.json`:
 starts on the same 30% soup. An empty world's random state starts at 1, so this is the world you
 made in the app. `jetcarp run` runs it, draws it and saves it:
 
+```sh
+jetcarp run life-k2-007.json --gens 500 --png life-k2-007.png --save life-k2-007-500.json
+```
+
+It prints:
+
 ```text
-$ jetcarp run life-k2-007.json --gens 500 --png life-k2-007.png --save life-k2-007-500.json
 scene:      life-k2-007.json
 tiling:     Periodic (custom or catalog) (periodic): 9880 cells, 52x38 unit cells, 5 tile type(s), storage periodic, edges wrap
 backend:    cpu (32 threads)
@@ -141,8 +146,13 @@ The hash is the one the app showed at generation 500 (`hash 6f05d121` in the men
 world, tile for tile. `jetcarp verify life-k2-007-500.json` replays the saved scene and checks that it
 reaches the hash again. `jetcarp objects` is the *Objects* pane:
 
+```sh
+jetcarp objects life-k2-007.json --gens 500
+```
+
+It prints, in part:
+
 ```text
-$ jetcarp objects life-k2-007.json --gens 500
 …
 generation: 500  hash 6f05d1213042e5e6
 rule:       B3/S23 (CA 1, field 0), 81 live cells
@@ -161,8 +171,13 @@ objects:    18 (still lifes 5, oscillators 12, spaceships 1, other 0), 4 symmetr
 `--list` lists every object with where it is, and `--png` draws them coloured by class. For edge
 neighbours, add `"neighborhood": "edge"` to Life in the scene:
 
+```sh
+jetcarp objects life-k2-007-edge.json --gens 500
+```
+
+It prints, in part:
+
 ```text
-$ jetcarp objects life-k2-007-edge.json --gens 500
 …
 rule:       B3/S23V (CA 1, field 0), 354 live cells
 objects:    70 (still lifes 70, oscillators 0, spaceships 0, other 0), 4 symmetries, periods up to 64

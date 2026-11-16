@@ -16,8 +16,13 @@ exploratory search in full.
 `jetcarp quickstart build` searches for as many minutes as you say, then puts its best runs into
 the Quick Start:
 
+```sh
+jetcarp quickstart build --minutes 3
+```
+
+It prints:
+
 ```text
-$ jetcarp quickstart build --minutes 3
 explore search job 22 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches (310 of them confirmed), 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
@@ -30,6 +35,9 @@ Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated,
   ltl                       3,922   0.30   2.18     511
   …
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 In three minutes it ran 28,078 worlds, each a rule of one of its 22 rule families on one of the
 tilings, from a start of its own, and scored each for how lively, varied and long-lasting it was. It
@@ -90,8 +98,13 @@ own). Built-in and pack entries can be in the categories above too.
 The build is an explore job in your library. `jetcarp jobs list` lists it with the others, and
 `jetcarp jobs runs` lists its stored runs, best first:
 
+```sh
+jetcarp jobs runs --limit 5
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs runs --limit 5
     11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2
     17127   2.59  cycle   greenberg_hastings snubsq           GH 6/2
     12419   2.55  cycle   greenberg_hastings catalog:k5-219   GH 11/2
@@ -106,8 +119,13 @@ rule family, its tiling and its rule. Its options choose a `--family`, a `--tili
 
 **A contact sheet** shows chosen runs at an eighth of the way, halfway and at the end:
 
+```sh
+jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.png
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.png
 4 runs, 632x928: /home/ada/best.png
 ```
 
@@ -116,8 +134,13 @@ $ jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.
 **Clips** animate a sample of runs from every category, to look through by eye. Each is a GIF, and
 `manifest.json` says what each one is:
 
+```sh
+jetcarp jobs clips --sample 24 --out clips --page
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs clips --sample 24 --out clips --page
 24 clips in /home/ada/clips
 categories: Living textures 6, Oscillators 5, Waves & spirals 5, Growth 4, Frozen at once 2, Quick deaths 2
 rating page: /home/ada/clips/index.html
@@ -131,8 +154,13 @@ move on, and S stars it. The browser keeps your ratings as you go, so you can cl
 come back. When you are done, *Save ratings* downloads them as one file, and `jobs review --from`
 records them:
 
+```sh
+jetcarp jobs review 22 --from ~/Downloads/ratings-clips.json
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs review 22 --from ~/Downloads/ratings-clips.json
 recorded 15 review(s) and 3 star(s) by Ada (0 for runs not in job 22, 0 already recorded); job 22 has drop 6, keep 5, maybe 4, ★ 3
 ```
 
@@ -142,10 +170,25 @@ records only what is new in it.
 **Reviews** record your verdict on a run, `keep`, `maybe` or `drop`, and `--reviewed` lists runs by
 it, with each run's verdicts (one per rater, keep first) and a ★ if it has one:
 
+```sh
+jetcarp jobs review 22 11856 keep
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs review 22 11856 keep
 recorded 1 review(s); job 22 has keep 1
-$ jetcarp jobs runs --reviewed keep
+```
+
+Then list the runs you kept:
+
+```sh
+jetcarp jobs runs --reviewed keep
+```
+
+It prints:
+
+```text
     11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2  [keep]
 1 run(s) of explore job 22
 ```
@@ -153,8 +196,13 @@ $ jetcarp jobs runs --reviewed keep
 To watch any run in the app, save it as a scene, and open that with *File → Open scene…* or
 `jetcarp --scene snub-gh.json`:
 
+```sh
+jetcarp jobs scene 22 17127 --save snub-gh.json
+```
+
+It prints:
+
 ```text
-$ jetcarp jobs scene 22 17127 --save snub-gh.json
 run 17127 saved as a scene: /home/ada/snub-gh.json
 ```
 
@@ -167,13 +215,28 @@ menu, your packs and your website exports.
 **From the command line**, `jetcarp library quickstart` lists every entry that is not built in, and
 hides, shows or removes one by its id:
 
+```sh
+jetcarp library quickstart --source atlas
+```
+
+It prints:
+
 ```text
-$ jetcarp library quickstart --source atlas
 catalog: /home/ada/.local/share/jetcarp/library.sqlite (949 entries)
 atlas:a0e3aa0c-1077           atlas     search_run Short-lived Continuous       Lenia R=9,T=5, k6-535
 atlas:a0e3aa0c-1079           atlas     search_run Short-lived Continuous       Lenia R=10,T=1 k6-535
 …
-$ jetcarp library quickstart --hide atlas:a0e3aa0c-1077
+```
+
+Hide the first of them:
+
+```sh
+jetcarp library quickstart --hide atlas:a0e3aa0c-1077
+```
+
+It prints:
+
+```text
 atlas:a0e3aa0c-1077: hidden
 ```
 
@@ -184,21 +247,41 @@ An atlas entry's id is `atlas:`, the start of its search's id, and the run's id.
 
 `jetcarp library promote` adds an entry under *My finds*. It takes a run of a search:
 
+```sh
+jetcarp library promote --search-run 17127 --job 22 --title "Spirals on the snub square"
+```
+
+It prints:
+
 ```text
-$ jetcarp library promote --search-run 17127 --job 22 --title "Spirals on the snub square"
 promoted: Spirals on the snub square
 entry:    find:run-a0e3aa0c-17127 in /home/ada/.local/share/jetcarp/library.sqlite
 It appears in the app's Quick Start under "My finds".
 ```
 
-or any scene file, such as the one from [Life on a new tiling](life-on-a-new-tiling.md):
+It also takes any scene file, such as the one from [Life on a new tiling](life-on-a-new-tiling.md):
+
+```sh
+jetcarp library promote --scene life-k2-007.json --title "Life on k2-007"
+```
+
+It prints:
 
 ```text
-$ jetcarp library promote --scene life-k2-007.json --title "Life on k2-007"
 promoted: Life on k2-007
 entry:    find:scene-3eb3915ac28926d6 in /home/ada/.local/share/jetcarp/library.sqlite
 It appears in the app's Quick Start under "My finds".
-$ jetcarp library quickstart --source promotion
+```
+
+Both are now listed as promotions:
+
+```sh
+jetcarp library quickstart --source promotion
+```
+
+It prints:
+
+```text
 catalog: /home/ada/.local/share/jetcarp/library.sqlite (2 entries)
 find:run-a0e3aa0c-17127       promotion search_run Spirals on the snub square   GH 6/2         3.3.4.3.4 snub square
 find:scene-3eb3915ac28926d6   promotion scene      Life on k2-007               B3/S23         [3.4^2.6; 3.6.3.6] #2 (k2-007)
@@ -214,8 +297,13 @@ A pack carries Quick Start entries, with everything needed to open them, to othe
 [Packs](../guides/packs.md)). Packs are signed with your *publisher key*. `jetcarp pack key` makes
 it, and a name given to it goes on your packs:
 
+```sh
+jetcarp pack key --name "Ada Example"
+```
+
+It prints:
+
 ```text
-$ jetcarp pack key --name "Ada Example"
 made publisher key SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0
   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC7I9X81inrgVLhrhn8hMV/B08wtjbCTviYzImkte4pF jetcarp publisher
   file /home/ada/.config/jetcarp/pack/publisher_ed25519
@@ -224,14 +312,29 @@ made publisher key SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0
 
 Then export the entries you choose, by their ids:
 
-```text
-$ jetcarp pack export --to my-finds-2026.11 --feed my-finds --title "My finds" --version-label 2026.11 \
+```sh
+jetcarp pack export --to my-finds-2026.11 --feed my-finds --title "My finds" --version-label 2026.11 \
     --id find:run-a0e3aa0c-17127 --id find:scene-3eb3915ac28926d6
+```
+
+It prints:
+
+```text
 publishing feed my-finds (version 1) into /home/ada/.my-finds-2026.11.store
 …
 exported sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 into /home/ada/my-finds-2026.11: 15 files, 25647 bytes
 …
-$ jetcarp pack info my-finds-2026.11
+```
+
+`jetcarp pack info` shows what the pack holds:
+
+```sh
+jetcarp pack info my-finds-2026.11
+```
+
+It prints:
+
+```text
 export sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 (feed my-finds, version 2026.11)
   My finds
   publisher SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0 (Ada Example), signed by its publisher
@@ -256,12 +359,27 @@ A build is an exploratory search and its publishing in one job. For a longer sea
 through before publishing anything, run the two apart. The search here has a minute; give yours an
 hour (`--minutes 60`):
 
+```sh
+jetcarp search explore --gpu --minutes 1 --label longer
+```
+
+It prints:
+
 ```text
-$ jetcarp search explore --gpu --minutes 1 --label longer
 explore search job 23 in /home/ada/.local/share/jetcarp/library.sqlite
 …
 explore search 23 paused (at its budget); `jetcarp jobs resume 23` continues it from its archive (not run for run: the search is not deterministic)
-$ jetcarp quickstart publish
+```
+
+Then publish its atlas:
+
+```sh
+jetcarp quickstart publish
+```
+
+It prints:
+
+```text
 873 atlas entries from explore job 23 (search 79d59129-7681-4f75-9a12-709a698683b3) in the Quick Start of /home/ada/.local/share/jetcarp/library.sqlite: 873 new, 0 updated, 0 removed
 ```
 

@@ -32,8 +32,15 @@ let names = jetcarp("reference.palettes").palettes.map(|p| p.name);
 print(`${names.len()} palettes, the first ${names[0]}`);
 ```
 
+Run it, saved as `hex-life.rhai`:
+
+```sh
+jetcarp script hex-life.rhai --set gens=600 --set every=200
+```
+
+It prints:
+
 ```text
-$ jetcarp script hex-life.rhai --set gens=600 --set every=200
 generation 200: 197 live, hash 9fd22c3b518fe0a5
 generation 400: 209 live, hash c56126e522f752f6
 generation 600: 197 live, hash f711a1e991a158b7
@@ -41,6 +48,9 @@ generation 600: 197 live, hash f711a1e991a158b7
 output: /home/ada/Pictures/JETCARP/2026-11-10_18-36-13_hex-life
 time:   0.12s
 ```
+
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
 
 The folder holds the three pictures, the scene (which `jetcarp verify` replays to the same hash) and
 `run.json`, the record of the run described below.
@@ -93,8 +103,8 @@ script's integers (beyond 2^63 − 1, such as a random state), which seeds and `
 exactly. A key that was not given reads as `()`, Rhai's
 "nothing", so `params.gens ?? 300` gives a default:
 
-```text
-$ jetcarp script sweep.rhai --set from=0 --set to=255 --set label=wolfram
+```sh
+jetcarp script sweep.rhai --set from=0 --set to=255 --set label=wolfram
 ```
 
 ## Where scripts write: `--out`

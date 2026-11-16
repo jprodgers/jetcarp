@@ -75,8 +75,13 @@ shape. Jumps run in the background while the window shows the last frame.
 `jetcarp hashlife` takes a scene, a record exported from the pattern library, or a pattern in RLE or
 plaintext. A Gosper glider gun, 2<sup>40</sup> generations on:
 
+```sh
+jetcarp hashlife gosper.rle --gens 2^40 --png gun.png
+```
+
+It prints:
+
 ```text
-$ jetcarp hashlife gosper.rle --gens 2^40 --png gun.png
 input:      gosper.rle
 mode:       plane (square B3/S23)
 generation: 1099511627776 (+1099511627776 in 0.008s)
@@ -98,8 +103,13 @@ overrides the rule (RLE files default to their header's rule, else `B3/S23`).
 `--torus` jumps a scene in place instead, and `--compare cpu` (or `gpu`) also runs the ordinary
 engine and checks that every cell agrees:
 
+```sh
+jetcarp hashlife torus.json --torus --gens 5000 --compare cpu
+```
+
+It prints:
+
 ```text
-$ jetcarp hashlife torus.json --torus --gens 5000 --compare cpu
 input:      torus.json
 mode:       torus (Square (parallelogram) (square): 65536 cells, 256x256 unit cells, 1 tile type(s), storage dense, edges wrap)
 generation: 5000 (+5000 in 0.200s)

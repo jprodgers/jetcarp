@@ -29,8 +29,13 @@ folder, so unpack a zip or tar first.
 `jetcarp pack check` reads a pack and checks all of it, without importing anything. It checks the
 format, the publisher's signature, the hash and size of every file, and every id:
 
+```sh
+jetcarp pack check penrose-finds-2026.11
+```
+
+It prints:
+
 ```text
-$ jetcarp pack check penrose-finds-2026.11
 sha256:a968036b…: feed penrose-finds, by SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8 (Ada Example), checking every object
 …
 checked sha256:a968036b… (feed penrose-finds, SHA256:yNFIDrcM… Ada Example, signed by its publisher)
@@ -62,8 +67,13 @@ signature is damaged), and the rows, parts and bytes of each table.
 
 `jetcarp pack import` runs the same checks and then merges the pack into your library:
 
+```sh
+jetcarp pack import penrose-finds-2026.11
+```
+
+It ends with:
+
 ```text
-$ jetcarp pack import penrose-finds-2026.11
 …
 imported sha256:a968036b… (feed penrose-finds, SHA256:yNFIDrcM… Ada Example, signed by its publisher)
   9 objects checked (213869 bytes)
@@ -90,8 +100,13 @@ What happens to each kind of record:
   work on them as on a search you ran yourself, and `jetcarp jobs resume` continues it. Until then
   its line says that nothing has run in your library yet:
 
+  ```sh
+  jetcarp jobs list
+  ```
+
+  It prints:
+
   ```text
-  $ jetcarp jobs list
       2  explore  paused   2026-11-15T03:47:43Z  explore 2: 4,211 runs (0/s), 1,736 elites in 1,048 niches (0 of them confirmed), 10 of 1,359 tilings; not run here yet
   ```
 - **Quick Start entries** appear in the Quick Start menu. A newer version of a pack you imported
@@ -116,26 +131,39 @@ not a program.
 Every pack you make is signed with your *publisher key*, an Ed25519 key that JETCARP keeps in its
 settings folder. `jetcarp pack key` makes one the first time and shows it after that:
 
+```sh
+jetcarp pack key
+```
+
+It prints:
+
 ```text
-$ jetcarp pack key
 made publisher key SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8
   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPv65+hMLaYJAVXB/chf5oAx0smWQlLyOVymcinItHV jetcarp publisher
   file /home/ada/.config/jetcarp/pack/publisher_ed25519
   not named (packs show the key only; --name to be named)
 ```
 
+The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
+[Folders](../reference/folders.md#the-three-folders)).
+
 Your packs show only the key until you give a name. `--orcid` and `--github` add those too, and
 they appear in each pack's `CITATION.cff`:
 
-```text
-$ jetcarp pack key --name "Ada Example" --orcid 0000-0002-1825-0097
+```sh
+jetcarp pack key --name "Ada Example" --orcid 0000-0002-1825-0097
 ```
 
 The key is an ordinary OpenSSH key, so OpenSSH can check JETCARP's signatures too. In an export's
 folder, with the publisher's public key in a file `allowed` as `ada ssh-ed25519 AAAA…`:
 
+```sh
+ssh-keygen -Y verify -f allowed -I ada -n jetcarp-manifest -s sigs/*.sig < pack.json
+```
+
+It prints:
+
 ```text
-$ ssh-keygen -Y verify -f allowed -I ada -n jetcarp-manifest -s sigs/*.sig < pack.json
 Good "jetcarp-manifest" signature for ada with ED25519 key SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8
 ```
 
@@ -147,8 +175,13 @@ signed by a stranger. `--key FILE` signs with an OpenSSH Ed25519 key of your own
 `jetcarp pack publish` writes your library, or part of it, as a new version of a feed in a store.
 The store folder is made if it doesn't exist:
 
+```sh
+jetcarp pack publish --to my-store --feed penrose-finds --title "Penrose finds" --version-label 2026.11
+```
+
+It prints:
+
 ```text
-$ jetcarp pack publish --to my-store --feed penrose-finds --title "Penrose finds" --version-label 2026.11
 publishing feed penrose-finds (version 1) into /home/ada/packs/my-store
 3 patterns read, 3 new rows
 …
@@ -194,8 +227,8 @@ publishing gives the same version id, byte for byte.
 later one. Earlier versions stay as they were, since every file in them is fixed by its hash, but
 anyone importing the new version sees the retraction and its reason:
 
-```text
-$ jetcarp pack publish --to my-store --feed penrose-finds --version-label 2026.12 \
+```sh
+jetcarp pack publish --to my-store --feed penrose-finds --version-label 2026.12 \
     --retract 'pattern:3dec1a434a261b937448693adbeab960=duplicate of a known still life'
 ```
 
@@ -206,8 +239,13 @@ store's records into this version. Each keeps its original publisher.
 
 `jetcarp pack export` lays one version out for a single download:
 
+```sh
+jetcarp pack export --from my-store --to penrose-finds-2026.11
+```
+
+It prints:
+
 ```text
-$ jetcarp pack export --from my-store --to penrose-finds-2026.11
 exported sha256:a968036b… into /home/ada/packs/penrose-finds-2026.11: 24 files, 222559 bytes
 ```
 
@@ -234,8 +272,13 @@ Ratings are about people's taste, so a pack includes only the ratings of raters 
 a permanent public release. Record that agreement with `jetcarp pack rater`, using the name the
 library's ratings give:
 
+```sh
+jetcarp pack rater "Ada Example" --show-name
+```
+
+It prints:
+
 ```text
-$ jetcarp pack rater "Ada Example" --show-name
 Ada Example                              rater-17935ea8ceb8a90a  consented 2026-11-12T02:14:37Z, named
 ```
 
@@ -255,9 +298,14 @@ different: it goes into your packs as your *annotations*, signed with your key.
 An export is plain Parquet and JSON, so any data tool can read it. With DuckDB, in the export's
 folder:
 
-```text
-$ duckdb -init views.sql
-D SELECT id, class, period, cells FROM patterns ORDER BY cells;
+```sh
+duckdb -init views.sql
+```
+
+then, at DuckDB's `D` prompt:
+
+```sql
+SELECT id, class, period, cells FROM patterns ORDER BY cells;
 ```
 
 [Polars](https://pola.rs/) and pandas read the same files, with `read_parquet` on a table's folder.
