@@ -329,7 +329,7 @@ Example:
 | `wallpaper.fresh` | boolean | Render a new grid of the world's tiling sized to fill the image at `cell_px` (its CAs and seeds, without its edits). An aperiodic tiling gets the substitution level nearest that. |
 | `wallpaper.gens` | integer | Generations to run first (on the host's world: only with `fresh`). |
 | `wallpaper.monitors` | string | Monitors as WIDTHxHEIGHT+X+Y, comma separated (xrandr's layout): the image spans them. |
-| `wallpaper.out` | string | Output .png file or folder (default <Pictures>/JETCARP/wallpapers/). |
+| `wallpaper.out` | string | Output .png file or folder (default &lt;Pictures>/JETCARP/wallpapers/). |
 | `wallpaper.outline` | number | Draw tile outlines when tiles are at least this many pixels across (default 0: never). |
 | `wallpaper.palette` | string | Colour every CA with this palette first: a name (`reference {"what": "palettes"}` lists them) or hex colours like `#4fc3ff` or `#103050-#4fc3ff`. |
 | `wallpaper.scale` | number | Pixels per world unit (with `center`). |
@@ -421,7 +421,7 @@ Example:
 
 ### `library_curate`
 
-**Curate library records.** Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (name, tags, notes, rating 1-5, state), e.g. {"id": "glider", "changes": {"rating": 4, "append_notes": "LLM: a clean c/4 ship"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good, a pattern with its rules, sightings and Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under "My finds", e.g. {"quickstart": {"pattern": "<id>", "title": "Trihex glider"}}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side) and lists their parts ({"compounds": {}}; with {"apply": true} it stores the parts instead).
+**Curate library records.** Changes the library. With `id` (a pattern's id, prefix or name; ant-...; or a Quick Start handle) give one of: `changes` (name, tags, notes, rating 1-5, state), e.g. {"id": "glider", "changes": {"rating": 4, "append_notes": "LLM: a clean c/4 ship"}} (mark text you wrote as yours); `hidden` (Quick Start entries: true leaves it out of the menu, packs and the website; false shows it again); or `remove`: true (deletes the record for good, a pattern with its rules, sightings and Quick Start entry; ask the user first). Without `id`: `quickstart` adds an entry to the app's Quick Start under "My finds", e.g. {"quickstart": {"pattern": "&lt;id>", "title": "Trihex glider"}}; or `compounds` finds stored patterns that are really several independent objects (two gliders side by side) and lists their parts ({"compounds": {}}; with {"apply": true} it stores the parts instead).
 
 *may replace or delete something*
 
@@ -444,7 +444,7 @@ Example:
 | `hidden` | boolean | Quick Start entries: leave it out of the menu, packs and the website (true), or show it again (false). |
 | `id` | string | The record: a pattern's id, unique prefix or name; an ant run's id (ant-...); or a Quick Start entry's handle (find:..., atlas:..., life). |
 | `kind` | `"pattern"`, `"ant"`, `"quickstart"` | What `id` names (default: from its form). |
-| `quickstart` | object | Add an entry to the Quick Start under "My finds". It takes one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`, e.g. {"pattern": "<id>", "title": "Trihex glider"}, {"ant": "ant-..."}, {"search_run": <run id>, "job": <explore job>}, {"folder": "<sweep folder>", "run": "#12"} (a run of a run_script sweep), {"scene": "<scene file>"}. Settings: `jetcarp://schema/library_curate/quickstart`. |
+| `quickstart` | object | Add an entry to the Quick Start under "My finds". It takes one of `pattern`, `ant`, `folder` with `run`, `search_run` (with `job`), or `scene`, e.g. {"pattern": "&lt;id>", "title": "Trihex glider"}, {"ant": "ant-..."}, {"search_run": &lt;run id>, "job": &lt;explore job>}, {"folder": "&lt;sweep folder>", "run": "#12"} (a run of a run_script sweep), {"scene": "&lt;scene file>"}. Settings: `jetcarp://schema/library_curate/quickstart`. |
 | `quickstart.ant` | string | An ant run (`ant-...`): its build-up from step 0; the run's state becomes promoted. |
 | `quickstart.description` | string | Patterns, ants, search runs and scenes: the description (default: generated, or the scene's). |
 | `quickstart.favourite` | boolean | Sweep runs: also star the run in the folder's favourites.json (default true). |
@@ -516,7 +516,7 @@ Example:
 | `census.sample` | integer | B/S rules sampled (seeded, distinct) when there are more than `all_max` (default 2000). |
 | `census.sample_seed` | integer or string | The sample's seed (default: from `seed`). |
 | `census.seed` | integer or string | Default 1. |
-| `census.size` | string | Grid size for a tiling given by id: "WxH" unit cells, about N cells, or "L<level>" (default 64x64; aperiodic tilings: their default level). |
+| `census.size` | string | Grid size for a tiling given by id: "WxH" unit cells, about N cells, or "L&lt;level>" (default 64x64; aperiodic tilings: their default level). |
 | `census.soups` | integer | Soups per rule (default 8; soup s uses RNG state seed + s). |
 | `census.states` | integer | Generations rules with this many states (B/S rules otherwise). |
 | `census.survive` | array or string | Survival digits for B/S rules, as `birth` (default 0 to max). |
@@ -629,7 +629,7 @@ Example:
 | `search.rules` | array or string | Rules (Life-like and Generations rules without B0): a list, or text separated by spaces, commas, or semicolons (default B3/S23). |
 | `search.rules_file` | string | A file of more rules, one per line (`#` comments). |
 | `search.seed` | integer or string | Soup s uses RNG state seed + s (default 1). |
-| `search.size` | array or integer or string | Grid size: "WxH" unit cells, about N cells ("4000"), "L<level>" on aperiodic tilings, or [w, h] (default 64x64). |
+| `search.size` | array or integer or string | Grid size: "WxH" unit cells, about N cells ("4000"), "L&lt;level>" on aperiodic tilings, or [w, h] (default 64x64). |
 | `search.soup_radius` | number | Soup only a disc at the centre: its radius as a fraction of half the shorter side; with a dead boundary, escaping spaceships are caught at the edge. |
 | `search.soups` | integer | Soups per rule and tiling (default 16). |
 | `search.store` | boolean | Store what is found in the catalog (default true; false only reports it). |
@@ -1133,6 +1133,6 @@ Templates, for one record at a time:
 | `jetcarp://schema/{tool}/{argument}` | application/schema+json | A tool argument's settings: The JSON Schema of a tool argument's settings, for the arguments tools/list only summarises, e.g. jetcarp://schema/search_start/hunt or jetcarp://schema/pack/publish (resources/list lists every one). |
 | `jetcarp://job/{id}` | application/json | A library job: One search job's status and progress (as job_status reports it), by its id. |
 | `jetcarp://pattern/{id}` | application/json | A library pattern: One pattern's record (rules, range, sightings, the cells of its phases), by id, unique prefix, or name. |
-| `jetcarp://quickstart/{handle}` | application/json | A Quick Start entry: One Quick Start entry with its scene, by handle (life, find:<id>, atlas:<...>). |
+| `jetcarp://quickstart/{handle}` | application/json | A Quick Start entry: One Quick Start entry with its scene, by handle (life, find:&lt;id>, atlas:&lt;...>). |
 
 <!-- END GENERATED: docs/tools/gen-mcp.py -->

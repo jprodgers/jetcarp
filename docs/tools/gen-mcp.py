@@ -125,8 +125,17 @@ def type_of(s: dict) -> str:
     return t or "any"
 
 
+def md(text: str) -> str:
+    """The program's text for the page: a `<` outside a code span is written `&lt;`, so placeholders
+    such as <id> or L<level> show on the page instead of being read as HTML tags and dropped."""
+    parts = text.split("`")
+    for i in range(0, len(parts), 2):
+        parts[i] = parts[i].replace("<", "&lt;")
+    return "`".join(parts)
+
+
 def cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ")
+    return md(text).replace("|", "\\|").replace("\n", " ")
 
 
 def check_example(name: str, schema: dict, args: dict, at: str, problems: list, parts=None):
@@ -197,7 +206,7 @@ def generate(jetcarp: str) -> str:
     s = [BEGIN, "",
          f"The server calls itself `{info['serverInfo']['name']}` ({info['serverInfo']['title']}) and offers "
          f"{len(tools)} tools and {len(resources)} resources. Its instructions to the client:", "",
-         "> " + info["instructions"], "",
+         "> " + md(info["instructions"]), "",
          "## Tools", "",
          "| Tool | What it does |", "| --- | --- |"]
     for t in tools:
@@ -212,7 +221,7 @@ def generate(jetcarp: str) -> str:
             hints.append("may replace or delete something")
         if t["name"] in ONLY:
             hints.append(ONLY[t["name"]])
-        s += [f"### `{t['name']}`", "", f"**{t['title']}.** " + t["description"], ""]
+        s += [f"### `{t['name']}`", "", f"**{t['title']}.** " + md(t["description"]), ""]
         if hints:
             s += ["*" + "; ".join(hints) + "*", ""]
         s += arguments(t["inputSchema"], parts.get(t["name"], {}))
