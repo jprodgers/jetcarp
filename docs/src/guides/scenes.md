@@ -130,7 +130,8 @@ as PNG…*, *File → Export wallpaper…*,
 `jetcarp wallpaper`, `jetcarp hashlife --png` and a script's `save_png` carries its scene inside it,
 as PNG text chunks: `jetcarp:scene` (the whole scene), `jetcarp:version`, `jetcarp:generation`,
 `jetcarp:hash` and `jetcarp:dead_boundary`. A picture can therefore always be traced back to the run
-that made it. (Animations and frames from `jetcarp media` do not carry them.)
+that made it. (Animations, from *File → Export animation…* or `jetcarp media`, and the frames
+`jetcarp media` writes do not carry them.)
 
 JETCARP does not yet open a scene from a PNG itself, but any program that reads PNG text chunks can
 take it out. With Python and the Pillow library:

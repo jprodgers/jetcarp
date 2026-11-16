@@ -66,7 +66,7 @@ screen. For the screensaver, set *Show* to *A rotation* in the *Screensaver* pan
 rotation's name are *Edit*, *New*, *Duplicate* and, for one of your own, *Delete* (for an edited
 built-in rotation, *Revert to built-in*). It is the same editor in both:
 
-<img src="../images/guides/rotation-editor-desktop-pane.webp" alt="The Desktop background pane with the rotation editor open under the screen's rotation, JACA rainbow fronts (Cairo): Save and Close at the top; Name; Order In order, Default unticked; Settings for every item; the one item, JACA rainbow fronts (Cairo), with its remove and move buttons; Add profile, Add scene…, Add series and a box for a Quick Start id; Script; and Save and Close again at the foot" width="568">
+<img src="../images/guides/rotation-editor-desktop-pane.webp" alt="The Desktop background pane with the rotation editor open under the screen's rotation, JACA rainbow fronts (Cairo): Save and Close at the top; Name; Order In order, Default unticked; Settings for every item; the one item, JACA rainbow fronts (Cairo), with its remove and move buttons; Add profile, Add scene…, Add series and the Add Quick Start box, with kites typed in it and the five matching entries listed below it, Brian's Brain on Penrose kites and darts (P2) among them; Script; and Save and Close again at the foot" width="568">
 
 The editor has:
 
@@ -105,7 +105,7 @@ To show only the scene open in the app, no editor is needed: *Show just this sce
 and *New* in the *Desktop background* pane, saves it as a profile and as a rotation of just that
 profile, and chooses the rotation for that screen (see
 [The Desktop background pane](wallpapers.md#the-desktop-background-pane)). The picture above is of
-such a rotation, opened with *Edit*.
+such a rotation, opened with *Edit*, with `kites` typed into the *Add Quick Start* box.
 
 ## Rotation files
 

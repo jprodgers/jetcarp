@@ -27,10 +27,12 @@ the screen's resolution (the grid's size in pixels, or the outputs' span when th
 outputs), with tile outlines as *View → Cell outlines* has them.
 
 *File → Export animation (GIF or WebP)…* records the view as it is now and the generations after
-it: choose how many generations, a frame every how many, the longer side in pixels and the format
-(GIF, or lossless WebP for worlds with more than 256 colours), then *Export…*. It steps a copy of
-the world on the processor in the background, so the app runs on meanwhile, and the frames play at
-the world's speed. (The hunts window's *Render media* makes animations of its finds instead.)
+it: choose how many generations, a frame every how many (up to 2,000 frames in all), the longer side
+in pixels and the format (GIF, or lossless WebP for worlds with more than 256 colours), then
+*Export…*. It steps a copy of the world on the processor in the background, so the app runs on
+meanwhile, and the frames play at the world's speed. Like the media below, an animation does not
+carry its scene. (The *Hunts* window's *Render media (animations of these finds)*, beside a hunt's
+finds, makes animations of the finds instead, as `jetcarp media render` does.)
 
 **On the command line**, `jetcarp run` writes a picture of the state it ends in:
 

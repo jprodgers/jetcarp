@@ -65,8 +65,10 @@ one.) The world opens running, with the grid on the right and the panes on the l
   *Max speed* runs as fast as the computer can, and *GPU simulation* chooses where the world steps:
   *Follow the shared setting* (the default: the [GPU setting](../guides/gpu.md) all of JETCARP
   shares, which is automatic and puts worlds of 16,000 cells or more on the graphics card), *On*
-  every world it can run, *Off* none. The results are exactly the same. *Run → Jump* leaps far ahead with HashLife, for the rules it can
-  run (see [HashLife and very long runs](../guides/hashlife.md)).
+  every world it can run, *Off* none. The results are exactly the same. *GPU adapter*, below it,
+  chooses which graphics card JETCARP uses, on a computer with two (see
+  [The GPU](../guides/gpu.md#the-setting)). *Run → Jump* leaps far ahead with HashLife, for
+  the rules it can run (see [HashLife and very long runs](../guides/hashlife.md)).
 - **The menu bar's right end** shows the scene's name, whether it is running, the generation, the
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
@@ -89,7 +91,8 @@ The panes are in two groups of tabs, upper and lower:
 | *Draw* | The mouse's tool (*Pan*, *Draw* or *Erase*), which automaton it paints *Into*, and the state it paints | [Several automata at once](../guides/several-automata.md#in-the-app) |
 | *Objects* | *Find objects*: the still lifes, oscillators and spaceships in the world now, counted, and highlighted when you click a row | [Life on a new tiling](../tutorials/life-on-a-new-tiling.md) |
 | *Display* | Where the grid shows (this window, full screen, or full-screen *Outputs* on chosen monitors) and the cell size in pixels | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
-| *Screensaver* | Screensaver mode, its profiles and rotations, and the background host | [Wallpapers](../guides/wallpapers.md) |
+| *Screensaver* | Screensaver mode, its profiles and rotations, and the system screen saver's rotation | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
+| *Desktop background* | The background host: each screen's rotation and monitor, the lock screen, the still picture, how it runs, and *Fit to this computer* | [Wallpapers](../guides/wallpapers.md#the-desktop-background-pane) |
 | *CAs* | Each automaton in the world: its rule, neighbours, field, steps per generation, colouring and palette, with *Seed*, *Random* and *Clear* | [Several automata at once](../guides/several-automata.md), [Palettes](../guides/palettes.md) |
 | *Add* | Add an automaton from the catalog of named rules or by its notation, or load a rule table | [Rule notation](../reference/rule-notation.md), [Named rules](../automata/named-rules.md) |
 | *Sequence* | A scripted sequence: which automata run, and when to move on | [Several automata at once](../guides/several-automata.md) |
@@ -109,11 +112,11 @@ and *Window → Reset layout* puts everything back:
 | --- | --- |
 | *File* | *Quick Start*, *New empty world*, *Open scene…* and *Save scene…*, the picture exports (*Export the world as PNG…*, *Export the view as PNG…*, *Export animation (GIF or WebP)…*, *Export contact sheet…*, *Export wallpaper…*), *Quit* |
 | *Edit* | *Reset* (R: clear and seed every automaton again), *Clear every CA*, *Copy state hash*, *Paste a library pattern…* |
-| *View* | *Fit* and zoom, *Cell outlines*, the status bar and an auto-hiding menu bar, *Hide all panes*, *Pixel-exact zoom*, *Fill the canvas*, *Full screen*, *Show on outputs*, *Screensaver mode* and its settings, *Keep awake* |
+| *View* | *Fit* and zoom, *Cell outlines*, the status bar and an auto-hiding menu bar, *Hide all panes*, *Pixel-exact zoom*, *Fill the canvas*, *Full screen*, *Show on outputs*, *Screensaver mode* and its settings, *Desktop background settings…*, *Keep awake*, the *Display* pane |
 | *Run* | *Run / Pause*, *Step*, *Jump*, *Speed*, *Max speed*, *GPU simulation*, *GPU adapter* |
-| *Tiling* | The *Tiling* pane, *Family*, *Edges*, *Tiling catalog*, *Tile editor…*, *Unit cell editor…* |
+| *Tiling* | The *Tiling* pane, *Family*, *Edges*, *Tiling catalog*, *Tile editor…*, *Unit cell editor…*, *Paste tile JSON…* |
 | *CA* | *Add from catalog*, *Add by notation…*, *Load rule table…*, the *CAs* and *Sequence* panes, *Palettes…* |
-| *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |
+| *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Clear every CA*, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |
 | *Tools* | The tool windows below, *Sweep this world…*, the *Objects* pane |
 | *Window* | Every pane and tool window, *Hide all panes*, *Reset layout*, *Displays* |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |

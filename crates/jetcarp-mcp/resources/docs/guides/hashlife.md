@@ -52,9 +52,11 @@ sequence installed, cannot be jumped in place.
 `2^40` or `1e6`, and three choices:
 
 - **Jump ahead (HashLife)** jumps the world in place. When the world does not qualify, the button is
-  greyed out and hovering over it says why (for example, *HashLife needs a torus whose sides are powers
-  of two (this one is 200 × 140 unit cells)*). To make one, set the Tiling pane's *Size* to *Width ×
-  height*, type sides such as 256 × 256 (in unit cells), and choose *Wrap* edges.
+  greyed out and hovering over it says why, and what to do (for example, *HashLife needs a torus
+  whose sides are powers of two (this one is 200 × 140 unit cells): make one with sides like
+  256 × 256 (the app's Tiling pane: Size, Width × height; the command line: --size 256x256), with
+  wrap edges*). So set the Tiling pane's *Size* to *Width × height*, type sides such as 256 × 256
+  (in unit cells), and choose *Wrap* edges.
 - **On the unbounded plane** shows the same frame after that many generations on the plane, as a new
   world named after the old one (*… +1000000 (HashLife plane)*).
 - **HashLife view…** opens the pattern on the plane in a window of its own, also under *Tools →

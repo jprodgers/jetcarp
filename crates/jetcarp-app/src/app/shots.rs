@@ -580,9 +580,10 @@ fn shots_desktop_pane_cards() {
 /// Windows test had, JACA rainbow fronts on Cairo pentagons), the pane before and after *Show just
 /// this scene*: the scene saved as a profile and as a rotation of just that profile, the screen
 /// running it, the screensaver's choice untouched; pressed again, nothing more is made. Then the
-/// editor opened from the pane, with Save and Close above it, and a new rotation saved there,
-/// chosen for the screen alone. Pictures: `desktop-just-*.png`; `desktop-just-editor.png` is the
-/// book's `guides/rotation-editor-desktop-pane.webp` (`guides/rotations.md`).
+/// editor opened from the pane, with Save and Close above it and `kites` typed into its Add Quick
+/// Start box (#74), and a new rotation saved there, chosen for the screen alone. Pictures:
+/// `desktop-just-*.png`; `desktop-just-editor.png` is the book's
+/// `guides/rotation-editor-desktop-pane.webp` (`guides/rotations.md`).
 #[test]
 #[ignore]
 fn shots_desktop_show_just_this_scene() {
@@ -674,6 +675,14 @@ fn shots_desktop_show_just_this_scene() {
         top(&h, "Save").max.y < top(&h, "Name").min.y,
         "Save above the name"
     );
+    // The Add Quick Start box searched (#74): the entries matching what is typed, to click.
+    h.click_right_of("Add series");
+    h.frame_with(0.05, vec![egui::Event::Text("kites".into())]);
+    h.run(0.5, 0.05, |_| false);
+    h.find("Brian's Brain on Penrose kites and darts (P2)");
+    // The pointer off the pane, so no hover text covers the list.
+    let [w, ht] = h.o.size();
+    h.hover(egui::pos2(w as f32 - 2.0, ht as f32 - 2.0));
     h.steady();
     h.shot_part("desktop-just-editor", pane);
     let close = top(&h, "Close");
