@@ -161,11 +161,13 @@ that will declare them stable.
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
   *Static*, *Quiet rows*) now get a sixteenth of the sample each, at least 2, and the output says
   how many clips each category got. ([#56](https://github.com/jprodgers/jetcarp/issues/56))
-- **A GPU failing part way could crash or hang the process on Windows.** After a failed batch,
-  the stepper let go of its buffers while the GPU still had work in flight, and a readback waited
-  for the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does
-  the same when it is dropped, and a wait for the GPU over 60 seconds counts as a failure, so the
-  processor carries on. ([#52](https://github.com/jprodgers/jetcarp/issues/52))
+- **A GPU failing part way could crash the process on Windows.** After a failed batch, the
+  stepper let go of its buffers while the GPU still had work in flight, and a readback waited for
+  the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does the
+  same when it is dropped, and a wait for the GPU over 60 seconds counts as a failure, so the
+  processor carries on. The GPU recovery test can still hang now and then on an Intel UHD under
+  Windows (1 run in 30); that part is still open.
+  ([#52](https://github.com/jprodgers/jetcarp/issues/52))
 - **At login on Windows, JETCARP's launcher kept Windows waiting.** The launcher, `jetcarpw.exe`,
   waited for the host it started, so Windows, which runs the login entries one at a time and waits
   on each, waited on it too, which held up the entries after it. At login the launcher now starts
