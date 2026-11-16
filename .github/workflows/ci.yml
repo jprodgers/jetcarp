@@ -48,6 +48,23 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
             libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: The Windows installer parses, and a refusal is one clean line (#117)
+        # Windows PowerShell 5.1, as people run it. Nothing else checks install.ps1.
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Continue"
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\packaging\install.ps1", [ref]$null, [ref]$errs)
+          if ($errs) { $errs; exit 1 }
+          $out = powershell -NoProfile -ExecutionPolicy Bypass -File packaging\install.ps1 -Version 0.4.2 -InstallDir "$env:RUNNER_TEMP\jetcarp-none" -Uninstall 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $out
+          if ($code -ne 1) { Write-Host "exit code $code, expected 1"; exit 1 }
+          if ($out -notmatch "jetcarp-installer: no JETCARP installed" -or $out -match "CategoryInfo|FullyQualifiedErrorId") {
+            Write-Host "the refusal is not one clean line"; exit 1
+          }
+          exit 0
       - name: Build
         run: cargo build --workspace --release --all-targets ${{ matrix.features }}
       - name: Test

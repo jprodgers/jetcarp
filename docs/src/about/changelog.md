@@ -386,6 +386,11 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
   whole the installer refused `--uninstall,`), says plainly that `jetcarp uninstall` keeps the
   program and that any release's installer removes any version's install, and has a step for the
   assistant. ([#103](https://github.com/jprodgers/jetcarp/issues/103))
+- **The Windows installer's refusals looked like a crash.** Each one-line refusal (a folder it
+  didn't make, nothing to uninstall, a version that isn't one) was followed by PowerShell's error
+  block, because the script stopped with `throw`. A refusal is now its one line and exit code 1. CI
+  now parses the installer with Windows PowerShell and checks a refusal.
+  ([#117](https://github.com/jprodgers/jetcarp/issues/117))
 - **Progress lines wider than the terminal left pieces behind.** A job's progress, redrawn in place
   on standard error, wrapped in a narrow window, and each redraw went back only to the start of its
   last row, leaving the rest ("newest: p3 oscillatohunt 1: 192/5,000 soups, ..."). A progress line

@@ -50,16 +50,23 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $Repo = "@REPO@"
+
+function Say([string]$Message) { Write-Host "jetcarp-installer: $Message" }
+# A refusal is one line and exit code 1, not PowerShell's error block (#117). The script runs as a
+# file, so exit ends only the script; it still runs the finally that removes the temporary
+# folder, and no catch takes it.
+function Fail([string]$Message) {
+    Write-Host "jetcarp-installer: $Message" -ForegroundColor Red
+    exit 1
+}
+
 if (-not $Version) { $Version = "@VERSION@" }
 $Version = $Version.TrimStart("v")
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
-    throw "jetcarp-installer: $Version is not a JETCARP version (such as 0.4.0 or 0.4.0-rc.2)"
+    Fail "$Version is not a JETCARP version (such as 0.4.0 or 0.4.0-rc.2)"
 }
 $Target = "x86_64-pc-windows-msvc"
 $Archive = "jetcarp-$Version-$Target.zip"
-
-function Say([string]$Message) { Write-Host "jetcarp-installer: $Message" }
-function Fail([string]$Message) { throw "jetcarp-installer: $Message" }
 
 if (-not $InstallDir) { $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\jetcarp" }
 if (-not $DownloadUrl) { $DownloadUrl = "https://github.com/$Repo/releases/download/v$Version" }
