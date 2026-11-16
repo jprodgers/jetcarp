@@ -282,10 +282,10 @@ pub fn hold_reasons<'a>(holds: impl Iterator<Item = &'a str>) -> Vec<String> {
         let words = match h {
             "battery" => "on battery".to_string(),
             "busy" => "the processor is busy".into(),
-            "covered" => "held by the desktop: windows cover it".into(),
+            "covered" => "windows cover the desktop".into(),
             "tuning" => "tuning the desktop background for this computer".into(),
-            "dark" => "held by the desktop: the screen is locked or off".into(),
-            other => format!("held by the desktop ({other})"),
+            "dark" => "the screen is locked or off".into(),
+            other => format!("the desktop asked ({other})"),
         };
         if !why.contains(&words) {
             why.push(words);
@@ -1352,8 +1352,8 @@ mod tests {
         assert_eq!(
             hold_reasons(["covered", "dark", "tuning"].into_iter()),
             [
-                "held by the desktop: windows cover it",
-                "held by the desktop: the screen is locked or off",
+                "windows cover the desktop",
+                "the screen is locked or off",
                 "tuning the desktop background for this computer"
             ]
         );

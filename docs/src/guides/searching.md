@@ -235,6 +235,6 @@ and finds. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do
 strategies, *Tools → Catalog tools…* runs collisions and the evolutionary search, and
 *Tools → Pattern library…* browses what all of them found. A job started in the app can be stopped
 or resumed from the command line, and the other way round. In the *Hunts* window, a job whose
-process has gone shows as *stalled* at once, and *Render media (animations of these finds)*, beside
+process has gone shows as *stale* at once, and *Render media (animations of these finds)*, beside
 a job's finds, writes each find's animation, poster and thumbnail in the background (see
 [Pictures and animations](pictures.md#animations)).

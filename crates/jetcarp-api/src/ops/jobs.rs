@@ -1068,7 +1068,7 @@ pub struct ResumeIn {
     /// Run on a thread of this process and answer at once.
     #[serde(default)]
     pub background: bool,
-    /// Run in a process of its own and answer at once.
+    /// Run in a process of its own, answering once it has the job.
     #[serde(default)]
     pub detach: bool,
     /// Files to write when the job ends in this call.

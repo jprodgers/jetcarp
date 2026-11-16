@@ -532,7 +532,7 @@ Example:
 | `collide.phases` | array or string | B's phases: "all" (default), a list, or "0,1". |
 | `collide.rule` | string | The rule to run (both must work in it; default: A's rule if B works in it, else B's). |
 | `collide.store` | boolean | Store the products in the catalog (default true; false only reports them). |
-| `detach` | boolean | Run in a process of its own (`jetcarp jobs resume JOB`) and answer at once. |
+| `detach` | boolean | Run in a process of its own (`jetcarp jobs resume JOB`), answering once it has the job. |
 | `evolve` | object | The evolutionary glider search, storing the movers it verifies. Multi-state priority rules evolve towards rules whose seeds travel far. Settings: `jetcarp://schema/search_start/evolve`. |
 | `evolve.cap` | integer | Population cap during the GA (default 64; explosive rules score 0). |
 | `evolve.champions` | integer | Distinct top genomes verified at the end (default 16). |

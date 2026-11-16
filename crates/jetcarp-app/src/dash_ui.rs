@@ -1761,7 +1761,7 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
-/// Status text and colour (stalled jobs say so).
+/// Status text and colour (stale jobs say so, as `jobs status` and MCP do).
 /// The button that carries a paused job on here, and what it says on hover: *Resume here* for
 /// a deterministic job, *Continue here* for one that is not (an explore search).
 fn resume_button(j: &JobSummary) -> (&'static str, &'static str) {
@@ -1780,7 +1780,7 @@ fn resume_button(j: &JobSummary) -> (&'static str, &'static str) {
 
 fn status_label(j: &JobSummary) -> (String, Color32) {
     if j.stale {
-        return ("stalled".into(), Color32::from_rgb(0xff, 0x8a, 0x3c));
+        return ("stale".into(), Color32::from_rgb(0xff, 0x8a, 0x3c));
     }
     let here = if j.here { " (here)" } else { "" };
     let col = match j.status.as_str() {

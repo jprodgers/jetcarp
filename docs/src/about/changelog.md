@@ -189,8 +189,7 @@ that will declare them stable.
   was gone after 45 seconds, and `jobs resume` could take it at once, so the three disagreed. A
   runner holds its job's lock and names itself in the job's row, and the system lets go of the lock
   when the process ends: a job that names a runner and whose lock is free is now stale at once, in
-  `jobs status`, `jobs list`, `jobs wait`, `jobs remove` and the app's *Hunts…* window (*stalled*
-  there) alike. `jobs status` says so in words (it printed `status running` and kept `stale` to its
+  `jobs status`, `jobs list`, `jobs wait`, `jobs remove` and the app's *Hunts…* window alike. `jobs status` says so in words (it printed `status running` and kept `stale` to its
   JSON), and so do the MCP server's `job_status` and its list. `--status running` leaves stale jobs
   out, and `--status stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
   [#64](https://github.com/jprodgers/jetcarp/issues/64))
@@ -289,6 +288,11 @@ that will declare them stable.
   this adapter (it has no GPU timestamps): the GPU limit isn't applied" (with `--json`,
   `"gpu_unmeasured": true` on each card and `gpu_note` on the last line).
   ([#72](https://github.com/jprodgers/jetcarp/issues/72))
+- **`host status` called a screen frozen by a hold *paused*, and doubled its reason** ("held: held
+  by the desktop: windows cover it"). A screen frozen by a hold now says *held*, one paused by hand
+  *paused*, and the reason reads "held: windows cover the desktop (resumes by itself)". The app's
+  *Hunts…* window says *stale*, as the command line and the MCP server do, not *stalled*.
+  ([#76](https://github.com/jprodgers/jetcarp/issues/76))
 
 ### Changed
 

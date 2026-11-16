@@ -1161,7 +1161,7 @@ pub struct BuildIn {
     /// Run on a thread of this process and answer at once.
     #[serde(default)]
     pub background: bool,
-    /// Run in a process of its own (`jetcarp jobs resume JOB`) and answer at once.
+    /// Run in a process of its own (`jetcarp jobs resume JOB`), answering once it has the job.
     #[serde(default)]
     pub detach: bool,
 }

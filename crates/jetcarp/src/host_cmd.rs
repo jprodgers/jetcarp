@@ -254,6 +254,7 @@ fn show(v: &Value, json: bool) {
 /// The host's status, for people: what each screen shows and where, the monitors, the wallpaper,
 /// the caption, why it is paused, and the host's notes.
 fn status_lines(v: &Value) -> Vec<String> {
+    let held_now = v["held"].as_array().is_some_and(|h| !h.is_empty());
     let mut out = vec![format!(
         "running, pid {}, up {}s, {} MB, GPU {}",
         v["pid"],
@@ -325,10 +326,12 @@ fn status_lines(v: &Value) -> Vec<String> {
             st["label"].as_str().unwrap_or("?"),
             st["number"],
             st["count"],
-            if st["paused"] == true {
-                " · paused"
-            } else {
-                ""
+            // A screen frozen by a hold says held (the hold's reason follows below), one paused
+            // by hand says paused (#76).
+            match (st["paused"] == true, v["paused"] == true, held_now) {
+                (false, _, _) => "",
+                (true, false, true) => " · held",
+                _ => " · paused",
             }
         ));
     }

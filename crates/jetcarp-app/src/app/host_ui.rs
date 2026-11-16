@@ -233,7 +233,13 @@ fn summary(v: &Value) -> String {
             }
         }
         if s["paused"] == true {
-            t.push_str(", paused");
+            // Frozen by a hold (its reason is the pane's Held line) or paused by hand (#76).
+            let held = v["held"].as_array().is_some_and(|h| !h.is_empty());
+            t.push_str(if held && v["paused"] != true {
+                ", held"
+            } else {
+                ", paused"
+            });
         }
         lines.push(t);
     }

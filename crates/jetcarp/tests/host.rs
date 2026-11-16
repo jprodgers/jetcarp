@@ -270,7 +270,7 @@ fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
     assert_eq!(reply["ok"], true);
     let v = h.wait(|v| Host::stage(v)["paused"] == true, "the hold to pause it");
     assert_eq!(v["held"][0], "covered");
-    assert_eq!(v["held_why"][0], "held by the desktop: windows cover it");
+    assert_eq!(v["held_why"][0], "windows cover the desktop");
     assert_eq!(
         (&v["paused"], &v["paused_why"]),
         (&json!(false), &json!([]))

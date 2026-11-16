@@ -1784,7 +1784,7 @@ pub struct SearchStartIn {
     /// Run on a thread of this process and answer at once (jobs.status follows it, jobs.stop stops it).
     #[serde(default)]
     pub background: bool,
-    /// Run in a process of its own (`jetcarp jobs resume JOB`) and answer at once.
+    /// Run in a process of its own (`jetcarp jobs resume JOB`), answering once it has the job.
     #[serde(default)]
     pub detach: bool,
     /// Files to write when the job ends in this call.
