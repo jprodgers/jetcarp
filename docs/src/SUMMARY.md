@@ -4,6 +4,7 @@
 
 # Getting started
 
+- [Photosensitive seizure warning](getting-started/photosensitivity.md)
 - [Installing JETCARP](getting-started/installing.md)
 - [First run and setup](getting-started/first-run.md)
 - [A tour of the app](getting-started/tour.md)

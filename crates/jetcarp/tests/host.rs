@@ -11,7 +11,21 @@ struct Host {
     home: PathBuf,
 }
 
+/// A scratch home for one test, its photosensitive seizure warning accepted (#96), as on a
+/// computer where JETCARP has been set up: the host runs its scenes.
 fn home(name: &str) -> PathBuf {
+    let dir = unwarned_home(name);
+    jetcarp_core::photosensitivity::record_in(
+        &dir.join("config/jetcarp"),
+        jetcarp_core::photosensitivity::Answer::NoDisorder,
+        "test",
+    )
+    .unwrap();
+    dir
+}
+
+/// A scratch home where the photosensitive seizure warning has not been answered.
+fn unwarned_home(name: &str) -> PathBuf {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("jetcarp-host-test-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -503,6 +517,113 @@ fn the_login_entry_starts_the_host_for_the_desktop_and_comes_off() {
     run(&["host", "login", "off"]);
     assert!(!entry.exists(), "the old entry is removed too");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Until the photosensitive seizure warning has been accepted, nothing on the command line starts
+/// the desktop background or the screen saver: each says why, with the warning, and changes
+/// nothing. Once `jetcarp setup` has accepted it, the host starts (#96).
+#[test]
+fn nothing_starts_on_screen_before_the_warning_is_accepted() {
+    let dir = unwarned_home("unwarned");
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+        c.args(args).stdin(Stdio::null());
+        with_env(&mut c, &dir);
+        c.output().unwrap()
+    };
+    /// Stops a host however the test ends.
+    struct Stop<F: Fn()>(F);
+    impl<F: Fn()> Drop for Stop<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+    let _stop = Stop(|| {
+        let _ = run(&["host", "stop"]);
+    });
+    for (args, what) in [
+        (
+            &["host", "start", "--headless"][..],
+            "start the background host",
+        ),
+        (&["host", "wallpaper", "on"], "show the desktop background"),
+        (
+            &["host", "login", "on"],
+            "start the background host at login",
+        ),
+        (&["host", "saver", "install"], "install the screen saver"),
+        (
+            &["host", "serve", "--saver", "--seconds", "1"],
+            "run the screen saver",
+        ),
+    ] {
+        let o = run(args);
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(!o.status.success(), "{args:?} was not refused: {err}");
+        assert!(
+            err.contains(&format!(
+                "JETCARP won't {what} until its photosensitive seizure warning has been accepted"
+            )),
+            "{args:?}: {err}"
+        );
+        assert!(err.contains("B0"), "the warning itself: {err}");
+    }
+    let o = run(&["host", "status"]);
+    assert!(String::from_utf8_lossy(&o.stderr).contains("not running"));
+    assert!(
+        !dir.join("config/jetcarp/host.json").exists(),
+        "nothing saved"
+    );
+    assert!(!dir.join("config/autostart/jetcarp-host.desktop").exists());
+    assert!(
+        !dir.join("Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist")
+            .exists()
+    );
+    // Reading and turning off are not refused.
+    assert!(run(&["host", "wallpaper", "off"]).status.success());
+    // Accepted with `jetcarp setup`, the host starts.
+    let o = run(&["setup", "--yes", "--seizure-warning", "no-disorder"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let o = run(&["host", "start", "--headless"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+}
+
+/// A host started before the photosensitive seizure warning was accepted (at login, say, after an
+/// upgrade) holds every screen at its first frame and says why in its status; resuming by hand or
+/// a sweep on screen does not get round it. Once the warning is accepted it starts by itself
+/// (#96).
+#[test]
+fn a_host_holds_its_screens_until_the_warning_is_accepted() {
+    let dir = unwarned_home("held");
+    let child = spawn(&dir, &["--rotation", "Wolfram series"]);
+    let h = Host { child, home: dir };
+    let v = h.wait(
+        |v| Host::stage(v)["cells"].as_u64() > Some(0),
+        "the first frame",
+    );
+    assert_eq!(v["held"], json!(["warning"]), "{v}");
+    assert_eq!(v["paused"], false, "held, not paused: {v}");
+    let why = v["held_why"][0].as_str().unwrap();
+    assert_eq!(why, jetcarp_core::photosensitivity::HOST_HELD);
+    let e = h
+        .call(json!({"action": "tune", "seconds": 0.5}))
+        .unwrap_err();
+    assert!(e.contains("photosensitive seizure warning"), "{e}");
+    h.call(json!({"action": "resume"})).unwrap();
+    std::thread::sleep(Duration::from_millis(800));
+    let v = h.call(json!({"action": "status"})).unwrap();
+    assert_eq!(Host::stage(&v)["generation"], 0, "nothing animated: {v}");
+    jetcarp_core::photosensitivity::record_in(
+        &h.home.join("config/jetcarp"),
+        jetcarp_core::photosensitivity::Answer::NoDisorder,
+        "test",
+    )
+    .unwrap();
+    let v = h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(2),
+        "the scenes to start once the warning was accepted",
+    );
+    assert_eq!(v["held"], json!([]), "{v}");
 }
 
 /// A screen tuned for this computer builds a tuned scene at the size found, and the scene it shows

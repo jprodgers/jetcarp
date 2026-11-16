@@ -12,6 +12,12 @@ JETCARP's GNOME extension. The table in
 says what works where, and [what has been tested](../guides/wallpapers.md#what-has-been-tested) on
 which machines.
 
+> **Photosensitive seizure warning.** A live wallpaper or a screen saver fills the screen, and some
+> rules flicker it many times a second, which can trigger seizures in people with photosensitive
+> epilepsy. Read the [warning](../getting-started/photosensitivity.md) first; the app asks you to
+> answer it at its first launch, and the desktop background and the screen saver don't start until
+> you have.
+
 ## 1. Pick an entry
 
 On the Quick Start screen, type `penrose` in the search box and click *Brian's Brain on Penrose

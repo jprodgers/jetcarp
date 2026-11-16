@@ -68,6 +68,23 @@ fn setup_explorer_yes_end_to_end() {
     assert_eq!(st["done"], false);
     assert_eq!(st["bundled"][0]["title"], "minimal");
     assert_eq!(st["bundled"][0]["starter"], true);
+    // The photosensitive seizure warning comes first (#96): with no terminal to ask it in, and
+    // no answer saved, setup refuses with the warning, whatever else it was asked.
+    let answer = s.0.join("config/photosensitivity.json");
+    for args in [&["setup"][..], &["setup", "--profile", "explorer", "--yes"]] {
+        let o = s.run(args);
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(!o.status.success(), "{args:?}");
+        assert!(err.contains("PHOTOSENSITIVE SEIZURE WARNING"), "{err}");
+        assert!(err.contains("--seizure-warning no-disorder"), "{err}");
+    }
+    assert!(!answer.exists() && !s.0.join("config/setup.json").exists());
+    // `--seizure-warning` with nothing else to do saves only the answer.
+    let o = s.run(&["setup", "--yes", "--seizure-warning", "no-disorder"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let saved = std::fs::read_to_string(&answer).unwrap();
+    assert!(saved.contains("\"answer\": \"no_disorder\""), "{saved}");
+    assert!(!s.0.join("config/setup.json").exists());
     // With no terminal and no profile, it says what to do instead of asking.
     let o = s.run(&["setup"]);
     assert!(!o.status.success());
@@ -136,4 +153,29 @@ fn setup_explorer_yes_end_to_end() {
     assert!(o.status.success());
     let st = s.json(&["setup", "--status", "--json"]);
     assert_eq!(st["record"]["profile"], "blank-slate");
+}
+
+/// `--seizure-warning at-risk` goes on, after the advice not to use JETCARP, and saves the answer
+/// for the strobe limiter to come (#96).
+#[test]
+fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
+    let s = Scratch::new("setup-at-risk");
+    let o = s.run(&[
+        "setup",
+        "--profile",
+        "blank-slate",
+        "--yes",
+        "--seizure-warning",
+        "at-risk",
+    ]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "{err}");
+    assert!(err.contains("PLEASE DON'T USE JETCARP"), "{err}");
+    let saved = std::fs::read_to_string(s.0.join("config/photosensitivity.json")).unwrap();
+    assert!(saved.contains("\"answer\": \"at_risk\""), "{saved}");
+    assert!(saved.contains(env!("CARGO_PKG_VERSION")), "{saved}");
+    assert!(s.0.join("config/setup.json").is_file());
+    // Answered once, `--yes` needs no answer again.
+    let o = s.run(&["setup", "--profile", "blank-slate", "--yes"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
 }

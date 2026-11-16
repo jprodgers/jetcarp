@@ -98,7 +98,9 @@ impl Offer {
 }
 
 /// `jetcarp host wallpaper on`, then `jetcarp host start` (or a reload when the host runs).
+/// Refused, as they are, until the photosensitive seizure warning has been accepted (#96).
 fn wallpaper_on() -> Result<String, String> {
+    jetcarp_core::photosensitivity::require("show the desktop background")?;
     let mut s = HostSettings::load().0;
     s.screens
         .iter_mut()

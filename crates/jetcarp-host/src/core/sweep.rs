@@ -151,6 +151,12 @@ enum Step {
 impl Core {
     /// Starts a sweep on the real screen (each size shown for `seconds`).
     pub(crate) fn start_sweep(&mut self, req: TuneRequest, seconds: f64) -> Result<(), String> {
+        // A sweep runs its screen whatever holds it, so not before the warning is accepted (#96).
+        if self.local_holds.contains(super::WARNING_HOLD) {
+            return Err(jetcarp_core::photosensitivity::refusal(
+                "sweep the desktop background's sizes on screen",
+            ));
+        }
         if self.sweep.is_some() {
             return Err("a sweep is already running".into());
         }

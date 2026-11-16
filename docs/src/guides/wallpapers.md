@@ -16,6 +16,14 @@ What any of these shows is a [screensaver profile](#screensaver-profiles), a [ro
 (a list of items that change over time), a scene file or a Quick Start entry. For a first, step-by-step
 setup, see [Your first live wallpaper](../tutorials/first-wallpaper.md).
 
+> **Photosensitive seizure warning.** Full screen, as the desktop background or as a screen saver,
+> some rules flicker the whole screen many times a second, which can trigger seizures in people with
+> photosensitive epilepsy. None of these starts until the
+> [warning](../getting-started/photosensitivity.md) has been answered, in the app or with
+> `jetcarp setup`: `jetcarp host start`, `host wallpaper on`, `host login on` and
+> `host saver install` refuse, a host started at login holds its screens still, and the screen
+> saver does not start.
+
 ## What works on which system
 
 | | Linux with GNOME | Other Linux desktops | Windows | macOS |
@@ -72,7 +80,9 @@ GNOME, Intel Macs, and any other versions of these systems.
 
 *View → Screensaver mode* (F12), or *Start the screensaver* in the *Screensaver* pane, hides every
 control and runs the screensaver; Esc leaves it. It runs full screen on the app's monitor, or on the
-monitors chosen in the *Display* pane.
+monitors chosen in the *Display* pane. Like everything else in the app, it waits for the
+[photosensitive seizure warning](../getting-started/photosensitivity.md) to be answered; `jetcarp
+--screensaver` shows the warning first, then the screensaver.
 
 *View → Screensaver settings…* opens the *Screensaver* pane:
 
@@ -163,9 +173,16 @@ the processor is busy, while the desktop holds it (windows cover it, or the scre
 and during a sweep of *Fit to this computer*. Its `note:` lines are the host's recent messages, such
 as the GPU it took. Just after `next` the new item is *starting* until its world is built.
 
+A host started before the [photosensitive seizure warning](../getting-started/photosensitivity.md)
+was answered (at login after an upgrade, say) holds every screen at its first picture, and `status`
+says so on a line of its own: `waiting: the photosensitive seizure warning has not been
+accepted (…)`. The scenes start by themselves, within a few seconds, once it has been answered in
+the app or with `jetcarp setup`. Meanwhile `start`, `wallpaper on`, `login on`, `saver install` and
+*Fit to this computer* on screen are refused, with the warning.
+
 | Command | Effect |
 | --- | --- |
-| `jetcarp host start [--rotation NAME] [--headless]` | Start the host; it keeps running after the command ends. `--rotation` is for this run only; `--headless` runs it with no window or menu |
+| `jetcarp host start [--rotation NAME] [--headless]` | Start the host; it keeps running after the command ends. `--rotation` is for this run only; `--headless` runs it with no window or menu. Refused until the photosensitive seizure warning has been answered |
 | `jetcarp host stop`, `status`, `pause`, `resume` | Quit it, say what it shows, freeze it, carry on |
 | `jetcarp host next`, `previous` `[--screen N]` | The next or previous item, on every screen or one |
 | `jetcarp host rotation NAME [--screen N]` | Choose a screen's rotation |
@@ -453,6 +470,11 @@ first screen's rotation); in the app, the same choice is *System screen saver ru
 *Screensaver* pane, with an *Install* button.
 `jetcarp host saver status` says whether it is installed, and `remove` takes it out.
 
+Until the [photosensitive seizure warning](../getting-started/photosensitivity.md) has been
+answered, `install` refuses, and on Windows a screen saver installed before shows nothing but the
+warning, in a message box. A macOS screen saver installed before the warning existed keeps running
+as it was built until it is installed again.
+
 - **Windows.** A copy of JETCARP's windowless launcher is made at `%LOCALAPPDATA%\JETCARP\JETCARP.scr`
   and selected in *Screen Saver Settings*, as right-clicking a `.scr` file and choosing *Install*
   would. It reads JETCARP's settings each time it starts, so changes apply at once, and its *Settings*
@@ -481,7 +503,8 @@ first screen's rotation); in the app, the same choice is *System screen saver ru
 
 `jetcarp host login on` (or *Start at login*, in the *Desktop background* pane or the host's menu)
 makes the host start when
-you log in; `jetcarp host login off` stops that. It uses each system's own per-user mechanism:
+you log in; `jetcarp host login off` stops that. Turning it on waits for the
+[photosensitive seizure warning](../getting-started/photosensitivity.md) to be answered. It uses each system's own per-user mechanism:
 
 | System | What is written |
 | --- | --- |

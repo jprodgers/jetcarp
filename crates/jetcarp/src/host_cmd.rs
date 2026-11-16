@@ -93,6 +93,9 @@ pub enum SaverAction {
 #[derive(Subcommand, Debug)]
 pub enum HostCmd {
     /// Run the host in this process (what `start`, login and the GNOME menu run).
+    ///
+    /// Until the photosensitive seizure warning has been accepted (in the app, or with `jetcarp
+    /// setup`), it holds every screen still and `status` says why; `--saver` refuses to start.
     Serve(jetcarp_host::HostArgs),
     /// Run as the Windows screen saver (what `JETCARP.scr` runs, with Windows' arguments).
     #[command(hide = true)]
@@ -101,6 +104,9 @@ pub enum HostCmd {
         args: Vec<String>,
     },
     /// Start the host (it keeps running after this command ends).
+    ///
+    /// Refused until the photosensitive seizure warning has been accepted, in the app or with
+    /// `jetcarp setup`; so are `wallpaper on`, `login on` and `saver install`.
     Start {
         /// Run this rotation, for this run only.
         #[arg(long)]
@@ -233,6 +239,12 @@ pub enum HostCmd {
         #[arg(long)]
         save: Option<std::path::PathBuf>,
     },
+}
+
+/// Ok once the photosensitive seizure warning has been accepted; else `action` is refused, with
+/// the warning (#96).
+fn warned(action: &str) -> Result<()> {
+    jetcarp_core::photosensitivity::require(action).map_err(|e| anyhow!(e))
 }
 
 /// Saves `s` and tells a running host; no host running is fine.
@@ -402,8 +414,19 @@ fn status_lines(v: &Value) -> Vec<String> {
     if !why.is_empty() {
         out.push(format!("paused: {}", why.join("; ")));
     }
+    // Held until the photosensitive seizure warning is accepted (#96): a line of its own, since
+    // it waits for an answer rather than passing by itself.
+    use jetcarp_core::photosensitivity::HOST_HELD;
+    if words("held_why").contains(&HOST_HELD) {
+        out.push(format!(
+            "waiting: {HOST_HELD}; the scenes start once it has been"
+        ));
+    }
     // A hold passes by itself, unlike a pause (#76).
-    let held = words("held_why");
+    let held: Vec<&str> = words("held_why")
+        .into_iter()
+        .filter(|w| *w != HOST_HELD)
+        .collect();
     if !held.is_empty() {
         out.push(format!("held: {} (resumes by itself)", held.join("; ")));
     }
@@ -540,7 +563,10 @@ pub fn run(a: HostArgs) -> Result<()> {
                 )
             }
         }
-        HostCmd::Start { rotation, headless } => start(rotation.as_deref(), headless, j),
+        HostCmd::Start { rotation, headless } => {
+            warned("start the background host")?;
+            start(rotation.as_deref(), headless, j)
+        }
         HostCmd::Stop => {
             if let Err(e) = host_call(&json!({"action": "quit"})) {
                 // The answer to "quit" can be lost as the host closes its end (seen on Windows as
@@ -677,6 +703,9 @@ pub fn run(a: HostArgs) -> Result<()> {
             Ok(())
         }
         HostCmd::Login { state } => {
+            if state.b() {
+                warned("start the background host at login")?;
+            }
             let cmd = autostart::login_command().map_err(|e| anyhow!(e))?;
             autostart::set(state.b(), &cmd).map_err(|e| anyhow!(e))?;
             println!(
@@ -695,6 +724,9 @@ pub fn run(a: HostArgs) -> Result<()> {
             monitor,
             rotation,
         } => {
+            if state.b() {
+                warned("show the desktop background")?;
+            }
             let mut s = HostSettings::load().0;
             let place = if state.b() {
                 Place::Wallpaper
@@ -805,6 +837,9 @@ pub fn run(a: HostArgs) -> Result<()> {
             Ok(())
         }
         HostCmd::Saver { action, rotation } => {
+            if action == SaverAction::Install {
+                warned("install the screen saver")?;
+            }
             if let Some(name) = rotation {
                 let mut s = HostSettings::load().0;
                 s.saver_rotation = Some(name);
@@ -1004,5 +1039,27 @@ mod tests {
             has("held: on battery; the processor is busy (resumes by itself)"),
             "{lines:?}"
         );
+    }
+
+    /// A host held by the photosensitive seizure warning says so on a line of its own, apart
+    /// from the holds that pass by themselves (#96).
+    #[test]
+    fn status_says_the_warning_holds_the_host() {
+        use jetcarp_core::photosensitivity::HOST_HELD;
+        let v = json!({
+            "pid": 7, "uptime_s": 2.0, "memory_mb": 90, "gpu": "UHD", "screens": [],
+            "paused": false, "paused_why": [],
+            "held": ["warning", "battery"], "held_why": [HOST_HELD, "on battery"],
+            "log": [],
+        });
+        let lines = status_lines(&v);
+        let has = |l: &str| lines.iter().any(|x| x == l);
+        assert!(
+            has(&format!(
+                "waiting: {HOST_HELD}; the scenes start once it has been"
+            )),
+            "{lines:?}"
+        );
+        assert!(has("held: on battery (resumes by itself)"), "{lines:?}");
     }
 }

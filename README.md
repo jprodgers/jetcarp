@@ -2,6 +2,11 @@
 
 **Jimmie's Euclidean Tilings and Cellular Automata Research Program**
 
+> **Photosensitive seizure warning:** JETCARP's animations can flash and flicker rapidly, and can
+> trigger seizures in people with photosensitive epilepsy. Please read the
+> [warning](https://jprodgers.github.io/jetcarp/getting-started/photosensitivity.html) before you
+> use it.
+
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24191765.svg)](https://doi.org/10.5281/zenodo.24191765)
 
 <picture>

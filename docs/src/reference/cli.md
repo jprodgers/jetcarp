@@ -54,7 +54,7 @@ Commands:
   doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
   uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes
   paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
-  setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where things stand
+  setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes` asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows where things stand
   isohedral   List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet
   rules       List named rules and notation
   script      Run a Rhai script: worlds, runs, images, parallel rule sweeps (see the book's "Scripting (Rhai) API" reference). `--examples` lists the example scripts built in, `--example NAME` runs one
@@ -2437,33 +2437,61 @@ Options:
 #### `jetcarp host serve`
 
 ```text
-Run the host in this process (what `start`, login and the GNOME menu run)
+Run the host in this process (what `start`, login and the GNOME menu run).
+
+Until the photosensitive seizure warning has been accepted (in the app, or with `jetcarp setup`), it holds every screen still and `status` says why; `--saver` refuses to start.
 
 Usage: jetcarp host serve [OPTIONS]
 
 Options:
-      --headless             Run with no window or tray (scripts, and automated tests)
-      --canvas <CANVAS>      Canvas size with --headless, as WxH [default: 1280x720]
-      --rotation <ROTATION>  Run this rotation on the first screen, for this run only
-      --seconds <SECONDS>    Quit after this many seconds
-      --saver                Run as a screen saver: full screen on every monitor until there is input
-      --login                Started at login (what the login entry runs): show only the screens placed on the desktop, and open no windows. With none, the host waits in the tray or menu bar
-      --json                 Print the host's reply as JSON
-  -h, --help                 Print help
+      --headless
+          Run with no window or tray (scripts, and automated tests)
+
+      --canvas <CANVAS>
+          Canvas size with --headless, as WxH
+          
+          [default: 1280x720]
+
+      --rotation <ROTATION>
+          Run this rotation on the first screen, for this run only
+
+      --seconds <SECONDS>
+          Quit after this many seconds
+
+      --saver
+          Run as a screen saver: full screen on every monitor until there is input
+
+      --login
+          Started at login (what the login entry runs): show only the screens placed on the desktop, and open no windows. With none, the host waits in the tray or menu bar
+
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp host start`
 
 ```text
-Start the host (it keeps running after this command ends)
+Start the host (it keeps running after this command ends).
+
+Refused until the photosensitive seizure warning has been accepted, in the app or with `jetcarp setup`; so are `wallpaper on`, `login on` and `saver install`.
 
 Usage: jetcarp host start [OPTIONS]
 
 Options:
-      --rotation <ROTATION>  Run this rotation, for this run only
-      --headless             No window or tray
-      --json                 Print the host's reply as JSON
-  -h, --help                 Print help
+      --rotation <ROTATION>
+          Run this rotation, for this run only
+
+      --headless
+          No window or tray
+
+      --json
+          Print the host's reply as JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 #### `jetcarp host stop`
@@ -2897,22 +2925,50 @@ Set JETCARP up for what you want it for, where it keeps its files, what it sees 
 ### `jetcarp setup`
 
 ```text
-First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where things stand
+First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes` asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows where things stand
 
 Usage: jetcarp setup [OPTIONS]
 
 Options:
-      --json                    Print the result as JSON instead of text (commands that report a result)
-      --profile <PROFILE>       The profile: desktop-art, explorer, researcher, everything, or blank-slate. Asked for in a terminal when left out
-      --data-dir <DIR>          Keep JETCARP's data (the library, its media and search folders) in this folder from now on, for big libraries; recorded in paths.json in the settings folder. It must be empty, or hold a JETCARP data folder already: nothing is moved
-      --quickstart-minutes <N>  Minutes of the Quick Start build: a search whose best runs are added to the Quick Start (default: the profile's, 10, 30 or 60; 0: none)
-      --packs <DIR>             Import the packs in this folder too: a pack store, an export, or a folder holding them (repeatable)
-  -y, --yes                     Ask nothing: do what the profile does (the desktop offers are only printed)
-      --status                  Only show where things stand: whether setup has run, the folders, the packs that came with JETCARP, the GPU, and what each profile takes here
-      --no-gpu                  The Quick Start build runs on the CPU even when there is a GPU
-      --threads <THREADS>       Worker threads (default: all cores, and all but two for the Quick Start build)
-      --quiet                   No progress on standard error
-  -h, --help                    Print help
+      --json
+          Print the result as JSON instead of text (commands that report a result)
+
+      --profile <PROFILE>
+          The profile: desktop-art, explorer, researcher, everything, or blank-slate. Asked for in a terminal when left out
+
+      --data-dir <DIR>
+          Keep JETCARP's data (the library, its media and search folders) in this folder from now on, for big libraries; recorded in paths.json in the settings folder. It must be empty, or hold a JETCARP data folder already: nothing is moved
+
+      --quickstart-minutes <N>
+          Minutes of the Quick Start build: a search whose best runs are added to the Quick Start (default: the profile's, 10, 30 or 60; 0: none)
+
+      --packs <DIR>
+          Import the packs in this folder too: a pack store, an export, or a folder holding them (repeatable)
+
+  -y, --yes
+          Ask nothing: do what the profile does (the desktop offers are only printed). The photosensitive seizure warning must have been answered before, or with --seizure-warning
+
+      --seizure-warning <ANSWER>
+          Answer the photosensitive seizure warning without being asked (saved in the settings folder). Setup asks it first in a terminal; with --yes, or no terminal, it needs this the first time. With no --profile, only the answer is saved
+
+          Possible values:
+          - no-disorder: You don't have epilepsy or a seizure disorder
+          - at-risk:     You have, or may have, a seizure disorder, and go on at your own risk, against the warning's advice not to use JETCARP
+
+      --status
+          Only show where things stand: whether setup has run, the folders, the packs that came with JETCARP, the GPU, and what each profile takes here
+
+      --no-gpu
+          The Quick Start build runs on the CPU even when there is a GPU
+
+      --threads <THREADS>
+          Worker threads (default: all cores, and all but two for the Quick Start build)
+
+      --quiet
+          No progress on standard error
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 ### `jetcarp paths`

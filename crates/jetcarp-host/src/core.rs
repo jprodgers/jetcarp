@@ -38,6 +38,14 @@ const QUIT_GRACE: f64 = 1.0;
 const TUNING_SILENCE: f64 = 30.0;
 /// The monitors must stay as they are this long before the host tunes again for them.
 const RETUNE_SETTLE: f64 = 15.0;
+/// The hold that keeps every screen still until the photosensitive seizure warning has been
+/// accepted (#96).
+pub(crate) const WARNING_HOLD: &str = "warning";
+/// How often a host held by the warning looks for an answer.
+const WARNING_CHECK: f64 = 2.0;
+/// What a host held by the warning prints on standard error as it starts.
+const WARNING_SAID: &str = "nothing runs until the photosensitive seizure warning has been \
+                            accepted: open the JETCARP app, or run `jetcarp setup`";
 
 /// Whether wallpapers can be shown, as far as the host knows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -218,6 +226,8 @@ pub struct Core {
     retune_since: Option<f64>,
     /// The sizes the host last tuned again for by itself, so it tries each arrangement once.
     retune_tried: Option<Vec<(usize, [u32; 2])>>,
+    /// When the host last looked for an answer to the photosensitive seizure warning.
+    warning_at: f64,
 }
 
 /// The tuned desktop background screens whose canvas is not the one their tuning was found for,
@@ -285,6 +295,7 @@ pub fn hold_reasons<'a>(holds: impl Iterator<Item = &'a str>) -> Vec<String> {
             "covered" => "windows cover the desktop".into(),
             "tuning" => "tuning the desktop background for this computer".into(),
             "dark" => "the screen is locked or off".into(),
+            WARNING_HOLD => jetcarp_core::photosensitivity::HOST_HELD.into(),
             other => format!("the desktop asked ({other})"),
         };
         if !why.contains(&words) {
@@ -347,8 +358,26 @@ impl Core {
         // The host's own tests turn the rules off, so a busy test machine doesn't pause them.
         core.watch_power = std::env::var_os("JETCARP_HOST_NO_PAUSE_RULES").is_none();
         core.is_host = true;
+        core.check_warning();
         core.settle_still();
         Ok(core)
+    }
+
+    /// The photosensitive seizure warning (#96): until it has been accepted, every screen is held
+    /// at its first frame, so nothing animates, and the status says why. A held host looks again
+    /// every few seconds ([`WARNING_CHECK`]), so an answer given in the app or with `jetcarp
+    /// setup` starts the scenes.
+    fn check_warning(&mut self) {
+        let held = self.local_holds.contains(WARNING_HOLD);
+        let accepted = jetcarp_core::photosensitivity::accepted();
+        if held && accepted {
+            self.note("the photosensitive seizure warning has been accepted; the scenes run");
+            self.set_local_hold(WARNING_HOLD, false);
+        } else if !held && !accepted {
+            // The status says it as a hold (`held_why`); the log on standard error says it too.
+            say!("jetcarp-host: {WARNING_SAID}");
+            self.set_local_hold(WARNING_HOLD, true);
+        }
     }
 
     /// The screen saver: one scene, no link, and nothing written back to the settings.
@@ -419,6 +448,7 @@ impl Core {
             sweep_last: None,
             retune_since: None,
             retune_tried: None,
+            warning_at: 0.0,
         };
         if let Some(w) = warning {
             core.note(w);
@@ -774,6 +804,10 @@ impl Core {
         if self.is_host && now - self.still_at >= POWER_CHECK {
             self.still_at = now;
             self.refresh_still();
+        }
+        if self.local_holds.contains(WARNING_HOLD) && now - self.warning_at >= WARNING_CHECK {
+            self.warning_at = now;
+            self.check_warning();
         }
         if self.tuning_at.is_some_and(|t| now - t > TUNING_SILENCE) {
             self.tuning_at = None;
@@ -1190,6 +1224,7 @@ impl Core {
         }
         let since = *self.retune_since.get_or_insert(now);
         let waiting = self.user_paused
+            || self.local_holds.contains(WARNING_HOLD)
             || self.local_holds.contains("battery")
             || self.local_holds.contains("busy")
             || self.tuning_at.is_some();

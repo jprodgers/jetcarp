@@ -17,6 +17,11 @@ Release builds are made for Linux on x86_64 and ARM (aarch64), Windows on x86_64
 Apple silicon and Intel. Linux on ARM and Intel Macs are built by the same release workflow but have
 not been tried by hand. On anything else, [cargo](#with-cargo) builds JETCARP from source.
 
+> **Photosensitive seizure warning.** JETCARP's animations can flash and flicker rapidly, and can
+> trigger seizures in people with photosensitive epilepsy. Read the
+> [warning](photosensitivity.md) first: the app shows it at its first launch, and `jetcarp setup`
+> asks it, before anything animates on screen.
+
 ## The installers
 
 On Linux and macOS, in a terminal:

@@ -34,7 +34,7 @@ fn host_control_definition() -> Value {
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it).",
+        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.",
         "inputSchema": {"type": "object", "properties": {
             "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "tune", "scene", "quit"], "description": "Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene."},
             "on": {"type": "boolean", "description": "With wallpaper, login or tune: on or off. Default on."},
@@ -47,6 +47,30 @@ fn host_control_definition() -> Value {
         }, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
+}
+
+/// Whether a `host_control` call would start or show scenes: refused, with the warning, until
+/// the photosensitive seizure warning has been accepted (#96). Reading the status, pausing,
+/// hiding, quitting and opening the app (which shows the warning itself) are not.
+fn host_call_shows(args: &Value) -> bool {
+    let on = args.get("on").and_then(Value::as_bool).unwrap_or(true);
+    match args
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or("status")
+    {
+        "resume" | "next" | "previous" | "rotation" => true,
+        "wallpaper" | "login" | "tune" => on,
+        _ => false,
+    }
+}
+
+/// A `host_control` call, refused while the warning stands in its way.
+fn host_control(args: &Value) -> Result<Value, String> {
+    if host_call_shows(args) {
+        jetcarp_core::photosensitivity::require("start or show scenes in the background host")?;
+    }
+    crate::link::host_call(args)
 }
 
 struct Link {
@@ -219,7 +243,7 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
                 let id = msg["id"].clone();
                 if name == crate::link::HOST_TOOL {
                     let args = msg["params"]["arguments"].clone();
-                    let o = match crate::link::host_call(&args) {
+                    let o = match host_control(&args) {
                         Ok(v) => ToolOutput::text(v.to_string()),
                         Err(e) => ToolOutput::error(e),
                     };
@@ -289,6 +313,44 @@ fn stop_own_jobs() {
                  carries it on",
                 STOP_WAIT.as_secs()
             ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_call_shows;
+    use serde_json::json;
+
+    /// The `host_control` calls that start or show scenes wait for the photosensitive seizure
+    /// warning; reading, pausing, hiding and quitting do not (#96).
+    #[test]
+    fn host_calls_that_start_or_show_scenes_are_known() {
+        for a in [
+            json!({"action": "resume"}),
+            json!({"action": "next"}),
+            json!({"action": "previous", "screen": 1}),
+            json!({"action": "rotation", "name": "x"}),
+            json!({"action": "wallpaper"}),
+            json!({"action": "wallpaper", "on": true}),
+            json!({"action": "login"}),
+            json!({"action": "tune", "dry_run": true}),
+        ] {
+            assert!(host_call_shows(&a), "{a}");
+        }
+        for a in [
+            json!({}),
+            json!({"action": "status"}),
+            json!({"action": "pause"}),
+            json!({"action": "wallpaper", "on": false}),
+            json!({"action": "login", "on": false}),
+            json!({"action": "tune", "on": false}),
+            json!({"action": "scene"}),
+            json!({"action": "reload"}),
+            json!({"action": "open_app"}),
+            json!({"action": "quit"}),
+        ] {
+            assert!(!host_call_shows(&a), "{a}");
         }
     }
 }

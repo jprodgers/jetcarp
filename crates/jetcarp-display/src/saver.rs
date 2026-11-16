@@ -18,9 +18,10 @@ pub fn os_name() -> &'static str {
 }
 
 /// Puts JETCARP in the list and opens the system's screen saver settings. Returns where it went and
-/// any warnings.
+/// any warnings. Refused until the photosensitive seizure warning has been accepted (#96).
 #[cfg(feature = "library")]
 pub fn install() -> Result<(PathBuf, Vec<String>), String> {
+    jetcarp_core::photosensitivity::require("install the screen saver")?;
     if cfg!(target_os = "macos") {
         return crate::macsaver::install();
     }

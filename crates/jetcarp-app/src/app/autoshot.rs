@@ -379,7 +379,13 @@ impl JetcarpApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        if self.building.is_some() || self.display.fill_pending || self.display.pixel_zoom_pending {
+        // While the photosensitive seizure warning shows (#96), nothing builds or fills: the
+        // screenshot pictures the warning.
+        if !self.warning.showing
+            && (self.building.is_some()
+                || self.display.fill_pending
+                || self.display.pixel_zoom_pending)
+        {
             return;
         }
         if a.frames_left > 0 {

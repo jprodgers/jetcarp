@@ -428,6 +428,23 @@ that will declare them stable.
 
 ### Added
 
+- **A photosensitive seizure warning, answered before JETCARP animates anything on screen.** Some
+  rules flicker the whole screen many times a second (a B0 rule turns the whole field over every
+  generation), which can trigger seizures in people with photosensitive epilepsy. The app now opens
+  on the warning, before setup, and an existing user sees it at the next launch. To go on, you
+  confirm that you don't have epilepsy or a seizure disorder; the other answer advises you not to
+  use JETCARP, with *Quit JETCARP* as its main button and a smaller *Continue at my own risk*. The
+  answer is saved in the settings folder (`photosensitivity.json`, with its date and version), so
+  the planned strobe limiter ([#97](https://github.com/jprodgers/jetcarp/issues/97)) can switch
+  itself on for those at risk. `jetcarp setup` asks it first in a terminal, and with `--yes` needs
+  `--seizure-warning no-disorder` (or `at-risk`) the first time. Until it has been answered,
+  `jetcarp host start`, `host wallpaper on`, `host login on` and `host saver install` refuse with the
+  warning, a host started at login holds its screens still and says why in `host status`, the
+  screen saver does not start, and the MCP tool `host_control` refuses to start or show scenes.
+  Pictures, animations and other files are not held back. See
+  [Photosensitive seizure warning](../getting-started/photosensitivity.md); the README and the book's
+  introduction, installation and desktop pages carry the warning too.
+  ([#96](https://github.com/jprodgers/jetcarp/issues/96))
 - **Fit the desktop background to this computer.** *Fit to this computer…* in the new *Desktop
   background* pane, or `jetcarp host tune`, sweeps each scene of the wallpaper's rotation through a
   ladder of sizes on the desktop itself, two seconds each: 1 to 64 screen pixels a cell on a

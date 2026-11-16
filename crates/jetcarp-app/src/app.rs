@@ -206,6 +206,12 @@ pub struct JetcarpApp {
     wallpaper: wallpaper_ui::WallpaperUi,
     /// The setup wizard (`crate::setup_ui`): at the first launch, and Help → Setup….
     setup: crate::setup_ui::Wizard,
+    /// The photosensitive seizure warning (`crate::warning_ui`, #96): until it has been
+    /// answered it fills the window, and nothing steps, shows or starts.
+    warning: crate::warning_ui::Warning,
+    /// The command line's launch flags, held back while the warning shows (screensaver mode and
+    /// full-screen outputs among them).
+    pending_launch: Option<crate::cli::LaunchArgs>,
 }
 
 /// What the status and menu bars show about the world, kept until its revision changes.
@@ -326,21 +332,60 @@ impl JetcarpApp {
             pal_ui: Default::default(),
             wallpaper: Default::default(),
             setup: crate::setup_ui::Wizard::for_app(),
+            warning: crate::warning_ui::Warning::for_app(),
+            pending_launch: None,
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
         let mut app = app.with_autoshot(&cc.egui_ctx);
+        // The photosensitive seizure warning comes first (#96): until it has been answered, the
+        // launch waits.
+        if app.warning.showing {
+            app.pending_launch = Some(launch);
+        } else {
+            app.launch(&cc.egui_ctx, launch);
+        }
+        app
+    }
+
+    /// The launch, once the photosensitive seizure warning has been answered: the command line's
+    /// flags (screensaver mode among them), then, at the first launch (setup never ran), the
+    /// setup wizard; screenshot runs and a launch into screensaver mode never open it.
+    fn launch(&mut self, ctx: &egui::Context, launch: crate::cli::LaunchArgs) {
         let saver = launch.screensaver;
-        app.apply_launch(&cc.egui_ctx, launch);
-        // The first launch (setup never ran) opens the setup wizard; screenshot runs and a
-        // launch into screensaver mode never do.
+        self.apply_launch(ctx, launch);
         if !saver
             && std::env::var_os("JETCARP_SCREENSHOT").is_none()
             && crate::setup_ui::Wizard::first_run()
         {
-            app.setup.show_again();
+            self.setup.show_again();
         }
-        app
+    }
+
+    /// The photosensitive seizure warning, filling the window. An answer is saved and the launch
+    /// goes on; Quit closes the app.
+    fn warning_screen(&mut self, ui: &mut egui::Ui) {
+        use crate::warning_ui::Choice;
+        let ctx = ui.ctx().clone();
+        match self.warning.show(ui) {
+            None => {}
+            Some(Choice::Quit) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Some(Choice::Answered(a)) => {
+                if let Err(e) = jetcarp_core::photosensitivity::record(a, "app") {
+                    self.message = Some((
+                        format!(
+                            "Your answer to the photosensitive seizure warning could not be \
+                             saved, so it will be asked again next time: {e}"
+                        ),
+                        true,
+                    ));
+                }
+                self.warning.showing = false;
+                if let Some(l) = self.pending_launch.take() {
+                    self.launch(&ctx, l);
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------- command layer
@@ -482,6 +527,11 @@ impl eframe::App for JetcarpApp {
     /// whole core busy. A pass steps that long's worth of generations (`run_steps` takes up to a
     /// quarter of a second at a time), so the world keeps its speed. Nothing here draws.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Nothing runs, AI control included, until the photosensitive seizure warning has been
+        // answered (#96).
+        if self.warning.showing {
+            return;
+        }
         self.ai_poll(ctx);
         if self.screen == Screen::Sim {
             let now = self.started.elapsed().as_secs_f64();
@@ -509,6 +559,13 @@ impl eframe::App for JetcarpApp {
         }
         self.shell.monitors.update(frame);
         self.window_place(frame);
+        // The photosensitive seizure warning, alone, until it has been answered (#96): no outputs,
+        // screensaver, tool windows or setup. A screenshot run still ends, picturing it.
+        if self.warning.showing {
+            self.warning_screen(ui);
+            self.autoshot_tick(&ctx);
+            return;
+        }
         self.poll_build(&ctx);
         self.saver_zoom();
         self.autoshot_tick(&ctx);

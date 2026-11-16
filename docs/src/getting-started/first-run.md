@@ -1,5 +1,9 @@
 # First run and setup
 
+Before anything else, the app shows the
+[photosensitive seizure warning](photosensitivity.md), which asks whether you have epilepsy or a
+seizure disorder. It shows once; setup comes after it.
+
 The first time you open the app, JETCARP asks a few questions in a small *Set up JETCARP* window: what
 you would like it for, where its data should go, which packs to import and whether to use it on your
 desktop. Your answers choose a *setup profile*. Setup then imports packs and searches for Quick
@@ -122,12 +126,15 @@ you tick it:
 
 ## From the command line
 
-`jetcarp setup` does the same in a terminal. With no `--profile` it asks the questions there; with
-`--profile NAME --yes` it asks nothing, for scripts. Either way it says what it will do, then does
-it, with the jobs' progress on a line below. Here with a one-minute build:
+`jetcarp setup` does the same in a terminal. It shows the
+[photosensitive seizure warning](photosensitivity.md) first, unless it was answered before. With no
+`--profile` it asks the questions there; with `--profile NAME --yes` it asks nothing, for scripts,
+and the first time it needs the warning answered with `--seizure-warning`. Either way it says what
+it will do, then does it, with the jobs' progress on a line below. Here with a one-minute build:
 
 ```text
-$ jetcarp setup --profile explorer --yes --quickstart-minutes 1
+$ jetcarp setup --profile explorer --yes --quickstart-minutes 1 --seizure-warning no-disorder
+saved your answer to the photosensitive seizure warning: no epilepsy or seizure disorder
 
 setting up JETCARP as Explorer:
   1. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
@@ -149,6 +156,7 @@ Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 | `--quickstart-minutes N` | The build's minutes instead of the profile's; `0` for none |
 | `--packs DIR` | Import the packs in this folder too (repeatable) |
 | `--yes` | Ask nothing. The desktop offers are only printed, as the commands that do them |
+| `--seizure-warning ANSWER` | Answer the [photosensitive seizure warning](photosensitivity.md) without being asked: `no-disorder` (you don't have epilepsy or a seizure disorder) or `at-risk` (you have, or may have, one, and go on at your own risk). `--yes` needs it the first time; with no `--profile`, only the answer is saved |
 | `--no-gpu` | Build on the processor even when there is a GPU |
 | `--status` | Only show where things stand (below) |
 

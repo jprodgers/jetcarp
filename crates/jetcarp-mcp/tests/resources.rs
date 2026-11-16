@@ -85,6 +85,20 @@ fn resources_match_the_book() {
     assert_eq!(pages.len(), book.len() - 1, "every page but SUMMARY.md");
 }
 
+/// The book's warning page says what the program says (#96): the warning and the advice, word for
+/// word, as `jetcarp_core::photosensitivity` has them (the advice's last paragraph adds a link).
+#[test]
+fn the_book_carries_the_photosensitive_seizure_warning() {
+    use jetcarp_core::photosensitivity as ps;
+    let page = jetcarp_mcp::docs::page("getting-started/photosensitivity").expect("the page");
+    let flat = page.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.starts_with(&format!("# {} ", ps::TITLE)), "{flat}");
+    let said = [ps::KEY, ps::RISK_KEY, ps::RISK_DETAILS[0]];
+    for p in said.into_iter().chain(ps::DETAILS) {
+        assert!(flat.contains(p), "the page does not say {p:?}");
+    }
+}
+
 #[test]
 fn the_crate_packages_small() {
     let res = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");

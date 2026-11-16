@@ -4,6 +4,9 @@
 //! what it will do, then does it, the jobs' progress on standard error. The desktop offers
 //! (Desktop art, Everything) are questions in a terminal and printed commands otherwise: setup
 //! never changes the desktop unasked.
+//!
+//! Before anything else it asks the photosensitive seizure warning (#96), unless it was answered
+//! before; `--seizure-warning` answers it instead, and `--yes` needs one or the other.
 
 use crate::search_cmd::CliProgress;
 use crate::show;
@@ -12,6 +15,7 @@ use jetcarp_api::op::{Op, Quiet, Report};
 use jetcarp_api::ops::setup::{self, ApplyIn, Profile, SetupApply, SetupStatus};
 use jetcarp_api::ops::system::human_bytes;
 use jetcarp_app::desktop_offers::Offer;
+use jetcarp_core::photosensitivity::{self as ps, Answer};
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 
@@ -34,9 +38,15 @@ pub struct SetupArgs {
     /// (repeatable).
     #[arg(long, value_name = "DIR")]
     packs: Vec<PathBuf>,
-    /// Ask nothing: do what the profile does (the desktop offers are only printed).
+    /// Ask nothing: do what the profile does (the desktop offers are only printed). The
+    /// photosensitive seizure warning must have been answered before, or with --seizure-warning.
     #[arg(long, short = 'y')]
     yes: bool,
+    /// Answer the photosensitive seizure warning without being asked (saved in the settings
+    /// folder). Setup asks it first in a terminal; with --yes, or no terminal, it needs this the
+    /// first time. With no --profile, only the answer is saved.
+    #[arg(long, value_enum, value_name = "ANSWER")]
+    seizure_warning: Option<WarningAnswer>,
     /// Only show where things stand: whether setup has run, the folders, the packs that came
     /// with JETCARP, the GPU, and what each profile takes here.
     #[arg(long)]
@@ -56,6 +66,92 @@ pub struct SetupArgs {
     /// The Quick Start build searches only these rule families (tests; default: every one).
     #[arg(long, hide = true)]
     build_families: Option<String>,
+}
+
+/// `--seizure-warning`'s answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum WarningAnswer {
+    /// You don't have epilepsy or a seizure disorder.
+    NoDisorder,
+    /// You have, or may have, a seizure disorder, and go on at your own risk, against the
+    /// warning's advice not to use JETCARP.
+    AtRisk,
+}
+
+impl WarningAnswer {
+    fn answer(self) -> Answer {
+        match self {
+            WarningAnswer::NoDisorder => Answer::NoDisorder,
+            WarningAnswer::AtRisk => Answer::AtRisk,
+        }
+    }
+}
+
+/// How the photosensitive seizure warning came out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Warned {
+    /// Answered now, or before: setup goes on.
+    Accepted,
+    /// They have, or may have, a seizure disorder, and chose to quit.
+    Quit,
+}
+
+/// The photosensitive seizure warning, before anything else (#96): an answer given with
+/// `--seizure-warning` is saved; else one saved before stands; else it is asked in a terminal,
+/// and with no terminal (or `--yes`) setup refuses, with the warning.
+fn seizure_warning(a: &SetupArgs, interactive: bool) -> Result<Warned> {
+    if let Some(w) = a.seizure_warning {
+        let rec = ps::record(w.answer(), "setup").map_err(anyhow::Error::msg)?;
+        if rec.answer == Answer::AtRisk {
+            eprintln!("{}\n", ps::risk_text());
+        }
+        eprintln!(
+            "saved your answer to the photosensitive seizure warning: {}",
+            rec.answer.words()
+        );
+        return Ok(Warned::Accepted);
+    }
+    if ps::accepted() {
+        return Ok(Warned::Accepted);
+    }
+    if !interactive {
+        bail!(
+            "JETCARP's photosensitive seizure warning has not been answered, and setup cannot ask \
+             it here (--yes, or no terminal).\n\n{}\n\nIf you don't have \
+             epilepsy or a seizure disorder, add `--seizure-warning no-disorder`. If you have, or \
+             may have, one, please don't use JETCARP.",
+            ps::text()
+        );
+    }
+    eprintln!("{}\n", ps::text());
+    eprintln!("{}", ps::QUESTION);
+    eprintln!("  1. {}", ps::NO_DISORDER);
+    eprintln!("  2. {}", ps::AT_RISK);
+    loop {
+        let Some(t) = ask("Choose 1 or 2: ") else {
+            bail!("the photosensitive seizure warning was not answered; nothing changed");
+        };
+        match t.as_str() {
+            "1" => {
+                ps::record(Answer::NoDisorder, "setup").map_err(anyhow::Error::msg)?;
+                eprintln!();
+                return Ok(Warned::Accepted);
+            }
+            "2" => break,
+            _ => eprintln!("  type 1 or 2"),
+        }
+    }
+    eprintln!("\n{}\n", ps::risk_text());
+    let t = ask("Press Enter to quit, or type c and Enter to continue at your own risk: ")
+        .unwrap_or_default();
+    if t.eq_ignore_ascii_case("c") {
+        ps::record(Answer::AtRisk, "setup").map_err(anyhow::Error::msg)?;
+        eprintln!();
+        Ok(Warned::Accepted)
+    } else {
+        eprintln!("JETCARP was not set up.");
+        Ok(Warned::Quit)
+    }
 }
 
 /// A line from the terminal, trimmed (`None` at the end of input).
@@ -127,6 +223,14 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
     }
     let terminal = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
     let interactive = terminal && !a.yes;
+    // The photosensitive seizure warning comes first (#96).
+    if seizure_warning(&a, interactive)? == Warned::Quit {
+        return Ok(());
+    }
+    // `--seizure-warning` alone, with nothing to ask the rest in: only the answer is saved.
+    if a.seizure_warning.is_some() && a.profile.is_none() && !interactive {
+        return Ok(());
+    }
     if a.yes && a.profile.is_none() {
         bail!(
             "--yes needs a --profile (desktop-art, explorer, researcher, everything, or blank-slate)"

@@ -31,6 +31,7 @@ pub mod patch;
 pub mod paths;
 pub mod pattern;
 pub mod penrose;
+pub mod photosensitivity;
 pub mod pile;
 pub mod pin;
 pub mod quickstart;

@@ -241,7 +241,10 @@ calls `app_display {"screensaver": true, "profile": "Hodgepodge"}`.
 The [background host](../guides/wallpapers.md), which keeps scenes running as wallpapers without
 the app, has a tool of its own, `host_control`: its status, the next or previous item, pause and
 resume, which rotation runs, and whether the scenes are the desktop background. The host must be
-running already (`jetcarp host start`); the tool does not start it.
+running already (`jetcarp host start`); the tool does not start it. Until you have answered the
+[photosensitive seizure warning](../getting-started/photosensitivity.md), in the app or with
+`jetcarp setup`, it refuses to start or show scenes, with the warning; an assistant cannot answer
+it for you.
 
 Switch AI control off when you are done: while it is on, any program running as you can read the
 token and steer the app. See [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md).

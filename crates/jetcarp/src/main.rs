@@ -178,8 +178,9 @@ enum Cmd {
     Paths,
     /// First-run setup: choose a profile (desktop-art, explorer, researcher, everything,
     /// blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as
-    /// jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where
-    /// things stand.
+    /// jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes`
+    /// asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows
+    /// where things stand.
     Setup(setup_cmd::SetupArgs),
     /// List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet.
     Isohedral {

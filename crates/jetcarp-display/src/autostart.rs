@@ -419,8 +419,12 @@ pub fn enabled() -> bool {
     }
 }
 
-/// Makes `cmd` start at login, or stops that. A host already running is left alone.
+/// Makes `cmd` start at login, or stops that. A host already running is left alone. Starting
+/// at login is refused until the photosensitive seizure warning has been accepted (#96).
 pub fn set(on: bool, cmd: &ProgramCommand) -> Result<(), String> {
+    if on {
+        jetcarp_core::photosensitivity::require("start the background host at login")?;
+    }
     #[cfg(windows)]
     {
         registry::set(on, cmd)

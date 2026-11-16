@@ -34,6 +34,7 @@ mod span;
 mod start;
 mod sweep_form;
 mod thumbs;
+mod warning_ui;
 mod window_job;
 
 pub use cli::LaunchArgs;

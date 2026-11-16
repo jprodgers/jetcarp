@@ -13,6 +13,11 @@ keep verified catalogues of what they find.
 JETCARP 0.4 is the first public release; the [changelog](about/changelog.md) lists what each
 release does, and [How JETCARP was made](about/how-made.md) tells where it came from.
 
+> **Photosensitive seizure warning.** JETCARP's animations can flash and flicker rapidly, and can
+> trigger seizures in people with photosensitive epilepsy. Please read the
+> [warning](getting-started/photosensitivity.md) before you use it; JETCARP asks you to answer it
+> before it animates anything on screen.
+
 ## Who it is for
 
 - **Desktop art.** JETCARP can run a scene as a live wallpaper behind your windows, as a screensaver,

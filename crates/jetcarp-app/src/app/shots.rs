@@ -26,8 +26,15 @@ struct Harness {
 
 impl Harness {
     /// The app in a window of `w` × `h` points, as at its first launch but with the setup
-    /// window closed. `None` without `JETCARP_OFFSCREEN_OUT` or a GPU.
+    /// window closed, its photosensitive seizure warning answered. `None` without
+    /// `JETCARP_OFFSCREEN_OUT` or a GPU.
     fn new(w: u32, h: u32) -> Option<Harness> {
+        Harness::open(w, h, true)
+    }
+
+    /// [`new`](Self::new), with the photosensitive seizure warning answered in the scratch
+    /// settings folder (`answered`), or not (it then shows first, #96).
+    fn open(w: u32, h: u32, answered: bool) -> Option<Harness> {
         let dir = PathBuf::from(std::env::var_os("JETCARP_OFFSCREEN_OUT")?);
         std::fs::create_dir_all(&dir).ok()?;
         for v in [
@@ -38,6 +45,13 @@ impl Harness {
             "JETCARP_RUNTIME_DIR",
         ] {
             assert!(std::env::var_os(v).is_some(), "set {v} to a scratch folder");
+        }
+        use jetcarp_core::photosensitivity as ps;
+        let settings = jetcarp_core::paths::config_dir().expect("JETCARP_CONFIG_DIR is set");
+        if !answered {
+            let _ = std::fs::remove_file(ps::file_in(&settings));
+        } else if ps::read_in(&settings).is_none() {
+            ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
         }
         let Some(o) = Offscreen::new(w, h) else {
             eprintln!("no GPU adapter");
@@ -359,6 +373,29 @@ fn shots_tour() {
     h.shot_part("tour-window-menu", Harness::around(&[bar, last, wide], 8.0));
     h.hold_menu("");
     h.escape();
+}
+
+/// The book's photosensitive seizure warning (`getting-started/photosensitivity.md`, #96): the
+/// app's first screen with no answer saved, and the advice that follows the answer that you have,
+/// or may have, a seizure disorder. Until it is answered nothing else shows and nothing runs;
+/// *Continue at my own risk* saves that answer and the launch goes on.
+#[test]
+#[ignore]
+fn shots_photosensitivity_warning() {
+    use jetcarp_core::photosensitivity as ps;
+    let Some(mut h) = Harness::open(960, 540, false) else {
+        return;
+    };
+    assert!(h.app.warning.showing && h.app.pending_launch.is_some());
+    h.shot("photosensitivity-1-warning");
+    assert!(h.o.find("Quick Start").is_none(), "only the warning shows");
+    h.click(ps::AT_RISK);
+    h.shot("photosensitivity-2-at-risk");
+    h.click(ps::CONTINUE);
+    assert!(!h.app.warning.showing && h.app.pending_launch.is_none());
+    assert_eq!(ps::read().map(|r| r.answer), Some(ps::Answer::AtRisk));
+    // Answered as the other pictures are, for the tests after this one.
+    ps::record(ps::Answer::NoDisorder, "test").unwrap();
 }
 
 /// Not a picture: the AI control window opens on the Quick Start, with no world open, and its
