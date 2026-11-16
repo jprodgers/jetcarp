@@ -91,16 +91,18 @@ pub fn locked() -> bool {
     }
 }
 
-/// Whether every display is asleep (the screen is off). While a locked Mac's display sleeps, the
-/// session no longer reads as locked and the lock screen no longer covers the wallpaper, so this is
-/// what keeps the host held then (#95); it also holds it while an unlocked display sleeps.
+/// Whether every display is asleep (the screen is off), or none is online: either way nothing the
+/// host draws can be seen. It holds the host while an unlocked display sleeps (#95).
 pub fn displays_asleep() -> bool {
     let mut ids = [0u32; 16];
     let mut count = 0u32;
     // SAFETY: a buffer of 16 display ids and a count, as CGGetOnlineDisplayList takes.
     let err = unsafe { CGGetOnlineDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
-    if err != 0 || count == 0 {
+    if err != 0 {
         return false;
+    }
+    if count == 0 {
+        return true;
     }
     ids[..count.min(16) as usize]
         .iter()

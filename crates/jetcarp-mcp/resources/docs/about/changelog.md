@@ -169,9 +169,11 @@ that will declare them stable.
   host's control files live. It now prints a `runtime:` line (`runtime` in `--json`), and doctor's
   Folders section names it too. ([#85](https://github.com/jprodgers/jetcarp/issues/85))
 - **On macOS, a locked Mac's sleeping display let the background host run.** Locked, the host
-  held; but once the display slept, the session no longer read as locked and the lock screen no
-  longer covered the wallpaper, so the host ran on a dark screen until the display woke. It now
-  also holds while every display is asleep. ([#95](https://github.com/jprodgers/jetcarp/issues/95))
+  held; but a few seconds after the display slept it let go and ran on the dark screen until the
+  display woke: its holds asked for a wallpaper window being shown, and the host had none while
+  the display slept. It now holds whenever a wallpaper is wanted and none of it can be seen: the
+  session locked, every display asleep, or no wallpaper window at all.
+  ([#95](https://github.com/jprodgers/jetcarp/issues/95))
 - **On macOS the app stopped while its window was hidden.** Minimised, covered by another
   window or on another desktop, the app got no frames, and it answered AI control and stepped its
   world only in a frame: the world nearly stopped, and `jetcarp mcp --app` waited until the window

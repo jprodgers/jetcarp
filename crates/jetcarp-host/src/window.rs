@@ -625,10 +625,15 @@ impl App {
             let showing = !walls.is_empty();
             let covered = showing && walls.iter().all(|w| !d::visible(w));
             self.core.set_local_hold("covered", covered);
-            // Locked, or the displays asleep: a locked Mac whose display sleeps reads as neither
-            // locked nor covered (#95).
-            self.core
-                .set_local_hold("dark", showing && (d::locked() || d::displays_asleep()));
+            // Dark while a wallpaper is wanted and nothing of it can be seen: the session locked,
+            // the displays asleep, or no wallpaper window at all. While a locked Mac's display
+            // slept, the host lost its wallpaper windows (so it showed nothing, and a hold that
+            // asked for a window shown let go) and ran on a dark screen (#95).
+            let wants = self.core.wants_wallpaper();
+            self.core.set_local_hold(
+                "dark",
+                wants && (!showing || d::locked() || d::displays_asleep()),
+            );
         }
         self.watch_starving();
         let geometry: Vec<_> = el
