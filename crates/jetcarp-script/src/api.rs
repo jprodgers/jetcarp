@@ -1325,7 +1325,7 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
     let c = ctx.clone();
     e.register_fn("library", move |path: &str| -> R<LibHandle> {
         // Another catalog (a folder holding library.sqlite, or a .sqlite file): it must be
-        // somewhere the script may write to.
+        // somewhere the script may write to, the file as well as its folder.
         let file = Library::file_for(std::path::PathBuf::from(path));
         let dir = file
             .parent()
@@ -1333,8 +1333,9 @@ fn register_library(e: &mut Engine, ctx: &Arc<Ctx>) {
             .filter(|d| !d.is_empty())
             .unwrap_or_else(|| ".".into());
         let d = c.writable_dir(&dir).or_err()?;
+        let name = d.join(file.file_name().unwrap_or_default());
         Ok(LibHandle(Library::open(
-            d.join(file.file_name().unwrap_or_default()),
+            c.writable(&name.display().to_string()).or_err()?,
         )))
     });
     e.register_fn("to_string", |l: &mut LibHandle| {

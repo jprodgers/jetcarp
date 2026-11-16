@@ -152,6 +152,73 @@ fn media_for_patterns_scenes_and_what_is_missing() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `media.export` and a scene's media do not write through a symbolic link already at one of
+/// their names (a file, or the frames folder) that leads out of the folder: refused, with
+/// nothing written where it leads. A link that stays inside the folder is followed.
+#[cfg(unix)]
+#[test]
+fn media_files_are_not_written_through_a_link_out_of_their_folder() {
+    use std::os::unix::fs::symlink;
+    let dir = scratch("media-links");
+    let (lib, cx) = catalog(&dir);
+    let cx = cx.with_out_root(Some(dir.join("out")));
+    render(&cx, json!({"pattern": "glider", "frames": true})).unwrap();
+    let id = lib.get("glider").unwrap().id;
+    let away = dir.join("away");
+    std::fs::create_dir_all(away.join("frames")).unwrap();
+    let export = |to: &std::path::Path| {
+        MediaExport::run(
+            &cx,
+            MediaExportIn {
+                kind: "pattern".into(),
+                id: id.clone(),
+                to: to.display().to_string(),
+                mode: None,
+            },
+            &Quiet,
+        )
+    };
+    let scene = |to: &std::path::Path| {
+        MediaRender::run(
+            &cx,
+            MediaRenderIn {
+                quickstart: Some("life".into()),
+                out: Some(to.display().to_string()),
+                gens: Some(3),
+                frames: Some(true),
+                ..Default::default()
+            },
+            &Quiet,
+        )
+    };
+    let run = |what: &str, to: &std::path::Path| match what {
+        "export" => export(to).map(|_| ()),
+        _ => scene(to).map(|_| ()),
+    };
+    for name in ["poster.png", "frames"] {
+        for what in ["export", "scene"] {
+            let to = dir.join(format!("{what}-{name}"));
+            std::fs::create_dir_all(&to).unwrap();
+            symlink(away.join(name), to.join(name)).unwrap();
+            let e = run(what, &to).unwrap_err();
+            assert!(e.message.contains("may only write inside"), "{what}: {e}");
+            assert!(
+                e.message.contains(&to.join(name).display().to_string()),
+                "{what}: {e}"
+            );
+        }
+    }
+    assert!(!away.join("poster.png").exists());
+    assert_eq!(std::fs::read_dir(away.join("frames")).unwrap().count(), 0);
+    // A link that stays inside: the poster lands where it leads.
+    let to = dir.join("export-inside");
+    std::fs::create_dir_all(to.join("real")).unwrap();
+    symlink(to.join("real/poster.png"), to.join("poster.png")).unwrap();
+    export(&to).unwrap();
+    assert!(to.join("real/poster.png").is_file());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn site_export_writes_once_and_keeps_its_page() {
     let dir = scratch("site");

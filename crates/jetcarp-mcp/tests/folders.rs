@@ -3,7 +3,9 @@
 //! exists or not) and `..` after a link cannot reach outside; a refusal reads the same whether or
 //! not the path outside exists; and a folder given with `--allow` is read, written and listed
 //! (`files_list` too). A folder the tools may use but cannot write in says "Permission denied",
-//! and a refusal names the path asked for, not a file inside it (#65).
+//! and a refusal names the path asked for, not a file inside it (#65). The files the tools name
+//! themselves inside a folder they were given are not written through a link planted at one of
+//! those names.
 //!
 //! The allowed folders are set before this binary's first tool call, which is why these tests have
 //! a binary of their own.
@@ -345,4 +347,89 @@ fn a_refusal_names_the_path_asked_for() {
             "{tool} {args}: {e}"
         );
     }
+}
+
+/// The files the tools name themselves inside a folder they were given (a scene's poster and
+/// frames, a site export's manifest, a pile's colours, a sweep's record) are not written through
+/// a symbolic link already at that name that leads outside: the call is refused, naming the file
+/// as the tools would write it, and nothing appears where the link leads.
+#[cfg(unix)]
+#[test]
+fn a_link_at_a_name_the_tools_choose_is_not_written_through() {
+    let (mut s, mut h, root) = new();
+    let out = root.join("out");
+    let away = root.join("outside/planted");
+    std::fs::create_dir_all(away.join("frames")).unwrap();
+    // A link at `name` in the folder `folder` of the output folder, to a file not there yet.
+    let plant = |folder: &str, name: &str| {
+        std::fs::create_dir_all(out.join(folder)).unwrap();
+        link(&away.join(folder), &out.join(folder).join(name));
+        out.join(folder).join(name)
+    };
+    let cases = [
+        (
+            plant("lk-media", "poster.png"),
+            "media_render",
+            json!({"quickstart": "life", "out": "lk-media"}),
+        ),
+        (
+            plant("lk-site", "manifest.json"),
+            "pack",
+            json!({"site": {"to": "lk-site"}}),
+        ),
+        (
+            plant("lk-pile", "look.json"),
+            "search_start",
+            json!({"pile": {"tiling": "square", "grains": "1e3", "folder": "lk-pile"}}),
+        ),
+    ];
+    for (planted, tool, args) in cases {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(e.contains("may only write inside"), "{tool} {args}: {e}");
+        assert!(
+            e.contains(&planted.display().to_string()),
+            "{tool} {args}: {e}"
+        );
+        assert!(!e.contains("outside"), "{tool} {args}: {e}");
+    }
+    // A linked `frames` folder is refused before a frame is written.
+    std::fs::create_dir_all(out.join("lk-frames")).unwrap();
+    link(&away.join("frames"), &out.join("lk-frames/frames"));
+    let e = fails(&call(
+        &mut s,
+        &mut h,
+        "media_render",
+        json!({"quickstart": "life", "out": "lk-frames", "frames": true}),
+    ));
+    assert!(e.contains("may only write inside"), "{e}");
+    // A sweep's record in the folder a script names.
+    plant("lk-sweep", "run.json");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "run_script",
+        json!({"script": "try { sweep(#{ rules: \"B3/S23\", tiling: \"square\", size: [16, 16], seed: \"random:0.4\", max_gens: 4, png: false, folder: \"lk-sweep\" }); print(\"wrote\"); } catch (e) { print(`refused ${e}`); }"}),
+    ));
+    assert!(
+        t.contains("refused") && t.contains("may only write inside"),
+        "{t}"
+    );
+    // A catalog a script opens in a folder: its file is checked, not only the folder.
+    plant("lk-lib", "library.sqlite");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "run_script",
+        json!({"script": "try { let l = library(\"lk-lib\"); print(l.info()); } catch (e) { print(`refused ${e}`); }"}),
+    ));
+    assert!(
+        t.contains("refused") && t.contains("may only write inside"),
+        "{t}"
+    );
+    let left: Vec<_> = std::fs::read_dir(&away)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(left, ["frames"], "nothing written outside");
+    assert_eq!(std::fs::read_dir(away.join("frames")).unwrap().count(), 0);
 }

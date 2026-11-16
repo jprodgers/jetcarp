@@ -862,7 +862,9 @@ impl Ctx {
     /// `run.json` in every output folder that has none (sweeps write their own).
     fn write_run_records(&self, s: &Summary) {
         for dir in self.out_dirs.lock().unwrap().iter() {
-            let p = dir.join("run.json");
+            let Ok(p) = out::inside(dir, "run.json") else {
+                continue;
+            };
             if p.exists() {
                 continue;
             }

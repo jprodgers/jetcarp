@@ -432,6 +432,48 @@ fn run_to_dir_writes_everything() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A pile's files are not written through a symbolic link that leads out of its folder, at the
+/// steps folder or at a file's name; a steps folder linked to a folder inside is followed.
+#[cfg(unix)]
+#[test]
+fn a_pile_folder_link_that_leads_outside_is_refused() {
+    use std::os::unix::fs::symlink;
+    let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-pile-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    let away = d.join("away");
+    std::fs::create_dir_all(away.join("steps")).unwrap();
+    let spec = PileSpec {
+        tiling: spec_of("square"),
+        nb: Nb::Edge,
+        grains: 500,
+        centre: Centre::Cell,
+    };
+    let run = |dir: &std::path::Path| {
+        let mut p = Pile::new(spec.clone()).unwrap();
+        pile::run_to_dir(&mut p, dir, None, &mut Ctl::default(), &Default::default())
+    };
+    for (name, to) in [
+        ("steps", away.join("steps")),
+        ("pile.json", away.join("pile.json")),
+    ] {
+        let dir = d.join(format!("pile-{name}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        symlink(&to, dir.join(name)).unwrap();
+        let e = run(&dir).unwrap_err();
+        assert!(e.contains("may only write inside"), "{name}: {e}");
+        assert!(e.contains(&dir.join(name).display().to_string()), "{e}");
+    }
+    assert_eq!(std::fs::read_dir(away.join("steps")).unwrap().count(), 0);
+    assert!(!away.join("pile.json").exists());
+    let dir = d.join("pile-inside");
+    std::fs::create_dir_all(dir.join("real-steps")).unwrap();
+    symlink(dir.join("real-steps"), dir.join("steps")).unwrap();
+    run(&dir).unwrap();
+    assert!(std::fs::read_dir(dir.join("real-steps")).unwrap().count() > 0);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn sixty_four_bit_grain_counts() {
     let p = Pile::new(PileSpec {

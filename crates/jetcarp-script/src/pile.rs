@@ -83,8 +83,8 @@ fn run_piles(ctx: &Arc<Ctx>, m: &Map) -> R<Map> {
         Some(v) => grains_of(v)?,
         None => 10_000,
     };
-    let root = ctx.root.join("piles");
-    std::fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
+    // `piles` is a name inside the output folder, so it is checked like any folder.
+    let root = ctx.writable_dir(&ctx.root.join("piles").display().to_string())?;
     let dir = out::make_out_dir(&root, &format!("sheet-{grains}"))?;
     ctx.add_out_dir(&dir);
     let mut base = m.clone();

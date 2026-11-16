@@ -1239,10 +1239,10 @@ pub fn publish(
     let kp = store.key_path(&me)?;
     let (_, kbytes) = key_statement(publisher, &created)?;
     if !kp.exists() {
-        crate::store::write_atomic(&kp, &kbytes)?;
+        store.write_file(&kp, &kbytes)?;
     }
     let sig = publisher.signer.sign(sign::NS_MANIFEST, &mbytes)?;
-    crate::store::write_atomic(
+    store.write_file(
         &store
             .sig_dir(&mh)?
             .join(format!("{}.sig", sign::signer_name(&me))),
@@ -1261,7 +1261,7 @@ pub fn publish(
     r.signature = publisher
         .signer
         .sign(sign::NS_REF, &json::canonical(&unsigned_value(&r)?)?)?;
-    crate::store::write_atomic(&store.ref_path(&opts.feed)?, &json::canonical_of(&r)?)?;
+    store.write_file(&store.ref_path(&opts.feed)?, &json::canonical_of(&r)?)?;
     out.seq = seq;
     if opts.views {
         let v = src.version(&mh)?;
@@ -1532,7 +1532,7 @@ pub fn copy_version(src: &Source, v: &Version, to: &Store) -> Result<(), String>
         Source::Export(_) => vec![],
     };
     for (stem, text) in sigs {
-        crate::store::write_atomic(
+        to.write_file(
             &to.sig_dir(&v.hash)?.join(format!("{stem}.sig")),
             text.as_bytes(),
         )?;
@@ -1544,7 +1544,7 @@ pub fn copy_version(src: &Source, v: &Version, to: &Store) -> Result<(), String>
             && !dst.exists()
         {
             let b = crate::store::read_limited(&p, json::MAX_DOC)?;
-            crate::store::write_atomic(&dst, &b)?;
+            to.write_file(&dst, &b)?;
         }
     }
     Ok(())

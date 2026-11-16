@@ -449,6 +449,33 @@ fn a_clips_rating_page_saves_ratings_that_reviews_read_back() {
     for x in clips {
         assert!(page.contains(&format!("\"file\":\"{}\"", x["file"].as_str().unwrap())));
     }
+    // The manifest and the page are not written through a symbolic link already at their name
+    // that leads out of the folder.
+    #[cfg(unix)]
+    {
+        let away = dir.join("away");
+        std::fs::create_dir_all(&away).unwrap();
+        for name in ["manifest.json", "index.html"] {
+            let round = dir.join(format!("linked-{name}"));
+            std::fs::create_dir_all(&round).unwrap();
+            std::os::unix::fs::symlink(away.join(name), round.join(name)).unwrap();
+            let e = fails(
+                call_json(
+                    &cx,
+                    "search.clips",
+                    json!({"job": job, "out": round.display().to_string(), "sample": 4,
+                           "px": 32, "frames": 3, "page": true}),
+                ),
+                ErrorKind::Io,
+            );
+            assert!(e.message.contains("may only write inside"), "{e}");
+            assert!(
+                e.message.contains(&round.join(name).display().to_string()),
+                "{e}"
+            );
+        }
+        assert_eq!(std::fs::read_dir(&away).unwrap().count(), 0);
+    }
     // A ratings file as the page saves it: verdicts, a star alone, and a run of another search.
     let ids: Vec<i64> = clips.iter().map(|x| x["id"].as_i64().unwrap()).collect();
     let file = dir.join("ratings-round-1.json");

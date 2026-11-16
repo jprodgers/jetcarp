@@ -185,8 +185,7 @@ fn progress_of(job: i64, pile: &Pile, spec: &PileJobSpec, status: &str) -> PileP
 pub fn start(lib: &Library, spec: &PileJobSpec) -> Result<i64, String> {
     jetcarp_core::render::builtin_palette(&spec.palette)?;
     let pile = Pile::new(spec.pile.clone())?;
-    std::fs::create_dir_all(spec.folder.join("steps"))
-        .map_err(|e| format!("{}: {e}", spec.folder.display()))?;
+    jetcarp_core::pile::make_steps_dir(&spec.folder)?;
     jetcarp_core::pile::export::write_look_file(&spec.folder, &spec.palette, spec.reverse)?;
     let v = serde_json::to_value(spec).map_err(|e| e.to_string())?;
     let job = lib.create_job(KIND, &v)?;

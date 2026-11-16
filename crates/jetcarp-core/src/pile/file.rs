@@ -101,7 +101,12 @@ pub fn save(pile: &Pile, path: &Path) -> Result<(), String> {
         header["in_step"] = json!(x);
     }
     let hb = serde_json::to_vec(&crate::json_int::safe(header)).unwrap();
+    // The temporary name stays in the file's folder; the file itself is replaced by the rename.
     let tmp = path.with_extension("pile.tmp");
+    let tmp = match path.parent() {
+        Some(d) => crate::paths::inside(d, &tmp)?,
+        None => tmp,
+    };
     let f = std::fs::File::create(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
     let mut w = std::io::BufWriter::new(f);
     let io = |e: std::io::Error| format!("{}: {e}", path.display());

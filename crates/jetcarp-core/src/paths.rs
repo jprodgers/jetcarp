@@ -20,6 +20,9 @@
 //!
 //! One more folder belongs to the program, not the user: the packs that came with it (the
 //! starter pack), which JETCARP reads but never writes; see [`bundled_packs_dir`].
+//!
+//! Paths are compared with their symbolic links followed ([`resolve`]); a file JETCARP names
+//! itself inside a folder it was given is checked to stay inside that folder ([`inside`]).
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -308,6 +311,119 @@ pub fn absolute(p: &Path) -> PathBuf {
     }
 }
 
+/// Most symbolic links one path may pass through (Linux's own limit), so that a loop of links
+/// ends instead of being followed for ever.
+const MAX_LINKS: u32 = 40;
+
+/// `p` as the file system will see it when a file is opened or made there: made absolute, the
+/// deepest part of it that exists resolved with every symbolic link followed
+/// ([`std::fs::canonicalize`]), and the rest, which does not exist yet, joined on with its `.`
+/// and `..` worked out.
+///
+/// The folder rules (`jetcarp_api::out::Guard`) and [`inside`] check this path rather than the
+/// path's text, because a link may point anywhere. A link whose target does not exist is followed
+/// by hand: `canonicalize` refuses it, but a write through it would make the target. `..` follows
+/// the system's rule, so on Unix `link/..` is the folder holding the link's target, not the
+/// folder holding the link.
+pub fn resolve(p: &Path) -> std::io::Result<PathBuf> {
+    resolve_links(&std::path::absolute(p)?, 0)
+}
+
+/// [`resolve`] for an absolute path, `links` links into it.
+fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
+    use std::path::Component;
+    let parts: Vec<Component> = p.components().collect();
+    let mut k = parts.len();
+    let mut real = PathBuf::new();
+    while k > 0 {
+        let head: PathBuf = parts[..k].iter().collect();
+        if let Ok(r) = std::fs::canonicalize(&head) {
+            real = r;
+            break;
+        }
+        if matches!(parts[k - 1], Component::Normal(_))
+            && std::fs::symlink_metadata(&head).is_ok_and(|m| m.file_type().is_symlink())
+        {
+            if links >= MAX_LINKS {
+                return Err(std::io::Error::other(format!(
+                    "{}: too many symbolic links",
+                    p.display()
+                )));
+            }
+            // A relative target starts in the folder that holds the link.
+            let mut next = head
+                .parent()
+                .unwrap_or(Path::new(""))
+                .join(std::fs::read_link(&head)?);
+            next.extend(&parts[k..]);
+            return resolve_links(&std::path::absolute(&next)?, links + 1);
+        }
+        k -= 1;
+    }
+    // What is left does not exist, so it holds no links; but a `..` in it can step back into
+    // what does exist (`new/../link`), so then the result is resolved again.
+    let mut stepped_back = false;
+    for c in &parts[k..] {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                real.pop();
+                stepped_back = true;
+            }
+            c => real.push(c.as_os_str()),
+        }
+    }
+    if stepped_back {
+        resolve_links(&real, links)
+    } else {
+        Ok(real)
+    }
+}
+
+/// `path` (relative paths start at `dir`), a file or folder JETCARP is about to write inside
+/// the folder `dir` under a name it chose itself (an animation's frames, an export's files, a
+/// pile's steps, a store's objects), if it is still inside `dir` once both are resolved
+/// ([`resolve`]); else refused. Returns the path to open: `dir` as given followed by the rest of
+/// the resolved path, so the file opened is the one checked.
+///
+/// The folder rules check the folder a tool, a script or a job is given; the files JETCARP then
+/// names inside it are checked here, since a symbolic link already at one of those names, or at
+/// a folder on the way to it, would take the write somewhere else. Write sites call this with the
+/// final path before they create a folder or open a file. It resolves the path instead of opening
+/// with `O_NOFOLLOW` or refusing every link, because that way it works the same on Linux, macOS
+/// and Windows (std's `canonicalize` and `read_link` on each), it covers the folders on the way
+/// as well as the last name (`O_NOFOLLOW` covers only the last, and only on Unix), and a link
+/// that stays inside `dir` keeps working. It checks the links that are there when it runs: a link
+/// made between the check and the write would need something that can already write in `dir`.
+///
+/// A refusal names the path as JETCARP would write it, never where the link leads, and reads
+/// the same whether or not that place exists.
+pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
+    // A name in `dir`, or a path already under it (`dir.join(name)`, as several writers pass):
+    // joining that onto a relative `dir` again would double it.
+    let path = path.as_ref();
+    let path = if path.starts_with(dir) {
+        path.to_path_buf()
+    } else {
+        dir.join(path)
+    };
+    let refused = || {
+        format!(
+            "JETCARP may only write inside {} (got {}, where a symbolic link leads out of it)",
+            dir.display(),
+            path.display()
+        )
+    };
+    let real = resolve(&path).map_err(|_| refused())?;
+    let base = resolve(dir).map_err(|_| refused())?;
+    let rest = real.strip_prefix(&base).map_err(|_| refused())?;
+    Ok(if rest.as_os_str().is_empty() {
+        dir.to_path_buf()
+    } else {
+        dir.join(rest)
+    })
+}
+
 /// This machine's name, for job owners (`host:pid` while a job runs; no extra dependency:
 /// `HOSTNAME` or `COMPUTERNAME`, then `/etc/hostname`, else `unknown`). Run records leave it out,
 /// since their folders are made to be shared.
@@ -341,4 +457,55 @@ pub fn describe() -> String {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "(no packs came with the program)".into())
     )
+}
+
+// Making symbolic links needs a privilege on Windows, so these tests run on Unix.
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A link at a name JETCARP writes, or at a folder on the way, that leads out of the folder
+    /// is refused, naming the path as written and reading the same whether or not the place it
+    /// leads to exists; a link that stays inside is followed.
+    #[test]
+    fn a_name_inside_a_folder_stays_inside_it() {
+        use std::os::unix::fs::symlink;
+        let d = std::env::temp_dir().join(format!("jetcarp-inside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let (dir, outside) = (d.join("dir"), d.join("outside"));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("there.png"), "kept").unwrap();
+        symlink(outside.join("there.png"), dir.join("a.png")).unwrap();
+        symlink(outside.join("missing.png"), dir.join("b.png")).unwrap();
+        symlink(&outside, dir.join("frames")).unwrap();
+        let a = inside(&dir, "a.png").unwrap_err();
+        let b = inside(&dir, "b.png").unwrap_err();
+        assert_eq!(a.replace("a.png", "X"), b.replace("b.png", "X"));
+        assert!(a.contains("may only write inside"), "{a}");
+        assert!(a.contains(&dir.join("a.png").display().to_string()), "{a}");
+        assert!(!a.contains("outside"), "{a}");
+        assert!(inside(&dir, "frames/0000.png").is_err());
+        assert!(inside(&dir, "frames").is_err());
+        assert!(inside(&dir, "sub/../../outside/x").is_err());
+        // Names that are not there yet, and a link that stays inside.
+        assert_eq!(inside(&dir, "new/x.png").unwrap(), dir.join("new/x.png"));
+        symlink(dir.join("sub"), dir.join("alias")).unwrap();
+        assert_eq!(inside(&dir, "alias/x.png").unwrap(), dir.join("sub/x.png"));
+        assert_eq!(inside(&dir, dir.join("sub")).unwrap(), dir.join("sub"));
+        // A relative folder: a path already under it is not joined on again.
+        let rel = Path::new("no-such-folder-here");
+        assert_eq!(inside(rel, rel.join("x.tmp")).unwrap(), rel.join("x.tmp"));
+        assert_eq!(inside(rel, "x.tmp").unwrap(), rel.join("x.tmp"));
+        // A loop of links is refused the same way.
+        symlink(dir.join("loop-b"), dir.join("loop-a")).unwrap();
+        symlink(dir.join("loop-a"), dir.join("loop-b")).unwrap();
+        assert!(inside(&dir, "loop-a").is_err());
+        assert_eq!(
+            std::fs::read_to_string(outside.join("there.png")).unwrap(),
+            "kept"
+        );
+        assert!(!outside.join("missing.png").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

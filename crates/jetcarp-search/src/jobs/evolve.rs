@@ -329,7 +329,7 @@ impl Strategy for EvolveRun {
             files = jetcarp_core::evolve::write_outputs(&report, dir)?;
             let fp = dir.join("movers.json");
             std::fs::write(
-                &fp,
+                jetcarp_core::paths::inside(dir, "movers.json")?,
                 serde_json::to_string_pretty(&found).map_err(|e| e.to_string())? + "\n",
             )
             .map_err(|e| format!("writing {}: {e}", fp.display()))?;

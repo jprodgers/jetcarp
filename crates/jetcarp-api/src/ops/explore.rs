@@ -2075,14 +2075,21 @@ impl Op for SearchClips {
             None => atlas::taste_sample(&c, a.sample.max(1), a.seed).map_err(ApiError::engine)?,
         };
         let dir = cx.fs.writable_dir(&a.out)?;
+        // The clips' names are checked to stay inside the folder before any is rendered.
+        let files = picks
+            .iter()
+            .map(|(r, _)| crate::out::inside(&dir, format!("{}.gif", r.id)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ApiError::io)?;
         let total = picks.len() as u64;
         let done = std::sync::atomic::AtomicU64::new(0);
         let mut clips: Vec<Clip> = picks
             .par_iter()
-            .filter_map(|(r, cat)| {
+            .zip(&files)
+            .filter_map(|((r, cat), file)| {
                 let bytes = atlas::clip(r, cat, a.frames, a.px).ok()?;
                 let name = format!("{}.gif", r.id);
-                std::fs::write(dir.join(&name), bytes).ok()?;
+                std::fs::write(file, bytes).ok()?;
                 let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 p.report(n, Some(total), &format!("clip {n} of {total}"));
                 Some(Clip {
@@ -2100,7 +2107,7 @@ impl Op for SearchClips {
             })
             .collect();
         clips.sort_by_key(|c| c.id);
-        let manifest = dir.join("manifest.json");
+        let manifest = crate::out::inside(&dir, "manifest.json").map_err(ApiError::io)?;
         let text =
             serde_json::to_string_pretty(&clips).map_err(|e| ApiError::engine(e.to_string()))?;
         std::fs::write(&manifest, &text)

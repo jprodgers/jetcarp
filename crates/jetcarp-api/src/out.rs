@@ -85,73 +85,10 @@ pub fn absolute(p: &Path) -> PathBuf {
     out
 }
 
-/// Most symbolic links one path may pass through (Linux's own limit), so that a loop of links
-/// ends instead of being followed for ever.
-const MAX_LINKS: u32 = 40;
-
-/// `p` as the file system will see it when a file is opened or made there: made absolute, the
-/// deepest part of it that exists resolved with every symbolic link followed
-/// ([`std::fs::canonicalize`]), and the rest, which does not exist yet, joined on with its `.`
-/// and `..` worked out.
-///
-/// The folder rules ([`Guard`]) check this path rather than the path's text, because a link
-/// inside an allowed folder may point anywhere. A link whose target does not exist is followed by
-/// hand: `canonicalize` refuses it, but a write through it would make the target. `..` follows
-/// the system's rule, so on Unix `link/..` is the folder holding the link's target, not the
-/// folder holding the link.
-pub fn resolve(p: &Path) -> std::io::Result<PathBuf> {
-    resolve_links(&std::path::absolute(p)?, 0)
-}
-
-/// [`resolve`] for an absolute path, `links` links into it.
-fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
-    let parts: Vec<Component> = p.components().collect();
-    let mut k = parts.len();
-    let mut real = PathBuf::new();
-    while k > 0 {
-        let head: PathBuf = parts[..k].iter().collect();
-        if let Ok(r) = std::fs::canonicalize(&head) {
-            real = r;
-            break;
-        }
-        if matches!(parts[k - 1], Component::Normal(_))
-            && std::fs::symlink_metadata(&head).is_ok_and(|m| m.file_type().is_symlink())
-        {
-            if links >= MAX_LINKS {
-                return Err(std::io::Error::other(format!(
-                    "{}: too many symbolic links",
-                    p.display()
-                )));
-            }
-            // A relative target starts in the folder that holds the link.
-            let mut next = head
-                .parent()
-                .unwrap_or(Path::new(""))
-                .join(std::fs::read_link(&head)?);
-            next.extend(&parts[k..]);
-            return resolve_links(&std::path::absolute(&next)?, links + 1);
-        }
-        k -= 1;
-    }
-    // What is left does not exist, so it holds no links; but a `..` in it can step back into
-    // what does exist (`new/../link`), so then the result is resolved again.
-    let mut stepped_back = false;
-    for c in &parts[k..] {
-        match c {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                real.pop();
-                stepped_back = true;
-            }
-            c => real.push(c.as_os_str()),
-        }
-    }
-    if stepped_back {
-        resolve_links(&real, links)
-    } else {
-        Ok(real)
-    }
-}
+// A path with its symbolic links followed, and a name JETCARP writes inside a checked folder
+// checked to stay inside it. They live in `jetcarp_core::paths`, where the writers below this
+// crate (media, packs, piles) reach them too.
+pub use jetcarp_core::paths::{inside, resolve};
 
 /// Where a script may write.
 #[derive(Clone, Debug, Default)]

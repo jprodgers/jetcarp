@@ -109,6 +109,10 @@ root itself. A path outside the root is refused:
 error: line 3, column 3: scripts may only write inside /home/ada/Pictures/JETCARP (got /home/ada/elsewhere.png); use out_dir("label") for a new output folder
 ```
 
+Paths are checked with their symbolic links followed, and so are the files JETCARP names itself
+inside a folder a script gives (a sweep's manifests, media frames, an export's files): a link at
+one of those names that leads out of the folder is refused.
+
 From the command line and the app a script may read files anywhere; through MCP, only from the output
 folder. A relative path to read is looked for next to the script first, then in the current output
 folder. Each output folder a script makes gets a `run.json` that records the script's text, its

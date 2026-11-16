@@ -87,7 +87,7 @@ pub(crate) fn write_page(
         )
         .replace("__META__", &script_json(&meta))
         .replace("__CLIPS__", &script_json(&clips));
-    let page = dir.join("index.html");
+    let page = crate::out::inside(dir, "index.html").map_err(ApiError::io)?;
     std::fs::write(&page, html)
         .map_err(|e| ApiError::io(format!("writing {}: {e}", page.display())))?;
     Ok(page)

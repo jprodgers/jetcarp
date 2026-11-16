@@ -37,6 +37,7 @@ pub mod lattice;
 pub mod patch;
 
 use crate::geom::*;
+use crate::paths::inside;
 use crate::topology::{Nb, SizeSpec, Storage, TilingSpec, Topology};
 use lattice::{Lattice, LatticeBoard};
 use patch::PatchBoard;
@@ -657,23 +658,30 @@ pub fn checkpoint_path(dir: &Path, step: u32) -> PathBuf {
 }
 
 /// Save the pile into its folder: a finished step's file (the step's checkpoint, if any, then
-/// removed), or the checkpoint of the step stopped part way. Returns the file written.
+/// removed), or the checkpoint of the step stopped part way. Returns the file written. Like
+/// every file a pile writes in its folder, it is checked to stay inside the folder once
+/// symbolic links are followed ([`crate::paths::inside`]).
 pub fn save_to_dir(pile: &Pile, dir: &Path) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dir.join("steps"))
-        .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    make_steps_dir(dir)?;
     match pile.in_step {
         Some(x) => {
             let p = checkpoint_path(dir, x.step);
-            file::save(pile, &p)?;
+            file::save(pile, &inside(dir, &p)?)?;
             Ok(p)
         }
         None => {
             let p = step_path(dir, pile.done);
-            file::save(pile, &p)?;
+            file::save(pile, &inside(dir, &p)?)?;
             let _ = std::fs::remove_file(checkpoint_path(dir, pile.done));
             Ok(p)
         }
     }
+}
+
+/// Make `dir/steps`, checked to stay inside `dir`.
+pub fn make_steps_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(inside(dir, "steps")?)
+        .map_err(|e| format!("cannot create {}: {e}", dir.display()))
 }
 
 /// The latest step file in `dir/steps` (a step's checkpoint among them), if any.
@@ -696,8 +704,7 @@ pub fn run_to_dir(
     ctl: &mut Ctl,
     opts: &RunOptions,
 ) -> Result<RunSummary, String> {
-    std::fs::create_dir_all(dir.join("steps"))
-        .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    make_steps_dir(dir)?;
     while !pile.finished() {
         let r = match toppler.as_mut() {
             Some(t) => pile.next_step(Some(&mut **t), ctl),
@@ -715,7 +722,7 @@ pub fn run_to_dir(
         }
         write_growth(pile, dir)?;
         let meta = export::metadata(pile, opts, None);
-        write_json(&dir.join("pile.json"), &meta)?;
+        write_json(&inside(dir, "pile.json")?, &meta)?;
     }
     let last = step_path(dir, pile.done);
     if !opts.save_steps && pile.done > 0 && !last.exists() {
@@ -750,7 +757,7 @@ pub fn write_growth(pile: &Pile, dir: &Path) -> Result<(), String> {
             r.backend
         );
     }
-    let p = dir.join("growth.csv");
+    let p = inside(dir, "growth.csv")?;
     std::fs::write(&p, s).map_err(|e| format!("{}: {e}", p.display()))
 }
 

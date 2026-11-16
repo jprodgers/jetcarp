@@ -141,3 +141,31 @@ fn a_search_checkpointed_and_resumed_equals_one_run() {
     // A checkpoint of another population size is refused.
     assert!(Evolution::resume(&small("square", 32, 10, 5), &cp).is_err());
 }
+
+/// A run's files are not written through a symbolic link at one of their names that leads out
+/// of the run's folder; a link that stays inside it is followed.
+#[cfg(unix)]
+#[test]
+fn a_run_folder_link_that_leads_outside_is_refused() {
+    use std::os::unix::fs::symlink;
+    let d = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("jetcarp-evolve-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    let (dir, away) = (d.join("run"), d.join("away"));
+    std::fs::create_dir_all(dir.join("kept")).unwrap();
+    std::fs::create_dir_all(&away).unwrap();
+    let report = evolve(&small("square", 8, 2, 1), &|_| true).unwrap();
+    symlink(away.join("fitness.csv"), dir.join("fitness.csv")).unwrap();
+    let e = jetcarp_core::evolve::write_outputs(&report, &dir).unwrap_err();
+    assert!(e.contains("may only write inside"), "{e}");
+    assert!(
+        e.contains(&dir.join("fitness.csv").display().to_string()),
+        "{e}"
+    );
+    assert_eq!(std::fs::read_dir(&away).unwrap().count(), 0);
+    std::fs::remove_file(dir.join("fitness.csv")).unwrap();
+    symlink(dir.join("kept/fitness.csv"), dir.join("fitness.csv")).unwrap();
+    jetcarp_core::evolve::write_outputs(&report, &dir).unwrap();
+    assert!(dir.join("kept/fitness.csv").is_file());
+    let _ = std::fs::remove_dir_all(&d);
+}

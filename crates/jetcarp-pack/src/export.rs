@@ -25,6 +25,7 @@ use crate::publish::media_ext;
 use crate::read::{self, Source, Version};
 use crate::store::{read_limited, write_atomic};
 use crate::tables::{MediaPackRow, TilingRow};
+use jetcarp_core::paths::inside;
 use std::path::Path;
 
 /// What an export wrote.
@@ -72,7 +73,8 @@ pub fn link_or_copy_with(from: &Path, to: &Path, link: LinkFn) -> Result<(u64, b
 
 /// Export a version of a store into the folder `to` (made; files in it are replaced), its
 /// tables, segments, media and reference patches hard-linked to the store's objects where the
-/// file system allows, else copied.
+/// file system allows, else copied. Every file is checked to stay inside `to` once symbolic links
+/// are followed ([`inside`]).
 pub fn export(src: &Source, v: &Version, to: &Path) -> Result<Exported, String> {
     export_with(src, v, to, |a, b| std::fs::hard_link(a, b))
 }
@@ -94,7 +96,7 @@ pub fn export_with(
         ..Default::default()
     };
     let mut put = |rel: &str, bytes: &[u8]| -> Result<(), String> {
-        write_atomic(&to.join(rel), bytes)?;
+        write_atomic(&inside(to, rel)?, bytes)?;
         out.files += 1;
         out.bytes += bytes.len() as u64;
         Ok(())
@@ -120,7 +122,7 @@ pub fn export_with(
     let mut bytes = 0u64;
     let (mut linked, mut copied) = (0u64, 0u64);
     let mut link = |from: &Path, rel: &str| -> Result<(), String> {
-        let (n, l) = link_or_copy_with(from, &to.join(rel), link_fn)?;
+        let (n, l) = link_or_copy_with(from, &inside(to, rel)?, link_fn)?;
         bytes += n;
         files += 1;
         if l {

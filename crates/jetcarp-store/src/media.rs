@@ -26,6 +26,7 @@ use jetcarp_core::media::{
     Animation, MediaMode, MediaOptions, STYLE_VERSION, content_hash, encode, pattern_animation,
     scene_animation,
 };
+use jetcarp_core::paths::inside;
 use jetcarp_core::pattern::{PatternClass, PatternRecord};
 use jetcarp_core::render::Image;
 use jetcarp_core::world::Scene;
@@ -509,19 +510,26 @@ struct Encoded {
 
 /// Write a job's files to `dir` under readable names (`frames/0000.png`..., `anim.gif` or
 /// `anim.webp`, `poster.png`, `thumb.png`), replacing only those files (the folder may be the
-/// user's own). Rows' paths are the files' names in `dir`.
+/// user's own). Rows' paths are the files' names in `dir`. Each name is checked before anything
+/// is removed or written, so a symbolic link at one that leads out of `dir` is refused
+/// ([`jetcarp_core::paths::inside`]).
 fn write_tree(dir: &Path, enc: &Encoded) -> Result<Vec<MediaRow>, String> {
+    const NAMES: [&str; 4] = ["anim.gif", "anim.webp", "poster.png", "thumb.png"];
+    for f in NAMES.iter().chain(&["frames"]) {
+        inside(dir, f)?;
+    }
+    // A link that stays inside is removed, not what it leads to, and replaced by the files.
     let frames_dir = dir.join("frames");
     if frames_dir.is_dir() {
         std::fs::remove_dir_all(&frames_dir)
             .map_err(|e| format!("{}: {e}", frames_dir.display()))?;
     }
-    for f in ["anim.gif", "anim.webp", "poster.png", "thumb.png"] {
+    for f in NAMES {
         let _ = std::fs::remove_file(dir.join(f));
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let put = |name: &str, b: &[u8]| -> Result<(), String> {
-        let p = dir.join(name);
+        let p = inside(dir, name)?;
         std::fs::write(&p, b).map_err(|e| format!("{}: {e}", p.display()))
     };
     let mut rows = Vec::new();
@@ -946,8 +954,9 @@ pub fn export(
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut out = Vec::new();
+    // Each name is checked to stay inside `dir` before it is made or copied over.
     let copy = |from: &Path, to: PathBuf, out: &mut Vec<PathBuf>| -> Result<(), String> {
-        std::fs::copy(from, &to).map_err(|e| format!("{}: {e}", from.display()))?;
+        std::fs::copy(from, inside(dir, &to)?).map_err(|e| format!("{}: {e}", from.display()))?;
         out.push(to);
         Ok(())
     };
@@ -955,7 +964,8 @@ pub fn export(
         match r.kind.as_str() {
             "frames" => {
                 let fd = dir.join("frames");
-                std::fs::create_dir_all(&fd).map_err(|e| format!("{}: {e}", fd.display()))?;
+                let made = inside(dir, &fd)?;
+                std::fs::create_dir_all(&made).map_err(|e| format!("{}: {e}", fd.display()))?;
                 if r.frame_files.len() != r.frames as usize {
                     return Err(format!(
                         "the frame list {} is missing",

@@ -90,7 +90,7 @@ impl Colors {
 /// The colouring chosen for a run folder, kept in `look.json` so a run resumed from the folder
 /// (`jetcarp pile --resume <folder>`, a script's `folder:`) exports with it.
 pub fn write_look_file(dir: &Path, palette: &str, reverse: bool) -> Result<(), String> {
-    let p = dir.join("look.json");
+    let p = crate::paths::inside(dir, "look.json")?;
     let v = json!({"palette": palette, "reverse": reverse});
     std::fs::write(&p, serde_json::to_string_pretty(&v).unwrap())
         .map_err(|e| format!("{}: {e}", p.display()))
@@ -503,16 +503,17 @@ pub fn finish(pile: &Pile, dir: &Path, opts: &RunOptions) -> Result<RunSummary, 
         ("jetcarp:version", crate::VERSION.to_string()),
         ("jetcarp:pile", serde_json::to_string(&pile.spec).unwrap()),
     ];
+    let inside = |name: &str| crate::paths::inside(dir, name);
     if opts.export.png && pile.board.grains() > 0 {
         let p = dir.join("pile.png");
-        size = Some(write_png(&b, &p, &opts.export, &text)?);
+        size = Some(write_png(&b, &inside("pile.png")?, &opts.export, &text)?);
         png = Some(p);
     }
     let mut prev = None;
     if opts.export.preview_side > 0 {
         let img = preview(&b, opts.export.preview_side, &Look::of(&opts.export));
         let p = dir.join("preview.png");
-        crate::render::write_png(&p, &img, &text)?;
+        crate::render::write_png(&inside("preview.png")?, &img, &text)?;
         prev = Some(p);
     }
     let image = json!({
@@ -526,7 +527,7 @@ pub fn finish(pile: &Pile, dir: &Path, opts: &RunOptions) -> Result<RunSummary, 
         "preview": prev.as_ref().map(|_| "preview.png"),
     });
     let meta = crate::json_int::safe(metadata(pile, opts, Some(image)));
-    super::write_json(&dir.join("pile.json"), &meta)?;
+    super::write_json(&inside("pile.json")?, &meta)?;
     Ok(RunSummary {
         dir: dir.to_path_buf(),
         png,

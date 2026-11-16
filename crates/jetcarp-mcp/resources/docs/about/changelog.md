@@ -223,6 +223,14 @@ that will declare them stable.
 - **The MCP tools resolve symbolic links before checking that a path is inside the folders they
   may use.** `files_list` also lists the folders given with `jetcarp mcp --allow`, as the other
   tools read and write there.
+- **Files the tools and scripts name themselves inside a checked folder don't follow a symbolic
+  link planted in their place.** An animation's frames and poster, a site or pack export's files,
+  a pack store's objects (the hidden store beside an export too), a pile's steps and pictures, an
+  evolve run's tables, rating clips and a sweep's records are each checked to stay inside their
+  folder once links are followed: a link that leads out is refused, naming the file, and a link
+  that stays inside still works. The command line and the app write them the same way. The
+  output folder's `piles` folder, and the catalog file a script opens with `library(...)`, are
+  checked like any other path.
 - **MCP `world_new` given width and height skipped its 4,000,000-cell limit.** It checked each
   side, not the cells the grid would have, so 4096 x 4096 (16.8 million cells, or 50 million on
   trihex) was built. The limit now counts the world's cells, several to a unit cell on trihex and

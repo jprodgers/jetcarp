@@ -212,7 +212,8 @@ impl EvolveReport {
 
 /// Write a run folder: `fitness.csv` (per generation), `champions.json` (top distinct genomes
 /// with their cross-radius checks), `gliders.json` (the ones that passed), and `run.json` (the
-/// whole report). Returns the files written.
+/// whole report). Returns the files written. Each is checked to stay inside `dir` once symbolic
+/// links are followed ([`crate::paths::inside`]).
 pub fn write_outputs(
     report: &EvolveReport,
     dir: &std::path::Path,
@@ -221,7 +222,8 @@ pub fn write_outputs(
     let mut out = Vec::new();
     let mut put = |name: &str, text: String| -> Result<(), String> {
         let p = dir.join(name);
-        std::fs::write(&p, text).map_err(|e| format!("writing {}: {e}", p.display()))?;
+        std::fs::write(crate::paths::inside(dir, name)?, text)
+            .map_err(|e| format!("writing {}: {e}", p.display()))?;
         out.push(p);
         Ok(())
     };

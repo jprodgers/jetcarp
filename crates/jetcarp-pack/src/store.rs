@@ -13,9 +13,13 @@
 //! allowlist, a feed name (letters, digits, `-`) or a signer name (a fingerprint made safe):
 //! nothing a pack says becomes a path any other way. Objects are written to a temporary file
 //! and renamed, never changed once written, and every object read is checked against its name.
+//! Every file written is checked to stay inside the store's folder once symbolic links are
+//! followed ([`jetcarp_core::paths::inside`]); reads follow links freely, so a store whose files
+//! link into a download cache reads as before.
 
 use crate::docs::{StoreMarker, VERSION};
 use crate::hash::{self, HashWriter};
+use jetcarp_core::paths::inside;
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -52,7 +56,7 @@ impl Store {
     /// A store at `root`, made (with its marker) if it does not exist.
     pub fn create(root: &Path) -> Result<Store, String> {
         std::fs::create_dir_all(root).map_err(|e| io(root, e))?;
-        let m = root.join(MARKER);
+        let m = inside(root, MARKER)?;
         if !m.exists() {
             let bytes = crate::json::canonical_of(&StoreMarker {
                 format: "jetcarp-store".into(),
@@ -151,11 +155,7 @@ impl Store {
 
     /// A temporary file in the store that becomes an object when finished.
     pub fn temp(&self) -> Result<TempObject, String> {
-        let d = self.root.join(TMP);
-        std::fs::create_dir_all(&d).map_err(|e| io(&d, e))?;
-        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let k = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path = d.join(format!("{}-{k}.tmp", std::process::id()));
+        let path = self.temp_path("object")?;
         let f = File::create(&path).map_err(|e| io(&path, e))?;
         Ok(TempObject {
             w: Some(HashWriter::new(BufWriter::with_capacity(1 << 20, f))),
@@ -165,11 +165,11 @@ impl Store {
 
     /// A path for a scratch file in the store's temporary folder (`stem` names its use).
     pub fn temp_path(&self, stem: &str) -> Result<PathBuf, String> {
-        let d = self.root.join(TMP);
+        let d = inside(&self.root, TMP)?;
         std::fs::create_dir_all(&d).map_err(|e| io(&d, e))?;
         static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let k = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Ok(d.join(format!("{stem}-{}-{k}.tmp", std::process::id())))
+        inside(&d, format!("{stem}-{}-{k}.tmp", std::process::id()))
     }
 
     /// Remove the temporary folder (after a publish).
@@ -233,20 +233,24 @@ impl Store {
         Ok(out)
     }
 
-    /// Write a file under the store (refs, keys, signatures, views): to a temporary name, then
-    /// renamed.
+    /// Write a file under the store (refs, keys, signatures, views; `rel` relative to the store's
+    /// folder, or a path inside it): to a temporary name, then renamed.
     pub fn write_file(&self, rel: &Path, bytes: &[u8]) -> Result<(), String> {
-        let p = self.root.join(rel);
-        write_atomic(&p, bytes)
+        write_atomic(&inside(&self.root, rel)?, bytes)
     }
 }
 
-/// Write a file through a temporary name in its folder.
+/// Write a file through a temporary name in its folder. The temporary name is checked to stay
+/// in that folder ([`inside`]); `p` itself is replaced by the rename, never written through.
 pub fn write_atomic(p: &Path, bytes: &[u8]) -> Result<(), String> {
-    if let Some(d) = p.parent() {
-        std::fs::create_dir_all(d).map_err(|e| io(d, e))?;
-    }
     let tmp = p.with_extension(format!("tmp{}", std::process::id()));
+    let tmp = match p.parent() {
+        Some(d) => {
+            std::fs::create_dir_all(d).map_err(|e| io(d, e))?;
+            inside(d, &tmp)?
+        }
+        None => tmp,
+    };
     std::fs::write(&tmp, bytes).map_err(|e| io(&tmp, e))?;
     std::fs::rename(&tmp, p).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -292,7 +296,7 @@ impl TempObject {
         f.sync_all().map_err(|e| io(&self.path, e))?;
         drop(f);
         let h = format!("{}{hex}", hash::PREFIX);
-        let p = store.object_path(&h, ext)?;
+        let p = inside(&store.root, store.object_path(&h, ext)?)?;
         if p.is_file() {
             let _ = std::fs::remove_file(&self.path);
             return Ok(h);

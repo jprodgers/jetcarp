@@ -38,6 +38,7 @@
 use crate::media::{self, MediaRow, MediaTarget};
 use crate::{Library, QsSource};
 use jetcarp_core::media::{MediaMode, MediaOptions, content_hash};
+use jetcarp_core::paths::inside;
 use jetcarp_core::pattern::{CurationState, PatternClass, PatternRecord, RuleRange};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -52,9 +53,10 @@ pub const FORMAT: u32 = 1;
 pub const PAGE: &str = include_str!("../data/site/index.html");
 
 /// Write [`PAGE`] as `DIR/index.html`, unless it is there already unchanged. Returns whether it
-/// was written. [`export`] leaves the page alone: it is not part of the manifest.
+/// was written. [`export`] leaves the page alone: it is not part of the manifest. A symbolic link
+/// at `index.html` that leads out of `dir` is refused ([`inside`]).
 pub fn write_page(dir: &Path) -> Result<bool, String> {
-    let p = dir.join("index.html");
+    let p = inside(dir, "index.html")?;
     if std::fs::read_to_string(&p).ok().as_deref() == Some(PAGE) {
         return Ok(false);
     }
@@ -630,8 +632,9 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
     let old = Manifest::read(dir);
     let old_files = old.as_ref().map(|m| m.files()).unwrap_or_default();
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    // Every name is checked to stay inside `dir` before its folder is made or it is written.
     let write = |rel: &str, bytes: &[u8]| -> Result<(), String> {
-        let p = dir.join(rel);
+        let p = inside(dir, rel)?;
         if let Some(parent) = p.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
@@ -683,10 +686,13 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
             report.unchanged += 1;
         }
     }
-    // Delete what is no longer public.
+    // Delete what is no longer public: only inside `dir`, whatever the old manifest names. The
+    // folder is checked, not the name itself: a link there is removed, not what it leads to.
     for rel in old_files.keys() {
         if !new_files.contains(rel) {
-            let p = dir.join(rel);
+            let r = Path::new(rel);
+            let p = inside(dir, r.parent().unwrap_or(Path::new("")))?
+                .join(r.file_name().unwrap_or_default());
             if p.exists() {
                 std::fs::remove_file(&p).map_err(|e| format!("{}: {e}", p.display()))?;
             }

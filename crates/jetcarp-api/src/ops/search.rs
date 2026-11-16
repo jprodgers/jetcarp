@@ -1190,12 +1190,13 @@ impl PileIn {
             return Ok(Built::New(to_json(&js)?));
         }
         let (id, spec) = self.pile()?;
+        // The default `piles` folder is a name inside the output folder, so it is checked too.
         let root = match &self.out {
             Some(o) => cx.fs.writable_dir(o)?,
-            None => cx.output_root().join("piles"),
+            None => cx
+                .fs
+                .writable_dir(&cx.output_root().join("piles").display().to_string())?,
         };
-        std::fs::create_dir_all(&root)
-            .map_err(|e| ApiError::io(format!("{}: {e}", root.display())))?;
         let name = self
             .name
             .clone()

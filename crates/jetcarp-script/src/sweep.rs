@@ -285,7 +285,8 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
     };
     let resume = get_bool(v, "resume")?.unwrap_or(true);
     let settings = settings_json(v, &plan, &tiling);
-    let run_json = folder.join("run.json");
+    // Every file the sweep names in its folder is checked to stay inside it (`out::inside`).
+    let run_json = out::inside(&folder, "run.json")?;
     if resume
         && let Ok(old) = std::fs::read_to_string(&run_json)
         && let Ok(old) = serde_json::from_str::<Value>(&old)
@@ -368,7 +369,7 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(folder.join("manifest.partial.jsonl"))
+            .open(out::inside(&folder, "manifest.partial.jsonl")?)
             .map_err(|e| format!("manifest.partial.jsonl: {e}"))?,
     );
     let todo: Vec<&Item> = plan
@@ -445,7 +446,7 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
         .map(|c| c.to_string())
         .collect();
     out::write_bytes(
-        &folder.join("manifest.csv"),
+        &out::inside(&folder, "manifest.csv")?,
         out::to_csv(&all, &columns).as_bytes(),
     )?;
     let mut cols = columns.clone();
@@ -461,7 +462,7 @@ pub(crate) fn run_sweep(ctx: &Ctx, v: &Value, cb: Option<&Callback>) -> Result<V
         }
     }
     out::write_bytes(
-        &folder.join("manifest.json"),
+        &out::inside(&folder, "manifest.json")?,
         serde_json::to_string_pretty(&json!({"columns": cols, "rows": all}))
             .unwrap()
             .as_bytes(),
@@ -601,7 +602,7 @@ fn run_one(
         (Some(spec), true) => {
             sim::apply_palette(w, spec)?;
             let name = format!("{}.png", item.stem);
-            let (_, _, bytes) = sim::save_png(w, spec, &folder.join(&name))?;
+            let (_, _, bytes) = sim::save_png(w, spec, &out::inside(folder, &name)?)?;
             row.insert("file".into(), json!(name));
             row.insert("png_bytes".into(), json!(bytes));
         }

@@ -42,7 +42,9 @@ as long as it runs.
 - **Files.** The tools read and write files only in JETCARP's output folder (`JETCARP_OUT`, else
   `<Pictures>/JETCARP`), the library's folder, and folders given with `--allow`; they also read the
   packs that came with JETCARP. Relative paths start in the output folder. A path outside these,
-  once its symbolic links are followed, is refused with an error that names the folders. See
+  once its symbolic links are followed, is refused with an error that names the folders. The files
+  a tool names itself inside a folder (frames, an export's files, a pile's steps) are checked the
+  same way, so a link at one of those names that leads out of the folder is refused too. See
   [Folders and environment variables](folders.md).
 - **Limits per call.** Worlds of at most 4 million cells, counting every cell, several to a unit
   cell on trihex and the k-uniform tilings (a refusal names sides that fit); at most 1,000,000
