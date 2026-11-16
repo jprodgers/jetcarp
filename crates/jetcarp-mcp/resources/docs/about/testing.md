@@ -68,7 +68,7 @@ four vendors (as of 0.4.2):
 | | Framework Desktop (the main machine) | Acer Nitro V15 laptop | MacBook Pro |
 |---|---|---|---|
 | Processor | AMD Ryzen AI Max+ 395, 16 cores, 32 threads | Intel Core i5-13420H, 8 cores, 12 threads | Apple M2 Max, 12 cores |
-| Memory | 94 GB visible to the system (shared with the GPU) | 15.7 GB | 64 GB (shared with the GPU) |
+| Memory | 128 GB unified, split by hand: 96 GB for the system and 32 GB for the GPU (changeable with a reboot) | 15.7 GB | 64 GB unified (shared with the GPU) |
 | Graphics | AMD Radeon 8060S (integrated), Vulkan (Mesa 26.2.5, RADV); Mesa's llvmpipe, a software renderer | NVIDIA GeForce RTX 3050 6GB Laptop GPU (driver 546.18) and Intel UHD Graphics (driver 31.0.101.4146), each on Vulkan and DirectX 12; an Optimus laptop, the UHD driving the screen | Apple M2 Max, 38-core GPU, Metal |
 | System | Fedora Linux 45, Linux 7.3, GNOME Shell 51.1 on Wayland | Windows 11 Home 26H2 (build 26300) | macOS 27.2.1 |
 | Screen | AOC Q3277, 2560 × 1440 at 60 Hz (moved to a laptop for the two-monitor sitting) | 1920 × 1080, built in | the built-in Retina panel |
