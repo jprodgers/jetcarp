@@ -608,7 +608,12 @@ fn a_host_holds_its_screens_until_the_warning_is_accepted() {
     let e = h
         .call(json!({"action": "tune", "seconds": 0.5}))
         .unwrap_err();
-    assert!(e.contains("photosensitive seizure warning"), "{e}");
+    if jetcarp_core::fit::FIT {
+        assert!(e.contains("photosensitive seizure warning"), "{e}");
+    } else {
+        // No sweep at all while Fit to this computer is switched off (#112).
+        assert_eq!(e, jetcarp_core::fit::HELD_BACK);
+    }
     h.call(json!({"action": "resume"})).unwrap();
     std::thread::sleep(Duration::from_millis(800));
     let v = h.call(json!({"action": "status"})).unwrap();
@@ -630,6 +635,7 @@ fn a_host_holds_its_screens_until_the_warning_is_accepted() {
 /// (`scene`) records that grid, so it replays as shown; a scene the tuning does not name keeps its
 /// own size. A tuner's hold pauses the screens until it lets go.
 #[test]
+#[ignore = "Fit to this computer is switched off in 0.4.2 (#112); back with Fit in 0.4.3 (#113)"]
 fn a_tuned_size_is_applied_and_recorded() {
     let dir = home("tuned");
     let settings = json!({"screens": [{"rotation": "Wolfram series", "tuning": {
@@ -690,6 +696,113 @@ fn a_tuned_size_is_applied_and_recorded() {
     h.call(json!({"action": "tuning", "on": false})).unwrap();
     let v = h.wait(|v| Host::stage(v)["paused"] == false, "it to carry on");
     assert_eq!(v["tuning"]["running"], false);
+}
+
+/// `jetcarp` with this test's folders: its exit status, standard output and standard error.
+fn jetcarp_in(home: &Path, args: &[&str]) -> (bool, String, String) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args(args).stdin(Stdio::null());
+    with_env(&mut c, home);
+    let out = c.output().unwrap();
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// *Fit to this computer* is switched off in 0.4.2 (#112): `jetcarp host tune` is not in the help
+/// and refuses, with or without a host; the host refuses every sweep and a tuner's hold, says
+/// nothing of fitting in its status, and shows each scene at its own size, as 0.4.1 did, though
+/// `host.json` holds the sizes a release candidate's Fit saved. Those stay in the file as they
+/// were, for 0.4.3, whatever else is saved. (With Fit back on, the tests above cover it.)
+#[test]
+fn fit_is_switched_off_and_a_saved_fit_is_kept_but_not_applied() {
+    use jetcarp_core::fit::{FIT, HELD_BACK};
+    if FIT {
+        return;
+    }
+    let dir = home("nofit");
+    let tuning = json!({"rotation": "Wolfram series", "canvas": [160, 120], "scale": 1.0,
+        "limits": {"cpu_percent": 5.0, "gpu_percent": 40.0, "auto": true}, "fps": 30.0,
+        "scenes": [{"scene": "W0", "design_px": 4.0, "cell_px": 8.0, "chosen": true,
+                    "recommended": {"px": 8.0}}]});
+    let settings = json!({"screens": [{"rotation": "Wolfram series", "tuning": tuning}],
+        "tune": {"cpu_percent": 5.0, "gpu_percent": 40.0, "auto": true}});
+    let file = dir.join("config/jetcarp/host.json");
+    std::fs::write(&file, settings.to_string()).unwrap();
+    let saved =
+        || -> Value { serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap() };
+    let saved_tuning = || -> jetcarp_display::host_settings::Tuning {
+        serde_json::from_value(saved()["screens"][0]["tuning"].clone()).unwrap()
+    };
+    let want: jetcarp_display::host_settings::Tuning =
+        serde_json::from_value(tuning.clone()).unwrap();
+
+    // Not in the help, and refused with no host running.
+    let (ok, help, _) = jetcarp_in(&dir, &["host", "--help"]);
+    assert!(ok, "{help}");
+    assert!(help.contains("  pacing"), "{help}");
+    assert!(
+        !help.lines().any(|l| l.trim_start().starts_with("tune")),
+        "{help}"
+    );
+    let (ok, out, err) = jetcarp_in(&dir, &["host", "tune"]);
+    assert!(!ok, "refused: {out}{err}");
+    assert!(err.contains(HELD_BACK), "{err}");
+
+    // The host shows W0 (Rule 0) at its own 4 px, not the 8 px saved.
+    let child = spawn(&dir, &[]);
+    let h = Host {
+        child,
+        home: dir.clone(),
+    };
+    let v = h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(0),
+        "the scene to run",
+    );
+    let s = Host::stage(&v);
+    assert_eq!(s["label"], "W0", "{s}");
+    assert_eq!(s["cell_px"], 4.0, "{s}");
+    assert_eq!(s["grid"], json!([40, 30]), "{s}");
+    assert_eq!(s["cells"], 1200, "{s}");
+    // Nothing of fitting in the status.
+    for k in ["tune", "tuning"] {
+        assert!(v.get(k).is_none(), "{k} in {v}");
+    }
+    assert!(s.get("tuned").is_none(), "{s}");
+    let shown = h.call(json!({"action": "scene"})).unwrap();
+    assert_eq!(shown["grid"], json!([40, 30]));
+    assert!(shown.get("tuned").is_none(), "{shown}");
+    // Every way of asking for a sweep, its news or a tuner's hold is refused.
+    for a in [
+        json!({"action": "tune", "seconds": 0.5}),
+        json!({"action": "tune", "on": false}),
+        json!({"action": "tune_stop"}),
+        json!({"action": "tune_events"}),
+        json!({"action": "tuning", "on": true}),
+    ] {
+        assert_eq!(h.call(a.clone()).unwrap_err(), HELD_BACK, "{a}");
+    }
+    let v = h.call(json!({"action": "status"})).unwrap();
+    assert_eq!(v["held"], json!([]), "no tuner's hold: {v}");
+    // The command line, with the host running, refuses too (as JSON lines with --json).
+    let (ok, out, err) = jetcarp_in(&dir, &["host", "tune", "--json"]);
+    assert!(!ok, "refused: {out}{err}");
+    let last: Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
+    assert_eq!(
+        (last["event"].as_str(), last["error"].as_str()),
+        (Some("failed"), Some(HELD_BACK)),
+        "{out}"
+    );
+    // A setting saved and read again keeps the saved fit as it was, unused.
+    let (ok, out, err) = jetcarp_in(&dir, &["host", "pacing", "low-power"]);
+    assert!(ok, "{out}{err}");
+    h.wait(|v| v["pacing"] == "low_power", "low power");
+    assert_eq!(saved_tuning(), want);
+    assert_eq!(saved()["tune"]["cpu_percent"], 5.0);
+    let v = h.call(json!({"action": "status"})).unwrap();
+    assert_eq!(Host::stage(&v)["cell_px"], 4.0, "{v}");
 }
 
 /// Generations stepped, frames drawn and seconds passed on screen 0 over about a second and a
@@ -838,6 +951,7 @@ fn swept(dir: &Path) -> Vec<(String, Vec<f64>, f64, bool)> {
 /// each size's numbers come as JSON lines, `--pick own` leaves each scene at its own size, and the
 /// pictures land in `--crops` and beside the settings.
 #[test]
+#[ignore = "Fit to this computer is switched off in 0.4.2 (#112); back with Fit in 0.4.3 (#113)"]
 fn host_tune_sweeps_off_screen_with_no_host() {
     let dir = home("tune");
     two_rules(&dir);
@@ -934,6 +1048,7 @@ fn saved_limit(dir: &Path) -> f64 {
 /// it; each scene is left at the recommended size (the finest within the limits), which the host
 /// then shows. A sweep can be stopped part way.
 #[test]
+#[ignore = "Fit to this computer is switched off in 0.4.2 (#112); back with Fit in 0.4.3 (#113)"]
 fn the_host_sweeps_its_own_screen_and_shows_the_recommended_size() {
     let dir = home("sweep");
     two_rules(&dir);

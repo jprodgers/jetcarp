@@ -14,6 +14,7 @@ pub mod exact;
 pub mod exact_graph;
 pub mod explore;
 pub mod families;
+pub mod fit;
 pub mod geom;
 pub mod hashlife;
 pub mod hat;

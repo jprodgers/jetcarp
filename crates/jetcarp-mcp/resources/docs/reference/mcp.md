@@ -950,14 +950,10 @@ Example:
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene. |
-| `cpu_limit` | number |  |
-| `fps` | number |  |
-| `gpu_limit` | number |  |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; scene: a screen's scene. |
 | `name` | string | With rotation: the one to run (saved). |
-| `on` | boolean | With wallpaper, login or tune: on or off. Default on. |
-| `pick` | string or number |  |
-| `screen` | integer | Counted from 0. Default: every screen for next, previous and tune, else the first. |
+| `on` | boolean | With wallpaper or login: on or off. Default on. |
+| `screen` | integer | Counted from 0. Default: every screen for next and previous, else the first. |
 
 Example:
 

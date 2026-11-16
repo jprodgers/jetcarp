@@ -100,7 +100,7 @@ what to run, and what counts as a pass. It is carried out in three parts.
   rating clips on the rating page in two browsers, fitting a score to the ratings, packs.
 - **The app:** every menu item, pane and tool window, popped out and back, AI control from an MCP
   client, light and dark, the scripting examples, exports, and big worlds on each GPU.
-- **The desktop background:** rotations, *Fit to this computer*, pauses for full-screen windows,
+- **The desktop background:** rotations, cell sizes, pauses for full-screen windows,
   battery and busy processors, sleep, lock and login, and the background host killed and restarted.
 - **MCP and robustness:** every tool, bad input of every kind (124 malformed calls in one sitting),
   paths outside the allowed folders, read-only folders, damaged and tampered packs, two programs

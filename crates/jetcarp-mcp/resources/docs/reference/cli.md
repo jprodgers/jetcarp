@@ -2425,7 +2425,6 @@ Commands:
   lock       What a wallpaper does on the GNOME lock screen (saved)
   gnome      The GNOME Shell extension behind wallpapers and the top-bar menu
   saver      The screen saver (Windows and macOS)
-  tune       Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
   scene      The scene a screen shows now, its grid's size included, as a scene file that replays it
   help       Print this message or the help of the given subcommand(s)
 
@@ -2813,28 +2812,6 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-```
-
-#### `jetcarp host tune`
-
-```text
-Fit the desktop background to this computer: run each scene of the wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as they are. A running host pauses while it runs, then shows the sizes found
-
-Usage: jetcarp host tune [OPTIONS]
-
-Options:
-      --cpu-limit <PERCENT>            JETCARP's processor time, in percent of the whole machine, every core counted (saved; default 10)
-      --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent (saved; default 25)
-      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the rate each scene draws at)
-      --screen <SCREEN>                Only this screen (counted from 0). Default: every screen on the desktop
-      --pick <WHICH>                   Which size each scene is left at: recommended (the finest within the limits; the default), finest (the finest shown), own (the scene's own), or a cell size in pixels. Without it, a size chosen before is kept while it is still within the limits
-      --crops <DIR>                    Save each size's picture here as a PNG (they are kept beside the host's settings too)
-      --canvas <CANVAS>                The screen's size in pixels, as WxH, when no host is running to say (default: the size it was tuned for before, else its monitor's)
-      --trial-seconds <TRIAL_SECONDS>  Seconds each size shows for (the last three quarters are measured) [default: 2]
-      --dry-run                        Measure and report, but save nothing
-      --stop                           Stop the sweep a running host is making (the scenes already done stay saved)
-      --json                           Print the host's reply as JSON
-  -h, --help                           Print help
 ```
 
 #### `jetcarp host scene`

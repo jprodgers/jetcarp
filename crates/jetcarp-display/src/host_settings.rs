@@ -536,6 +536,15 @@ impl HostSettings {
             .filter(|t| t.rotation == rotation)
     }
 
+    /// The tuning the host applies to screen `i` now: [`HostSettings::tuning_for`]'s while *Fit
+    /// to this computer* is in this release. With it switched off ([`jetcarp_core::fit::FIT`],
+    /// 0.4.2, #112) none: each scene shows at its own size, and what an earlier Fit saved stays in
+    /// the file, untouched, for 0.4.3.
+    pub fn tuning_applied(&self, i: usize, rotation: &str) -> Option<&Tuning> {
+        self.tuning_for(i, rotation)
+            .filter(|_| jetcarp_core::fit::FIT)
+    }
+
     /// The GPU policy the desktop background follows: `JETCARP_GPU`, else its own choice, else the
     /// shared setting.
     pub fn gpu_policy(&self) -> Policy {
@@ -711,6 +720,31 @@ mod tests {
             Some(Size::px(5.0))
         );
         assert!(!old.scenes[0].chosen && old.scenes[0].rungs.is_empty());
+    }
+
+    /// With *Fit to this computer* switched off (0.4.2, #112), the sizes a release candidate's Fit
+    /// saved are read and written back as they were, for 0.4.3, but not applied: each scene shows
+    /// at its own size. (With Fit back on, `tuning_applied` is `tuning_for`.)
+    #[test]
+    fn a_saved_fit_is_kept_but_not_applied_while_fit_is_switched_off() {
+        let text = r#"{"screens": [{"rotation": "r", "place": "wallpaper", "tuning": {
+            "rotation": "r", "canvas": [2560, 1440], "scale": 1.0,
+            "scenes": [{"scene": "a", "design_px": 3.0, "cell_px": 5.0, "chosen": true,
+                        "recommended": {"px": 5.0}}]}}],
+            "tune": {"cpu_percent": 5.0, "gpu_percent": 40.0, "auto": true}}"#;
+        let s: HostSettings = serde_json::from_str(text).unwrap();
+        let s = s.checked();
+        assert!(s.tuning_for(0, "r").is_some(), "read as saved");
+        assert_eq!(
+            s.tuning_applied(0, "r").is_some(),
+            jetcarp_core::fit::FIT,
+            "applied only while Fit is in this release"
+        );
+        // Written back whole, limits and all.
+        let back: HostSettings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.clone().checked(), s);
+        assert_eq!(back.screens[0].tuning, s.screens[0].tuning);
+        assert_eq!(back.tune.cpu_percent, 5.0);
     }
 
     /// A size chosen under another rotation stays saved, but only the scenes of the rotation shown

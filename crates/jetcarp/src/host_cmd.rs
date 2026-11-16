@@ -233,6 +233,8 @@ pub enum HostCmd {
     /// its screen's size and keep, for each, the most cells that stay within the processor and GPU
     /// limits at a smooth frame rate (saved). The rules and colours stay as they are. A running
     /// host pauses while it runs, then shows the sizes found.
+    // Hidden from the help, and refused, while Fit is switched off (JETCARP 0.4.2, #112).
+    #[command(hide = !jetcarp_core::fit::FIT)]
     Tune(jetcarp_host::TuneArgs),
     /// The scene a screen shows now, its grid's size included, as a scene file that replays it.
     Scene {

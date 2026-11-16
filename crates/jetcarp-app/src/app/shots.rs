@@ -478,10 +478,15 @@ fn shots_wallpaper() {
         .host
         .test_extension(jetcarp_display::gnome::ExtensionState::NotInstalled);
     h.action(menu::Action::Pane("desktop"));
-    // Tall enough for the whole pane, down to the Performance group's Fit to this computer.
+    // Tall enough for the whole pane, down to the Performance group's pacing (and, while Fit to
+    // this computer is in the release, its button: #112).
     h.column(0.36, 0.94);
     h.frame_with(0.05, vec![]);
-    h.find("Fit to this computer…");
+    h.find(if jetcarp_core::fit::FIT {
+        "Fit to this computer…"
+    } else {
+        "Show every generation"
+    });
     h.steady();
     h.shot("wallpaper-desktop-pane");
 }
@@ -490,12 +495,19 @@ fn shots_wallpaper() {
 /// cards, with their pictures. A real sweep saved in the scratch settings is shown when there is
 /// one (`jetcarp host tune` run with the same `JETCARP_CONFIG_DIR` first); else two scenes' cards
 /// are made up here, their pictures drawn on the processor.
+///
+/// Fit is switched off in 0.4.2 (#112), so there are no cards to picture and the book has no such
+/// picture: this does nothing until Fit returns in 0.4.3 (#113).
 #[test]
 #[ignore]
 fn shots_desktop_pane_cards() {
     use jetcarp_display::host_settings::{
         GpuTiming, HostSettings, Place, Rung, Size, TunedScene, Tuning, crops_dir,
     };
+    if !jetcarp_core::fit::FIT {
+        eprintln!("Fit to this computer is switched off (#112): no cards to picture");
+        return;
+    }
     // Tall enough for the Performance group and three scenes' cards below it.
     let Some(mut h) = Harness::new(1600, 1100) else {
         return;

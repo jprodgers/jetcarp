@@ -213,6 +213,19 @@ fn a_whole_session_over_stdio() {
     // No host or app runs in this test's runtime folder.
     let e = fails(&tool(&mut c, "host_control", json!({})));
     assert!(e.contains("not running"), "{e}");
+    // While Fit to this computer is switched off (0.4.2, #112), host_control offers no `tune`,
+    // and refuses one all the same.
+    if !jetcarp_core::fit::FIT {
+        let host = tools["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "host_control")
+            .unwrap();
+        assert!(!host.to_string().contains("tune"), "{host}");
+        let e = fails(&tool(&mut c, "host_control", json!({"action": "tune"})));
+        assert_eq!(e, jetcarp_core::fit::HELD_BACK);
+    }
     // Until the photosensitive seizure warning has been accepted, host_control refuses to start
     // or show scenes, with the warning; once it has, the call goes through (#96).
     let e = fails(&tool(&mut c, "host_control", json!({"action": "resume"})));

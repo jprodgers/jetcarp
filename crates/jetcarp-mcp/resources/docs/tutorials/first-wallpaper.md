@@ -54,7 +54,7 @@ A live wallpaper is run by the *background host*, a separate JETCARP program tha
 the app closes. Everything about it is in the *Desktop background* pane: choose *View → Desktop
 background settings…*, or *Desktop background settings…* under *While it runs*:
 
-<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, Show every generation or Low power, Up to 60 frames a second, the processor and GPU limits and Fit to this computer…" width="700">
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second, GPU simulation Follow the shared setting (Automatic), the shared setting, Caption, the pauses on battery and when busy, Start at login; and Performance, with the GPU, Show every generation or Low power, Up to 60 frames a second, and a line saying each scene shows at its own cell size" width="700">
 
 The host shows a *rotation*: a list of items, each shown for a while. Make one with your profile in
 it, here in the pane:
@@ -88,14 +88,11 @@ wallpaper is hidden behind windows; the pane then says why, as in *Held: the pro
 (resumes by itself).* The guide's [background host](../guides/wallpapers.md#the-background-host)
 section has every setting.
 
-Then press *Fit to this computer…* under *Performance*. The host shows each scene of the rotation
-on the desktop at a ladder of sizes, from big cells to one pixel a cell, a couple of seconds each
-(move this window aside to watch), measuring how hard JETCARP works at each. Then each scene gets a
-row of cards: a picture of the screen at that size, its cells, the processor, GPU and frame rate,
-and whether it stays under the *Processor limit* and *GPU limit* and keeps its frames smooth. Each
-scene shows at the card marked *Recommended*, the finest size within the limits; click another card
-if you like it better. The rules and colours stay as they are (see
-[Fit to this computer](../guides/wallpapers.md#fit-to-this-computer)).
+Each scene shows at its own cell size: your profile's, which is *Cells* in its editor in the
+*Screensaver* pane, and for the Quick Start entry the rotation's, which *Settings for every item* in
+the rotation editor sets (4 unless you change it). On a square or hexagonal grid, the finer the
+cells, the more of them fill the screen and the harder the computer works; a Penrose patch keeps its
+number of tiles (see [Cell sizes](../guides/wallpapers.md#cell-sizes)).
 
 ## 5. The same from the command line
 

@@ -93,7 +93,9 @@ pub struct StageStatus {
     /// An aperiodic patch's level.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<u32>,
-    /// That size came from *Fit to this computer*, not the scene.
+    /// That size came from *Fit to this computer*, not the scene (left out of reports while Fit
+    /// is switched off, #112).
+    #[serde(skip_serializing_if = "fit_off")]
     pub tuned: bool,
     /// The grid's width and height in cells, where the tiling has them.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,6 +106,11 @@ pub struct StageStatus {
     pub speed: f32,
     pub seconds_left: Option<f64>,
     pub caption: Vec<String>,
+}
+
+/// Fit to this computer is switched off ([`jetcarp_core::fit::FIT`]): reports say nothing of it.
+fn fit_off(_: &bool) -> bool {
+    !jetcarp_core::fit::FIT
 }
 
 pub struct Stage {

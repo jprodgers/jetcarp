@@ -31,22 +31,61 @@ fn use_app_definition() -> Value {
 }
 
 fn host_control_definition() -> Value {
+    // Fit to this computer's `tune` and its options, only while Fit is in this release (#112).
+    let fit = jetcarp_core::fit::FIT;
+    let mut actions = vec![
+        "status",
+        "next",
+        "previous",
+        "pause",
+        "resume",
+        "rotation",
+        "wallpaper",
+        "login",
+        "open_app",
+        "reload",
+    ];
+    if fit {
+        actions.push("tune");
+    }
+    actions.extend(["scene", "quit"]);
+    let (tune, with_on, every_screen) = if fit {
+        (
+            "; tune sweeps cell sizes on screen (pick: recommended, finest, own or px)",
+            "With wallpaper, login or tune",
+            "next, previous and tune",
+        )
+    } else {
+        ("", "With wallpaper or login", "next and previous")
+    };
+    let mut properties = json!({
+        "action": {"type": "string", "enum": actions, "description": format!("Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json{tune}; scene: a screen's scene.")},
+        "on": {"type": "boolean", "description": format!("{with_on}: on or off. Default on.")},
+        "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
+        "screen": {"type": "integer", "minimum": 0, "description": format!("Counted from 0. Default: every screen for {every_screen}, else the first.")},
+    });
+    if fit {
+        properties["cpu_limit"] = json!({"type": "number"});
+        properties["gpu_limit"] = json!({"type": "number"});
+        properties["fps"] = json!({"type": "number"});
+        properties["pick"] = json!({"type": ["string", "number"]});
+    }
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
         "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.",
-        "inputSchema": {"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["status", "next", "previous", "pause", "resume", "rotation", "wallpaper", "login", "open_app", "reload", "tune", "scene", "quit"], "description": "Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; tune sweeps cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene."},
-            "on": {"type": "boolean", "description": "With wallpaper, login or tune: on or off. Default on."},
-            "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
-            "screen": {"type": "integer", "minimum": 0, "description": "Counted from 0. Default: every screen for next, previous and tune, else the first."},
-            "cpu_limit": {"type": "number"},
-            "gpu_limit": {"type": "number"},
-            "fps": {"type": "number"},
-            "pick": {"type": ["string", "number"]},
-        }, "additionalProperties": false},
+        "inputSchema": {"type": "object", "properties": properties, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
+}
+
+/// Whether a `host_control` call asks for *Fit to this computer*: a sweep, its news, or a tuner's
+/// hold. Refused while Fit is switched off (#112), whether or not the schema lists it.
+fn host_call_fits(args: &Value) -> bool {
+    matches!(
+        args.get("action").and_then(Value::as_str),
+        Some("tune" | "tune_stop" | "tune_events" | "tuning")
+    )
 }
 
 /// Whether a `host_control` call would start or show scenes: refused, with the warning, until
@@ -67,6 +106,9 @@ fn host_call_shows(args: &Value) -> bool {
 
 /// A `host_control` call, refused while the warning stands in its way.
 fn host_control(args: &Value) -> Result<Value, String> {
+    if host_call_fits(args) {
+        jetcarp_core::fit::available()?;
+    }
     if host_call_shows(args) {
         jetcarp_core::photosensitivity::require("start or show scenes in the background host")?;
     }
@@ -319,8 +361,36 @@ fn stop_own_jobs() {
 
 #[cfg(test)]
 mod tests {
-    use super::host_call_shows;
+    use super::{host_call_fits, host_call_shows, host_control, host_control_definition};
     use serde_json::json;
+
+    /// While *Fit to this computer* is switched off (0.4.2, #112), `host_control` has no `tune`
+    /// action or options in its schema, and refuses one all the same, before asking any host.
+    #[test]
+    fn fit_is_not_offered_or_done_while_switched_off() {
+        if jetcarp_core::fit::FIT {
+            return;
+        }
+        let d = host_control_definition();
+        let props = &d["inputSchema"]["properties"];
+        let actions = props["action"]["enum"].as_array().unwrap();
+        assert!(!actions.iter().any(|a| a == "tune"), "{actions:?}");
+        assert!(actions.iter().any(|a| a == "scene"), "{actions:?}");
+        for k in ["cpu_limit", "gpu_limit", "fps", "pick"] {
+            assert!(props.get(k).is_none(), "{k} in {props}");
+        }
+        assert!(!d.to_string().contains("tune"), "{d}");
+        for a in ["tune", "tune_stop", "tune_events", "tuning"] {
+            let call = json!({"action": a, "on": false});
+            assert!(host_call_fits(&call));
+            assert_eq!(
+                host_control(&call).unwrap_err(),
+                jetcarp_core::fit::HELD_BACK,
+                "{a}"
+            );
+        }
+        assert!(!host_call_fits(&json!({"action": "status"})));
+    }
 
     /// The `host_control` calls that start or show scenes wait for the photosensitive seizure
     /// warning; reading, pausing, hiding and quitting do not (#96).

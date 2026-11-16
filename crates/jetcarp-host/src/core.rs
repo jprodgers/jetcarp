@@ -526,7 +526,8 @@ impl Core {
                 self.settings.screens[i].monitor,
                 self.settings.screens[i].place,
             );
-            let tuned = self.settings.tuning_for(i, &want).cloned();
+            // None while Fit is switched off (#112): each scene at its own size.
+            let tuned = self.settings.tuning_applied(i, &want).cloned();
             let kept = old.get_mut(i).and_then(Option::take);
             // One that can no longer be read keeps going as it is.
             let unchanged = |s: &Screen| {
@@ -887,7 +888,7 @@ impl Core {
 
     fn status(&self) -> Value {
         let now = self.now();
-        json!({
+        let mut v = json!({
             "running": true,
             "pid": std::process::id(),
             "uptime_s": now.round(),
@@ -909,8 +910,6 @@ impl Core {
             "fps": self.settings.fps,
             "pacing": self.settings.pacing,
             "max_fps": self.settings.max_fps,
-            "tune": self.settings.tune,
-            "tuning": self.tuning_status(),
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
             "rotations": rotation_names(),
@@ -926,7 +925,13 @@ impl Core {
                 "simulation": s.sim.report(&self.policy.origin()),
             })).collect::<Vec<_>>(),
             "log": self.log,
-        })
+        });
+        // Nothing of fitting while Fit is switched off (#112).
+        if jetcarp_core::fit::FIT {
+            v["tune"] = json!(self.settings.tune);
+            v["tuning"] = self.tuning_status();
+        }
+        v
     }
 
     pub fn set_paused(&mut self, paused: bool) {
@@ -1082,6 +1087,11 @@ impl Core {
     fn act(&mut self, a: &Value) -> Result<Value, String> {
         let screen = a.get("screen").and_then(Value::as_u64).map(|s| s as usize);
         match a.get("action").and_then(Value::as_str).unwrap_or("status") {
+            // Fit to this computer is switched off (#112): its sweeps, the news of one and a
+            // tuner's hold are refused, however they are asked for.
+            "tune" | "tune_stop" | "tune_events" | "tuning" if !jetcarp_core::fit::FIT => {
+                return Err(jetcarp_core::fit::HELD_BACK.into());
+            }
             "status" => {}
             "next" => self.skip(1, screen)?,
             "previous" => self.skip(-1, screen)?,
@@ -1153,14 +1163,17 @@ impl Core {
                     .ok_or_else(|| format!("there is no screen {i}"))?;
                 let scene = s.stage.scene().ok_or("nothing is showing yet")?;
                 let st = s.stage.status();
-                return Ok(json!({
+                let mut v = json!({
                     "screen": i,
                     "label": st.label,
                     "cell_px": st.cell_px,
-                    "tuned": st.tuned,
                     "grid": st.grid,
                     "scene": serde_json::to_value(&scene).map_err(|e| e.to_string())?,
-                }));
+                });
+                if jetcarp_core::fit::FIT {
+                    v["tuned"] = json!(st.tuned);
+                }
+                return Ok(v);
             }
             "login" => {
                 let on = a.get("on").and_then(Value::as_bool).unwrap_or(true);
@@ -1201,9 +1214,11 @@ impl Core {
         p.reply(reply);
     }
 
-    /// Sweeps again when the monitors have changed under tuned screens.
+    /// Sweeps again when the monitors have changed under tuned screens (never while Fit is
+    /// switched off, #112).
     fn watch_retune(&mut self) {
-        if self.sweep.is_some()
+        if !jetcarp_core::fit::FIT
+            || self.sweep.is_some()
             || !self.is_host
             || !self.settings.tune.auto
             || self.shell() != Shell::Alive

@@ -204,16 +204,16 @@ adapter, or `simulation: CPU:` and why, such as `GPU simulation off, from the de
 own setting`, or a world too small to be worth the GPU), the monitors, whether the caption is on,
 how the screens are paced, and, while it is paused by hand, `paused: by hand`. A hold passes by
 itself, so it is told apart from a pause: `held: on battery (resumes by itself)`, and likewise while
-the processor is busy, while the desktop holds it (windows cover it, or the screen is locked or off)
-and during a sweep of *Fit to this computer*. Its `note:` lines are the host's recent messages, such
+the processor is busy, and while the desktop holds it (windows cover it, or the screen is locked or
+off). Its `note:` lines are the host's recent messages, such
 as the GPU it took. Just after `next` the new item is *starting* until its world is built.
 
 A host started before the [photosensitive seizure warning](../getting-started/photosensitivity.md)
 was answered (at login after an upgrade, say) holds every screen at its first picture, and `status`
 says so on a line of its own: `waiting: the photosensitive seizure warning has not been
 accepted (…)`. The scenes start by themselves, within a few seconds, once it has been answered in
-the app or with `jetcarp setup`. Meanwhile `start`, `wallpaper on`, `login on`, `saver install` and
-*Fit to this computer* on screen are refused, with the warning.
+the app or with `jetcarp setup`. Meanwhile `start`, `wallpaper on`, `login on` and `saver install`
+are refused, with the warning.
 
 | Command | Effect |
 | --- | --- |
@@ -226,7 +226,6 @@ the app or with `jetcarp setup`. Meanwhile `start`, `wallpaper on`, `login on`, 
 | `jetcarp host pacing every-generation\|low-power` | Whether a faster scene draws faster, showing every generation (the default), or every screen draws at the frame rate and no scene runs faster (see [below](#frame-rate-and-speed)) |
 | `jetcarp host caption on\|off` | Show what is running in a corner, with `--corner`, `--size`, `--generation on\|off` and `--seconds` |
 | `jetcarp host battery on\|off` | Pause while the computer runs on battery (default on) |
-| `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]` | Fit the desktop background to this computer (see [below](#fit-to-this-computer)) |
 | `jetcarp host scene [--screen N] [--save FILE]` | The scene a screen shows, its grid's size included, as a scene file |
 | `jetcarp host busy PERCENT` | Pause while the whole processor stays at least this busy, as during a long search (default 80; 0 never). It carries on once the load is 20 points lower |
 | `jetcarp host wallpaper`, `still`, `lock`, `gnome`, `saver`, `login` | See the sections below |
@@ -237,14 +236,13 @@ the next time it starts (*saved; the host is not running*). When the host reads 
 whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
 Should the host's memory pass `max_memory_mb` in `host.json` (6,144 MB by default), it gives up the
 biggest scene it shows for the next item, with a note; on Linux it first gives back the memory it
-has freed but kept, as it also does after each sweep of *Fit to this computer*.
+has freed but kept.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
 is completely hidden behind other windows, while the screen is locked, and while the display is
 asleep (on macOS, whether locked or not). `jetcarp host
 status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
 carries on) with `paused_why`, and apart from it what the host is holding for, which passes by
-itself: `held` (`battery`, `busy`, `covered`, `dark` or `tuning`) with `held_why`, the same in
-words.
+itself: `held` (`battery`, `busy`, `covered` or `dark`) with `held_why`, the same in words.
 
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has
@@ -291,10 +289,10 @@ second)` (`pacing`, `fps` and `max_fps` in `--json`; `max_fps` is `null` with `m
 *View → Desktop background settings…* opens the *Desktop background* pane, which holds everything
 about the host. The *Display* and *Screensaver* panes link to it.
 
-<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane, where profiles are made; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second 30, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, Fit to this computer…, and Measure again by itself when the monitors change" width="700">
+<img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane, where profiles are made; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second 30, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Show every generation (chosen) or Low power, Up to 60 frames a second, and a line saying each scene shows at its own cell size, which its profile or its rotation sets" width="700">
 
-- **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too, and
-  whether tuning chose it), why it is paused (*Paused: by hand.*), and what holds it, which passes
+- **The host:** *Start* or *Stop*, *Pause*, ◀ ▶, and what each screen shows (its cell size too),
+  why it is paused (*Paused: by hand.*), and what holds it, which passes
   by itself (*Held: the processor is busy (resumes by itself).*).
 - **Where:** *Show on the desktop*, and for each screen its rotation and its monitor (*Every monitor*,
   or one of them). *Add a screen* puts another rotation on another monitor. Under each screen's
@@ -317,134 +315,49 @@ about the host. The *Display* and *Screensaver* panes link to it.
   setting* it can follow (see [The GPU](gpu.md#the-setting)), the *Caption*, *Pause on battery*,
   *Pause while the processor is busier than* a share, and *Start at login*.
 - **Performance:** the GPU it uses, *Show every generation* or *Low power*, and *Up to* (60 frames a
-  second or the monitor's refresh rate; see [Frame rate and speed](#frame-rate-and-speed)), the
-  limits, *Fit to this computer…*, and the cards it leaves (see below).
+  second or the monitor's refresh rate; see [Frame rate and speed](#frame-rate-and-speed)). Each
+  scene shows at its own cell size (see [Cell sizes](#cell-sizes)).
 
 The settings are the host's own `host.json`, as before; the pane writes them and tells a running host.
 
-## Fit to this computer
+## Cell sizes
 
-How small a wallpaper's cells can be depends on the screen and the computer. On a lower-resolution
-laptop panel, Life on squares at one pixel a cell is still easy to see; on a Retina screen, a
-one-pixel cell is too small to see, and four million of them crawl; an aperiodic patch wants tiles
-small but not tiny. So rather than guess, *Fit to this computer…* in the pane's *Performance* group,
-or `jetcarp host tune`, shows you: it sweeps each scene of the desktop background through a ladder
-of sizes, a couple of seconds each, on the desktop itself, measures each one, and then lets you
-choose from a row of cards.
+How small a scene's cells can be depends on the screen and the computer. On a lower-resolution
+laptop panel, Life on squares at one pixel a cell is still easy to see; on a Retina screen a
+one-pixel cell is too small to see; and the more cells, the harder the processor and the GPU work.
+JETCARP 0.4.2 shows each scene of the desktop background at its own cell size, as 0.4.1 did. To
+change it:
 
-<img src="../images/guides/desktop-pane-cards.webp" alt="The Performance group after a sweep: Show every generation (chosen) or Low power, Up to 60 frames a second, the limits (processor 10%, GPU 25%, smooth at the monitor's rate), Fit to this computer…, and a row of cards for each scene. Life and a forest fire at 1, 2, 3, 4 and 6 pixels a cell, each card a picture of the screen at that size with its cells, processor, GPU and frame rate, all within the limits and 1 px recommended; Langton's ant, a placed pattern, at the same sizes drawn at 60 frames a second, 1 px over the limits and its own 4 px recommended" width="700">
+- **A profile** has its own: *Cells*, in the *Screensaver* pane's profile editor (see
+  [Screensaver profiles](#screensaver-profiles)), with *Rebuild to fill* to rebuild a periodic
+  tiling to cover the screen at that size. It holds wherever the profile shows.
+- **A rotation** sets one in the [rotation editor](rotations.md#make-a-rotation-in-the-app) (*Edit*
+  under a screen's rotation in the *Desktop background* pane): *Settings for every item*, then *Cell
+  size*, for every item that is not a stored profile (4 unless set), and *Settings for this item*,
+  then *Cell size*, for one item, a profile included.
+- **By hand**, a rotation file's `look` takes `cell_px`, for the whole rotation or for one item (see
+  [Rotation files](rotations.md#rotation-files)), and a profile's file has `cell_px` too.
 
-**The sizes.** On a lattice the ladder is 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48 and 64 pixels a cell,
-in the screen's own pixels (on a screen of two pixels a point, 2 px is one point), and the scene's own
-size. It runs from the finest that keeps the world within 4 million cells (and within the GPU's
-buffers) to the coarsest sensible, 60 cells across the screen's shorter side. On an aperiodic tiling
-it is the patch's levels, each fitted to the screen, whatever size that makes its tiles, and the
-scene's own. The rules, palettes and colouring stay as they are: only the number of cells changes.
+A cell size is in points, 1 to 64: on a screen of two pixels a point, 1 is two pixels. On a periodic
+tiling rebuilt to fill the screen (as profiles and rotations do unless told not to), it sets how many
+cells cover the screen. An aperiodic patch (Penrose, the hat, the Spectre) keeps its scene's level,
+and so its number of tiles: they show at the cell size, or larger where the patch would not fill
+the screen at that size. A running host shows a rotation or profile saved again at once.
 
-**The sweep** shows the coarsest size first and works finer, each size for two seconds, measured over
-the last one and a half, each scene at the frame rate it draws at (see
-[Frame rate and speed](#frame-rate-and-speed)). On the host it runs on the real screen (the other
-screens pause meanwhile); move your windows aside to watch. It stops going finer once a size is
-more than twice over a limit: anything finer would only crawl. Several scenes take a minute or two.
+Finer cells cost more processor and GPU time, so if the desktop background works the computer too
+hard, give its scenes bigger cells, or choose *Low power* (see
+[Frame rate and speed](#frame-rate-and-speed)).
 
-**The limits** decide which cards are marked *within the limits*:
+The host's status gives each screen's cell size and grid (`cell_px` and `grid` with `--json`).
+`jetcarp host scene --save FILE` saves the scene a screen shows, at the size it was built, so it
+replays exactly, and the still picture the host leaves carries that scene inside it, as every
+picture JETCARP writes does.
 
-- **Processor limit:** JETCARP's own processor time, as a share of the whole machine with every core
-  counted (default 10%).
-- **GPU limit:** JETCARP's own share of the graphics card's time (default 25%).
-- **Smooth at:** the frame rate it must keep (default the monitor's refresh rate, or 60, and never more
-  than the rate the scene draws at: Life at 60 generations a second must keep 60 frames a second, a
-  scene of 30 the host's *Frames per second*, which is 30 unless you change it).
-
-A size is within them when the processor and GPU stay under 80% of their limits, 95% of frames take
-under 90% of the frame's time, and the scene keeps its speed. With several screens on the desktop,
-each gets an equal share. Sizes over the limits are shown too, marked, and you can still choose them.
-
-**The cards.** Each card has a picture of the screen at that size, shown at the screen's own pixels so
-a one-pixel cell looks as it will; the size and the number of cells; the processor, GPU (*unknown*
-where it could not be measured, see *What it measures* below) and frame rate; and whether it is
-within the limits. *Recommended* marks the finest size within them, and each scene shows at its
-recommended size unless you click another card. A scene that is a pattern placed on an empty field
-(a glider gun, an ant from one cell) keeps its own size unless you choose another. *Use this size
-for every scene on this tiling* gives the card's size to the screen's other scenes on the same
-tiling, and *Use the recommended size for the rest* settles every scene you have not chosen. *Use
-the scenes' own sizes* forgets the sweep.
-
-```sh
-jetcarp host tune --cpu-limit 1 --gpu-limit 3
-```
-
-It prints:
-
-```text
-sweeping 3 scenes on 1 screen at 30 frames a second, on AMD Radeon 8060S Graphics (RADV STRIX_HALO)
-screen 0, scene 1 of 3: profile Life at 24 px (size 1 of up to 9)
-  24 px, 6,360 cells: processor 0.1%, GPU 0.8%, 30 fps, frames 2.3 ms, on the processor — within the limits
-...
-  4 px, 230,400 cells: processor 0.8%, GPU 1.8%, 30 fps, frames 4.8 ms, on the GPU — within the limits
-  3 px, 409,440 cells: processor 1.2%, GPU 2.5%, 30 fps, frames 4.5 ms, on the GPU, its own size — over: processor 1.2% (over 0.8%: the 1.0% limit, less 20%), GPU 2.5% (over 2.4%: the 3.0% limit, less 20%)
-...
-screen 0: profile Life: 9 sizes; recommended 4 px; shows at 4 px, 230,400 cells
-...
-screen 0: profile Penrose waves: 3 sizes; recommended level 5 (7.3 px); shows at level 5 (7.3 px), 35,000 cells
-swept 3 scene(s) (GPU time from the system's count of JETCARP's GPU time); saved to ~/.config/jetcarp/host.json
-```
-
-**What it measures.** The processor time is JETCARP's own, on every thread. The GPU time is the
-system's own count of JETCARP's GPU time on Linux; elsewhere it comes from the GPU's timestamp
-queries, in the host's window and off screen alike, where the adapter has them. On Windows, an
-adapter without them (such as an Intel UHD) is measured by Windows' own GPU engine counters for
-JETCARP's process, the figures Task Manager shows, and held to the GPU limit like the others.
-Failing those, the GPU share is not measured: timing each frame from its submission until the GPU is
-done gives only an upper bound, which counts the time the work waits in the driver's queue (on
-Windows it read about 90% for a scene the GPU spent 10% of its time on). The cards then show the
-share as *GPU unknown*, each size's line from `jetcarp host tune` has `GPU not measured`, and the
-pane and the sweep's last line say "GPU share not measured on this adapter (it has no GPU
-timestamps): the GPU limit isn't applied"; the frame times are still held to the frame rate. With
-`--json`, such a card has `"gpu_unmeasured": true` and no `gpu_percent`, and the last line has the
-same words as `gpu_note`. The summary says which clock it used (with `--json`, `gpu_timing`:
-`kernel`, `timestamps`, `counters` for Windows' engine counters, or `submission`). A world small
-enough that the [GPU setting](gpu.md) leaves it on the processor is tried there, and held to the
-processor limit like any other. On battery a sweep started by hand says that a computer on battery
-may measure slower than plugged in.
-
-**With the host stopped**, `jetcarp host tune` (and the pane) sweep off screen in a program of their own,
-at each screen's size, drawing and stepping the way the host does, and the cards are the same.
-
-**What is kept.** Each scene's cards and the size it shows at are saved in `host.json` as each scene's
-sweep ends, with whether you chose it, and the pictures in the `tune` folder beside it. The cards
-show only the scenes of the rotation each screen shows now: a size you chose for a scene of another
-rotation stays saved, and is kept while it fits should that scene come back, but gets no row. A
-screen given another rotation shows its scenes at their own sizes until it is swept again; on a
-screen of another size, a lattice scene keeps its number of cells and a patch its level. With
-*Measure again by itself when the monitors change* (on by default), the host sweeps again once a
-swept screen's size changes and the monitors have stayed put for 15 seconds (not on battery, while
-the processor is busy, or while paused by hand). A size you chose is kept if it is still within the
-limits there; if not, the recommended one shows, with a note in the pane and in `jetcarp host
-status`.
-
-**A tuned scene is still exactly reproducible**, since a scene's grid size is part of it. The host's
-status gives each screen's cell size and grid; `jetcarp host scene --save FILE` saves the scene a
-screen shows, at the size it was built, and the still picture the host leaves carries that scene
-inside it, as every picture JETCARP writes does.
-
-| Option | Effect |
-| --- | --- |
-| `--cpu-limit P` | JETCARP's processor time, in percent of the whole machine (1 to 100; saved; default 10) |
-| `--gpu-limit P` | JETCARP's share of the GPU's time, in percent (1 to 100; saved; default 25) |
-| `--fps N` | The frame rate to keep (saved; default the monitor's refresh rate, or 60, at most the rate each scene draws at) |
-| `--pick WHICH` | The size each scene is left at: `recommended` (the finest within the limits), `finest` (the finest shown), `own`, or a cell size in pixels. `own` and a size in pixels are placed whether or not the sweep showed them, so a pick undoes a sweep that stopped early (on an aperiodic patch, a size in pixels takes the nearest level shown). Without it, a size chosen before is kept while it fits, else the recommended one |
-| `--crops DIR` | Save each size's picture here as a PNG |
-| `--screen N` | Only this screen |
-| `--canvas WxH` | The screen's size, when no host is running to say (else the size it was swept for before, else its monitor's) |
-| `--trial-seconds S` | How long each size shows (default 2; the last three quarters are measured) |
-| `--dry-run` | Measure and report, but save nothing |
-| `--stop` | Stop the host's sweep (the scenes done stay saved) |
-| `--json` | Each size's numbers, and each scene's cards, as lines of JSON |
-
-Scripts and AI assistants reach it through the host: the MCP tool `host_control` takes
-`{"action": "tune", "cpu_limit": 10, "pick": "recommended"}` (and `"on": false` to stop it), and its
-status shows the progress under `tuning`; `{"action": "scene"}` gives a screen's scene.
+*Fit to this computer*, which showed each scene at a ladder of sizes, measured each and recommended
+the finest within limits on the processor and the GPU, was tried in 0.4.2's release candidates. A
+fit took from 45 seconds to 12 minutes, so it is held back, and a faster one is planned for 0.4.3
+([#113](https://github.com/jprodgers/jetcarp/issues/113)). Sizes a release candidate's Fit saved stay
+in `host.json`, unused.
 
 ## The live desktop background
 

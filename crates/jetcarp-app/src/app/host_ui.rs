@@ -2,7 +2,9 @@
 //! which runs scenes as the desktop background (or in windows) as its own program. Start and stop
 //! it, choose each screen's rotation and monitor, the lock screen, the still picture, the frame
 //! rate and the GPU, the pauses, start at login, GNOME's extension, and *Fit to this computer*,
-//! which tunes each scene's cell size to the processor and GPU limits set here.
+//! which tunes each scene's cell size to the processor and GPU limits set here. Fit is switched
+//! off in 0.4.2 ([`jetcarp_core::fit::FIT`], #112): the pane shows neither it nor its limits and
+//! cards, and returns in 0.4.3 (#113).
 //!
 //! The host is its own program, so all of this works over the link and the settings file
 //! (`host.json`); closing this window leaves it running. Rotations and profiles are shared with
@@ -1098,8 +1100,9 @@ enum CardDo {
     RecommendedForRest,
 }
 
-/// The limits, *Fit to this computer*, and the cards. Returns whether to start a sweep, stop the
-/// one running, or forget the sizes found; a card chosen is put in `settings` (`changed`).
+/// The pacing, then the limits, *Fit to this computer*, and the cards (these three not while Fit
+/// is switched off, #112). Returns whether to start a sweep, stop the one running, or forget the
+/// sizes found; a card chosen is put in `settings` (`changed`).
 /// `shown` gives the scenes each screen's rotation shows now: only they get rows (#73).
 #[allow(clippy::too_many_arguments)]
 fn performance_ui(
@@ -1161,6 +1164,18 @@ fn performance_ui(
                 );
         });
     });
+    // Fit to this computer is switched off in 0.4.2 (#112): no limits, no button, no cards. The
+    // sizes an earlier Fit saved stay in the settings, unused.
+    if !jetcarp_core::fit::FIT {
+        ui.label(
+            RichText::new(
+                "Each scene shows at its own cell size, which its profile or its rotation sets.",
+            )
+            .small()
+            .weak(),
+        );
+        return (false, false, false);
+    }
     let l = &mut settings.tune;
     egui::Grid::new("host-tune-limits")
         .num_columns(2)

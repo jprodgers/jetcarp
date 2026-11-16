@@ -8,6 +8,9 @@
 //! screen's size, the way the host runs a scene (the same stage, stepping and drawing, at the
 //! frame rate the host would draw it at: [`jetcarp_display::pace`]); it runs in a process of its
 //! own, so the processor time it measures is its own.
+//!
+//! Switched off in 0.4.2 ([`jetcarp_core::fit::FIT`], #112): [`run`] refuses, and the command is
+//! hidden from the help. A fast fit returns in 0.4.3 (#113).
 
 use crate::core::{STEP_SHARE, SharedGpu, load_rotation};
 use crate::gpu_engine::EngineMeter;
@@ -132,13 +135,16 @@ struct Job {
 /// Runs the sweep, reporting as it goes. `json`: JSON lines on stdout.
 pub fn run(args: TuneArgs, json: bool) -> Result<(), String> {
     let out = Out { json };
-    let r = if args.stop {
-        host_call(&json!({"action": "tune", "on": false})).map(|_| println!("stopped"))
-    } else if !args.offscreen && host_call(&json!({"action": "status"})).is_ok() {
-        follow_host(&args, &out)
-    } else {
-        tune(&args, &out)
-    };
+    // Refused while Fit is switched off (#112).
+    let r = jetcarp_core::fit::available().and_then(|()| {
+        if args.stop {
+            host_call(&json!({"action": "tune", "on": false})).map(|_| println!("stopped"))
+        } else if !args.offscreen && host_call(&json!({"action": "status"})).is_ok() {
+            follow_host(&args, &out)
+        } else {
+            tune(&args, &out)
+        }
+    });
     if let (Err(e), true) = (&r, json) {
         out.event(&TuneEvent::Failed { error: e.clone() });
     }

@@ -7,6 +7,11 @@ that will declare them stable.
 
 ## [0.4.2] – unreleased
 
+*Fit to this computer*, tried in the release candidates, is held back for 0.4.3: a fit took from 45
+seconds to 12 minutes, against a target of 10 to 30 seconds. Each scene of the desktop background
+shows at its own size, as in 0.4.1, and sizes a release candidate's Fit saved stay in `host.json`,
+unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
+
 ### Fixed
 
 - **The live desktop works on GNOME 51 (Fedora 45).** The GNOME extension claimed only GNOME
@@ -125,8 +130,7 @@ that will declare them stable.
   scene still draws several a frame; `jetcarp host max-fps refresh` lets it draw at a fast
   monitor's full rate), and each screen keeps its own rate. *Low power*, in the *Desktop background* pane's *Performance*
   group or `jetcarp host pacing low-power`, draws at the frame rate instead and caps each scene's
-  speed there. *Fit to this computer* measures and judges each scene at the frame rate it draws
-  at, and `jetcarp host status` gives each screen's frame rate and speed (see
+  speed there. `jetcarp host status` gives each screen's frame rate and speed (see
   [Frame rate and speed](../guides/wallpapers.md#frame-rate-and-speed)).
   ([#42](https://github.com/jprodgers/jetcarp/issues/42))
 - **`--limit`'s help promised an exact stop that an explore search can't make.** An explore
@@ -151,11 +155,6 @@ that will declare them stable.
 - **The AI control window said "Connections 0" after a client had connected and left.** It counts
   the links open at the moment, and now says so: *Open connections*.
   ([#60](https://github.com/jprodgers/jetcarp/issues/60))
-- **The background host grew by about 100 MB with each Fit sweep and kept it.** glibc kept the
-  memory of the sweep's trial grids for reuse. The host now gives it back after a sweep, and
-  before its memory limit lets a scene go, so memory it no longer holds never counts against it.
-  On Linux, three sweeps left the host at 157 MB instead of 376 MB.
-  ([#69](https://github.com/jprodgers/jetcarp/issues/69))
 - **A rating round of clips gave the runs nobody keeps as many slots as the rest.** `jobs clips`
   shared its sample equally among the categories, so on a JACA search "Frozen at once", 12% of the
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
@@ -315,7 +314,7 @@ that will declare them stable.
   first, and a note now appears only if runs are still unsealed.
   ([#68](https://github.com/jprodgers/jetcarp/issues/68))
 - **`host status --json` said `"paused": false` while `paused_why` gave a reason.** A hold (on
-  battery, a busy processor, the desktop covered or dark, a tuner) was listed in `paused_why`,
+  battery, a busy processor, the desktop covered or dark) was listed in `paused_why`,
   though `paused` means paused by hand. `paused_why` now gives only why it is paused, and a hold's
   reasons are in a new `held_why`, beside `held`, the holds' names. The text status and the
   *Desktop background* pane say "held: the processor is busy (resumes by itself)".
@@ -328,22 +327,6 @@ that will declare them stable.
   desktop background's own setting`), `--json` gives each screen's `simulation` (`on`, `adapter`
   and `why`), and the log's GPU line is replaced when the setting changes.
   ([#75](https://github.com/jprodgers/jetcarp/issues/75))
-- **Fit's cards showed a row for a scene of another rotation.** A size chosen for a scene is kept
-  when the screen moves to another rotation, for when that scene comes back, so a hat-tiling scene
-  fitted by itself for a one-scene rotation showed as a fourth row under the three scenes of
-  "Until it settles". The cards now show only the scenes of the rotation each screen shows, and
-  *Use the recommended size for the rest* and *Use this size for every scene on this tiling* settle
-  only those; the other sizes stay saved. ([#73](https://github.com/jprodgers/jetcarp/issues/73))
-- **Fit to this computer didn't apply the GPU limit on an adapter without GPU timestamps, and didn't
-  say so.** On a laptop's Intel UHD, which has no GPU timestamps, each frame was timed from its
-  submission, an upper bound 3 to 10 times Windows' own count, which since #38 is not judged, so a
-  size using 31% of the UHD was recommended under a 25% limit. On Windows such an adapter is now
-  measured by Windows' GPU engine counters for JETCARP's process (the figures Task Manager shows),
-  judged like Linux's count; where they can't be read either, the cards show *GPU unknown* rather
-  than the unjudged number, and the pane and `host tune`'s last line say "GPU share not measured on
-  this adapter (it has no GPU timestamps): the GPU limit isn't applied" (with `--json`,
-  `"gpu_unmeasured": true` on each card and `gpu_note` on the last line).
-  ([#72](https://github.com/jprodgers/jetcarp/issues/72))
 - **`host status` called a screen frozen by a hold *paused*, and doubled its reason** ("held: held
   by the desktop: windows cover it"). A screen frozen by a hold now says *held*, one paused by hand
   *paused*, and the reason reads "held: windows cover the desktop (resumes by itself)". The app's
@@ -500,23 +483,9 @@ that will declare them stable.
   [Photosensitive seizure warning](../getting-started/photosensitivity.md); the README and the book's
   introduction, installation and desktop pages carry the warning too.
   ([#96](https://github.com/jprodgers/jetcarp/issues/96))
-- **Fit the desktop background to this computer.** *Fit to this computer…* in the new *Desktop
-  background* pane, or `jetcarp host tune`, sweeps each scene of the wallpaper's rotation through a
-  ladder of sizes on the desktop itself, two seconds each: 1 to 64 screen pixels a cell on a
-  lattice (from the finest within 4 million cells to 60 cells across), patch levels on an aperiodic
-  tiling. It measures JETCARP's own processor and GPU time (the system's count on Linux) and frame
-  rate at each, against a processor limit (default 10% of the machine), a GPU limit (default 25%)
-  and a smooth frame rate, and then each scene gets a row of cards: a picture of the screen at that
-  size at its own pixels, the numbers, and whether it is within the limits. The finest within them is
-  recommended and shown unless you click another card; a pattern placed on an empty field keeps its
-  own size. The host sweeps again when the monitors change, keeping a size you chose while it still
-  fits. With the host stopped it sweeps off screen. `--pick recommended|finest|own|PX`, `--crops
-  DIR`, `--dry-run`, `--stop` and `--json` (every size's numbers); scripts and AI assistants reach it
-  through `host_control` (`{"action": "tune"}`). See
-  [Fit to this computer](../guides/wallpapers.md#fit-to-this-computer).
 - **`jetcarp host scene`** prints or saves (`--save FILE`) the scene a screen shows, its grid's size
-  included, so a tuned wallpaper replays exactly; `host_control` gives it as `{"action": "scene"}`.
-  The host's status gives each screen's cell size and grid, and says when tuning chose them.
+  included, so a wallpaper replays exactly; `host_control` gives it as `{"action": "scene"}`.
+  The host's status gives each screen's cell size and grid.
 
 - **Export an animation of the world.** *File → Export animation (GIF or WebP)…* records the view
   and the generations after it, as a GIF or a lossless WebP: how many generations, a frame every how
