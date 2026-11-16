@@ -1967,19 +1967,26 @@ pub struct AdapterReport {
 /// Every adapter on every backend, marking the one the GPU simulation would use. Identical
 /// entries (the same driver installed twice, as inside a Flatpak) are listed once.
 pub fn adapter_reports() -> Vec<AdapterReport> {
+    adapter_reports_with(true)
+}
+
+/// [`adapter_reports`], self-testing the adapters only when `test`: doctor leaves the tests out
+/// when the GPU simulation is off for everything, as its report of the choices does (#84), so
+/// each adapter is checked against the requirements only.
+pub fn adapter_reports_with(test: bool) -> Vec<AdapterReport> {
     let mut seen = std::collections::HashSet::new();
-    adapter_list()
+    adapter_list(test)
         .into_iter()
         .filter(|r| seen.insert((r.name.clone(), r.backend.clone(), r.driver.clone())))
         .collect()
 }
 
-fn adapter_list() -> Vec<AdapterReport> {
+fn adapter_list(test: bool) -> Vec<AdapterReport> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
     let policy = select::Policy::load();
-    let chosen = select::pick_from(&adapters, &policy, select::Purpose::Compute, None)
+    let chosen = select::pick_tested(&adapters, &policy, select::Purpose::Compute, None, test)
         .ok()
         .map(|c| c.info);
     adapters
@@ -1994,6 +2001,9 @@ fn adapter_list() -> Vec<AdapterReport> {
             )
             .err()
             .or_else(|| {
+                if !test {
+                    return None;
+                }
                 let t = select::self_test(&a);
                 (!t.passed).then_some(t.note)
             });

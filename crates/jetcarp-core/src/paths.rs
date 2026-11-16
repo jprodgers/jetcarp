@@ -282,8 +282,14 @@ pub fn plain_path(p: PathBuf) -> PathBuf {
 /// `~/.cache/jetcarp/<name>` elsewhere. The host's single-instance lock (`host.lock`) and the
 /// app's and host's endpoint files live here.
 pub fn runtime_file(name: &str) -> Option<PathBuf> {
+    runtime_dir().map(|d| d.join(name))
+}
+
+/// The runtime folder [`runtime_file`] uses (`jetcarp paths` names it, #85): none when the
+/// system gives no place for one.
+pub fn runtime_dir() -> Option<PathBuf> {
     if let Some(d) = env_dir("JETCARP_RUNTIME_DIR") {
-        return Some(d.join(name));
+        return Some(d);
     }
     let base = if cfg!(windows) {
         std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
@@ -292,7 +298,7 @@ pub fn runtime_file(name: &str) -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
     }?;
-    Some(base.join(APP_DIR).join(name))
+    Some(base.join(APP_DIR))
 }
 
 /// The search databases' folder: `<data>/explore`.

@@ -494,7 +494,7 @@ pub fn pick_from(
 }
 
 /// [`pick_from`], with the compute adapter's self-test only when `test`.
-fn pick_tested(
+pub(crate) fn pick_tested(
     adapters: &[wgpu::Adapter],
     policy: &Policy,
     purpose: Purpose,

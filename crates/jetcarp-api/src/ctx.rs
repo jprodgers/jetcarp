@@ -509,6 +509,10 @@ pub struct Paths {
     /// `<program folder>/packs`; none when
     /// the install has none ([`jetcarp_core::paths::bundled_packs_dir`]).
     pub bundled_packs: Option<PathBuf>,
+    /// Runtime: the host's single-instance lock and the app's and host's endpoint files
+    /// (`$JETCARP_RUNTIME_DIR`, else `%LOCALAPPDATA%\jetcarp`, `$XDG_RUNTIME_DIR/jetcarp` or
+    /// `~/.cache/jetcarp`); none when the system gives no place for it.
+    pub runtime: Option<PathBuf>,
 }
 
 /// What an operation runs with. Cheap to make; the folders are read from the environment when an
@@ -648,6 +652,7 @@ impl Ctx {
                 .bundled_dir
                 .clone()
                 .or_else(jetcarp_core::paths::bundled_packs_dir),
+            runtime: jetcarp_core::paths::runtime_dir(),
         }
     }
 

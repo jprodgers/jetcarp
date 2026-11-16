@@ -95,7 +95,7 @@ fn jetcarp_env() -> Vec<(String, String)> {
 /// The folders as `jetcarp paths` prints them.
 fn paths_text(p: &Paths) -> String {
     format!(
-        "settings: {}\ndata:     {}\noutput:   {}\nbundled:  {}\n",
+        "settings: {}\ndata:     {}\noutput:   {}\nbundled:  {}\nruntime:  {}\n",
         p.settings
             .as_ref()
             .map(|p| p.display().to_string())
@@ -105,7 +105,11 @@ fn paths_text(p: &Paths) -> String {
         p.bundled_packs
             .as_ref()
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "(no packs came with the program)".into())
+            .unwrap_or_else(|| "(no packs came with the program)".into()),
+        p.runtime
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(none on this system)".into())
     )
 }
 
@@ -119,7 +123,7 @@ impl Report for Paths {
 pub struct SystemPaths;
 impl Op for SystemPaths {
     const NAME: &'static str = "system.paths";
-    const SUMMARY: &'static str = "The settings, data, and output folders JETCARP uses (environment overrides included), and the folder of packs that came with the program.";
+    const SUMMARY: &'static str = "The settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program.";
     const READ_ONLY: bool = true;
     type In = NoInput;
     type Out = Paths;
@@ -142,6 +146,8 @@ pub struct DoctorFolders {
     pub library_bytes: u64,
     /// The packs that came with the program (see `system.paths`).
     pub bundled_packs: Option<PathBuf>,
+    /// The runtime folder: the host's lock and the endpoint files (see `system.paths`).
+    pub runtime: Option<PathBuf>,
     /// Bytes in that folder; none when it is missing.
     pub bundled_packs_bytes: Option<u64>,
     /// Where the program looked for them, in order (`$JETCARP_BUNDLED_PACKS` alone when set).
@@ -180,6 +186,7 @@ impl Report for DoctorReport {
             data: f.data.clone(),
             output: f.output.clone(),
             bundled_packs: f.bundled_packs.clone(),
+            runtime: f.runtime.clone(),
         };
         for l in paths_text(&paths).lines() {
             if l.starts_with("bundled:") {
@@ -410,6 +417,7 @@ impl Op for SystemDoctor {
                 library,
                 library_exists,
                 bundled_packs: paths.bundled_packs,
+                runtime: paths.runtime,
                 bundled_packs_bytes,
                 bundled_packs_searched: jetcarp_core::paths::bundled_packs_candidates(),
                 data_chosen_missing,

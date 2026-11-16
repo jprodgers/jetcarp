@@ -11,15 +11,17 @@ settings: /home/ada/.config/jetcarp
 data:     /home/ada/.local/share/jetcarp
 output:   /home/ada/Pictures/JETCARP
 bundled:  /home/ada/.local/lib/jetcarp/packs
+runtime:  /run/user/1000/jetcarp
 ```
 
-The last line is the folder of packs that came with the program, the starter pack, which JETCARP
+`bundled:` is the folder of packs that came with the program, the starter pack, which JETCARP
 reads and never writes; it says `(no packs came with the program)` when there is none, as after
 `cargo install`. Where it is looked for is in
-[Installing JETCARP](../getting-started/installing.md#the-starter-pack).
+[Installing JETCARP](../getting-started/installing.md#the-starter-pack). `runtime:` is the small
+folder for the running app's and host's control files ([Runtime](#runtime-folder) below).
 
-`jetcarp paths --json` prints the same as JSON (the last as `bundled_packs`, `null` when there is
-none). `jetcarp doctor` adds the catalog file, how much data is in use, the starter pack's size (or
+`jetcarp paths --json` prints the same as JSON (`bundled_packs` and `runtime` are `null` when there
+is none). `jetcarp doctor` adds the catalog file, how much data is in use, the starter pack's size (or
 where it looked for one), and every `JETCARP_…` variable that is set, with wgpu's `WGPU_…` ones
 (such as `WGPU_BACKEND`), which change the graphics adapters it finds. That makes it the thing to
 paste into a bug report.
@@ -108,13 +110,14 @@ such as `jetcarp run --png`, write where you tell them. The [MCP tools](mcp.md) 
 in the output folder, the library's folder and folders given with `jetcarp mcp --allow`, and
 relative paths they are given start in the output folder.
 
-**Runtime.** One more, small folder holds the files through which the running app and the background
+<a id="runtime-folder"></a>**Runtime.** One more, small folder holds the files through which the running app and the background
 host accept local control (their port and access token): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
 the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
 every copy of JETCARP you run, whatever folders the others point at, so there is one background
 host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
-one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own.
+one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `jetcarp paths` and
+`jetcarp doctor` show the one in use.
 
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).

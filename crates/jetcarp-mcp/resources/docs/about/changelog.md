@@ -161,6 +161,13 @@ that will declare them stable.
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
   *Static*, *Quiet rows*) now get a sixteenth of the sample each, at least 2, and the output says
   how many clips each category got. ([#56](https://github.com/jprodgers/jetcarp/issues/56))
+- **doctor with the GPU simulation off still tested every adapter.** It said "not used, and not
+  tested", but its list of graphics adapters ran the GPU self-test on each one and saved the
+  results. With the GPU off for the app and the desktop background alike, doctor now checks each
+  adapter against the requirements only. ([#84](https://github.com/jprodgers/jetcarp/issues/84))
+- **`jetcarp paths` didn't name the runtime folder**, where the host's lock and the app's and
+  host's control files live. It now prints a `runtime:` line (`runtime` in `--json`), and doctor's
+  Folders section names it too. ([#85](https://github.com/jprodgers/jetcarp/issues/85))
 - **A GPU failing part way could crash the process on Windows.** After a failed batch, the
   stepper let go of its buffers while the GPU still had work in flight, and a readback waited for
   the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does the

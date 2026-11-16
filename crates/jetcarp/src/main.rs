@@ -173,8 +173,8 @@ enum Cmd {
     /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
     /// Shows the plan unless --yes.
     Uninstall(platform::UninstallArgs),
-    /// Print the settings, data, and output folders JETCARP uses (environment overrides
-    /// included).
+    /// Print the settings, data, output, and runtime folders JETCARP uses (environment overrides
+    /// included), and the folder of packs that came with the program.
     Paths,
     /// First-run setup: choose a profile (desktop-art, explorer, researcher, everything,
     /// blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as

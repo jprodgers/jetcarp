@@ -107,7 +107,7 @@ pub fn soup_batcher() -> Result<Arc<dyn SoupBatcher>, String> {
 
 /// Every graphics adapter, the one used for computing marked.
 pub fn adapters() -> Vec<GpuAdapter> {
-    jetcarp_gpu::adapter_reports()
+    jetcarp_gpu::adapter_reports_with(any_on(&select::Policy::load()))
         .into_iter()
         .map(|g| GpuAdapter {
             name: g.name,
@@ -149,22 +149,25 @@ fn mode_of(m: Mode) -> GpuMode {
     }
 }
 
-/// The policy and each purpose's adapter, with the self-test (run now if it has not been), and
-/// what the app and the desktop background each do with their own choices.
-pub fn policy() -> GpuPolicy {
-    let shared = select::Policy::load();
-    let own = [
+/// Whether the GPU simulation is on (or automatic) for the app or the desktop background under
+/// the policy `shared`; off for both, doctor tests no adapter (#84).
+fn any_on(shared: &select::Policy) -> bool {
+    [
         (crate::simgpu::OWNER, crate::app::saved_gpu_choice()),
         (
             jetcarp_display::host_settings::OWNER,
             jetcarp_display::host_settings::HostSettings::load().0.gpu,
         ),
-    ];
+    ]
+    .iter()
+    .any(|(name, o)| program(shared, name, *o).mode != GpuMode::Off)
+}
+
+/// The policy and each purpose's adapter, with the self-test (run now if it has not been), and
+/// what the app and the desktop background each do with their own choices.
+pub fn policy() -> GpuPolicy {
     // With the GPU simulation off for the app and the host alike, doctor doesn't test adapters.
-    let any_on = own
-        .iter()
-        .any(|(name, o)| program(&shared, name, *o).mode != GpuMode::Off);
-    let (p, choices) = select::report_with(any_on);
+    let (p, choices) = select::report_with(any_on(&select::Policy::load()));
     let programs = [
         (crate::simgpu::OWNER, crate::app::saved_gpu_choice()),
         (

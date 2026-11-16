@@ -53,11 +53,15 @@ fn json_before_or_after_the_subcommand() {
     let before = json_of(&["--json", "paths"]);
     assert_eq!(after, before);
     let keys: Vec<&String> = after.as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["bundled_packs", "data", "output", "settings"]);
-    // Without --json: the text, as before.
+    assert_eq!(
+        keys,
+        ["bundled_packs", "data", "output", "runtime", "settings"]
+    );
+    // Without --json: the text, as before, with the runtime folder last (#85).
     let text = String::from_utf8(jetcarp(&["paths"]).stdout).unwrap();
     assert!(text.starts_with("settings: "), "{text}");
     assert!(text.contains("\ndata:     "), "{text}");
+    assert!(text.contains("\nruntime:  "), "{text}");
     let rules = json_of(&["rules", "--json"]);
     assert_eq!(rules["rules"][0]["notation"], "B3/S23");
     let tilings = json_of(&["--json", "tilings"]);
@@ -153,6 +157,37 @@ fn run_gives_one_hash_on_the_cpu_and_by_default() {
             .success()
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// With the GPU simulation off, doctor tests no adapter: it says so, and writes no self-test
+/// results (#84). It bites only where there is a hardware adapter to test (not on CI's lavapipe).
+#[test]
+fn doctor_with_the_gpu_off_runs_no_self_test() {
+    let cfg =
+        test_dir("JETCARP_CONFIG_DIR", "config").join(format!("gpu-off-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&cfg);
+    std::fs::create_dir_all(&cfg).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+        .args(["doctor", "--json"])
+        .env("JETCARP_OUT", out_root())
+        .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+        .env("JETCARP_CONFIG_DIR", &cfg)
+        .env("JETCARP_GPU", "off")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let d: Value = serde_json::from_slice(&o.stdout).unwrap();
+    for c in d["gpu_policy"]["choices"].as_array().into_iter().flatten() {
+        assert!(
+            c["self_test"].is_null(),
+            "a self-test with the GPU off: {c}"
+        );
+    }
+    assert!(
+        !cfg.join("gpu-checks.json").exists(),
+        "doctor ran the GPU self-test with the GPU off"
+    );
+    let _ = std::fs::remove_dir_all(&cfg);
 }
 
 #[test]

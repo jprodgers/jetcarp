@@ -53,7 +53,7 @@ Commands:
   tilings     List tiling families with their neighbour counts
   doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
   uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes
-  paths       Print the settings, data, and output folders JETCARP uses (environment overrides included)
+  paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
   setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal; `--profile NAME --yes` asks nothing. `--status` shows where things stand
   isohedral   List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet
   rules       List named rules and notation
@@ -2918,7 +2918,7 @@ Options:
 ### `jetcarp paths`
 
 ```text
-Print the settings, data, and output folders JETCARP uses (environment overrides included)
+Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
 
 Usage: jetcarp paths [OPTIONS]
 
