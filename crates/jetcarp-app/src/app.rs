@@ -476,8 +476,10 @@ impl eframe::App for JetcarpApp {
     /// another desktop: macOS, Wayland and Windows give such a window no frames): AI control is
     /// answered and the running world steps here, so both go on behind a hidden window (#87).
     /// eframe runs these passes when a repaint is asked for: the AI control link asks for one
-    /// with each request, and a running world with each pass. While hidden they come every 100
-    /// to 250 ms, and a pass steps that long's worth of generations (`run_steps` takes up to a
+    /// with each request, and a running world with each pass. While the window is hidden a
+    /// running world asks for the next pass 50 ms on, not at once: with no frame to present there
+    /// is nothing to wait on, and on macOS a covered window's passes then ran back to back, a
+    /// whole core busy. A pass steps that long's worth of generations (`run_steps` takes up to a
     /// quarter of a second at a time), so the world keeps its speed. Nothing here draws.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ai_poll(ctx);
@@ -489,7 +491,11 @@ impl eframe::App for JetcarpApp {
                 f.add_step(t0.elapsed().as_secs_f64() * 1e3);
             }
             if self.playing {
-                ctx.request_repaint();
+                if ctx.input(|i| i.viewport().visible() == Some(false)) {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(50));
+                } else {
+                    ctx.request_repaint();
+                }
             }
         }
     }
