@@ -254,8 +254,9 @@ fn bundled_packs_places(env: Option<&OsStr>, exe: Option<&Path>) -> Vec<PathBuf>
 }
 
 /// The running program's file with symbolic links resolved (winget's portable installs link the
-/// program into a folder on the `PATH` on Windows too).
-fn program_path() -> Option<PathBuf> {
+/// program into a folder on the `PATH` on Windows too). `jetcarp uninstall` tells from it how the
+/// program was installed.
+pub fn program_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let real = std::fs::canonicalize(&exe).unwrap_or(exe);
     Some(if cfg!(windows) {

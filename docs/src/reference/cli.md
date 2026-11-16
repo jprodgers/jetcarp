@@ -52,7 +52,7 @@ Commands:
   site        Website export: the public catalog as JSON and media with a manifest and a viewer page, incrementally
   tilings     List tiling families with their neighbour counts
   doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
-  uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes
+  uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
   paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
   setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes` asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows where things stand
   isohedral   List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet
@@ -3004,7 +3004,7 @@ Options:
 ### `jetcarp uninstall`
 
 ```text
-Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes
+Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
 
 Usage: jetcarp uninstall [OPTIONS]
 

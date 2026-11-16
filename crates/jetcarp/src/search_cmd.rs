@@ -696,7 +696,8 @@ impl Progress for CliProgress {
         }
         let mut l = self.last.lock().unwrap();
         if self.tty {
-            eprint!("\r\x1b[2K{msg}");
+            // Fitted to the terminal: a wrapped line leaves its first rows behind (#104).
+            eprint!("\r\x1b[2K{}", crate::term::fit_to_stderr(msg));
             let _ = std::io::stderr().flush();
             l.1 = true;
         } else if l.0.is_none_or(|t| t.elapsed().as_secs_f64() >= 5.0) {

@@ -375,6 +375,28 @@ that will declare them stable.
   ([#100](https://github.com/jprodgers/jetcarp/issues/100),
   [#101](https://github.com/jprodgers/jetcarp/issues/101),
   [#102](https://github.com/jprodgers/jetcarp/issues/102))
+- **Uninstalling read as not uninstalling, and failed a step on macOS.** `jetcarp uninstall` now
+  says first what it does and doesn't: it undoes what JETCARP set up outside its folders, and the
+  program stays, as do the settings and data unless asked. It ends with the one command that
+  removes the program, told from where the program is (the installers' folder, Homebrew's `Cellar`,
+  Scoop, winget, pipx, uv, another Python environment, cargo), rather than a list of eight, which
+  stays for a program it can't place; and with a line on removing JETCARP from an AI assistant
+  (`claude mcp remove jetcarp`, or Claude Desktop's config), which otherwise lists it as failing to
+  connect. On macOS the data folder is inside the settings folder, so `--settings --data` deleted
+  it with the settings and then reported "FAILED ... No such file or directory" for it: the data
+  folder now goes first, a folder already gone counts as done, and `--settings` alone, which
+  deleted the data folder with the settings, keeps it. The installers' `--uninstall` no longer says
+  to run `jetcarp uninstall` first after the fact, or points to `jetcarp paths` once the program
+  has gone: they name the folders kept instead. The [Uninstalling](../guides/uninstalling.md) page
+  puts each command in a block of its own (a table cell held two, joined by ", or", and copied
+  whole the installer refused `--uninstall,`), says plainly that `jetcarp uninstall` keeps the
+  program and that any release's installer removes any version's install, and has a step for the
+  assistant. ([#103](https://github.com/jprodgers/jetcarp/issues/103))
+- **Progress lines wider than the terminal left pieces behind.** A job's progress, redrawn in place
+  on standard error, wrapped in a narrow window, and each redraw went back only to the start of its
+  last row, leaving the rest ("newest: p3 oscillatohunt 1: 192/5,000 soups, ..."). A progress line
+  in a terminal is now cut to its width, its least important part (a hunt's "newest: ...") going
+  first; written to a file, lines stay whole. ([#104](https://github.com/jprodgers/jetcarp/issues/104))
 
 ### Changed
 

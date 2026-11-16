@@ -25,6 +25,7 @@ mod research;
 mod script_cmd;
 mod search_cmd;
 mod setup_cmd;
+mod term;
 mod wallpaper_cmd;
 
 #[derive(Parser)]
@@ -171,7 +172,8 @@ enum Cmd {
     Doctor,
     /// Undo what JETCARP set up outside its folders (the host and its still on the desktop,
     /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
-    /// Shows the plan unless --yes.
+    /// Shows the plan unless --yes. The program itself stays; this ends with the command that
+    /// removes it.
     Uninstall(platform::UninstallArgs),
     /// Print the settings, data, output, and runtime folders JETCARP uses (environment overrides
     /// included), and the folder of packs that came with the program.
@@ -300,11 +302,17 @@ pub(crate) fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<
     out.check().map_err(anyhow::Error::new)
 }
 
-/// Progress as one line on standard error, rewritten in place (`\r`); the caller ends it.
+/// Progress as one line on standard error, rewritten in place (`\r`), fitted to the terminal's
+/// width (#104); the caller ends it.
 pub(crate) struct ProgressLine;
 impl Progress for ProgressLine {
     fn report(&self, _done: u64, _total: Option<u64>, msg: &str) {
-        eprint!("\r{msg}");
+        use std::io::IsTerminal;
+        if std::io::stderr().is_terminal() {
+            eprint!("\r\x1b[2K{}", term::fit_to_stderr(msg));
+        } else {
+            eprint!("\r{msg}");
+        }
     }
 }
 

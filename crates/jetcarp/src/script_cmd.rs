@@ -166,7 +166,7 @@ Run one with: jetcarp script --example NAME"
             let mut l = last.lock().unwrap();
             let end = p.done >= p.total;
             if tty {
-                eprint!("\r\x1b[2K{}", p.line());
+                eprint!("\r\x1b[2K{}", crate::term::fit_to_stderr(&p.line()));
                 let _ = std::io::stderr().flush();
                 l.1 = true;
                 if end {

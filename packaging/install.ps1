@@ -120,11 +120,13 @@ function Get-MadeBefore {
 
 if ($Uninstall) {
     if (-not (Test-Path $Marker)) { Fail "no JETCARP installed by this installer in $InstallDir" }
-    Say "run ``jetcarp uninstall`` first if JETCARP set anything up (host, login, screen saver)"
+    if (Test-Path (Join-Path $InstallDir "jetcarp.exe")) {
+        Say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by ``jetcarp uninstall``, not by this: if that is still to do, install again and run it"
+    }
     $Made = @(Get-MadeBefore)
     Remove-Item -Recurse -Force $InstallDir
     Remove-FromUserPath $InstallDir
-    Say "removed $InstallDir and took it off your PATH (your settings, data and pictures are kept)"
+    Say "removed $InstallDir and took it off your PATH"
     # The folders the install made around it (such as %LOCALAPPDATA%\Programs), deepest first, if empty.
     foreach ($m in @($Made | Sort-Object -Unique -Descending)) {
         if ((Test-Path -LiteralPath $m -PathType Container) -and @(Get-ChildItem -Force -LiteralPath $m).Count -eq 0) {
@@ -132,6 +134,9 @@ if ($Uninstall) {
             Say "removed $m (empty, made by the install)"
         }
     }
+    # Named here, as `jetcarp paths` would have, since the program has gone.
+    $Pictures = Join-Path ([Environment]::GetFolderPath("MyPictures")) "JETCARP"
+    Say "kept your settings, data and pictures, usually in $(Join-Path $env:APPDATA 'jetcarp'), $(Join-Path $env:LOCALAPPDATA 'jetcarp') and $Pictures; delete them by hand if you want them gone"
     return
 }
 

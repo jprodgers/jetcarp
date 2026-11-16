@@ -25,22 +25,26 @@ pub fn folder_size(p: &Path) -> u64 {
         .sum()
 }
 
-/// Deletes `dir` and everything in it except the files in `keep` and the folders that hold them,
-/// and returns the files kept. Uninstalling deletes the settings folder this way, keeping the
-/// picture the desktop shows (a still the host left, or on Windows the copy of the user's own
-/// picture that was put back), so the desktop is never left pointing at a deleted file.
-/// Symbolic links are removed, not followed.
+/// Deletes `dir` and everything in it except what is in `keep` (files, or folders kept whole)
+/// and the folders that hold them, and returns what was kept. Uninstalling deletes the settings
+/// folder this way, keeping the picture the desktop shows (a still the host left, or on Windows
+/// the copy of the user's own picture that was put back), so the desktop is never left pointing at
+/// a deleted file, and keeping the data folder when it is inside and was not asked for (macOS).
+/// Keeping `dir` itself keeps everything. Symbolic links are removed, not followed.
 pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
-    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    let root = canon(dir);
+    let root = canonical(dir);
     let mut inside: Vec<PathBuf> = keep
         .iter()
-        .map(|k| canon(k))
-        .filter(|k| k.starts_with(&root) && k.is_file())
+        .map(|k| canonical(k))
+        .filter(|k| k.starts_with(&root) && k.exists())
         .collect();
+    inside.sort();
     inside.dedup();
     if inside.is_empty() {
         std::fs::remove_dir_all(dir)?;
+        return Ok(inside);
+    }
+    if inside.contains(&root) {
         return Ok(inside);
     }
     /// Empties `d` but for `keep`; true when nothing is left in it.
@@ -48,14 +52,14 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
         let mut left = false;
         for e in std::fs::read_dir(d)? {
             let p = e?.path();
-            if std::fs::symlink_metadata(&p)?.is_dir() {
+            if keep.contains(&p) {
+                left = true;
+            } else if std::fs::symlink_metadata(&p)?.is_dir() {
                 if empty(&p, keep)? {
                     std::fs::remove_dir(&p)?;
                 } else {
                     left = true;
                 }
-            } else if keep.contains(&p) {
-                left = true;
             } else {
                 std::fs::remove_file(&p)?;
             }
@@ -64,6 +68,17 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
     }
     empty(&root, &inside)?;
     Ok(inside)
+}
+
+/// `p` with its symbolic links followed, or as it is when that fails.
+fn canonical(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+/// Whether `inner` is `outer` or a folder inside it, as named or with symbolic links followed
+/// (on macOS the data folder is inside the settings folder).
+fn within(inner: &Path, outer: &Path) -> bool {
+    inner.starts_with(outer) || canonical(inner).starts_with(canonical(outer))
 }
 
 /// A size for people: `512 B`, `3.4 MB`.
@@ -478,11 +493,183 @@ pub struct UninstallReport {
     pub kept_settings: Option<PathBuf>,
     /// The output folder (never deleted).
     pub output: PathBuf,
+    /// How this program was installed, and what removes it; none when that can't be told.
+    pub installed_with: Option<InstalledWith>,
+}
+
+/// How a JETCARP program was installed, told by where it is, and what removes it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct InstalledWith {
+    /// What installed it: `installer` (JETCARP's own), `homebrew`, `scoop`, `winget`, `pipx`,
+    /// `uv`, `pip` or `cargo`.
+    pub by: String,
+    /// The folder the program is in, symbolic links followed.
+    pub folder: PathBuf,
+    /// The commands that remove it, in order (the PowerShell installer is saved first).
+    pub remove: Vec<String>,
+}
+
+impl InstalledWith {
+    /// `by` for people: "Homebrew", "JETCARP's installer".
+    pub fn name(&self) -> &str {
+        match self.by.as_str() {
+            "installer" => "JETCARP's installer",
+            "homebrew" => "Homebrew",
+            "scoop" => "Scoop",
+            other => other,
+        }
+    }
+}
+
+/// Where the installers are, the latest release's: any release's installer removes any
+/// version's install (it checks its marker, and removes before it would download anything).
+const INSTALLER_URL: &str =
+    "https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer";
+
+/// How the program at `exe` (its path with symbolic links followed) was installed, on Windows or
+/// not, from where it is (#103):
+///
+/// - JETCARP's installer leaves a `.jetcarp-installer` file in the program's folder
+///   (`~/.local/lib/jetcarp`, `%LOCALAPPDATA%\Programs\jetcarp`, or the folder it was given);
+/// - Homebrew keeps it in `<prefix>/Cellar/jetcarp/<version>/bin` (`/opt/homebrew`, `/usr/local`,
+///   `/home/linuxbrew/.linuxbrew`), Scoop in `scoop\apps\jetcarp\<version>`, winget in
+///   `Microsoft\WinGet\Packages\JimmieRodgers.JETCARP_<source>`;
+/// - pipx and uv each make it a Python environment, `pipx/venvs/jetcarp` and `uv/tools/jetcarp`
+///   (`uv\data\tools\jetcarp` on Windows); any other Python environment, with `pyvenv.cfg` above
+///   the `bin` (`Scripts`) folder, is pip's;
+/// - cargo installs into the `bin` folder of a root that holds its `.crates.toml` (`~/.cargo`).
+///
+/// `None` when it cannot tell: a release archive, a copy, pip outside a Python environment.
+pub fn installed_with(exe: &Path, windows: bool) -> Option<InstalledWith> {
+    let text = exe.to_string_lossy();
+    let (dir, _) = text.rsplit_once(['/', '\\'])?;
+    let folder = PathBuf::from(dir);
+    // Matched without regard to case or separator: Windows and macOS ignore case.
+    let norm = text.replace('\\', "/").to_lowercase();
+    let has = |part: &str| norm.contains(part);
+    let found = |by: &str, remove: Vec<String>| {
+        Some(InstalledWith {
+            by: by.into(),
+            folder: folder.clone(),
+            remove,
+        })
+    };
+    if folder.join(".jetcarp-installer").is_file() {
+        return found("installer", installer_commands(&folder, windows));
+    }
+    if has("/cellar/jetcarp/") {
+        return found("homebrew", vec!["brew uninstall jetcarp".into()]);
+    }
+    if has("/scoop/apps/jetcarp/") {
+        return found("scoop", vec!["scoop uninstall jetcarp".into()]);
+    }
+    if has("/microsoft/winget/packages/jimmierodgers.jetcarp_") {
+        return found(
+            "winget",
+            vec!["winget uninstall JimmieRodgers.JETCARP".into()],
+        );
+    }
+    if has("/pipx/venvs/jetcarp/") {
+        return found("pipx", vec!["pipx uninstall jetcarp".into()]);
+    }
+    if has("/uv/tools/jetcarp/") || has("/uv/data/tools/jetcarp/") {
+        return found("uv", vec!["uv tool uninstall jetcarp".into()]);
+    }
+    // A Python environment or cargo's root: the program is in its `bin` (`Scripts`) folder.
+    let (root, bin) = dir.rsplit_once(['/', '\\'])?;
+    let root = PathBuf::from(root);
+    let bin = bin.to_lowercase();
+    if (bin == "bin" || bin == "scripts") && root.join("pyvenv.cfg").is_file() {
+        return found("pip", vec!["pip uninstall jetcarp".into()]);
+    }
+    if bin == "bin"
+        && (root.join(".crates.toml").is_file()
+            || root.join(".crates2.json").is_file()
+            || has("/.cargo/bin/"))
+    {
+        let default = std::env::var_os("CARGO_HOME")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| home_dir().map(|h| h.join(".cargo")));
+        let mut cmd = "cargo uninstall jetcarp".to_string();
+        if default.is_some_and(|d| canonical(&d) != canonical(&root)) {
+            let _ = write!(cmd, " --root {}", quoted(&root, windows));
+        }
+        return found("cargo", vec![cmd]);
+    }
+    None
+}
+
+/// The home folder, from `HOME` (`USERPROFILE` on Windows).
+fn home_dir() -> Option<PathBuf> {
+    let vars: &[&str] = if cfg!(windows) {
+        &["USERPROFILE"]
+    } else {
+        &["HOME"]
+    };
+    vars.iter()
+        .find_map(|v| std::env::var_os(v).filter(|v| !v.is_empty()))
+        .map(PathBuf::from)
+}
+
+/// The commands that run the latest release's installer with its option to uninstall, naming
+/// the program's folder when it is not the installer's default.
+fn installer_commands(folder: &Path, windows: bool) -> Vec<String> {
+    let default = if windows {
+        std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Programs").join("jetcarp"))
+    } else {
+        home_dir().map(|h| h.join(".local").join("lib").join("jetcarp"))
+    };
+    let same = default.is_some_and(|d| {
+        let (d, f) = (canonical(&d), canonical(folder));
+        if windows {
+            d.to_string_lossy().to_lowercase() == f.to_string_lossy().to_lowercase()
+        } else {
+            d == f
+        }
+    });
+    if windows {
+        let mut run =
+            "powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1 -Uninstall"
+                .to_string();
+        if !same {
+            let _ = write!(run, " -InstallDir {}", quoted(folder, true));
+        }
+        vec![
+            format!("Invoke-WebRequest {INSTALLER_URL}.ps1 -OutFile jetcarp-installer.ps1"),
+            run,
+        ]
+    } else {
+        let mut run = format!("curl -LsSf {INSTALLER_URL}.sh | sh -s -- --uninstall");
+        if !same {
+            let _ = write!(run, " --dir {}", quoted(folder, false));
+        }
+        vec![run]
+    }
+}
+
+/// `p` as one argument to a shell: as it is when it holds nothing a shell would read, else in
+/// single quotes (the shell's, or PowerShell's, which doubles a quote inside).
+fn quoted(p: &Path, windows: bool) -> String {
+    let s = p.to_string_lossy();
+    if !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/\\._-:+".contains(c))
+    {
+        s.into_owned()
+    } else if windows {
+        format!("'{}'", s.replace('\'', "''"))
+    } else {
+        format!("'{}'", s.replace('\'', r"'\''"))
+    }
 }
 
 impl Report for UninstallReport {
     fn text(&self) -> String {
-        let mut s = String::new();
+        let mut s = String::from(
+            "This undoes what JETCARP set up outside its folders. It never removes the program \
+             itself, and deletes its settings and data only when asked (--settings, --data).\n\n",
+        );
         if self.steps.is_empty() {
             s.push_str("Nothing to undo: JETCARP has not set anything up outside its folders.\n");
         } else {
@@ -527,20 +714,13 @@ impl Report for UninstallReport {
         }
         let _ = writeln!(
             s,
-            "Your pictures and exports in {} are never deleted.",
-            self.output.display()
-        );
-        let _ = writeln!(
-            s,
-            "\nTo remove the program itself, use what installed it: the installer again with \
-             `{}`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip uninstall \
-             jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, `cargo uninstall \
-             jetcarp`, or delete its folder.",
-            if cfg!(windows) {
-                "-Uninstall"
+            "{}Your pictures and exports in {} are never deleted.",
+            if self.kept_data.is_none() && self.kept_settings.is_none() {
+                "\n"
             } else {
-                "--uninstall"
-            }
+                ""
+            },
+            self.output.display()
         );
         if self.done
             && self
@@ -550,6 +730,55 @@ impl Report for UninstallReport {
         {
             s.push_str("Log out and back in once to finish removing the GNOME extension.\n");
         }
+        // After the steps listed, when they are still to be done.
+        let lead = if self.done || self.steps.is_empty() {
+            "To remove"
+        } else {
+            "Then, to remove"
+        };
+        match &self.installed_with {
+            Some(w) => {
+                let place = match w.folder.parent().filter(|_| w.by == "pip") {
+                    Some(env) => format!("in the Python environment {}", env.display()),
+                    None => format!("in {}", w.folder.display()),
+                };
+                let how = if w.by == "pip" {
+                    "this with that environment active"
+                } else if w.by == "installer" && w.remove.len() > 1 {
+                    // The PowerShell installer: saved, then run.
+                    "these in PowerShell"
+                } else {
+                    "this"
+                };
+                let _ = writeln!(
+                    s,
+                    "\n{lead} the program itself ({place}, installed with {}), run {how}:\n",
+                    w.name()
+                );
+                for c in &w.remove {
+                    let _ = writeln!(s, "    {c}");
+                }
+            }
+            None => {
+                let _ = writeln!(
+                    s,
+                    "\n{lead} the program itself, use what installed it: the installer again \
+                     with `{}`, `pipx uninstall jetcarp`, `uv tool uninstall jetcarp`, `pip \
+                     uninstall jetcarp`, `brew uninstall jetcarp`, `scoop uninstall jetcarp`, \
+                     `cargo uninstall jetcarp`, or delete its folder.",
+                    if cfg!(windows) {
+                        "-Uninstall"
+                    } else {
+                        "--uninstall"
+                    }
+                );
+            }
+        }
+        s.push_str(
+            "\nIf you connected JETCARP to an AI assistant, remove it there too: `claude mcp \
+             remove jetcarp` for Claude Code, or the \"jetcarp\" entry in Claude Desktop's \
+             claude_desktop_config.json.\n",
+        );
         s
     }
 }
@@ -655,21 +884,46 @@ impl Op for SystemUninstall {
                 }),
             ));
         }
+        let data = paths.data.clone();
+        // On macOS the data folder is inside the settings folder (#103). Deleting both, it goes
+        // first, so each step finds its own folder; deleting only the settings, it is kept.
+        let data_inside = paths
+            .settings
+            .as_deref()
+            .is_some_and(|c| data.exists() && within(&data, c));
+        let mut settings_step: Option<(String, Run)> = None;
         if let Some(c) = paths.settings.clone().filter(|c| c.exists()) {
             if a.settings {
                 // Asked when the step runs, after the steps before it have put the user's own
                 // picture back.
                 let platform = cx.platform.clone();
-                steps.push((
-                    format!("delete the settings folder {}", c.display()),
+                let keep_data = (data_inside && !a.data).then(|| data.clone());
+                settings_step = Some((
+                    format!(
+                        "delete the settings folder {}{}",
+                        c.display(),
+                        if keep_data.is_some() {
+                            ", except the data folder inside it"
+                        } else {
+                            ""
+                        }
+                    ),
                     Box::new(move || {
-                        let kept = remove_dir_keeping(&c, &platform.desktop_files())
-                            .map_err(|e| e.to_string())?;
-                        Ok((!kept.is_empty()).then(|| {
-                            let names: Vec<String> =
-                                kept.iter().map(|k| k.display().to_string()).collect();
-                            format!("kept {}: the desktop shows it", names.join(", "))
-                        }))
+                        if !c.exists() {
+                            return Ok(Some("already gone".into()));
+                        }
+                        let mut keep = platform.desktop_files();
+                        keep.extend(keep_data.clone());
+                        let kept = remove_dir_keeping(&c, &keep).map_err(|e| e.to_string())?;
+                        // The pictures kept, not the data folder the step's name says it keeps.
+                        let data = keep_data.as_deref().map(canonical);
+                        let shown: Vec<String> = kept
+                            .iter()
+                            .filter(|k| Some(*k) != data.as_ref())
+                            .map(|k| k.display().to_string())
+                            .collect();
+                        Ok((!shown.is_empty())
+                            .then(|| format!("kept {}: the desktop shows it", shown.join(", "))))
                     }),
                 ));
             } else if let Some(record) = Some(c.join("host-program")).filter(|p| p.exists()) {
@@ -683,18 +937,24 @@ impl Op for SystemUninstall {
                 ));
             }
         }
-        let data = paths.data.clone();
+        let mut data_step: Option<(String, Run)> = None;
         if a.data && data.exists() {
             let size = human_bytes(folder_size(&data));
             let d = data.clone();
-            steps.push((
+            data_step = Some((
                 format!("delete the data folder {} ({size})", data.display()),
-                Box::new(move || {
-                    std::fs::remove_dir_all(&d)
-                        .map(|()| None)
-                        .map_err(|e| e.to_string())
+                Box::new(move || match std::fs::remove_dir_all(&d) {
+                    Ok(()) => Ok(None),
+                    // Gone already, with a folder it was in.
+                    Err(_) if !d.exists() => Ok(Some("already gone".into())),
+                    Err(e) => Err(e.to_string()),
                 }),
             ));
+        }
+        if data_inside {
+            steps.extend(data_step.into_iter().chain(settings_step));
+        } else {
+            steps.extend(settings_step.into_iter().chain(data_step));
         }
         let steps = steps
             .into_iter()
@@ -734,6 +994,8 @@ impl Op for SystemUninstall {
             kept_data,
             kept_settings,
             output: paths.output,
+            installed_with: jetcarp_core::paths::program_path()
+                .and_then(|exe| installed_with(&exe, cfg!(windows))),
         })
     }
 }

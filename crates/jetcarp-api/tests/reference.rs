@@ -312,13 +312,23 @@ fn uninstall_lists_then_undoes() {
     assert_eq!(runs.load(Ordering::SeqCst), 0);
     assert!(!plan.done);
     let t = plan.text();
+    // First what it does and doesn't (#103).
     assert!(
         t.starts_with(
-            "Would undo (run again with --yes):\n  remove the test hook\n  stop the test daemon\n"
+            "This undoes what JETCARP set up outside its folders. It never removes the program \
+             itself, and deletes its settings and data only when asked (--settings, --data).\n\n\
+             Would undo (run again with --yes):\n  remove the test hook\n  stop the test daemon\n"
         ),
         "{t}"
     );
     assert!(t.contains("are never deleted."));
+    // The test program was not installed, so every way of removing the program is listed; then
+    // the assistant's registration.
+    assert!(
+        t.contains("\nThen, to remove the program itself, use what installed it: "),
+        "{t}"
+    );
+    assert!(t.contains("`claude mcp remove jetcarp`"), "{t}");
     // Running the steps deletes nothing of the user's unless asked (settings, data), but it
     // forgets a recorded host command, so only do it in the tests' own settings folder.
     if std::env::var_os("JETCARP_CONFIG_DIR").is_none() {

@@ -119,7 +119,7 @@ made_before() {
 if [ -n "$uninstall" ]; then
     [ -f "$marker" ] || die "no JETCARP installed by this installer in $dir"
     if [ -x "$dir/jetcarp" ]; then
-        say "run \`jetcarp uninstall\` first if JETCARP set anything up (host, login item, screen saver)"
+        say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by \`jetcarp uninstall\`, not by this: if that is still to do, install again and run it"
     fi
     if link_ours; then
         rm -f "$bin_dir/jetcarp"
@@ -127,13 +127,19 @@ if [ -n "$uninstall" ]; then
     fi
     made=$(made_before)
     rm -rf "$dir"
-    say "removed $dir (your settings, data and pictures are kept; see \`jetcarp paths\`)"
+    say "removed $dir"
     # The folders the install made around it (such as ~/.local/lib), deepest first, if empty.
     printf '%s\n' "$made" | sort -ru | while IFS= read -r m; do
         if [ -n "$m" ] && [ -d "$m" ] && rmdir "$m" 2>/dev/null; then
             say "removed $m (empty, made by the install)"
         fi
     done
+    # Named here, as `jetcarp paths` would have, since the program has gone.
+    case "$(uname -s)" in
+        Darwin) kept="$HOME/Library/Application Support/jetcarp (with the data in its data folder) and $HOME/Pictures/JETCARP" ;;
+        *) kept="${XDG_CONFIG_HOME:-$HOME/.config}/jetcarp, ${XDG_DATA_HOME:-$HOME/.local/share}/jetcarp and $HOME/Pictures/JETCARP" ;;
+    esac
+    say "kept your settings, data and pictures, usually in $kept; delete them by hand if you want them gone"
     exit 0
 fi
 
