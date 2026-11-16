@@ -65,7 +65,7 @@ a public pre-release, built by the same workflow as a release, which the package
 Scoop, PyPI, crates.io) do not pick up. Each candidate is tested on three machines, with GPUs from
 four vendors (as of 0.4.2):
 
-| | Framework Desktop (the main machine) | Acer laptop | MacBook Pro |
+| | Framework Desktop (the main machine) | Acer Nitro V15 laptop | MacBook Pro |
 |---|---|---|---|
 | Processor | AMD Ryzen AI Max+ 395, 16 cores, 32 threads | Intel Core i5-13420H, 8 cores, 12 threads | Apple M2 Max, 12 cores |
 | Memory | 94 GB visible to the system (shared with the GPU) | 15.7 GB | 64 GB (shared with the GPU) |
@@ -116,7 +116,8 @@ machine, working from the written plan. It records every step with its evidence 
 timings, screenshots where they matter) and asks Jimmie, at the machine, whenever a step needs eyes
 or hands: whether a picture looks right, whether a page is clumsy, whether a shortcut does what it
 says. Results are committed as they come in, and a main session reads them, files the problems and
-fixes them.
+fixes them. The plans, logs and results are published in
+[jetcarp-testing](https://github.com/jprodgers/jetcarp-testing).
 
 ## How a problem is handled
 
@@ -188,8 +189,9 @@ and the [changelog](changelog.md) lists the fixes with their issues.
 - **The AI's reading of results** can be wrong. Its test sessions have misread or mis-set-up steps:
   one ran a read-only-folder check against a folder it had itself left writable, and the step had to
   be rerun. Results are kept with their evidence so such mistakes can be found.
-- **The test plans and raw results** of each candidate are kept in a private repository, as they
-  hold personal and security-sensitive details. What is public is the tests themselves, the CI runs,
-  the issues (each saying where it was found) and the changelog.
+- **Withheld records.** The test plans, logs and results are public, in
+  [jetcarp-testing](https://github.com/jprodgers/jetcarp-testing): a copy of the repository the test
+  sessions worked in, less the records of a security problem handled privately (withheld until it
+  is described publicly) and a few personal details. Its `WITHHELD.md` lists what is left out.
 - **Expert review.** The check by people who know the field best, the ConwayLife community, is still
   to come.
