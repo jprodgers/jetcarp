@@ -189,6 +189,11 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
   system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept. ⌘M, which
   did nothing, now minimises the window.
   ([#91](https://github.com/jprodgers/jetcarp/issues/91), [#98](https://github.com/jprodgers/jetcarp/issues/98))
+- **`host status` gave a screen's asked-for speed, not the speed it reached.** A world too big for
+  its screen read as running at full speed (a 64-million-cell world at 3.9 generations a second
+  said 30). Each screen now measures what it reaches, and the status says so when it falls short:
+  `30 fps, 3.90 of 30 generations a second` (`measured_speed` in `--json`).
+  ([#116](https://github.com/jprodgers/jetcarp/issues/116))
 - **The app's Copy buttons and Paste did nothing.** JETCARP built its window toolkit without
   clipboard support, so copying a rule, an id, the world's hash or the AI control token, and pasting
   into a text box, never reached the system clipboard. The AI control window also now says how to

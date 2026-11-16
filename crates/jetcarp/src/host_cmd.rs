@@ -470,10 +470,24 @@ fn rate(x: f64) -> String {
 fn pace_words(st: &Value) -> Option<String> {
     let fps = st["frame_rate"].as_f64()?;
     let speed = st["speed"].as_f64().unwrap_or(0.0);
-    Some(if speed > 0.0 {
-        format!("{} fps, {} generations a second", rate(fps), rate(speed))
-    } else {
-        format!("{} fps, as fast as it can", rate(fps))
+    // The speed reached, when the world can't keep up with the speed asked (#116).
+    let reached = st["measured_speed"].as_f64();
+    Some(match (speed > 0.0, reached) {
+        (true, Some(m)) if m < speed * 0.9 => {
+            format!(
+                "{} fps, {} of {} generations a second",
+                rate(fps),
+                rate(m),
+                rate(speed)
+            )
+        }
+        (true, _) => format!("{} fps, {} generations a second", rate(fps), rate(speed)),
+        (false, Some(m)) => format!(
+            "{} fps, as fast as it can ({} generations a second)",
+            rate(fps),
+            rate(m)
+        ),
+        (false, None) => format!("{} fps, as fast as it can", rate(fps)),
     })
 }
 
@@ -990,6 +1004,29 @@ pub fn run(a: HostArgs) -> Result<()> {
 mod tests {
     use super::status_lines;
     use serde_json::json;
+
+    /// A screen that can't keep up with its scene's speed says what it reaches (#116).
+    #[test]
+    fn a_screen_says_the_speed_it_reaches_when_it_falls_short() {
+        let words = |speed: f64, measured: Option<f64>| {
+            let mut st = json!({"frame_rate": 30.0, "speed": speed});
+            if let Some(m) = measured {
+                st["measured_speed"] = json!(m);
+            }
+            super::pace_words(&st).unwrap()
+        };
+        assert_eq!(
+            words(30.0, Some(3.9)),
+            "30 fps, 3.90 of 30 generations a second"
+        );
+        assert_eq!(words(30.0, Some(29.5)), "30 fps, 30 generations a second");
+        assert_eq!(words(30.0, None), "30 fps, 30 generations a second");
+        assert_eq!(
+            words(0.0, Some(250.0)),
+            "30 fps, as fast as it can (250 generations a second)"
+        );
+        assert_eq!(words(0.0, None), "30 fps, as fast as it can");
+    }
 
     #[test]
     fn status_says_where_each_screen_is_the_caption_and_why_it_is_paused() {

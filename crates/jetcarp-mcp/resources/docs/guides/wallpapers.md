@@ -169,6 +169,9 @@ pacing: every generation (at least 30 fps, up to 60 fps, or the monitor's refres
 note: GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan; GPU simulation auto (automatic)
 ```
 
+A screen whose world can't keep up with its scene's speed says what it reaches instead, as in
+`30 fps, 3.90 of 30 generations a second` (`measured_speed` in `--json`).
+
 Move on to the next item:
 
 ```sh

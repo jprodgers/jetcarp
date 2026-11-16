@@ -104,6 +104,11 @@ pub struct StageStatus {
     pub frame_rate: f32,
     /// Generations a second the world on show runs at (0: as fast as it can, or nothing yet).
     pub speed: f32,
+    /// Generations a second it reached over its last couple of seconds of running: below
+    /// [`speed`](Self::speed) when the world is too big for it (#116). None while paused or just
+    /// started.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measured_speed: Option<f32>,
     pub seconds_left: Option<f64>,
     pub caption: Vec<String>,
 }
@@ -142,7 +147,14 @@ pub struct Stage {
     tuned: Option<Tuning>,
     /// Worlds put on show so far.
     builds: u64,
+    /// Where the speed it reaches was last measured from: (the time, the generation) (#116).
+    rate_mark: Option<(f64, u64)>,
+    /// The speed it reached, generations a second.
+    measured: Option<f32>,
 }
+
+/// Seconds of running a measured speed covers.
+const RATE_EVERY: f64 = 2.0;
 
 /// About how many cells `scene` will have (None: cannot tell before building it).
 pub fn estimate_cells(scene: &Scene) -> Option<u64> {
@@ -204,6 +216,8 @@ impl Stage {
             notes: vec![],
             tuned: None,
             builds: 0,
+            rate_mark: None,
+            measured: None,
         })
     }
 
@@ -609,12 +623,35 @@ impl Stage {
             self.start_build();
         }
         if self.paused || self.load_pending || self.building.is_some() {
+            self.rate_mark = None;
+            self.measured = None;
             return;
         }
         let deadline = Instant::now() + budget;
         self.rotate(self.play_time, now, Clock::local());
         if !self.load_pending {
             self.step(dt, sim, deadline);
+        }
+        self.measure(now);
+    }
+
+    /// The speed reached: generations over the last [`RATE_EVERY`] seconds of running. A new
+    /// world (its generation back near 0) starts the count again.
+    fn measure(&mut self, now: f64) {
+        let Some(g) = self.show.as_ref().map(|s| s.world.generation) else {
+            return;
+        };
+        match self.rate_mark {
+            Some((t, g0)) if g >= g0 => {
+                if now - t >= RATE_EVERY {
+                    self.measured = Some(((g - g0) as f64 / (now - t)) as f32);
+                    self.rate_mark = Some((now, g));
+                }
+            }
+            _ => {
+                self.rate_mark = Some((now, g));
+                self.measured = None;
+            }
         }
     }
 
@@ -718,6 +755,7 @@ impl Stage {
             level,
             frame_rate: pace.fps,
             speed: pace.speed,
+            measured_speed: self.measured,
             seconds_left: self.player.seconds_left(self.play_time),
             caption: w
                 .map(|w| caption::lines(w, Some(self.place()), true))
