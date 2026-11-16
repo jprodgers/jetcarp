@@ -31,11 +31,15 @@ was this:
   do, which rules and tilings it should have, what to search for and how to judge the results, which
   questions were worth asking and which claims could be made. Many of the ideas are Jimmie's own,
   among them JACA and the layered rules. Jimmie asked for the features in the app rather than designing
-  its interface, tested the program on Linux, Windows and macOS (by hand, alongside automated tests and
-  Claude sessions running test plans on each machine), and decided what is claimed in this book.
+  its interface, and decided what is claimed in this book. For testing, Jimmie decided what needed
+  checking and how thoroughly (every operating system and GPU vendor, the upgrade path, a newcomer's
+  first hour), approved each test plan, ran the hands-on sittings on Linux, Windows and macOS, judged
+  the results by eye, and decided which problems held a release back. Jimmie wrote no code, test code
+  included.
 - **Claude**, working in Claude Code, wrote all of the code and the tests, designed the app's interface
-  to Jimmie's requests, wrote the first drafts of this book, and ran many of the searches, audits and
-  checks described below as separate agents, each with a written brief.
+  to Jimmie's requests, wrote the first drafts of this book, drafted the test plans' detailed steps
+  from Jimmie's requests, and ran many of the searches, audits and checks described below as separate
+  agents, each with a written brief, among them a test session on each machine working from the plan.
 
 Jimmie does not take credit for the code: the ideas and the direction are Jimmie's, the execution
 was done by agentic coding.
@@ -48,9 +52,16 @@ matter to you.
 
 ## How the claims were checked
 
-- **Tests.** About 650 automated tests, including the pinned geometry of every tiling, the pinned
-  dynamics of every built-in Quick Start entry, CPU and GPU equality, and the resumption of every kind
-  of search (see [Reproducibility](../research/reproducibility.md)).
+- **Tests.** Over a thousand automated tests, including the pinned geometry of every tiling, the
+  pinned dynamics of every built-in Quick Start entry, CPU and GPU equality, and the resumption of
+  every kind of search (see [Reproducibility](../research/reproducibility.md)), run on Linux, Windows
+  and macOS on every change.
+- **Release testing.** Every release goes through release candidates, each tested on three machines
+  with GPUs from four vendors: CPU and GPU parity over every built-in scene on each adapter, the test
+  suite on real GPUs, long searches killed and resumed, hands-on sittings with the app, the desktop
+  background and the MCP server, and a check of every fix. Every problem found becomes a public
+  issue. The process, the machines and a record of the 0.4.2 cycle are in
+  [How JETCARP is tested](testing.md).
 - **Exact verification.** Nothing goes into the catalogue without being run again and compared cell
   by cell; turmite highways are proved. Before release, all 103 spaceship records, 739 long-period
   oscillators and 39,744 turmite highways were run again on the release engine, with no change.

@@ -17,7 +17,7 @@ first so we can agree on the approach. **AI-assisted contributions are welcome**
 written with an AI coding tool (see [How JETCARP was made](how-made.md)): say so in the pull request,
 and make sure you understand, have run and can explain every change. Every contribution, whoever or
 whatever wrote it, is reviewed in depth with AI tools and then tested heavily before it is merged: we
-do not trust, but we verify.
+do not trust, but we verify. [How JETCARP is tested](testing.md) says how.
 
 ## Building and testing
 

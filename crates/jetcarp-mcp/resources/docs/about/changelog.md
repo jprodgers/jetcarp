@@ -534,6 +534,12 @@ that will declare them stable.
   Security problems can be reported privately through GitHub's *Report a vulnerability* as well as
   by email. See [Contributing](contributing.md).
 
+- **A page on how JETCARP is tested**, [How JETCARP is tested](testing.md): the automated tests and
+  CI, the release candidates tested by hand on three machines with GPUs from four vendors (their
+  specifications), how each problem is handled, who does what, a record of the 0.4.2 cycle, and what
+  the testing does not cover. [How JETCARP was made](how-made.md) says more exactly who did what in
+  testing.
+
 ## [0.4.1] – 2026-11-13
 
 ### Fixed

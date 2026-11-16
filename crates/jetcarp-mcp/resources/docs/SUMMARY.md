@@ -100,5 +100,6 @@
 - [Licence](about/licence.md)
 - [Credits and acknowledgements](about/credits.md)
 - [How JETCARP was made](about/how-made.md)
+- [How JETCARP is tested](about/testing.md)
 - [Changelog](about/changelog.md)
 - [Contributing](about/contributing.md)
