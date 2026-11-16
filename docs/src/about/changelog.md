@@ -168,6 +168,11 @@ that will declare them stable.
 - **`jetcarp paths` didn't name the runtime folder**, where the host's lock and the app's and
   host's control files live. It now prints a `runtime:` line (`runtime` in `--json`), and doctor's
   Folders section names it too. ([#85](https://github.com/jprodgers/jetcarp/issues/85))
+- **Every JACA run that didn't die was a "Battle", settled ones too.** A JACA run that had settled
+  into a cycle, or froze late, was put with the battles still being fought, so a clip round on a
+  JACA search was one category, full of runs that look static, and the caps for the categories
+  people seldom keep (#56) never applied. A JACA run is now a Battle while it is still going, and
+  *Static* once it has settled. ([#86](https://github.com/jprodgers/jetcarp/issues/86))
 - **A GPU failing part way could crash the process on Windows.** After a failed batch, the
   stepper let go of its buffers while the GPU still had work in flight, and a readback waited for
   the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does the

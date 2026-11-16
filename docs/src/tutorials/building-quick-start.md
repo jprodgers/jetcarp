@@ -70,14 +70,14 @@ Each atlas entry gets one category from how its run behaved, tested in about thi
 | *Frozen at once* | Stopped changing early in the run |
 | *Wildfire* | A forest fire, which never settles |
 | *Gliders & ships* | At least three things moving across a quiet, sparse background |
-| *Battles* | A JACA rule, where two kinds of cell annihilate each other |
+| *Battles* | A JACA rule, where two kinds of cell annihilate each other, still fighting at the end of the run (one that settled is *Static*) |
 | *Waves & spirals* | Smooth waves or spirals that travel or turn |
 | *Spots & stripes* | A Lenia rule settled into quiet spots or stripes |
 | *Labyrinths* | Large smooth regions that have nearly stopped changing |
 | *Oscillators* | Ended in a cycle of more than one generation |
 | *Ash & debris* | Nearly still, in many small pieces |
 | *Growth* | Still growing at the end |
-| *Static* | Fine-grained noise, like a badly tuned television |
+| *Static* | Fine-grained noise, like a badly tuned television; or a JACA battle that settled into a cycle or froze |
 | *Turbulence* | More than a fifth of the cells still changing at the end |
 | *Living textures* | Still changing, and none of the above |
 

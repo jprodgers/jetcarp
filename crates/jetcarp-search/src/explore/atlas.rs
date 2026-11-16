@@ -79,8 +79,15 @@ pub fn categorize(fate: &str, f: &Features, fam: Fam, gens: u32) -> &'static str
     if f.movers >= 3 && f.density_late < 0.12 && f.activity_late < 0.04 && !field_rule {
         return "Gliders & ships";
     }
+    // A battle is one still being fought. A JACA run that settled into a cycle, or froze late,
+    // reads as static (rated so: none of 60 settled JACA runs kept in rc.3's M-2), and Static is
+    // capped in a clip round (#56) where Battles is not (#86).
     if fam == Fam::Jaca {
-        return "Battles";
+        return if matches!(fate, "running" | "capped") {
+            "Battles"
+        } else {
+            "Static"
+        };
     }
     // Ahead of oscillators: a settled spiral is a long cycle.
     if (field_rule && f.smooth > 0.35 && f.entropy > 0.4) || (f.travel > 0.45 && f.smooth > 0.35) {
@@ -861,6 +868,17 @@ mod tests {
         for c in RARELY_KEPT {
             assert!(gave.contains(&c), "{c} is not a category categorize gives");
         }
+        // JACA: a battle still going is a battle; one that settled (a cycle, or frozen late) is
+        // Static, so a clip round caps it (#86).
+        let late = Features {
+            settle: 900,
+            ..Features::default()
+        };
+        assert_eq!(categorize("running", &f, Fam::Jaca, 1000), "Battles");
+        assert_eq!(categorize("capped", &f, Fam::Jaca, 1000), "Battles");
+        assert_eq!(categorize("cycle", &late, Fam::Jaca, 1000), "Static");
+        assert_eq!(categorize("froze", &late, Fam::Jaca, 1000), "Static");
+        assert_eq!(categorize("froze", &f, Fam::Jaca, 1000), "Frozen at once");
         assert_eq!(
             (
                 rarely_kept_cap(48),
