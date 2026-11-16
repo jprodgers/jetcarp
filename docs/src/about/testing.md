@@ -111,6 +111,10 @@ what to run, and what counts as a pass. It is carried out in three parts.
 **R, a check of every fix.** Each candidate's plan lists every problem fixed since the last one,
 with a step that shows the fix working, run on every machine.
 
+**A pre-check before the tag** (since `rc.4`): the suite and both parity sets run on every machine's
+adapters from the release branch before the candidate is tagged, with the scripted checks of what
+the candidate changed, so a candidate starts from a branch already known to pass.
+
 The unattended steps, and the commands within the sittings, are run by a Claude Code session on each
 machine, working from the written plan. It records every step with its evidence (commands, outputs,
 timings, screenshots where they matter) and asks Jimmie, at the machine, whenever a step needs eyes
@@ -171,9 +175,10 @@ A record of one cycle, as of its fourth release candidate (November 2026):
 | `rc.1`'s testing | 32 (#15–#46) | the three machines, CI (3), the book audit (3) |
 | `rc.2`'s testing | 31 (#47–#78, less #70), and one security problem, handled privately | the three machines, a full pass |
 | `rc.3`'s testing | 37 (#80–#116) | the three machines (30: 4 in Phase 1, 25 in the Mac's sittings, 1 in the Acer's), writing the book (1), a user's report and one issue split from it (#114, #115), Jimmie's decisions (4: the seizure warning #96 and its roadmap item #97; holding Fit back, #112 and #113) |
+| `rc.4`'s pre-check, on the branch | 4 (#117–#120) | the Acer (#117), the book audit (#118), a Dependabot alert (#119), CI (#120) |
 
-Of the 113 issues filed in the cycle (#2–#116), 90 were fixed or done for 0.4.2 (those from `rc.3`'s
-testing are checked in `rc.4`'s), 21 were moved to 0.4.3, and one is on the roadmap (#97). Three
+Of the 117 issues filed in the cycle (#2–#120), 93 were fixed or done for 0.4.2 (those from `rc.3`'s
+testing and `rc.4`'s pre-check are checked in `rc.4`'s), 22 were moved to 0.4.3, and one is on the roadmap (#97). Three
 came from outside: a user's report (#1, from 0.4.1), a question on the ConwayLife forum (#70), and a
 user's report on the MCP server (#114), answered with a fix in 0.4.2 and an issue for 0.4.3 (#115). Every issue says where it was found,
 and the [changelog](changelog.md) lists the fixes with their issues.

@@ -118,14 +118,10 @@ fn gpu_setup() {
 
 /// A screen saver or its preview, which nothing else controls and which may run beside a host.
 /// Before the photosensitive seizure warning has been accepted (#96) it shows nothing: it says
-/// why (in a message box, for Windows' screen saver itself) and ends.
+/// why and ends.
 fn run_saver(mode: window::Mode, seconds: Option<f64>) -> ! {
     if let Err(e) = jetcarp_core::photosensitivity::require("run the screen saver") {
         say!("jetcarp-host: {e}");
-        #[cfg(windows)]
-        if mode == window::Mode::Saver {
-            desktop_win::message(&e);
-        }
         std::process::exit(1);
     }
     gpu_setup();
@@ -157,7 +153,15 @@ fn open_settings() {
 pub fn run_scr(args: &[String]) {
     use saver_args::ScrMode;
     match saver_args::parse(args) {
-        ScrMode::Run => run_saver(window::Mode::Saver, None),
+        ScrMode::Run => {
+            // Windows' screen saver itself has no terminal, so a refusal (#96) is said in a
+            // message box too. Only here: `host serve --saver` says it on the command line, where
+            // a box would wait for a click that may never come (#120).
+            if let Err(e) = jetcarp_core::photosensitivity::require("run the screen saver") {
+                desktop_win::message(&e);
+            }
+            run_saver(window::Mode::Saver, None)
+        }
         ScrMode::Preview(parent) => run_saver(window::Mode::Preview(parent), None),
         ScrMode::Configure => open_settings(),
     }
