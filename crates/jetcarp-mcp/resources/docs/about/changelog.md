@@ -7,11 +7,6 @@ that will declare them stable.
 
 ## [0.4.2] – unreleased
 
-*Fit to this computer*, tried in the release candidates, is held back for 0.4.3: a fit took from 45
-seconds to 12 minutes, against a target of 10 to 30 seconds. Each scene of the desktop background
-shows at its own size, as in 0.4.1, and sizes a release candidate's Fit saved stay in `host.json`,
-unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
-
 ### Fixed
 
 - **The live desktop works on GNOME 51 (Fedora 45).** The GNOME extension claimed only GNOME
@@ -155,6 +150,10 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
 - **The AI control window said "Connections 0" after a client had connected and left.** It counts
   the links open at the moment, and now says so: *Open connections*.
   ([#60](https://github.com/jprodgers/jetcarp/issues/60))
+- **The background host's memory limit counted memory it had already freed.** On Linux, glibc keeps
+  freed memory for reuse rather than giving it back. Before its memory limit (`max_memory_mb` in
+  `host.json`) lets a scene go, the host now gives that memory back and looks again.
+  ([#69](https://github.com/jprodgers/jetcarp/issues/69))
 - **A rating round of clips gave the runs nobody keeps as many slots as the rest.** `jobs clips`
   shared its sample equally among the categories, so on a JACA search "Frozen at once", 12% of the
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
@@ -185,7 +184,7 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
   and Save applies a rule still being typed first.
   ([#90](https://github.com/jprodgers/jetcarp/issues/90))
 - **On macOS, ⌘H (Quick Start) hid the app and F11 (Full screen) showed the desktop**, both taken
-  by the system. Quick Start is now Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H still working where the
+  by the system. Quick Start is now Ctrl+Shift+H (⇧⌘H) everywhere, Ctrl+H still working where the
   system allows, and Full screen is ⌃⌘F on macOS, as in other Mac apps, with F11 kept. ⌘M, which
   did nothing, now minimises the window.
   ([#91](https://github.com/jprodgers/jetcarp/issues/91), [#98](https://github.com/jprodgers/jetcarp/issues/98))
@@ -275,14 +274,8 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
 - **The MCP tools resolve symbolic links before checking that a path is inside the folders they
   may use.** `files_list` also lists the folders given with `jetcarp mcp --allow`, as the other
   tools read and write there.
-- **Files the tools and scripts name themselves inside a checked folder don't follow a symbolic
-  link planted in their place.** An animation's frames and poster, a site or pack export's files,
-  a pack store's objects (the hidden store beside an export too), a pile's steps and pictures, an
-  evolve run's tables, rating clips and a sweep's records are each checked to stay inside their
-  folder once links are followed: a link that leads out is refused, naming the file, and a link
-  that stays inside still works. The command line and the app write them the same way. The
-  output folder's `piles` folder, and the catalog file a script opens with `library(...)`, are
-  checked like any other path.
+- **The folder checks cover each file JETCARP names itself inside a folder it was given**, as well
+  as the folder.
 - **MCP `world_new` given width and height skipped its 4,000,000-cell limit.** It checked each
   side, not the cells the grid would have, so 4096 x 4096 (16.8 million cells, or 50 million on
   trihex) was built. The limit now counts the world's cells, several to a unit cell on trihex and
@@ -354,6 +347,9 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
   `jetcarp host start` once. Turning start at login off (or `jetcarp uninstall`) now also unloads
   the job from launchd, which had kept it until logout, unless the host it started is running.
   ([#99](https://github.com/jprodgers/jetcarp/issues/99))
+- **The MCP reference lost its placeholders.** Where a tool's text named one outside a code span,
+  such as `"pattern": "<id>"` or the size format `L<level>`, the book took it for an HTML tag and
+  showed `"L"`. The page now shows them. ([#92](https://github.com/jprodgers/jetcarp/issues/92))
 - **The book's first hour didn't work as written.** Its command blocks held a `$` prompt, the
   command and its output together, so copying a block, or pressing its copy button, pasted all
   three and nothing ran. Each command is now in a block of its own with no prompt, and its output in
@@ -597,6 +593,17 @@ unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
   specifications), how each problem is handled, who does what, a record of the 0.4.2 cycle, and what
   the testing does not cover. [How JETCARP was made](how-made.md) says more exactly who did what in
   testing.
+
+### Removed
+
+- **Fit to this computer, tried in the release candidates, is not in 0.4.2.** It showed each scene
+  of the desktop background at a ladder of cell sizes, measured each, and recommended one, but a fit
+  took from 45 seconds to 12 minutes, against a target of 10 to 30 seconds. A faster one is planned
+  for 0.4.3 ([#113](https://github.com/jprodgers/jetcarp/issues/113)). Each scene shows at its own
+  size, as in 0.4.1: the *Desktop background* pane has no *Fit to this computer…* or its cards and
+  limits, `jetcarp host tune` refuses, the MCP tool `host_control` has no `tune`, and the host
+  measures nothing when the monitors change. Sizes a release candidate's Fit saved stay in
+  `host.json`, unused. ([#112](https://github.com/jprodgers/jetcarp/issues/112))
 
 ## [0.4.1] – 2026-11-13
 
