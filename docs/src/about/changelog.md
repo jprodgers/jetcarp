@@ -156,38 +156,20 @@ that will declare them stable.
   before its memory limit lets a scene go, so memory it no longer holds never counts against it.
   On Linux, three sweeps left the host at 157 MB instead of 376 MB.
   ([#69](https://github.com/jprodgers/jetcarp/issues/69))
-- **The app couldn't make a grid of a set width and height, so HashLife's jump in place was out of
-  reach.** The jump needs a wrapping grid whose sides are powers of two, and the Tiling pane offered
-  only approximate cell counts and *Fill the view*. *Size* now has *Width × height*, in unit cells
-  as `--size WxH` on the command line, and the jump's message says how to make such a grid.
-  ([#58](https://github.com/jprodgers/jetcarp/issues/58))
-- **The app had no way to choose which GPU JETCARP uses.** The shared setting could name an
-  adapter, but only by editing `gpu.json` or setting `JETCARP_GPU`, so on a laptop with two GPUs the
-  app couldn't be moved from one to the other. *Run → GPU adapter* now lists *Automatic*,
-  *Discrete*, *Integrated* and each adapter found, and saves the choice to the shared setting; the
-  app moves at its next start. ([#59](https://github.com/jprodgers/jetcarp/issues/59))
 - **A rating round of clips gave the runs nobody keeps as many slots as the rest.** `jobs clips`
   shared its sample equally among the categories, so on a JACA search "Frozen at once", 12% of the
   runs, took 20 of 48 clips. The categories people seldom keep (*Frozen at once*, *Quick deaths*,
   *Static*, *Quiet rows*) now get a sixteenth of the sample each, at least 2, and the output says
   how many clips each category got. ([#56](https://github.com/jprodgers/jetcarp/issues/56))
-- **The app couldn't export an animation of the world.** Its only animation export was the hunts
-  window's *Render media*, which is for finds and picks the format itself. *File → Export animation
-  (GIF or WebP)…* now records the view and the generations after it, as a GIF or a lossless WebP,
-  in the background. ([#62](https://github.com/jprodgers/jetcarp/issues/62))
 - **A GPU failing part way could crash or hang the process on Windows.** After a failed batch,
   the stepper let go of its buffers while the GPU still had work in flight, and a readback waited
   for the GPU for ever. It now lets the GPU finish (or fail) before anything goes, a stepper does
   the same when it is dropped, and a wait for the GPU over 60 seconds counts as a failure, so the
   processor carries on. ([#52](https://github.com/jprodgers/jetcarp/issues/52))
-- **A rotation's Quick Start entry could only be added by typing its handle.** The rotation editor's
-  box now searches the built-in Quick Start entries by title, rule or handle as you type, and adds
-  the one you click; a handle and Enter still work, for entries of your own.
-  ([#74](https://github.com/jprodgers/jetcarp/issues/74))
-- **At login on Windows, the desktop background host started later than it needed to.** JETCARP's
-  launcher waited for the host it started, so Windows, which runs the login entries one at a time,
-  waited on it too. At login the launcher now starts the host and exits.
-  ([#78](https://github.com/jprodgers/jetcarp/issues/78))
+- **At login on Windows, JETCARP's launcher kept Windows waiting.** The launcher, `jetcarpw.exe`,
+  waited for the host it started, so Windows, which runs the login entries one at a time and waits
+  on each, waited on it too, which held up the entries after it. At login the launcher now starts
+  the host and exits. ([#78](https://github.com/jprodgers/jetcarp/issues/78))
 - **An explore search packed and imported had a few fewer confirmed elites than the search.** Runs
   often tie for a niche's last places (every run that dies at the same generation scores the same),
   and a tie went to the run that came first. A search takes in its runs as its GPU batches and CPU
@@ -202,15 +184,15 @@ that will declare them stable.
   left out. A running search is now refused whatever it has stored, and an export or publish that
   is refused no longer leaves its empty `--to` folder behind.
   ([#57](https://github.com/jprodgers/jetcarp/issues/57))
-- **A job whose process was killed read as running for up to five minutes.** `jetcarp jobs
-  status` called a job stale only once its progress and heartbeat were five minutes old, `jobs
-  wait` said it was gone after 45 seconds, and `jobs resume` could take it at once, so the three
-  disagreed. A runner holds its job's lock and names itself in the job's row, and the system lets
-  go of the lock when the process ends: a job that names a runner and whose lock is free is now
-  stale at once, in `jobs status`, `jobs list`, `jobs wait`, `jobs remove` and the app's *Hunts…*
-  window alike. `jobs status` says so in words (it printed `status running` and kept `stale` to
-  its JSON), and so do the MCP server's `job_status` and its list. `--status running` leaves stale
-  jobs out, and `--status stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
+- **A job whose process was killed read as running for up to five minutes.** `jetcarp jobs status`
+  called a job stale only once its progress and heartbeat were five minutes old, `jobs wait` said it
+  was gone after 45 seconds, and `jobs resume` could take it at once, so the three disagreed. A
+  runner holds its job's lock and names itself in the job's row, and the system lets go of the lock
+  when the process ends: a job that names a runner and whose lock is free is now stale at once, in
+  `jobs status`, `jobs list`, `jobs wait`, `jobs remove` and the app's *Hunts…* window (*stalled*
+  there) alike. `jobs status` says so in words (it printed `status running` and kept `stale` to its
+  JSON), and so do the MCP server's `job_status` and its list. `--status running` leaves stale jobs
+  out, and `--status stale` lists them. ([#49](https://github.com/jprodgers/jetcarp/issues/49),
   [#64](https://github.com/jprodgers/jetcarp/issues/64))
 - **`jobs wait` straight after `jobs resume --detach` said the job was gone.** The new process had
   not taken the job yet, and the killed run's name was still in its row. `--detach` now clears it,
@@ -297,15 +279,16 @@ that will declare them stable.
   "Until it settles". The cards now show only the scenes of the rotation each screen shows, and
   *Use the recommended size for the rest* and *Use this size for every scene on this tiling* settle
   only those; the other sizes stay saved. ([#73](https://github.com/jprodgers/jetcarp/issues/73))
-- **Fit to this computer didn't apply the GPU limit on an adapter without GPU timestamps, and
-  didn't say so.** On the Acer's Intel UHD each frame was timed from its submission, an upper bound
-  3 to 10 times Windows' own count, which since #38 is not judged, so a size using 31% of the UHD
-  was recommended under a 25% limit. On Windows such an adapter is now measured by Windows' GPU
-  engine counters for JETCARP's process (the figures Task Manager shows), judged like Linux's count;
-  where they can't be read either, the cards show *GPU unknown* rather than the unjudged number, and
-  the pane and `host tune`'s last line say "GPU share not measured on this adapter (it has no GPU
-  timestamps): the GPU limit isn't applied" (with `--json`, `"gpu_unmeasured": true` on each card
-  and `gpu_note` on the last line). ([#72](https://github.com/jprodgers/jetcarp/issues/72))
+- **Fit to this computer didn't apply the GPU limit on an adapter without GPU timestamps, and didn't
+  say so.** On a laptop's Intel UHD, which has no GPU timestamps, each frame was timed from its
+  submission, an upper bound 3 to 10 times Windows' own count, which since #38 is not judged, so a
+  size using 31% of the UHD was recommended under a 25% limit. On Windows such an adapter is now
+  measured by Windows' GPU engine counters for JETCARP's process (the figures Task Manager shows),
+  judged like Linux's count; where they can't be read either, the cards show *GPU unknown* rather
+  than the unjudged number, and the pane and `host tune`'s last line say "GPU share not measured on
+  this adapter (it has no GPU timestamps): the GPU limit isn't applied" (with `--json`,
+  `"gpu_unmeasured": true` on each card and `gpu_note` on the last line).
+  ([#72](https://github.com/jprodgers/jetcarp/issues/72))
 
 ### Changed
 
@@ -404,6 +387,26 @@ that will declare them stable.
   included, so a tuned wallpaper replays exactly; `host_control` gives it as `{"action": "scene"}`.
   The host's status gives each screen's cell size and grid, and says when tuning chose them.
 
+- **Export an animation of the world.** *File → Export animation (GIF or WebP)…* records the view
+  and the generations after it, as a GIF or a lossless WebP: how many generations, a frame every how
+  many and the longer side in pixels, rendered on a copy of the world in the background. The *Hunts*
+  window's *Render media*, which makes animations of finds and picks their format itself, is now a
+  full-size button, *Render media (animations of these finds)*.
+  ([#62](https://github.com/jprodgers/jetcarp/issues/62))
+- **Choose the GPU in the app.** *Run → GPU adapter* lists *Automatic*, *Discrete*, *Integrated* and
+  each adapter found, and saves the choice as the shared setting's adapter (`gpu_adapter` in
+  `gpu.json`, which could be set only by editing the file or with `JETCARP_GPU`), so a laptop's app
+  can move from one GPU to the other. The app moves at its next start; the command line, the MCP
+  server and the host at theirs. ([#59](https://github.com/jprodgers/jetcarp/issues/59))
+- **A grid of a set width and height in the app.** The *Tiling* pane's *Size* has *Width × height*,
+  in unit cells as `--size WxH` on the command line, so HashLife's jump in place, which needs a
+  wrapping grid whose sides are powers of two, can be reached from the app; the jump's message says
+  how to make such a grid. ([#58](https://github.com/jprodgers/jetcarp/issues/58))
+- **Find a Quick Start entry for a rotation by name.** The rotation editor's *Add Quick Start* box
+  searches the built-in entries by title, rule or handle as you type, and adds the one you click,
+  where it took a handle only; a handle and Enter still work, for entries of your own.
+  ([#74](https://github.com/jprodgers/jetcarp/issues/74))
+
 - **A page for rating clips.** `jetcarp jobs clips --page` also writes `index.html` into the clips
   folder: the clips in batches, each with Keep, Maybe and Drop and a ★, with a progress bar, a
   tally, a note box, and the keyboard (← →, K, M, D, S). It works offline from the folder and
@@ -472,6 +475,12 @@ that will declare them stable.
 - **`examples/bench.rs` in `jetcarp-gpu` times from 4,000 cells up**, with a `--paced` table of
   one generation a frame and the processor time each path takes, from which the automatic
   thresholds come.
+
+- **Ways to take part.** On GitHub, new issues offer forms for a bug report, a feature request, a
+  new rule or tiling, and a history or credit correction, a pull request starts from a checklist,
+  and `CONTRIBUTING.md` and a code of conduct (the Contributor Covenant 2.1) join the repository.
+  Security problems can be reported privately through GitHub's *Report a vulnerability* as well as
+  by email. See [Contributing](contributing.md).
 
 ## [0.4.1] – 2026-11-13
 
