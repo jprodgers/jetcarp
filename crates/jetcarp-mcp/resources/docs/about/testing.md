@@ -31,7 +31,7 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 - **The book.** The command-line and MCP reference pages are generated from the program and checked
   against it, and the copy of the book built into the program must match the book.
 
-About 35 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
+About 40 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
 book's pictures of the app, and the rest time the program, run very large worlds, or need a desktop
 session.
 
@@ -60,9 +60,9 @@ release workflow.
 
 ## Release candidates
 
-Before a release, JETCARP goes through release candidates: `0.4.2-rc.1`, `rc.2`, and so on. Each is
-a public pre-release, built by the same workflow as a release, which the package managers (Homebrew,
-Scoop, PyPI, crates.io) do not pick up. Each candidate is tested on three machines, with GPUs from
+Since 0.4.2, a release goes through release candidates first: `0.4.2-rc.1`, `rc.2`, and so on.
+Each is a public pre-release, built by the same workflow as a release, which the package managers
+(Homebrew, Scoop, PyPI, crates.io) do not pick up. Each candidate is tested on three machines, with GPUs from
 four vendors (as of 0.4.2):
 
 | | Framework Desktop (the main machine) | Acer Nitro V15 laptop | MacBook Pro |
