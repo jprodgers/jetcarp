@@ -27,6 +27,10 @@ bytes.workspace = true
 [target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
 libc = "0.2.191"
 
+# proc_pid_rusage: the process's physical footprint, which macOS's memory readings use (#80).
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.191"
+
 [dev-dependencies]
 # The GPU strategies' tests: a hunt and an explore search on the GPU equal the CPU's.
 jetcarp-gpu.workspace = true

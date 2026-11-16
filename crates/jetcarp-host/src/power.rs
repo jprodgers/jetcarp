@@ -357,6 +357,35 @@ mod imp {
     }
 }
 
+/// The memory this process uses, in bytes: its physical footprint on macOS (#80), its resident
+/// size elsewhere (its working set on Windows). The host's memory limit and `host status` judge
+/// by it.
+pub fn memory_bytes() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    if let Some(b) = mac_footprint() {
+        return Some(b);
+    }
+    memory_stats::memory_stats().map(|m| m.physical_mem as u64)
+}
+
+/// This process's physical footprint on macOS: what Activity Monitor shows as its memory, without
+/// the pages its allocator has freed but the system hasn't taken back, which the resident size
+/// counts (#80).
+#[cfg(target_os = "macos")]
+fn mac_footprint() -> Option<u64> {
+    // SAFETY: rusage_info_v2 is plain data, zeroed is a valid value, and proc_pid_rusage writes at
+    // most one rusage_info_v2 for the RUSAGE_INFO_V2 flavour.
+    unsafe {
+        let mut info: libc::rusage_info_v2 = std::mem::zeroed();
+        let r = libc::proc_pid_rusage(
+            libc::getpid(),
+            libc::RUSAGE_INFO_V2,
+            (&mut info as *mut libc::rusage_info_v2).cast::<libc::rusage_info_t>(),
+        );
+        (r == 0).then_some(info.ri_phys_footprint)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

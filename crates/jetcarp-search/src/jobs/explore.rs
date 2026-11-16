@@ -557,9 +557,39 @@ pub fn title(sp: &ExploreSpec) -> String {
     format!("{t}, {f}")
 }
 
-/// The process's resident memory in GB (its working set on Windows; 0 where it cannot be read).
+/// The memory this process uses, in bytes: its physical footprint on macOS, its resident size
+/// elsewhere (its working set on Windows). On macOS the resident size also counts pages the
+/// allocator has freed but the system hasn't taken back: a long explore search read 5.6 GB
+/// resident against a 533 MB footprint (#80), so its status and its memory cap were far off.
+pub fn memory_bytes() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    if let Some(b) = mac_footprint() {
+        return Some(b);
+    }
+    memory_stats::memory_stats().map(|m| m.physical_mem as u64)
+}
+
+/// This process's physical footprint on macOS: what Activity Monitor shows as its memory, without
+/// the pages its allocator has freed but the system hasn't taken back, which the resident size
+/// counts (#80).
+#[cfg(target_os = "macos")]
+fn mac_footprint() -> Option<u64> {
+    // SAFETY: rusage_info_v2 is plain data, zeroed is a valid value, and proc_pid_rusage writes at
+    // most one rusage_info_v2 for the RUSAGE_INFO_V2 flavour.
+    unsafe {
+        let mut info: libc::rusage_info_v2 = std::mem::zeroed();
+        let r = libc::proc_pid_rusage(
+            libc::getpid(),
+            libc::RUSAGE_INFO_V2,
+            (&mut info as *mut libc::rusage_info_v2).cast::<libc::rusage_info_t>(),
+        );
+        (r == 0).then_some(info.ri_phys_footprint)
+    }
+}
+
+/// The process's memory in GB ([`memory_bytes`]; 0 where it cannot be read).
 pub fn rss_gb() -> f64 {
-    memory_stats::memory_stats().map_or(0.0, |m| m.physical_mem as f64 / (1u64 << 30) as f64)
+    memory_bytes().map_or(0.0, |b| b as f64 / (1u64 << 30) as f64)
 }
 
 /// A live explore run, with or without a GPU backend.

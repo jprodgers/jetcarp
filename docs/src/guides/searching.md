@@ -102,6 +102,8 @@ $ jetcarp jobs list
   to it too, and `jetcarp jobs status JOB` says why it paused. An explore search keeps the grids it
   has built for reuse, up to about 3 GB, so over hours its memory grows towards that as it reaches
   more tilings; on Linux it gives the memory it has freed back to the system between its steps.
+  "Memory" is the physical footprint on macOS, the figure Activity Monitor shows, and the resident
+  size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an

@@ -823,17 +823,17 @@ impl Core {
 
     /// Over the limit: give up on the biggest world.
     fn check_memory(&mut self) {
-        let Some(m) = memory_stats::memory_stats() else {
+        let Some(b) = crate::power::memory_bytes() else {
             return;
         };
-        let mut mb = (m.physical_mem / (1 << 20)) as u64;
+        let mut mb = b / (1 << 20);
         if mb <= self.settings.max_memory_mb {
             return;
         }
         // Over the limit: first give back what the allocator only keeps, and look again (#69).
         release_free_memory();
-        if let Some(m) = memory_stats::memory_stats() {
-            mb = (m.physical_mem / (1 << 20)) as u64;
+        if let Some(b) = crate::power::memory_bytes() {
+            mb = b / (1 << 20);
         }
         if mb <= self.settings.max_memory_mb {
             return;
@@ -857,7 +857,7 @@ impl Core {
             "running": true,
             "pid": std::process::id(),
             "uptime_s": now.round(),
-            "memory_mb": memory_stats::memory_stats().map(|m| m.physical_mem / (1 << 20)),
+            "memory_mb": crate::power::memory_bytes().map(|b| b / (1 << 20)),
             // Paused as the user sees it: by hand, or a rotation with nothing it can show, both of
             // which have to be resumed. A hold (`held`, the holds' names, and `held_why`, the
             // same in words) passes by itself, so it is not a pause: each pair agrees (#76).

@@ -293,6 +293,11 @@ that will declare them stable.
   *paused*, and the reason reads "held: windows cover the desktop (resumes by itself)". The app's
   *Hunts…* window says *stale*, as the command line and the MCP server do, not *stalled*.
   ([#76](https://github.com/jprodgers/jetcarp/issues/76))
+- **On macOS, JETCARP's memory readings counted gigabytes of memory already freed.** The resident
+  size it read includes pages the allocator has freed but the system hasn't taken back yet: a long
+  explore search showed 5.6 GB where Activity Monitor's figure, its physical footprint, was 533 MB.
+  The status lines, `--max-rss-gb` and the background host's memory limit now use the physical
+  footprint on macOS. ([#80](https://github.com/jprodgers/jetcarp/issues/80))
 
 ### Changed
 
