@@ -1559,7 +1559,7 @@ mod tests {
             ..Default::default()
         };
         let mut taken = false;
-        let out = ctx.run_ui(input, |ui| {
+        let mut out = ctx.run_ui(input, |ui| {
             mac_minimise_shortcut(ui.ctx());
             taken = !ui.ctx().input(|i| {
                 i.events
@@ -1576,6 +1576,8 @@ mod tests {
                 "⌘M sent egui's Minimized command to {id:?}"
             );
         }
+        // No renderer takes the fonts' texture here; a debug build checks it was (epaint).
+        out.textures_delta.clear();
     }
 
     #[test]
