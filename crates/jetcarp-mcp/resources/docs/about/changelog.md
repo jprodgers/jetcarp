@@ -5,7 +5,16 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
-## [0.4.2] – unreleased
+## [0.4.2] – 2026-11-17
+
+### Security
+
+- **Two low-severity security problems are fixed.** Both were handled privately, and each has an
+  advisory with the details:
+  [GHSA-88q3-9mmf-m2xw](https://github.com/jprodgers/jetcarp/security/advisories/GHSA-88q3-9mmf-m2xw)
+  (in 0.4.1 and earlier) and
+  [GHSA-78q7-m3j3-xg23](https://github.com/jprodgers/jetcarp/security/advisories/GHSA-78q7-m3j3-xg23)
+  (in 0.4.0 and 0.4.1). Upgrading to 0.4.2 fixes both.
 
 ### Fixed
 

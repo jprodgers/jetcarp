@@ -17,8 +17,8 @@ authors:
     affiliation: Independent
     orcid: "https://orcid.org/0009-0003-8775-6483"
     website: "https://jimmieprodgers.com"
-version: 0.4.1
-date-released: "2026-11-13"
+version: 0.4.2
+date-released: "2026-11-17"
 license:
   - Unlicense
   - MIT
