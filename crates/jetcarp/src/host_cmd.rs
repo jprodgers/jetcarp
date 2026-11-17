@@ -520,6 +520,21 @@ fn refresh_login_item() -> bool {
     }
 }
 
+/// The `JETCARP_*` folder variables set for this run (`var` reads one), which a login item never
+/// carries: the host it starts uses the default folders (#124).
+fn own_folders(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Vec<&'static str> {
+    [
+        "JETCARP_CONFIG_DIR",
+        "JETCARP_DATA_DIR",
+        "JETCARP_RUNTIME_DIR",
+        "JETCARP_LIBRARY",
+        "JETCARP_OUT",
+    ]
+    .into_iter()
+    .filter(|k| var(k).is_some_and(|v| !v.is_empty()))
+    .collect()
+}
+
 /// The host once launchd has the login item again: its status within 10 seconds, and whether it
 /// is the one that ran before (`before`, its pid). launchd stops a host it started from the item
 /// and starts the item again, a new host, unless one is running already: that one holds the
@@ -817,6 +832,17 @@ pub fn run(a: HostArgs) -> Result<()> {
                 println!("the host no longer starts at login");
                 return Ok(());
             }
+            // The login item carries none of this run's JETCARP_* folders, so the host it starts
+            // uses the default ones; a host running here with folders of its own is another (#124).
+            let own = own_folders(|k| std::env::var_os(k));
+            if !own.is_empty() {
+                eprintln!(
+                    "note: the login item starts the host with the default folders; {} {} not \
+                     passed on to it",
+                    own.join(", "),
+                    if own.len() == 1 { "is" } else { "are" }
+                );
+            }
             let before = host_call(&json!({"action": "status"}))
                 .ok()
                 .map(|v| v["pid"].as_u64());
@@ -825,6 +851,12 @@ pub fn run(a: HostArgs) -> Result<()> {
             match launchd {
                 autostart::Launchd::NotUsed => {}
                 autostart::Launchd::Skipped(why) => eprintln!("{why}"),
+                // The host launchd starts or keeps is the default folders' one, which this run
+                // can't see, so it says nothing of the one it can (#124).
+                autostart::Launchd::Registered if !own.is_empty() => println!(
+                    "registered with launchd, which runs the host with the default folders, not \
+                     this run's"
+                ),
                 // launchd starts the item as it takes it: never a second host (see
                 // `host_after_registering`).
                 autostart::Launchd::Registered => match host_after_registering(before.flatten()) {
@@ -1031,6 +1063,22 @@ pub fn run(a: HostArgs) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// The folder variables a login item doesn't carry are named; empty ones count as unset
+    /// (#124).
+    #[test]
+    fn a_login_item_s_missing_folders_are_named() {
+        use std::ffi::OsString;
+        let none = super::own_folders(|_| None);
+        assert!(none.is_empty());
+        let some = super::own_folders(|k| match k {
+            "JETCARP_CONFIG_DIR" => Some(OsString::from("/t/config")),
+            "JETCARP_RUNTIME_DIR" => Some(OsString::from("/t/run")),
+            "JETCARP_OUT" => Some(OsString::new()),
+            _ => None,
+        });
+        assert_eq!(some, ["JETCARP_CONFIG_DIR", "JETCARP_RUNTIME_DIR"]);
+    }
+
     use super::status_lines;
     use serde_json::json;
 
