@@ -103,7 +103,7 @@ fn help(c: &mut Call) -> Res {
             .trim_start_matches("jetcarp://docs/")
             .trim_end_matches(".md")
             .trim_matches('/');
-        return match crate::docs::page(key) {
+        return match crate::docs::page_served(key) {
             Some(text) => Ok(ToolOutput::text(text)),
             None => Err(format!(
                 "no book page '{page}'. help {{\"topic\": \"pages\"}} lists them."

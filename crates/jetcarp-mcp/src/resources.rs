@@ -134,8 +134,8 @@ pub fn read(uri: &str) -> Result<Value, String> {
     match kind {
         "docs" => {
             let page = key.trim_end_matches(".md").trim_matches('/');
-            crate::docs::page(page)
-                .map(|t| contents(uri, "text/markdown", t.to_string()))
+            crate::docs::page_served(page)
+                .map(|t| contents(uri, "text/markdown", t))
                 .ok_or_else(|| format!("no book page '{page}' (resources/list lists them)"))
         }
         "reference" => {

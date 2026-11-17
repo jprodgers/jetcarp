@@ -99,6 +99,23 @@ fn the_book_carries_the_photosensitive_seizure_warning() {
     }
 }
 
+/// The MCP reference, served as text, reads `<id>` and `L<level>`, not the HTML entities its
+/// Markdown writes for the rendered book (#126).
+#[test]
+fn pages_are_served_without_html_entities() {
+    let raw = jetcarp_mcp::docs::page("reference/mcp").expect("the page");
+    assert!(
+        raw.contains("L&lt;level>"),
+        "the book's page changed: update this test"
+    );
+    let served = jetcarp_mcp::docs::page_served("reference/mcp").unwrap();
+    assert!(served.contains("L<level>"), "not decoded");
+    assert!(
+        !served.contains("&lt;"),
+        "an entity left in the served page"
+    );
+}
+
 #[test]
 fn the_crate_packages_small() {
     let res = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
