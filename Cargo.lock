@@ -2450,6 +2450,7 @@ dependencies = [
  "jetcarp-script",
  "jetcarp-search",
  "jetcarp-store",
+ "objc2 0.6.5",
  "png",
  "pollster 0.4.0",
  "rfd",

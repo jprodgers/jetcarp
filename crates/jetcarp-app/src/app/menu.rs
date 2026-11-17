@@ -956,10 +956,7 @@ impl JetcarpApp {
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         // macOS's Minimise: the app has no Window menu for the system's shortcut to act on (#98).
         #[cfg(target_os = "macos")]
-        if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M)))
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-        }
+        mac_minimise_shortcut(ctx);
         let typing = ctx.egui_wants_keyboard_input();
         for a in Action::all() {
             for k in a.keys() {
@@ -1446,6 +1443,16 @@ fn check_atom(checked: bool) -> egui::Atom<'static> {
     })
 }
 
+/// ⌘M on macOS: minimise the window through AppKit, as its yellow button does, never through
+/// egui's `ViewportCommand::Minimized`, which left egui counting the window as hidden after a
+/// restore from the Dock, so it was never drawn again (#131; see `macwin`).
+#[cfg(target_os = "macos")]
+fn mac_minimise_shortcut(ctx: &egui::Context) {
+    if ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M))) {
+        crate::macwin::miniaturize();
+    }
+}
+
 /// Whether "Random" seeding makes sense for a rule (not ants, rows, sandpiles, wires, JvN).
 pub(super) fn takes_random(rule: &Rule) -> bool {
     !rule.is_agent()
@@ -1532,6 +1539,42 @@ mod tests {
             Custom::AddFromCatalog,
         ] {
             assert!(customs.contains(&c), "{c:?} missing");
+        }
+    }
+
+    /// ⌘M is taken, and minimises without egui's `Minimized` command, which froze the window
+    /// after a restore from the Dock (#131).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn cmd_m_minimises_through_appkit_not_egui() {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: Key::M,
+                physical_key: Some(Key::M),
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::MAC_CMD,
+            }],
+            ..Default::default()
+        };
+        let mut taken = false;
+        let out = ctx.run_ui(input, |ui| {
+            mac_minimise_shortcut(ui.ctx());
+            taken = !ui.ctx().input(|i| {
+                i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Key { key: Key::M, .. }))
+            });
+        });
+        assert!(taken, "⌘M was not taken by the shortcut");
+        for (id, v) in &out.viewport_output {
+            assert!(
+                !v.commands
+                    .iter()
+                    .any(|c| matches!(c, egui::ViewportCommand::Minimized(_))),
+                "⌘M sent egui's Minimized command to {id:?}"
+            );
         }
     }
 

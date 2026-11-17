@@ -40,6 +40,11 @@ clap.workspace = true
 # Offscreen pictures of tool windows in tests (`src/offscreen.rs`); already in the tree.
 pollster.workspace = true
 
+# macOS: ⌘M minimises through AppKit's `miniaturize:` (`src/macwin.rs`, #131). objc2 is already
+# in the tree: the host, the display crate and the screen saver use it.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+
 # Keep-awake (`src/keepawake.rs`): the XDG portal and session bus. zbus 5 is already in the
 # tree through AccessKit, so this adds no new crates.
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -18,6 +18,8 @@ mod isohedral_ui;
 mod jump_ui;
 mod keepawake;
 mod library_ui;
+#[cfg(target_os = "macos")]
+mod macwin;
 mod monitors;
 #[cfg(test)]
 mod offscreen;
