@@ -502,7 +502,8 @@ that will declare them stable.
   `--seizure-warning no-disorder` (or `at-risk`) the first time. Until it has been answered,
   `jetcarp host start`, `host wallpaper on`, `host login on` and `host saver install` refuse with the
   warning, a host started at login holds its screens still and says why in `host status`, the
-  screen saver does not start, and the MCP tool `host_control` refuses to start or show scenes.
+  screen saver does not start, and the MCP tool `host_control` refuses to start showing scenes, as
+  the command line does.
   Pictures, animations and other files are not held back. See
   [Photosensitive seizure warning](../getting-started/photosensitivity.md); the README and the book's
   introduction, installation and desktop pages carry the warning too.

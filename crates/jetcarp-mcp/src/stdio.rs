@@ -88,9 +88,12 @@ fn host_call_fits(args: &Value) -> bool {
     )
 }
 
-/// Whether a `host_control` call would start or show scenes: refused, with the warning, until
-/// the photosensitive seizure warning has been accepted (#96). Reading the status, pausing,
-/// hiding, quitting and opening the app (which shows the warning itself) are not.
+/// Whether a `host_control` call would start showing scenes: refused, with the warning, until
+/// the photosensitive seizure warning has been accepted (#96), as `jetcarp host wallpaper on` and
+/// `login on` are. The rest go to the host as on the command line: reading the status, pausing,
+/// hiding, quitting, opening the app (which shows the warning itself), and resuming, the next or
+/// previous scene and choosing a rotation, since the host holds every screen until the warning is
+/// accepted and its status says so (#125).
 fn host_call_shows(args: &Value) -> bool {
     let on = args.get("on").and_then(Value::as_bool).unwrap_or(true);
     match args
@@ -98,16 +101,30 @@ fn host_call_shows(args: &Value) -> bool {
         .and_then(Value::as_str)
         .unwrap_or("status")
     {
-        "resume" | "next" | "previous" | "rotation" => true,
         "wallpaper" | "login" | "tune" => on,
         _ => false,
     }
 }
 
-/// A `host_control` call, refused while the warning stands in its way.
+/// A `host_control` call, refused while the warning stands in its way, and refused, naming the
+/// actions, when its action isn't one the tool lists, before any host is asked (#125).
 fn host_control(args: &Value) -> Result<Value, String> {
     if host_call_fits(args) {
         jetcarp_core::fit::available()?;
+    }
+    if let Some(a) = args.get("action").and_then(Value::as_str) {
+        let def = host_control_definition();
+        let known: Vec<&str> = def["inputSchema"]["properties"]["action"]["enum"]
+            .as_array()
+            .map(|v| v.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if !known.contains(&a) {
+            return Err(format!(
+                "{}: `action` must be one of {} (got \"{a}\")",
+                crate::link::HOST_TOOL,
+                known.join(", ")
+            ));
+        }
     }
     if host_call_shows(args) {
         jetcarp_core::photosensitivity::require("start or show scenes in the background host")?;
@@ -392,15 +409,12 @@ mod tests {
         assert!(!host_call_fits(&json!({"action": "status"})));
     }
 
-    /// The `host_control` calls that start or show scenes wait for the photosensitive seizure
-    /// warning; reading, pausing, hiding and quitting do not (#96).
+    /// The `host_control` calls that start showing scenes wait for the photosensitive seizure
+    /// warning (#96); the rest go to the host, which holds every screen until it is accepted, as
+    /// the command line's do (#125).
     #[test]
     fn host_calls_that_start_or_show_scenes_are_known() {
         for a in [
-            json!({"action": "resume"}),
-            json!({"action": "next"}),
-            json!({"action": "previous", "screen": 1}),
-            json!({"action": "rotation", "name": "x"}),
             json!({"action": "wallpaper"}),
             json!({"action": "wallpaper", "on": true}),
             json!({"action": "login"}),
@@ -419,8 +433,21 @@ mod tests {
             json!({"action": "reload"}),
             json!({"action": "open_app"}),
             json!({"action": "quit"}),
+            json!({"action": "resume"}),
+            json!({"action": "next"}),
+            json!({"action": "previous", "screen": 1}),
+            json!({"action": "rotation", "name": "x"}),
         ] {
             assert!(!host_call_shows(&a), "{a}");
         }
+    }
+
+    /// An action the tool doesn't list is refused, naming the ones it does, before any host is
+    /// asked (#125); with no host running, "not running" would otherwise be the answer.
+    #[test]
+    fn an_unknown_action_is_refused_naming_the_actions() {
+        let e = host_control(&json!({"action": "start"})).unwrap_err();
+        assert!(e.contains("`action` must be one of"), "{e}");
+        assert!(e.contains("status") && e.contains("(got \"start\")"), "{e}");
     }
 }

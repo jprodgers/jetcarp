@@ -227,22 +227,32 @@ fn a_whole_session_over_stdio() {
         assert_eq!(e, jetcarp_core::fit::HELD_BACK);
     }
     // Until the photosensitive seizure warning has been accepted, host_control refuses to start
-    // or show scenes, with the warning; once it has, the call goes through (#96).
-    let e = fails(&tool(&mut c, "host_control", json!({"action": "resume"})));
-    assert!(
-        e.contains("won't start or show scenes in the background host") && e.contains("B0"),
-        "{e}"
-    );
+    // showing scenes, with the warning; once it has, the call goes through (#96). Resuming goes
+    // to the host either way, as `jetcarp host resume` does, since a host holds every screen
+    // until the warning is accepted (#125); here no host is running.
     let e = fails(&tool(
         &mut c,
         "host_control",
         json!({"action": "wallpaper"}),
     ));
+    assert!(
+        e.contains("won't start or show scenes in the background host") && e.contains("B0"),
+        "{e}"
+    );
     assert!(e.contains("photosensitive seizure warning"), "{e}");
-    use jetcarp_core::photosensitivity::{Answer, record_in};
-    record_in(&root.join("config"), Answer::NoDisorder, "test").unwrap();
     let e = fails(&tool(&mut c, "host_control", json!({"action": "resume"})));
     assert!(e.contains("not running"), "{e}");
+    use jetcarp_core::photosensitivity::{Answer, record_in};
+    record_in(&root.join("config"), Answer::NoDisorder, "test").unwrap();
+    let e = fails(&tool(
+        &mut c,
+        "host_control",
+        json!({"action": "wallpaper"}),
+    ));
+    assert!(e.contains("not running"), "{e}");
+    // An action the tool doesn't list is refused, naming the ones it does (#125).
+    let e = fails(&tool(&mut c, "host_control", json!({"action": "start"})));
+    assert!(e.contains("`action` must be one of"), "{e}");
     let e = fails(&tool(&mut c, "app_display", json!({})));
     assert!(e.contains("only available in the JETCARP app"), "{e}");
     let missing: Vec<&String> = names.iter().filter(|n| !called.contains(*n)).collect();

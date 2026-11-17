@@ -49,7 +49,7 @@ answered, nothing else starts anything on screen:
 | The background host started at login, or by `jetcarp host serve` | Runs, but holds every screen still; `jetcarp host status` says why, and the scenes start by themselves once the warning has been answered |
 | The system's screen saver (Windows), `jetcarp host serve --saver` | Refuses to start, with the warning (on Windows in a message box) |
 | The app's screensaver mode and full-screen outputs | Wait for the app's own warning |
-| The MCP tool `host_control` | Refuses the actions that start or show scenes (`resume`, `next`, `previous`, `rotation`, and `wallpaper` and `login` when turning on), with the warning |
+| The MCP tool `host_control` | Refuses `wallpaper` and `login` when turning on, with the warning, as the command line does; its other actions reach the host, which holds every screen as above |
 
 What only reads or writes files is not held back: `jetcarp host status`, `jetcarp doctor`, pictures,
 GIF and WebP animations, videos and scene files. They don't animate anything on your screen, but
