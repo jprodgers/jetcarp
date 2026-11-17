@@ -274,8 +274,8 @@ that will declare them stable.
 - **The MCP tools resolve symbolic links before checking that a path is inside the folders they
   may use.** `files_list` also lists the folders given with `jetcarp mcp --allow`, as the other
   tools read and write there.
-- **The folder checks cover each file JETCARP names itself inside a folder it was given**, as well
-  as the folder.
+- **The folder checks cover each file JETCARP names itself inside a folder it was given, or beside
+  it**, as well as the folder.
 - **MCP `world_new` given width and height skipped its 4,000,000-cell limit.** It checked each
   side, not the cells the grid would have, so 4096 x 4096 (16.8 million cells, or 50 million on
   trihex) was built. The limit now counts the world's cells, several to a unit cell on trihex and

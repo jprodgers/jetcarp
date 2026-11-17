@@ -770,12 +770,15 @@ fn export(cx: &Ctx, a: &ExportIn, to: &Path, p: &dyn Progress) -> Result<ExportO
             // The store the library is published into first, kept (hidden, beside the
             // export) so the feed's later versions are published into it. Beside is not
             // inside, so it is checked too; a refused publish takes away the folder it made.
-            let (scratch, made) = make_dir(
-                cx,
-                &to.with_file_name(format!(".{name}.store"))
-                    .display()
-                    .to_string(),
-            )?;
+            let hidden = to.with_file_name(format!(".{name}.store"));
+            // Its name is one JETCARP chooses, beside the folder it was given, so it is checked
+            // as the files JETCARP names inside a folder are, before anything is made: a
+            // symbolic link already there that leads out of the folder holding the export is
+            // refused, not followed, with or without folder rules.
+            if let Some(parent) = to.parent() {
+                jetcarp_core::paths::inside(parent, &hidden).map_err(ApiError::io)?;
+            }
+            let (scratch, made) = make_dir(cx, &hidden.display().to_string())?;
             unmake_dir(do_publish(cx, &pi, scratch.clone(), p), &scratch, made)?;
             (scratch.clone(), Some(scratch))
         }

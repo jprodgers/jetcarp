@@ -521,3 +521,44 @@ fn an_export_s_scratch_store_stays_inside_the_folder_rules() {
     assert!(!dir.join(".out.store").exists());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Without folder rules (the command line), a symbolic link planted at the hidden store an export
+/// keeps beside its folder, leading out of the folder that holds the export, is refused, and
+/// nothing is written where it leads.
+#[cfg(unix)]
+#[test]
+fn an_export_refuses_a_link_planted_at_its_hidden_store() {
+    use jetcarp_api::ops::pack::{ExportIn, PackExport, PublishIn};
+    let dir = scratch("export-planted-store");
+    let away = scratch("export-planted-store-away");
+    std::os::unix::fs::symlink(&away, dir.join(".exp.store")).unwrap();
+    let cx = Ctx::new().with_library(Some(dir.join("lib")));
+    let e = fails(
+        PackExport::run(
+            &cx,
+            ExportIn {
+                to: dir.join("exp").display().to_string(),
+                publish: Some(PublishIn::default()),
+                ..Default::default()
+            },
+            &Quiet,
+        ),
+        ErrorKind::Io,
+    );
+    assert!(
+        e.message.contains("where a symbolic link leads out of it"),
+        "{e}"
+    );
+    assert!(e.message.contains(".exp.store"), "{e}");
+    assert_eq!(
+        std::fs::read_dir(&away).unwrap().count(),
+        0,
+        "written where the link leads"
+    );
+    assert!(
+        !dir.join("exp").exists(),
+        "the refused export left its folder"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(away);
+}
