@@ -115,6 +115,12 @@ with a step that shows the fix working, run on every machine.
 adapters from the release branch before the candidate is tagged, with the scripted checks of what
 the candidate changed, so a candidate starts from a branch already known to pass.
 
+**A narrow candidate** is tested to fit what it changes. `rc.5` carried one fix that couldn't wait
+(#131: on macOS, the app's window stopped drawing after ⌘M) and seven small ones, none of them in the
+background host or the simulation. So the Acer's and the Mac's overnight runs on `rc.4` counted for it
+(the Framework's ran on `rc.5`). Its sittings ran on
+`rc.4` or `rc.5`, and every machine ran parity, the suite and each fix's check again on `rc.5`.
+
 The unattended steps, and the commands within the sittings, are run by a Claude Code session on each
 machine, working from the written plan. It records every step with its evidence (commands, outputs,
 timings, screenshots where they matter) and asks Jimmie, at the machine, whenever a step needs eyes
@@ -167,7 +173,7 @@ budget, a pack that silently lost its runs. Neither would have been enough alone
 
 ## The 0.4.2 cycle in numbers
 
-A record of one cycle, as of its fourth release candidate (November 2026):
+A record of one cycle, from the first issue to the release, after five candidates (November 2026):
 
 | Stage | Issues filed | Found by |
 |---|---|---|
@@ -176,9 +182,13 @@ A record of one cycle, as of its fourth release candidate (November 2026):
 | `rc.2`'s testing | 31 (#47–#78, less #70), and one security problem, handled privately | the three machines, a full pass |
 | `rc.3`'s testing | 37 (#80–#116) | the three machines (30: 4 in Phase 1, 25 in the Mac's sittings, 1 in the Acer's), writing the book (1), a user's report and one issue split from it (#114, #115), Jimmie's decisions (4: the seizure warning #96 and its roadmap item #97; holding Fit back, #112 and #113) |
 | `rc.4`'s pre-check, on the branch | 6 (#117–#122) | the Acer (3: #117, #121, #122), the book audit (#118), a Dependabot alert (#119), CI and the Acer (#120) |
+| `rc.4`'s testing | 15 (#123–#137), and a second security problem, handled privately | the Mac (8), the Framework (4), the Acer (2), looking into #119 (#123) |
+| `rc.5`'s testing | 7 (#138–#144) | the Framework (3: the suite run with the GPU taken away, #138; a newcomer's first hour, #139, #140), the Mac (2), the Acer (2) |
 
-Of the 119 issues filed in the cycle (#2–#122), 94 were fixed or done for 0.4.2 (those from `rc.3`'s
-testing and `rc.4`'s pre-check are checked in `rc.4`'s), 23 were moved to 0.4.3, and one is on the roadmap (#97). Three
+Of the 141 issues filed in the cycle (#2–#144), 101 were fixed or done for 0.4.2 (each checked on the
+next candidate), 36 were moved to 0.4.3, one is on the roadmap (#97), one was answered in part (#114,
+below), and two were closed with no change: a Dependabot alert for a crate that no build compiles (#119),
+and a rule applied only when its box loses focus, which is by design (#132). Three
 came from outside: a user's report (#1, from 0.4.1), a question on the ConwayLife forum (#70), and a
 user's report on the MCP server (#114), answered with a fix in 0.4.2 and an issue for 0.4.3 (#115). Every issue says where it was found,
 and the [changelog](changelog.md) lists the fixes with their issues.

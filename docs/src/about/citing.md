@@ -12,9 +12,9 @@ between releases before 1.0.
 ## The software
 
 > Rodgers, J. (2026). *JETCARP: Jimmie's Euclidean Tilings and Cellular Automata Research Program*
-> (Version 0.4.1) [Computer software]. Zenodo. <https://doi.org/10.5281/zenodo.24191765>
+> (Version 0.4.2) [Computer software]. Zenodo. <https://doi.org/10.5281/zenodo.24191765>
 
-with the version you ran in place of 0.4.1.
+with the version you ran in place of 0.4.2.
 
 | Field | Value |
 | --- | --- |
@@ -32,7 +32,7 @@ the same fields):
 @software{rodgers2026jetcarp,
   author  = {Rodgers, Jimmie},
   title   = {{JETCARP}: Jimmie's Euclidean Tilings and Cellular Automata Research Program},
-  version = {0.4.1},   % the version you ran
+  version = {0.4.2},   % the version you ran
   year    = {2026},
   url     = {https://github.com/jprodgers/jetcarp},
   license = {Unlicense OR MIT},

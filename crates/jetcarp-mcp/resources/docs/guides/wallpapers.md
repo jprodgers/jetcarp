@@ -54,9 +54,10 @@ on these machines again, except as the Fedora 45 line says.
   version has not yet been tested in a real GNOME session.
 - **Fedora 45, GNOME 51.1 on Wayland, one monitor, with JETCARP 0.4.1's host and the extension as
   fixed for [#2](https://github.com/jprodgers/jetcarp/issues/2):** the live desktop background runs
-  on the desktop. Pausing under a full screen app has been tried only in a headless GNOME 51.1
-  session. The lock screen, the top-bar menu, and keeping the host's windows out of the overview
-  and the window switcher have not been checked on GNOME 51 yet.
+  on the desktop. With 0.4.2's release candidates, in headless GNOME 51.1 sessions only: pausing
+  under a full screen app, two monitors, a monitor taken away and brought back, and eight hours
+  through a rotation's scenes. The lock screen, the top-bar menu, and keeping the host's windows out
+  of the overview and the window switcher have not been checked on GNOME 51 yet.
 - **Windows 11 Home (version 26H2) on a laptop with two graphics adapters, with and without a second
   monitor:** the live desktop background under the icons (including after Explorer restarts and after
   a change of display scaling), the screen saver (install, preview, starting after the idle time,
@@ -66,14 +67,18 @@ on these machines again, except as the Fedora 45 line says.
   runs, removal), sleep with the lid closed, the still picture on one screen, and the pauses on battery
   and when busy.
 
-Starting at a real login has been tried only on the Windows laptop, with JETCARP 0.4.2-rc.2: after
-signing out and in, the host started with its saved rotation, 97 seconds after sign-in, once the
-login entries before it had had their turn. JETCARP's launcher then kept Windows waiting on it too,
-which held up the entries after it ([#78](https://github.com/jprodgers/jetcarp/issues/78)); the
-launcher now starts the host and exits at once, which has not been tried at a real login yet. On
-the Mac, with 0.4.2-rc.3 put in place of 0.4.1, the first login after the upgrade did not start the
-host ([#99](https://github.com/jprodgers/jetcarp/issues/99), fixed since, which has not been tried
-at a real login yet); once launchd had started the new program by hand, the next login did.
+Starting at a real login has been tried on the Windows laptop and the Mac:
+- **Windows, with 0.4.2-rc.2:** after signing out and in, the host started with its saved rotation,
+  97 seconds after sign-in, once the login entries before it had had their turn. JETCARP's launcher
+  then kept Windows waiting on it too, which held up the entries after it
+  ([#78](https://github.com/jprodgers/jetcarp/issues/78)); the launcher now starts the host and
+  exits at once.
+- **Windows, with 0.4.2-rc.5,** in a new account, put in place of 0.4.1 installed with Scoop: the
+  host came back at sign-in as the new version. It held until the photosensitive seizure warning
+  was answered in the app, then ran with the saved settings.
+- **The Mac:** with 0.4.2-rc.3 put in place of 0.4.1, the first login after the upgrade did not
+  start the host ([#99](https://github.com/jprodgers/jetcarp/issues/99)). With that fixed, upgrading
+  from rc.3 to rc.4 restarted the host as rc.4 at once, and it came back as rc.4 at the next login.
 
 Not tested yet: starting at a real login on Linux (the entry is written and removed correctly, but
 no one has logged in with it), a fresh boot on Windows, Linux desktops other than
