@@ -482,7 +482,9 @@ The entry runs `jetcarp host serve --login` (on Windows through `jetcarpw.exe` w
 no console window opens) at the path the program has now. Windows runs these entries one at a time
 and waits for each, so at login `jetcarpw.exe` starts the host and exits at once, rather than
 waiting for it as it does from a shortcut. If you move the program, turn the setting off and on
-again. A host already running is left alone, except on macOS one that launchd started from the
+again. The entry carries no environment variables, so the host it starts uses the default folders:
+run with `JETCARP_*` folders of your own, `host login on` names the variables it won't pass on. A
+host already running is left alone, except on macOS one that launchd started from the
 entry, which `host login on` restarts. Turning it off removes the entry, and on macOS also unloads
 it from launchd, unless the host it started is still running: that host is left running.
 

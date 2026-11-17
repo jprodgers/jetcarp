@@ -185,12 +185,14 @@ and run it with `-Uninstall`:
 powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1 -Uninstall
 ```
 
-It deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off your user `PATH`, and deletes
-`%LOCALAPPDATA%\Programs` if it made it and it is empty. If you installed with `-InstallDir`, add it
+It deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off your user `PATH` if it was there (an
+install with `-NoModifyPath` never put it there), and deletes `%LOCALAPPDATA%\Programs` if it made it
+and it is empty. If you installed with `-InstallDir`, add it
 again. As with the shell installer, any release's installer removes any version's install.
 
-Both installers say what they removed, and that your settings, data and pictures were kept, with the
-folders they are usually in.
+Both installers say what they removed, and name the folders of your settings, data and pictures
+that are still there. After `jetcarp uninstall --settings --data`, they are gone, and nothing is said
+of them.
 
 ### pipx
 
