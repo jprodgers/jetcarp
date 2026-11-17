@@ -147,9 +147,13 @@ if ($Uninstall) {
             Say "removed $m (empty, made by the install)"
         }
     }
-    # Named here, as `jetcarp paths` would have, since the program has gone.
+    # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
+    # there, so nothing is said of what `jetcarp uninstall --settings --data` already took (#134).
     $Pictures = Join-Path ([Environment]::GetFolderPath("MyPictures")) "JETCARP"
-    Say "kept your settings, data and pictures, usually in $(Join-Path $env:APPDATA 'jetcarp'), $(Join-Path $env:LOCALAPPDATA 'jetcarp') and $Pictures; delete them by hand if you want them gone"
+    $Kept = @((Join-Path $env:APPDATA 'jetcarp'), (Join-Path $env:LOCALAPPDATA 'jetcarp'), $Pictures) | Where-Object { Test-Path -LiteralPath $_ }
+    if (@($Kept).Count -gt 0) {
+        Say "kept your settings, data and pictures in $(@($Kept) -join ', '); delete them by hand if you want them gone"
+    }
     return
 }
 

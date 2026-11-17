@@ -134,12 +134,19 @@ if [ -n "$uninstall" ]; then
             say "removed $m (empty, made by the install)"
         fi
     done
-    # Named here, as `jetcarp paths` would have, since the program has gone.
+    # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
+    # there, so nothing is said of what `jetcarp uninstall --settings --data` already took (#134).
     case "$(uname -s)" in
-        Darwin) kept="$HOME/Library/Application Support/jetcarp (with the data in its data folder) and $HOME/Pictures/JETCARP" ;;
-        *) kept="${XDG_CONFIG_HOME:-$HOME/.config}/jetcarp, ${XDG_DATA_HOME:-$HOME/.local/share}/jetcarp and $HOME/Pictures/JETCARP" ;;
+        Darwin) set -- "$HOME/Library/Application Support/jetcarp" "$HOME/Pictures/JETCARP" ;;
+        *) set -- "${XDG_CONFIG_HOME:-$HOME/.config}/jetcarp" "${XDG_DATA_HOME:-$HOME/.local/share}/jetcarp" "$HOME/Pictures/JETCARP" ;;
     esac
-    say "kept your settings, data and pictures, usually in $kept; delete them by hand if you want them gone"
+    kept=""
+    for k in "$@"; do
+        if [ -e "$k" ]; then kept="${kept:+$kept, }$k"; fi
+    done
+    if [ -n "$kept" ]; then
+        say "kept your settings, data and pictures in $kept; delete them by hand if you want them gone"
+    fi
     exit 0
 fi
 
