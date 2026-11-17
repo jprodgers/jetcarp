@@ -404,6 +404,12 @@ that will declare them stable.
   last row, leaving the rest ("newest: p3 oscillatohunt 1: 192/5,000 soups, ..."). A progress line
   in a terminal is now cut to its width, its least important part (a hunt's "newest: ...") going
   first; written to a file, lines stay whole. ([#104](https://github.com/jprodgers/jetcarp/issues/104))
+- **In Windows' old console window, progress lines printed `←[2K` and left a row behind each
+  redraw.** The line is erased with an escape code before each redraw, and the old console window
+  (conhost, which cmd and PowerShell open unless Windows Terminal is the default, as on Windows 10)
+  prints escape codes as text while they are off. JETCARP now turns them on for standard error at
+  start-up, and where it can't, erases the line with spaces.
+  ([#127](https://github.com/jprodgers/jetcarp/issues/127))
 
 ### Changed
 

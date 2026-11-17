@@ -673,7 +673,7 @@ impl CliProgress {
     pub(crate) fn clear(&self) {
         let mut l = self.last.lock().unwrap();
         if l.1 {
-            eprint!("\r\x1b[2K");
+            eprint!("{}", crate::term::clear_line());
             let _ = std::io::stderr().flush();
             l.1 = false;
         }
@@ -697,7 +697,11 @@ impl Progress for CliProgress {
         let mut l = self.last.lock().unwrap();
         if self.tty {
             // Fitted to the terminal: a wrapped line leaves its first rows behind (#104).
-            eprint!("\r\x1b[2K{}", crate::term::fit_to_stderr(msg));
+            eprint!(
+                "{}{}",
+                crate::term::clear_line(),
+                crate::term::fit_to_stderr(msg)
+            );
             let _ = std::io::stderr().flush();
             l.1 = true;
         } else if l.0.is_none_or(|t| t.elapsed().as_secs_f64() >= 5.0) {
@@ -711,7 +715,7 @@ impl Progress for CliProgress {
     fn log(&self, line: &str) {
         let mut l = self.last.lock().unwrap();
         if l.1 {
-            eprint!("\r\x1b[2K");
+            eprint!("{}", crate::term::clear_line());
             l.1 = false;
         }
         eprintln!("{line}");

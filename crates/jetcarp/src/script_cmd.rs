@@ -151,7 +151,7 @@ Run one with: jetcarp script --example NAME"
         Event::Log(line) => {
             let mut l = last.lock().unwrap();
             if l.1 {
-                eprint!("\r\x1b[2K");
+                eprint!("{}", crate::term::clear_line());
                 l.1 = false;
             }
             if json {
@@ -166,7 +166,11 @@ Run one with: jetcarp script --example NAME"
             let mut l = last.lock().unwrap();
             let end = p.done >= p.total;
             if tty {
-                eprint!("\r\x1b[2K{}", crate::term::fit_to_stderr(&p.line()));
+                eprint!(
+                    "{}{}",
+                    crate::term::clear_line(),
+                    crate::term::fit_to_stderr(&p.line())
+                );
                 let _ = std::io::stderr().flush();
                 l.1 = true;
                 if end {

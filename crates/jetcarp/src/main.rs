@@ -309,7 +309,7 @@ impl Progress for ProgressLine {
     fn report(&self, _done: u64, _total: Option<u64>, msg: &str) {
         use std::io::IsTerminal;
         if std::io::stderr().is_terminal() {
-            eprint!("\r\x1b[2K{}", term::fit_to_stderr(msg));
+            eprint!("{}{}", term::clear_line(), term::fit_to_stderr(msg));
         } else {
             eprint!("\r{msg}");
         }
@@ -378,6 +378,8 @@ fn without_json(cmd: &Cmd) -> Option<&'static str> {
 fn main() -> Result<()> {
     // A PastePattern naming a library pattern finds it in the default library.
     jetcarp_store::install();
+    // Escape codes on in Windows' old console window, for the progress lines (#127).
+    term::init();
     // GPU self-test results are kept in the settings folder by the program, never by code that
     // uses the GPU crate as a library (the test suites).
     jetcarp_gpu::select::keep_checks(true);
