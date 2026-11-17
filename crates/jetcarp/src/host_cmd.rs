@@ -90,6 +90,15 @@ pub enum SaverAction {
     Status,
 }
 
+/// `jetcarp host tune`'s help while Fit is in the release.
+const TUNE_ABOUT: &str = "Fit the desktop background to this computer: run each scene of the \
+    wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within \
+    the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as \
+    they are. A running host pauses while it runs, then shows the sizes found.";
+/// clap's own help layout, for `host tune` while Fit is in the release.
+const TUNE_HELP: &str =
+    "{before-help}{about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}";
+
 #[derive(Subcommand, Debug)]
 pub enum HostCmd {
     /// Run the host in this process (what `start`, login and the GNOME menu run).
@@ -229,12 +238,14 @@ pub enum HostCmd {
         #[arg(long)]
         rotation: Option<String>,
     },
-    /// Fit the desktop background to this computer: run each scene of the wallpaper's rotation at
-    /// its screen's size and keep, for each, the most cells that stay within the processor and GPU
-    /// limits at a smooth frame rate (saved). The rules and colours stay as they are. A running
-    /// host pauses while it runs, then shows the sizes found.
-    // Hidden from the help, and refused, while Fit is switched off (JETCARP 0.4.2, #112).
-    #[command(hide = !jetcarp_core::fit::FIT)]
+    // Hidden from the help, and refused, while Fit is switched off (JETCARP 0.4.2, #112); its own
+    // help then says only that, as the refusal does, not how Fit works (#128).
+    #[command(
+        hide = !jetcarp_core::fit::FIT,
+        about = if jetcarp_core::fit::FIT { TUNE_ABOUT } else { jetcarp_core::fit::HELD_BACK },
+        long_about = None,
+        help_template = if jetcarp_core::fit::FIT { TUNE_HELP } else { "{about-with-newline}" },
+    )]
     Tune(jetcarp_host::TuneArgs),
     /// The scene a screen shows now, its grid's size included, as a scene file that replays it.
     Scene {

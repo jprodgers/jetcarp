@@ -132,8 +132,14 @@ if ($Uninstall) {
     }
     $Made = @(Get-MadeBefore)
     Remove-Item -Recurse -Force $InstallDir
+    # Said only when the folder was on the PATH: after -NoModifyPath it never was (#128).
+    $WasOnPath = @((Get-UserPath) -split ";" | Where-Object { $_ -and ($_.TrimEnd("\") -eq $InstallDir.TrimEnd("\")) }).Count -gt 0
     Remove-FromUserPath $InstallDir
-    Say "removed $InstallDir and took it off your PATH"
+    if ($WasOnPath) {
+        Say "removed $InstallDir and took it off your PATH"
+    } else {
+        Say "removed $InstallDir (it wasn't on your PATH)"
+    }
     # The folders the install made around it (such as %LOCALAPPDATA%\Programs), deepest first, if empty.
     foreach ($m in @($Made | Sort-Object -Unique -Descending)) {
         if ((Test-Path -LiteralPath $m -PathType Container) -and @(Get-ChildItem -Force -LiteralPath $m).Count -eq 0) {
