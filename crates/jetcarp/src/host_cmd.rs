@@ -591,16 +591,34 @@ fn settle_picture(s: &HostSettings) {
     }
 }
 
-/// Whether the host has gone within a few seconds (its port closed: a status call could wait for
-/// an answer from a host that is closing).
+/// Whether the host has gone within a few seconds: its port closed (a status call could wait for
+/// an answer from a host that is closing), and its single-instance lock let go, so a host started
+/// next can take it (#122).
 fn gone_soon() -> bool {
     for _ in 0..50 {
-        if host_gone() {
+        if host_gone() && host_lock_free() {
             return true;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     false
+}
+
+/// Whether no host holds the single-instance lock (`host.lock`): taken and let go at once. The
+/// unlock is explicit, since on Windows a lock let go only by closing the file can linger.
+fn host_lock_free() -> bool {
+    let Some(path) = jetcarp_mcp::link::runtime_file("host.lock") else {
+        return true;
+    };
+    let Ok(f) = std::fs::OpenOptions::new().write(true).open(&path) else {
+        // No lock file: no host has run here.
+        return true;
+    };
+    let free = f.try_lock().is_ok();
+    if free {
+        let _ = f.unlock();
+    }
+    free
 }
 
 pub fn run(a: HostArgs) -> Result<()> {

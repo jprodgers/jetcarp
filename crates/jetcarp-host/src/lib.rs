@@ -70,7 +70,9 @@ fn parse_canvas(s: &str) -> Result<[f64; 2], String> {
 }
 
 /// Holds the single-instance lock for as long as the host runs. The OS drops it on any exit, so a
-/// crash cannot leave the host locked out.
+/// crash cannot leave the host locked out. A host that has just quit can hold it a moment longer
+/// (on Windows the system lets a lock go some time after the process ends, longer on a busy
+/// machine), so a host started straight after waits up to 2 s for it (#122).
 fn single_instance() -> Result<std::fs::File, String> {
     let path = jetcarp_mcp::link::runtime_file("host.lock").ok_or("no runtime folder")?;
     let dir = path.parent().expect("a folder");
@@ -81,12 +83,20 @@ fn single_instance() -> Result<std::fs::File, String> {
         .write(true)
         .open(&path)
         .map_err(|e| format!("{}: {e}", path.display()))?;
-    match f.try_lock() {
-        Ok(()) => Ok(f),
-        Err(std::fs::TryLockError::WouldBlock) => {
-            Err("the JETCARP background host is already running".into())
+    let t0 = Instant::now();
+    loop {
+        match f.try_lock() {
+            Ok(()) => return Ok(f),
+            Err(std::fs::TryLockError::WouldBlock) if t0.elapsed() < Duration::from_secs(2) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(std::fs::TryLockError::WouldBlock) => {
+                return Err("the JETCARP background host is already running".into());
+            }
+            Err(std::fs::TryLockError::Error(e)) => {
+                return Err(format!("{}: {e}", path.display()));
+            }
         }
-        Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
     }
 }
 

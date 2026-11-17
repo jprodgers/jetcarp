@@ -393,6 +393,12 @@ that will declare them stable.
   says that `--seizure-warning` without `--profile` saves only the answer when setup can't ask the
   rest (with `--yes`, or without a terminal).
   ([#118](https://github.com/jprodgers/jetcarp/issues/118))
+- **`jetcarp host start` straight after `host stop` could fail on a busy Windows machine.** `host
+  stop` returned once the old host's port had closed, but the old process could hold the host's
+  single-instance lock a moment longer. The new host found it held and quit, and `host start` said
+  only "the host did not start". `host stop` now also waits for the lock, and a new host waits up to
+  2 seconds for one that is still closing.
+  ([#122](https://github.com/jprodgers/jetcarp/issues/122))
 - **Progress lines wider than the terminal left pieces behind.** A job's progress, redrawn in place
   on standard error, wrapped in a narrow window, and each redraw went back only to the start of its
   last row, leaving the rest ("newest: p3 oscillatohunt 1: 192/5,000 soups, ..."). A progress line

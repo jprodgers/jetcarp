@@ -175,9 +175,9 @@ A record of one cycle, as of its fourth release candidate (November 2026):
 | `rc.1`'s testing | 32 (#15–#46) | the three machines, CI (3), the book audit (3) |
 | `rc.2`'s testing | 31 (#47–#78, less #70), and one security problem, handled privately | the three machines, a full pass |
 | `rc.3`'s testing | 37 (#80–#116) | the three machines (30: 4 in Phase 1, 25 in the Mac's sittings, 1 in the Acer's), writing the book (1), a user's report and one issue split from it (#114, #115), Jimmie's decisions (4: the seizure warning #96 and its roadmap item #97; holding Fit back, #112 and #113) |
-| `rc.4`'s pre-check, on the branch | 5 (#117–#121) | the Acer (2: #117, #121), the book audit (#118), a Dependabot alert (#119), CI (#120) |
+| `rc.4`'s pre-check, on the branch | 6 (#117–#122) | the Acer (3: #117, #121, #122), the book audit (#118), a Dependabot alert (#119), CI and the Acer (#120) |
 
-Of the 118 issues filed in the cycle (#2–#121), 93 were fixed or done for 0.4.2 (those from `rc.3`'s
+Of the 119 issues filed in the cycle (#2–#122), 94 were fixed or done for 0.4.2 (those from `rc.3`'s
 testing and `rc.4`'s pre-check are checked in `rc.4`'s), 23 were moved to 0.4.3, and one is on the roadmap (#97). Three
 came from outside: a user's report (#1, from 0.4.1), a question on the ConwayLife forum (#70), and a
 user's report on the MCP server (#114), answered with a fix in 0.4.2 and an issue for 0.4.3 (#115). Every issue says where it was found,
