@@ -21,3 +21,4 @@ dirs.workspace = true
 flate2.workspace = true
 gif.workspace = true
 image-webp.workspace = true
+ureq = "3.5.2"
