@@ -294,9 +294,12 @@ grep jetcarp-0.4.0-aarch64-apple-darwin.tar.gz SHA256SUMS | shasum -a 256 --chec
 ```
 
 or, in PowerShell, compare `(Get-FileHash jetcarp-0.4.0-x86_64-pc-windows-msvc.zip).Hash` with the
-file's line in `SHA256SUMS` (the case of the letters does not matter). Once the repository is
-public, each release file also has a signed record of the workflow run that built it, which the
-GitHub CLI checks:
+file's line in `SHA256SUMS` (the case of the letters does not matter).
+
+`SHA256SUMS` shows that a download is complete and unchanged, but it comes from the same place as
+the archive. To check where a file came from, each release file also has a provenance
+attestation: a signed record, made by GitHub, of the repository, workflow and commit that built
+it. The GitHub CLI checks it (the installers do not):
 
 ```bash
 gh attestation verify jetcarp-0.4.0-x86_64-unknown-linux-gnu.tar.gz --repo jprodgers/jetcarp
@@ -305,8 +308,8 @@ gh attestation verify jetcarp-0.4.0-x86_64-unknown-linux-gnu.tar.gz --repo jprod
 ## No telemetry
 
 JETCARP makes no network connections. It does not check for updates, report crashes or collect
-statistics of any kind; it never sends anything anywhere. The only sockets it opens are on your own
-computer, for the app's AI control and the background host (see
+statistics of any kind; it never sends anything anywhere. The only network sockets it opens are on
+your own computer, for the app's AI control and the background host (see
 [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)). Packs and other files
 reach it only when you give them to it.
 
