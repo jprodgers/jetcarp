@@ -153,6 +153,11 @@ claims more than its evidence: novelty only as set out in
   Start and media), the searches (`jetcarp-search`: the job runner and every search), the
   operations (`jetcarp-api`), then the front ends. The traits a GPU backend implements stay in the
   engine, so `jetcarp-gpu` needs only `jetcarp-core`.
+- The crates that take in other people's data have no unsafe code, and say so with
+  `#![forbid(unsafe_code)]`: `jetcarp-mcp`, `jetcarp-pack`, `jetcarp-script`, `jetcarp-store` and
+  `jetcarp-gpu`. Elsewhere unsafe code is for calls into the operating system (the desktop
+  background, the screen saver, power and login items) and a few hot loops; a new use needs a
+  `// SAFETY:` comment saying why it is sound.
 - Errors are messages a user can act on ("Margolus block rules need the square grid. Remove that CA
   before switching tilings."), not codes.
 - Tests live beside the code (`#[cfg(test)]`) and in each crate's `tests/` folder. A new rule, tiling
