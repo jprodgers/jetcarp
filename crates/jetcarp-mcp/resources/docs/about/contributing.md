@@ -59,6 +59,15 @@ export JETCARP_LIBRARY=/scratch/jetcarp/library
 CI builds and tests the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
 silicon), and builds it for macOS on Intel and Linux on ARM.
 
+A new dependency must not be a network client or server of any kind: JETCARP makes no network
+connections. CI checks the dependency tree with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny),
+which also looks for known vulnerabilities and accepts crates only from crates.io. To run the same
+check yourself (`cargo install --locked cargo-deny`):
+
+```sh
+cargo deny check --warn unmaintained advisories bans sources
+```
+
 ## The determinism pins
 
 Three tests pin JETCARP's behaviour: `crates/jetcarp-core/tests/geometry_pins.rs` (the cell polygons

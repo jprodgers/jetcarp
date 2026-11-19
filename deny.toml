@@ -1,0 +1,134 @@
+# cargo-deny's checks of the dependency tree, run by the Dependencies workflow (deps.yml) on every
+# push to main, every pull request and once a week. The licences are not checked here:
+# packaging/about.toml handles them.
+#
+# The crates checked are the ones built for the targets JETCARP releases for (release.yml), with
+# every feature on and with the tests' dev-dependencies: what cargo would build for any of them.
+
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
+all-features = true
+
+# Known problems in dependencies, from the RustSec advisory database. A vulnerability fails the
+# check, and so does unsoundness anywhere in the tree, not only in direct dependencies. A notice
+# that a crate is unmaintained is not a vulnerability: CI runs the check with
+# `--warn unmaintained`, so those are warnings in its log and never fail it (#186 lists them).
+# Run it the same way: `cargo deny check --warn unmaintained advisories bans sources`.
+[advisories]
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+unused-ignored-advisory = "deny"
+ignore = [
+    # On Linux the tray icon pulls in gtk 0.18 and glib 0.18; JETCARP never uses the iterator
+    # the notice is about (#119).
+    { id = "RUSTSEC-2024-0429", reason = "glib 0.18's VariantStrIter, which JETCARP never uses: #119" },
+]
+
+# SECURITY.md promises that JETCARP makes no network connections. No crate that is an HTTP, TLS,
+# DNS, WebSocket or peer-to-peer client or server may enter the tree, directly or through another
+# crate. Networking is planned for a later version (#169, #170); this list changes with it.
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    # HTTP clients and servers
+    { crate = "reqwest", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hyper", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hyper-util", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hyper-tls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hyper-rustls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "h2", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "h3", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "ureq", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "curl", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "curl-sys", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "isahc", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "attohttpc", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "minreq", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "surf", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "ehttp", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "awc", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "actix-web", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "actix-http", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "axum", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "warp", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tide", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "rocket", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "poem", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "salvo", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tiny_http", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "rouille", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tonic", reason = "SECURITY.md: JETCARP makes no network connections" },
+    # TLS
+    { crate = "rustls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tokio-rustls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "rustls-webpki", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "rustls-native-certs", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "webpki", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "webpki-roots", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "native-tls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tokio-native-tls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "openssl", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "openssl-sys", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "boring", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "boring-sys", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "s2n-tls", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "schannel", reason = "SECURITY.md: JETCARP makes no network connections" },
+    # DNS
+    { crate = "hickory-resolver", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hickory-proto", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hickory-client", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hickory-server", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "hickory-recursor", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "trust-dns-resolver", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "trust-dns-proto", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "trust-dns-client", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "trust-dns-server", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "trust-dns-https", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "c-ares", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "c-ares-sys", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "dns-lookup", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "mdns-sd", reason = "SECURITY.md: JETCARP makes no network connections" },
+    # WebSocket
+    { crate = "tungstenite", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "tokio-tungstenite", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "async-tungstenite", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "websocket", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "ws", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "fastwebsockets", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "soketto", reason = "SECURITY.md: JETCARP makes no network connections" },
+    # QUIC and peer to peer
+    { crate = "quinn", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "quinn-proto", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "h3-quinn", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "libp2p", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "libp2p-core", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "libp2p-swarm", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "libp2p-tcp", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "libp2p-quic", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "iroh", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "webrtc", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "str0m", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "librqbit", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "mainline", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "russh", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "ssh2", reason = "SECURITY.md: JETCARP makes no network connections" },
+    { crate = "lettre", reason = "SECURITY.md: JETCARP makes no network connections" },
+]
+# An async runtime is not a network client, but its networking parts are.
+features = [
+    { crate = "tokio", deny = ["net"], reason = "SECURITY.md: JETCARP makes no network connections" },
+]
+
+# Crates come from crates.io only: no other registry, and no git repositories.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
