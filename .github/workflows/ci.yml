@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every job only reads the repository: its token can do nothing else.
+permissions:
+  contents: read
+
 # A newer push to the same branch or pull request cancels the run it supersedes.
 concurrency:
   group: ci-${{ github.ref }}
