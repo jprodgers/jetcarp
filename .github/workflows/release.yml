@@ -86,8 +86,7 @@ jobs:
       prerelease: ${{ steps.check.outputs.prerelease }}
       packs: ${{ steps.packs.outputs.packs }}
     steps:
-      - uses: actions/checkout@v7
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: The tag matches the version in Cargo.toml, and the changelog has it
         # A tag that disagrees with Cargo.toml gives a release whose files all report another
         # version than the one people downloaded. A release (not a candidate) also needs its
@@ -113,7 +112,7 @@ jobs:
         # disagree.
         run: python3 packaging/package.py notes --out notes.md
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: notes
           path: notes.md
@@ -148,7 +147,7 @@ jobs:
             echo "No starter pack: the release is built without one."
           fi
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.packs.outputs.packs == 'true'
         with:
           name: starter-pack
@@ -161,9 +160,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
         run: |
           sudo apt-get update
@@ -198,14 +197,14 @@ jobs:
       # The starter pack's folder, or nothing.
       PACKS: ${{ needs.verify.outputs.packs == 'true' && 'starter-pack' || '' }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: release-${{ matrix.target }}
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -216,7 +215,7 @@ jobs:
             python -m pip install "ziglang==$ZIGLANG_VERSION"
           fi
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: needs.verify.outputs.packs == 'true'
         with:
           name: starter-pack
@@ -232,7 +231,7 @@ jobs:
       - name: Hand the Windows programs to SignPath
         id: unsigned
         if: matrix.target == 'x86_64-pc-windows-msvc' && vars.SIGNPATH_ORGANIZATION_ID != '' && github.event_name == 'push'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-windows
           path: |
@@ -240,7 +239,7 @@ jobs:
             target/x86_64-pc-windows-msvc/dist/jetcarpw.exe
       - name: Sign them (SignPath)
         if: steps.unsigned.outcome == 'success'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -283,7 +282,7 @@ jobs:
             target/x86_64-unknown-linux-gnu/dist/jetcarp pack check "$d"
           done
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-${{ matrix.target }}
           path: dist/*
@@ -301,13 +300,13 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: dist-*
           path: release
           merge-multiple: true
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: notes
 
@@ -320,7 +319,7 @@ jobs:
       - name: The Homebrew, Scoop and winget manifests, filled in (for checking; written at publishing)
         run: python3 packaging/package.py manifests --sums release/SHA256SUMS --out manifests
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-files
           path: |
@@ -332,13 +331,13 @@ jobs:
         # Lets anyone check a download with `gh attestation verify FILE --repo jprodgers/jetcarp`.
         # GitHub offers this for public repositories.
         if: github.event_name == 'push' && !github.event.repository.private
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release/*
 
       - name: The GitHub release (a pre-release for a candidate, else a draft)
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: JETCARP ${{ needs.verify.outputs.version }}
           files: release/*
@@ -358,13 +357,13 @@ jobs:
     permissions:
       id-token: write # trusted publishing; no token in secrets
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: dist-*
           path: wheels
           merge-multiple: true
       - run: find wheels -type f ! -name '*.whl' -delete
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: wheels/
           repository-url: https://test.pypi.org/legacy/
@@ -392,7 +391,7 @@ jobs:
           cd wheels
           grep '\.whl$' SHA256SUMS | sha256sum -c -
           rm SHA256SUMS
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: wheels/
 
@@ -402,10 +401,10 @@ jobs:
     runs-on: ubuntu-24.04
     environment: crates-io
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
       - name: Linux libraries (crates.io's verification builds the window and display crates)
         run: |
           sudo apt-get update

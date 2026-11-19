@@ -42,7 +42,8 @@ if a test touches the default ones.
 
 GitHub Actions runs on every push to `main` and every pull request. A release is prepared on a
 branch with a pull request open against `main`, so every push to it is tested; a tag runs the
-release workflow.
+release workflow. The workflows name each action they use by its commit, with its version beside it,
+so a tag that moves cannot change what runs.
 
 - **Build and test** the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
   silicon). The runners have no GPU of their own, so on Linux the GPU tests run on Mesa's software

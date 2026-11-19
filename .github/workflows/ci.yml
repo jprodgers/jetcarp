@@ -38,9 +38,9 @@ jobs:
           - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher" }
           - { name: macOS arm64, os: macos-latest, features: "" }
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
         if: runner.os == 'Linux'
         run: |
@@ -100,8 +100,8 @@ jobs:
     name: Formatting
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
           components: rustfmt
       - name: rustfmt
@@ -112,8 +112,8 @@ jobs:
     name: Third-party notices are current
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
       - name: cargo-about (the version packaging/notices.sh names)
         run: cargo install --locked cargo-about --version 0.9.3 --features cli
       - run: packaging/notices.sh --check
@@ -123,7 +123,7 @@ jobs:
     name: Workflows and packaging scripts
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: actionlint 1.7.12, checked against its release's checksum
         run: |
           v=1.7.12
@@ -150,9 +150,9 @@ jobs:
     name: The crates package and build on their own (crates.io dry run)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries
         run: |
           sudo apt-get update
@@ -179,11 +179,11 @@ jobs:
           - { name: macOS x86_64, os: macos-latest, target: x86_64-apple-darwin }
           - { name: Linux aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: ${{ matrix.target }}
       - name: Linux libraries
