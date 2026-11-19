@@ -2,7 +2,8 @@
 //! on the world the user is watching.
 //!
 //! Off by default. When switched on, `jetcarp_mcp::link::Listener` listens on 127.0.0.1 only and
-//! requires the token it records in the user's runtime directory. Requests are answered here, on
+//! requires the token it records in the user's runtime directory. Switched off, the listener is
+//! dropped: nothing accepts on its port and its endpoint file is gone ([`AiControl::switch_off`]). Requests are answered here, on
 //! the UI thread, by the same `jetcarp_mcp::Server` the CLI uses; every world change goes through
 //! `JetcarpApp::try_exec`, the path behind all of the app's buttons.
 
@@ -12,6 +13,7 @@ use jetcarp_core::Command;
 use jetcarp_core::world::{Applied, Scene, World};
 use jetcarp_mcp::link::{DEFAULT_PORT, Listener};
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -25,6 +27,34 @@ pub struct AiControl {
     served: u64,
     last: String,
     env_checked: bool,
+}
+
+impl AiControl {
+    /// Switch AI control on: listen on 127.0.0.1, on `port` or else any free port, recording the
+    /// port and token in `endpoint`.
+    fn switch_on(
+        &mut self,
+        port: u16,
+        endpoint: Option<PathBuf>,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) {
+        let r = Listener::start_at(port, endpoint.clone(), wake.clone())
+            .or_else(|_| Listener::start_at(0, endpoint, wake));
+        match r {
+            Ok(l) => {
+                self.listener = Some(l);
+                self.error = None;
+            }
+            Err(e) => self.error = Some(format!("Could not listen on 127.0.0.1: {e}")),
+        }
+    }
+
+    /// Switch AI control off. Dropping the listener stops it accepting connections and removes
+    /// its endpoint file, so the app takes no commands until it is switched on again
+    /// (SECURITY.md).
+    fn switch_off(&mut self) {
+        self.listener = None;
+    }
 }
 
 impl jetcarp_api::world::Host for JetcarpApp {
@@ -68,20 +98,14 @@ impl jetcarp_api::world::Host for JetcarpApp {
 
 impl JetcarpApp {
     pub(super) fn ai_stop(&mut self) {
-        self.ai.listener = None;
+        self.ai.switch_off();
     }
 
     pub(super) fn ai_start(&mut self, ctx: &egui::Context) {
         let c = ctx.clone();
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || c.request_repaint());
-        let r = Listener::start(DEFAULT_PORT, wake.clone()).or_else(|_| Listener::start(0, wake));
-        match r {
-            Ok(l) => {
-                self.ai.listener = Some(l);
-                self.ai.error = None;
-            }
-            Err(e) => self.ai.error = Some(format!("Could not listen on 127.0.0.1: {e}")),
-        }
+        self.ai
+            .switch_on(DEFAULT_PORT, jetcarp_mcp::link::endpoint_file(), wake);
     }
 
     /// Answer queued requests. Called once per frame on the UI thread.
@@ -156,7 +180,7 @@ impl JetcarpApp {
                 if on {
                     self.ai_start(ctx);
                 } else {
-                    self.ai.listener = None;
+                    self.ai_stop();
                 }
             }
             if let Some(e) = &self.ai.error {
@@ -200,5 +224,84 @@ impl JetcarpApp {
         if !open {
             self.ai.window_open = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::{Duration, Instant};
+
+    /// Whether a client with `token` is let in on `port`: it connects, sends the token and is
+    /// told `ok`.
+    fn lets_in(port: u16, token: &str) -> bool {
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let Ok(s) = TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else {
+            return false;
+        };
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut w = s.try_clone().unwrap();
+        if writeln!(w, "{}", json!({"jetcarp_token": token})).is_err() {
+            return false;
+        }
+        let mut line = String::new();
+        let _ = BufReader::new(s).read_line(&mut line);
+        serde_json::from_str::<Value>(&line).is_ok_and(|v| v["ok"] == true)
+    }
+
+    /// Whether nothing accepts a connection on `port` within a few seconds. The listener's
+    /// thread closes its socket within moments of being told to stop; until then the system
+    /// still accepts connections for it.
+    fn closed_soon(port: u16) -> bool {
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let t = Instant::now();
+        while t.elapsed() < Duration::from_secs(10) {
+            if TcpStream::connect_timeout(&addr, Duration::from_secs(1)).is_err() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
+    /// SECURITY.md: the app takes commands only while AI control is switched on. It starts off;
+    /// on, it lets a client with the token in and records the endpoint; off, nothing accepts on
+    /// the port it used and the endpoint file is gone; on again, a new listener lets a client in,
+    /// with a new token.
+    #[test]
+    fn nothing_listens_while_ai_control_is_off() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-ai-control-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join("app-endpoint.json");
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
+        let mut ai = AiControl::default();
+        assert!(ai.listener.is_none(), "AI control starts off");
+
+        ai.switch_on(0, Some(file.clone()), wake.clone());
+        let (port, token) = {
+            let l = ai.listener.as_ref().expect("switched on");
+            assert!(l.wrote_file());
+            (l.port, l.token.clone())
+        };
+        assert!(file.exists(), "the endpoint is recorded");
+        assert!(
+            lets_in(port, &token),
+            "on: a client with the token is let in"
+        );
+
+        ai.switch_off();
+        assert!(!file.exists(), "off: the endpoint file is removed");
+        assert!(closed_soon(port), "off: nothing accepts on port {port}");
+
+        ai.switch_on(0, Some(file.clone()), wake);
+        let l = ai.listener.as_ref().expect("switched on again");
+        assert_ne!(l.token, token, "a new token each time");
+        assert!(file.exists(), "the endpoint is recorded again");
+        assert!(lets_in(l.port, &l.token), "on again: let in");
+        ai.switch_off();
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

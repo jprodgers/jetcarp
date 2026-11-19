@@ -3,6 +3,7 @@
 //! and signatures. Each must be refused with a message, never a crash or a hang.
 
 mod common;
+mod links;
 
 use common::*;
 use jetcarp_pack::docs::{Index, Manifest};
@@ -444,65 +445,99 @@ fn unsigned_and_badly_signed_versions_are_refused() {
     assert!(import::import(&lib, &o3, &|_| {}).is_ok());
 }
 
-/// A symbolic link already in an export's folder or in a store, at a name JETCARP writes (or a
-/// folder on the way to one), that leads out of it: the export and the publish are refused, and
-/// nothing is written where the link leads. A link that stays inside the folder is followed, and
-/// the export reads as before.
-#[cfg(unix)]
+/// A link already in an export's folder or in a store, at a name JETCARP writes (or a folder on
+/// the way to one), that leads out of it: the export and the publish are refused, and nothing is
+/// written where the link leads. A link that stays inside the folder is followed, and the export
+/// reads as before. Each folder case runs with every kind of link to a folder the system has (on
+/// Windows a directory junction and a directory symbolic link); the manifest's own name is a
+/// file symbolic link.
 #[test]
 fn a_link_out_of_an_export_or_a_store_is_not_written_through() {
-    use std::os::unix::fs::symlink;
     let (dir, s, h) = store("links-out");
     let src = Source::open(&s).unwrap();
     let v = src.version(&h).unwrap();
     let away = dir.join("away");
-    std::fs::create_dir_all(&away).unwrap();
-    let refused = |e: String, at: &Path| {
-        assert!(e.contains("may only write inside"), "{e}");
-        assert!(e.contains(&at.display().to_string()), "{e}");
-        assert!(!e.contains("away"), "{e}");
-    };
-    // The manifest's own name, then a folder the index objects go in.
-    for name in ["pack.json", "index"] {
-        let to = dir.join(format!("export-{name}"));
-        std::fs::create_dir_all(&to).unwrap();
-        symlink(away.join(name), to.join(name)).unwrap();
-        let e = jetcarp_pack::export::export(&src, &v, &to).unwrap_err();
-        refused(e, &to.join(name));
-    }
-    // A store whose objects folder leads outside.
-    let st = dir.join("store-linked");
-    std::fs::create_dir_all(&st).unwrap();
     std::fs::create_dir_all(away.join("objects")).unwrap();
-    symlink(away.join("objects"), st.join("objects")).unwrap();
-    let lib = Library::open(dir.join("lib"));
-    let e = jetcarp_pack::publish::publish(
-        &lib,
-        &publisher(9, "Test Publisher"),
-        &mut book(&[]),
-        &options("hostile", &st),
-        &|_| {},
-    )
-    .unwrap_err();
-    refused(e, &st.join("objects"));
+    let refused = |case: &str, e: String, at: &Path| {
+        assert!(e.contains("may only write inside"), "{case}: {e}");
+        assert!(e.contains(&at.display().to_string()), "{case}: {e}");
+        assert!(!e.contains("away"), "{case}: {e}");
+    };
+    // The manifest's own name.
+    let case = "a linked pack.json in an export (symlink)";
+    let to = dir.join("export-pack.json");
+    std::fs::create_dir_all(&to).unwrap();
+    match links::file(&away.join("pack.json"), &to.join("pack.json")) {
+        Err(why) => links::skip(case, &why),
+        Ok(()) => {
+            let e = jetcarp_pack::export::export(&src, &v, &to).unwrap_err();
+            refused(case, e, &to.join("pack.json"));
+            links::ran(case);
+        }
+    }
+    for &kind in links::Kind::for_folders() {
+        let k = kind.name();
+        // A folder the index objects go in.
+        let case = format!("a linked index folder in an export ({k})");
+        let to = dir.join(format!("export-index-{k}"));
+        std::fs::create_dir_all(&to).unwrap();
+        match links::folder(kind, &away.join("index"), &to.join("index")) {
+            Err(why) => links::skip(&case, &why),
+            Ok(()) => {
+                let e = jetcarp_pack::export::export(&src, &v, &to).unwrap_err();
+                refused(&case, e, &to.join("index"));
+                links::ran(&case);
+            }
+        }
+        // A store whose objects folder leads outside.
+        let case = format!("a linked objects folder in a store ({k})");
+        let st = dir.join(format!("store-linked-{k}"));
+        std::fs::create_dir_all(&st).unwrap();
+        match links::folder(kind, &away.join("objects"), &st.join("objects")) {
+            Err(why) => links::skip(&case, &why),
+            Ok(()) => {
+                let lib = Library::open(dir.join("lib"));
+                let e = jetcarp_pack::publish::publish(
+                    &lib,
+                    &publisher(9, "Test Publisher"),
+                    &mut book(&[]),
+                    &options("hostile", &st),
+                    &|_| {},
+                )
+                .unwrap_err();
+                refused(&case, e, &st.join("objects"));
+                links::ran(&case);
+            }
+        }
+        // A link that stays inside: the index objects land where it leads.
+        let case = format!("a linked index folder that stays inside an export ({k})");
+        let to = dir.join(format!("export-inside-{k}"));
+        std::fs::create_dir_all(to.join("real-index")).unwrap();
+        match links::folder(kind, &to.join("real-index"), &to.join("index")) {
+            Err(why) => links::skip(&case, &why),
+            Ok(()) => {
+                jetcarp_pack::export::export(&src, &v, &to).unwrap();
+                assert!(
+                    std::fs::read_dir(to.join("real-index")).unwrap().count() > 0,
+                    "{case}"
+                );
+                assert!(
+                    Source::open(&to)
+                        .unwrap()
+                        .version(&h)
+                        .unwrap()
+                        .signed
+                        .by_publisher,
+                    "{case}"
+                );
+                links::ran(&case);
+            }
+        }
+    }
     let left: Vec<_> = std::fs::read_dir(&away)
         .unwrap()
         .map(|e| e.unwrap().file_name())
         .collect();
     assert_eq!(left, ["objects"], "nothing written outside");
     assert_eq!(std::fs::read_dir(away.join("objects")).unwrap().count(), 0);
-    // A link that stays inside: the index objects land where it leads.
-    let to = dir.join("export-inside");
-    std::fs::create_dir_all(to.join("real-index")).unwrap();
-    symlink(to.join("real-index"), to.join("index")).unwrap();
-    jetcarp_pack::export::export(&src, &v, &to).unwrap();
-    assert!(std::fs::read_dir(to.join("real-index")).unwrap().count() > 0);
-    assert!(
-        Source::open(&to)
-            .unwrap()
-            .version(&h)
-            .unwrap()
-            .signed
-            .by_publisher
-    );
 }
