@@ -11,7 +11,8 @@
 //! the default rate ([`LUM_RATE`]) a softened tile can make at most three transitions a second, half
 //! the limit, whatever is drawn; a flip becomes a fade. Tiles the plan leaves alone are shown as
 //! drawn. The last frame shown is kept in linear light at 16 bits a channel, so that a slow fade
-//! does not stall on 8-bit steps.
+//! does not stall on 8-bit steps. While nothing is softened only each tile's mean is kept, so the
+//! first softened frame moves from a grey at that mean: even that frame is within the step.
 //!
 //! **Stripes.** A plan can also *veil* tiles: blend them towards a grey of a given luminance, which
 //! lowers the contrast of strong stripes there. The amount and the grey are interpolated between
@@ -157,9 +158,12 @@ pub struct Softener {
     height: u32,
     /// The last frame shown before any veil, linear light, 16 bits a channel.
     state: Vec<[u16; 3]>,
-    /// Each tile's mean luminance and red measure in `state`.
+    /// Each tile's mean luminance and red measure in the last frame shown (kept whether or not
+    /// it was softened).
     prev: Vec<[f32; 2]>,
-    /// `state` holds nothing yet: the next frame is shown as drawn.
+    /// `prev` is for frames of this size.
+    prev_valid: bool,
+    /// `state` holds nothing: the last frame was not softened.
     empty: bool,
 }
 
@@ -192,6 +196,7 @@ impl Softener {
     /// Forget the last frame shown: the next is shown as drawn.
     pub fn reset(&mut self) {
         self.empty = true;
+        self.prev_valid = false;
     }
 
     /// Carries out `plan` on `rgba` (`width` by `height`, sRGB), drawn `dt` seconds after the last
@@ -210,10 +215,18 @@ impl Softener {
             self.width = width;
             self.height = height;
             self.empty = true;
+            self.prev_valid = false;
         }
         let active = plan.active() && plan.fits(input.cols, input.rows);
         if !active {
-            // Nothing to soften: the state follows what is shown, so softening can start from it.
+            // Nothing to soften: remember the tiles shown, so that softening can start from them.
+            self.prev = input
+                .lum
+                .iter()
+                .zip(&input.red)
+                .map(|(l, r)| [*l, *r])
+                .collect();
+            self.prev_valid = true;
             self.empty = true;
             return Softened {
                 shown: None,
@@ -221,16 +234,21 @@ impl Softener {
                 input,
             };
         }
-        let fresh = self.empty || self.state.len() != n || self.prev.len() != input.len();
+        // The first softened frame has no last frame to move from, only its tiles' means: it
+        // moves from a grey at each tile's last mean, so that even that frame is within the step.
+        let fresh = self.empty || self.state.len() != n;
         if fresh {
             self.state = vec![[0; 3]; n];
+        }
+        if self.prev.len() != input.len() {
             self.prev = vec![[0.0; 2]; input.len()];
+            self.prev_valid = false;
         }
         let (lum_step, red_step) = plan.steps(dt);
         // Each tile's fraction of the way to the new frame.
         let beta: Vec<f32> = (0..input.len())
             .map(|t| {
-                if fresh || !plan.soften[t] {
+                if !self.prev_valid || !plan.soften[t] {
                     return 1.0;
                 }
                 let (dl, dr) = (
@@ -261,11 +279,12 @@ impl Softener {
                 let new = [linear(px[0]), linear(px[1]), linear(px[2])];
                 let b = beta[t];
                 let s = if b < 1.0 {
-                    let st = self.state[i];
-                    [0, 1, 2].map(|k| {
-                        let p = from16(st[k]);
-                        p + (new[k] - p) * b
-                    })
+                    let was = if fresh {
+                        [self.prev[t][0]; 3]
+                    } else {
+                        self.state[i].map(from16)
+                    };
+                    [0, 1, 2].map(|k| was[k] + (new[k] - was[k]) * b)
                 } else {
                     new
                 };
@@ -293,6 +312,7 @@ impl Softener {
             output.red[t] = out_sum[t][1] / px;
         }
         self.empty = false;
+        self.prev_valid = true;
         Softened {
             shown: Some(shown),
             input,

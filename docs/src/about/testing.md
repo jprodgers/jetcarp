@@ -39,6 +39,37 @@ session.
 Tests never write to your own settings, data or pictures: they run in scratch folders, and CI fails
 if a test touches the default ones.
 
+## The strobe guard
+
+The [strobe guard](../guides/strobe-guard.md) is tested without anyone watching flashing scenes.
+Nobody with photosensitivity is asked to test it: the flashing scenes are checked by numbers and
+recordings, never by eye, and the hands-on sittings watch the guard's status, in a small window,
+with the guard already on.
+
+- **The detector** (`jetcarp_core::strobe`) is tested on synthetic frame sequences at 30, 60, 120
+  and 144 frames a second: just under and just over three flashes a second, a luminance step of 0.1
+  and just under, the darker state at 0.8, a flashing square just under and just over a quarter of
+  the 10° field, a strip larger than that area that never fills a quarter of a field, a view smaller
+  than the field, red flashes apart from general ones, the sliding one-second window, the extended
+  failure, and checkerboards reversing.
+- **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
+  checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
+  faint cell outlines, low contrast and bright stripes, which it must not.
+- **The guard's decisions** are tested end to end on a simulated screen: what it draws, softened as
+  the guard says, read back a few frames late. A field flipping every frame is softened and then
+  slowed and never shows more than three flashes a second, at any frame rate; flashing that slowing
+  cannot stop is paused; small flashing and slow fades are left alone; switched off, it does
+  nothing.
+- **The GPU and the processor agree**: the GPU's tile maps, half-resolution image and softened
+  frames match the processor's, to the texture unit's sRGB decoding.
+- **The corpus** (`docs/scenes/strobe/`): scenes made to flash, scenes made to sit just under the
+  limits, ordinary scenes and striped scenes, each drawn frame by frame on the processor at a fixed
+  speed and size, with JETCARP's verdict on each pinned in a test.
+- **The outside check** compares JETCARP's verdicts with those of EA's
+  [IRIS](https://github.com/electronicarts/IRIS) on recordings of what each output path drew.
+  JETCARP must miss nothing IRIS flags; false alarms are counted and kept low. IRIS, like the guard,
+  is a tool, not a certificate.
+
 ## Continuous integration
 
 GitHub Actions runs on every push to `main` and every pull request. A release is prepared on a

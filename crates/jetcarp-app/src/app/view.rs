@@ -112,21 +112,21 @@ impl JetcarpApp {
         }
         let t0 = std::time::Instant::now();
         let deadline = t0 + std::time::Duration::from_millis(14);
-        let want = if self.max_speed {
+        // The strobe guard may cap the speed (never what the generations are).
+        let (speed, max_speed) = self.guarded_speed();
+        let want = if max_speed {
             u64::MAX
         } else {
-            self.acc_after(dt)
+            self.acc_after(dt, speed)
         };
         if want > 0 {
-            let done = self
-                .sim
-                .step(&mut self.world, want, deadline, !self.max_speed);
+            let done = self.sim.step(&mut self.world, want, deadline, !max_speed);
             if done > 0 {
                 self.colors_dirty = true;
                 self.acc = (self.acc - done as f64).max(0.0);
             }
         }
-        if self.max_speed {
+        if max_speed {
             while t0.elapsed().as_millis() < 14 {
                 self.exec(Command::Step { gens: 1 });
             }
@@ -138,9 +138,10 @@ impl JetcarpApp {
         }
     }
 
-    /// Add this frame's time to the generation accumulator; returns whole generations due.
-    pub(super) fn acc_after(&mut self, dt: f64) -> u64 {
-        self.acc = (self.acc + dt * self.speed as f64).min(self.speed as f64 * 0.25 + 1.0);
+    /// Add this frame's time at `speed` generations a second to the generation accumulator;
+    /// returns whole generations due.
+    pub(super) fn acc_after(&mut self, dt: f64, speed: f32) -> u64 {
+        self.acc = (self.acc + dt * speed as f64).min(speed as f64 * 0.25 + 1.0);
         self.acc.floor() as u64
     }
 
@@ -345,7 +346,9 @@ impl JetcarpApp {
         {
             f.add_color(work.secs * 1e3, work.cells);
         }
-        TileCallback(draw)
+        // Every view is drawn through the strobe guard (#97).
+        let guard = Some(self.guard_feed(view, size));
+        TileCallback { draw, guard }
     }
 
     /// `JETCARP_GRID_POPOUT=1|deferred`: the grid, mirrored in a second OS window (wave 1's

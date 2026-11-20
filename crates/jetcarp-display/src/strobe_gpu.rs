@@ -8,9 +8,9 @@
 //! the half-resolution luminance image. One workgroup is one tile: 64 threads, each reading a 2 by 2
 //! block of pixels once. When the guard's [`Plan`] softens or veils anything, the same pass then
 //! carries it out exactly as [`jetcarp_core::strobe::soften::Softener`] does: it keeps the last
-//! frame shown in linear light (16 bits a channel), moves each softened tile towards the new frame
-//! by the fraction that keeps its mean within the step, veils, writes the frame to show, and
-//! measures that too. With nothing to soften the frame is shown as drawn and nothing is written
+//! frame shown in linear light (16 bits a channel; while nothing is softened, only each tile's
+//! mean), moves each softened tile towards the new frame by the fraction that keeps its mean
+//! within the step, veils, writes the frame to show, and measures that too. With nothing to soften the frame is shown as drawn and nothing is written
 //! but the tile means.
 //!
 //! The maps come back to the processor through a ring of [`SLOTS`] readback buffers, a frame or two
@@ -21,7 +21,9 @@
 //! [`StrobeGpu::blit`] draws the frame to show (the one drawn, or the softened one) into a render
 //! pass: the app's view inside egui's pass, or a surface.
 
+use jetcarp_core::strobe::Viewing;
 use jetcarp_core::strobe::frame::{LumImage, TileMap, tiles_for};
+use jetcarp_core::strobe::guard::{Frame, Guard, Pace};
 use jetcarp_core::strobe::soften::Plan;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -54,6 +56,7 @@ const GUARD: u32 = 1u;
 const FRESH: u32 = 2u;
 const HALF: u32 = 4u;
 const DECODE: u32 = 8u;
+const PREV: u32 = 16u;
 
 var<workgroup> acc: array<vec4<f32>, 64>;
 var<workgroup> cnt: array<f32, 64>;
@@ -120,15 +123,18 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
   let lin = acc[0].x / total;
   let rin = acc[0].y / total;
   if ((p.mode & GUARD) == 0u) {
-    if (lx == 0u) { tiles[tile] = vec4<f32>(lin, rin, lin, rin); }
+    if (lx == 0u) {
+      tiles[tile] = vec4<f32>(lin, rin, lin, rin);
+      prev[tile] = vec2<f32>(lin, rin);
+    }
     return;
   }
   // Everyone has read the sums before the arrays are used again.
   workgroupBarrier();
   var beta = 1.0;
   let pl = textureLoad(plan, vec2<i32>(i32(wg.x), i32(wg.y)), 0);
-  if ((p.mode & FRESH) == 0u && pl.x > 0.5) {
-    let pv = prev[tile];
+  let pv = prev[tile];
+  if ((p.mode & PREV) != 0u && pl.x > 0.5) {
     let dl = abs(lin - pv.x);
     let dr = abs(rin - pv.y);
     if (dl > p.lum_step) { beta = min(beta, p.lum_step / dl); }
@@ -142,10 +148,12 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
       let i = q.y * p.size.x + q.x;
       var s = px[k];
       if (beta < 1.0) {
-        let st = state[i];
-        let rg = unpack2x16unorm(st.x);
-        let b = unpack2x16unorm(st.y).x;
-        let was = vec3<f32>(rg, b);
+        // The first softened frame moves from a grey at the tile's last mean.
+        var was = vec3<f32>(pv.x);
+        if ((p.mode & FRESH) == 0u) {
+          let st = state[i];
+          was = vec3<f32>(unpack2x16unorm(st.x), unpack2x16unorm(st.y).x);
+        }
         s = was + (px[k] - was) * beta;
       }
       state[i] = vec2<u32>(pack2x16unorm(s.rg), pack2x16unorm(vec2<f32>(s.b, 0.0)));
@@ -190,6 +198,7 @@ const GUARD: u32 = 1;
 const FRESH: u32 = 2;
 const HALF: u32 = 4;
 const DECODE: u32 = 8;
+const PREV: u32 = 16;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -299,6 +308,8 @@ pub struct StrobeGpu {
     scene: Option<Scene>,
     /// The state holds the last frame shown (the last frame was softened, at this size).
     state_valid: bool,
+    /// The last tiles buffer holds the last frame's tile means, at this size.
+    prev_valid: bool,
     /// What the last frame showed, and the blit set up for it.
     shown: Shown,
     blit_bind: Option<wgpu::BindGroup>,
@@ -506,6 +517,7 @@ impl StrobeGpu {
             soft: None,
             scene: None,
             state_valid: false,
+            prev_valid: false,
             shown: Shown::Drawn,
             blit_bind: None,
             blit_format: None,
@@ -620,6 +632,7 @@ impl StrobeGpu {
         });
         self.soft = None;
         self.state_valid = false;
+        self.prev_valid = false;
         self.too_large = false;
     }
 
@@ -788,6 +801,9 @@ impl StrobeGpu {
         if manual {
             mode |= DECODE;
         }
+        if self.prev_valid {
+            mode |= PREV;
+        }
         queue.write_buffer(
             &self.params,
             0,
@@ -877,6 +893,7 @@ impl StrobeGpu {
             slot.soft = soften;
         }
         self.state_valid = soften;
+        self.prev_valid = true;
         let shown = if soften {
             Shown::Softened
         } else {
@@ -1084,6 +1101,77 @@ impl StrobeGpu {
             .as_ref()
             .filter(|_| self.shown == Shown::Softened)
             .map(|s| &s.shown)
+    }
+}
+
+/// The strobe guard for one view drawn on the GPU: the pass ([`StrobeGpu`]) and the decisions
+/// ([`Guard`]) together, as every GPU output uses them: the app's view and outputs, and the
+/// shared painter behind the desktop background and the screen savers.
+///
+/// Each frame: [`update`](Self::update) before drawing (the readings of frames the GPU has
+/// finished go to the guard, which decides), then draw, then [`frame`](Self::frame) to measure
+/// and soften what was drawn, then [`StrobeGpu::after_submit`] once the work is submitted.
+pub struct GuardedGpu {
+    pub gpu: StrobeGpu,
+    pub guard: Guard,
+    pace: Pace,
+    last_time: Option<f64>,
+}
+
+impl GuardedGpu {
+    /// A guard for a view watched as `viewing` says, all of a screen or part of one of
+    /// `screen_px` pixels, on or off as the person's setting says.
+    pub fn new(
+        device: &wgpu::Device,
+        viewing: Viewing,
+        screen_px: Option<f64>,
+        on: bool,
+    ) -> GuardedGpu {
+        GuardedGpu {
+            gpu: StrobeGpu::new(device),
+            guard: Guard::new(viewing, screen_px, on),
+            pace: Pace::default(),
+            last_time: None,
+        }
+    }
+
+    /// Hands the readings of finished frames to the guard, with the pace the scene runs at now.
+    pub fn update(&mut self, device: &wgpu::Device, pace: Pace) {
+        self.pace = pace;
+        for r in self.gpu.take(device) {
+            self.guard.observe(
+                Frame {
+                    time: r.time,
+                    input: &r.input,
+                    output: &r.output,
+                    half: r.half.as_ref(),
+                },
+                pace,
+            );
+        }
+        self.guard.set_can_soften(self.gpu.can_soften());
+    }
+
+    /// Measures, and softens as the guard's plan says, the frame drawn at `now` (in `source`, or
+    /// the scene texture).
+    pub fn frame(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        enc: &mut wgpu::CommandEncoder,
+        source: Option<&wgpu::Texture>,
+        now: f64,
+    ) -> Shown {
+        let dt = self.last_time.map_or(1.0 / 60.0, |l| (now - l).max(0.0)) as f32;
+        self.last_time = Some(now);
+        let half = self.guard.wants_half(now);
+        let plan = if self.guard.on() {
+            self.guard.plan().clone()
+        } else {
+            Plan::default()
+        };
+        self.gpu
+            .process(device, queue, enc, source, &plan, dt, now, half)
     }
 }
 

@@ -120,6 +120,7 @@ and *Window → Reset layout* puts everything back:
 | *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Clear every CA*, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |
 | *Tools* | The tool windows below, *Sweep this world…*, the *Objects* pane |
 | *Window* | Every pane and tool window, *Hide all panes*, *Reset layout*, *Displays* |
+| *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
 
 *Help → Keyboard shortcuts…* lists the menus' shortcuts. Single-key shortcuts such as Space and R

@@ -9,6 +9,24 @@ that will declare them stable.
 
 ### Added
 
+- **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
+  it flashes more than three times a second or shows strong regular stripes.** Every frame is
+  measured as WCAG 2.3.1 defines flashes and red flashes, with its area rule (a quarter of a 10°
+  field, for a screen watched from 40 cm at 96 pixels an inch for each step of its scale factor),
+  and the screen's mean as IRIS measures it; regular high-contrast stripes over a quarter of the
+  screen are measured as ITU-R BT.1702 describes them. The guard first softens the tiles that flash
+  (their brightness may change by at most 0.3 a second), then slows a scene that keeps flashing,
+  down to half a generation a second, then pauses it with a note saying why; strong stripes are
+  veiled. It is on for everyone, in the app's view, full screen, the outputs, the world AI control
+  acts on, the desktop background on all three systems and the screen savers; it never changes what
+  a world computes. Someone who answered the photosensitive seizure warning *I have, or may have, a
+  seizure disorder* can't turn it off; someone who answered *I don't* can, in the app's new
+  *Settings → Safety*, through a confirmation with an unticked box. The desktop background and the
+  screen saver keep their own switch, on until turned off with the same confirmation, since people
+  in the room never answered the warning. The switches are saved with the warning's answer;
+  `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
+  MCP tool turns them off. Measuring a 1080p frame takes 0.02 ms on a Radeon 8060S.
+  ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when

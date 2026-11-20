@@ -70,7 +70,8 @@ to an empty value counts as not set.
 `host.json` the background host's. `setup.json` records the first-run setup (the profile chosen,
 when, and the jobs it started; its being there is what tells the app that setup has run), and
 `paths.json` a data folder chosen in setup. `photosensitivity.json` holds the answer to the
-[photosensitive seizure warning](../getting-started/photosensitivity.md#where-the-answer-is-kept),
+[photosensitive seizure warning](../getting-started/photosensitivity.md#where-the-answer-is-kept)
+and the [strobe guard](../guides/strobe-guard.md)'s switches,
 with its date and the version that saved it; until it is there, nothing animates on screen. `gpu.json` is the [GPU setting](../guides/gpu.md#the-setting)
 that every part of JETCARP shares (automatic, on or off, and which adapter), and `gpu-checks.json`
 keeps the GPU self-test's result for each adapter, driver and version (the `jetcarp` program writes
