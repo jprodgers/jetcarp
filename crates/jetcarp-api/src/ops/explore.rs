@@ -995,7 +995,7 @@ impl Op for SearchTry {
         let (spec, topo) = sized_spec(&key, cells).map_err(invalid)?;
         let seed = match &a.seed {
             Some(v) if !v.is_null() => args::parse_seed(v).map_err(invalid)?,
-            _ => jetcarp_core::world::default_seed(&rule, topo.len()),
+            _ => jetcarp_core::world::default_seed(&rule, &topo),
         };
         let cand = Cand {
             tiling: key,

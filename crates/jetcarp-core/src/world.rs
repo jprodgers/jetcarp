@@ -473,7 +473,9 @@ pub fn cell_size(topo: &Topology) -> f64 {
     }
 }
 
-pub fn default_seed(rule: &Rule, n_cells: usize) -> SeedSpec {
+/// The start a rule takes when it is given none, on this tiling.
+pub fn default_seed(rule: &Rule, topo: &Topology) -> SeedSpec {
+    let n_cells = topo.len();
     match rule {
         Rule::Cyclic { .. }
         | Rule::Rps { .. }
@@ -487,7 +489,17 @@ pub fn default_seed(rule: &Rule, n_cells: usize) -> SeedSpec {
         Rule::Layered { .. } => SeedSpec::Center,
         Rule::Wolfram(_) => SeedSpec::TopCenter,
         Rule::Turmite(_) => SeedSpec::Ants { count: 1 },
-        Rule::WireWorld => SeedSpec::WireDemo,
+        // The demo's clock loops are drawn for the square grid. Anywhere else: wiring along the
+        // borders of random regions, about 70 cells a region with four signals each (the explore
+        // search's best-rated circuits had 50 regions or more and 4 or more signals a region).
+        Rule::WireWorld if topo.rows().is_some() => SeedSpec::WireDemo,
+        Rule::WireWorld => {
+            let sites = (n_cells / 70).clamp(3, 400) as u32;
+            SeedSpec::Circuit {
+                sites,
+                electrons: 4 * sites,
+            }
+        }
         Rule::Sandpile => SeedSpec::Pile {
             grains: (n_cells as u64 * 3).max(1000),
         },
@@ -1576,7 +1588,7 @@ impl World {
         let joins_busy_field = self.fields[field].shared && !self.fields[field].is_empty();
         let seed = spec.seed.clone().unwrap_or_else(|| match rule {
             Rule::LifeLike { .. } | Rule::Generations { .. } if joins_busy_field => SeedSpec::Empty,
-            _ => default_seed(&rule, self.topo.len()),
+            _ => default_seed(&rule, &self.topo),
         });
         let table = self.table_for(&rule);
         let nb = match &table {
@@ -1665,8 +1677,8 @@ impl World {
             ca.heat = None;
             ca.ticks = 0;
             let is_agent = rule.is_agent();
-            let default = default_seed(&rule, self.topo.len());
-            let seed_kind_changed = std::mem::discriminant(&default_seed(&ca.rule, 1))
+            let default = default_seed(&rule, &self.topo);
+            let seed_kind_changed = std::mem::discriminant(&default_seed(&ca.rule, &self.topo))
                 != std::mem::discriminant(&default);
             ca.rule = rule;
             if seed_kind_changed {

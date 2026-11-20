@@ -20,6 +20,13 @@ that will declare them stable.
 
 ### Fixed
 
+- **WireWorld can be added without a start on any tiling.** Its default start, the clock-loop
+  demo, is drawn for the square grid, so everywhere else adding the rule alone was refused with
+  "the WireWorld demo needs the square grid", from the command line, scripts and the MCP tools
+  alike. Off the square grid it now starts with a `circuit`: wiring along the borders of random
+  regions, about one region per 70 cells, with four signals in each. The square grid keeps the
+  demo. ([WireWorld](../automata/wireworld.md#on-any-tiling),
+  [#180](https://github.com/jprodgers/jetcarp/issues/180))
 - **Larger than Life keeps every count a rule names.** A birth or survival count above the square
   grid's neighbourhood size (8 at range 1, 1,680 at range 20) was dropped without a word, so on
   tilings whose neighbourhoods hold more cells, such as triangles with 12 touch neighbours, a rule

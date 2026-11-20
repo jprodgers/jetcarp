@@ -907,3 +907,85 @@ fn existing_scenes_still_load() {
         "JACA presets failed to load"
     );
 }
+
+/// Rules that run on one grid only (`reference/rule-notation.md`): elementary and Margolus rules
+/// and von Neumann's 29 states on squares, the hexagon row rules on their hexagon grids, and Larger
+/// than Life's cross neighbourhood on squares.
+fn tied_to_one_grid(rule: &rules::Rule) -> bool {
+    use rules::Rule;
+    match rule {
+        Rule::Wolfram(_)
+        | Rule::HexWolfram { .. }
+        | Rule::HexTri { .. }
+        | Rule::Margolus(_)
+        | Rule::VonNeumann => true,
+        Rule::Ltl(l) => l.hood == ltl::Hood::Cross,
+        _ => false,
+    }
+}
+
+// Every rule that is not tied to one grid can be added with its default start (no seed given) on a
+// hexagon grid and on an aperiodic patch, and runs: every named rule and an example of every kind.
+// WireWorld's default start was the square grid's clock-loop demo, refused anywhere else (#180).
+#[test]
+fn every_rule_starts_by_default_off_the_square_grid() {
+    let mut list: Vec<String> = rules::catalog()
+        .iter()
+        .map(|e| e.notation.to_string())
+        .collect();
+    list.extend(
+        [
+            "B3/S23",
+            "B014/S2",
+            "B2/S/C3",
+            "R5,C2,S33-57,B34-45",
+            "R2,C3,S4-9,B5-8,NN",
+            "Layer 2/01",
+            "JACA +B3/S23 -B36/S23 blast 2",
+            "Turmite LLRR",
+            "Turmite 1R1,1L0/1R1,0N0",
+            "WireWorld",
+            "Cyclic 14/1",
+            "GH 8/1",
+            "RPS 3/3",
+            "ForestFire 0.01/0.0001",
+            "Hodgepodge 100/2/3/28",
+            "Lenia R=13,T=10,b=1,m=0.15,s=0.015",
+            "Sandpile",
+            "Priority 4: 0|n0>=3&n1>=1->3; 3|n3>=3->0; 3|n1>=1->1",
+            "SpectreGlider",
+            "Table parity",
+        ]
+        .map(String::from),
+    );
+    list.sort();
+    list.dedup();
+    let tilings = [
+        ("hex", TilingSpec::rect("hex", 24, 20, Boundary::Wrap)),
+        ("hat", TilingSpec::new("hat").with_size(SizeSpec::Level(2))),
+    ];
+    let mut bad = vec![];
+    let mut tried = 0;
+    for (name, spec) in &tilings {
+        for text in &list {
+            let (rule, _) = rules::Rule::parse(text).unwrap();
+            if tied_to_one_grid(&rule) {
+                continue;
+            }
+            tried += 1;
+            let mut w = World::new(spec.clone(), 1).unwrap();
+            if let Err(e) = w
+                .add_ca(CaSpec::new(text))
+                .and_then(|_| w.apply(Command::Step { gens: 2 }))
+            {
+                bad.push(format!("{text} on {name}: {e}"));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "{} of {tried} rules were refused with their default start:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
+}
