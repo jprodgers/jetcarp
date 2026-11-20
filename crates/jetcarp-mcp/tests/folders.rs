@@ -581,7 +581,8 @@ fn names_every_system_cannot_hold_are_refused() {
         ("world_new", json!({"path": "Con.json"}), reserved),
         ("world_new", json!({"path": "plain.json:other"}), colon),
         ("files_list", json!({"path": "LPT1"}), reserved),
-        ("files_list", json!({"path": "a:b"}), colon),
+        ("files_list", json!({"path": "ab:c"}), colon),
+        ("files_list", json!({"path": "x/a:b"}), colon),
         ("world_status", json!({"save_path": "scene.json."}), dot),
         ("world_status", json!({"save_path": "scene.json "}), space),
         ("world_status", json!({"save_path": "dir./x.json"}), dot),
@@ -626,6 +627,14 @@ fn names_every_system_cannot_hold_are_refused() {
             json!({"save_path": name}),
         ));
         assert!(root.join("out").join(name).is_file(), "{name}");
+    }
+    // `a:b`: on Windows one letter and a `:` at the start is a drive (`A:`), so the path is
+    // outside the folders there; elsewhere it is a name with a `:`. Refused either way.
+    let e = fails(&call(&mut s, &mut h, "files_list", json!({"path": "a:b"})));
+    if cfg!(windows) {
+        assert!(e.contains("outside") || e.contains(colon), "{e}");
+    } else {
+        assert!(e.contains(colon), "{e}");
     }
     // `.` and `..` keep their meaning.
     ok(&call(

@@ -460,57 +460,75 @@ pub fn check_names(rel: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// `p` made absolute against the working directory, with `.` and `..` worked out by name and
-/// nothing looked up (unlike [`std::path::absolute`] on Windows, which can turn a device name into
-/// the device).
-fn lexical(p: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
+/// One part of a path as text: a name (`Some`), or a drive or root (`None` names, the text kept
+/// for comparing).
+type Part = (bool, String);
+
+/// The parts of `p` made absolute against the working directory, with `.` and `..` worked out by
+/// name and nothing looked up (unlike [`std::path::absolute`] on Windows, which can turn a device
+/// name into the device). They stay text and are never put back together into a path: on
+/// Windows a name such as `a:b.png` pushed onto a path on its own reads as the drive `A:` and
+/// replaces everything before it.
+fn lexical_parts(p: &Path) -> Vec<Part> {
+    let mut out: Vec<Part> = Vec::new();
     for c in joined(p).components() {
         match c {
             std::path::Component::ParentDir => {
-                out.pop();
+                if out.last().is_some_and(|(name, _)| *name) {
+                    out.pop();
+                }
             }
             std::path::Component::CurDir => {}
-            c => out.push(c.as_os_str()),
+            std::path::Component::Normal(n) => out.push((true, n.to_string_lossy().into_owned())),
+            c => out.push((false, c.as_os_str().to_string_lossy().into_owned())),
         }
     }
     out
 }
 
-/// What follows `dir` in `path`, by name, if `path` is under `dir`: letter case ignored on Windows
-/// and macOS, whose usual file systems ignore it.
-fn below_by_name(dir: &Path, path: &Path) -> Option<PathBuf> {
-    let fold = |c: std::path::Component| {
-        let s = c.as_os_str().to_string_lossy().into_owned();
+/// The names that follow `dir`'s parts in `path`'s, if `path` is under `dir` by name: letter case
+/// ignored on Windows and macOS, whose usual file systems ignore it.
+fn below_by_name(dir: &[Part], path: &[Part]) -> Option<Vec<String>> {
+    let fold = |s: &str| {
         if cfg!(any(windows, target_os = "macos")) {
             s.to_lowercase()
         } else {
-            s
+            s.to_string()
         }
     };
-    let mut d = dir.components();
-    let mut p = path.components();
-    loop {
-        match d.next() {
-            None => return Some(p.collect()),
-            Some(dc) => {
-                if fold(p.next()?) != fold(dc) {
-                    return None;
-                }
-            }
+    if path.len() < dir.len() {
+        return None;
+    }
+    for ((_, d), (_, p)) in dir.iter().zip(path) {
+        if fold(d) != fold(p) {
+            return None;
         }
     }
+    Some(path[dir.len()..].iter().map(|(_, n)| n.clone()).collect())
 }
 
 /// [`check_names`] for the names `path` has below the folder `dir`, worked out by name before
 /// anything is looked up. The folder's own path is not checked: it is the person's own. A path
 /// not under `dir` by name passes here (it is outside, or reaches `dir` another way, and the
-/// caller checks what it resolves to).
+/// caller checks what it resolves to: [`check_names_beyond`]).
 pub fn check_names_below(dir: &Path, path: &Path) -> Result<(), String> {
-    match below_by_name(&lexical(dir), &lexical(path)) {
-        Some(rest) => check_names(&rest),
+    match below_by_name(&lexical_parts(dir), &lexical_parts(path)) {
+        Some(names) => names.iter().try_for_each(|n| check_name(n)),
         None => Ok(()),
     }
+}
+
+/// [`check_name`] for each name of `full` after the parts of `base` (a path `full` is known to
+/// start with: a resolved path and its resolved folder). The names are read from `full` itself,
+/// whose drive and root come first, rather than from what `strip_prefix` leaves, which on Windows
+/// would read a first name such as `a:b.png` as a drive.
+pub fn check_names_beyond(base: &Path, full: &Path) -> Result<(), String> {
+    for c in full.components().skip(base.components().count()) {
+        if let std::path::Component::Normal(n) = c {
+            check_name(&n.to_string_lossy())?;
+        }
+    }
+    Ok(())
 }
 
 /// `p` as the file system will see it when a file is opened or made there: made absolute, the
@@ -644,6 +662,18 @@ pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
     // A name in `dir`, or a path already under it (`dir.join(name)`, as several writers pass):
     // joining that onto a relative `dir` again would double it.
     let path = path.as_ref();
+    // On Windows a name that starts with one letter and a `:` (`a:b.png`) reads as a drive, and
+    // joining it onto `dir` would replace `dir`: refuse it as the name it is.
+    if !path.is_absolute()
+        && matches!(
+            path.components().next(),
+            Some(std::path::Component::Prefix(_))
+        )
+    {
+        let first = path.to_string_lossy();
+        let first = first.split(['/', '\\']).next().unwrap_or_default();
+        check_name(first)?;
+    }
     let path = if path.starts_with(dir) {
         path.to_path_buf()
     } else {
@@ -662,7 +692,7 @@ pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
     let base = resolve(dir).map_err(|_| refused())?;
     let rest = real.strip_prefix(&base).map_err(|_| refused())?;
     // The names the write will really make, if a link on the way changed them.
-    check_names(rest)?;
+    check_names_beyond(&base, &real)?;
     let open = if rest.as_os_str().is_empty() {
         dir.to_path_buf()
     } else {
@@ -954,6 +984,7 @@ mod name_tests {
             "AUX/x.json",
             "plain.json:other",
             "sub/a:b.png",
+            "a:b.png",
         ] {
             let e = inside(&dir, rel).unwrap_err();
             assert!(
@@ -970,6 +1001,33 @@ mod name_tests {
         for rel in ["console.json", "nullable.png", "com10.json", "lpt.json"] {
             assert_eq!(inside(&dir, rel).unwrap(), dir.join(rel));
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// On Windows a name that starts with one letter and a `:` reads as a drive when it stands
+    /// alone; it is still a name below a folder, with either separator, and still refused. (The
+    /// paths are built from text, not with `join`, which would let such a name replace them.)
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_name_like_a_drive_is_still_refused_as_a_name() {
+        let dir = scratch("drive-like");
+        for rel in [
+            "sub/a:b.png",
+            r"sub\a:b.png",
+            r"x/y\a:b.png",
+            "a:b.png",
+            r"a:b\c.png",
+        ] {
+            let e = inside(&dir, rel).unwrap_err();
+            assert!(e.contains("a `:` in a name"), "{rel}: {e}");
+        }
+        let under = |rel: &str| PathBuf::from(format!("{}\\{rel}", dir.display()));
+        for rel in ["a:b.png", "sub/a:b.png", r"sub\x/a:b.png"] {
+            assert!(check_names_below(&dir, &under(rel)).is_err(), "{rel}");
+            assert!(check_names_beyond(&dir, &under(rel)).is_err(), "{rel}");
+        }
+        assert!(check_names_beyond(&dir, &under("sub/ok.png")).is_ok());
+        assert!(!dir.join("sub").exists() && !dir.join("x").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

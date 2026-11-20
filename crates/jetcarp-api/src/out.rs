@@ -143,7 +143,7 @@ impl Guard {
                 continue;
             };
             // The names that will really be read or made, if a link on the way changed them.
-            jetcarp_core::paths::check_names(rest)?;
+            jetcarp_core::paths::check_names_beyond(&base, &real)?;
             let path = if rest.as_os_str().is_empty() {
                 r.clone()
             } else {
