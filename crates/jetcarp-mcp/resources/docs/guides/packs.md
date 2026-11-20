@@ -36,17 +36,34 @@ jetcarp pack check penrose-finds-2026.11
 It prints:
 
 ```text
-sha256:a968036b…: feed penrose-finds, by SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8 (Ada Example), checking every object
+sha256:a968036b…: feed penrose-finds, signed by Ada Example, key SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8; new key: never seen in this library; checking every object
 …
-checked sha256:a968036b… (feed penrose-finds, SHA256:yNFIDrcM… Ada Example, signed by its publisher)
+checked sha256:a968036b… (feed penrose-finds)
+  signed by Ada Example, key SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8; new key: never seen in this library
   9 objects checked (213869 bytes)
 ```
 
 The first part is the *version id*: the hash of the manifest, which in turn lists the hash of every
 file. Two packs with the same version id are the same pack. The `SHA256:…` value is the publisher's
-key fingerprint, the same form `ssh-keygen -l` prints. A name after it is one the publisher gave
+key fingerprint, the same form `ssh-keygen -l` prints. The name before it is one the publisher gave
 themselves, and nothing more: trust a publisher by their key, for instance one they list on their
 website.
+
+After the key, JETCARP says what your library knows of it:
+
+| It says | When |
+| --- | --- |
+| **new key: never seen in this library** | No pack signed by this key has been imported into this library before |
+| **known key: this library has imported packs it signed** | A pack signed by it was imported here before |
+| **your own publisher key** | It is [your publisher key](#your-publisher-key): a pack you made |
+| **the pack came with JETCARP** | The pack is in the folder of packs that came with the program, such as the [starter pack](../getting-started/installing.md#the-starter-pack) |
+
+A new key is not a fault: every publisher's key is new the first time. It is worth a look when you
+expected a pack from someone whose packs you already have, since their packs would show as known: a
+publisher who makes a new key becomes, to JETCARP, a new publisher. An import of a pack its
+publisher didn't sign (`--allow-unsigned`) makes no key known. The app's
+[setup window](../getting-started/first-run.md) shows the same, under each pack before it is
+imported and under each import afterwards, with the key cut short (the whole key on hover).
 
 If any file was changed, the check fails and says which:
 
@@ -61,7 +78,8 @@ other than the newest.
 To see what a pack holds before checking all of it, `jetcarp pack info` reads only its manifest
 and signatures: the title and description, the publisher and whether they signed it (or that a
 signature is there but does not verify: the version was changed after it was signed, or the
-signature is damaged), and the rows, parts and bytes of each table.
+signature is damaged), what your library knows of their key, and the rows, parts and bytes of each
+table.
 
 ## Import a pack
 
@@ -75,7 +93,8 @@ It ends with:
 
 ```text
 …
-imported sha256:a968036b… (feed penrose-finds, SHA256:yNFIDrcM… Ada Example, signed by its publisher)
+imported sha256:a968036b… (feed penrose-finds)
+  signed by Ada Example, key SHA256:yNFIDrcM3AiT87AjIHMwLfCRBHMOW4KZm5X6pwQx1A8; new key: never seen in this library
   9 objects checked (213869 bytes)
   patterns: 3 added, 0 merged, 0 flagged needs_reverify
   sightings 3, ratings 0, ants 0, Quick Start 0, media 0, searches 0, retracted 0

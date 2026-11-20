@@ -582,12 +582,30 @@ fn a_pack_import_job_reports_and_runs_again_harmlessly() {
     let sum = k.summary(&lib.job(job).unwrap());
     assert_eq!((sum.done, sum.total), (1, Some(1)));
     // A second job for the same pack adds nothing.
+    // The job says who signed the pack, and what the library knew of the key (new: nothing
+    // signed by it was imported before; this test's bundled folder is the context's, not the
+    // program's, so the import does not count it as having come with JETCARP).
+    let line = out.progress["line"].as_str().unwrap();
+    assert!(line.contains("; signed by "), "{line}");
+    assert!(
+        line.contains("new key: never seen in this library"),
+        "{line}"
+    );
+    let sj = setup::setup_job(&s.ctx(), &lib, job).unwrap();
+    assert!(
+        sj.signed_by
+            .as_deref()
+            .is_some_and(|w| w.starts_with("signed by ")),
+        "{sj:?}"
+    );
+    assert_eq!(sj.key.as_deref(), Some("new"));
     let job2 = jobs::create(&lib, &js).unwrap();
     let out = Runner::new(lib.clone())
         .run(job2, &RunOptions::default())
         .unwrap();
     assert_eq!(out.progress["report"]["patterns_added"], 0);
     assert_eq!(out.progress["report"]["patterns_merged"], 3);
+    assert_eq!(out.progress["report"]["key"], "known");
     // A relative path is refused; a missing pack fails the job with the reason.
     let bad = |spec| {
         jobs::create(
@@ -604,4 +622,75 @@ fn a_pack_import_job_reports_and_runs_again_harmlessly() {
     let r = Runner::new(lib.clone()).run(gone, &RunOptions::default());
     assert!(r.is_err());
     assert_eq!(lib.job(gone).unwrap().status, JobStatus::Failed);
+}
+
+/// Packs listed for import say who signed them and what the library knows of the key: those that
+/// came with JETCARP say so; the same pack in a folder of the person's own is a new key until a
+/// version signed by it is imported, then a known one; `pack.info` and `pack.import` say the same.
+#[test]
+fn packs_say_who_signed_them_and_whether_the_key_is_new() {
+    use jetcarp_api::op::Report;
+    use setup::KeySeen;
+    let s = Scratch::new("signer");
+    let cx = s.ctx();
+    let st = setup::status(&cx);
+    let a = &st.bundled[1];
+    assert!(a.signed && !a.publisher.is_empty(), "{a:?}");
+    assert_eq!(a.key_seen(), Some(KeySeen::Shipped));
+    assert!(
+        a.signed_by_and_key()
+            .unwrap()
+            .ends_with("; the pack came with JETCARP"),
+        "{a:?}"
+    );
+    assert!(
+        st.text().contains("the pack came with JETCARP"),
+        "{}",
+        st.text()
+    );
+    let mine = s.dir.join("mine");
+    copy_dir(&golden("minimal"), &mine.join("minimal"));
+    let lib = Library::open(s.library());
+    let found = setup::packs_in(&mine, Some(&lib));
+    assert_eq!(found[0].key_seen(), Some(KeySeen::New));
+    assert_eq!(found[0].publisher, a.publisher);
+    let w = found[0].signed_by_and_key().unwrap();
+    assert!(w.ends_with("; new key: never seen in this library"), "{w}");
+    assert!(
+        w.contains("key SHA256:") && w.contains('…'),
+        "the key cut short: {w}"
+    );
+    let path = mine.join("minimal").display().to_string();
+    let info = jetcarp_api::call(&cx, "pack.info", json!({"path": path}), &Quiet).unwrap();
+    assert_eq!(info.value["key"], "new");
+    assert!(
+        info.text
+            .contains("signed by its publisher; new key: never seen in this library"),
+        "{}",
+        info.text
+    );
+    let c = jetcarp_api::call(
+        &cx,
+        "pack.import",
+        json!({"path": path, "verify": "none"}),
+        &Quiet,
+    )
+    .unwrap();
+    assert_eq!(c.value["key"], "new");
+    let first = c.text.lines().nth(1).unwrap_or("");
+    assert!(
+        first.trim_start().starts_with("signed by ")
+            && first.ends_with(&format!(
+                "key {}; new key: never seen in this library",
+                a.publisher
+            )),
+        "{}",
+        c.text
+    );
+    let info = jetcarp_api::call(&cx, "pack.info", json!({"path": path}), &Quiet).unwrap();
+    assert_eq!(info.value["key"], "known");
+    assert_eq!(
+        setup::packs_in(&mine, Some(&lib))[0].key_seen(),
+        Some(KeySeen::Known)
+    );
 }

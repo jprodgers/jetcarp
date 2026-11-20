@@ -7,6 +7,17 @@ that will declare them stable.
 
 ## [0.4.3] – unreleased
 
+### Added
+
+- **Importing a pack says who signed it, and says plainly when their key is new.** The setup
+  window shows, under each pack before it is imported and under each import afterwards, the
+  publisher's name and the start of their key, marked *New key: never seen in this library* when
+  no pack signed by that key has been imported into the library before. `jetcarp pack import`,
+  `pack check` and `pack info`, the MCP `pack` tool and `jetcarp setup` say the same, with the whole
+  key; a known key, your own publisher key and the packs that came with JETCARP are each said as
+  such. Before, the app showed only a pack's name and size, and the command line the key alone.
+  ([Packs](../guides/packs.md#check-a-pack))
+
 ### Fixed
 
 - **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but

@@ -128,8 +128,11 @@ pub fn line(p: &PackImportProgress) -> String {
             1 => " (1 from an earlier version removed)".into(),
             g => format!(" ({g} from earlier versions removed)"),
         };
+        let signer = import::report_signed_words(r, false)
+            .map(|w| format!("; {w}"))
+            .unwrap_or_default();
         return format!(
-            "pack import {}: {name} imported: {} patterns new, {} merged, {q} Quick Start {}{gone}, {} ant runs",
+            "pack import {}: {name} imported: {} patterns new, {} merged, {q} Quick Start {}{gone}, {} ant runs{signer}",
             p.job,
             n("patterns_added"),
             n("patterns_merged"),

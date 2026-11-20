@@ -101,6 +101,9 @@ pub struct Imported {
     pub publisher_name: String,
     /// `publisher` (signed by its publisher's key), `unsigned`.
     pub signed: String,
+    /// What the library knew of the publisher's key before this import (signed versions only):
+    /// [`KeySeen`].
+    pub key: Option<KeySeen>,
     pub patterns_added: u64,
     pub patterns_merged: u64,
     pub flagged: u64,
@@ -122,6 +125,165 @@ pub struct Imported {
     pub sample: Sample,
     pub notes: Vec<String>,
     pub dry_run: bool,
+}
+
+/// What a library knows of a publisher's key, before a version signed by it is imported: shown
+/// wherever a pack is imported or listed for import, so that a key never met before is plain to
+/// see. A publisher is the key its manifest names, as `pack_imports` records it (a new key is a
+/// new publisher: the packs guide says so of `jetcarp pack key`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KeySeen {
+    /// No version signed by it has been imported into this library, and it is not this
+    /// computer's own publisher key.
+    New,
+    /// The library has imported a version its publisher signed with it before (an import of an
+    /// unsigned version, allowed by hand, does not count: nothing showed it was the key's).
+    Known,
+    /// This computer's own publisher key (`jetcarp pack key`).
+    Own,
+    /// The pack came with this copy of JETCARP (it is in the program's own folder of packs,
+    /// [`came_with_jetcarp`]): installed with the program, so its key is as trusted as the
+    /// program itself, and the starter pack is not flagged as new on every first run.
+    Shipped,
+}
+
+impl KeySeen {
+    /// `new`, `known`, `own`, as reports write it.
+    pub fn name(self) -> &'static str {
+        match self {
+            KeySeen::New => "new",
+            KeySeen::Known => "known",
+            KeySeen::Own => "own",
+            KeySeen::Shipped => "shipped",
+        }
+    }
+
+    /// From [`KeySeen::name`].
+    pub fn parse(s: &str) -> Option<KeySeen> {
+        match s {
+            "new" => Some(KeySeen::New),
+            "known" => Some(KeySeen::Known),
+            "own" => Some(KeySeen::Own),
+            "shipped" => Some(KeySeen::Shipped),
+            _ => None,
+        }
+    }
+
+    /// In words, after the key: `new key: never seen in this library`.
+    pub fn words(self) -> &'static str {
+        match self {
+            KeySeen::New => "new key: never seen in this library",
+            KeySeen::Known => "known key: this library has imported packs it signed",
+            KeySeen::Own => "your own publisher key",
+            KeySeen::Shipped => "the pack came with JETCARP",
+        }
+    }
+}
+
+/// The pack at `path` came with this copy of JETCARP: it is inside the program's own folder of
+/// packs ([`jetcarp_core::paths::bundled_packs_dir`]), both resolved.
+pub fn came_with_jetcarp(path: &std::path::Path) -> bool {
+    let Some(dir) = jetcarp_core::paths::bundled_packs_dir() else {
+        return false;
+    };
+    match (std::fs::canonicalize(&dir), std::fs::canonicalize(path)) {
+        (Ok(d), Ok(p)) => p.starts_with(d),
+        _ => false,
+    }
+}
+
+/// What `lib` knows of the publisher key `publisher` (a fingerprint), this computer's own key
+/// being [`own_publisher_key`].
+pub fn key_seen(lib: &Library, publisher: &str) -> Result<KeySeen, String> {
+    key_seen_with(lib, publisher, own_publisher_key().as_deref())
+}
+
+/// [`key_seen`], with this computer's own key given.
+pub fn key_seen_with(lib: &Library, publisher: &str, own: Option<&str>) -> Result<KeySeen, String> {
+    if own == Some(publisher) {
+        return Ok(KeySeen::Own);
+    }
+    let known = lib
+        .pack_imports()?
+        .iter()
+        .any(|r| r.publisher == publisher && r.signed == "publisher");
+    Ok(if known { KeySeen::Known } else { KeySeen::New })
+}
+
+/// This computer's own publisher key's fingerprint (`jetcarp pack key`), if it has one: read
+/// from its public half beside it, else from the key itself. Nothing is made.
+pub fn own_publisher_key() -> Option<String> {
+    let f = crate::sign::key_file().ok()?;
+    if let Ok(t) = std::fs::read_to_string(f.with_extension("pub"))
+        && let Ok(fp) = crate::sign::fingerprint_of(t.trim())
+    {
+        return Some(fp);
+    }
+    crate::sign::load_or_create(Some(&f), false)
+        .ok()
+        .map(|(s, _)| s.fingerprint().to_string())
+}
+
+/// A key's fingerprint cut to its first characters (`SHA256:3eidC4LN3iNQ…`), for lists where
+/// the whole of it is a hover away.
+pub fn short_key(fingerprint: &str) -> String {
+    match fingerprint.strip_prefix("SHA256:") {
+        Some(b) if b.chars().count() > 12 => {
+            format!("SHA256:{}…", b.chars().take(12).collect::<String>())
+        }
+        _ => fingerprint.to_string(),
+    }
+}
+
+/// Who signed a version, in words, as imports show it: `signed by Ada Lovelace, key
+/// SHA256:…; new key: never seen in this library`, or `not signed by its publisher (key …)`.
+/// `short` cuts the key ([`short_key`]).
+pub fn signed_words(
+    publisher: &str,
+    name: &str,
+    signed: bool,
+    key: Option<KeySeen>,
+    short: bool,
+) -> String {
+    let fp = if short {
+        short_key(publisher)
+    } else {
+        publisher.to_string()
+    };
+    if !signed {
+        return format!("not signed by its publisher (key {fp})");
+    }
+    let mut s = if name.is_empty() {
+        format!("signed by its publisher, key {fp}")
+    } else {
+        format!("signed by {name}, key {fp}")
+    };
+    if let Some(k) = key {
+        s.push_str("; ");
+        s.push_str(k.words());
+    }
+    s
+}
+
+/// [`signed_words`] from an import's report (`pack_imports.report`, a job's progress, or
+/// `pack.import`'s answer); none for a report that names no publisher.
+pub fn report_signed_words(r: &Value, short: bool) -> Option<String> {
+    let publisher = r
+        .get("publisher")
+        .and_then(Value::as_str)
+        .filter(|p| !p.is_empty())?;
+    Some(signed_words(
+        publisher,
+        r.get("publisher_name")
+            .and_then(Value::as_str)
+            .unwrap_or(""),
+        r.get("signed").and_then(Value::as_str) == Some("publisher"),
+        r.get("key")
+            .and_then(Value::as_str)
+            .and_then(KeySeen::parse),
+        short,
+    ))
 }
 
 fn de<T: serde::de::DeserializeOwned>(v: Value, what: &str) -> Result<T, String> {
@@ -232,6 +394,14 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
     if let Some(b) = v.signed.bad.first() {
         return Err(format!("a signature on this version does not verify: {b}"));
     }
+    // What the library knew of the key, before this import records it.
+    if by_publisher {
+        out.key = Some(if came_with_jetcarp(&opts.path) {
+            KeySeen::Shipped
+        } else {
+            key_seen(lib, &m.publisher)?
+        });
+    }
     out.signed = if by_publisher {
         "publisher".into()
     } else if opts.allow_unsigned {
@@ -245,14 +415,9 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
         ));
     };
     log(&format!(
-        "{h}: feed {}, by {}{}, checking every object",
+        "{h}: feed {}, {}; checking every object",
         m.feed,
-        m.publisher,
-        if v.signed.name.is_empty() {
-            String::new()
-        } else {
-            format!(" ({})", v.signed.name)
-        }
+        signed_words(&m.publisher, &v.signed.name, by_publisher, out.key, false)
     ));
     check_objects(&src, &v, &mut out)?;
 
@@ -876,6 +1041,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             report: json!({
                 "title": m.title,
                 "publisher_name": out.publisher_name,
+                "key": out.key.map(KeySeen::name),
                 "patterns_added": out.patterns_added,
                 "patterns_merged": out.patterns_merged,
                 "flagged": out.flagged,
