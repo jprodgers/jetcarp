@@ -101,7 +101,7 @@ impl Remeasured {
 
     /// Keep these runs' replayed measures, with whether each differs from its stored ones.
     pub fn put(&mut self, rows: &[(i64, Features, bool)]) -> Result<(), String> {
-        let tx = self.db.transaction().map_err(e)?;
+        let tx = crate::explore::store::begin_write(&mut self.db)?;
         {
             let mut st = tx
                 .prepare_cached(

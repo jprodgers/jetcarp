@@ -26,7 +26,9 @@ use jetcarp_core::explore::cand::Cand;
 use jetcarp_core::explore::features::{Fate, Features, SignMeasures};
 use jetcarp_core::explore::space::{ALL_FAMS, Fam};
 use jetcarp_core::topology::Nb;
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -41,6 +43,23 @@ const MERGE_SEEN: i64 = 64;
 
 fn e(x: rusqlite::Error) -> String {
     x.to_string()
+}
+
+/// A write transaction holding the database's write lock from its start, as the library's do.
+/// Waiting for another program's write is then done once, at the start, within the busy timeout;
+/// a transaction that read first and wrote second could instead be refused at its first write,
+/// with no wait, if another program had written in between.
+pub(crate) fn begin_write(c: &mut Connection) -> Result<Transaction<'_>, String> {
+    c.transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(e)
+}
+
+/// Whether the elites carry their runs' candidates (format 2), or only ids (format 1).
+fn elites_have_runs(c: &Connection) -> Result<bool, String> {
+    c.prepare("SELECT 1 FROM pragma_table_info('elites') WHERE name = 'tiling'")
+        .map_err(e)?
+        .exists([])
+        .map_err(e)
 }
 
 /// A family by its name ([`Fam::name`], or its serde name: `wire_world` too).
@@ -185,7 +204,7 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     if let Some(d) = path.parent() {
         std::fs::create_dir_all(d).map_err(|x| format!("{}: {x}", d.display()))?;
     }
-    let c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
+    let mut c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
     c.busy_timeout(jetcarp_store::library::BUSY_WAIT)
         .map_err(e)?;
     // Waited for, as the library's is: several jobs may make the same store at once.
@@ -193,25 +212,24 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     c.execute_batch("PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;")
         .map_err(e)?;
     c.execute_batch(SCHEMA).map_err(e)?;
-    // Format 1: elites held only ids.
-    let has_tiling: bool = c
-        .prepare("SELECT 1 FROM pragma_table_info('elites') WHERE name = 'tiling'")
-        .map_err(e)?
-        .exists([])
-        .map_err(e)?;
-    if !has_tiling {
-        let mut sql = String::from("BEGIN;");
-        for (n, t) in EVAL_COLS.split(',').zip([
-            "TEXT", "INT", "TEXT", "TEXT", "TEXT", "INT", "INT", "INT", "INT", "TEXT", "TEXT",
-            "REAL", "INT", "BLOB",
-        ]) {
-            sql += &format!("ALTER TABLE elites ADD COLUMN {n} {t};");
+    // Format 1: elites held only ids. Asked again with the write lock held: another program
+    // opening the same database at the same moment may have brought it up already.
+    if !elites_have_runs(&c)? {
+        let tx = begin_write(&mut c)?;
+        if !elites_have_runs(&tx)? {
+            let mut sql = String::new();
+            for (n, t) in EVAL_COLS.split(',').zip([
+                "TEXT", "INT", "TEXT", "TEXT", "TEXT", "INT", "INT", "INT", "INT", "TEXT", "TEXT",
+                "REAL", "INT", "BLOB",
+            ]) {
+                sql += &format!("ALTER TABLE elites ADD COLUMN {n} {t};");
+            }
+            sql += &format!(
+                "UPDATE elites SET ({EVAL_COLS}) = (SELECT {EVAL_COLS} FROM runs r WHERE r.id = elites.id);"
+            );
+            tx.execute_batch(&sql).map_err(e)?;
         }
-        sql += &format!(
-            "UPDATE elites SET ({EVAL_COLS}) = (SELECT {EVAL_COLS} FROM runs r WHERE r.id = elites.id);
-             COMMIT;"
-        );
-        c.execute_batch(&sql).map_err(e)?;
+        tx.commit().map_err(e)?;
     }
     c.execute(
         "INSERT OR IGNORE INTO meta(k, v) VALUES('format', ?1)",
@@ -343,7 +361,7 @@ pub fn write(c: &mut Connection, d: &Delta) -> Result<(), String> {
     if d.is_empty() {
         return Ok(());
     }
-    let tx = c.transaction().map_err(e)?;
+    let tx = begin_write(c)?;
     write_in(&tx, d)?;
     tx.commit().map_err(e)
 }
@@ -692,7 +710,7 @@ pub fn load(c: &mut Connection) -> Result<Saved, String> {
     s.stats.seen = s.seen.len() as u64;
     if s.stats.seen_blobs as i64 > MERGE_SEEN {
         let blob: Vec<u8> = s.seen.iter().flat_map(|h| h.to_le_bytes()).collect();
-        let tx = c.transaction().map_err(e)?;
+        let tx = begin_write(c)?;
         tx.execute("DELETE FROM seen", []).map_err(e)?;
         tx.execute("INSERT INTO seen(data) VALUES(?1)", [blob])
             .map_err(e)?;

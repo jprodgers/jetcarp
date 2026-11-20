@@ -25,7 +25,8 @@ that will declare them stable.
   yet at the same moment as another, one of them could be refused at once, although each waits
   up to 30 seconds for the others: SQLite does not wait while a new library is switched to its
   write-ahead log. JETCARP now waits for that too, for the library and for the explore runs'
-  store.
+  store. Programs opening one search from before 0.4 at the same moment no longer fail with
+  "duplicate column name" while it is brought up to date: one does it, and the others wait.
 - **`jetcarp_core::lenia::decode_rle` refuses a run-length text that would need more room than
   its limit allows, or that is malformed, instead of panicking or asking for more memory than the
   system has.** The limit is the caller's: the new `decode_rle_within` takes it, so it can follow
