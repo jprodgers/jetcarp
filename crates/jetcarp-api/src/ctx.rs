@@ -152,6 +152,7 @@ impl FsPolicy {
             Some(b) if !Path::new(p).is_absolute() => b.join(p),
             _ => PathBuf::from(p),
         };
+        jetcarp_core::paths::check_length(&p).map_err(ApiError::io)?;
         std::path::absolute(&p)
             .map_err(|e| ApiError::invalid(format!("bad path {}: {e}", p.display())))
     }
@@ -183,25 +184,29 @@ impl FsPolicy {
             _ => p.to_path_buf(),
         };
         let Some(g) = &self.read else {
+            jetcarp_core::paths::check_length(&given).map_err(ApiError::io)?;
             return Ok(match &self.base {
                 Some(_) if !p.is_absolute() => out::absolute(&given),
                 _ => given,
             });
         };
-        g.inside(&given).ok_or_else(|| {
-            let shown = out::absolute(&given);
-            ApiError::io(match &self.who {
-                Some(who) => format!(
-                    "{who} may only read inside {}, not {}",
-                    roots_text(g),
-                    shown.display()
-                ),
-                None => format!(
-                    "this run may only read inside the output folders, not {}",
-                    shown.display()
-                ),
+        g.find(&given)
+            .map_err(ApiError::io)?
+            .map(|(p, _)| p)
+            .ok_or_else(|| {
+                let shown = out::absolute(&given);
+                ApiError::io(match &self.who {
+                    Some(who) => format!(
+                        "{who} may only read inside {}, not {}",
+                        roots_text(g),
+                        shown.display()
+                    ),
+                    None => format!(
+                        "this run may only read inside the output folders, not {}",
+                        shown.display()
+                    ),
+                })
             })
-        })
     }
 }
 

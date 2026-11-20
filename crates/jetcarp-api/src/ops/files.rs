@@ -155,7 +155,7 @@ pub fn resolve(cx: &Ctx, root_name: &str, p: Option<&str>) -> Result<(PathBuf, P
             .chain(more.iter().cloned())
             .collect(),
     };
-    let Some((path, root)) = guard.locate(&want) else {
+    let Some((path, root)) = guard.find(&want).map_err(ApiError::io)? else {
         let mut folders = vec![
             format!("JETCARP's output folder ({})", named[0].1.display()),
             format!("the catalog's folder ({})", named[1].1.display()),

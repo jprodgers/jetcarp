@@ -22,7 +22,7 @@ jetcarp-core.workspace = true
 jetcarp-store = { workspace = true, optional = true }
 jetcarp-gpu.workspace = true
 # World-only: rotations need only the series expansion and the argument parsers.
-jetcarp-script = { workspace = true, default-features = false }
+jetcarp-script.workspace = true
 wgpu.workspace = true
 bytemuck.workspace = true
 serde.workspace = true

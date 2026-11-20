@@ -18,9 +18,9 @@ path = "src/lib.rs"
 jetcarp-core.workspace = true
 jetcarp-store.workspace = true
 jetcarp-search.workspace = true
-jetcarp-api.workspace = true
+jetcarp-api = { workspace = true, features = ["default"] }
 jetcarp-gpu.workspace = true
-jetcarp-display.workspace = true
+jetcarp-display = { workspace = true, features = ["default"] }
 eframe.workspace = true
 egui-wgpu.workspace = true
 egui_tiles.workspace = true
@@ -32,7 +32,7 @@ serde_json.workspace = true
 anyhow.workspace = true
 rfd.workspace = true
 jetcarp-mcp.workspace = true
-jetcarp-script.workspace = true
+jetcarp-script = { workspace = true, features = ["default"] }
 png.workspace = true
 clap.workspace = true
 

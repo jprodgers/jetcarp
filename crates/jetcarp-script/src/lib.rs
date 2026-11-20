@@ -838,9 +838,10 @@ impl Ctx {
             }
         };
         if !restrict {
+            jetcarp_core::paths::check_length(&p)?;
             return Ok(out::absolute(&p));
         }
-        guard.inside(&p).ok_or_else(|| {
+        guard.find(&p)?.map(|(p, _)| p).ok_or_else(|| {
             format!(
                 "this run may only read inside the output folders, not {}",
                 out::absolute(&p).display()
