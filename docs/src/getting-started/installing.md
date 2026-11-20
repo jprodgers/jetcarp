@@ -36,9 +36,12 @@ curl -LsSf https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp
 On Windows, in PowerShell, save the installer and run it:
 
 ```powershell
-Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
-powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile "$env:TEMP\jetcarp-installer.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1"
 ```
+
+Then open a new PowerShell window and run `jetcarp`: the window you installed from can't see the new
+`PATH` yet, so `jetcarp` isn't found there.
 
 (The script is saved first because Microsoft Defender can flag the one-line form some installers
 use, piping a downloaded script into `iex`, as a trojan; run as a file, the same script raises no
@@ -54,12 +57,12 @@ refuses the archive if its checksum does not match, and unpacks it into a folder
 
 Nothing else is changed: no administrator rights are needed, no system folders are touched, and the
 shell installer never edits your shell's startup files. If `~/.local/bin` is not on your `PATH`, it
-says so and shows the line to add. On Windows, open a new terminal afterwards so that it sees the
-new `PATH`.
+says so and shows the line to add.
 
 The installers take options. With the shell installer, put them after `sh -s --` (or download the
 script and run `sh jetcarp-installer.sh OPTIONS`); with PowerShell, put them after the script's
-name (`.\jetcarp-installer.ps1 -NoPacks`), or set the environment variable named with each.
+name (`powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1" -NoPacks`), or set
+the environment variable named with each.
 
 | Shell | PowerShell | Variable | Does |
 | --- | --- | --- | --- |
@@ -181,8 +184,8 @@ curl -LsSf https://github.com/jprodgers/jetcarp/releases/download/vX.Y.Z-rc.N/je
 ```
 
 ```powershell
-Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/download/vX.Y.Z-rc.N/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
-powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/download/vX.Y.Z-rc.N/jetcarp-installer.ps1 -OutFile "$env:TEMP\jetcarp-installer.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1"
 ```
 
 Or run any installer with `--version X.Y.Z-rc.N` (`-Version X.Y.Z-rc.N` in PowerShell), the

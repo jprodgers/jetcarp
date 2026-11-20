@@ -68,6 +68,20 @@ that will declare them stable.
   `--publisher-key` is added: the key is the identity behind every pack its publisher signed, and
   the rater book holds raters' names and their consent; before, `--settings` deleted them.
   ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
+- **The Windows install and uninstall lines save the installer to the temp folder.** Every copy
+  (the README, the book, the release notes, the installer's own help and `jetcarp uninstall`) saved
+  `jetcarp-installer.ps1` into the current folder, which fails in a PowerShell window that opens in
+  `C:\Windows\system32`; they now save it to and run it from `$env:TEMP`, and a check in CI keeps
+  every copy so. ([Installing](../getting-started/installing.md), [#143](https://github.com/jprodgers/jetcarp/issues/143))
+- **The Windows installer's last line says to open a new PowerShell window.** The window it runs from
+  can't see the new `PATH`, so `jetcarp` typed there next wasn't found, and the only word of it was
+  in the middle of the output. ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **A repeated `jetcarp uninstall --settings --data` says the folders are already gone,** instead of
+  only "Nothing to undo", which read as if the options had been ignored.
+  ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
+  your settings, data and pictures" when only the pictures were left.
+  ([#142](https://github.com/jprodgers/jetcarp/issues/142))
 
 ## [0.4.2] – 2026-11-17
 

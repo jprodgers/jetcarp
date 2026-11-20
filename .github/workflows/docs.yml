@@ -48,6 +48,9 @@ jobs:
       - name: The scripting reference matches the program's function list
         run: python3 docs/tools/gen-scripting.py --check
 
+      - name: Every copy of the Windows install lines saves the installer to the temp folder
+        run: python3 docs/tools/check-install-lines.py
+
       - name: Build
         run: mdbook build docs
 
