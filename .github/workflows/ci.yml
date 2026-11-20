@@ -29,6 +29,7 @@ jobs:
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     env:
       # The runners have no GPU: run the GPU tests on a software adapter (Mesa's lavapipe on
       # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
@@ -122,6 +123,7 @@ jobs:
   fmt:
     name: Formatting
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -134,6 +136,7 @@ jobs:
     # THIRD_PARTY_LICENSES.html, which ships in every release, must match Cargo.lock.
     name: Third-party notices are current
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -145,6 +148,7 @@ jobs:
     # The workflows (actionlint, with shellcheck on their scripts) and the packaging scripts.
     name: Workflows and packaging scripts
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: actionlint 1.7.12, checked against its release's checksum
@@ -174,6 +178,7 @@ jobs:
     # without `pack` (as jetcarp-script asks for it) until a publish dry run.
     name: The crates package and build on their own (crates.io dry run)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -197,6 +202,7 @@ jobs:
     # Targets nobody can test by hand yet: compile them so they don't rot.
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
