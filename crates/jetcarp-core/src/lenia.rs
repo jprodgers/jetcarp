@@ -515,27 +515,82 @@ pub fn step(topo: &Topology, rule: &LeniaRule, k: &Kernel, f: &mut Field) {
 /// s=0.015 (kernel and growth 1, polynomial).
 pub const ORBIUM: &str = "7.MD6.qL$6.pKqEqFURpApBRAqQ$5.VqTrSsBrOpXpWpTpWpUpCrQ$4.CQrQsTsWsApITNPpGqGvL$3.IpIpWrOsGsBqXpJ4.LsFrL$A.DpKpSpJpDqOqUqSqE5.ExD$qL.pBpTT2.qCrGrVrWqM5.sTpP$.pGpWpD3.qUsMtItQtJ6.tL$.uFqGH3.pXtOuR2vFsK5.sM$.tUqL4.GuNwAwVxBwNpC4.qXpA$2.uH5.vBxGyEyMyHtW4.qIpL$2.wV5.tIyG3yOxQqW2.FqHpJ$2.tUS4.rM2yOyJyOyHtVpPMpFqNV$2.HsR4.pUxAyOxLxDxEuVrMqBqGqKJ$3.sLpE3.pEuNxHwRwGvUuLsHrCqTpR$3.TrMS2.pFsLvDvPvEuPtNsGrGqIP$4.pRqRpNpFpTrNtGtVtStGsMrNqNpF$5.pMqKqLqRrIsCsLsIrTrFqJpHE$6.RpSqJqPqVqWqRqKpRXE$8.OpBpIpJpFTK!";
 
+/// Most values a decoded Lenia pattern may hold, rows times columns once short rows are padded:
+/// 2^24 (16,777,216 values, 64 MiB of `f32`). Chan's published creatures are a few hundred
+/// values across at most, and a pattern is stamped onto a field of at most
+/// [`crate::topology::MAX_CELLS`] cells, so this leaves room for any real pattern while a text of
+/// a few bytes can no longer ask for gigabytes.
+pub const MAX_PATTERN_VALUES: usize = 1 << 24;
+
+/// Most rows, and most values in a row, a decoded Lenia pattern may have: 2^16 (65,536). Rows
+/// are counted separately from [`MAX_PATTERN_VALUES`] because empty rows hold no values but still
+/// cost memory.
+pub const MAX_PATTERN_SIDE: usize = 1 << 16;
+
 /// Decode Chan's 2D run-length format into rows of values in [0, 1] (short rows padded with 0).
+///
+/// A text that is not in that format is refused with an error, and so is one that would decode
+/// to more than [`MAX_PATTERN_SIDE`] rows or columns, or more than [`MAX_PATTERN_VALUES`] values
+/// in all. The sizes are checked before anything is allocated, so a run count of any size costs
+/// nothing.
 pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
     let mut rows: Vec<Vec<f32>> = vec![vec![]];
+    let mut width = 0usize;
     let mut count = String::new();
     let mut prefix: Option<char> = None;
-    let take = |count: &mut String| -> usize {
+    let take = |count: &mut String| -> Result<usize, String> {
         let n = if count.is_empty() {
             1
         } else {
-            count.parse().unwrap_or(1)
+            count
+                .parse::<usize>()
+                .ok()
+                .filter(|&n| n <= MAX_PATTERN_SIDE)
+                .ok_or_else(|| {
+                    let shown = if count.len() > 20 {
+                        format!("{}… ({} digits)", &count[..20], count.len())
+                    } else {
+                        count.clone()
+                    };
+                    format!(
+                        "Lenia RLE run count {shown} is too large (a pattern is at most \
+                         {MAX_PATTERN_SIDE} values across and {MAX_PATTERN_SIDE} rows)"
+                    )
+                })?
         };
         count.clear();
-        n
+        Ok(n)
+    };
+    // Rows times the widest row so far: what the padded pattern would hold.
+    let fits = |rows: usize, width: usize| -> Result<(), String> {
+        if rows > MAX_PATTERN_SIDE || width > MAX_PATTERN_SIDE {
+            return Err(format!(
+                "Lenia RLE pattern is too large: {width} values across and {rows} rows (at most \
+                 {MAX_PATTERN_SIDE} of each)"
+            ));
+        }
+        if rows.saturating_mul(width) > MAX_PATTERN_VALUES {
+            return Err(format!(
+                "Lenia RLE pattern is too large: {width} values across and {rows} rows, more \
+                 than {MAX_PATTERN_VALUES} values in all"
+            ));
+        }
+        Ok(())
     };
     for ch in st.trim().trim_end_matches('!').chars() {
+        if ch.is_ascii_digit() || ch == '$' || ('p'..='y').contains(&ch) {
+            // A two-letter value's first letter must be followed by its second.
+            if let Some(p) = prefix {
+                return Err(format!("bad Lenia RLE symbol {p}{ch}"));
+            }
+        }
         if ch.is_ascii_digit() {
             count.push(ch);
         } else if ('p'..='y').contains(&ch) {
             prefix = Some(ch);
         } else if ch == '$' {
-            let n = take(&mut count);
+            let n = take(&mut count)?;
+            fits(rows.len() + n, width)?;
             for _ in 0..n {
                 rows.push(vec![]);
             }
@@ -549,17 +604,22 @@ pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
                 }
                 (p, c) => return Err(format!("bad Lenia RLE symbol {p:?}{c}")),
             };
-            let n = take(&mut count);
+            let n = take(&mut count)?;
+            let len = rows.last().map_or(0, |r| r.len()) + n;
+            fits(rows.len(), width.max(len))?;
+            width = width.max(len);
             let row = rows.last_mut().unwrap();
             row.extend(std::iter::repeat_n(v.min(255) as f32 / 255.0, n));
         }
     }
+    if let Some(p) = prefix {
+        return Err(format!("bad Lenia RLE symbol {p} at the end"));
+    }
     while rows.last().is_some_and(|r| r.is_empty()) {
         rows.pop();
     }
-    let w = rows.iter().map(|r| r.len()).max().unwrap_or(0);
     for r in &mut rows {
-        r.resize(w, 0.0);
+        r.resize(width, 0.0);
     }
     Ok(rows)
 }
@@ -569,5 +629,69 @@ pub fn pattern(name: &str) -> Option<Vec<Vec<f32>>> {
     match name.to_ascii_lowercase().as_str() {
         "orbium" | "orbium unicaudatus" | "o2u" => decode_rle(ORBIUM).ok(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod rle_tests {
+    use super::*;
+
+    /// Orbium decodes as it always did: 20 by 20, every value in [0, 1].
+    #[test]
+    fn orbium_still_decodes() {
+        let p = decode_rle(ORBIUM).unwrap();
+        assert_eq!((p.len(), p[0].len()), (20, 20));
+        assert!(p.iter().all(|r| r.len() == 20));
+        assert_eq!(p[0][7], 13.0 / 255.0);
+        assert_eq!(pattern("orbium"), Some(p));
+    }
+
+    /// Run counts of any size are refused with an error, before anything is allocated: one too
+    /// many digits for a number, one past the side, and the largest that fits.
+    #[test]
+    fn huge_run_counts_are_refused() {
+        let e = decode_rle(&format!("{}A!", "9".repeat(100_000))).unwrap_err();
+        assert!(e.contains("(100000 digits)") && e.len() < 200, "{e}");
+        for text in [
+            "99999999999999999999999999A!",
+            "18446744073709551616.!",
+            "4294967296o!",
+            "65537A!",
+            "65537$A!",
+            "4000000000$A!",
+            "A99999999999999999999$B!",
+        ] {
+            let e = decode_rle(text).unwrap_err();
+            assert!(e.contains("too large"), "{text}: {e}");
+        }
+        let p = decode_rle("65536A!").unwrap();
+        assert_eq!((p.len(), p[0].len()), (1, MAX_PATTERN_SIDE));
+    }
+
+    /// Rows times the widest row is what the padded pattern holds: refused past
+    /// MAX_PATTERN_VALUES even when every run is small, and let through just under it.
+    #[test]
+    fn a_pattern_just_under_and_over_the_limit() {
+        // 256 rows of one value, then a row 65,536 wide: 257 x 65,536 > 2^24 once padded.
+        let over = format!("{}65536A!", "A$".repeat(256));
+        let e = decode_rle(&over).unwrap_err();
+        assert!(e.contains("more than 16777216 values"), "{e}");
+        // 255 rows of one value, then a row 65,536 wide: 256 x 65,536 = 2^24 exactly.
+        let under = format!("{}65536A!", "A$".repeat(255));
+        let p = decode_rle(&under).unwrap();
+        assert_eq!(p.len() * p[0].len(), MAX_PATTERN_VALUES);
+        // Long rows built from many small runs count as much as one long run.
+        let long = format!("{}A!", "9999A".repeat(7));
+        assert!(decode_rle(&long).unwrap_err().contains("too large"));
+    }
+
+    /// A first letter of a two-letter value must be followed by its second.
+    #[test]
+    fn malformed_text_is_refused() {
+        for text in ["pA$p$A!", "p3A!", "pqA!", "AB p!", "Z!", "pZ!", "A p"] {
+            assert!(decode_rle(text).is_err(), "{text}");
+        }
+        assert_eq!(decode_rle("").unwrap(), Vec::<Vec<f32>>::new());
+        assert_eq!(decode_rle("2$!").unwrap(), Vec::<Vec<f32>>::new());
     }
 }

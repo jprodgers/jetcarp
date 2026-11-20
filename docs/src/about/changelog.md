@@ -20,6 +20,12 @@ that will declare them stable.
 
 ### Fixed
 
+- **`jetcarp_core::lenia::decode_rle` refuses a run-length text that would not fit, instead of
+  panicking or asking for more memory than the system has.** A run count, the rows and the
+  columns are each at most 65,536, and a pattern at most 16,777,216 values once padded, checked
+  before anything is allocated; a malformed two-letter value is refused too. Found by fuzzing;
+  JETCARP itself decodes only its built-in Orbium with it, which is unchanged, but the function is
+  public in the `jetcarp-core` crate. ([#194](https://github.com/jprodgers/jetcarp/issues/194))
 - **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but
   the workspace's manifests needed 1.99 to load. CI now checks the whole workspace with 1.95.
   ([#175](https://github.com/jprodgers/jetcarp/issues/175))
