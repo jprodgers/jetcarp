@@ -59,6 +59,14 @@ so a tag that moves cannot change what runs.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
   dry run), and the generated reference pages match the program.
+- **The dependencies,** with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) (`deny.toml`),
+  on every push to `main`, every pull request and once a week, since an advisory can be published
+  without anything in JETCARP changing. The check fails on a known vulnerability or unsoundness in
+  any dependency (the [RustSec](https://rustsec.org/) database), on any HTTP, TLS, DNS, WebSocket
+  or peer-to-peer client or server crate that `deny.toml` does not allow, so that no networking
+  comes in unplanned while [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)
+  says JETCARP makes no network connections, and on any crate from somewhere other than crates.io. A notice that a crate
+  is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
