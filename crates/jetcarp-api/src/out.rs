@@ -108,17 +108,32 @@ impl Guard {
 
     /// [`Guard::inside`], with the folder the path is in.
     pub fn locate(&self, p: &Path) -> Option<(PathBuf, PathBuf)> {
-        let real = resolve(p).ok()?;
-        self.roots.iter().find_map(|r| {
+        self.find(p).ok().flatten()
+    }
+
+    /// [`Guard::locate`], with a path too long to read or write refused in its own words
+    /// ([`jetcarp_core::paths::check_length`]) rather than as outside the folders: the path as
+    /// given, before anything is looked up, and the path that would be opened.
+    pub fn find(&self, p: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
+        let real = match resolve(p) {
+            Ok(real) => real,
+            Err(e) => return jetcarp_core::paths::too_long(&e).map_or(Ok(None), Err),
+        };
+        for r in &self.roots {
             let r = absolute(r);
-            let rest = real.strip_prefix(resolve(&r).ok()?).ok()?;
+            let Ok(base) = resolve(&r) else { continue };
+            let Ok(rest) = real.strip_prefix(&base) else {
+                continue;
+            };
             let path = if rest.as_os_str().is_empty() {
                 r.clone()
             } else {
                 r.join(rest)
             };
-            Some((path, r))
-        })
+            jetcarp_core::paths::check_length(&path)?;
+            return Ok(Some((path, r)));
+        }
+        Ok(None)
     }
 
     /// `p` is inside one of the folders once resolved ([`Guard::inside`]).
@@ -128,7 +143,7 @@ impl Guard {
 
     /// `path` (relative paths start at `base`) resolved and checked, nothing created. A path
     /// outside is refused naming the path as given, in the words of `who` (`the MCP tools`), or
-    /// the script's words when there is none.
+    /// the script's words when there is none; a path too long, in its own ([`Guard::find`]).
     pub fn check(&self, base: &Path, path: &str, who: Option<&str>) -> Result<PathBuf, String> {
         let given = Path::new(path);
         let given = if given.is_absolute() {
@@ -136,7 +151,7 @@ impl Guard {
         } else {
             base.join(given)
         };
-        self.inside(&given).ok_or_else(|| {
+        self.find(&given)?.map(|(p, _)| p).ok_or_else(|| {
             let roots: Vec<String> = self.roots.iter().map(|r| r.display().to_string()).collect();
             let got = absolute(&given);
             match who {
@@ -345,6 +360,17 @@ mod tests {
         assert!(g.allows(Path::new("/tmp/jetcarp-out/a/b.png")));
         assert!(!g.allows(Path::new("/tmp/jetcarp-out/../etc/passwd")));
         assert!(!g.allows(Path::new("/tmp/jetcarp-outx/a.png")));
+        // A path of 4,096 bytes or more, inside the folder or outside it, is refused in its own
+        // words, before anything is looked up.
+        for base in ["/tmp/jetcarp-out", "/tmp/elsewhere"] {
+            let e = g
+                .check(Path::new(base), &"a/".repeat(3000), Some("the MCP tools"))
+                .unwrap_err();
+            assert!(
+                e.contains("bytes long") && !e.contains("may only write"),
+                "{e}"
+            );
+        }
     }
 
     /// A fresh scratch folder for one test.
