@@ -114,6 +114,186 @@ fn b0_background_stays_dead() {
     }
 }
 
+/// A two-state B/S rule's birth and survival masks and its neighbourhood.
+fn bs_rule(rule: &str) -> (u32, u32, Nb) {
+    let (r, nb) = jetcarp_core::rules::Rule::parse(rule).unwrap();
+    let jetcarp_core::rules::Rule::LifeLike { birth, survive } = r else {
+        panic!("{rule} is not a B/S rule")
+    };
+    (birth, survive, nb.unwrap_or(Nb::Touch))
+}
+
+/// One generation of a two-state B/S rule by brute force on the neighbour graph: each neighbour
+/// slot counts its cell's state, and a slot past a lattice's edge counts `past(its tile type)`.
+fn bs_step(
+    t: &Topology,
+    (birth, survive, nb): (u32, u32, Nb),
+    s: &[u8],
+    past: &dyn Fn(u32) -> u8,
+) -> Vec<u8> {
+    (0..t.len())
+        .map(|i| {
+            let mut c = 0u32;
+            for k in 0..t.degree(i, nb) {
+                c += match t.slot(i, nb, k) {
+                    Some(j) => s[j] as u32,
+                    None => {
+                        let g = t.lattice().unwrap();
+                        past(g.offsets[nb as usize][i % g.ntypes as usize][k].k) as u32
+                    }
+                };
+            }
+            let m = if s[i] == 1 { survive } else { birth };
+            (m >> c & 1) as u8
+        })
+        .collect()
+}
+
+/// Run a B0 rule from a soup, and from an empty world, `gens` generations, next to the plain rule
+/// run by brute force from the same soup and from the empty world (the background). The stored
+/// states must be the real ones relative to the background, `real xor background`, so the
+/// empty world stays empty. Returns the first mismatch.
+fn b0_against_brute_force(spec: &TilingSpec, rule: &str, gens: u64) -> Result<(), String> {
+    let r = bs_rule(rule);
+    let mut w = World::new(spec.clone(), 11).unwrap();
+    w.add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.35 }))
+        .unwrap();
+    let mut empty = World::new(spec.clone(), 11).unwrap();
+    empty
+        .add_ca(CaSpec::new(rule).seed(SeedSpec::Empty))
+        .unwrap();
+    let t = w.topo.clone();
+    let n = t.len();
+    let mut truth = w.fields[0].state.clone();
+    let mut bg = vec![0u8; n];
+    let never = |_: u32| -> u8 { panic!("a wrapped lattice or a patch has no edge slots") };
+    for g in 1..=gens {
+        w.step();
+        empty.step();
+        truth = bs_step(&t, r, &truth, &never);
+        bg = bs_step(&t, r, &bg, &never);
+        let lit = empty.fields[0].population();
+        if lit != 0 {
+            return Err(format!(
+                "{rule} on {}: generation {g}: {lit} of {n} cells of the empty world are lit",
+                spec.family
+            ));
+        }
+        let wrong = (0..n)
+            .filter(|&i| w.fields[0].state[i] != truth[i] ^ bg[i])
+            .count();
+        if wrong != 0 {
+            return Err(format!(
+                "{rule} on {}: generation {g}: {wrong} of {n} cells differ from the true rule",
+                spec.family
+            ));
+        }
+    }
+    Ok(())
+}
+
+// B0 rules are exact on every neighbour graph (#171): on tilings where every tile has the same
+// number of neighbours, and on those where the tiles have different numbers and the survival list
+// holds some of them, which the alternating-background emulation got wrong from generation 3.
+#[test]
+fn b0_emulation_is_exact_on_every_neighbour_graph() {
+    let rect = |f: &str, w, h| TilingSpec::rect(f, w, h, Boundary::Wrap);
+    let level = |f: &str, l| TilingSpec::new(f).with_size(SizeSpec::Level(l));
+    let cases: Vec<(TilingSpec, &[&str])> = vec![
+        (
+            rect("square", 12, 12),
+            &["B014/S2", "B0123478/S01234678", "B0/S8"],
+        ),
+        (rect("hex", 12, 12), &["B0/S6", "B02/S347", "B014/S2"]),
+        (rect("cairo", 8, 8), &["B0/S6", "B02/S347"]),
+        // 4.8.8: squares have 4 neighbours, octagons 8.
+        (
+            rect("oct", 12, 12),
+            &[
+                "B03/S23",
+                "B0123478/S01234678",
+                "B0/S8",
+                "B0/S4",
+                "B03/S238",
+                "B014/S2",
+            ],
+        ),
+        // 3.6.3.6 with edge neighbours: triangles have 3, hexagons 6.
+        (
+            rect("trihex", 12, 12),
+            &["B0/S6V", "B0/S3V", "B01/S36V", "B03/S23V"],
+        ),
+        // 3.4.6.4: 6, 8 and 12 touch neighbours.
+        (
+            rect("rhombitrihex", 8, 8),
+            &["B03/S238", "B0/S8", "B0123478/S01234678", "B0/S6"],
+        ),
+        // 3.3.4.3.4: 9 and 12.
+        (rect("snubsq", 8, 8), &["B03/S2,3,9", "B0/S12"]),
+        // 4.6.12 with edge neighbours: 4, 6 and 12.
+        (rect("trunctrihex", 8, 8), &["B0/S4V", "B0/S6V"]),
+        // Patches: the open boundary's tiles have fewer neighbours than the inner ones.
+        (
+            level("penrose-rhomb", 5),
+            &["B0123478/S01234678", "B0/S8", "B03/S238", "B014/S2"],
+        ),
+        (level("hat", 3), &["B0/S6", "B03/S238", "B0/S8", "B014/S2"]),
+    ];
+    let bad: Vec<String> = cases
+        .iter()
+        .flat_map(|(spec, rules)| rules.iter().map(move |r| (spec, *r)))
+        .filter_map(|(spec, rule)| b0_against_brute_force(spec, rule, 30).err())
+        .collect();
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+// Past a lattice's dead edge a neighbour slot is in the background, as if the tiling went on,
+// empty (stored as 0); past a live edge it is live, as for B/S rules without B0.
+#[test]
+fn b0_dead_and_live_edges() {
+    let mut bad = vec![];
+    for (family, w, h) in [("square", 12, 10), ("oct", 10, 8), ("rhombitrihex", 8, 8)] {
+        for boundary in [Boundary::Dead, Boundary::Live] {
+            for rule in ["B0/S8", "B014/S2", "B03/S238", "B0123478/S01234678"] {
+                let r = bs_rule(rule);
+                let spec = TilingSpec::rect(family, w, h, boundary);
+                let mut world = World::new(spec.clone(), 5).unwrap();
+                world
+                    .add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.35 }))
+                    .unwrap();
+                // The empty world's background, one state per tile type, from a wrapped copy.
+                let wrapped =
+                    Topology::build(&TilingSpec::rect(family, w, h, Boundary::Wrap)).unwrap();
+                let t = world.topo.clone();
+                let nt = t.lattice().unwrap().ntypes as usize;
+                let mut bg = vec![0u8; wrapped.len()];
+                let mut truth = world.fields[0].state.clone();
+                for g in 1..=24 {
+                    let edge = |k: u32| match boundary {
+                        Boundary::Live => 1,
+                        _ => bg[k as usize],
+                    };
+                    truth = bs_step(&t, r, &truth, &edge);
+                    bg = bs_step(&wrapped, r, &bg, &|_| 0);
+                    world.step();
+                    let wrong = (0..t.len())
+                        .filter(|&i| world.fields[0].state[i] != truth[i] ^ bg[i % nt])
+                        .count();
+                    if wrong != 0 {
+                        bad.push(format!(
+                            "{rule} on {family} {boundary:?}: generation {g}: {wrong} of {} \
+                             cells differ from the true rule",
+                            t.len()
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 #[test]
 fn ltl_runs_on_other_tilings() {
     for fam in ["hex", "trihex", "cairo"] {

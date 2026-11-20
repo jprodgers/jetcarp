@@ -113,14 +113,9 @@ impl StepRule {
             return Err("HashLife needs neighbours within one unit cell".into());
         }
         let maxn = offsets.iter().map(|t| t.len()).max().unwrap_or(0);
+        // The stepper stores a B0 Life-like field relative to the background of each tile type
+        // (`b0::Types`), which is what this program's phases follow, on any lattice.
         let b0_life = matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1);
-        if b0_life && offsets.iter().any(|t| t.len() != maxn) {
-            return Err(
-                "HashLife runs B0 Life-like rules only where every tile has the same number of \
-                 neighbours (the stepper's alternating-background emulation assumes one degree)"
-                    .into(),
-            );
-        }
         let states: u8 = match rule {
             Rule::LifeLike { .. } => 2,
             Rule::Generations { states, .. } | Rule::GreenbergHastings { states, .. } => *states,
@@ -433,7 +428,7 @@ impl LatticeRule {
                         return Err(format!(
                             "{who}a B0 Life-like rule needs its field to itself (make it \
                              private): the stepper keeps that field relative to the rule's \
-                             alternating background"
+                             background"
                         ));
                     }
                     b0 = Some((ci, ca.ticks));

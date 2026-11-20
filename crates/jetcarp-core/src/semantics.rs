@@ -34,8 +34,9 @@ pub const FIRST: &str = "1";
 /// Every rule family and its semantics version: the one table. Raise a family's version by one
 /// when the meaning of any of its rules changes (see the module notes).
 pub const RULE_SEMANTICS: [(&str, &str); 23] = [
-    // B/S rules: `B3/S23`, `B3/S23V`.
-    ("lifelike", "1"),
+    // B/S rules: `B3/S23`, `B3/S23V`. 2 since 0.4.3: B0 rules are exact where the tiles have
+    // different numbers of neighbours, and count live past a live edge (#171).
+    ("lifelike", "2"),
     // Generations: `B2/S/C3`.
     ("generations", "1"),
     // Larger than Life: `R5,C2,S33-57,B34-45`. 2 since 0.4.3: counts above the square grid's

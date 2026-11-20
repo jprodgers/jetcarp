@@ -1008,8 +1008,10 @@ JETCARP is level 4. **Replay** (level 3):
   is alive; Generations, 1 is alive and 2 and up are the dying states in order
   ([Generations](../automata/generations.md)); other families as their automata pages define,
   each pinned by its semantics version.
-- A rule with birth on 0 (B0) is run as two complementary rules alternating on even and odd
-  generations, as [Life-like rules](../automata/life-like.md#b0-rules) describes.
+- A Life-like rule with birth on 0 (B0) is the plain rule; JETCARP stores its cells relative to
+  the rule's run from an empty world, as [Life-like rules](../automata/life-like.md#b0-rules)
+  describes (where every tile has the same number of neighbours, that is two complementary rules
+  alternating on even and odd generations).
 - Aperiodic patterns are not level 3 in 1.0: a site lists its tiles' corners and the pattern
   graph's neighbours among pattern tiles only. Replaying them is JETCARP's (level 4).
 - Search runs replay only in JETCARP: re-creating a run's soup needs its random-number generator

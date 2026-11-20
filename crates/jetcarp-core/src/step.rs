@@ -18,8 +18,9 @@ pub(crate) fn counts_ticks(rule: &Rule) -> bool {
 pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first_of_gen: bool) {
     match &ca.rule {
         Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
+            let rule = (*birth, *survive);
             ca.ticks += 1;
-            step_b0(topo, ca.nb, *birth, *survive, ca.ticks, f)
+            step_b0(topo, ca.nb, rule, ca.ticks, &mut ca.background, f)
         }
         Rule::LifeLike { birth, survive } => step_bs(topo, ca.nb, *birth, *survive, 2, f),
         Rule::Generations {
@@ -102,44 +103,64 @@ pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first
     }
 }
 
-/// B0 rules without emulation would flip the whole background every generation. As in other CA
-/// programs, they run as a pair of rules on alternating generations so the background stays dead:
-/// stored states are the true states on even generations and their complement on odd ones.
-/// For a cell with `d` neighbours and rule (B, S):
-/// - without S_d: even steps use (not B, not S); odd steps use B' = {d-c : c in S}, S' = {d-c : c in B};
-/// - with S_d (the background would stay live): the stored state stays complemented after the
-///   first step, which uses (not B, not S); later steps use B' = {d-c : c not in S},
-///   S' = {d-c : c not in B}.
+/// B0 rules without emulation would flip the whole background every generation. They are stored
+/// relative to the background, the rule run from the empty world ([`crate::b0`]), so empty space
+/// stays empty: each step decodes the real states (`stored xor background`), applies the rule,
+/// and stores the result against the next background. Exact on any neighbour graph; where every
+/// tile has the same number of neighbours it gives the usual alternating-rule emulation.
 ///
-/// `tick` is the 1-based step count of this CA.
-fn step_b0(topo: &Topology, nb: Nb, birth: u32, survive: u32, tick: u64, f: &mut Field) {
-    let odd = tick.is_multiple_of(2);
-    let rev = |m: u32, d: u32| -> u32 {
-        (0..=d)
-            .filter(|c| m >> c & 1 == 1)
-            .fold(0, |a, c| a | 1 << (d - c))
+/// `tick` is the 1-based step count of this CA; `slot` holds its background.
+fn step_b0(
+    topo: &Topology,
+    nb: Nb,
+    rule: (u32, u32),
+    tick: u64,
+    slot: &mut Option<std::sync::Arc<crate::b0::Background>>,
+    f: &mut Field,
+) {
+    // A lattice whose background never repeats soon enough was refused when the CA was added.
+    let Some(bg) = crate::b0::ready(slot, topo, nb, rule, tick - 1) else {
+        return;
     };
-    // Per degree: (birth, survive) masks to use this step.
-    let masks: Vec<(u32, u32)> = (0..32u32)
-        .map(|d| {
-            let full = if d >= 31 {
-                u32::MAX
-            } else {
-                (1u32 << (d + 1)) - 1
-            };
-            if survive >> d & 1 == 1 {
-                if tick == 1 {
-                    (!birth & full, !survive & full)
-                } else {
-                    (rev(!survive & full, d), rev(!birth & full, d))
-                }
-            } else if !odd {
-                (!birth & full, !survive & full)
-            } else {
-                (rev(survive & full, d), rev(birth & full, d))
-            }
-        })
-        .collect();
+    match &bg.kind {
+        crate::b0::Kind::Types(t) => step_b0_types(topo, nb, rule, t, tick, f),
+        crate::b0::Kind::Cells(c) => {
+            let next = step_b0_cells(topo, nb, rule, &c.states, f);
+            *slot = Some(std::sync::Arc::new(crate::b0::Background::cells(
+                nb, rule.0, rule.1, tick, next,
+            )));
+        }
+    }
+}
+
+/// Ages for B0 rules, from the stored states: 1 for a stored cell that turns on, one more each
+/// step it stays on.
+#[inline]
+fn b0_age(s: u8, v: u8, age: u16) -> u16 {
+    if v == 1 {
+        if s == 1 {
+            age.saturating_add(1).min(65000)
+        } else {
+            1
+        }
+    } else {
+        0
+    }
+}
+
+/// One B0 step on a lattice, whose background is one state per tile type.
+fn step_b0_types(
+    topo: &Topology,
+    nb: Nb,
+    (birth, survive): (u32, u32),
+    t: &crate::b0::Types,
+    tick: u64,
+    f: &mut Field,
+) {
+    let Some(g) = topo.lattice() else { return };
+    let (p0, p1) = (t.phase(tick - 1), t.phase(tick));
+    let live = topo.live_edges();
+    let uniform = t.uniform(p0).zip(t.uniform(p1));
     let a = &f.state;
     let age = &f.age;
     f.back
@@ -149,24 +170,79 @@ fn step_b0(topo: &Topology, nb: Nb, birth: u32, survive: u32, tick: u64, f: &mut
         .with_min_len(MIN_PAR)
         .for_each(|(i, (o, oa))| {
             let s = a[i];
-            let mut c = 0u32;
-            topo.for_each_neighbor(i, nb, |j| c += (a[j] == 1) as u32);
-            let d = (topo.degree(i, nb) as u32).min(31);
-            let (b, sv) = masks[d as usize];
-            let v = if s == 0 { (b >> c) & 1 } else { (sv >> c) & 1 } as u8;
-            *o = v;
-            *oa = if v == 1 {
-                if s == 1 {
-                    age[i].saturating_add(1).min(65000)
-                } else {
-                    1
+            let (b0, b1, count) = match uniform {
+                // The whole background is dead or live: real neighbours are the stored ones or
+                // their complement, and a slot past a dead edge is in the background too.
+                Some((b0, b1)) => {
+                    let mut c = 0u32;
+                    topo.for_each_neighbor(i, nb, |j| c += (a[j] == 1) as u32);
+                    let count = if b0 == 1 {
+                        topo.degree(i, nb) as u32 - c
+                    } else if live {
+                        c + topo.missing(i, nb)
+                    } else {
+                        c
+                    };
+                    (b0, b1, count)
                 }
-            } else {
-                0
+                None => {
+                    let (u, j, k) = g.decompose(i);
+                    let base = u + g.row_start[j as usize];
+                    let mut c = 0u32;
+                    for o in &g.offsets[nb as usize][k as usize] {
+                        let bk = t.state(p0, o.k as usize);
+                        c += match g.resolve(base + o.di, j + o.dj, o.k) {
+                            Some(x) => ((a[x] == 1) as u8 ^ bk) as u32,
+                            None if live => 1,
+                            None => bk as u32,
+                        };
+                    }
+                    (t.state(p0, k as usize), t.state(p1, k as usize), c)
+                }
             };
+            let real = (s != 0) as u8 ^ b0;
+            let v = crate::b0::next_state(real, count, birth, survive) ^ b1;
+            *o = v;
+            *oa = b0_age(s, v, age[i]);
         });
     std::mem::swap(&mut f.state, &mut f.back);
     std::mem::swap(&mut f.age, &mut f.back_age);
+}
+
+/// One B0 step on a patch, whose background `bg` is kept per cell. Returns the next background.
+fn step_b0_cells(
+    topo: &Topology,
+    nb: Nb,
+    (birth, survive): (u32, u32),
+    bg: &[u8],
+    f: &mut Field,
+) -> Vec<u8> {
+    let mut next = vec![0u8; bg.len()];
+    let a = &f.state;
+    let age = &f.age;
+    f.back
+        .par_iter_mut()
+        .zip(f.back_age.par_iter_mut())
+        .zip(next.par_iter_mut())
+        .enumerate()
+        .with_min_len(MIN_PAR)
+        .for_each(|(i, ((o, oa), nbg))| {
+            let s = a[i];
+            // Live real neighbours, and live background ones.
+            let (mut c, mut cb) = (0u32, 0u32);
+            topo.for_each_neighbor(i, nb, |j| {
+                c += ((a[j] == 1) as u8 ^ bg[j]) as u32;
+                cb += bg[j] as u32;
+            });
+            let b1 = crate::b0::next_state(bg[i], cb, birth, survive);
+            let v = crate::b0::next_state((s != 0) as u8 ^ bg[i], c, birth, survive) ^ b1;
+            *nbg = b1;
+            *o = v;
+            *oa = b0_age(s, v, age[i]);
+        });
+    std::mem::swap(&mut f.state, &mut f.back);
+    std::mem::swap(&mut f.age, &mut f.back_age);
+    next
 }
 
 /// Write a new state array (ages: 1 while a cell is nonzero and unchanged-from-zero, else kept).

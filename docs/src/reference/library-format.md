@@ -248,7 +248,7 @@ version is not part of a record's id.
 
 | Family | Rules | Version |
 | --- | --- | --- |
-| `lifelike` | B/S: `B3/S23`, `B3/S23V` | 1 |
+| `lifelike` | B/S: `B3/S23`, `B3/S23V` | 2 (since 0.4.3: B0 rules exact on every tiling) |
 | `generations` | `B2/S/C3` | 1 |
 | `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 2 (since 0.4.3: counts above the square grid's neighbourhood size kept) |
 | `elementary` | `W30` | 1 |

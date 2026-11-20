@@ -20,6 +20,21 @@ that will declare them stable.
 
 ### Fixed
 
+- **Life-like rules with birth on 0 give the right results on every tiling.** JETCARP ran a B0
+  rule as two complementary rules alternating on even and odd generations, which is exact only
+  where every tile has the same number of neighbours. On tilings whose tiles have different
+  numbers, such as 4.8.8, 3.4.6.4, most k-uniform tilings and every aperiodic patch, a rule whose
+  survival list held some of those numbers but not all, such as `B0/S8` on 4.8.8, went wrong from
+  the third generation, on the CPU and the GPU alike. Each cell is now kept relative to the rule's
+  run from an empty world, so empty space still stays dark and the result is exact on any tiling;
+  where every tile has the same number of neighbours nothing changes. A B0 rule also counts the
+  cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
+  runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. The Life-like
+  [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is now 2:
+  scenes of such rules replay to other states, and pattern records verified under version 1 are
+  flagged for `jetcarp library reverify`, though no search stores B0 patterns.
+  ([B0 rules](../automata/life-like.md#b0-rules),
+  [#171](https://github.com/jprodgers/jetcarp/issues/171))
 - **WireWorld can be added without a start on any tiling.** Its default start, the clock-loop
   demo, is drawn for the square grid, so everywhere else adding the rule alone was refused with
   "the WireWorld demo needs the square grid", from the command line, scripts and the MCP tools

@@ -430,6 +430,9 @@ pub struct CaInstance {
     pub glow: bool,
     /// JACA: annihilation glow and counts (display and status only; not part of the state).
     pub heat: Option<Arc<crate::jaca::Heat>>,
+    /// B0 Life-like rules: the background the field is stored relative to ([`crate::b0`]), at
+    /// `ticks` steps. A function of the tiling, the rule and `ticks`, made again when missing.
+    pub background: Option<Arc<crate::b0::Background>>,
 }
 
 impl CaInstance {
@@ -1577,6 +1580,14 @@ impl World {
                 .or(nb_from_text)
                 .unwrap_or_else(|| rule.default_nb())
         };
+        // A B0 Life-like rule is stored relative to its background, which a lattice works out
+        // on its unit cell (and refuses if it takes too long to repeat).
+        let background = match rule {
+            Rule::LifeLike { birth, survive } if birth & 1 == 1 => Some(Arc::new(
+                crate::b0::Background::new(&self.topo, nb, birth, survive)?,
+            )),
+            _ => None,
+        };
         let id = match spec.id {
             Some(id) if !self.cas.iter().any(|c| c.id == id) => id,
             _ => self.next_id,
@@ -1636,6 +1647,7 @@ impl World {
             ticks: 0,
             color_by: spec.color_by,
             agent_edge: spec.agent_edge,
+            background,
         };
         self.cas.push(ca);
         let i = self.cas.len() - 1;
@@ -1675,6 +1687,7 @@ impl World {
             ca.kernel = None;
             ca.layers = None;
             ca.heat = None;
+            ca.background = None;
             ca.ticks = 0;
             let is_agent = rule.is_agent();
             let default = default_seed(&rule, &self.topo);

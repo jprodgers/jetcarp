@@ -407,32 +407,91 @@ fn b0_rules() {
     }
 }
 
-/// B0 runs alternate complementary rules by the parity of the step count, so a GPU run that
+/// B0 rules follow their background's phase, which the step count gives, so a GPU run that
 /// starts on an odd tick (after a CPU generation), or with two steps per generation, must keep
-/// the parity.
+/// it: on a lattice, and on a patch, whose cells' background the GPU takes from the CPU.
 #[test]
 fn b0_from_an_odd_tick() {
     let Some(mut sim) = gpu() else { return };
-    for &rule in B0 {
-        for spg in [1, 2, 3] {
-            let sc = scene(
-                TilingSpec::rect("square", 32, 24, Boundary::Wrap),
-                vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
-            );
-            let mut cpu = World::from_scene(&sc).unwrap();
-            let mut gw = World::from_scene(&sc).unwrap();
-            cpu.apply(Command::Step { gens: 1 }).unwrap();
-            gw.apply(Command::Step { gens: 1 }).unwrap();
-            assert_eq!(gw.cas[0].ticks, spg as u64);
-            let (_, on_cpu) = compare_worlds(
-                &mut sim,
-                &mut cpu,
-                &mut gw,
-                &[1, 2, 7, 50],
-                &format!("{rule} x{spg} from tick {spg}"),
-            );
-            assert_eq!(on_cpu, 0);
+    let tilings = [
+        TilingSpec::rect("square", 32, 24, Boundary::Wrap),
+        TilingSpec::rect("oct", 12, 12, Boundary::Dead),
+        TilingSpec::new("hat").with_size(SizeSpec::Level(3)),
+    ];
+    for t in &tilings {
+        for &rule in B0.iter().chain(&["B03/S238"]) {
+            for spg in [1, 2, 3] {
+                let sc = scene(
+                    t.clone(),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
+                );
+                let mut cpu = World::from_scene(&sc).unwrap();
+                let mut gw = World::from_scene(&sc).unwrap();
+                cpu.apply(Command::Step { gens: 1 }).unwrap();
+                gw.apply(Command::Step { gens: 1 }).unwrap();
+                assert_eq!(gw.cas[0].ticks, spg as u64);
+                let (_, on_cpu) = compare_worlds(
+                    &mut sim,
+                    &mut cpu,
+                    &mut gw,
+                    &[1, 2, 7, 50],
+                    &format!("{rule} x{spg} on {} from tick {spg}", t.family),
+                );
+                assert_eq!(on_cpu, 0);
+            }
         }
+    }
+}
+
+/// B0 rules where the tiles have different numbers of neighbours and the survival list holds
+/// some of them (#171): on lattices with every edge, where the background is one state per tile
+/// type, and on patches, where each cell carries its own. The GPU must equal the CPU, also when
+/// the CPU goes on from where the GPU stopped (the background read back).
+#[test]
+fn b0_rules_on_mixed_tilings() {
+    let Some(mut sim) = gpu() else { return };
+    let lattices: &[(&str, u32, u32, &[&str])] = &[
+        (
+            "oct",
+            12,
+            12,
+            &["B0/S8", "B0/S4", "B03/S238", "B0123478/S01234678"],
+        ),
+        ("trihex", 10, 10, &["B0/S6V", "B03/S23V", "B0/S3V"]),
+        ("rhombitrihex", 8, 8, &["B03/S238", "B0/S8", "B0/S6"]),
+        ("snubsq", 8, 8, &["B03/S2,3,9"]),
+    ];
+    let mut cases: Vec<(TilingSpec, &str, &[u64])> = vec![];
+    for &(fam, w, h, rules) in lattices {
+        for b in BOUNDARIES {
+            for &rule in rules {
+                cases.push((TilingSpec::rect(fam, w, h, b), rule, CHUNKS));
+            }
+        }
+    }
+    for (fam, level) in [("penrose-rhomb", 4), ("hat", 3), ("spectre", 3)] {
+        for rule in [
+            "B0123478/S01234678",
+            "B0/S8",
+            "B03/S238",
+            "B014/S2",
+            "B0/S6",
+        ] {
+            let t = TilingSpec::new(fam).with_size(SizeSpec::Level(level));
+            cases.push((t, rule, &[1, 5, 40, 150]));
+        }
+    }
+    for (t, rule, chunks) in cases {
+        let what = format!("{rule} on {} {:?}", t.family, t.boundary);
+        let sc = scene(t, vec![ca(rule, None, SeedSpec::Random { density: 0.3 })]);
+        compare_gpu(&mut sim, &sc, chunks, &what);
+        // 37 generations on the GPU, then 20 on the CPU, equal 57 on the CPU.
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.apply(Command::Step { gens: 57 }).unwrap();
+        assert_eq!(sim.step_mixed(&mut gw, 37).unwrap().cpu_gens, 0, "{what}");
+        gw.apply(Command::Step { gens: 20 }).unwrap();
+        same(&cpu, &gw, &format!("{what}: the CPU after the GPU"));
     }
 }
 

@@ -711,6 +711,21 @@ impl BatchSim {
             } else if p.kind == KIND_JACA && p.c > 0 {
                 max_blast = max_blast.max(p.c);
                 passes += p.c as f64 + 1.0;
+            } else if p.kind == KIND_B0
+                && let Some(g) = job.topo.lattice()
+            {
+                // A lattice's background, per tile type: tail and phases, then a word per phase
+                // and type, the state in bit 0 and the live background slots above it. On a
+                // patch (c = 0) the cells carry it in bit 8.
+                let t = jetcarp_core::b0::Types::new(g, job.nb, p.birth, p.survive)?;
+                (p.a, p.b, p.c) = (tables.len() as u32, t.ntypes as u32, 1);
+                tables.extend([t.tail as u32, t.phases() as u32]);
+                tables.extend(
+                    t.states
+                        .iter()
+                        .zip(&t.live)
+                        .map(|(&s, &l)| s as u32 | l << 1),
+                );
             }
             edges += (avg_edges + 1.0) * n as f64 * passes;
             params.push(p);

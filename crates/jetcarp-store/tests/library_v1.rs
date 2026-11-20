@@ -373,9 +373,11 @@ fn a_record_whose_rule_semantics_differ_is_flagged_on_opening_and_reverify_clear
 
 // A library made before rule-semantics versions (schema 2 without `family` and `semantics`)
 // gains them on opening: each pattern its rule's family and version 1, and nothing is flagged
-// but a record whose rule this engine cannot read.
+// but a record whose rule this engine cannot read and records of a family whose version is no
+// longer 1 (B/S rules' is 2 since 0.4.3).
 #[test]
 fn a_library_from_before_rule_semantics_gains_them_on_opening() {
+    let moved = |f: &str| (jetcarp_core::semantics::version(f) != Some("1")) as i64;
     let lib = temp_lib("presemantics");
     let g = one("B3/S23", GLIDER);
     let b = one("B3/S23", "oo/oo");
@@ -406,7 +408,10 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
         .unwrap();
     }
     let lib = Library::open(&path);
-    assert_eq!(lib.info().unwrap().needs_reverify, 1);
+    assert_eq!(
+        lib.info().unwrap().needs_reverify,
+        1 + moved("lifelike") + moved("cyclic")
+    );
     assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
     let c = Connection::open(&path).unwrap();
     let rows: Vec<(String, String, String, i64)> = c
@@ -418,9 +423,9 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
         .unwrap();
     for (id, family, sem, flag) in rows {
         let want = if id == g.id {
-            ("lifelike", 0)
+            ("lifelike", moved("lifelike"))
         } else if id == b.id {
-            ("cyclic", 0)
+            ("cyclic", moved("cyclic"))
         } else {
             ("", 1)
         };

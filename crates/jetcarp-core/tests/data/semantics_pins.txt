@@ -13,7 +13,7 @@ jaca	1	37f5a88f7057a799
 jvn29	1	c62459a48f7b74a6
 layered	1	7f5e0380a3e97067
 lenia	1	0b80d3fba355d51d
-lifelike	1	76ec7f2a1b8b93bc
+lifelike	2	76ec7f2a1b8b93bc
 ltl	2	b68415cc96697c2d
 margolus	1	88d77936a0873edb
 priority	1	adb6757433dc0152
