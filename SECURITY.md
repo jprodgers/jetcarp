@@ -28,9 +28,10 @@ is a list of steps and the conditions that move between them, which is data. The
 requires that if a later version lets scenes carry Rhai scripts, a script from a pack does not run
 unless you switch scripts on for that pack.
 
-**Rhai scripts run only when you run them** (`jetcarp script FILE`, from the app, or through the
-MCP server's `run_script` tool), and they write files only inside JETCARP's output folder or the
-folder you give with `--out` (through the MCP server, also the folders you allow with `--allow`).
+**Rhai scripts run only when you run them** (`jetcarp script FILE`, from the app, through the
+MCP server's `run_script` tool, or as a rotation's script while that rotation plays), and they
+write files only inside JETCARP's output folder or the folder you give with `--out` (through the
+MCP server, also the folders you allow with `--allow`).
 
 **The local link and its token.** The running app (only while *AI control* is switched on) and the
 background host accept commands over TCP on `127.0.0.1`, which other computers cannot reach. A
