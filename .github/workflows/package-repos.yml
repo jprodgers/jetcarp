@@ -33,6 +33,7 @@ jobs:
       (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-') &&
       vars.UPDATE_HOMEBREW == 'true')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: homebrew
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
@@ -63,6 +64,7 @@ jobs:
       (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-') &&
       vars.UPDATE_SCOOP == 'true')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: scoop
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
