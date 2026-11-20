@@ -443,6 +443,49 @@ fn b0_from_an_odd_tick() {
     }
 }
 
+/// A B0 world repeats only when its background's phase does too (#211), on the GPU as on the
+/// CPU: worlds whose stored cells come back with the background in another phase, on squares,
+/// 4.8.8 and a hat patch, report the same status, at the same generation.
+#[test]
+fn b0_repeats_match_the_cpu() {
+    let Some(mut sim) = gpu() else { return };
+    let cases = [
+        (
+            TilingSpec::rect("square", 8, 8, Boundary::Wrap),
+            "B014/S2",
+            10,
+        ),
+        (
+            TilingSpec::rect("square", 8, 8, Boundary::Wrap),
+            "B013/S1",
+            26,
+        ),
+        (TilingSpec::rect("oct", 8, 8, Boundary::Wrap), "B0/S8", 3),
+        (
+            TilingSpec::new("hat").with_size(SizeSpec::Level(2)),
+            "B014/S2",
+            17,
+        ),
+    ];
+    for (t, rule, seed) in cases {
+        let mk = || {
+            let mut w = World::new(t.clone(), seed).unwrap();
+            w.add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 }))
+                .unwrap();
+            w
+        };
+        let (mut cpu, mut gw) = (mk(), mk());
+        let what = format!("{rule} on {} seed {seed}", t.family);
+        let (_, on_cpu) = compare_worlds(&mut sim, &mut cpu, &mut gw, &[1, 7, 9, 31, 80], &what);
+        assert_eq!(on_cpu, 0, "{what}");
+        assert!(
+            matches!(cpu.status(), Status::Repeats { .. }),
+            "{what}: {:?}",
+            cpu.status()
+        );
+    }
+}
+
 /// B0 rules where the tiles have different numbers of neighbours and the survival list holds
 /// some of them (#171): on lattices with every edge, where the background is one state per tile
 /// type, and on patches, where each cell carries its own. The GPU must equal the CPU, also when

@@ -126,9 +126,7 @@ fn step_b0(
         crate::b0::Kind::Types(t) => step_b0_types(topo, nb, rule, t, tick, f),
         crate::b0::Kind::Cells(c) => {
             let next = step_b0_cells(topo, nb, rule, &c.states, f);
-            *slot = Some(std::sync::Arc::new(crate::b0::Background::cells(
-                nb, rule.0, rule.1, tick, next,
-            )));
+            *slot = Some(std::sync::Arc::new(bg.with_cells(tick, next)));
         }
     }
 }

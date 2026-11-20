@@ -1966,7 +1966,9 @@ impl GpuSim {
                             .for_each(glow);
                     }
                 }
-                // The B0 owner's background on a patch, at the step count the run reached.
+                // The B0 owner's background on a patch, at the step count the run reached (its
+                // cycle, if known, as the upload's).
+                let topo = world.topo.clone();
                 let bg_owner = gf
                     .bg_owner
                     .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
@@ -1979,9 +1981,17 @@ impl GpuSim {
                     } else {
                         words.par_iter().map(bit).collect()
                     };
-                    ca.background = Some(Arc::new(jetcarp_core::b0::Background::cells(
-                        ca.nb, birth, survive, ca.ticks, states,
-                    )));
+                    let made = match ca.background.as_deref() {
+                        Some(b) if b.is_for(ca.nb, birth, survive) => None,
+                        _ => jetcarp_core::b0::Background::new(&topo, ca.nb, birth, survive).ok(),
+                    };
+                    let next = made
+                        .as_ref()
+                        .or(ca.background.as_deref())
+                        .map(|b| b.with_cells(ca.ticks, states));
+                    if let Some(b) = next {
+                        ca.background = Some(Arc::new(b));
+                    }
                 }
             }
         }

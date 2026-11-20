@@ -123,21 +123,61 @@ pub struct Cells {
     pub states: Vec<u8>,
 }
 
-impl Cells {
-    /// One step of the plain rule.
-    fn step(&mut self, topo: &Topology, nb: Nb, birth: u32, survive: u32) {
-        let b = &self.states;
-        self.states = (0..b.len())
-            .into_par_iter()
-            .with_min_len(crate::step::MIN_PAR)
-            .map(|i| {
-                let mut c = 0u32;
-                topo.for_each_neighbor(i, nb, |j| c += b[j] as u32);
-                next_state(b[i], c, birth, survive)
-            })
-            .collect();
-        self.tick += 1;
+/// Most cell updates spent looking for a patch's background cycle ([`Background::new`]), and most
+/// steps: a background that has not repeated by then is treated as never repeating.
+const CYCLE_WORK: usize = 1 << 26;
+const CYCLE_STEPS: usize = 4096;
+
+/// One step of the plain rule on every cell of a patch.
+fn cells_next(topo: &Topology, nb: Nb, birth: u32, survive: u32, b: &[u8]) -> Vec<u8> {
+    (0..b.len())
+        .into_par_iter()
+        .with_min_len(crate::step::MIN_PAR)
+        .map(|i| {
+            let mut c = 0u32;
+            topo.for_each_neighbor(i, nb, |j| c += b[j] as u32);
+            next_state(b[i], c, birth, survive)
+        })
+        .collect()
+}
+
+/// A patch's background as `(tail, period)`, when it repeats within the budget (Brent's cycle
+/// finding, from the empty world).
+fn cells_cycle(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Option<(u64, u64)> {
+    let n = topo.len();
+    let budget = (CYCLE_WORK / n.max(1)).min(CYCLE_STEPS);
+    let step = |b: &[u8]| cells_next(topo, nb, birth, survive, b);
+    let x0 = vec![0u8; n];
+    let (mut power, mut lam) = (1usize, 1usize);
+    let (mut tortoise, mut hare) = (x0.clone(), step(&x0));
+    let mut steps = 1;
+    while tortoise != hare {
+        if power == lam {
+            tortoise = hare.clone();
+            power *= 2;
+            lam = 0;
+        }
+        hare = step(&hare);
+        lam += 1;
+        steps += 1;
+        if steps > budget {
+            return None;
+        }
     }
+    let (mut tortoise, mut hare) = (x0.clone(), x0);
+    for _ in 0..lam {
+        hare = step(&hare);
+    }
+    let mut mu = 0usize;
+    while tortoise != hare {
+        tortoise = step(&tortoise);
+        hare = step(&hare);
+        mu += 1;
+        if mu > budget {
+            return None;
+        }
+    }
+    Some((mu as u64, lam as u64))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,43 +193,72 @@ pub struct Background {
     pub birth: u32,
     pub survive: u32,
     pub kind: Kind,
+    /// The background's `(tail, period)` in steps from the empty world, when known: always on a
+    /// lattice; on a patch when it repeats soon enough to be found ([`Background::new`]).
+    pub cycle: Option<(u64, u64)>,
 }
 
 impl Background {
     /// The background of `(birth, survive)` with neighbourhood `nb` on `topo`, at the empty
-    /// world.
+    /// world. On a patch this looks for the background's cycle, for at most 2^26 cell updates
+    /// and 4,096 steps.
     pub fn new(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Result<Background, String> {
-        let kind = match &topo.storage {
-            Storage::Lattice(g) => Kind::Types(Types::new(g, nb, birth, survive)?),
-            Storage::Explicit(_) => Kind::Cells(Cells {
-                tick: 0,
-                states: vec![0; topo.len()],
-            }),
+        let (kind, cycle) = match &topo.storage {
+            Storage::Lattice(g) => {
+                let t = Types::new(g, nb, birth, survive)?;
+                let cycle = (t.tail as u64, (t.phases() - t.tail) as u64);
+                (Kind::Types(t), Some(cycle))
+            }
+            Storage::Explicit(_) => (
+                Kind::Cells(Cells {
+                    tick: 0,
+                    states: vec![0; topo.len()],
+                }),
+                cells_cycle(topo, nb, birth, survive),
+            ),
         };
         Ok(Background {
             nb,
             birth,
             survive,
             kind,
+            cycle,
         })
     }
 
-    /// A patch's background after `tick` steps, as `states`.
-    pub fn cells(nb: Nb, birth: u32, survive: u32, tick: u64, states: Vec<u8>) -> Background {
+    /// This patch background after `tick` steps, as `states`.
+    pub fn with_cells(&self, tick: u64, states: Vec<u8>) -> Background {
         Background {
-            nb,
-            birth,
-            survive,
+            nb: self.nb,
+            birth: self.birth,
+            survive: self.survive,
             kind: Kind::Cells(Cells { tick, states }),
+            cycle: self.cycle,
         }
     }
 
-    fn fits(&self, nb: Nb, birth: u32, survive: u32, tick: u64) -> bool {
+    /// Whether this is the background of `(birth, survive)` with neighbourhood `nb`.
+    pub fn is_for(&self, nb: Nb, birth: u32, survive: u32) -> bool {
         (self.nb, self.birth, self.survive) == (nb, birth, survive)
+    }
+
+    fn fits(&self, nb: Nb, birth: u32, survive: u32, tick: u64) -> bool {
+        self.is_for(nb, birth, survive)
             && match &self.kind {
                 Kind::Types(_) => true,
                 Kind::Cells(c) => c.tick == tick,
             }
+    }
+
+    /// The phase `t` steps after the empty world: equal for two step counts exactly when the
+    /// background is the same at both, and so goes on the same. A background whose cycle is not
+    /// known gives every step count a value of its own (from 2^63), which matches no other.
+    pub fn phase_key(&self, t: u64) -> u64 {
+        match self.cycle {
+            Some((mu, _)) if t < mu => t,
+            Some((mu, lam)) => mu + (t - mu) % lam,
+            None => (1 << 63) | t,
+        }
     }
 }
 
@@ -207,11 +276,21 @@ pub fn ready(
         .as_deref()
         .is_some_and(|b| b.fits(nb, birth, survive, tick))
     {
-        let mut b = Background::new(topo, nb, birth, survive).ok()?;
+        // A patch's background at another step count keeps its cycle; its states are stepped
+        // from the empty world, only as far as that step count's phase when the cycle is known.
+        let mut b = match slot.as_deref() {
+            Some(old) if old.is_for(nb, birth, survive) => old.with_cells(0, vec![0; topo.len()]),
+            _ => Background::new(topo, nb, birth, survive).ok()?,
+        };
+        let steps = match b.phase_key(tick) {
+            p if p >> 63 == 1 => tick,
+            p => p,
+        };
         if let Kind::Cells(c) = &mut b.kind {
-            while c.tick < tick {
-                c.step(topo, nb, birth, survive);
+            for _ in 0..steps {
+                c.states = cells_next(topo, nb, birth, survive, &c.states);
             }
+            c.tick = tick;
         }
         *slot = Some(std::sync::Arc::new(b));
     }
@@ -260,5 +339,40 @@ mod tests {
             assert_eq!([bg.state(0, k), bg.state(1, k), bg.state(2, k)], want);
         }
         assert_eq!(bg.uniform(2), None);
+    }
+
+    // A patch's background cycle, as stepping it shows, and the phase keys it gives: B0/S8 on a
+    // hat patch (no tile has 8 neighbours) alternates from the start; B0/S6 settles later.
+    #[test]
+    fn patch_backgrounds_know_their_cycle() {
+        let t =
+            Topology::build(&TilingSpec::new("hat").with_size(crate::SizeSpec::Level(3))).unwrap();
+        for (rule, want) in [("B0/S8", (0, 2)), ("B0/S6", (36, 6))] {
+            let (r, _) = crate::rules::Rule::parse(rule).unwrap();
+            let crate::rules::Rule::LifeLike { birth, survive } = r else {
+                panic!()
+            };
+            let bg = Background::new(&t, Nb::Touch, birth, survive).unwrap();
+            assert_eq!(bg.cycle, Some(want), "{rule}");
+            let (mu, lam) = want;
+            let mut states = vec![vec![0u8; t.len()]];
+            for _ in 0..mu + 2 * lam {
+                let next = cells_next(&t, Nb::Touch, birth, survive, states.last().unwrap());
+                states.push(next);
+            }
+            for a in 0..states.len() as u64 {
+                for b in 0..states.len() as u64 {
+                    let same = states[a as usize] == states[b as usize];
+                    assert_eq!(bg.phase_key(a) == bg.phase_key(b), same, "{rule} {a} {b}");
+                }
+            }
+        }
+        // A background not known to repeat matches no other step count.
+        let none = Background {
+            cycle: None,
+            ..Background::new(&t, Nb::Touch, 1, 1 << 8).unwrap()
+        };
+        assert_ne!(none.phase_key(3), none.phase_key(5));
+        assert_eq!(none.phase_key(3) >> 63, 1);
     }
 }

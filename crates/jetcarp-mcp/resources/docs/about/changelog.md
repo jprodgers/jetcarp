@@ -20,6 +20,15 @@ that will declare them stable.
 
 ### Fixed
 
+- **A world with a B0 rule is said to repeat only when it does.** The period check compared the
+  cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
+  background's phase, so a world whose kept cells came back with the background in another phase
+  (on squares, after an odd number of generations) was reported as repeating, and a script
+  waiting for a repeat stopped, although the next generations differed. The background's phase is
+  now compared too, on the CPU and the GPU: such a world repeats with the true period (often
+  twice the old one), and on an aperiodic patch whose background does not settle within a few
+  thousand generations no repeat is reported. ([B0 rules](../automata/life-like.md#b0-rules),
+  [#211](https://github.com/jprodgers/jetcarp/issues/211))
 - **Life-like rules with birth on 0 give the right results on every tiling.** JETCARP ran a B0
   rule as two complementary rules alternating on even and odd generations, which is exact only
   where every tile has the same number of neighbours. On tilings whose tiles have different

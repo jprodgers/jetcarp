@@ -2155,16 +2155,22 @@ impl World {
             phases: self.phases(),
         }
     }
-    /// Per CA, the step parity of phase-dependent rules (Margolus partitions), else 0.
+    /// Per CA, the phase of what its next step depends on beyond the cells, else 0: a Margolus
+    /// partition's parity, and a B0 Life-like rule's background ([`crate::b0`]; a B0 world whose
+    /// stored cells come back with the background in another phase goes on differently, #211).
+    /// A B0 CA whose background is not at hand, or whose cycle is not known, gives a value that
+    /// matches no other step count's.
     pub(crate) fn phases(&self) -> Vec<u64> {
         self.cas
             .iter()
-            .map(|c| {
-                if matches!(c.rule, Rule::Margolus(_)) {
-                    c.ticks % 2
-                } else {
-                    0
-                }
+            .map(|c| match c.rule {
+                Rule::Margolus(_) => c.ticks % 2,
+                Rule::LifeLike { birth, survive } if birth & 1 == 1 => c
+                    .background
+                    .as_deref()
+                    .filter(|b| b.is_for(c.nb, birth, survive))
+                    .map_or((1 << 63) | c.ticks, |b| b.phase_key(c.ticks)),
+                _ => 0,
             })
             .collect()
     }

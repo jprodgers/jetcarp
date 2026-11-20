@@ -294,6 +294,80 @@ fn b0_dead_and_live_edges() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// Step a B0 world until it reports a repeat (at most `gens` generations), then a few periods
+/// more. `Err` names a repeat that is not one: two generations a period apart, from where it was
+/// seen on, whose stored cells differ.
+fn repeat_holds(
+    spec: &TilingSpec,
+    rule: &str,
+    seed: u64,
+    gens: u64,
+) -> Option<Result<u64, String>> {
+    let mut w = World::new(spec.clone(), seed).unwrap();
+    w.add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 }))
+        .unwrap();
+    let mut states = vec![w.fields[0].state.clone()];
+    let (period, seen_at) = (0..gens).find_map(|_| {
+        w.step();
+        states.push(w.fields[0].state.clone());
+        match w.status() {
+            Status::Repeats { period, seen_at } => Some((period, seen_at)),
+            _ => None,
+        }
+    })?;
+    for _ in 0..3 * period {
+        w.step();
+        states.push(w.fields[0].state.clone());
+    }
+    let (g, p) = (seen_at as usize, period as usize);
+    Some(
+        match (g..states.len() - p).find(|&t| states[t] != states[t + p]) {
+            None => Ok(period),
+            Some(t) => Err(format!(
+                "{rule} on {} seed {seed}: reported to repeat with period {period} at generation \
+                 {seen_at}, but generations {t} and {} differ",
+                spec.family,
+                t + p
+            )),
+        },
+    )
+}
+
+// A B0 world is reported as repeating only when it repeats (#211). Its stored cells can come back
+// while the background is in another phase (on the square grid, after an odd number of steps),
+// and then the next steps differ: the period check compares the background's phase too. The
+// first case is one the check got wrong: B014/S2's stored cells on an 8 x 8 torus repeat after
+// one step at generation 16, and change again at the next.
+#[test]
+fn b0_repeats_are_real_repeats() {
+    let square = TilingSpec::rect("square", 8, 8, Boundary::Wrap);
+    let mut bad = vec![];
+    match repeat_holds(&square, "B014/S2", 10, 300) {
+        Some(Ok(_)) => {}
+        Some(Err(e)) => bad.push(e),
+        None => bad.push("B014/S2 seed 10 no longer repeats within 300 generations".into()),
+    }
+    let mut repeats = 0;
+    let tilings = [
+        square,
+        TilingSpec::rect("oct", 8, 8, Boundary::Wrap),
+        TilingSpec::new("hat").with_size(SizeSpec::Level(2)),
+    ];
+    for spec in &tilings {
+        for rule in ["B014/S2", "B01/S1", "B0/S", "B013/S1", "B02/S013", "B0/S8"] {
+            for seed in 1..30 {
+                match repeat_holds(spec, rule, seed, 300) {
+                    Some(Ok(_)) => repeats += 1,
+                    Some(Err(e)) => bad.push(e),
+                    None => {}
+                }
+            }
+        }
+    }
+    assert!(repeats > 100, "only {repeats} worlds repeated");
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 #[test]
 fn ltl_runs_on_other_tilings() {
     for fam in ["hex", "trihex", "cairo"] {
