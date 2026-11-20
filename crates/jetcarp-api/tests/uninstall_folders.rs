@@ -10,7 +10,7 @@
 //! one test, because the folders come from environment variables, which it sets.
 
 use jetcarp_api::error::ErrorKind;
-use jetcarp_api::ops::system::{SystemUninstall, UninstallIn, UninstallReport};
+use jetcarp_api::ops::system::{SystemUninstall, UninstallIn, UninstallReport, remove_dir_keeping};
 use jetcarp_api::{ApiError, Ctx, Op, Quiet};
 use std::path::{Path, PathBuf};
 
@@ -35,6 +35,34 @@ fn tree(d: &Path) -> Vec<String> {
     walk(d, d, &mut out);
     out.sort();
     out
+}
+
+/// Makes a link to the folder `target` at `link`.
+type MakeLink = fn(&Path, &Path) -> std::io::Result<()>;
+
+/// A symbolic link to the folder `target` at `link`.
+fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(target, link);
+    #[cfg(windows)]
+    return std::os::windows::fs::symlink_dir(target, link);
+}
+
+/// A junction to the folder `target` at `link` (Windows: `mklink /J`, which needs no privilege).
+#[cfg(windows)]
+fn junction(target: &Path, link: &Path) -> std::io::Result<()> {
+    let out = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ))
+    }
 }
 
 /// A data folder as JETCARP leaves it: the library with SQLite's files beside it, a job lock,
@@ -355,36 +383,120 @@ fn only_folders_of_jetcarps_own_are_deleted() {
     all_ok(&run(true, true, true).unwrap());
     assert!(!mac.exists());
 
-    // ---- Links: only the link goes (as before), for either folder.
-    let link = d.join("link-to-documents");
-    let make_link = || {
-        #[cfg(unix)]
-        let made = std::os::unix::fs::symlink(&docs, &link);
+    // ---- Links. A folder that is a link (a symbolic link, or a junction on Windows) is removed
+    // as a link: nothing behind it is read, emptied or deleted, even what would be kept. A link
+    // inside a folder is removed as a link too, never followed.
+    let kinds: &[(&str, MakeLink)] = &[
+        ("link", symlink_dir),
         #[cfg(windows)]
-        let made = std::os::windows::fs::symlink_dir(&docs, &link);
-        made
-    };
-    match make_link() {
-        Ok(()) => {
-            set(&settings, Some(&link));
-            all_ok(&run(true, false, true).unwrap());
-            assert!(
-                std::fs::symlink_metadata(&link).is_err(),
-                "the link is gone"
-            );
-            assert_eq!(tree(&docs), before, "the folder it led to is kept");
-            make_link().unwrap();
-            data_of_jetcarps(&data);
-            set(&link, Some(&data));
-            all_ok(&run(true, true, false).unwrap());
-            assert!(
-                std::fs::symlink_metadata(&link).is_err(),
-                "the link is gone"
-            );
-            assert_eq!(tree(&docs), before, "the folder it led to is kept");
+        ("junction", junction),
+    ];
+    for &(kind, make) in kinds {
+        let link = d.join(format!("settings-{kind}"));
+        // Behind the link: a settings folder with someone's own file in it, the data folder inside
+        // it (as on macOS, kept by --settings alone) and a desktop picture to keep.
+        let target = d.join(format!("behind-the-{kind}"));
+        settings_of_jetcarps(&target);
+        data_of_jetcarps(&target.join("data"));
+        write(&target.join("letter.txt"), "Dear Ada");
+        let still = target.join("desktop-pictures").join("still-1.png");
+        if let Err(e) = make(&target, &link) {
+            // Symbolic links need Developer Mode on Windows; junctions do not.
+            eprintln!("skipped the settings {kind}: {e}");
+            continue;
         }
-        // Windows without Developer Mode cannot make one.
-        Err(e) => eprintln!("skipped the links: {e}"),
+        let behind = tree(&target);
+
+        // Through uninstall: only the link goes, though the data folder inside would be kept.
+        set(&link, Some(&link.join("data")));
+        let plan = run(false, true, false).unwrap();
+        assert!(
+            plan.steps.iter().any(|s| s.what
+                == format!(
+                    "remove the link {} (the settings folder it leads to is left as it is)",
+                    link.display()
+                )),
+            "{:?}",
+            plan.steps
+        );
+        all_ok(&run(true, true, false).unwrap());
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the {kind} is gone"
+        );
+        assert_eq!(
+            tree(&target),
+            behind,
+            "nothing behind the {kind} is touched"
+        );
+
+        // Directly, with a desktop picture to keep behind it: still only the link goes, and
+        // nothing is reported kept.
+        make(&target, &link).unwrap();
+        let kept = remove_dir_keeping(&link, &[still.clone(), link.join("data")]).unwrap();
+        assert!(kept.is_empty(), "{kept:?}");
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the {kind} is gone"
+        );
+        assert_eq!(
+            tree(&target),
+            behind,
+            "nothing behind the {kind} is touched"
+        );
+
+        // A data folder that is a link: only the link goes.
+        make(&target.join("data"), &link).unwrap();
+        set(&settings, Some(&link));
+        let plan = run(false, false, true).unwrap();
+        assert!(
+            plan.steps.iter().any(|s| s.what
+                == format!(
+                    "remove the link {} (the data folder it leads to is left as it is)",
+                    link.display()
+                )),
+            "{:?}",
+            plan.steps
+        );
+        all_ok(&run(true, false, true).unwrap());
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the {kind} is gone"
+        );
+        assert_eq!(
+            tree(&target),
+            behind,
+            "nothing behind the {kind} is touched"
+        );
+
+        // A link inside the settings folder (rotations/ leading elsewhere) counts as JETCARP's by
+        // its name, and is removed as a link: with the data folder kept inside (so the folder is
+        // emptied entry by entry) and without (so it is deleted whole).
+        let outside = d.join(format!("rotations-elsewhere-{kind}"));
+        write(&outside.join("evening.json"), "{}");
+        write(&outside.join("mine.txt"), "mine");
+        let outside_before = tree(&outside);
+        for keep_data in [true, false] {
+            let own = d.join(format!("settings-with-a-{kind}-inside"));
+            settings_of_jetcarps(&own);
+            std::fs::remove_dir_all(own.join("rotations")).unwrap();
+            make(&outside, &own.join("rotations")).unwrap();
+            let own_data = own.join("data");
+            data_of_jetcarps(&own_data);
+            set(&own, Some(&own_data));
+            all_ok(&run(true, true, !keep_data).unwrap());
+            assert!(
+                std::fs::symlink_metadata(own.join("rotations")).is_err(),
+                "the {kind} inside is gone"
+            );
+            assert_eq!(own_data.exists(), keep_data);
+            assert_eq!(
+                tree(&outside),
+                outside_before,
+                "nothing behind it is touched"
+            );
+            let _ = std::fs::remove_dir_all(&own);
+        }
     }
 
     // ---- The default data folder, moved into the scratch folder through XDG_DATA_HOME (Linux

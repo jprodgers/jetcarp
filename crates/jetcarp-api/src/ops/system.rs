@@ -30,8 +30,17 @@ pub fn folder_size(p: &Path) -> u64 {
 /// folder this way, keeping the picture the desktop shows (a still the host left, or on Windows
 /// the copy of the user's own picture that was put back), so the desktop is never left pointing at
 /// a deleted file, and keeping the data folder when it is inside and was not asked for (macOS).
-/// Keeping `dir` itself keeps everything. Symbolic links are removed, not followed.
+/// Keeping `dir` itself keeps everything.
+///
+/// A link, a symbolic link or on Windows a junction, is removed as a link and never followed,
+/// whether it is `dir` itself or something inside it: nothing behind it is read, emptied or
+/// deleted. When `dir` is a link, only the link goes, and what `keep` names behind it stays where
+/// it is, untouched (so nothing is reported kept).
 pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
+    if is_link(dir) {
+        remove_link(dir)?;
+        return Ok(Vec::new());
+    }
     let root = canonical(dir);
     let mut inside: Vec<PathBuf> = keep
         .iter()
@@ -54,6 +63,8 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
             let p = e?.path();
             if keep.contains(&p) {
                 left = true;
+            } else if is_link(&p) {
+                remove_link(&p)?;
             } else if std::fs::symlink_metadata(&p)?.is_dir() {
                 if empty(&p, keep)? {
                     std::fs::remove_dir(&p)?;
@@ -68,6 +79,19 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
     }
     empty(&root, &inside)?;
     Ok(inside)
+}
+
+/// Whether `p` is a link to somewhere else: a symbolic link, or on Windows a junction (std counts
+/// both as symbolic links; neither is followed here).
+pub fn is_link(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// Removes the link `p` itself, never what it leads to: `remove_file` for a link on Unix and a
+/// file link on Windows, `remove_dir` for a junction or a link to a folder on Windows, which
+/// removes the link only.
+fn remove_link(p: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(p).or_else(|e| std::fs::remove_dir(p).map_err(|_| e))
 }
 
 /// `p` with its symbolic links followed, or as it is when that fails.
@@ -933,7 +957,7 @@ fn uuid_like(name: &str) -> bool {
 /// Whether `p` is a folder of its own, not a link to one: a link is not looked into, since
 /// deleting it removes only the link.
 fn real_dir(p: &Path) -> bool {
-    p.is_dir() && !std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+    p.is_dir() && !is_link(p)
 }
 
 /// What in the folder `dir` JETCARP did not put there, as paths inside it (empty: everything in
@@ -947,14 +971,28 @@ fn not_jetcarps(
     folders: &[(&str, Inside)],
     also: Option<&str>,
 ) -> Vec<String> {
-    let entries = |d: &Path| -> Result<Vec<(String, bool)>, String> {
+    /// An entry: a file, a folder, or a link (a symbolic link or a junction), which is never
+    /// followed: deleting the folder removes the link, not where it leads.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Kind {
+        File,
+        Folder,
+        Link,
+    }
+    let entries = |d: &Path| -> Result<Vec<(String, Kind)>, String> {
         std::fs::read_dir(d)
             .map_err(|e| e.to_string())?
             .map(|e| {
                 let e = e.map_err(|e| e.to_string())?;
-                // A link is not followed: deleting the folder removes the link, not where it leads.
-                let dir = e.file_type().map_err(|e| e.to_string())?.is_dir();
-                Ok((e.file_name().to_string_lossy().into_owned(), dir))
+                let t = e.file_type().map_err(|e| e.to_string())?;
+                let kind = if t.is_symlink() {
+                    Kind::Link
+                } else if t.is_dir() {
+                    Kind::Folder
+                } else {
+                    Kind::File
+                };
+                Ok((e.file_name().to_string_lossy().into_owned(), kind))
             })
             .collect()
     };
@@ -963,34 +1001,45 @@ fn not_jetcarps(
         Ok(t) => t,
         Err(e) => return vec![format!("(it cannot be read: {e})")],
     };
-    for (name, is_dir) in top {
+    for (name, kind) in top {
         if system_litter(&name) || also == Some(name.as_str()) {
             continue;
         }
-        if !is_dir && (files.contains(&name.as_str()) || being_written(&name, files)) {
-            continue;
-        }
-        let Some(&(_, inside)) = folders.iter().find(|(f, _)| is_dir && *f == name) else {
-            odd.push(name);
-            continue;
-        };
-        let ok = |n: &str, d: bool| match inside {
-            Inside::Anything => true,
-            Inside::Files => !d,
-            Inside::HexFolders => d && n.len() == 2 && n.chars().all(|c| c.is_ascii_hexdigit()),
-            Inside::UuidFolders => d && uuid_like(n),
-            Inside::Named(names) => !d && (names.contains(&n) || being_written(n, names)),
-        };
-        if matches!(inside, Inside::Anything) {
-            continue;
-        }
-        match entries(&dir.join(&name)) {
-            Ok(list) => odd.extend(
-                list.into_iter()
-                    .filter(|(n, d)| !system_litter(n) && !ok(n, *d))
-                    .map(|(n, _)| format!("{name}/{n}")),
-            ),
-            Err(e) => odd.push(format!("{name}/ (it cannot be read: {e})")),
+        // A link counts by its name alone: only the link is removed, so what it leads to is
+        // never at stake.
+        let file_name = files.contains(&name.as_str()) || being_written(&name, files);
+        let folder = folders.iter().find(|(f, _)| *f == name).map(|&(_, i)| i);
+        match (kind, file_name, folder) {
+            (Kind::File, true, _) | (Kind::Link, true, _) | (Kind::Link, _, Some(_)) => continue,
+            (Kind::Folder, _, Some(inside)) => {
+                let ok = |n: &str, k: Kind| {
+                    let d = k == Kind::Folder;
+                    let link = k == Kind::Link;
+                    match inside {
+                        Inside::Anything => true,
+                        Inside::Files => !d,
+                        Inside::HexFolders => {
+                            (d || link) && n.len() == 2 && n.chars().all(|c| c.is_ascii_hexdigit())
+                        }
+                        Inside::UuidFolders => (d || link) && uuid_like(n),
+                        Inside::Named(names) => {
+                            !d && (names.contains(&n) || being_written(n, names))
+                        }
+                    }
+                };
+                if matches!(inside, Inside::Anything) {
+                    continue;
+                }
+                match entries(&dir.join(&name)) {
+                    Ok(list) => odd.extend(
+                        list.into_iter()
+                            .filter(|(n, k)| !system_litter(n) && !ok(n, *k))
+                            .map(|(n, _)| format!("{name}/{n}")),
+                    ),
+                    Err(e) => odd.push(format!("{name}/ (it cannot be read: {e})")),
+                }
+            }
+            _ => odd.push(name),
         }
     }
     odd.sort();
@@ -1265,25 +1314,37 @@ impl Op for SystemUninstall {
             .as_deref()
             .is_some_and(|c| data.exists() && within(&data, c));
         let mut settings_step: Option<(String, Run)> = None;
-        if let Some(c) = paths.settings.clone().filter(|c| c.exists()) {
+        if let Some(c) = paths.settings.clone().filter(|c| c.exists() || is_link(c)) {
             if a.settings {
                 // Asked when the step runs, after the steps before it have put the user's own
                 // picture back.
                 let platform = cx.platform.clone();
                 let keep_data = (data_inside && !a.data).then(|| data.clone());
                 settings_step = Some((
-                    format!(
-                        "delete the settings folder {}{}",
-                        c.display(),
-                        if keep_data.is_some() {
-                            ", except the data folder inside it"
-                        } else {
-                            ""
-                        }
-                    ),
+                    if is_link(&c) {
+                        format!(
+                            "remove the link {} (the settings folder it leads to is left as it is)",
+                            c.display()
+                        )
+                    } else {
+                        format!(
+                            "delete the settings folder {}{}",
+                            c.display(),
+                            if keep_data.is_some() {
+                                ", except the data folder inside it"
+                            } else {
+                                ""
+                            }
+                        )
+                    },
                     Box::new(move || {
-                        if !c.exists() {
+                        if !c.exists() && !is_link(&c) {
                             return Ok(Some("already gone".into()));
+                        }
+                        // A link is removed as a link: nothing behind it is touched, not even what
+                        // would be kept (remove_dir_keeping).
+                        if is_link(&c) {
+                            return remove_link(&c).map(|()| None).map_err(|e| e.to_string());
                         }
                         let mut keep = platform.desktop_files();
                         keep.extend(keep_data.clone());
@@ -1311,7 +1372,23 @@ impl Op for SystemUninstall {
             }
         }
         let mut data_step: Option<(String, Run)> = None;
-        if a.data && data.exists() {
+        if a.data && is_link(&data) {
+            // A link is removed as a link: nothing behind it is read or deleted.
+            let d = data.clone();
+            data_step = Some((
+                format!(
+                    "remove the link {} (the data folder it leads to is left as it is)",
+                    data.display()
+                ),
+                Box::new(move || match remove_link(&d) {
+                    Ok(()) => Ok(None),
+                    Err(_) if std::fs::symlink_metadata(&d).is_err() => {
+                        Ok(Some("already gone".into()))
+                    }
+                    Err(e) => Err(e.to_string()),
+                }),
+            ));
+        } else if a.data && data.exists() {
             let size = human_bytes(folder_size(&data));
             let d = data.clone();
             data_step = Some((

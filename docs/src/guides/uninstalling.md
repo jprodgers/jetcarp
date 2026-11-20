@@ -118,8 +118,10 @@ from and what in it is not JETCARP's, and changes nothing. Correct the variable 
 or, if it really is JETCARP's folder and you want it gone, delete it yourself. Without the option,
 the uninstall undoes the rest and keeps the folder. A library alone does not make a folder
 JETCARP's, since JETCARP makes `library.sqlite` in whatever folder it is given. A folder that is a
-link to another folder is not looked into: the option removes the link and leaves the folder it
-leads to alone.
+link to another folder (a symbolic link, or a junction on Windows) is not looked into: the option
+removes the link and leaves the folder it leads to exactly as it is, with what would otherwise be
+kept, such as the picture the desktop shows or the data folder inside. A link inside either folder
+is removed as a link too, never followed.
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you
 want to keep your pattern library, copy `library.sqlite` (and its `media` folder) out of the data
