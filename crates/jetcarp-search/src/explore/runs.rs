@@ -1581,7 +1581,7 @@ impl Runs {
             });
         }
         // The working database: unsealed scores, the archive, the family totals.
-        let tx = self.db.transaction().map_err(e)?;
+        let tx = crate::explore::store::begin_write(&mut self.db)?;
         {
             let mut st = tx
                 .prepare("UPDATE runs SET score = ?1 WHERE id = ?2")
