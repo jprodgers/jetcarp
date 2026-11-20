@@ -55,12 +55,13 @@ matter to you.
 - **Tests.** Over a thousand automated tests, including the pinned geometry of every tiling, the
   pinned dynamics of every built-in Quick Start entry, CPU and GPU equality, and the resumption of
   every kind of search (see [Reproducibility](../research/reproducibility.md)), run on Linux, Windows
-  and macOS on every change.
+  and macOS on every push (a newer push cancels the run it supersedes).
 - **Release testing.** 0.4.2 went through release candidates, each tested on three machines with
   GPUs from four vendors: CPU and GPU parity over every built-in scene on each adapter, the test
   suite on real GPUs, long searches killed and resumed, hands-on sittings with the app, the desktop
   background and the MCP server, and a check of every fix. Every problem found becomes a public
-  issue, except a security problem, which is handled privately. The process, the machines and a record of the 0.4.2 cycle are in
+  issue, except a security problem, which is reported and fixed privately until the release that
+  fixes it. The process, the machines and a record of the 0.4.2 cycle are in
   [How JETCARP is tested](testing.md).
 - **Exact verification.** Nothing goes into the catalogue without being run again and compared cell
   by cell; turmite highways are proved. Before release, all 103 spaceship records, 739 long-period
