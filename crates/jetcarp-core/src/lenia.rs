@@ -516,67 +516,60 @@ pub fn step(topo: &Topology, rule: &LeniaRule, k: &Kernel, f: &mut Field) {
 pub const ORBIUM: &str = "7.MD6.qL$6.pKqEqFURpApBRAqQ$5.VqTrSsBrOpXpWpTpWpUpCrQ$4.CQrQsTsWsApITNPpGqGvL$3.IpIpWrOsGsBqXpJ4.LsFrL$A.DpKpSpJpDqOqUqSqE5.ExD$qL.pBpTT2.qCrGrVrWqM5.sTpP$.pGpWpD3.qUsMtItQtJ6.tL$.uFqGH3.pXtOuR2vFsK5.sM$.tUqL4.GuNwAwVxBwNpC4.qXpA$2.uH5.vBxGyEyMyHtW4.qIpL$2.wV5.tIyG3yOxQqW2.FqHpJ$2.tUS4.rM2yOyJyOyHtVpPMpFqNV$2.HsR4.pUxAyOxLxDxEuVrMqBqGqKJ$3.sLpE3.pEuNxHwRwGvUuLsHrCqTpR$3.TrMS2.pFsLvDvPvEuPtNsGrGqIP$4.pRqRpNpFpTrNtGtVtStGsMrNqNpF$5.pMqKqLqRrIsCsLsIrTrFqJpHE$6.RpSqJqPqVqWqRqKpRXE$8.OpBpIpJpFTK!";
 
 /// Most values a decoded Lenia pattern may hold, rows times columns once short rows are padded:
-/// 2^24 (16,777,216 values, 64 MiB of `f32`). Chan's published creatures are a few hundred
-/// values across at most, and a pattern is stamped onto a field of at most
-/// [`crate::topology::MAX_CELLS`] cells, so this leaves room for any real pattern while a text of
-/// a few bytes can no longer ask for gigabytes.
-pub const MAX_PATTERN_VALUES: usize = 1 << 24;
+/// the most cells a grid may have ([`crate::topology::MAX_CELLS`]), so the decoder accepts any
+/// pattern a grid could hold and refuses only one that no grid could. A single run count is held
+/// to the same number, and so is the number of rows, each row counting as at least one value.
+pub const MAX_PATTERN_VALUES: usize = crate::topology::MAX_CELLS as usize;
 
-/// Most rows, and most values in a row, a decoded Lenia pattern may have: 2^16 (65,536). Rows
-/// are counted separately from [`MAX_PATTERN_VALUES`] because empty rows hold no values but still
-/// cost memory.
-pub const MAX_PATTERN_SIDE: usize = 1 << 16;
+/// A run count's text as a number, at most [`MAX_PATTERN_VALUES`]; an empty count is 1.
+fn run_count(count: &str) -> Result<usize, String> {
+    if count.is_empty() {
+        return Ok(1);
+    }
+    count
+        .parse::<usize>()
+        .ok()
+        .filter(|&n| n <= MAX_PATTERN_VALUES)
+        .ok_or_else(|| {
+            let shown = if count.len() > 20 {
+                format!("{}… ({} digits)", &count[..20], count.len())
+            } else {
+                count.to_string()
+            };
+            format!(
+                "Lenia RLE run count {shown} is too large: no grid holds more than \
+                 {MAX_PATTERN_VALUES} cells"
+            )
+        })
+}
+
+/// Whether a pattern of `rows` rows, the widest `width` values across, fits: rows times the
+/// widest row, each row counting as at least one value, at most [`MAX_PATTERN_VALUES`].
+fn pattern_fits(rows: usize, width: usize) -> Result<(), String> {
+    if rows.saturating_mul(width.max(1)) > MAX_PATTERN_VALUES {
+        return Err(format!(
+            "Lenia RLE pattern is too large: {width} values across and {rows} rows, more than \
+             {MAX_PATTERN_VALUES} in all, the most cells a grid holds"
+        ));
+    }
+    Ok(())
+}
 
 /// Decode Chan's 2D run-length format into rows of values in [0, 1] (short rows padded with 0).
 ///
-/// A text that is not in that format is refused with an error, and so is one that would decode
-/// to more than [`MAX_PATTERN_SIDE`] rows or columns, or more than [`MAX_PATTERN_VALUES`] values
-/// in all. The sizes are checked before anything is allocated, so a run count of any size costs
-/// nothing.
+/// It accepts any pattern a grid could hold ([`MAX_PATTERN_VALUES`]) and refuses with an error
+/// only a text that is not in that format or that would decode to more than that: a run count
+/// past it, or rows times the widest row past it, each row counting as at least one value. The
+/// sizes are checked before anything is allocated, and empty rows take no memory until a value
+/// comes after them, so a run count of any size costs nothing.
 pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
-    let mut rows: Vec<Vec<f32>> = vec![vec![]];
+    // The rows that have values, with their row numbers; empty rows are only counted.
+    let mut filled: Vec<(usize, Vec<f32>)> = Vec::new();
+    let mut row = 0usize;
+    let mut cur: Vec<f32> = Vec::new();
     let mut width = 0usize;
     let mut count = String::new();
     let mut prefix: Option<char> = None;
-    let take = |count: &mut String| -> Result<usize, String> {
-        let n = if count.is_empty() {
-            1
-        } else {
-            count
-                .parse::<usize>()
-                .ok()
-                .filter(|&n| n <= MAX_PATTERN_SIDE)
-                .ok_or_else(|| {
-                    let shown = if count.len() > 20 {
-                        format!("{}… ({} digits)", &count[..20], count.len())
-                    } else {
-                        count.clone()
-                    };
-                    format!(
-                        "Lenia RLE run count {shown} is too large (a pattern is at most \
-                         {MAX_PATTERN_SIDE} values across and {MAX_PATTERN_SIDE} rows)"
-                    )
-                })?
-        };
-        count.clear();
-        Ok(n)
-    };
-    // Rows times the widest row so far: what the padded pattern would hold.
-    let fits = |rows: usize, width: usize| -> Result<(), String> {
-        if rows > MAX_PATTERN_SIDE || width > MAX_PATTERN_SIDE {
-            return Err(format!(
-                "Lenia RLE pattern is too large: {width} values across and {rows} rows (at most \
-                 {MAX_PATTERN_SIDE} of each)"
-            ));
-        }
-        if rows.saturating_mul(width) > MAX_PATTERN_VALUES {
-            return Err(format!(
-                "Lenia RLE pattern is too large: {width} values across and {rows} rows, more \
-                 than {MAX_PATTERN_VALUES} values in all"
-            ));
-        }
-        Ok(())
-    };
     for ch in st.trim().trim_end_matches('!').chars() {
         if ch.is_ascii_digit() || ch == '$' || ('p'..='y').contains(&ch) {
             // A two-letter value's first letter must be followed by its second.
@@ -589,11 +582,13 @@ pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
         } else if ('p'..='y').contains(&ch) {
             prefix = Some(ch);
         } else if ch == '$' {
-            let n = take(&mut count)?;
-            fits(rows.len() + n, width)?;
-            for _ in 0..n {
-                rows.push(vec![]);
+            let n = run_count(&count)?;
+            count.clear();
+            pattern_fits(row + n + 1, width)?;
+            if !cur.is_empty() {
+                filled.push((row, std::mem::take(&mut cur)));
             }
+            row += n;
         } else {
             let v: u32 = match (prefix.take(), ch) {
                 (None, '.') | (None, 'b') => 0,
@@ -604,24 +599,32 @@ pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
                 }
                 (p, c) => return Err(format!("bad Lenia RLE symbol {p:?}{c}")),
             };
-            let n = take(&mut count)?;
-            let len = rows.last().map_or(0, |r| r.len()) + n;
-            fits(rows.len(), width.max(len))?;
+            let n = run_count(&count)?;
+            count.clear();
+            let len = cur.len() + n;
+            pattern_fits(row + 1, width.max(len))?;
             width = width.max(len);
-            let row = rows.last_mut().unwrap();
-            row.extend(std::iter::repeat_n(v.min(255) as f32 / 255.0, n));
+            cur.extend(std::iter::repeat_n(v.min(255) as f32 / 255.0, n));
         }
     }
     if let Some(p) = prefix {
         return Err(format!("bad Lenia RLE symbol {p} at the end"));
     }
-    while rows.last().is_some_and(|r| r.is_empty()) {
-        rows.pop();
+    if !cur.is_empty() {
+        filled.push((row, cur));
     }
-    for r in &mut rows {
-        r.resize(width, 0.0);
+    // Empty rows at the end are dropped; the rest are padded to the widest row. Each filled row
+    // is moved into place, so the values are never held twice.
+    let rows = filled.last().map_or(0, |(r, _)| r + 1);
+    let mut out = Vec::with_capacity(rows);
+    for (r, mut values) in filled {
+        while out.len() < r {
+            out.push(vec![0.0; width]);
+        }
+        values.resize(width, 0.0);
+        out.push(values);
     }
-    Ok(rows)
+    Ok(out)
 }
 
 /// A built-in Lenia pattern by name, as rows of values.
@@ -643,11 +646,37 @@ mod rle_tests {
         assert_eq!((p.len(), p[0].len()), (20, 20));
         assert!(p.iter().all(|r| r.len() == 20));
         assert_eq!(p[0][7], 13.0 / 255.0);
+        assert_eq!(
+            p[0][15],
+            ((b'q' - b'p') as f32 * 24.0 + (b'L' - b'A') as f32 + 25.0) / 255.0
+        );
         assert_eq!(pattern("orbium"), Some(p));
     }
 
-    /// Run counts of any size are refused with an error, before anything is allocated: one too
-    /// many digits for a number, one past the side, and the largest that fits.
+    /// The bound is the grid's own, checked as arithmetic so the test needs no gigabyte: exactly
+    /// MAX_CELLS fits in any shape a grid could have, one more does not.
+    #[test]
+    fn the_bound_is_what_a_grid_holds() {
+        let max = crate::topology::MAX_CELLS as usize;
+        assert_eq!(MAX_PATTERN_VALUES, max);
+        for (rows, width) in [(1, max), (max, 1), (16_000, 16_000), (max, 0), (2, max / 2)] {
+            assert!(pattern_fits(rows, width).is_ok(), "{rows} x {width}");
+        }
+        for (rows, width) in [(1, max + 1), (max + 1, 1), (max + 1, 0), (16_000, 16_001)] {
+            let e = pattern_fits(rows, width).unwrap_err();
+            assert!(
+                e.contains("the most cells a grid holds"),
+                "{rows} x {width}: {e}"
+            );
+        }
+        assert!(pattern_fits(usize::MAX, usize::MAX).is_err());
+        assert_eq!(run_count(""), Ok(1));
+        assert_eq!(run_count(&max.to_string()), Ok(max));
+        assert!(run_count(&(max + 1).to_string()).is_err());
+    }
+
+    /// Run counts too large for any grid, or for a number, are refused with an error before
+    /// anything is allocated; an over-long count is shown cut short.
     #[test]
     fn huge_run_counts_are_refused() {
         let e = decode_rle(&format!("{}A!", "9".repeat(100_000))).unwrap_err();
@@ -655,34 +684,42 @@ mod rle_tests {
         for text in [
             "99999999999999999999999999A!",
             "18446744073709551616.!",
-            "4294967296o!",
-            "65537A!",
-            "65537$A!",
+            "256000001o!",
+            "256000001$A!",
             "4000000000$A!",
             "A99999999999999999999$B!",
         ] {
             let e = decode_rle(text).unwrap_err();
             assert!(e.contains("too large"), "{text}: {e}");
         }
-        let p = decode_rle("65536A!").unwrap();
-        assert_eq!((p.len(), p[0].len()), (1, MAX_PATTERN_SIDE));
     }
 
-    /// Rows times the widest row is what the padded pattern holds: refused past
-    /// MAX_PATTERN_VALUES even when every run is small, and let through just under it.
+    /// A long thin pattern a grid could hold decodes, across and down; rows times the widest row
+    /// past the bound is refused even when every run is small.
     #[test]
-    fn a_pattern_just_under_and_over_the_limit() {
-        // 256 rows of one value, then a row 65,536 wide: 257 x 65,536 > 2^24 once padded.
-        let over = format!("{}65536A!", "A$".repeat(256));
-        let e = decode_rle(&over).unwrap_err();
-        assert!(e.contains("more than 16777216 values"), "{e}");
-        // 255 rows of one value, then a row 65,536 wide: 256 x 65,536 = 2^24 exactly.
-        let under = format!("{}65536A!", "A$".repeat(255));
-        let p = decode_rle(&under).unwrap();
-        assert_eq!(p.len() * p[0].len(), MAX_PATTERN_VALUES);
-        // Long rows built from many small runs count as much as one long run.
-        let long = format!("{}A!", "9999A".repeat(7));
-        assert!(decode_rle(&long).unwrap_err().contains("too large"));
+    fn long_thin_patterns_and_the_padded_size() {
+        let wide = decode_rle("100000A!").unwrap();
+        assert_eq!((wide.len(), wide[0].len()), (1, 100_000));
+        let tall = decode_rle(&format!("{}A!", "A$".repeat(99_999))).unwrap();
+        assert_eq!((tall.len(), tall[0].len()), (100_000, 1));
+        // Two rows, the second as wide as the grid allows for two: padded, 2 x 128,000,001.
+        let e = decode_rle("A$128000001A!").unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        let e = decode_rle(&format!("{}A!", "100000000A".repeat(3))).unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+    }
+
+    /// Empty rows cost nothing until a value comes after them: a flood of them at the end is
+    /// dropped at once, and one past what any grid holds is refused, both without allocating.
+    #[test]
+    fn a_flood_of_empty_rows() {
+        let p = decode_rle("A200000000$!").unwrap();
+        assert_eq!((p.len(), p[0].len()), (1, 1));
+        for text in ["256000000$A!", "A256000000$A!", "200000000$100000000$A!"] {
+            let e = decode_rle(text).unwrap_err();
+            assert!(e.contains("too large"), "{text}: {e}");
+        }
+        assert_eq!(decode_rle("200000000$!").unwrap(), Vec::<Vec<f32>>::new());
     }
 
     /// A first letter of a two-letter value must be followed by its second.
@@ -693,5 +730,7 @@ mod rle_tests {
         }
         assert_eq!(decode_rle("").unwrap(), Vec::<Vec<f32>>::new());
         assert_eq!(decode_rle("2$!").unwrap(), Vec::<Vec<f32>>::new());
+        // Empty rows between values are kept and padded.
+        assert_eq!(decode_rle("A2$B!").unwrap().len(), 3);
     }
 }
