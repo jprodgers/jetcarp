@@ -68,6 +68,12 @@ that will declare them stable.
   `--publisher-key` is added: the key is the identity behind every pack its publisher signed, and
   the rater book holds raters' names and their consent; before, `--settings` deleted them.
   ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
+- **`THIRD_PARTY_LICENSES.html` lists only the libraries a release contains.** It also listed 42
+  that no release builds: a library's dependencies on one system, kept although JETCARP builds that
+  library only for another (the GTK family, which the tray icon needs only on Linux, where JETCARP
+  has no tray icon). The notices are now gathered for each release system on its own and put
+  together, and CI checks that they name exactly the libraries in each system's build.
+  ([#123](https://github.com/jprodgers/jetcarp/issues/123))
 
 ## [0.4.2] – 2026-11-17
 
