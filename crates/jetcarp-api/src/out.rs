@@ -48,7 +48,10 @@ pub fn sanitize(label: &str) -> String {
         }
     }
     let out = out.trim_matches(|c| c == '-' || c == '.').to_string();
-    let mut out: String = out.chars().take(80).collect();
+    // Cut to 80 characters, then trimmed again: a cut can end on a `.`, and a name ending in one
+    // is refused on every system ([`jetcarp_core::paths::check_name`]).
+    let out: String = out.chars().take(80).collect();
+    let mut out = out.trim_end_matches(['-', '.']).to_string();
     // A Windows device name (`con`, `aux.v2`) gets a `_` after its first part, so that a
     // scene called "Con" still has a folder every system can hold
     // ([`jetcarp_core::paths::reserved_on_windows`]).
@@ -378,6 +381,13 @@ mod tests {
         assert_eq!(sanitize("console"), "console");
         assert_eq!(sanitize("com10"), "com10");
         assert_eq!(sanitize("a:b"), "a-b");
+        // Never ending in a dot or a space, even where the 80-character cut falls on a dot.
+        assert_eq!(sanitize("scene. "), "scene");
+        assert_eq!(sanitize("..."), "run");
+        let cut = sanitize(&format!("{}.x", "a".repeat(79)));
+        assert_eq!(cut, "a".repeat(79));
+        let cut = sanitize(&format!("{}-.-x", "b".repeat(78)));
+        assert!(!cut.ends_with('.') && !cut.ends_with('-'), "{cut}");
         let g = Guard {
             roots: vec![PathBuf::from("/tmp/jetcarp-out")],
         };

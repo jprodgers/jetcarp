@@ -412,10 +412,15 @@ pub fn reserved_on_windows(name: &str) -> Option<&'static str> {
 
 /// Nothing if `name` (one file or folder name) can be copied to any system; else the sentence
 /// that refuses it. A `:` (on Windows it names a hidden data stream of a file: `plain.json:other`
-/// writes beside `plain.json`, out of sight) and Windows' device names ([`reserved_on_windows`])
-/// are refused on every system, so that folders and scenes can be copied between systems. It
-/// looks only at the text, so it reads the same whether or not the name exists.
+/// writes beside `plain.json`, out of sight), Windows' device names ([`reserved_on_windows`]),
+/// and a name ending in a dot or a space (Windows drops those, so `scene.json.` would become
+/// `scene.json` there) are refused on every system, so that folders and scenes can be copied
+/// between systems. `.` and `..` are not names and keep their meaning. It looks only at the text,
+/// so it reads the same whether or not the name exists.
 pub fn check_name(name: &str) -> Result<(), String> {
+    if name == "." || name == ".." {
+        return Ok(());
+    }
     if name.contains(':') {
         return Err(format!(
             "a `:` in a name (`{name}`) is refused on every system: on Windows it names a hidden \
@@ -432,6 +437,14 @@ pub fn check_name(name: &str) -> Result<(), String> {
             "the name {shown} is reserved on Windows; JETCARP refuses it on every system so that \
              folders and scenes can be copied between systems"
         ));
+    }
+    for (end, what) in [('.', "a dot"), (' ', "a space")] {
+        if name.ends_with(end) {
+            return Err(format!(
+                "the name `{name}` ends in {what}; Windows drops it, so JETCARP refuses it on \
+                 every system so that folders and scenes can be copied between systems"
+            ));
+        }
     }
     Ok(())
 }
@@ -865,6 +878,43 @@ mod name_tests {
             let e = check_names(Path::new(rel)).unwrap_err();
             assert!(e.contains("a `:` in a name"), "{rel}: {e}");
         }
+    }
+
+    /// A name ending in a dot or a space is refused, as a file and as a folder on the way; `.`
+    /// and `..` keep their meaning, and dots inside a name are fine.
+    #[test]
+    fn a_name_ending_in_a_dot_or_a_space_is_refused() {
+        assert_eq!(
+            check_name("scene.json.").unwrap_err(),
+            "the name `scene.json.` ends in a dot; Windows drops it, so JETCARP refuses it on \
+             every system so that folders and scenes can be copied between systems"
+        );
+        assert_eq!(
+            check_name("scene.json ").unwrap_err(),
+            "the name `scene.json ` ends in a space; Windows drops it, so JETCARP refuses it on \
+             every system so that folders and scenes can be copied between systems"
+        );
+        for name in ["name.", "name ", "...", "a.b.", "x. ", "run  "] {
+            assert!(check_name(name).is_err(), "{name:?}");
+        }
+        for name in [".", "..", "a.b.json", ".hidden", "v1.2.3.png", " lead"] {
+            assert!(check_name(name).is_ok(), "{name:?}");
+        }
+        assert!(check_names(Path::new("dir./x.json")).is_err());
+        assert!(check_names(Path::new("dir /x.json")).is_err());
+        assert!(check_names(Path::new(".../x.json")).is_err());
+        assert!(check_names(Path::new("./a/../b/a.b.json")).is_ok());
+        let dir = scratch("dots");
+        for rel in ["name.", "name ", "...", "dir./x.json", "sub/dir /x.png"] {
+            let e = inside(&dir, rel).unwrap_err();
+            assert!(e.contains("ends in a"), "{rel}: {e}");
+        }
+        assert!(!dir.join("dir.").exists() && !dir.join("sub").exists());
+        assert_eq!(inside(&dir, "a.b.json").unwrap(), dir.join("a.b.json"));
+        assert_eq!(inside(&dir, "x/../a.c.json").unwrap(), dir.join("a.c.json"));
+        assert!(check_names_below(&dir, &dir.join("deep/./../ok.json")).is_ok());
+        assert!(check_names_below(&dir, &dir.join("deep./x.json")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Every folder on the way is checked, not only the last name, and `.` and `..` are not

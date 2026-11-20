@@ -118,10 +118,13 @@ in the output folder, the library's folder and folders given with `jetcarp mcp -
 relative paths they are given start in the output folder.
 
 <a id="names"></a>**Names.** Inside these folders, JETCARP refuses a name that cannot be copied to
-every system: one with a `:` (on Windows it names a hidden data stream of a file) and Windows'
-device names (`CON`, `PRN`, `AUX`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, with or without an
-extension, in any letter case, such as `nul.json` or `AUX/x.json`). It refuses them on every system,
-with an error that names the name, so that folders and scenes can be copied between systems. The
+every system: one with a `:` (on Windows it names a hidden data stream of a file), Windows' device
+names (`CON`, `PRN`, `AUX`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, with or without an
+extension, in any letter case, such as `nul.json` or `AUX/x.json`), and a name ending in a dot or a
+space (`scene.json.`, `...`, `dir./x.json`: Windows drops those, so the name would change there).
+`.` and `..` keep their meaning, and dots inside a name (`a.b.json`) are fine. It refuses them on
+every system, with an error that names the name, so that folders and scenes can be copied between
+systems. The
 folders' own paths are yours and are not checked. A command that writes where you tell it checks the
 names you type (only the last one of a full path). A folder JETCARP names after a scene
 (`media/<name>`) gets a `_` after such a name, so a scene called "Con" goes to `media/Con_`.

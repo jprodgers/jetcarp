@@ -139,7 +139,12 @@ impl FsPolicy {
     /// with its symbolic links followed. Nothing is created, so a folder that cannot be made is
     /// reported as that, never as the rules.
     fn write_target(&self, path: &str) -> Result<PathBuf, ApiError> {
-        let p = path.trim();
+        // Whitespace around the path is dropped (a pasted line's newline), but not spaces at its
+        // end: a name ending in a space is refused, not quietly renamed
+        // ([`jetcarp_core::paths::check_name`]).
+        let p = path
+            .trim_start()
+            .trim_end_matches(|c: char| c.is_whitespace() && c != ' ');
         if p.is_empty() {
             return Err(ApiError::invalid("the path is empty"));
         }

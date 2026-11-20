@@ -534,13 +534,16 @@ fn a_path_of_4096_bytes_or_more_is_refused_and_a_deep_one_is_saved() {
 
 /// Names that cannot be copied to every system are refused in their own words, the same on every
 /// system, before anything is made: a Windows device name (a save, a picture, a read, a listing;
-/// alone, with an extension, as a folder) and a `:` in a name (a file's, a folder's). Names that
-/// only start with the same letters are saved.
+/// alone, with an extension, as a folder), a `:` in a name (a file's, a folder's), and a name
+/// ending in a dot or a space. Names that only start with the same letters, and dots inside a
+/// name, are saved.
 #[test]
 fn names_every_system_cannot_hold_are_refused() {
     let (mut s, mut h, root) = new();
     let reserved = "is reserved on Windows; JETCARP refuses it on every system";
     let colon = "a `:` in a name";
+    let dot = "ends in a dot; Windows drops it";
+    let space = "ends in a space; Windows drops it";
     for (tool, args, words) in [
         ("world_status", json!({"save_path": "CON"}), reserved),
         ("world_status", json!({"save_path": "nul.json"}), reserved),
@@ -579,6 +582,16 @@ fn names_every_system_cannot_hold_are_refused() {
         ("world_new", json!({"path": "plain.json:other"}), colon),
         ("files_list", json!({"path": "LPT1"}), reserved),
         ("files_list", json!({"path": "a:b"}), colon),
+        ("world_status", json!({"save_path": "scene.json."}), dot),
+        ("world_status", json!({"save_path": "scene.json "}), space),
+        ("world_status", json!({"save_path": "dir./x.json"}), dot),
+        (
+            "world_render",
+            json!({"max_side": 64, "save_path": "pic.png."}),
+            dot,
+        ),
+        ("world_new", json!({"path": "scene.json."}), dot),
+        ("files_list", json!({"path": "..."}), dot),
     ] {
         let e = fails(&call(&mut s, &mut h, tool, args.clone()));
         assert!(e.contains(words), "{tool} {args}: {e}");
@@ -592,10 +605,20 @@ fn names_every_system_cannot_hold_are_refused() {
         "run 12:30",
         "con.png",
         "pics:2",
+        "scene.json.",
+        "scene.json ",
+        "dir.",
+        "pic.png.",
     ] {
         assert!(!root.join("out").join(made).exists(), "{made} was made");
     }
-    for name in ["console.json", "nullable.json", "com10.json", "lpt.json"] {
+    for name in [
+        "console.json",
+        "nullable.json",
+        "com10.json",
+        "lpt.json",
+        "a.b.json",
+    ] {
         ok(&call(
             &mut s,
             &mut h,
@@ -604,4 +627,12 @@ fn names_every_system_cannot_hold_are_refused() {
         ));
         assert!(root.join("out").join(name).is_file(), "{name}");
     }
+    // `.` and `..` keep their meaning.
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"save_path": "./sub/../a.c.json"}),
+    ));
+    assert!(root.join("out/a.c.json").is_file());
 }
