@@ -17,7 +17,7 @@ path = "src/lib.rs"
 [dependencies]
 jetcarp-core.workspace = true
 jetcarp-gpu.workspace = true
-jetcarp-display.workspace = true
+jetcarp-display = { workspace = true, features = ["default"] }
 jetcarp-mcp.workspace = true
 clap.workspace = true
 serde_json.workspace = true

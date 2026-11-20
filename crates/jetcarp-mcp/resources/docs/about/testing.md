@@ -55,7 +55,8 @@ so a tag that moves cannot change what runs.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;
   an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
   nothing installed (the shell installer on Linux, the PowerShell one on Windows).
-- **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet.
+- **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet, and the whole
+  workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
   dry run), and the generated reference pages match the program.

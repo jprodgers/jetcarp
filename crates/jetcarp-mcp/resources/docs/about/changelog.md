@@ -5,6 +5,14 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
+## [0.4.3] – unreleased
+
+### Fixed
+
+- **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but
+  the workspace's manifests needed 1.99 to load. CI now checks the whole workspace with 1.95.
+  ([#175](https://github.com/jprodgers/jetcarp/issues/175))
+
 ## [0.4.2] – 2026-11-17
 
 ### Security
