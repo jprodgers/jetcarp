@@ -494,3 +494,40 @@ fn a_link_at_a_name_the_tools_choose_is_not_written_through() {
     assert_eq!(left, ["frames"], "nothing written outside");
     assert_eq!(std::fs::read_dir(away.join("frames")).unwrap().count(), 0);
 }
+
+/// A path of 4,096 bytes or more is refused in its own words, naming its length and the limit,
+/// the same on every system (a save, a picture, a listing); a path many folders deep under the
+/// limit is saved where it was asked for.
+#[test]
+fn a_path_of_4096_bytes_or_more_is_refused_and_a_deep_one_is_saved() {
+    let (mut s, mut h, root) = new();
+    for (tool, args) in [
+        (
+            "world_status",
+            json!({"save_path": format!("{}deep.json", "a/".repeat(3000))}),
+        ),
+        (
+            "world_render",
+            json!({"max_side": 64, "save_path": format!("{}deep.png", "b/".repeat(3000))}),
+        ),
+        ("files_list", json!({"path": "c/".repeat(3000)})),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args));
+        assert!(
+            e.contains("bytes long") && e.contains("shorter than 4,096 bytes"),
+            "{tool}: {e}"
+        );
+    }
+    assert!(!root.join("out/a").exists() && !root.join("out/b").exists());
+    // macOS's own limit is 1,024 bytes.
+    let depth = if cfg!(target_os = "macos") { 200 } else { 1500 };
+    let rel = format!("{}deep.json", "d/".repeat(depth));
+    ok(&call(
+        &mut s,
+        &mut h,
+        "world_status",
+        json!({"save_path": rel}),
+    ));
+    assert!(root.join("out").join(&rel).is_file());
+    let _ = std::fs::remove_dir_all(root.join("out/d"));
+}

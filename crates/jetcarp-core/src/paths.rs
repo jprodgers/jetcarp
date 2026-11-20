@@ -322,6 +322,76 @@ pub fn absolute(p: &Path) -> PathBuf {
 /// ends instead of being followed for ever.
 const MAX_LINKS: u32 = 40;
 
+/// The length, in bytes, from which JETCARP refuses a path it is asked to read or write: Linux's
+/// `PATH_MAX`, which counts the byte that ends the path. So every path Linux accepts, JETCARP
+/// accepts, and on Windows, whose long paths reach 32,767 characters, JETCARP refuses the same
+/// paths as on Linux (Jimmie, 20 November 2026). macOS's own limit, 1,024 bytes, still applies
+/// there. A path is counted as UTF-8 (WTF-8 on Windows), so the same text counts the same on
+/// every system.
+pub const MAX_PATH_BYTES: usize = 4096;
+
+/// The refusal [`resolve`] gives for a path of [`MAX_PATH_BYTES`] or more, so that the folder
+/// rules can give its own sentence ([`too_long`]) instead of theirs.
+#[derive(Debug)]
+struct TooLong(String);
+
+impl std::fmt::Display for TooLong {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for TooLong {}
+
+/// `p` as given, made absolute by joining it to the working directory, without working out its
+/// `.` and `..` (as the system receives it).
+fn joined(p: &Path) -> PathBuf {
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(p)
+    }
+}
+
+/// `n` with a comma between each group of three digits.
+fn thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Nothing if `p` (absolute, or relative to the working directory) is shorter than
+/// [`MAX_PATH_BYTES`]; else the sentence that refuses it: its first characters, its length and
+/// the limit. It looks only at the text, so it reads the same whether or not the path exists.
+pub fn check_length(p: &Path) -> Result<(), String> {
+    let full = joined(p);
+    let n = full.as_os_str().len();
+    if n < MAX_PATH_BYTES {
+        return Ok(());
+    }
+    let shown: String = full.to_string_lossy().chars().take(60).collect();
+    Err(format!(
+        "the path {shown}… is {} bytes long; JETCARP reads and writes only paths shorter than {} \
+         bytes, the same on every system",
+        thousands(n),
+        thousands(MAX_PATH_BYTES)
+    ))
+}
+
+/// The sentence of a refusal [`resolve`] gave because the path is too long ([`check_length`]),
+/// if `e` is one.
+pub fn too_long(e: &std::io::Error) -> Option<String> {
+    e.get_ref()
+        .and_then(|inner| inner.downcast_ref::<TooLong>())
+        .map(|t| t.0.clone())
+}
+
 /// `p` as the file system will see it when a file is opened or made there: made absolute, the
 /// deepest part of it that exists resolved with every symbolic link followed
 /// ([`std::fs::canonicalize`]), and the rest, which does not exist yet, joined on with its `.`
@@ -332,15 +402,57 @@ const MAX_LINKS: u32 = 40;
 /// by hand: `canonicalize` refuses it, but a write through it would make the target. `..` follows
 /// the system's rule, so on Unix `link/..` is the folder holding the link's target, not the
 /// folder holding the link.
+///
+/// A path of [`MAX_PATH_BYTES`] or more, as given, is refused before anything is looked up
+/// ([`too_long`] gives the sentence).
 pub fn resolve(p: &Path) -> std::io::Result<PathBuf> {
+    check_length(p)
+        .map_err(|s| std::io::Error::new(std::io::ErrorKind::InvalidInput, TooLong(s)))?;
     resolve_links(&std::path::absolute(p)?, 0)
+}
+
+/// How many of `parts`' leading components exist (each prefix looked up with
+/// [`std::fs::symlink_metadata`], so a link that leads nowhere still counts), found by halving:
+/// a few lookups for a path of any depth, where looking up every folder on the way costs one
+/// per folder, each longer than the last. A folder that does not exist has nothing under it, so
+/// once a prefix is missing every longer one is. None when a lookup fails for another reason (a
+/// loop of links, a folder that may not be searched): then nothing is assumed.
+fn existing_prefix(parts: &[std::path::Component]) -> Option<usize> {
+    use std::io::ErrorKind;
+    let (mut lo, mut hi) = (0, parts.len() + 1);
+    while hi - lo > 1 {
+        let mid = (lo + hi) / 2;
+        let head: PathBuf = parts[..mid].iter().collect();
+        match std::fs::symlink_metadata(&head) {
+            Ok(_) => lo = mid,
+            Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+                hi = mid
+            }
+            Err(_) => return None,
+        }
+    }
+    Some(lo)
 }
 
 /// [`resolve`] for an absolute path, `links` links into it.
 fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
     use std::path::Component;
+    // A link may make the path longer than the one given: past the limit, the system would not
+    // open it either. The refusal says nothing about where the link leads.
+    if p.as_os_str().len() >= MAX_PATH_BYTES {
+        return Err(std::io::Error::other(
+            "the path is too long once its links are followed",
+        ));
+    }
+    // The whole path exists: one call.
+    if let Ok(r) = std::fs::canonicalize(p) {
+        return Ok(r);
+    }
     let parts: Vec<Component> = p.components().collect();
-    let mut k = parts.len();
+    // The deepest prefix that exists is where the folders still to be made start; nothing
+    // deeper can be resolved, or be a link. Then, from there up, as before: the deepest prefix
+    // that resolves, unless a link that leads nowhere comes first.
+    let mut k = existing_prefix(&parts).unwrap_or(parts.len());
     let mut real = PathBuf::new();
     while k > 0 {
         let head: PathBuf = parts[..k].iter().collect();
@@ -404,7 +516,8 @@ fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
 /// made between the check and the write would need something that can already write in `dir`.
 ///
 /// A refusal names the path as JETCARP would write it, never where the link leads, and reads
-/// the same whether or not that place exists.
+/// the same whether or not that place exists. A path of [`MAX_PATH_BYTES`] or more is refused
+/// in its own words ([`check_length`]).
 pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
     // A name in `dir`, or a path already under it (`dir.join(name)`, as several writers pass):
     // joining that onto a relative `dir` again would double it.
@@ -421,14 +534,16 @@ pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
             path.display()
         )
     };
-    let real = resolve(&path).map_err(|_| refused())?;
+    let real = resolve(&path).map_err(|e| too_long(&e).unwrap_or_else(refused))?;
     let base = resolve(dir).map_err(|_| refused())?;
     let rest = real.strip_prefix(&base).map_err(|_| refused())?;
-    Ok(if rest.as_os_str().is_empty() {
+    let open = if rest.as_os_str().is_empty() {
         dir.to_path_buf()
     } else {
         dir.join(rest)
-    })
+    };
+    check_length(&open)?;
+    Ok(open)
 }
 
 /// This machine's name, for job owners (`host:pid` while a job runs; no extra dependency:
@@ -464,6 +579,89 @@ pub fn describe() -> String {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "(no packs came with the program)".into())
     )
+}
+
+#[cfg(test)]
+mod length_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("jetcarp-len-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sub")).unwrap();
+        d
+    }
+
+    /// A name that makes `dir/<name>` exactly `len` bytes long.
+    fn name_for(dir: &Path, len: usize) -> String {
+        let room = len - dir.join("x").as_os_str().len() + 1;
+        "n".repeat(room)
+    }
+
+    /// A path one byte under the limit is let through; at the limit and over it, it is refused
+    /// with its length and the limit, before anything is looked up, so the refusal reads the
+    /// same whether or not the folders on the way exist.
+    #[test]
+    fn a_path_of_4096_bytes_or_more_is_refused_in_its_own_words() {
+        let d = scratch("limit");
+        let under = d.join(name_for(&d, MAX_PATH_BYTES - 1));
+        assert_eq!(under.as_os_str().len(), MAX_PATH_BYTES - 1);
+        assert!(check_length(&under).is_ok());
+        for len in [MAX_PATH_BYTES, MAX_PATH_BYTES + 1, 6000] {
+            let p = d.join(name_for(&d, len));
+            assert_eq!(p.as_os_str().len(), len);
+            let e = check_length(&p).unwrap_err();
+            assert!(
+                e.contains(&format!("is {} bytes long", thousands(len))),
+                "{e}"
+            );
+            assert!(e.contains("shorter than 4,096 bytes"), "{e}");
+            let r = resolve(&p).unwrap_err();
+            assert_eq!(too_long(&r).as_deref(), Some(e.as_str()));
+        }
+        // The same answer whether or not the folder on the way exists: one path, refused before
+        // its folder is made and after. (The refusal shows only the path's first characters, so
+        // two different paths under a long temporary folder, as on Windows, can't be compared.)
+        let place = d.join("sub");
+        let p = place.join(name_for(&place, 5000));
+        let _ = std::fs::remove_dir_all(&place);
+        let missing = check_length(&p).unwrap_err();
+        let missing_resolved = too_long(&resolve(&p).unwrap_err());
+        std::fs::create_dir_all(&place).unwrap();
+        assert_eq!(check_length(&p).unwrap_err(), missing);
+        assert_eq!(too_long(&resolve(&p).unwrap_err()), missing_resolved);
+        assert_eq!(missing_resolved.as_deref(), Some(missing.as_str()));
+        // A name JETCARP writes inside a folder is refused in the same words, not as a link.
+        let e = inside(&d, name_for(&d, 5000)).unwrap_err();
+        assert!(
+            e.contains("bytes long") && !e.contains("symbolic link"),
+            "{e}"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A path many folders deep, none of them made yet, is resolved to itself and can be
+    /// written (macOS's own limit, 1,024 bytes, allows fewer folders there).
+    #[test]
+    fn a_path_many_folders_deep_is_resolved_and_written() {
+        let d = scratch("deep");
+        let depth = if cfg!(target_os = "macos") { 400 } else { 1500 };
+        let rel = format!("{}deep.json", "a/".repeat(depth));
+        let p = inside(&d, &rel).unwrap();
+        assert_eq!(p, d.join(&rel));
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, "{}").unwrap();
+        // Again, now that the folders exist, and for a new name beside the file.
+        assert_eq!(inside(&d, &rel).unwrap(), p);
+        assert_eq!(
+            resolve(&p.with_file_name("new.json")).unwrap(),
+            resolve(&d)
+                .unwrap()
+                .join(rel.replace("deep.json", "new.json"))
+        );
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "{}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
 
 // Making symbolic links needs a privilege on Windows, so these tests run on Unix.
@@ -508,6 +706,31 @@ mod tests {
         symlink(dir.join("loop-b"), dir.join("loop-a")).unwrap();
         symlink(dir.join("loop-a"), dir.join("loop-b")).unwrap();
         assert!(inside(&dir, "loop-a").is_err());
+        assert!(inside(&dir, "loop-a/new/x.png").is_err());
+        // Links at the end of folders that exist, many deep, with new folders after them: the
+        // deepest folder that exists is found without looking up each one on the way.
+        let deep: PathBuf = (0..60).map(|i| format!("d{i}")).collect();
+        std::fs::create_dir_all(dir.join(&deep)).unwrap();
+        symlink(&outside, dir.join(&deep).join("out")).unwrap();
+        symlink(outside.join("missing"), dir.join(&deep).join("gone")).unwrap();
+        symlink(dir.join("sub"), dir.join(&deep).join("stay")).unwrap();
+        for p in [
+            "out/new/a/x.png",
+            "gone",
+            "gone/new/x.png",
+            "stay/../../x.png",
+        ] {
+            assert!(inside(&dir, deep.join(p)).is_err(), "{p}");
+        }
+        assert_eq!(
+            inside(&dir, deep.join("stay/new/a/x.png")).unwrap(),
+            dir.join("sub/new/a/x.png")
+        );
+        assert_eq!(
+            inside(&dir, deep.join("new/../stay/x.png")).unwrap(),
+            dir.join("sub/x.png")
+        );
+        assert!(!outside.join("new").exists() && !outside.join("missing").exists());
         assert_eq!(
             std::fs::read_to_string(outside.join("there.png")).unwrap(),
             "kept"

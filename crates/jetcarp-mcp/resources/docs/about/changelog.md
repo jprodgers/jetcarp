@@ -5,6 +5,17 @@ All notable changes to JETCARP are listed here, newest first, in the style of
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
 that will declare them stable.
 
+## [0.4.3] – unreleased
+
+### Fixed
+
+- **Paths of 4,096 bytes or more are refused on every system, and a save into many new folders no
+  longer waits on JETCARP.** The MCP tools, scripts and jobs refuse such a path with an error that
+  gives its length, as Linux always did; on Windows, with long paths on, they used to make the
+  folders. JETCARP now finds where a new path begins in a few lookups instead of one for each
+  folder on the way, which made a save into a few thousand new folders take over a minute on
+  Windows. On macOS the system's own limit, 1,024 bytes, still comes first.
+
 ## [0.4.2] – 2026-11-17
 
 ### Security
