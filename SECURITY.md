@@ -14,8 +14,9 @@ newest release gets fixes.
 
 **It makes no network connections.** JETCARP 0.4 contains no HTTP client, no DNS lookups and no
 TLS: it never connects to the internet, checks for updates, or sends anything anywhere. There is
-no telemetry, no analytics and no crash reporting. The only sockets it opens are local ones, on
-`127.0.0.1`, described below. Packs and other files reach it only when you give them to it.
+no telemetry, no analytics and no crash reporting. The only network sockets it opens are local
+ones, on `127.0.0.1`, described below. (On Linux the windowing libraries also reach the display
+server and the desktop's message bus, through local sockets that are not network sockets.) Packs and other files reach it only when you give them to it.
 Networking (downloading packs, for one) is planned for a later version, and will happen only when
 you ask for it.
 
@@ -59,7 +60,14 @@ saver and a desktop picture.
 ## Release files
 
 Every release lists the SHA-256 of each file in `SHA256SUMS`, and the installers check the archive
-they download against it. How to check a download yourself is in
-[Installing JETCARP](docs/src/getting-started/installing.md#checking-a-download). Releases for
-macOS are not signed with an Apple Developer ID, and releases for Windows are not yet signed; the
-same page says how to open them.
+they download against it, refusing one that does not match or is not listed. That shows a
+download is complete and unchanged, but `SHA256SUMS` comes from the same place as the archive.
+Where it came from is shown by a provenance attestation: the release workflow has GitHub make one
+for every release file, a signed record of the repository, the workflow and the commit that built
+it. The GitHub CLI checks it (`gh attestation verify FILE --repo jprodgers/jetcarp`); the
+installers do not. How to check a download both ways is in
+[Installing JETCARP](docs/src/getting-started/installing.md#checking-a-download).
+
+Releases for macOS are not signed with an Apple Developer ID, and releases for Windows are not yet
+signed: the release workflow has a signing step, through the SignPath Foundation, that is not
+switched on yet. The same page says how to open them.
