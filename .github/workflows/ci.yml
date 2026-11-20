@@ -30,6 +30,10 @@ jobs:
       # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
       # tests skip there; macOS uses the runner's own GPU.
       JETCARP_GPU: software
+      # The folder rules' tests make links: on Windows directory junctions and symbolic links
+      # (the runner may make both). A link that cannot be made fails the test here, rather than
+      # skipping it as on a machine without the rights.
+      JETCARP_TEST_LINKS: all
     strategy:
       fail-fast: false
       matrix:
@@ -67,6 +71,16 @@ jobs:
           exit 0
       - name: Build
         run: cargo build --workspace --release --all-targets ${{ matrix.features }}
+      - name: The Windows installer refuses a tampered download, and one SHA256SUMS does not list
+        # The installer a release ships, with the program just built in a release folder of the
+        # test's own (packaging/test-install-ps1.ps1).
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          python packaging/package.py installers --out "$env:RUNNER_TEMP\installers"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          powershell -NoProfile -ExecutionPolicy Bypass -File packaging\test-install-ps1.ps1 -Installer "$env:RUNNER_TEMP\installers\jetcarp-installer.ps1" -Program target\release\jetcarp.exe
+          exit $LASTEXITCODE
       - name: Test
         if: runner.os != 'Linux'
         run: cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
@@ -90,6 +104,11 @@ jobs:
               exit 1
             fi
           done
+      - name: The folder rules' link tests, each case named (on Windows, junctions and symbolic links)
+        # The same build as the test step (the workspace, the same features), so nothing rebuilds.
+        run: |
+          cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
+          cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
       - name: The generated reference pages match the program (MCP tools, command line)
         if: runner.os == 'Linux'
         run: |
@@ -135,13 +154,15 @@ jobs:
       - name: shellcheck (the installers as POSIX sh, as they run under `curl | sh`)
         run: |
           shellcheck packaging/build.sh packaging/notices.sh packaging/update-manifest-repo.sh packaging/package-repo-keys.sh
-          shellcheck -s sh packaging/install.sh
-          shellcheck -s dash packaging/install.sh
+          shellcheck -s sh packaging/install.sh packaging/test-install-sh.sh
+          shellcheck -s dash packaging/install.sh packaging/test-install-sh.sh
       - name: The packaging script's own checks
         run: |
           python3 packaging/package.py verify --tag "v$(python3 packaging/package.py version)" --allow-undated
           python3 packaging/package.py notes --out /tmp/notes.md
           python3 packaging/package.py installers --out /tmp/installers
+      - name: The shell installer refuses a tampered download, and one SHA256SUMS does not list
+        run: sh packaging/test-install-sh.sh /tmp/installers/jetcarp-installer.sh
 
   packages:
     # crates.io builds each crate on its own, with only the features its dependents ask for; in

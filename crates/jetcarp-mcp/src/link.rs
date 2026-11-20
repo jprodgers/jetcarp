@@ -59,7 +59,12 @@ impl EndpointInfo {
     /// The endpoint recorded in runtime file `name`; `absent` is the error when there is none.
     pub fn read_from(name: &str, absent: &str) -> Result<EndpointInfo, String> {
         let p = runtime_file(name).ok_or("no home or runtime directory")?;
-        let text = std::fs::read_to_string(&p).map_err(|_| absent.to_string())?;
+        EndpointInfo::read_at(&p, absent)
+    }
+
+    /// The endpoint recorded in the file at `p`; `absent` is the error when there is none.
+    pub fn read_at(p: &Path, absent: &str) -> Result<EndpointInfo, String> {
+        let text = std::fs::read_to_string(p).map_err(|_| absent.to_string())?;
         let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
         Ok(EndpointInfo {
             port: v["port"].as_u64().ok_or("endpoint file has no port")? as u16,
@@ -176,8 +181,8 @@ pub struct Listener {
     stop: Arc<AtomicBool>,
     pub connections: Arc<Mutex<u32>>,
     wrote_file: bool,
-    /// The runtime file this listener records itself in.
-    file: &'static str,
+    /// The file this listener records itself in (none: it is not recorded).
+    file: Option<PathBuf>,
     /// Cancel flags of the requests in flight: a connection sets one as soon as a
     /// `notifications/cancelled` arrives, while the app is still busy with the call. The app
     /// gives its server the same map.
@@ -213,6 +218,17 @@ impl Listener {
     pub fn start_as(
         port: u16,
         file: &'static str,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) -> std::io::Result<Listener> {
+        Listener::start_at(port, runtime_file(file), wake)
+    }
+
+    /// [`start`](Self::start), recording the endpoint in the file at `file` (none: when the
+    /// system gives no runtime folder). The file is removed when the listener is dropped, if it
+    /// is still this listener's.
+    pub fn start_at(
+        port: u16,
+        file: Option<PathBuf>,
         wake: Arc<dyn Fn() + Send + Sync>,
     ) -> std::io::Result<Listener> {
         let sock = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))?;
@@ -283,10 +299,10 @@ impl Listener {
 
     fn write_file(&self) -> std::io::Result<()> {
         let p =
-            runtime_file(self.file).ok_or_else(|| std::io::Error::other("no runtime directory"))?;
+            (self.file.as_ref()).ok_or_else(|| std::io::Error::other("no runtime directory"))?;
         let text =
             json!({"port": self.port, "token": self.token, "pid": std::process::id()}).to_string();
-        write_private(&p, &text)
+        write_private(p, &text)
     }
 
     /// Whether the endpoint file was written (the token is then readable by this user only).
@@ -315,10 +331,10 @@ impl Drop for Listener {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         if self.wrote_file
-            && let Some(p) = runtime_file(self.file)
+            && let Some(p) = &self.file
         {
             // Only remove the file if it is still ours.
-            if let Ok(info) = EndpointInfo::read_from(self.file, "")
+            if let Ok(info) = EndpointInfo::read_at(p, "")
                 && info.token == self.token
             {
                 let _ = std::fs::remove_file(p);

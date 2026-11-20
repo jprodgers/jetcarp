@@ -7,10 +7,14 @@
 //! themselves inside a folder they were given are not written through a link planted at one of
 //! those names.
 //!
+//! Each link case runs with every kind of link the system has (`links`): on Windows a directory
+//! junction and a directory symbolic link for a folder, a file symbolic link for a file.
+//!
 //! The allowed folders are set before this binary's first tool call, which is why these tests have
 //! a binary of their own.
 
 mod common;
+mod links;
 
 use common::*;
 use jetcarp_mcp::{Server, Session};
@@ -44,91 +48,96 @@ fn new() -> (Server, Session, &'static Path) {
     (s, h, r)
 }
 
-/// A symbolic link at `link` to `target` (made afresh).
-#[cfg(unix)]
-fn link(target: &Path, link: &Path) {
-    let _ = std::fs::remove_file(link);
-    std::os::unix::fs::symlink(target, link).unwrap();
+/// Whether an error names `p`, with `/` or with `\` between its parts.
+fn names(e: &str, p: &str) -> bool {
+    e.contains(p) || e.contains(&p.replace('/', "\\"))
 }
 
-#[cfg(unix)]
 #[test]
 fn a_linked_folder_inside_the_output_folder_does_not_lead_outside() {
     let (mut s, mut h, root) = new();
     let outside = root.join("outside/dir");
-    link(&outside, &root.join("out/to-outside"));
-    let writes = [
-        (
-            "world_status",
-            json!({"save_path": "to-outside/scene.json"}),
-        ),
-        (
-            "world_render",
-            json!({"max_side": 64, "save_path": "to-outside/pic.png"}),
-        ),
-        (
-            "world_render",
-            json!({"wallpaper": {"size": "320x200", "out": "to-outside"}}),
-        ),
-        (
-            "media_render",
-            json!({"quickstart": "life", "out": "to-outside/media"}),
-        ),
-        ("pack", json!({"site": {"to": "to-outside/site"}})),
-    ];
-    for (tool, args) in writes {
-        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
-        assert!(
-            e.contains("the MCP tools may only write inside"),
-            "{tool} {args}: {e}"
+    for &kind in links::Kind::for_folders() {
+        let case = format!("a linked folder inside the output folder ({})", kind.name());
+        let name = format!("to-outside-{}", kind.name());
+        if let Err(why) = links::folder(kind, &outside, &root.join("out").join(&name)) {
+            links::skip(&case, &why);
+            continue;
+        }
+        let at = |p: &str| format!("{name}/{p}");
+        let writes = [
+            ("world_status", json!({"save_path": at("scene.json")})),
+            (
+                "world_render",
+                json!({"max_side": 64, "save_path": at("pic.png")}),
+            ),
+            (
+                "world_render",
+                json!({"wallpaper": {"size": "320x200", "out": name}}),
+            ),
+            (
+                "media_render",
+                json!({"quickstart": "life", "out": at("media")}),
+            ),
+            ("pack", json!({"site": {"to": at("site")}})),
+        ];
+        for (tool, args) in writes {
+            let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+            assert!(
+                e.contains("the MCP tools may only write inside"),
+                "{case}: {tool} {args}: {e}"
+            );
+            // The refusal names the path as given, not where the link leads.
+            assert!(!names(&e, "outside/dir"), "{case}: {tool} {args}: {e}");
+        }
+        let script = format!(
+            "try {{ write_text(\"{}\", \"x\"); print(\"wrote\"); }} catch (e) {{ print(`refused ${{e}}`); }}",
+            at("a.txt")
         );
-        // The refusal names the path as given, not where the link leads.
-        assert!(!e.contains("outside/dir"), "{tool} {args}: {e}");
-    }
-    let e = ok(&call(
-        &mut s,
-        &mut h,
-        "run_script",
-        json!({"script": "try { write_text(\"to-outside/a.txt\", \"x\"); print(\"wrote\"); } catch (e) { print(`refused ${e}`); }"}),
-    ));
-    assert!(e.contains("refused"), "{e}");
-    assert_eq!(
-        std::fs::read_dir(&outside).unwrap().count(),
-        0,
-        "nothing written outside"
-    );
+        let e = ok(&call(
+            &mut s,
+            &mut h,
+            "run_script",
+            json!({"script": script}),
+        ));
+        assert!(e.contains("refused"), "{case}: {e}");
+        assert_eq!(
+            std::fs::read_dir(&outside).unwrap().count(),
+            0,
+            "{case}: nothing written outside"
+        );
 
-    // Reads through the link are refused too, and files_list does not show the folder.
-    std::fs::write(outside.join("there.json"), "{}").unwrap();
-    let e = fails(&call(
-        &mut s,
-        &mut h,
-        "world_new",
-        json!({"path": "to-outside/there.json"}),
-    ));
-    assert!(e.contains("may only read inside"), "{e}");
-    let e = fails(&call(
-        &mut s,
-        &mut h,
-        "files_list",
-        json!({"path": "to-outside"}),
-    ));
-    assert!(e.contains("files_list only reads those"), "{e}");
-    assert!(!e.contains("outside/dir"), "{e}");
-    std::fs::remove_file(outside.join("there.json")).unwrap();
+        // Reads through the link are refused too, and files_list does not show the folder.
+        std::fs::write(outside.join("there.json"), "{}").unwrap();
+        let e = fails(&call(
+            &mut s,
+            &mut h,
+            "world_new",
+            json!({"path": at("there.json")}),
+        ));
+        assert!(e.contains("may only read inside"), "{case}: {e}");
+        let e = fails(&call(&mut s, &mut h, "files_list", json!({"path": name})));
+        assert!(e.contains("files_list only reads those"), "{case}: {e}");
+        assert!(!names(&e, "outside/dir"), "{case}: {e}");
+        std::fs::remove_file(outside.join("there.json")).unwrap();
+        links::ran(&case);
+    }
 }
 
-#[cfg(unix)]
 #[test]
 fn a_linked_file_is_not_written_through() {
     let (mut s, mut h, root) = new();
+    let case = "a linked file (symlink)";
     let victim = root.join("outside/victim.txt");
     std::fs::write(&victim, "kept\n").unwrap();
-    link(&victim, &root.join("out/innocent.json"));
-    link(&victim, &root.join("out/innocent.png"));
     // A link to a file that does not exist yet: writing through it would make the file.
     let missing = root.join("outside/made.json");
-    link(&missing, &root.join("out/dangling.json"));
+    let made = links::file(&victim, &root.join("out/innocent.json"))
+        .and_then(|_| links::file(&victim, &root.join("out/innocent.png")))
+        .and_then(|_| links::file(&missing, &root.join("out/dangling.json")));
+    if let Err(why) = made {
+        return links::skip(case, &why);
+    }
     for (tool, args) in [
         ("world_status", json!({"save_path": "innocent.json"})),
         ("world_status", json!({"save_path": "dangling.json"})),
@@ -154,47 +163,79 @@ fn a_linked_file_is_not_written_through() {
     ));
     assert!(e.contains("files_list only reads those"), "{e}");
     assert!(!e.contains("victim"), "{e}");
+    links::ran(case);
 }
 
-#[cfg(unix)]
+/// `..` after a link. On Unix it is worked out from where the link leads, so `deep/..` is the
+/// folder holding the link's target. Windows works `..` out from the path's text before any link
+/// is followed, so there `deep\..` is the output folder itself, which JETCARP checks and writes
+/// to just as the system would. Either way nothing reaches outside.
 #[test]
-fn dot_dot_after_a_link_is_worked_out_from_where_the_link_leads() {
+fn dot_dot_after_a_link_is_worked_out_as_the_system_does() {
     let (mut s, mut h, root) = new();
-    // `deep/..` is `outside/`, not the output folder.
-    link(&root.join("outside/dir"), &root.join("out/deep"));
-    let e = fails(&call(
-        &mut s,
-        &mut h,
-        "world_status",
-        json!({"save_path": "deep/../escape.json"}),
-    ));
-    assert!(e.contains("may only write inside"), "{e}");
-    assert!(!root.join("outside/escape.json").exists());
-    assert!(!root.join("out/escape.json").exists());
-    // A link that stays inside is fine, and the file lands where the link leads.
-    std::fs::create_dir_all(root.join("out/real")).unwrap();
-    link(&root.join("out/real"), &root.join("out/alias"));
-    let t = ok(&call(
-        &mut s,
-        &mut h,
-        "world_status",
-        json!({"save_path": "alias/kept.json"}),
-    ));
-    assert!(t.contains("Saved the scene"), "{t}");
-    assert!(root.join("out/real/kept.json").is_file());
+    for &kind in links::Kind::for_folders() {
+        let k = kind.name();
+        let case = format!("`..` after a linked folder ({k})");
+        let deep = format!("deep-{k}");
+        let real = root.join(format!("out/real-{k}"));
+        std::fs::create_dir_all(&real).unwrap();
+        let made = links::folder(
+            kind,
+            &root.join("outside/dir"),
+            &root.join("out").join(&deep),
+        )
+        .and_then(|_| links::folder(kind, &real, &root.join(format!("out/alias-{k}"))));
+        if let Err(why) = made {
+            links::skip(&case, &why);
+            continue;
+        }
+        let escape = format!("escape-{k}.json");
+        let r = call(
+            &mut s,
+            &mut h,
+            "world_status",
+            json!({"save_path": format!("{deep}/../{escape}")}),
+        );
+        if cfg!(windows) {
+            let t = ok(&r);
+            assert!(t.contains("Saved the scene"), "{case}: {t}");
+            assert!(root.join("out").join(&escape).is_file(), "{case}");
+        } else {
+            let e = fails(&r);
+            assert!(e.contains("may only write inside"), "{case}: {e}");
+            assert!(!root.join("out").join(&escape).exists(), "{case}");
+        }
+        assert!(!root.join("outside").join(&escape).exists(), "{case}");
+        // A link that stays inside is fine, and the file lands where the link leads.
+        let t = ok(&call(
+            &mut s,
+            &mut h,
+            "world_status",
+            json!({"save_path": format!("alias-{k}/kept.json")}),
+        ));
+        assert!(t.contains("Saved the scene"), "{case}: {t}");
+        assert!(real.join("kept.json").is_file(), "{case}");
+        links::ran(&case);
+    }
     // `..` in a part that does not exist yet can step back onto a link; it is followed.
-    link(
+    let case = "`..` onto a linked file (symlink)";
+    match links::file(
         &root.join("outside/victim2.json"),
         &root.join("out/back.json"),
-    );
-    let e = fails(&call(
-        &mut s,
-        &mut h,
-        "world_status",
-        json!({"save_path": "new-folder/../back.json"}),
-    ));
-    assert!(e.contains("may only write inside"), "{e}");
-    assert!(!root.join("outside/victim2.json").exists());
+    ) {
+        Err(why) => links::skip(case, &why),
+        Ok(()) => {
+            let e = fails(&call(
+                &mut s,
+                &mut h,
+                "world_status",
+                json!({"save_path": "new-folder/../back.json"}),
+            ));
+            assert!(e.contains("may only write inside"), "{e}");
+            assert!(!root.join("outside/victim2.json").exists());
+            links::ran(case);
+        }
+    }
 }
 
 #[test]
@@ -353,7 +394,6 @@ fn a_refusal_names_the_path_asked_for() {
 /// frames, a site export's manifest, a pile's colours, a sweep's record) are not written through
 /// a symbolic link already at that name that leads outside: the call is refused, naming the file
 /// as the tools would write it, and nothing appears where the link leads.
-#[cfg(unix)]
 #[test]
 fn a_link_at_a_name_the_tools_choose_is_not_written_through() {
     let (mut s, mut h, root) = new();
@@ -361,71 +401,92 @@ fn a_link_at_a_name_the_tools_choose_is_not_written_through() {
     let away = root.join("outside/planted");
     std::fs::create_dir_all(away.join("frames")).unwrap();
     // A link at `name` in the folder `folder` of the output folder, to a file not there yet.
-    let plant = |folder: &str, name: &str| {
+    let plant = |folder: &str, name: &str| -> Result<std::path::PathBuf, String> {
         std::fs::create_dir_all(out.join(folder)).unwrap();
-        link(&away.join(folder), &out.join(folder).join(name));
-        out.join(folder).join(name)
+        links::file(&away.join(folder), &out.join(folder).join(name))?;
+        Ok(out.join(folder).join(name))
     };
-    let cases = [
-        (
-            plant("lk-media", "poster.png"),
-            "media_render",
-            json!({"quickstart": "life", "out": "lk-media"}),
-        ),
-        (
-            plant("lk-site", "manifest.json"),
-            "pack",
-            json!({"site": {"to": "lk-site"}}),
-        ),
-        (
-            plant("lk-pile", "look.json"),
-            "search_start",
-            json!({"pile": {"tiling": "square", "grains": "1e3", "folder": "lk-pile"}}),
-        ),
-    ];
-    for (planted, tool, args) in cases {
-        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
-        assert!(e.contains("may only write inside"), "{tool} {args}: {e}");
-        assert!(
-            e.contains(&planted.display().to_string()),
-            "{tool} {args}: {e}"
-        );
-        assert!(!e.contains("outside"), "{tool} {args}: {e}");
+    let case = "a linked file at a name the tools choose (symlink)";
+    let planted = (|| {
+        Ok::<_, String>([
+            (
+                plant("lk-media", "poster.png")?,
+                "media_render",
+                json!({"quickstart": "life", "out": "lk-media"}),
+            ),
+            (
+                plant("lk-site", "manifest.json")?,
+                "pack",
+                json!({"site": {"to": "lk-site"}}),
+            ),
+            (
+                plant("lk-pile", "look.json")?,
+                "search_start",
+                json!({"pile": {"tiling": "square", "grains": "1e3", "folder": "lk-pile"}}),
+            ),
+        ])
+    })();
+    match planted {
+        Err(why) => links::skip(case, &why),
+        Ok(cases) => {
+            for (planted, tool, args) in cases {
+                let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+                assert!(e.contains("may only write inside"), "{tool} {args}: {e}");
+                assert!(
+                    e.contains(&planted.display().to_string()),
+                    "{tool} {args}: {e}"
+                );
+                assert!(!e.contains("outside"), "{tool} {args}: {e}");
+            }
+            // A sweep's record in the folder a script names.
+            plant("lk-sweep", "run.json").unwrap();
+            let t = ok(&call(
+                &mut s,
+                &mut h,
+                "run_script",
+                json!({"script": "try { sweep(#{ rules: \"B3/S23\", tiling: \"square\", size: [16, 16], seed: \"random:0.4\", max_gens: 4, png: false, folder: \"lk-sweep\" }); print(\"wrote\"); } catch (e) { print(`refused ${e}`); }"}),
+            ));
+            assert!(
+                t.contains("refused") && t.contains("may only write inside"),
+                "{t}"
+            );
+            // A catalog a script opens in a folder: its file is checked, not only the folder.
+            plant("lk-lib", "library.sqlite").unwrap();
+            let t = ok(&call(
+                &mut s,
+                &mut h,
+                "run_script",
+                json!({"script": "try { let l = library(\"lk-lib\"); print(l.info()); } catch (e) { print(`refused ${e}`); }"}),
+            ));
+            assert!(
+                t.contains("refused") && t.contains("may only write inside"),
+                "{t}"
+            );
+            links::ran(case);
+        }
     }
     // A linked `frames` folder is refused before a frame is written.
-    std::fs::create_dir_all(out.join("lk-frames")).unwrap();
-    link(&away.join("frames"), &out.join("lk-frames/frames"));
-    let e = fails(&call(
-        &mut s,
-        &mut h,
-        "media_render",
-        json!({"quickstart": "life", "out": "lk-frames", "frames": true}),
-    ));
-    assert!(e.contains("may only write inside"), "{e}");
-    // A sweep's record in the folder a script names.
-    plant("lk-sweep", "run.json");
-    let t = ok(&call(
-        &mut s,
-        &mut h,
-        "run_script",
-        json!({"script": "try { sweep(#{ rules: \"B3/S23\", tiling: \"square\", size: [16, 16], seed: \"random:0.4\", max_gens: 4, png: false, folder: \"lk-sweep\" }); print(\"wrote\"); } catch (e) { print(`refused ${e}`); }"}),
-    ));
-    assert!(
-        t.contains("refused") && t.contains("may only write inside"),
-        "{t}"
-    );
-    // A catalog a script opens in a folder: its file is checked, not only the folder.
-    plant("lk-lib", "library.sqlite");
-    let t = ok(&call(
-        &mut s,
-        &mut h,
-        "run_script",
-        json!({"script": "try { let l = library(\"lk-lib\"); print(l.info()); } catch (e) { print(`refused ${e}`); }"}),
-    ));
-    assert!(
-        t.contains("refused") && t.contains("may only write inside"),
-        "{t}"
-    );
+    for &kind in links::Kind::for_folders() {
+        let case = format!("a linked frames folder ({})", kind.name());
+        let folder = format!("lk-frames-{}", kind.name());
+        std::fs::create_dir_all(out.join(&folder)).unwrap();
+        if let Err(why) = links::folder(
+            kind,
+            &away.join("frames"),
+            &out.join(&folder).join("frames"),
+        ) {
+            links::skip(&case, &why);
+            continue;
+        }
+        let e = fails(&call(
+            &mut s,
+            &mut h,
+            "media_render",
+            json!({"quickstart": "life", "out": folder, "frames": true}),
+        ));
+        assert!(e.contains("may only write inside"), "{case}: {e}");
+        links::ran(&case);
+    }
     let left: Vec<_> = std::fs::read_dir(&away)
         .unwrap()
         .map(|e| e.unwrap().file_name())

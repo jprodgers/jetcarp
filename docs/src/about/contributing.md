@@ -46,6 +46,12 @@ libvulkan1`, plus `mesa-vulkan-drivers` so that the GPU tests can run on a softw
 are skipped, with a note, on a machine with no usable graphics adapter. A few slow surveys are marked
 `#[ignore]` and run only when asked (`cargo test … -- --ignored`).
 
+On Windows the tests of the folder rules make directory junctions and symbolic links. Symbolic links
+need Developer Mode (*Settings → System → For developers*) or an administrator's terminal; without
+either, those cases are skipped, and say so (`cargo test … -- --nocapture` shows `skipped:`).
+CI sets `JETCARP_TEST_LINKS=all`, which makes such a skip a failure. The installers' own tests are
+`packaging/test-install-sh.sh` and `packaging/test-install-ps1.ps1`.
+
 Tests should never touch your own settings, data or pictures. To be sure, point JETCARP's folders at
 scratch folders while testing, as CI does:
 

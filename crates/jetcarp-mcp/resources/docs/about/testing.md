@@ -25,8 +25,9 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   another), must end with exactly the results of one that ran through.
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
-  server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders)
-  and its limits, the scripting API, packs (signed, unsigned, tampered and truncated), and the app,
+  server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
+  on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI
+  control while it is switched off, the scripting API, packs (signed, unsigned, tampered and truncated), and the app,
   which a test harness drives offscreen, clicking widgets by their text.
 - **The book.** The command-line and MCP reference pages are generated from the program and checked
   against it, and the copy of the book built into the program must match the book.
@@ -48,7 +49,11 @@ release workflow.
   silicon). The runners have no GPU of their own, so on Linux the GPU tests run on Mesa's software
   renderer (lavapipe), on macOS on the runner's virtual GPU, and on Windows they are skipped (JETCARP
   never uses Windows' software renderer, WARP). On Linux the tests run once more with the default
-  folders, failing if any test writes to them.
+  folders, failing if any test writes to them. On Windows each of the folder rules' link cases must
+  make its junction or symbolic link and run; the log names each one.
+- **The installers** are each given a release folder of the test's own: an intact archive installs;
+  an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
+  nothing installed (the shell installer on Linux, the PowerShell one on Windows).
 - **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
