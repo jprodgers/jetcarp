@@ -41,6 +41,8 @@ pub mod reseed;
 pub mod rng;
 pub mod rules;
 pub mod sandpile;
+#[doc(hidden)]
+pub mod scratch;
 pub mod script;
 pub mod seeding;
 pub mod semantics;

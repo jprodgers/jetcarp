@@ -86,6 +86,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           powershell -NoProfile -ExecutionPolicy Bypass -File packaging\test-install-ps1.ps1 -Installer "$env:RUNNER_TEMP\installers\jetcarp-installer.ps1" -Program target\release\jetcarp.exe
           exit $LASTEXITCODE
+      - name: A temp folder of the tests' own, to check they leave nothing in it (#121)
+        shell: bash
+        run: |
+          base=$RUNNER_TEMP
+          # On Windows, a path both bash and the tests read the same way (D:/a/_temp).
+          if command -v cygpath >/dev/null; then base=$(cygpath -m "$RUNNER_TEMP"); fi
+          d="$base/tests-temp"
+          mkdir -p "$d"
+          { echo "TMPDIR=$d"; echo "TMP=$d"; echo "TEMP=$d"; } >> "$GITHUB_ENV"
       - name: Test
         if: runner.os != 'Linux'
         run: cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
@@ -114,6 +123,16 @@ jobs:
         run: |
           cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
+      - name: The tests left no folders or files of theirs in the temp folder (#121)
+        shell: bash
+        run: |
+          # The macOS screen saver's log is the program's own file there, not a test's.
+          left=$(find "$TMPDIR" -mindepth 1 -maxdepth 1 -name 'jetcarp*' ! -name jetcarp-saver.log)
+          if [ -n "$left" ]; then
+            echo "::error::tests left these in the temp folder:"
+            echo "$left"
+            exit 1
+          fi
       - name: The generated reference pages match the program (MCP tools, command line)
         if: runner.os == 'Linux'
         run: |
