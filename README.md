@@ -18,8 +18,8 @@
 aperiodic spectre tiling, a cyclic automaton and Hodgepodge on squares, and JACA, JETCARP's
 two-sign automaton, on the Cairo pentagons, a 2-uniform tiling and Penrose rhombs.*
 
-JETCARP runs cellular automata on almost any tiling of the plane: squares and hexagons, all eleven
-Archimedean tilings, the 1,248 k-uniform tilings up to k = 6, 81 isohedral tile types, tiles you
+JETCARP runs cellular automata on almost any tiling of the plane: squares and hexagons, the 1,248
+k-uniform tilings up to k = 6 (the eleven Archimedean tilings among them), 81 isohedral tile types, tiles you
 draw yourself, and the aperiodic Penrose, hat and spectre tilings. Several automata can run at
 once, on shared or separate cell fields. It has a graphical app, a command line, a scripting
 language, and a Model Context Protocol (MCP) server, plus tools that search for spaceships,
@@ -27,8 +27,8 @@ oscillators and other patterns and keep verified catalogues of what they find.
 
 <img src="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/getting-started/tour-quick-start.webp" width="906" alt="The JETCARP app's Quick Start: a grid of running examples (JACA battles on Penrose rhombs, cyclic and rock-paper-scissors spirals, a WireWorld adder, forest fire, Lenia, Hodgepodge, turmites and layered rules), with a sidebar of categories, sources, tilings and rule families, a search box and a count of 1,249 entries.">
 
-*The app opens on the Quick Start: over a thousand running examples, by category, tiling and rule
-family. The [book](https://jprodgers.github.io/jetcarp/) has the guides, tutorials and
+*The app opens on the Quick Start: 364 running examples built in, and over a thousand once it has
+built its own on your machine, by category, tiling and rule family. The [book](https://jprodgers.github.io/jetcarp/) has the guides, tutorials and
 references.*
 
 > **Status:** before 1.0, a release may still change the scene format, the command line, the

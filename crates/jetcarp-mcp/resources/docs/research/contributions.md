@@ -1,7 +1,7 @@
 # What is new in JETCARP
 
-> **Status, v0.4.0 (November 2026).** This page is a first draft of JETCARP's contributions,
-> written for the v0.4.0 release and the paper that will follow. Each claim below is limited to what our prior-art search supports.
+> **Status, November 2026.** This page sets out JETCARP's contributions. It was first written for
+> the v0.4.0 release and is kept current with each release, for the paper that will follow. Each claim below is limited to what our prior-art search supports.
 > The spaceship claims have been through the checks described in [How we checked](#how-we-checked),
 > but not yet past the ConwayLife community, whom we will ask; see *Checks still to do* at the end.
 > If you know of earlier work that we have missed, please open an issue. We will correct the page and
@@ -361,8 +361,8 @@ abelian property and is presumably known. See [The Abelian sandpile](../automata
 ### 6. Tilings as a dimension of an exploratory search
 
 **Claim (to our knowledge).** JETCARP's exploratory search is the first to treat the tiling itself as a
-search dimension: it explores tiling, rule family, rule and starting pattern together, over about 1,200
-periodic and aperiodic tilings and 22 rule families in one archive. (Fewer of the tilings are distinct
+search dimension: it explores tiling, rule family, rule and starting pattern together, over 1,279
+periodic and aperiodic tilings and 22 rule families in one archive (the search can now draw on 1,359 tilings). (Fewer of the tilings are distinct
 as neighbour graphs: the 81 isohedral types among them have only 11.) Its first full run covered about
 15 million runs.
 
@@ -385,7 +385,7 @@ over several tilings had fixed goals, such as gliders on three aperiodic tilings
 ([Edmond 2026](bibliography.md#edmond2026gliders)) or Life on six Archimedean lattices
 ([Guttesen 2026](bibliography.md#guttesen2026game)).
 
-The search will be described in full in [Search methods](search-methods.md).
+The search is described in full in [Search methods](search-methods.md).
 
 ### 7. One engine for every family on every tiling
 

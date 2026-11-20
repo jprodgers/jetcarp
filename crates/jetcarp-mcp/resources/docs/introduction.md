@@ -83,8 +83,9 @@ spectre tiling. Scene <code>docs/scenes/automata/layered-spectre.json</code>.</f
 Every picture of a world in this book is made by JETCARP from the scene named under it, so you can
 run any of them yourself: `jetcarp run <scene> --gens N --png out.png`. The scenes are in the
 [`docs/scenes`](https://github.com/jprodgers/jetcarp/tree/main/docs/scenes) folder of JETCARP's
-repository; or download a still picture and run the picture itself, since each one carries its scene
-(`jetcarp run figure.png`). The pictures of the app's windows are screenshots, with no scene.
+repository. Most still pictures also carry their scene inside them, so you can download one and run
+the picture itself (`jetcarp run figure.png`). The pictures of the app's windows are screenshots,
+with no scene.
 
 ## Two ways through this book
 

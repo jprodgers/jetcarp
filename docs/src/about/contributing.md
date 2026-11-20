@@ -157,7 +157,8 @@ some figures. Some pages are generated, and say so at the top: edit their source
 `docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py`, `gen-palettes.py`,
 `gen-scripting.py`, `gen-cli.py` or `gen-mcp.py` instead of editing the page (all but the bibliography's
 and the scripting reference's read a freshly built `target/release/jetcarp`). Each takes `--check`,
-which writes nothing and fails if the committed page is not what it would write; CI runs every one.
+which writes nothing and fails if the committed page is not what it would write; CI runs every one,
+and `docs/tools/check-rule-notation.py`, which parses the rule notation page's table of examples.
 `gen-scripting.py` also fails if the Rhai help and the functions the engine registers disagree. The MCP server's crate keeps a copy of the book for its
 crates.io package, which `docs/tools/copy-mcp-resources.py` brings up to date; the release
 workflow checks it.

@@ -187,16 +187,21 @@ described with the method.
 - **Hashes are not proofs.** A 64-bit hash is not cryptographic, and two different states could share
   one. Where it matters, as in pattern verification, JETCARP compares the states themselves.
 
-## Planned: verification receipts for packs
+## Checking packs, and receipts to come
 
 <div class="checked">
 
-**Planned, not in JETCARP 0.4.0.** Packs, the format for sharing catalogues and search results, come
-in a later release. The plan is that importing a pack checks the SHA-256 of every file against its
-manifest and the pack's geometry pins against the running engine, then re-runs a random sample of its
-records, chosen on the importing machine from a seed it records: 3,000 by default, and if all pass,
-fewer than about 0.1% of the pack's records are wrong, with 95% confidence (the "rule of three"),
-whatever its size. A full re-run is available on request. Each check writes a small *receipt*: the
+**Packs** (since JETCARP 0.4.2), the format for sharing catalogues and search results, are checked
+when they are imported ([Packs](../guides/packs.md#import-a-pack)): every file against its SHA-256,
+the version against its publisher's signature, every pattern's id against the pattern, and the
+pack's geometry pins and rule meanings against the running engine (a pattern from another engine
+version is kept and flagged for `jetcarp library reverify`). Then 3,000 of the new patterns are run
+again (fewer if the pack has fewer), chosen at random but seeded by the pack's version id, so the
+same pack always checks the same sample. If all pass, fewer than about 0.1% of the pack's patterns
+are wrong, with 95% confidence (the "rule of three"), whatever its size. `--verify full` runs every
+new pattern.
+
+**Planned, not yet in JETCARP: receipts.** Each check would write a small *receipt*: the
 pack's manifest hash, the mode and sample seed, the records checked and passed and any that failed,
 the JETCARP version, the geometry pins, the operating system and processor, the date, and who ran it.
 Later, receipts could be signed and collected in a public, append-only list, so that a pack can show
