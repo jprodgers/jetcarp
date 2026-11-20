@@ -2435,7 +2435,6 @@ dependencies = [
 name = "jetcarp-app"
 version = "0.4.2"
 dependencies = [
- "anyhow",
  "bytemuck",
  "clap",
  "dirs",
