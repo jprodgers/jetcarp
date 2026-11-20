@@ -727,6 +727,10 @@ pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
 
 type Guard<'a> = MutexGuard<'a, Option<Connection>>;
 
+/// How long a library connection waits for another's lock before giving up (SQLite's busy
+/// timeout, and [`Library::set_wal`]'s wait).
+pub const BUSY_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 impl Library {
     /// `JETCARP_LIBRARY` (a folder, or a `.sqlite` file), else `<data>/library.sqlite`
     /// ([`jetcarp_core::paths::data_dir`]).
@@ -764,6 +768,33 @@ impl Library {
         Library {
             path: Library::file_for(path.into()),
             conn: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Put a connection's database in write-ahead-log mode (`PRAGMA journal_mode = WAL`), waiting
+    /// for other connections as long as a busy timeout would ([`BUSY_WAIT`]). Returns the mode
+    /// now in use.
+    ///
+    /// SQLite does not wait for this pragma: switching a new, empty database to WAL needs it
+    /// alone, and while another connection is making the same database (the app, the host, the
+    /// MCP server and a search job may all start together) the pragma fails at once with
+    /// "database is locked", whatever the busy timeout. So it is tried again, briefly, until the
+    /// other connection has made the database (in WAL mode, after which the pragma changes
+    /// nothing) or the wait runs out.
+    pub fn set_wal(c: &Connection) -> rusqlite::Result<String> {
+        let start = std::time::Instant::now();
+        let mut pause = std::time::Duration::from_millis(1);
+        loop {
+            match c.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0)) {
+                Err(x)
+                    if x.sqlite_error_code() == Some(rusqlite::ErrorCode::DatabaseBusy)
+                        && start.elapsed() < BUSY_WAIT =>
+                {
+                    std::thread::sleep(pause);
+                    pause = (pause * 2).min(std::time::Duration::from_millis(50));
+                }
+                r => return r,
+            }
         }
     }
 

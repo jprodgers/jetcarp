@@ -186,12 +186,12 @@ pub fn open(path: &Path) -> Result<Connection, String> {
         std::fs::create_dir_all(d).map_err(|x| format!("{}: {x}", d.display()))?;
     }
     let c = Connection::open(path).map_err(|x| format!("{}: {x}", path.display()))?;
-    c.busy_timeout(std::time::Duration::from_secs(30))
+    c.busy_timeout(jetcarp_store::library::BUSY_WAIT)
         .map_err(e)?;
-    c.execute_batch(
-        "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;",
-    )
-    .map_err(e)?;
+    // Waited for, as the library's is: several jobs may make the same store at once.
+    jetcarp_store::Library::set_wal(&c).map_err(e)?;
+    c.execute_batch("PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;")
+        .map_err(e)?;
     c.execute_batch(SCHEMA).map_err(e)?;
     // Format 1: elites held only ids.
     let has_tiling: bool = c

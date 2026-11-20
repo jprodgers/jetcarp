@@ -602,11 +602,12 @@ fn create_or_check(c: &mut Connection) -> Result<(), String> {
     tx.commit().map_err(e)
 }
 
-/// A library file opened to be written: WAL, a 30 s busy timeout, foreign keys.
+/// A library file opened to be written: WAL (waited for: [`Library::set_wal`]), a 30 s busy
+/// timeout, foreign keys.
 fn open_writable(path: &std::path::Path) -> rusqlite::Result<Connection> {
     let c = Connection::open(path)?;
-    c.busy_timeout(std::time::Duration::from_secs(30))?;
-    c.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))?;
+    c.busy_timeout(super::BUSY_WAIT)?;
+    Library::set_wal(&c)?;
     c.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
     Ok(c)
 }
@@ -645,7 +646,7 @@ fn immutable_uri(path: &std::path::Path) -> String {
 fn open_read_only(path: &std::path::Path) -> rusqlite::Result<Connection> {
     use rusqlite::OpenFlags;
     let c = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    c.busy_timeout(std::time::Duration::from_secs(30))?;
+    c.busy_timeout(super::BUSY_WAIT)?;
     let readable = c
         .query_row("SELECT count(*) FROM sqlite_master", [], |r| {
             r.get::<_, i64>(0)
