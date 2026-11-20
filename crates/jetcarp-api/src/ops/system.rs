@@ -452,7 +452,8 @@ pub struct UninstallIn {
     /// Do it. Without this, only say what would be done.
     #[serde(default)]
     pub yes: bool,
-    /// Also delete the settings folder (except a picture the desktop still shows).
+    /// Also delete the settings folder (except a picture the desktop still shows), only when
+    /// everything in it is JETCARP's: a folder holding anything else is refused.
     #[serde(default)]
     pub settings: bool,
     /// Also delete the data folder (the catalog, search databases, packs), only when everything
@@ -798,12 +799,38 @@ fn dir_is_empty(d: &Path) -> bool {
     std::fs::read_dir(d).is_ok_and(|mut e| e.next().is_none())
 }
 
+// What `uninstall --data` and `uninstall --settings` count as JETCARP's (#195). Each deletes its
+// folder whole, so first it makes sure everything in the folder is something JETCARP keeps there.
+// No release has written a marker into either folder, so this recognises the folders older
+// versions made too; a folder named by mistake (`JETCARP_DATA_DIR`, `paths.json` or
+// `JETCARP_CONFIG_DIR` pointing at a folder of documents) holds something else.
+//
+// **The lists live here: `DATA_FILES` and `DATA_FOLDERS`, `SETTINGS_FILES` and `SETTINGS_FOLDERS`
+// (with `PACK_FILES`).** A file or folder JETCARP comes to keep in the data or settings folder must
+// be added to them, as well as to `folders.md` ("What lives in each folder"), or `uninstall` will
+// refuse a folder that holds it. The uninstall test (`tests/uninstall_folders.rs`) fills a
+// folder with every name on them.
+
+/// What may be inside one of JETCARP's folders.
+#[derive(Clone, Copy)]
+enum Inside {
+    /// Anything: JETCARP's own pictures, the search databases of older versions.
+    Anything,
+    /// Files only, of any name: job locks, saved profiles and rotations.
+    Files,
+    /// Folders named by two hexadecimal digits (`media/`).
+    HexFolders,
+    /// Folders named by a UUID (`searches/`).
+    UuidFolders,
+    /// These files, and their temporary files while being written.
+    Named(&'static [&'static str]),
+}
+
 /// The files JETCARP keeps at the top of a data folder: the library and what SQLite keeps beside
-/// it (`folders.md`, "What lives in each folder"); and, on Windows, where the data folder is also
-/// the runtime folder and the screen saver's (`%LOCALAPPDATA%\jetcarp`, whose name Windows reads
-/// in any case), the host's and the tuner's locks, the app's and the host's endpoint files, and
-/// `JETCARP.scr`.
-const DATA_FILES: [&str; 9] = [
+/// it; and, on Windows, where the data folder is also the runtime folder and the screen saver's
+/// (`%LOCALAPPDATA%\jetcarp`, whose name Windows reads in any case), the host's and the tuner's
+/// locks, the app's and the host's endpoint files, and `JETCARP.scr`.
+const DATA_FILES: &[&str] = &[
     "library.sqlite",
     "library.sqlite-wal",
     "library.sqlite-shm",
@@ -815,16 +842,71 @@ const DATA_FILES: [&str; 9] = [
     "JETCARP.scr",
 ];
 
-/// An endpoint file being written: `.<name>.<process id>.tmp` (`jetcarp_mcp::link`).
-fn endpoint_being_written(name: &str) -> bool {
-    name.strip_prefix('.')
-        .and_then(|n| n.strip_suffix(".tmp"))
-        .and_then(|n| n.rsplit_once('.'))
-        .is_some_and(|(file, pid)| {
-            matches!(file, "host-endpoint.json" | "app-endpoint.json")
-                && !pid.is_empty()
-                && pid.chars().all(|c| c.is_ascii_digit())
+/// The folders JETCARP keeps in a data folder: the library's job locks, its media
+/// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), and the search databases'
+/// folder ([`jetcarp_core::paths::explore_dir`]).
+const DATA_FOLDERS: &[(&str, Inside)] = &[
+    ("library.sqlite-jobs", Inside::Files),
+    ("media", Inside::HexFolders),
+    ("searches", Inside::UuidFolders),
+    ("explore", Inside::Anything),
+];
+
+/// The files JETCARP keeps at the top of the settings folder: the app's, the host's and setup's
+/// settings, the data folder chosen in setup, the answer to the photosensitive seizure warning,
+/// the GPU setting and its self-tests, the host's command, the user's own desktop picture, and
+/// the two macOS screen saver records.
+const SETTINGS_FILES: &[&str] = &[
+    "app.json",
+    "host.json",
+    "setup.json",
+    "paths.json",
+    "photosensitivity.json",
+    "gpu.json",
+    "gpu-checks.json",
+    "host-program",
+    "desktop-picture.json",
+    "screen-saver-before.plist",
+    "wallpaper-store-before-saver-remove.plist",
+];
+
+/// The publisher's files (`<settings>/pack/`): the private key and its public half, who the
+/// publisher is, and the rater book.
+const PACK_FILES: &[&str] = &[
+    "publisher_ed25519",
+    "publisher_ed25519.pub",
+    "publisher.json",
+    "raters.json",
+];
+
+/// The folders JETCARP keeps in the settings folder: screensaver profiles, rotations, the
+/// pictures of *Fit to this computer*, the host's desktop stills, and the publisher's files.
+const SETTINGS_FOLDERS: &[(&str, Inside)] = &[
+    ("screensavers", Inside::Files),
+    ("rotations", Inside::Files),
+    ("tune", Inside::Anything),
+    ("desktop-pictures", Inside::Anything),
+    ("pack", Inside::Named(PACK_FILES)),
+];
+
+/// A temporary file JETCARP writes beside one of `names` and then renames into place
+/// (`setup.json.tmp-123`, `raters.tmp123`, `gpu.json.tmp`, `.host-endpoint.json.123.tmp`): the
+/// name or its stem, then `tmp` with only digits, dots and dashes about it.
+fn being_written(name: &str, names: &[&str]) -> bool {
+    let n = name.strip_prefix('.').unwrap_or(name);
+    names.iter().any(|known| {
+        let stem = known.split('.').next().unwrap_or(known);
+        [*known, stem].iter().any(|k| {
+            n.strip_prefix(k)
+                .filter(|rest| rest.starts_with('.'))
+                .and_then(|rest| rest.split_once("tmp"))
+                .is_some_and(|(a, b)| {
+                    format!("{a}{b}")
+                        .chars()
+                        .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+                })
         })
+    })
 }
 
 /// What a system leaves in any folder it has shown (Finder, Explorer), which says nothing about
@@ -848,18 +930,23 @@ fn uuid_like(name: &str) -> bool {
         })
 }
 
-/// What in the data folder `data` is not JETCARP's, as paths inside it (empty: everything is, or
-/// it holds nothing), for `uninstall --data` (#195), which deletes the folder whole. JETCARP keeps
-/// only these there, and no release has kept anything else: the files of [`DATA_FILES`], with an
-/// endpoint file being written; the
-/// library's folder of job locks (`library.sqlite-jobs/`, files); `media/`, whose folders are
-/// named by two hexadecimal digits; `searches/`, one folder per search named by its UUID; and
-/// `explore/`, the search databases' folder ([`jetcarp_core::paths::explore_dir`]). A folder that
-/// is only these is JETCARP's, whichever way it was named (`JETCARP_DATA_DIR`, `paths.json`, the
-/// default), even one made by an older version, which wrote no marker of its own; a folder named by
-/// mistake, such as a folder of documents, holds something else. A library alone would not tell:
-/// JETCARP makes `library.sqlite` in whatever folder it is given, the first time it is used.
-fn not_jetcarps(data: &Path) -> Vec<String> {
+/// Whether `p` is a folder of its own, not a link to one: a link is not looked into, since
+/// deleting it removes only the link.
+fn real_dir(p: &Path) -> bool {
+    p.is_dir() && !std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// What in the folder `dir` JETCARP did not put there, as paths inside it (empty: everything in
+/// it is JETCARP's, or it holds nothing), given what JETCARP keeps in it: `files` (with their
+/// temporary files while being written) and `folders`, each with what may be inside. `also` is
+/// one more entry to count as JETCARP's (the data folder inside the settings folder, as on macOS,
+/// which `--data` checks on its own or the uninstall keeps).
+fn not_jetcarps(
+    dir: &Path,
+    files: &[&str],
+    folders: &[(&str, Inside)],
+    also: Option<&str>,
+) -> Vec<String> {
     let entries = |d: &Path| -> Result<Vec<(String, bool)>, String> {
         std::fs::read_dir(d)
             .map_err(|e| e.to_string())?
@@ -872,30 +959,32 @@ fn not_jetcarps(data: &Path) -> Vec<String> {
             .collect()
     };
     let mut odd = Vec::new();
-    let top = match entries(data) {
+    let top = match entries(dir) {
         Ok(t) => t,
         Err(e) => return vec![format!("(it cannot be read: {e})")],
     };
-    for (name, dir) in top {
-        if system_litter(&name) {
+    for (name, is_dir) in top {
+        if system_litter(&name) || also == Some(name.as_str()) {
             continue;
         }
-        // What may be inside each of JETCARP's folders (`None`: anything).
-        let inside: Option<fn(&str, bool) -> bool> = match (name.as_str(), dir) {
-            (n, false) if DATA_FILES.contains(&n) || endpoint_being_written(n) => continue,
-            ("library.sqlite-jobs", true) => Some(|_, dir| !dir),
-            ("media", true) => {
-                Some(|n, dir| dir && n.len() == 2 && n.chars().all(|c| c.is_ascii_hexdigit()))
-            }
-            ("searches", true) => Some(|n, dir| dir && uuid_like(n)),
-            ("explore", true) => None,
-            _ => {
-                odd.push(name);
-                continue;
-            }
+        if !is_dir && (files.contains(&name.as_str()) || being_written(&name, files)) {
+            continue;
+        }
+        let Some(&(_, inside)) = folders.iter().find(|(f, _)| is_dir && *f == name) else {
+            odd.push(name);
+            continue;
         };
-        let Some(ok) = inside else { continue };
-        match entries(&data.join(&name)) {
+        let ok = |n: &str, d: bool| match inside {
+            Inside::Anything => true,
+            Inside::Files => !d,
+            Inside::HexFolders => d && n.len() == 2 && n.chars().all(|c| c.is_ascii_hexdigit()),
+            Inside::UuidFolders => d && uuid_like(n),
+            Inside::Named(names) => !d && (names.contains(&n) || being_written(n, names)),
+        };
+        if matches!(inside, Inside::Anything) {
+            continue;
+        }
+        match entries(&dir.join(&name)) {
             Ok(list) => odd.extend(
                 list.into_iter()
                     .filter(|(n, d)| !system_litter(n) && !ok(n, *d))
@@ -908,44 +997,155 @@ fn not_jetcarps(data: &Path) -> Vec<String> {
     odd
 }
 
-/// `uninstall --data`'s refusal of a data folder that holds something not JETCARP's (#195).
-fn refuse_data(data: &Path, odd: &[String], settings: Option<&Path>) -> ApiError {
-    use jetcarp_core::paths::DataSource;
+/// A folder `uninstall` will not delete: which (`data` or `settings`), where, what in it is not
+/// JETCARP's, where its name came from, and what to do if that was a mistake.
+struct Refused {
+    which: &'static str,
+    folder: PathBuf,
+    odd: Vec<String>,
+    named: String,
+    mistake: String,
+}
+
+/// The data folder's refusal, if `--data` must refuse it.
+fn check_data(data: &Path, settings: Option<&Path>) -> Option<Refused> {
+    use jetcarp_core::paths::{DataSource, PATHS_FILE};
+    if !real_dir(data) {
+        return None;
+    }
+    let odd = not_jetcarps(data, DATA_FILES, DATA_FOLDERS, None);
+    if odd.is_empty() {
+        return None;
+    }
     let source = jetcarp_core::paths::data_dir_source(settings).1;
-    let named = match source {
-        DataSource::Env => " (named by JETCARP_DATA_DIR)",
-        DataSource::Chosen => " (chosen in setup, in paths.json)",
-        DataSource::Default => "",
-    };
-    let shown: Vec<&str> = odd.iter().take(3).map(String::as_str).collect();
-    let more = if odd.len() > 3 {
-        format!(" and {} more", odd.len() - 3)
-    } else {
-        String::new()
-    };
-    let mistake = match source {
-        DataSource::Env => {
-            "If JETCARP_DATA_DIR names this folder by mistake, correct or unset it and uninstall again. "
-                .to_string()
-        }
-        DataSource::Chosen => format!(
-            "If it was chosen by mistake, delete {} to go back to the default data folder, and uninstall again. ",
-            settings
-                .map(|s| s.join(jetcarp_core::paths::PATHS_FILE).display().to_string())
-                .unwrap_or_else(|| jetcarp_core::paths::PATHS_FILE.into())
+    let (named, mistake) = match source {
+        DataSource::Env => (
+            " (named by JETCARP_DATA_DIR)".to_string(),
+            "If JETCARP_DATA_DIR names the data folder by mistake, correct or unset it and uninstall again. "
+                .to_string(),
         ),
-        DataSource::Default => String::new(),
+        DataSource::Chosen => (
+            " (chosen in setup, in paths.json)".to_string(),
+            format!(
+                "If the data folder was chosen by mistake, delete {} to go back to the default one, and uninstall again. ",
+                settings
+                    .map(|s| s.join(PATHS_FILE).display().to_string())
+                    .unwrap_or_else(|| PATHS_FILE.into())
+            ),
+        ),
+        DataSource::Default => (String::new(), String::new()),
     };
-    ApiError::conflict(format!(
-        "the data folder {}{named} holds what JETCARP did not put there: {}{more}. \
-         `--data` deletes a data folder only when everything in it is JETCARP's, so nothing was done",
-        data.display(),
-        shown.join(", ")
-    ))
-    .hint(format!(
-        "{mistake}If it really is JETCARP's data folder and you want it gone, delete it yourself. \
-         Without --data, the uninstall undoes the rest and keeps the folder."
-    ))
+    Some(Refused {
+        which: "data",
+        folder: data.to_path_buf(),
+        odd,
+        named,
+        mistake,
+    })
+}
+
+/// The settings folder's refusal, if `--settings` must refuse it. The data folder inside it (as
+/// on macOS) is the data folder's own matter: `--data` checks it, and without `--data` it is kept.
+fn check_settings(settings: &Path, data: &Path) -> Option<Refused> {
+    if !real_dir(settings) {
+        return None;
+    }
+    let inside = within(data, settings)
+        .then(|| {
+            data.strip_prefix(settings)
+                .ok()
+                .map(Path::to_path_buf)
+                .or_else(|| {
+                    canonical(data)
+                        .strip_prefix(canonical(settings))
+                        .ok()
+                        .map(Path::to_path_buf)
+                })
+        })
+        .flatten();
+    let first = inside
+        .as_deref()
+        .and_then(|r| r.components().next())
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
+    let odd = not_jetcarps(settings, SETTINGS_FILES, SETTINGS_FOLDERS, first.as_deref());
+    if odd.is_empty() {
+        return None;
+    }
+    let env = std::env::var_os("JETCARP_CONFIG_DIR").filter(|v| !v.is_empty());
+    let by_env = env.is_some_and(|v| Path::new(&v) == settings);
+    Some(Refused {
+        which: "settings",
+        folder: settings.to_path_buf(),
+        odd,
+        named: if by_env {
+            " (named by JETCARP_CONFIG_DIR)".into()
+        } else {
+            String::new()
+        },
+        mistake: if by_env {
+            "If JETCARP_CONFIG_DIR names the settings folder by mistake, correct or unset it and uninstall again. "
+                .into()
+        } else {
+            String::new()
+        },
+    })
+}
+
+/// `uninstall`'s refusal of the folders it was asked to delete and will not (#195): each named,
+/// with where its name came from and what in it JETCARP did not put there (the first three, then
+/// how many more).
+fn refuse(refused: &[Refused]) -> ApiError {
+    let parts: Vec<String> = refused
+        .iter()
+        .map(|r| {
+            let shown: Vec<&str> = r.odd.iter().take(3).map(String::as_str).collect();
+            let more = if r.odd.len() > 3 {
+                format!(" and {} more", r.odd.len() - 3)
+            } else {
+                String::new()
+            };
+            format!(
+                "the {} folder {}{} holds what JETCARP did not put there: {}{more}",
+                r.which,
+                r.folder.display(),
+                r.named,
+                shown.join(", ")
+            )
+        })
+        .collect();
+    let flags: Vec<String> = refused.iter().map(|r| format!("--{}", r.which)).collect();
+    let (rule, gone, without) = if refused.len() == 1 {
+        (
+            format!(
+                "`{}` deletes the {} folder only when everything in it is JETCARP's",
+                flags[0], refused[0].which
+            ),
+            format!(
+                "If it really is JETCARP's {} folder and you want it gone, delete it yourself.",
+                refused[0].which
+            ),
+            format!(
+                "Without {}, the uninstall undoes the rest and keeps the folder.",
+                flags[0]
+            ),
+        )
+    } else {
+        (
+            format!(
+                "`{}` delete their folders only when everything in each is JETCARP's",
+                flags.join("` and `")
+            ),
+            "If they really are JETCARP's folders and you want them gone, delete them yourself."
+                .to_string(),
+            format!(
+                "Without {}, the uninstall undoes the rest and keeps the folders.",
+                flags.join(" and ")
+            ),
+        )
+    };
+    let mistakes: String = refused.iter().map(|r| r.mistake.as_str()).collect();
+    ApiError::conflict(format!("{}. {rule}, so nothing was done", parts.join("; ")))
+        .hint(format!("{mistakes}{gone} {without}"))
 }
 
 /// Deletes the host's lock file once no host holds it (waiting a little for a host that is
@@ -996,17 +1196,27 @@ impl Op for SystemUninstall {
         /// A step's work: a note on success (files kept), or why it failed.
         type Run = Box<dyn Fn() -> Result<Option<String>, String> + Send + Sync>;
         let paths = cx.paths();
-        // `--data` deletes the data folder whole, so first make sure it is JETCARP's (#195), before
-        // anything is done or listed. A data folder that is a link is not looked into: only the
-        // link is removed, and the folder it leads to is left alone.
-        if a.data
-            && paths.data.is_dir()
-            && !std::fs::symlink_metadata(&paths.data).is_ok_and(|m| m.file_type().is_symlink())
-        {
-            let odd = not_jetcarps(&paths.data);
-            if !odd.is_empty() {
-                return Err(refuse_data(&paths.data, &odd, paths.settings.as_deref()));
-            }
+        // `--data` and `--settings` delete their folders whole, so first make sure each is
+        // JETCARP's (#195), both before anything is done or listed. A folder that is a link is not
+        // looked into: only the link is removed, and the folder it leads to is left alone.
+        let refused: Vec<Refused> = [
+            a.data
+                .then(|| check_data(&paths.data, paths.settings.as_deref()))
+                .flatten(),
+            a.settings
+                .then(|| {
+                    paths
+                        .settings
+                        .as_deref()
+                        .and_then(|c| check_settings(c, &paths.data))
+                })
+                .flatten(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !refused.is_empty() {
+            return Err(refuse(&refused));
         }
         let mut steps: Vec<(String, Run)> = cx
             .platform

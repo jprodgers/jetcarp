@@ -90,7 +90,7 @@ Two options of `jetcarp uninstall` also delete JETCARP's folders:
 
 | Option | Deletes |
 | --- | --- |
-| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures. A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be |
+| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, the host's desktop pictures, and your publisher key with the rater book (`pack/`), if you made one, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **If you publish packs, copy `pack/` out first:** its key is your identity as the publisher of every pack you have signed, and without it you cannot sign another version of them |
 | `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases, but only when everything in it is JETCARP's (below). **This cannot be undone** |
 
 To undo everything and delete both folders:
@@ -103,18 +103,23 @@ On macOS the data folder is inside the settings folder. With both options, the d
 deleted first and then the settings folder; `--settings` alone deletes the settings and keeps the
 data folder inside it.
 
-`--data` deletes the data folder only when everything in it is JETCARP's: the library and the
-files SQLite keeps beside it, its folder of job locks, `media/`, `searches/` and `explore/` laid out
-as JETCARP lays them out, and on Windows the runtime files and the screen saver that share the
-folder. A folder holding anything else, such as a folder of documents that `JETCARP_DATA_DIR` or a
-data folder chosen in setup names by mistake, is refused before anything is done, even with
-`--yes`: the uninstall names the folder, where its name came from and what in it is not JETCARP's,
-and changes nothing. Correct the variable or the choice (deleting `paths.json` in the settings folder
-brings the usual data folder back) and run it again; or, if it really is your data folder and you
-want it gone, delete it yourself. Without `--data`, the uninstall undoes the rest and keeps the
-folder. A library alone does not make a folder JETCARP's, since JETCARP makes `library.sqlite` in
-whatever folder it is given. A data folder that is a link to another folder is not looked into:
-`--data` removes the link and leaves the folder it leads to alone.
+`--data` and `--settings` delete their folders only when everything in each is JETCARP's. In the
+data folder that is the library and the files SQLite keeps beside it, its folder of job locks, and
+`media/`, `searches/` and `explore/` laid out as JETCARP lays them out (on Windows, also the
+runtime files and the screen saver, which share the folder). In the settings folder it is the
+settings files [Folders](../reference/folders.md#what-lives-in-each-folder) lists, the folders of
+screensaver profiles, rotations, desktop stills and *Fit to this computer*'s pictures, and `pack/`
+with the publisher's files (and the data folder, where it is inside). A folder holding anything
+else, such as a folder of documents that `JETCARP_DATA_DIR`, `JETCARP_CONFIG_DIR` or a data folder
+chosen in setup names by mistake, is refused before anything is done, even with `--yes`: both
+folders are checked first, and the uninstall names each folder it refuses, where its name came
+from and what in it is not JETCARP's, and changes nothing. Correct the variable or the choice
+(deleting `paths.json` in the settings folder brings the usual data folder back) and run it again;
+or, if it really is JETCARP's folder and you want it gone, delete it yourself. Without the option,
+the uninstall undoes the rest and keeps the folder. A library alone does not make a folder
+JETCARP's, since JETCARP makes `library.sqlite` in whatever folder it is given. A folder that is a
+link to another folder is not looked into: the option removes the link and leaves the folder it
+leads to alone.
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you
 want to keep your pattern library, copy `library.sqlite` (and its `media` folder) out of the data
