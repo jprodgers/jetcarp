@@ -114,11 +114,14 @@ jobs:
         run: |
           cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
-      - name: The generated reference pages match the program (MCP tools, command line)
+      - name: The generated book pages match the program (MCP tools, command line, named rules, tilings, palettes)
         if: runner.os == 'Linux'
         run: |
           python3 docs/tools/gen-mcp.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-cli.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-named-rules.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-tiling-catalogue.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-palettes.py --check --jetcarp target/release/jetcarp
 
   fmt:
     name: Formatting

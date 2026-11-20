@@ -191,7 +191,7 @@ traces, and test fixtures. They may change without notice.
 | `JETCARP_SCREENSHOT` with `JETCARP_SCENE`, `JETCARP_FRAMES` and many others (`JETCARP_MENU`, `JETCARP_PANES`, `JETCARP_POPOUT`, `JETCARP_SPEED`, `JETCARP_PAUSED`, `JETCARP_WALLPAPER`, `JETCARP_SCRIPTS`, `JETCARP_DASHBOARD`, `JETCARP_RESEED`, `JETCARP_TOOL_PALETTE`, …) | Open the app on a scene, set up a window or tool, run some frames, save a screenshot and quit. A screenshot run neither reads nor writes `app.json` unless `JETCARP_CONFIG_DIR` is set; until the settings folder holds an answer to the photosensitive seizure warning, it pictures the warning |
 | `JETCARP_FRAMETIME` | Print frame-time statistics when the app closes |
 | `JETCARP_PRESENT` | The windows' present mode (`fifo`, `mailbox`, `immediate`, `novsync`), for frame-pacing checks |
-| `JETCARP_ZOOM`, `JETCARP_HLVIEW`, `JETCARP_HOST_PANEL` | Zoom, HashLife view and host panel set-up for headless checks |
+| `JETCARP_ZOOM`, `JETCARP_HLVIEW` | Zoom and HashLife view set-up for headless checks |
 | `JETCARP_EXPLORE_TRACE` | Timing lines from the exploratory search on standard error |
 | `JETCARP_HOST_NO_PAUSE_RULES` | The background host ignores its power rules (its own tests) |
 | `JETCARP_PIN_WRITE` | Tests only: rewrite the geometry and dynamics pins after a deliberate change (see [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)) |

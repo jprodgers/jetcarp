@@ -2,7 +2,8 @@
 
 In this tutorial you hunt for spaceships in Conway's Life on a tiling made of triangles and
 squares, look at the ship you find, check whether it is new, and then crash two copies of it into
-each other. It takes about ten minutes, and the hunt itself a few seconds.
+each other. It takes about ten minutes, and the hunt itself from a few seconds to a minute, depending on your
+processor.
 
 You need JETCARP installed ([Installing](../getting-started/installing.md)). Everything here runs
 in a terminal. The [Searching for patterns](../guides/searching.md) guide covers every option met

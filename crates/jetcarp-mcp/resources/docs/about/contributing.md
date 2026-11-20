@@ -154,10 +154,11 @@ the scene; the pictures of the app are drawn offscreen by ignored tests, in
 (it needs Python with NumPy and Pillow; set `PYTHON=` if your default Python lacks them). Both use
 `target/release/jetcarp` unless `JETCARP=` names another binary, and both take a filter to render only
 some figures. Some pages are generated, and say so at the top: edit their sources and run
-`docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py`,
-`gen-scripting.py`, `gen-cli.py` or `gen-mcp.py` instead of editing the page (the last two read a
-freshly built `target/release/jetcarp`). `gen-scripting.py` also fails if the Rhai help and the
-functions the engine registers disagree. The MCP server's crate keeps a copy of the book for its
+`docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py`, `gen-palettes.py`,
+`gen-scripting.py`, `gen-cli.py` or `gen-mcp.py` instead of editing the page (all but the bibliography's
+and the scripting reference's read a freshly built `target/release/jetcarp`). Each takes `--check`,
+which writes nothing and fails if the committed page is not what it would write; CI runs every one.
+`gen-scripting.py` also fails if the Rhai help and the functions the engine registers disagree. The MCP server's crate keeps a copy of the book for its
 crates.io package, which `docs/tools/copy-mcp-resources.py` brings up to date; the release
 workflow checks it.
 

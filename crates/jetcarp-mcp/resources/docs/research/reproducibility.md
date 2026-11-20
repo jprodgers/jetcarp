@@ -136,7 +136,7 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   must JACA's glow and counts.
 - **The exploratory search's batches** (`batch.rs`): populations, changes, hashes and frames of many
   worlds stepped together.
-- **Soup hunts** (`hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must
+- **Soup hunts** (`crates/jetcarp-search/tests/gpu_hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must
   leave exactly the catalogue a CPU-only hunt leaves.
 - **Large sandpiles** (`pile.rs`): the same pile, toppling count and sweep count at every step.
 
