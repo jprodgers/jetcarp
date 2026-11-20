@@ -49,6 +49,7 @@ pub mod sheet;
 pub mod sizeclass;
 pub mod spectre;
 pub mod step;
+pub mod strobe;
 pub mod table;
 pub mod topology;
 pub mod turmite;
