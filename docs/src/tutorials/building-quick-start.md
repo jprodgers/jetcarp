@@ -337,7 +337,7 @@ It prints:
 ```text
 export sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 (feed my-finds, version 2026.11)
   My finds
-  publisher SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0 (Ada Example), signed by its publisher
+  publisher SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0 (Ada Example), signed by its publisher; your own publisher key
   created 2026-11-12T11:53:23Z, licence CC0-1.0
   provenance             2 rows in 1 parts, 3860 bytes
   quickstart             2 rows in 2 parts, 8002 bytes

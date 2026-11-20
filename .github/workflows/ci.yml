@@ -198,6 +198,28 @@ jobs:
       - name: cargo publish --dry-run (every crate, as the release publishes them)
         run: cargo publish --workspace --locked --dry-run
 
+  msrv:
+    # The stated minimum Rust (Cargo.toml's rust-version) must build the workspace: every other
+    # job uses the newest stable, which hid that the workspace did not load on 1.95 to 1.98
+    # (#175). Keep the toolchain below in step with rust-version.
+    name: The minimum Rust (1.95) builds the workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      - name: cargo check, every target, with the locked dependencies
+        run: cargo check --workspace --all-targets --locked
+
   build-only:
     # Targets nobody can test by hand yet: compile them so they don't rot.
     name: Build (${{ matrix.name }})

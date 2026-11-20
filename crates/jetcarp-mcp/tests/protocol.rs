@@ -1122,3 +1122,60 @@ fn help_and_reference() {
     let e = fails(&call(&mut s, &mut h, "help", json!({"page": "nope/nope"})));
     assert!(e.contains("pages"), "{e}");
 }
+
+/// A pack imported through the tools says who signed it and that its key is new to the library;
+/// `info` says so before the import, and calls the key known after it.
+#[test]
+fn a_pack_import_names_its_signer_and_a_new_key() {
+    fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for e in std::fs::read_dir(from).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                copy_dir(&p, &to.join(e.file_name()));
+            } else {
+                std::fs::copy(&p, to.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    let (mut s, mut h) = new();
+    let root = setup("protocol");
+    // Inside the output folder, which the tools may read.
+    let pack = root.join("out/signer-test/minimal");
+    copy_dir(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../jetcarp-pack/tests/golden/minimal"),
+        &pack,
+    );
+    let path = path_json(&pack);
+    let info = ok(&call(
+        &mut s,
+        &mut h,
+        "pack",
+        json!({"info": {"path": path}}),
+    ));
+    assert!(
+        info.contains("signed by its publisher; new key: never seen in this library"),
+        "{info}"
+    );
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "pack",
+        json!({"import": {"path": path, "verify": "none"}}),
+    ));
+    assert!(
+        t.contains("signed by ") && t.contains("; new key: never seen in this library"),
+        "{t}"
+    );
+    let info = ok(&call(
+        &mut s,
+        &mut h,
+        "pack",
+        json!({"info": {"path": path}}),
+    ));
+    assert!(
+        info.contains("known key: this library has imported packs it signed"),
+        "{info}"
+    );
+}

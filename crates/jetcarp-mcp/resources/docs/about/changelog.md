@@ -7,6 +7,17 @@ that will declare them stable.
 
 ## [0.4.3] – unreleased
 
+### Added
+
+- **Importing a pack says who signed it, and says plainly when their key is new.** The setup
+  window shows, under each pack before it is imported and under each import afterwards, the
+  publisher's name and the start of their key, marked *New key: never seen in this library* when
+  no pack signed by that key has been imported into the library before. `jetcarp pack import`,
+  `pack check` and `pack info`, the MCP `pack` tool and `jetcarp setup` say the same, with the whole
+  key; a known key, your own publisher key and the packs that came with JETCARP are each said as
+  such. Before, the app showed only a pack's name and size, and the command line the key alone.
+  ([Packs](../guides/packs.md#check-a-pack))
+
 ### Fixed
 
 - **Names that Windows treats specially are refused on every system.** The MCP tools, scripts, jobs
@@ -16,12 +27,15 @@ that will declare them stable.
   `scene.json.` (Windows drops those, so the name would change there), with an error that names it,
   so that folders and scenes can be copied between systems. A folder JETCARP names after a scene
   called, say, "Con" gets a `_` after the name ([Names](../reference/folders.md#names)).
-- **Paths of 4,096 bytes or more are refused on every system, and a save into many new folders no
-  longer waits on JETCARP.** The MCP tools, scripts and jobs refuse such a path with an error that
-  gives its length, as Linux always did; on Windows, with long paths on, they used to make the
-  folders. JETCARP now finds where a new path begins in a few lookups instead of one for each
-  folder on the way, which made a save into a few thousand new folders take over a minute on
-  Windows. On macOS the system's own limit, 1,024 bytes, still comes first.
+- **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but
+  the workspace's manifests needed 1.99 to load. CI now checks the whole workspace with 1.95.
+  ([#175](https://github.com/jprodgers/jetcarp/issues/175))
+- **Paths of 4,096 bytes or more are refused on every system.** The MCP tools, scripts and jobs
+  refuse such a path at once, with an error that gives its length, as Linux always did; on
+  Windows, with long paths on, they used to make the folders, and a save a few thousand folders
+  deep held the MCP server for minutes. JETCARP also finds where a new path begins in a few
+  lookups instead of one for each folder on the way. On macOS the system's own limit, 1,024 bytes,
+  still comes first.
 
 ## [0.4.2] – 2026-11-17
 

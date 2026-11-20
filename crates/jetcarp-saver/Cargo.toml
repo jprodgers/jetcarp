@@ -20,7 +20,7 @@ jetcarp-core.workspace = true
 jetcarp-gpu.workspace = true
 # Without its library: the saver's scenes are baked into the bundle, and a sandboxed saver
 # could not read the library anyway. So the saver links no store, job runner or SQLite.
-jetcarp-display = { workspace = true, default-features = false }
+jetcarp-display.workspace = true
 serde_json.workspace = true
 wgpu.workspace = true
 pollster.workspace = true

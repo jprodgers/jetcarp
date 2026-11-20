@@ -114,6 +114,9 @@ fn setup_explorer_yes_end_to_end() {
     // It printed what it would do, then did it.
     assert!(err.contains("setting up JETCARP as Explorer:"), "{err}");
     assert!(err.contains("import minimal"), "{err}");
+    // Who signed it, and that it came with JETCARP (the program's own folder of packs here).
+    assert!(err.contains("the pack came with JETCARP"), "{err}");
+    assert!(out.contains("; signed by "), "{out}");
     assert!(err.contains("search for 3 seconds"), "{err}");
     assert!(out.contains("minimal imported: 3 patterns new"), "{out}");
     assert!(out.contains("Quick Start build"), "{out}");
