@@ -73,6 +73,12 @@ that will declare them stable.
   status says "GPU not opened yet (nothing shown yet)", and its screens that the GPU "is opened when
   the scene is first shown", where both said there was no GPU. A host that lost its GPU says that.
   ([#141](https://github.com/jprodgers/jetcarp/issues/141))
+- **On GNOME, setup says plainly to log out once after turning the live wallpaper on.** GNOME loads
+  JETCARP's extension only at login, and until then the scene shows in a window, which said nothing
+  about it; the only word was small print in setup. Setup now ends with "Log out and back in once to
+  see the live wallpaper on your desktop", the window's title says the same, and the host's note no
+  longer says to install an extension that setup already installed.
+  ([#139](https://github.com/jprodgers/jetcarp/issues/139))
 
 ## [0.4.2] – 2026-11-17
 
