@@ -359,6 +359,41 @@ is dated more closely than that.
   [How JETCARP is tested](https://jprodgers.github.io/jetcarp/about/testing.html).
 - **Stands.**
 
+### D-37. The dependencies are checked, and networking comes only on purpose
+
+- **Decided:** Jimmie, 19 November 2026, on the pull request that added the check
+  ([#187](https://github.com/jprodgers/jetcarp/pull/187)).
+- **The decision:** CI checks the dependency tree with cargo-deny on every push, every pull
+  request and once a week: known vulnerabilities, network client and server crates, and crates
+  from anywhere but crates.io. Networking is not ruled out: a change that adds it allows its crate
+  in `deny.toml`, for the one JETCARP crate that uses it, and updates SECURITY.md.
+- **Why:** "When I said a while back that JETCARP makes no network connection, I only meant that
+  currently. … I don't mean that for all time, and never have." And: "If it doesn't prevent us from
+  adding networking components, and there's a way to allow for known networking to occur in the
+  ways we specify, then that's fine. Otherwise I don't want to force us into no networking long
+  term, that's not my goal."
+- **How it reports:** "Required, later": the check only reports for now; which checks must pass
+  before `main` moves is decided for all of CI's jobs together. A notice that a crate is no longer
+  maintained is a warning and "never fail"s the check ([#186](https://github.com/jprodgers/jetcarp/issues/186)
+  lists them).
+- **Claude's part:** the check, and the way to allow a network crate for one JETCARP crate only
+  (cargo-deny's `wrappers`), came from the plan of the security work after the 0.4.2 audit; the
+  two answers in quotation marks are the options Jimmie chose from the ones Claude offered.
+- **Stands.** It works with D-23: whatever networking is decided, it comes in the crate meant
+  for it.
+
+### D-41. Uninstalling deletes only a data folder it can recognise as JETCARP's
+
+- **Decided:** Jimmie, 19 November 2026 ([#195](https://github.com/jprodgers/jetcarp/issues/195)).
+- **The decision:** "Refuse unless it's JETCARP's": `jetcarp uninstall --data` deletes the data
+  folder only when it can recognise it as JETCARP's (its library, its own sub-folders, or a
+  marker); a folder of other files is refused, named, and left for the person to delete by hand.
+- **Why:** testing found that a data folder set to a folder of someone's documents was deleted
+  whole, as told. The plan named the folder first, but the deletion cannot be undone.
+- **Claude's part:** the test, and the three options (refuse; warn louder; leave it); Jimmie
+  chose the first.
+- **Stands.** The fix is due in 0.4.3.
+
 ## Releases
 
 ### D-26. What does not work as intended does not ship
@@ -444,6 +479,48 @@ is dated more closely than that.
   someone that does know Rust to go over it with me at some point"), and a person reviews its
   security. "Right now just hopes, but before JOSS at a minimum."
 - **Open** (O-5): nobody has been found yet.
+
+### D-38. The workflows' actions are pinned, and updated each release cycle
+
+- **Decided:** Jimmie, 19 November 2026 ([#192](https://github.com/jprodgers/jetcarp/pull/192)).
+- **The decision:** every action the workflows use is named by its commit, with its version
+  beside it, so that a tag moved by an action's owner cannot change what runs in the release job.
+  "Update the hashes each release cycle": one pull request at the start of each cycle, reviewed by
+  Jimmie.
+- **Claude's part:** the pinning came from the audit's issue
+  [#183](https://github.com/jprodgers/jetcarp/issues/183); Claude offered updating by hand each
+  cycle or by Dependabot, and Jimmie chose by hand.
+- **Stands.**
+
+### D-39. Release files: checksums by the installers, attestations by hand, Windows not yet signed
+
+- **Decided:** Jimmie, 19 November 2026 ([#191](https://github.com/jprodgers/jetcarp/pull/191)).
+- **The decision:** the installers check a download against `SHA256SUMS`. Every release file
+  also has a provenance attestation, which a person checks with `gh attestation verify`; the
+  installers do not check it themselves ("Not now; say how"), to be looked at again with the
+  networking design. Windows signing is "Not live yet": the release workflow's SignPath step is
+  ready and switched off, and SECURITY.md says so.
+- **Claude's part:** the options; Jimmie chose.
+- **Stands.**
+
+### D-40. An outside score and code scanning: later, together
+
+- **Decided:** Jimmie, 19 November 2026.
+- **The decision:** "Later, both": the OpenSSF Scorecard (a public score) and GitHub's code
+  scanning are added together once the security work's pull requests are merged and the checks
+  required before `main` moves are decided, so that the first public score reflects them. Both
+  were tried privately first.
+- **Claude's part:** the trial and the options.
+- **Open** until then.
+
+### D-42. 0.4.3: the audit's security problems first, and every bug fix that can go in
+
+- **Decided:** Jimmie, 19 November 2026.
+- **The decision:** "I want to make sure all the security issues brought up by the audit are
+  addressed before starting 0.4.3. I also want to make sure that any and all bug fixes that can go
+  in, do go in. If that makes this a big release, then so be it."
+- **Stands.** It applies D-26's rule ("Anything that doesn't work as intended doesn't ship") to
+  the next release as a whole.
 
 ## People
 
