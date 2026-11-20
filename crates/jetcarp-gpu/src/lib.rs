@@ -25,6 +25,9 @@
 //! - Anything else (turmites and elementary rules, for example) is reported by
 //!   [`GpuSim::check`]; the caller runs those worlds on the CPU.
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, Reach};
 use jetcarp_core::rules::{FieldKind, Rule};

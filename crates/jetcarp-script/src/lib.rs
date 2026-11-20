@@ -21,6 +21,9 @@
 //! and the shared argument parsers ([`args`]), which is what `jetcarp-display` uses for
 //! rotations. A program built that way (the macOS saver) links no store, job runner or SQLite.
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 #[cfg(feature = "api")]
 mod ants;
 #[cfg(feature = "api")]

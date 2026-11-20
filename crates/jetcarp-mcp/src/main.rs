@@ -4,6 +4,9 @@
 //!
 //! Usage: `jetcarp-mcp [--app] [--allow DIR]... [--port N] [--token T]`
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 fn main() {
     // A PastePattern naming a library pattern finds it in the default library.
     jetcarp_store::install();

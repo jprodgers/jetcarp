@@ -28,6 +28,9 @@
 //! Arrow and Parquet's Arrow API live only here, so builds that do not use packs (the macOS
 //! screen saver, world-only scripting) never link them.
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 pub mod columns;
 pub mod docs;
 pub mod export;

@@ -15,6 +15,9 @@
 //! [`install`] connects the engine to the store: a `PastePattern` command that names a library
 //! pattern then finds it in the default library.
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 pub mod library;
 pub mod media;
 pub mod quickstart;

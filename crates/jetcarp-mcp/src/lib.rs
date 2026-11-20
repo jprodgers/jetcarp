@@ -9,6 +9,9 @@
 //!
 //! [`tools`] lists the tools and what each calls; [`resources`] the resources.
 
+// No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
+#![forbid(unsafe_code)]
+
 pub mod app_tools;
 mod compounds;
 pub mod docs;
