@@ -139,7 +139,12 @@ impl FsPolicy {
     /// with its symbolic links followed. Nothing is created, so a folder that cannot be made is
     /// reported as that, never as the rules.
     fn write_target(&self, path: &str) -> Result<PathBuf, ApiError> {
-        let p = path.trim();
+        // Whitespace around the path is dropped (a pasted line's newline), but not spaces at its
+        // end: a name ending in a space is refused, not quietly renamed
+        // ([`jetcarp_core::paths::check_name`]).
+        let p = path
+            .trim_start()
+            .trim_end_matches(|c: char| c.is_whitespace() && c != ' ');
         if p.is_empty() {
             return Err(ApiError::invalid("the path is empty"));
         }
@@ -147,6 +152,19 @@ impl FsPolicy {
             return g
                 .check(&self.base(), p, self.who.as_deref())
                 .map_err(ApiError::io);
+        }
+        // No folder rules (the command line): the names typed below the working folder, or the
+        // last name of an absolute path, must be ones every system can hold
+        // ([`jetcarp_core::paths::check_name`]); the folders above are the person's own.
+        // (The last name is checked as text: put back into a path of its own, a name such as
+        // `a:b.png` would read as a drive on Windows.)
+        let typed = Path::new(p);
+        if typed.is_absolute() {
+            if let Some(name) = typed.file_name() {
+                jetcarp_core::paths::check_name(&name.to_string_lossy()).map_err(ApiError::io)?;
+            }
+        } else {
+            jetcarp_core::paths::check_names(typed).map_err(ApiError::io)?;
         }
         let p = match &self.base {
             Some(b) if !Path::new(p).is_absolute() => b.join(p),

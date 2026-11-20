@@ -20,6 +20,13 @@ that will declare them stable.
 
 ### Fixed
 
+- **Names that Windows treats specially are refused on every system.** The MCP tools, scripts, jobs
+  and commands refuse a name with a `:` (on Windows it wrote a hidden data stream beside a file),
+  Windows' device names such as `CON`, `nul.json` and `AUX/x.json` (on Windows they were saved as
+  files other tools struggle to remove), and a name ending in a dot or a space, such as
+  `scene.json.` (Windows drops those, so the name would change there), with an error that names it,
+  so that folders and scenes can be copied between systems. A folder JETCARP names after a scene
+  called, say, "Con" gets a `_` after the name ([Names](../reference/folders.md#names)).
 - **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but
   the workspace's manifests needed 1.99 to load. CI now checks the whole workspace with 1.95.
   ([#175](https://github.com/jprodgers/jetcarp/issues/175))
