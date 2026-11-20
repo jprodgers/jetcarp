@@ -50,6 +50,7 @@
 
 pub mod flash;
 pub mod frame;
+pub mod soften;
 
 use std::sync::OnceLock;
 

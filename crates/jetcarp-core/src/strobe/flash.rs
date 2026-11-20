@@ -25,7 +25,7 @@
 use super::frame::TileMap;
 use super::{
     AREA_SHARE, DARK_LIMIT, EXTENDED_SECONDS, EXTENDED_WINDOW, FLASH_DELTA, MAX_TRANSITIONS,
-    RED_DELTA, TILE, Viewing, WARN_TRANSITIONS,
+    RED_DELTA, Viewing, WARN_TRANSITIONS,
 };
 use serde::Serialize;
 use std::collections::VecDeque;
@@ -456,7 +456,7 @@ fn max_window(w: &[f32], cols: i64, rows: i64, side: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strobe::luminance;
+    use crate::strobe::{TILE, luminance};
 
     const W: u32 = 640;
     const H: u32 = 480;
