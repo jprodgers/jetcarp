@@ -68,6 +68,11 @@ that will declare them stable.
   `--publisher-key` is added: the key is the identity behind every pack its publisher signed, and
   the rater book holds raters' names and their consent; before, `--settings` deleted them.
   ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
+- **`jetcarp host status` no longer says "GPU none" for a host that hasn't opened its GPU yet.** A
+  host started at login with nothing to show opens the GPU with its first window; until then the
+  status says "GPU not opened yet (nothing shown yet)", and its screens that the GPU "is opened when
+  the scene is first shown", where both said there was no GPU. A host that lost its GPU says that.
+  ([#141](https://github.com/jprodgers/jetcarp/issues/141))
 
 ## [0.4.2] – 2026-11-17
 

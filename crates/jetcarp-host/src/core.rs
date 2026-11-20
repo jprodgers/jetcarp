@@ -164,6 +164,9 @@ pub struct Core {
     /// None in a screen saver, which nothing controls.
     listener: Option<Listener>,
     gpu: Option<SharedGpu>,
+    /// Whether the GPU has been looked for yet, found, not found, or lost, so `status` tells a
+    /// host that hasn't opened it yet (started at login, nothing shown) from one with none (#141).
+    gpu_state: GpuState,
     /// The desktop background's GPU policy as last read (its own choice, the shared setting, or
     /// `JETCARP_GPU`), read again with the settings, so `status` says what each screen steps on
     /// now and why (#75).
@@ -414,6 +417,7 @@ impl Core {
             rotation_override: rotation,
             listener,
             gpu: None,
+            gpu_state: GpuState::NotOpened,
             policy,
             gpu_note: None,
             lookup,
@@ -484,7 +488,7 @@ impl Core {
                 g.queue.clone(),
                 self.policy.clone(),
             ),
-            None => SimBackend::unavailable("no GPU".into()),
+            None => SimBackend::unavailable(self.gpu_state.sim_reason().into()),
         }
     }
 
@@ -574,6 +578,11 @@ impl Core {
         if gpu.is_none() {
             self.note("no GPU found; running on the CPU");
         }
+        self.gpu_state = if gpu.is_some() {
+            GpuState::Found
+        } else {
+            GpuState::NoneFound
+        };
         self.gpu = gpu;
         self.note_gpu();
         for i in 0..self.screens.len() {
@@ -603,6 +612,7 @@ impl Core {
     /// stepped on the CPU until a new device is attached.
     pub fn gpu_lost(&mut self) {
         self.gpu = None;
+        self.gpu_state = GpuState::Lost;
         for s in &mut self.screens {
             s.stage.rebuild();
         }
@@ -907,6 +917,7 @@ impl Core {
             "monitors": self.monitors,
             "monitor_hz": self.monitor_hz,
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
+            "gpu_state": self.gpu_state.word(),
             "fps": self.settings.fps,
             "pacing": self.settings.pacing,
             "max_fps": self.settings.max_fps,
@@ -1308,9 +1319,58 @@ fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>,
     jetcarp_core::media::encode::png_with_text(image, &meta)
 }
 
+/// Where the host is with its GPU (#141).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GpuState {
+    /// Not looked for yet: the GPU is opened with the first window shown, so a host started at
+    /// login with nothing to show yet has none open.
+    NotOpened,
+    Found,
+    /// Looked for, and none could be used.
+    NoneFound,
+    /// Lost (a driver reset, sometimes after sleep), until a new device is attached.
+    Lost,
+}
+
+impl GpuState {
+    /// As `status` gives it: `not_opened`, `found`, `none_found` or `lost`.
+    pub fn word(self) -> &'static str {
+        match self {
+            GpuState::NotOpened => "not_opened",
+            GpuState::Found => "found",
+            GpuState::NoneFound => "none_found",
+            GpuState::Lost => "lost",
+        }
+    }
+
+    /// Why a screen steps on the processor when there is no GPU to step on.
+    pub fn sim_reason(self) -> &'static str {
+        match self {
+            GpuState::NotOpened => "the GPU is opened when the scene is first shown",
+            GpuState::Lost => "the GPU was lost, until it is back",
+            GpuState::Found | GpuState::NoneFound => "no GPU",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{hold_reasons, made_from, pause_reasons, retune_wanted};
+    use super::{GpuState, hold_reasons, made_from, pause_reasons, retune_wanted};
+
+    /// A screen of a host that hasn't opened its GPU yet says so, not "no GPU" (#141).
+    #[test]
+    fn a_screen_says_why_it_has_no_gpu() {
+        assert_eq!(
+            GpuState::NotOpened.sim_reason(),
+            "the GPU is opened when the scene is first shown"
+        );
+        assert_eq!(
+            GpuState::Lost.sim_reason(),
+            "the GPU was lost, until it is back"
+        );
+        assert_eq!(GpuState::NoneFound.sim_reason(), "no GPU");
+        assert_eq!(GpuState::NotOpened.word(), "not_opened");
+    }
     use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
     use jetcarp_display::{profiles, rotation};
 

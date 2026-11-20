@@ -283,12 +283,17 @@ fn show(v: &Value, json: bool) {
 /// the caption, why it is paused, and the host's notes.
 fn status_lines(v: &Value) -> Vec<String> {
     let held_now = v["held"].as_array().is_some_and(|h| !h.is_empty());
+    // A host started at login opens its GPU with the first window it shows, so none open yet
+    // is not the same as none found (#141).
+    let gpu = match (v["gpu"].as_str(), v["gpu_state"].as_str()) {
+        (Some(name), _) => name.to_string(),
+        (None, Some("not_opened")) => "not opened yet (nothing shown yet)".to_string(),
+        (None, Some("lost")) => "lost (on the processor until it is back)".to_string(),
+        (None, _) => "none".to_string(),
+    };
     let mut out = vec![format!(
-        "running, pid {}, up {}s, {} MB, GPU {}",
-        v["pid"],
-        v["uptime_s"],
-        v["memory_mb"],
-        v["gpu"].as_str().unwrap_or("none")
+        "running, pid {}, up {}s, {} MB, GPU {gpu}",
+        v["pid"], v["uptime_s"], v["memory_mb"],
     )];
     let monitors: Vec<&str> = v["monitors"]
         .as_array()
@@ -1222,6 +1227,35 @@ mod tests {
                  own setting"
             ),
             "{lines:?}"
+        );
+    }
+
+    /// A host that hasn't opened its GPU yet (started at login, nothing shown) does not say it has
+    /// none, and a host that lost its GPU says so (#141).
+    #[test]
+    fn status_tells_a_gpu_not_opened_yet_from_none() {
+        let first = |gpu: serde_json::Value, state: &str| {
+            status_lines(
+                &json!({"pid": 7, "uptime_s": 4.0, "memory_mb": 19, "gpu": gpu,
+                "gpu_state": state, "screens": [], "log": []}),
+            )[0]
+            .clone()
+        };
+        assert_eq!(
+            first(serde_json::Value::Null, "not_opened"),
+            "running, pid 7, up 4.0s, 19 MB, GPU not opened yet (nothing shown yet)"
+        );
+        assert_eq!(
+            first(serde_json::Value::Null, "none_found"),
+            "running, pid 7, up 4.0s, 19 MB, GPU none"
+        );
+        assert_eq!(
+            first(serde_json::Value::Null, "lost"),
+            "running, pid 7, up 4.0s, 19 MB, GPU lost (on the processor until it is back)"
+        );
+        assert_eq!(
+            first(json!("M2 Max"), "found"),
+            "running, pid 7, up 4.0s, 19 MB, GPU M2 Max"
         );
     }
 
