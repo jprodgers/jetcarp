@@ -2989,7 +2989,7 @@ Options:
       --json      Print the result as JSON instead of text (commands that report a result)
       --yes       Do it. Without this, only show what would be done
       --settings  Also delete JETCARP's settings folder (except a picture the desktop still shows)
-      --data      Also delete JETCARP's data folder (the pattern library, search databases, packs). This cannot be undone
+      --data      Also delete JETCARP's data folder (the pattern library, search databases, packs), only when everything in it is JETCARP's: a folder holding anything else is refused, and nothing is done. This cannot be undone
   -h, --help      Print help
 ```
 

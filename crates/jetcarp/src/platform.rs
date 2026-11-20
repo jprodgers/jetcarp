@@ -214,8 +214,9 @@ pub struct UninstallArgs {
     /// Also delete JETCARP's settings folder (except a picture the desktop still shows).
     #[arg(long)]
     pub settings: bool,
-    /// Also delete JETCARP's data folder (the pattern library, search databases, packs). This
-    /// cannot be undone.
+    /// Also delete JETCARP's data folder (the pattern library, search databases, packs), only
+    /// when everything in it is JETCARP's: a folder holding anything else is refused, and
+    /// nothing is done. This cannot be undone.
     #[arg(long)]
     pub data: bool,
 }

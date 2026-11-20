@@ -29,6 +29,12 @@ that will declare them stable.
   deep held the MCP server for minutes. JETCARP also finds where a new path begins in a few
   lookups instead of one for each folder on the way. On macOS the system's own limit, 1,024 bytes,
   still comes first.
+- **`jetcarp uninstall --data` deletes a data folder only when everything in it is JETCARP's.**
+  A folder holding anything else, such as a folder of documents that `JETCARP_DATA_DIR` or a data
+  folder chosen in setup names by mistake, is refused before anything is done, even with `--yes`,
+  and the refusal names the folder, where its name came from and what in it is not JETCARP's. A
+  library alone does not count, since JETCARP makes one in whatever folder it is given.
+  ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
 
 ## [0.4.2] – 2026-11-17
 
