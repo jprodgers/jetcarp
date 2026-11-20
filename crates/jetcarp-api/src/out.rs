@@ -48,7 +48,14 @@ pub fn sanitize(label: &str) -> String {
         }
     }
     let out = out.trim_matches(|c| c == '-' || c == '.').to_string();
-    let out: String = out.chars().take(80).collect();
+    let mut out: String = out.chars().take(80).collect();
+    // A Windows device name (`con`, `aux.v2`) gets a `_` after its first part, so that a
+    // scene called "Con" still has a folder every system can hold
+    // ([`jetcarp_core::paths::reserved_on_windows`]).
+    if jetcarp_core::paths::reserved_on_windows(&out).is_some() {
+        let at = out.find('.').unwrap_or(out.len());
+        out.insert(at, '_');
+    }
     if out.is_empty() { "run".into() } else { out }
 }
 
@@ -111,10 +118,17 @@ impl Guard {
         self.find(p).ok().flatten()
     }
 
-    /// [`Guard::locate`], with a path too long to read or write refused in its own words
-    /// ([`jetcarp_core::paths::check_length`]) rather than as outside the folders: the path as
-    /// given, before anything is looked up, and the path that would be opened.
+    /// [`Guard::locate`], with a path too long to read or write
+    /// ([`jetcarp_core::paths::check_length`]), or a name below a folder that cannot be copied to
+    /// every system ([`jetcarp_core::paths::check_name`]: a `:`, a Windows device name), refused
+    /// in its own words rather than as outside the folders: the path as given, before anything is
+    /// looked up, and the path that would be opened. The folders' own paths are the person's and
+    /// are not checked for names.
     pub fn find(&self, p: &Path) -> Result<Option<(PathBuf, PathBuf)>, String> {
+        jetcarp_core::paths::check_length(p)?;
+        for r in &self.roots {
+            jetcarp_core::paths::check_names_below(&absolute(r), p)?;
+        }
         let real = match resolve(p) {
             Ok(real) => real,
             Err(e) => return jetcarp_core::paths::too_long(&e).map_or(Ok(None), Err),
@@ -125,6 +139,8 @@ impl Guard {
             let Ok(rest) = real.strip_prefix(&base) else {
                 continue;
             };
+            // The names that will really be read or made, if a link on the way changed them.
+            jetcarp_core::paths::check_names(rest)?;
             let path = if rest.as_os_str().is_empty() {
                 r.clone()
             } else {
@@ -354,6 +370,14 @@ mod tests {
         assert_eq!(sanitize("HexW3"), "HexW3");
         assert_eq!(sanitize("B3/S23 soup hunt!"), "B3-S23-soup-hunt");
         assert_eq!(sanitize("../.."), "run");
+        // Windows' device names get a `_` so every system can hold the folder.
+        assert_eq!(sanitize("Con"), "Con_");
+        assert_eq!(sanitize("aux.v2"), "aux_.v2");
+        assert_eq!(sanitize("NUL "), "NUL_");
+        assert_eq!(sanitize("com1"), "com1_");
+        assert_eq!(sanitize("console"), "console");
+        assert_eq!(sanitize("com10"), "com10");
+        assert_eq!(sanitize("a:b"), "a-b");
         let g = Guard {
             roots: vec![PathBuf::from("/tmp/jetcarp-out")],
         };

@@ -122,7 +122,8 @@ error: line 3, column 3: scripts may only write inside /home/ada/Pictures/JETCAR
 Paths are checked with their symbolic links followed, and so is each file JETCARP names itself
 inside a folder a script gives. A path of 4,096 bytes or more is refused on every system, read or
 written, with an error that gives its length (on macOS the system's own limit, 1,024 bytes, comes
-first).
+first), and so is a name inside those folders that cannot be copied to every system: one with a `:`,
+or a Windows device name such as `CON` or `nul.json` ([Names](folders.md#names)).
 
 From the command line and the app a script may read files anywhere; through MCP, only from the output
 folder. A relative path to read is looked for next to the script first, then in the current output

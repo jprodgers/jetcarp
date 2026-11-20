@@ -148,6 +148,16 @@ impl FsPolicy {
                 .check(&self.base(), p, self.who.as_deref())
                 .map_err(ApiError::io);
         }
+        // No folder rules (the command line): the names typed below the working folder, or the
+        // last name of an absolute path, must be ones every system can hold
+        // ([`jetcarp_core::paths::check_name`]); the folders above are the person's own.
+        let typed = Path::new(p);
+        let names = if typed.is_absolute() {
+            typed.file_name().map(PathBuf::from).unwrap_or_default()
+        } else {
+            typed.to_path_buf()
+        };
+        jetcarp_core::paths::check_names(&names).map_err(ApiError::io)?;
         let p = match &self.base {
             Some(b) if !Path::new(p).is_absolute() => b.join(p),
             _ => PathBuf::from(p),

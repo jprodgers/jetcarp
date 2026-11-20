@@ -9,6 +9,12 @@ that will declare them stable.
 
 ### Fixed
 
+- **Names that Windows treats specially are refused on every system.** The MCP tools, scripts, jobs
+  and commands refuse a name with a `:` (on Windows it wrote a hidden data stream beside a file)
+  and Windows' device names such as `CON`, `nul.json` and `AUX/x.json` (on Windows they were saved
+  as files other tools struggle to remove), with an error that names it, so that folders and scenes
+  can be copied between systems. A folder JETCARP names after a scene called, say, "Con" gets a `_`
+  after the name ([Names](../reference/folders.md#names)).
 - **Paths of 4,096 bytes or more are refused on every system, and a save into many new folders no
   longer waits on JETCARP.** The MCP tools, scripts and jobs refuse such a path with an error that
   gives its length, as Linux always did; on Windows, with long paths on, they used to make the

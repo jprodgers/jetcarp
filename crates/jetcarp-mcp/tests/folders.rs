@@ -531,3 +531,77 @@ fn a_path_of_4096_bytes_or_more_is_refused_and_a_deep_one_is_saved() {
     assert!(root.join("out").join(&rel).is_file());
     let _ = std::fs::remove_dir_all(root.join("out/d"));
 }
+
+/// Names that cannot be copied to every system are refused in their own words, the same on every
+/// system, before anything is made: a Windows device name (a save, a picture, a read, a listing;
+/// alone, with an extension, as a folder) and a `:` in a name (a file's, a folder's). Names that
+/// only start with the same letters are saved.
+#[test]
+fn names_every_system_cannot_hold_are_refused() {
+    let (mut s, mut h, root) = new();
+    let reserved = "is reserved on Windows; JETCARP refuses it on every system";
+    let colon = "a `:` in a name";
+    for (tool, args, words) in [
+        ("world_status", json!({"save_path": "CON"}), reserved),
+        ("world_status", json!({"save_path": "nul.json"}), reserved),
+        ("world_status", json!({"save_path": "AUX/x.json"}), reserved),
+        (
+            "world_status",
+            json!({"save_path": "deep/../com1.json"}),
+            reserved,
+        ),
+        (
+            "world_status",
+            json!({"save_path": "plain.json:other"}),
+            colon,
+        ),
+        (
+            "world_status",
+            json!({"save_path": "plain.json:other:$DATA"}),
+            colon,
+        ),
+        (
+            "world_status",
+            json!({"save_path": "run 12:30/scene.json"}),
+            colon,
+        ),
+        (
+            "world_render",
+            json!({"max_side": 64, "save_path": "con.png"}),
+            reserved,
+        ),
+        (
+            "world_render",
+            json!({"max_side": 64, "save_path": "pics:2/x.png"}),
+            colon,
+        ),
+        ("world_new", json!({"path": "Con.json"}), reserved),
+        ("world_new", json!({"path": "plain.json:other"}), colon),
+        ("files_list", json!({"path": "LPT1"}), reserved),
+        ("files_list", json!({"path": "a:b"}), colon),
+    ] {
+        let e = fails(&call(&mut s, &mut h, tool, args.clone()));
+        assert!(e.contains(words), "{tool} {args}: {e}");
+    }
+    for made in [
+        "CON",
+        "nul.json",
+        "AUX",
+        "deep",
+        "plain.json",
+        "run 12:30",
+        "con.png",
+        "pics:2",
+    ] {
+        assert!(!root.join("out").join(made).exists(), "{made} was made");
+    }
+    for name in ["console.json", "nullable.json", "com10.json", "lpt.json"] {
+        ok(&call(
+            &mut s,
+            &mut h,
+            "world_status",
+            json!({"save_path": name}),
+        ));
+        assert!(root.join("out").join(name).is_file(), "{name}");
+    }
+}
