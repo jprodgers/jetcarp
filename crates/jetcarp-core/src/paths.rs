@@ -619,11 +619,18 @@ mod length_tests {
             let r = resolve(&p).unwrap_err();
             assert_eq!(too_long(&r).as_deref(), Some(e.as_str()));
         }
-        // The same answer under a folder that exists and one that does not.
-        let (there, missing) = (d.join("sub"), d.join("nop"));
-        let a = check_length(&there.join(name_for(&there, 5000))).unwrap_err();
-        let b = check_length(&missing.join(name_for(&missing, 5000))).unwrap_err();
-        assert_eq!(a.replace("sub", "nop"), b);
+        // The same answer whether or not the folder on the way exists: one path, refused before
+        // its folder is made and after. (The refusal shows only the path's first characters, so
+        // two different paths under a long temporary folder, as on Windows, can't be compared.)
+        let place = d.join("sub");
+        let p = place.join(name_for(&place, 5000));
+        let _ = std::fs::remove_dir_all(&place);
+        let missing = check_length(&p).unwrap_err();
+        let missing_resolved = too_long(&resolve(&p).unwrap_err());
+        std::fs::create_dir_all(&place).unwrap();
+        assert_eq!(check_length(&p).unwrap_err(), missing);
+        assert_eq!(too_long(&resolve(&p).unwrap_err()), missing_resolved);
+        assert_eq!(missing_resolved.as_deref(), Some(missing.as_str()));
         // A name JETCARP writes inside a folder is refused in the same words, not as a link.
         let e = inside(&d, name_for(&d, 5000)).unwrap_err();
         assert!(
