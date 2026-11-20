@@ -38,8 +38,9 @@ pub const RULE_SEMANTICS: [(&str, &str); 23] = [
     ("lifelike", "1"),
     // Generations: `B2/S/C3`.
     ("generations", "1"),
-    // Larger than Life: `R5,C2,S33-57,B34-45`.
-    ("ltl", "1"),
+    // Larger than Life: `R5,C2,S33-57,B34-45`. 2 since 0.4.3: counts above the square grid's
+    // neighbourhood size are kept, not dropped (#172).
+    ("ltl", "2"),
     // Elementary rules on square rows: `W30`.
     ("elementary", "1"),
     // Two-parent hexagon rows: `HexW 6`, `HexW3 1234`.

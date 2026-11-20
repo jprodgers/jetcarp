@@ -250,7 +250,7 @@ version is not part of a record's id.
 | --- | --- | --- |
 | `lifelike` | B/S: `B3/S23`, `B3/S23V` | 1 |
 | `generations` | `B2/S/C3` | 1 |
-| `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 1 |
+| `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 2 (since 0.4.3: counts above the square grid's neighbourhood size kept) |
 | `elementary` | `W30` | 1 |
 | `hexw` | two-parent hexagon rows: `HexW 6`, `HexW3 1234` | 1 |
 | `hext` | three-parent hexagon rows: `HexT 30`, `HexT3 sum 777` | 1 |

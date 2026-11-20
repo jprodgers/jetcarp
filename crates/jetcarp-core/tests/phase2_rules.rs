@@ -129,6 +129,160 @@ fn ltl_runs_on_other_tilings() {
     assert!(h.add_ca(CaSpec::new("R3,C2,S2,B3,N+")).is_err());
 }
 
+/// Counts written in a Larger than Life rule: `"3-4,9"` is 3, 4 and 9.
+fn ltl_counts(list: &str) -> Vec<usize> {
+    list.split(',')
+        .filter(|s| !s.is_empty())
+        .flat_map(|s| {
+            let (a, b) = s.split_once('-').unwrap_or((s, s));
+            a.parse::<usize>().unwrap()..=b.parse::<usize>().unwrap()
+        })
+        .collect()
+}
+
+/// One generation of a two-state Larger than Life rule by brute force: each cell counts the live
+/// cells within `r` steps over `nb`, each once. Also returns how many cells were born or survived
+/// on a count above `square_max`, the most the square grid's neighbourhood holds.
+fn ltl_brute(
+    t: &Topology,
+    nb: Nb,
+    r: usize,
+    (birth, survive): (&[usize], &[usize]),
+    s: &[u8],
+    square_max: usize,
+) -> (Vec<u8>, usize) {
+    let mut high = 0;
+    let next = (0..t.len())
+        .map(|i| {
+            let mut dist = std::collections::HashMap::from([(i, 0usize)]);
+            let mut q = std::collections::VecDeque::from([i]);
+            while let Some(c) = q.pop_front() {
+                let d = dist[&c];
+                if d < r {
+                    t.for_each_neighbor(c, nb, |j| {
+                        if let std::collections::hash_map::Entry::Vacant(e) = dist.entry(j) {
+                            e.insert(d + 1);
+                            q.push_back(j);
+                        }
+                    });
+                }
+            }
+            let c = dist.keys().filter(|&&j| j != i && s[j] == 1).count();
+            let v = if s[i] == 1 { survive } else { birth }.contains(&c) as u8;
+            high += (v == 1 && c > square_max) as usize;
+            v
+        })
+        .collect();
+    (next, high)
+}
+
+// Larger than Life keeps the counts it is given above the square grid's neighbourhood size (#172),
+// so its notation reads back as written.
+#[test]
+fn ltl_notation_keeps_counts_above_the_square_grids_neighbourhood() {
+    let bad: Vec<String> = [
+        "R1,C2,S2-3,B9-12",
+        "R1,C2,S0-12,B9-12",
+        "R4,C2,S40-80,B41-81",
+        "R7,C2,S112-224,B113-225",
+        "R1,C2,S0,B5-6,NN",
+        "R20,C2,S100-2000,B1700-1800",
+    ]
+    .iter()
+    .filter_map(|text| {
+        let (r, _) = jetcarp_core::rules::Rule::parse(text).unwrap();
+        (r.notation() != *text).then(|| format!("{text} reads back as {}", r.notation()))
+    })
+    .collect();
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+// And it runs as written (#172), against brute force: a triangle has 12 touch neighbours against a
+// square's 8, and a 3^6; 3^2.6^2 tiling has more cells within two steps than the square grid's 24.
+#[test]
+fn ltl_counts_above_the_square_grids_neighbourhood_count() {
+    let kuniform = TilingSpec {
+        params: Some(serde_json::json!({ "catalog": "k2-010" })),
+        ..TilingSpec::rect("periodic", 10, 10, Boundary::Wrap)
+    };
+    let cases = [
+        // (tiling, range, square grid's maximum, survival, birth, density)
+        (
+            TilingSpec::rect("triangle", 12, 12, Boundary::Wrap),
+            1,
+            8,
+            "0-12",
+            "9-12",
+            0.9,
+        ),
+        (
+            TilingSpec::rect("triangle", 12, 12, Boundary::Wrap),
+            1,
+            8,
+            "3-4,9-11",
+            "5,10-12",
+            0.6,
+        ),
+        (kuniform, 2, 24, "10-14,26-40", "25-40", 0.7),
+    ];
+    for (spec, r, square_max, s, b, density) in cases {
+        let rule = format!("R{r},C2,S{s},B{b}");
+        let mut w = World::new(spec.clone(), 5).unwrap();
+        w.add_ca(CaSpec::new(&rule).seed(SeedSpec::Random { density }))
+            .unwrap();
+        let t = w.topo.clone();
+        let (birth, survive) = (ltl_counts(b), ltl_counts(s));
+        let mut truth = w.fields[0].state.clone();
+        let mut high = 0;
+        for g in 1..=8 {
+            w.step();
+            let (next, h) = ltl_brute(&t, Nb::Touch, r, (&birth, &survive), &truth, square_max);
+            truth = next;
+            high += h;
+            let wrong = (0..t.len())
+                .filter(|&i| w.fields[0].state[i] != truth[i])
+                .count();
+            assert_eq!(
+                wrong,
+                0,
+                "{rule} on {}: generation {g}: {wrong} of {} cells differ from the rule as written",
+                spec.family,
+                t.len()
+            );
+        }
+        assert!(
+            high > 0,
+            "{rule} on {}: no cell was born or survived on a count above {square_max}",
+            spec.family
+        );
+    }
+    // The audit's scene: a 90 % soup on triangles, where most cells have 9 to 12 live neighbours.
+    let scene: Scene = Scene::from_json(
+        r#"{
+          "tiling": { "family": "triangle", "size": { "rect": { "w": 12, "h": 12 } }, "boundary": "wrap" },
+          "rng_state": 1,
+          "cas": [ { "rule": "R1,C2,S0-12,B9-12", "seed": { "random": { "density": 0.9 } } } ]
+        }"#,
+    )
+    .unwrap();
+    let mut w = World::from_scene(&scene).unwrap();
+    w.apply(Command::Step { gens: 1 }).unwrap();
+    assert!(
+        w.fields[0].population() > 0,
+        "the 90 % soup is empty after one generation, run as {}",
+        w.cas[0].notation()
+    );
+}
+
+// A count larger than any neighbourhood can hold is refused, saying what the limit is.
+#[test]
+fn ltl_refuses_counts_past_the_limit() {
+    let e = jetcarp_core::rules::Rule::parse("R2,C2,S2-3,B3-99999")
+        .err()
+        .expect("a count of 99,999 is refused");
+    assert!(e.contains("99999") && e.contains("at most"), "{e}");
+}
+
 // Layered parity from one cell on squares with edge neighbours: layers are diamonds, each quadrant
 // is Pascal's triangle mod 2, so layer d holds 4 * (2^popcount(d) - 1) live cells.
 #[test]

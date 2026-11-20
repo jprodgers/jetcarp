@@ -20,6 +20,19 @@ that will declare them stable.
 
 ### Fixed
 
+- **Larger than Life keeps every count a rule names.** A birth or survival count above the square
+  grid's neighbourhood size (8 at range 1, 1,680 at range 20) was dropped without a word, so on
+  tilings whose neighbourhoods hold more cells, such as triangles with 12 touch neighbours, a rule
+  ran as another: `R1,C2,S0-12,B9-12` ran as `R1,C2,S0-8,B`. Counts up to 65,535 are now kept, a
+  larger one is refused with a message, and the notation reads back as written, so Majority and
+  Majorly show as `R4,C2,S40-80,B41-81` and `R7,C2,S112-224,B113-225`. On the square grid no rule
+  runs differently, but those two rules' Quick Start entries have new handles
+  (`rule:R4,C2,S40-80,B41-81`, `rule:R7,C2,S112-224,B113-225`), and so new random starts. Larger
+  than Life's [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is
+  now 2: scenes of such rules on other tilings replay to other states, and pattern records verified
+  under version 1 are flagged for `jetcarp library reverify`.
+  ([Larger than Life](../automata/larger-than-life.md#on-any-tiling),
+  [#172](https://github.com/jprodgers/jetcarp/issues/172))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits
