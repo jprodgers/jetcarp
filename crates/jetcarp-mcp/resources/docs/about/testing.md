@@ -21,8 +21,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   state hash, generation, status and command log as the CPU, over every family the GPU runs, every
   kind of edge, and runs from 1 to 180 generations; hunts with and without the GPU must leave the same
   catalogue. A GPU that cannot run something must fall back to the CPU, never run it differently.
-- **Searches survive interruption.** Every kind of job, stopped and resumed (on the same runner or
-  another), must end with exactly the results of one that ran through.
+- **Searches survive interruption.** Every kind of job but the exploratory search, stopped and
+  resumed (on the same runner or another), must end with exactly the results of one that ran through;
+  the exploratory search continues from its saved archive instead
+  ([what is not guaranteed yet](../research/reproducibility.md#what-is-not-guaranteed-yet)).
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;

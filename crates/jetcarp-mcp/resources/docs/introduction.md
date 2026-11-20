@@ -28,7 +28,8 @@ release does, and [How JETCARP was made](about/how-made.md) tells where it came 
   Start with [Life on a new tiling](tutorials/life-on-a-new-tiling.md).
 - **Research.** Every run is a [scene](reference/scene-format.md) that replays bit for bit and records
   its state hash; every catalogued pattern has been verified exactly; the searches are resumable jobs
-  whose results do not depend on the thread count and are designed not to depend on the machine; and
+  whose results do not depend on the thread count and are designed not to depend on the machine
+  (all but the exploratory search, which [continues rather than resumes exactly](research/reproducibility.md#what-is-not-guaranteed-yet)); and
   everything can be scripted.
   Start with [Core ideas](getting-started/core-ideas.md) and [Reproducibility](research/reproducibility.md).
 

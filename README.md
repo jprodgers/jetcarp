@@ -92,9 +92,10 @@ If JETCARP helps your research, please cite it. GitHub's *Cite this repository* 
 
 Jimmie Rodgers designed JETCARP, chose its research directions, and tested it on Linux, Windows
 and macOS. All of its code was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI
-coding tool; the [documentation](https://jprodgers.github.io/jetcarp/about/how-made.html) describes who did what. Every simulation result JETCARP reports is checked by its own test suite or by exact
-verification (for example, exact recurrence for spaceships), but please treat it as you would any
-research software: check the results that matter to you.
+coding tool; the [documentation](https://jprodgers.github.io/jetcarp/about/how-made.html) describes who did what. Every pattern in its catalogues is verified exactly (a spaceship by its exact recurrence), every run
+replays to a recorded hash, and its test suite pins the geometry of every tiling and the dynamics of
+every built-in example; but please treat it as you would any research software: check the results
+that matter to you.
 
 ## Acknowledgements
 

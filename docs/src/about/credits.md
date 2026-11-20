@@ -23,8 +23,8 @@ knowledge, new, each with its evidence on [What is new in JETCARP](../research/c
   page, found with JETCARP by Jimmie Rodgers; 25 of them are claimed, to our knowledge, as not
   reported before.
 - Sandpile identities and large piles on the hat and spectre and across the tiling catalogues, the
-  tiling as a dimension of an exploratory search, and one engine running every family on every
-  tiling.
+  tiling as a dimension of an exploratory search, and one engine running nearly every family on every
+  tiling (the few tied to one grid stay on it).
 
 ## Acknowledgements
 

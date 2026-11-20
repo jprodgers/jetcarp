@@ -2,7 +2,8 @@
 
 JETCARP is built so that a run can be repeated exactly: the same scene reaches the same state, bit for
 bit, on one thread or thirty-two, on the CPU or the GPU, and, by design, on any operating system. A
-search stopped halfway and carried on later ends exactly where an uninterrupted one would. This page
+search stopped halfway and carried on later ends exactly where an uninterrupted one would, the
+exploratory search aside ([below](#what-is-not-guaranteed-yet)). This page
 says how that is achieved, how it is tested, and what is not guaranteed yet.
 
 ## Deterministic randomness
@@ -144,7 +145,8 @@ These tests are skipped, with a note, on a machine with no usable graphics adapt
 
 ## Interrupted searches end where uninterrupted ones would
 
-Every search in JETCARP runs as a *job* in the catalogue (see [Search methods](search-methods.md)). A
+All but the exploratory search, which continues from its saved archive rather than resuming exactly
+([below](#what-is-not-guaranteed-yet)). Every search in JETCARP runs as a *job* in the catalogue (see [Search methods](search-methods.md)). A
 job runs in steps of a few seconds and writes each step's finds, its progress and a checkpoint in one
 transaction, so stopping it, a crash or a reboot loses at most the step in flight. Results are merged
 in a fixed order (soups by index, for example, with each new pattern's record taken from the lowest

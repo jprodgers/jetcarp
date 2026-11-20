@@ -387,14 +387,16 @@ over several tilings had fixed goals, such as gliders on three aperiodic tilings
 
 The search is described in full in [Search methods](search-methods.md).
 
-### 7. One engine for every family on every tiling
+### 7. One engine for nearly every family on every tiling
 
 **Claim (to our knowledge).** No earlier program runs as many cellular automaton families (Life-like,
 Generations, Larger than Life, JACA, layered, turmites, WireWorld, cyclic, Greenberg–Hastings,
 rock-paper-scissors, Hodgepodge, forest fire, Lenia, sandpiles, priority tables and rule tables) on as
 many classes of tiling (lattices, 1,248 k-uniform tilings, 81 isohedral types with their 11 Laves
-neighbour graphs, drawn tiles, and the Penrose, hat and spectre tilings) with one neighbour model, tested for agreement across thread counts
-and between CPU and GPU.
+neighbour graphs, drawn tiles, and the Penrose, hat and spectre tilings) with one neighbour graph
+(Lenia alone measures distance between tile centres), tested for agreement across thread counts and
+between CPU and GPU. The few families tied to one grid's geometry stay on it
+([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 **Evidence.** Breadth is the contribution, not any one family on any one tiling: Ready runs arbitrary
 rules on meshes ([Ready](bibliography.md#huttonnd_ready)); HatLife ran Life-like, Larger than Life-style
