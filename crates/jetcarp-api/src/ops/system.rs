@@ -476,10 +476,18 @@ pub struct UninstallIn {
     /// Do it. Without this, only say what would be done.
     #[serde(default)]
     pub yes: bool,
-    /// Also delete the settings folder (except a picture the desktop still shows), only when
-    /// everything in it is JETCARP's: a folder holding anything else is refused.
+    /// Also delete the settings folder (except a picture the desktop still shows, and the
+    /// publisher's files unless `publisher_key`), only when everything in it is JETCARP's: a
+    /// folder holding anything else is refused.
     #[serde(default)]
     pub settings: bool,
+    /// With `settings`, also delete the publisher's files in the settings folder's `pack/`: the
+    /// publisher key and its public half, `publisher.json`, and the rater book. `settings` keeps
+    /// them otherwise, since the key is the identity behind every pack the publisher signed and
+    /// the rater book holds raters' names and their consent; neither can be made again. Refused
+    /// without `settings`.
+    #[serde(default)]
+    pub publisher_key: bool,
     /// Also delete the data folder (the catalog, search databases, packs), only when everything
     /// in it is JETCARP's: a folder holding anything else is refused. Cannot be undone.
     #[serde(default)]
@@ -507,6 +515,47 @@ pub struct KeptFolder {
     pub bytes: u64,
 }
 
+/// The publisher's files kept in the settings folder.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct KeptPublisher {
+    /// Their folder, `<settings>/pack`.
+    pub folder: PathBuf,
+    /// The files kept there, by name: those of `publisher_ed25519`, `publisher_ed25519.pub`,
+    /// `publisher.json` and `raters.json` that are there.
+    pub files: Vec<String>,
+}
+
+impl KeptPublisher {
+    /// The report's sentence: what is kept, where, why, and how to delete it.
+    pub fn sentence(&self) -> String {
+        let key = self.files.iter().any(|f| f != "raters.json");
+        let raters = self.files.iter().any(|f| f == "raters.json");
+        let (what, why, them) = match (key, raters) {
+            (true, true) => (
+                "your publisher key and rater book",
+                "the key is the identity behind every pack you signed, and the rater book holds \
+                 your raters' names and their consent",
+                "them",
+            ),
+            (true, false) => (
+                "your publisher key",
+                "it is the identity behind every pack you signed",
+                "it",
+            ),
+            _ => (
+                "your rater book",
+                "it holds your raters' names and their consent",
+                "it",
+            ),
+        };
+        format!(
+            "Kept {what}, in {} ({}): {why}. Add --publisher-key to delete {them} too.",
+            self.folder.display(),
+            self.files.join(", ")
+        )
+    }
+}
+
 /// What uninstalling did, or would do.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct UninstallReport {
@@ -517,6 +566,8 @@ pub struct UninstallReport {
     pub kept_data: Option<KeptFolder>,
     /// The settings folder, when it was kept.
     pub kept_settings: Option<PathBuf>,
+    /// The publisher's files `--settings` keeps (without `--publisher-key`), when there are any.
+    pub kept_publisher: Option<KeptPublisher>,
     /// The output folder (never deleted).
     pub output: PathBuf,
     /// How this program was installed, and what removes it; none when that can't be told.
@@ -722,32 +773,28 @@ impl Report for UninstallReport {
                 }
             }
         }
+        let mut kept = Vec::new();
+        if let Some(p) = &self.kept_publisher {
+            kept.push(p.sentence());
+        }
         if let Some(k) = &self.kept_data {
-            let _ = writeln!(
-                s,
-                "\nKept the data folder {} ({}); add --data to delete it.",
+            kept.push(format!(
+                "Kept the data folder {} ({}); add --data to delete it.",
                 k.path.display(),
                 human_bytes(k.bytes)
-            );
+            ));
         }
         if let Some(k) = &self.kept_settings {
-            let _ = writeln!(
-                s,
-                "{}Kept the settings folder {}; add --settings to delete it.",
-                if self.kept_data.is_some() { "" } else { "\n" },
+            kept.push(format!(
+                "Kept the settings folder {}; add --settings to delete it.",
                 k.display()
-            );
+            ));
         }
-        let _ = writeln!(
-            s,
-            "{}Your pictures and exports in {} are never deleted.",
-            if self.kept_data.is_none() && self.kept_settings.is_none() {
-                "\n"
-            } else {
-                ""
-            },
+        kept.push(format!(
+            "Your pictures and exports in {} are never deleted.",
             self.output.display()
-        );
+        ));
+        let _ = writeln!(s, "\n{}", kept.join("\n"));
         if self.done
             && self
                 .steps
@@ -1244,6 +1291,13 @@ impl Op for SystemUninstall {
     fn run(cx: &Ctx, a: UninstallIn, _: &dyn Progress) -> Result<UninstallReport, ApiError> {
         /// A step's work: a note on success (files kept), or why it failed.
         type Run = Box<dyn Fn() -> Result<Option<String>, String> + Send + Sync>;
+        if a.publisher_key && !a.settings {
+            return Err(ApiError::invalid(
+                "--publisher-key only means something with --settings: it deletes the publisher's \
+                 files (the publisher key and the rater book) that --settings keeps otherwise",
+            )
+            .hint("`jetcarp uninstall --settings --publisher-key` deletes the settings folder with them."));
+        }
         let paths = cx.paths();
         // `--data` and `--settings` delete their folders whole, so first make sure each is
         // JETCARP's (#195), both before anything is done or listed. A folder that is a link is not
@@ -1314,27 +1368,66 @@ impl Op for SystemUninstall {
             .as_deref()
             .is_some_and(|c| data.exists() && within(&data, c));
         let mut settings_step: Option<(String, Run)> = None;
+        let mut kept_publisher: Option<KeptPublisher> = None;
         if let Some(c) = paths.settings.clone().filter(|c| c.exists() || is_link(c)) {
             if a.settings {
                 // Asked when the step runs, after the steps before it have put the user's own
                 // picture back.
                 let platform = cx.platform.clone();
                 let keep_data = (data_inside && !a.data).then(|| data.clone());
+                // The publisher's files stay unless asked for (`--publisher-key`): the key is the
+                // identity behind every pack the publisher signed, and the rater book holds
+                // raters' names and their consent. Only files of their own count (a link is
+                // removed as a link).
+                let keep_publisher: Vec<PathBuf> = if a.publisher_key || is_link(&c) {
+                    Vec::new()
+                } else {
+                    PACK_FILES
+                        .iter()
+                        .map(|f| c.join("pack").join(f))
+                        .filter(|f| std::fs::symlink_metadata(f).is_ok_and(|m| m.is_file()))
+                        .collect()
+                };
+                if !keep_publisher.is_empty() {
+                    kept_publisher = Some(KeptPublisher {
+                        folder: c.join("pack"),
+                        files: keep_publisher
+                            .iter()
+                            .filter_map(|f| f.file_name())
+                            .map(|f| f.to_string_lossy().into_owned())
+                            .collect(),
+                    });
+                }
+                let except: Vec<&str> = [
+                    keep_data.is_some().then_some("the data folder inside it"),
+                    (!keep_publisher.is_empty()).then_some(
+                        if keep_publisher.iter().any(|f| !f.ends_with("raters.json")) {
+                            if keep_publisher.iter().any(|f| f.ends_with("raters.json")) {
+                                "your publisher key and rater book"
+                            } else {
+                                "your publisher key"
+                            }
+                        } else {
+                            "your rater book"
+                        },
+                    ),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
                 settings_step = Some((
                     if is_link(&c) {
                         format!(
                             "remove the link {} (the settings folder it leads to is left as it is)",
                             c.display()
                         )
+                    } else if except.is_empty() {
+                        format!("delete the settings folder {}", c.display())
                     } else {
                         format!(
-                            "delete the settings folder {}{}",
+                            "delete the settings folder {}, except {}",
                             c.display(),
-                            if keep_data.is_some() {
-                                ", except the data folder inside it"
-                            } else {
-                                ""
-                            }
+                            except.join(" and ")
                         )
                     },
                     Box::new(move || {
@@ -1348,12 +1441,18 @@ impl Op for SystemUninstall {
                         }
                         let mut keep = platform.desktop_files();
                         keep.extend(keep_data.clone());
+                        keep.extend(keep_publisher.iter().cloned());
                         let kept = remove_dir_keeping(&c, &keep).map_err(|e| e.to_string())?;
-                        // The pictures kept, not the data folder the step's name says it keeps.
-                        let data = keep_data.as_deref().map(canonical);
+                        // The pictures kept, not the data folder or the publisher's files the
+                        // step's name says it keeps.
+                        let named: Vec<PathBuf> = keep_data
+                            .iter()
+                            .chain(&keep_publisher)
+                            .map(|k| canonical(k))
+                            .collect();
                         let shown: Vec<String> = kept
                             .iter()
-                            .filter(|k| Some(*k) != data.as_ref())
+                            .filter(|k| !named.contains(k))
                             .map(|k| k.display().to_string())
                             .collect();
                         Ok((!shown.is_empty())
@@ -1443,6 +1542,7 @@ impl Op for SystemUninstall {
             steps,
             kept_data,
             kept_settings,
+            kept_publisher,
             output: paths.output,
             installed_with: jetcarp_core::paths::program_path()
                 .and_then(|exe| installed_with(&exe, cfg!(windows))),

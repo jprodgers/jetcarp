@@ -86,18 +86,28 @@ list whose files have gone.
 
 ## 2. JETCARP's folders
 
-Two options of `jetcarp uninstall` also delete JETCARP's folders:
+These options of `jetcarp uninstall` also delete JETCARP's folders:
 
 | Option | Deletes |
 | --- | --- |
-| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, the host's desktop pictures, and your publisher key with the rater book (`pack/`), if you made one, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **If you publish packs, copy `pack/` out first:** its key is your identity as the publisher of every pack you have signed, and without it you cannot sign another version of them |
+| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **Your publisher key and rater book are kept too** (`pack/`: the key, its public half, `publisher.json` and `raters.json`), and the report says where: the key is your identity as the publisher of every pack you have signed, and the rater book holds your raters' names and their consent, and neither can be made again |
+| `--publisher-key` | With `--settings`, the publisher key and rater book as well. Copy `pack/` out first if you might publish again. Without `--settings` it is refused |
 | `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases, but only when everything in it is JETCARP's (below). **This cannot be undone** |
 
-To undo everything and delete both folders:
+To undo everything and delete both folders, keeping your publisher key and rater book if you made
+them:
 
 ```sh
 jetcarp uninstall --yes --settings --data
 ```
+
+The report then ends with where they are kept:
+
+```text
+Kept your publisher key and rater book, in /home/ada/.config/jetcarp/pack (publisher_ed25519, publisher_ed25519.pub, publisher.json, raters.json): the key is the identity behind every pack you signed, and the rater book holds your raters' names and their consent. Add --publisher-key to delete them too.
+```
+
+To delete those too, add `--publisher-key`.
 
 On macOS the data folder is inside the settings folder. With both options, the data folder is
 deleted first and then the settings folder; `--settings` alone deletes the settings and keeps the

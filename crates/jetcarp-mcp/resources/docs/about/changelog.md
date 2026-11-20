@@ -44,7 +44,10 @@ that will declare them stable.
   makes one in whatever folder it is given. A folder that is a link, or a junction on Windows, is
   removed as a link: nothing behind it is read, emptied or deleted, where before `--settings`
   emptied the folder behind it when it kept something there (the picture the desktop shows, or the
-  data folder inside). A link inside either folder is removed as a link too.
+  data folder inside). A link inside either folder is removed as a link too. And `--settings` now
+  keeps the publisher key and the rater book (`pack/`), saying where they are, unless
+  `--publisher-key` is added: the key is the identity behind every pack its publisher signed, and
+  the rater book holds raters' names and their consent; before, `--settings` deleted them.
   ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
 
 ## [0.4.2] – 2026-11-17

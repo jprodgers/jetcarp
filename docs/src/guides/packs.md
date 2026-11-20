@@ -188,6 +188,8 @@ Good "jetcarp-manifest" signature for ada with ED25519 key SHA256:yNFIDrcM3AiT87
 
 **Back up the key file.** A new key is a new publisher: later versions of your feeds would be
 signed by a stranger. `--key FILE` signs with an OpenSSH Ed25519 key of your own instead.
+`jetcarp uninstall --settings` keeps the key and the rater book unless you add `--publisher-key`
+([Uninstalling](uninstalling.md)).
 
 ## Publish your library
 

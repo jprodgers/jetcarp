@@ -86,7 +86,8 @@ it keeps a copy of macOS's wallpaper store as it was in `wallpaper-store-before-
 holds your publisher key (`publisher_ed25519`, with `publisher_ed25519.pub`), who you are as a
 publisher (`publisher.json`) and the rater book (`raters.json`); see [Packs](../guides/packs.md).
 These are everything JETCARP keeps here, and what `jetcarp uninstall --settings` counts as
-JETCARP's ([Uninstalling](../guides/uninstalling.md)).
+JETCARP's; it deletes them all but `pack/`'s four files, which go only with `--publisher-key`
+([Uninstalling](../guides/uninstalling.md)).
 Files written by another settings version, or that cannot be read, give the defaults.
 
 **Data.**

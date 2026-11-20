@@ -10,6 +10,7 @@
 //! one test, because the folders come from environment variables, which it sets.
 
 use jetcarp_api::error::ErrorKind;
+use jetcarp_api::op::Report;
 use jetcarp_api::ops::system::{SystemUninstall, UninstallIn, UninstallReport, remove_dir_keeping};
 use jetcarp_api::{ApiError, Ctx, Op, Quiet};
 use std::path::{Path, PathBuf};
@@ -145,7 +146,11 @@ fn only_folders_of_jetcarps_own_are_deleted() {
             None => std::env::remove_var("JETCARP_DATA_DIR"),
         }
     };
-    let run = |yes: bool, settings: bool, data: bool| -> Result<UninstallReport, ApiError> {
+    let run_key = |yes: bool,
+                   settings: bool,
+                   data: bool,
+                   publisher_key: bool|
+     -> Result<UninstallReport, ApiError> {
         let cx = Ctx::new();
         let p = cx.paths();
         for f in p.settings.iter().chain([&p.data]) {
@@ -157,10 +162,12 @@ fn only_folders_of_jetcarps_own_are_deleted() {
                 yes,
                 settings,
                 data,
+                publisher_key,
             },
             &Quiet,
         )
     };
+    let run = |yes: bool, settings: bool, data: bool| run_key(yes, settings, data, false);
     let refused =
         |r: Result<UninstallReport, ApiError>, folder: &Path, names: &[&str]| -> ApiError {
             let e = r.expect_err("refused");
@@ -343,10 +350,39 @@ fn only_folders_of_jetcarps_own_are_deleted() {
     );
     assert!(odd_settings.join("pack").join("my-ssh-key").exists());
 
-    // A settings folder of JETCARP's own, with --data: both deleted, the data folder first.
+    // ---- The publisher's files: `--settings` keeps the publisher key, its public half,
+    // `publisher.json` and the rater book unless `--publisher-key` is added, and says so.
     let own_settings = d.join("own-settings");
     settings_of_jetcarps(&own_settings);
+    let pack = own_settings.join("pack");
+    let kept_files = [
+        ("publisher_ed25519", "PRIVATE KEY"),
+        ("publisher_ed25519.pub", "ssh-ed25519 AAAA public"),
+        ("publisher.json", "{\"name\": \"Ada\"}"),
+        ("raters.json", "{\"raters\": []}"),
+    ];
+    for (f, text) in kept_files {
+        write(&pack.join(f), text);
+    }
+    let kept_tree: Vec<String> = kept_files
+        .iter()
+        .map(|(f, _)| Path::new("pack").join(f).display().to_string())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let sentence = format!(
+        "Kept your publisher key and rater book, in {} (publisher_ed25519, publisher_ed25519.pub, \
+         publisher.json, raters.json): the key is the identity behind every pack you signed, and \
+         the rater book holds your raters' names and their consent. Add --publisher-key to delete \
+         them too.",
+        pack.display()
+    );
+    let step = format!(
+        "delete the settings folder {}, except your publisher key and rater book",
+        own_settings.display()
+    );
     set(&own_settings, Some(&data));
+    // The plan, with --data: both folders, the publisher's files kept, and the sentence.
     let plan = run(false, true, true).unwrap();
     let whats: Vec<&str> = plan.steps.iter().map(|s| s.what.as_str()).collect();
     assert!(
@@ -355,10 +391,61 @@ fn only_folders_of_jetcarps_own_are_deleted() {
             .any(|w| w.starts_with("delete the data folder")),
         "{whats:?}"
     );
-    let own = format!("delete the settings folder {}", own_settings.display());
-    assert!(whats.contains(&own.as_str()), "{whats:?}");
-    all_ok(&run(true, true, true).unwrap());
-    assert!(!own_settings.exists() && !data.exists());
+    assert!(whats.contains(&step.as_str()), "{whats:?}");
+    assert!(plan.text().contains(&sentence), "{}", plan.text());
+    let k = plan.kept_publisher.as_ref().expect("kept");
+    assert_eq!(k.folder, pack);
+    assert_eq!(
+        k.files,
+        [
+            "publisher_ed25519",
+            "publisher_ed25519.pub",
+            "publisher.json",
+            "raters.json"
+        ]
+    );
+    // Done: everything else goes (the file being written in pack/ too), the four files stay as
+    // they were, and the summary says where.
+    let r = run(true, true, true).unwrap();
+    all_ok(&r);
+    assert!(r.text().contains(&sentence), "{}", r.text());
+    assert!(!data.exists());
+    assert_eq!(tree(&own_settings), kept_tree);
+    for (f, text) in kept_files {
+        assert_eq!(std::fs::read_to_string(pack.join(f)).unwrap(), text, "{f}");
+    }
+    // A settings folder holding only the kept files: still JETCARP's, the same plan, and nothing
+    // changes.
+    let again = run(true, true, false).unwrap();
+    all_ok(&again);
+    assert!(
+        again.steps.iter().any(|s| s.what == step),
+        "{:?}",
+        again.steps
+    );
+    assert!(again.text().contains(&sentence));
+    assert_eq!(tree(&own_settings), kept_tree);
+    // --publisher-key without --settings: refused, nothing done.
+    let e = run_key(true, false, false, true).expect_err("refused");
+    assert_eq!(e.kind, ErrorKind::Invalid, "{e}");
+    assert!(
+        e.message
+            .contains("--publisher-key only means something with --settings"),
+        "{e}"
+    );
+    assert_eq!(tree(&own_settings), kept_tree);
+    // --settings --publisher-key: the publisher's files go too, and the folder with them.
+    let plan = run_key(false, true, false, true).unwrap();
+    assert!(
+        plan.steps
+            .iter()
+            .any(|s| s.what == format!("delete the settings folder {}", own_settings.display())),
+        "{:?}",
+        plan.steps
+    );
+    assert!(plan.kept_publisher.is_none() && !plan.text().contains("Kept your publisher"));
+    all_ok(&run_key(true, true, false, true).unwrap());
+    assert!(!own_settings.exists());
 
     // An empty settings folder: deleted.
     std::fs::create_dir_all(&own_settings).unwrap();
@@ -380,7 +467,7 @@ fn only_folders_of_jetcarps_own_are_deleted() {
     assert!(!e.message.contains("the settings folder"), "{e}");
     assert!(mac.join("app.json").exists(), "nothing was done");
     std::fs::remove_file(mac_data.join("letter.txt")).unwrap();
-    all_ok(&run(true, true, true).unwrap());
+    all_ok(&run_key(true, true, true, true).unwrap());
     assert!(!mac.exists());
 
     // ---- Links. A folder that is a link (a symbolic link, or a junction on Windows) is removed

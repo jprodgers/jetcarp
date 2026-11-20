@@ -213,9 +213,15 @@ pub struct UninstallArgs {
     pub yes: bool,
     /// Also delete JETCARP's settings folder (except a picture the desktop still shows), only
     /// when everything in it is JETCARP's: a folder holding anything else is refused, and
-    /// nothing is done. It holds your publisher key (pack/), if you made one.
+    /// nothing is done. Your publisher key and rater book (pack/) are kept unless you add
+    /// --publisher-key.
     #[arg(long)]
     pub settings: bool,
+    /// With --settings, also delete your publisher key and rater book (pack/ in the settings
+    /// folder), which --settings keeps otherwise: the key is the identity behind every pack you
+    /// signed, and the rater book holds your raters' names and their consent.
+    #[arg(long)]
+    pub publisher_key: bool,
     /// Also delete JETCARP's data folder (the pattern library, search databases, packs), only
     /// when everything in it is JETCARP's: a folder holding anything else is refused, and
     /// nothing is done. This cannot be undone.
