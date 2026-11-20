@@ -81,6 +81,7 @@ jobs:
     name: The tag, the version and the changelog agree
     if: github.event_name != 'release'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.check.outputs.version }}
       prerelease: ${{ steps.check.outputs.prerelease }}
@@ -159,6 +160,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -176,6 +178,7 @@ jobs:
     name: Build (${{ matrix.target }})
     needs: verify
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -295,6 +298,7 @@ jobs:
     # files together; only a tag creates a release.
     if: always() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.test.result != 'failure' && needs.test.result != 'cancelled'
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write
       id-token: write
@@ -351,6 +355,7 @@ jobs:
     needs: [verify, release]
     if: github.event_name == 'push' && needs.verify.outputs.prerelease == 'true' && vars.PUBLISH_TESTPYPI == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment:
       name: testpypi
       url: https://test.pypi.org/p/jetcarp
@@ -375,6 +380,7 @@ jobs:
     name: PyPI
     if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.PUBLISH_PYPI == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment:
       name: pypi
       url: https://pypi.org/p/jetcarp
@@ -399,6 +405,7 @@ jobs:
     name: crates.io
     if: github.event_name == 'release' && !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') && vars.PUBLISH_CRATES == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 240
     environment: crates-io
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

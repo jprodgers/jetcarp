@@ -28,6 +28,14 @@ cargo build --release
 cargo test --workspace --release
 ```
 
+Building the whole test suite in the release profile takes a lot of disk: the profile keeps
+debug information, and the tests' build came to more than 28 GB in the 0.4.2 audit. Without it,
+the same tests build into about 5 GB, and the suite runs in well under an hour on four cores:
+
+```sh
+CARGO_PROFILE_RELEASE_DEBUG=0 cargo test --workspace --release
+```
+
 The app:
 
 ```sh

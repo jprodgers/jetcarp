@@ -190,6 +190,22 @@ version without the `v`. Installing the release itself later replaces the candid
 
 ## On each system
 
+### What works on each system
+
+| | Linux | Windows | macOS |
+| --- | --- | --- | --- |
+| Release builds | x86_64 and ARM, with glibc 2.28 or newer (Debian 10, Ubuntu 20.04, Fedora 29 and later) | x86_64, on Windows 10 and 11 (and Windows on ARM through its x64 emulation) | Apple silicon and Intel, on macOS 11 or newer |
+| Tried by hand before each release ([how](../about/testing.md#release-candidates)) | Fedora 45 with GNOME, on x86_64 | Windows 11, on x86_64 | macOS 27, on Apple silicon |
+| [The GPU](../guides/gpu.md), with the same results as the processor, bit for bit | Vulkan | Vulkan or DirectX 12 | Metal |
+| [Live desktop background](../guides/wallpapers.md#what-works-on-which-system) | On GNOME, with JETCARP's extension (GNOME Shell 50 or 51), and its lock screen too; on other desktops, a window | Yes, and in the system's screen saver list | Yes, and in the system's screen saver list |
+| Paths JETCARP reads and writes | Shorter than 4,096 bytes | Shorter than 4,096 bytes | Shorter than 1,024 bytes, the system's own limit |
+
+For research (long searches, large libraries, deep folders of results), Linux is the system to
+choose: JETCARP is developed on it and tested on it most, and its file work has been quickest there
+in testing. For desktop art (live backgrounds, screen savers), use whichever system you already
+have; [the wallpapers table](../guides/wallpapers.md#what-works-on-which-system) shows what each one
+offers.
+
 ### Linux
 
 The release builds run on Linux with glibc 2.28 or newer: Debian 10, Ubuntu 20.04, Fedora 29,
