@@ -20,6 +20,16 @@ that will declare them stable.
 
 ### Fixed
 
+- **`jetcarp_core::lenia::decode_rle` refuses a run-length text that would need more room than
+  its limit allows, or that is malformed, instead of panicking or asking for more memory than the
+  system has.** The limit is the caller's: the new `decode_rle_within` takes it, so it can follow
+  a per-machine limit, and returns the pattern as one flat buffer that costs its values and
+  nothing per row; `decode_rle` keeps the most cells a grid may have (`topology::MAX_CELLS`) and
+  counts each of its rows at what the row costs. Sizes are checked before anything is allocated,
+  empty rows take no memory, and a refusal says what the pattern needs and what the limit is. A
+  count too long for a number and a malformed two-letter value are refused too. Found by fuzzing;
+  JETCARP itself decodes only its built-in Orbium with it, which is unchanged.
+  ([#194](https://github.com/jprodgers/jetcarp/issues/194))
 - **Names that Windows treats specially are refused on every system.** The MCP tools, scripts, jobs
   and commands refuse a name with a `:` (on Windows it wrote a hidden data stream beside a file),
   Windows' device names such as `CON`, `nul.json` and `AUX/x.json` (on Windows they were saved as
