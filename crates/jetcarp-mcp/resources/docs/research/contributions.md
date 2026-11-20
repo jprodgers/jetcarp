@@ -248,7 +248,7 @@ two or more smaller ships flying together, a smaller ship with a passenger, or a
   ([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)); we have not compared them
   with Guttesen's.
   JETCARP's searches found both independently: its kagome ship is exactly Guttesen's glider g, and its
-  snub-square ship matches Guttesen's figure. Ten catalogue entries turned out to be pairs of ships flying side
+  snub-square ship is Guttesen's period-8 glider, cell for cell. Ten catalogue entries turned out to be pairs of ships flying side
   by side without touching: eight pairs of Guttesen's glider g, one pair of the snub-square glider and one
   pair of a 3.6.3.6 ship. All Life candidates on 3.6.3.6 were such pairs. In Life on 3.3.4.3.4,
   JETCARP also found two larger ships built around Guttesen's glider, of periods 16 and 24; we found no
@@ -444,8 +444,6 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
   cell with the census's period-20 ship on k2-007, which is very likely Büttner's.
 - Compare the census's 3.3.3.4.4 ship with EricG's, and look more closely at the large Life ships of
   k3-055, which may share a common engine.
-- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once they
-  are published.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.
 - Re-run the key searches just before publication.
 
