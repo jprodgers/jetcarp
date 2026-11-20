@@ -9,12 +9,15 @@ that will declare them stable.
 
 ### Fixed
 
-- **Paths of 4,096 bytes or more are refused on every system, and a save into many new folders no
-  longer waits on JETCARP.** The MCP tools, scripts and jobs refuse such a path with an error that
-  gives its length, as Linux always did; on Windows, with long paths on, they used to make the
-  folders. JETCARP now finds where a new path begins in a few lookups instead of one for each
-  folder on the way, which made a save into a few thousand new folders take over a minute on
-  Windows. On macOS the system's own limit, 1,024 bytes, still comes first.
+- **JETCARP builds from source again with Rust 1.95 to 1.98.** 1.95 is the stated minimum, but
+  the workspace's manifests needed 1.99 to load. CI now checks the whole workspace with 1.95.
+  ([#175](https://github.com/jprodgers/jetcarp/issues/175))
+- **Paths of 4,096 bytes or more are refused on every system.** The MCP tools, scripts and jobs
+  refuse such a path at once, with an error that gives its length, as Linux always did; on
+  Windows, with long paths on, they used to make the folders, and a save a few thousand folders
+  deep held the MCP server for minutes. JETCARP also finds where a new path begins in a few
+  lookups instead of one for each folder on the way. On macOS the system's own limit, 1,024 bytes,
+  still comes first.
 
 ## [0.4.2] – 2026-11-17
 

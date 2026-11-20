@@ -16,8 +16,8 @@ dirs = { workspace = true }
 jetcarp-core.workspace = true
 jetcarp-store.workspace = true
 jetcarp-search.workspace = true
-jetcarp-api.workspace = true
-jetcarp-script.workspace = true
+jetcarp-api = { workspace = true, features = ["default"] }
+jetcarp-script = { workspace = true, features = ["default"] }
 serde.workspace = true
 serde_json.workspace = true
 # The local link's token: 128 bits from the operating system's random source (pure Rust).

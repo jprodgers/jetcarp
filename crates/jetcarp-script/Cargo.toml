@@ -22,7 +22,7 @@ api = ["jetcarp-api/ops", "dep:jetcarp-store", "dep:jetcarp-search"]
 jetcarp-core.workspace = true
 jetcarp-store = { workspace = true, optional = true }
 jetcarp-search = { workspace = true, optional = true }
-jetcarp-api = { workspace = true, default-features = false }
+jetcarp-api.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true

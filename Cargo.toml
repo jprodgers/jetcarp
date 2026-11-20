@@ -27,10 +27,10 @@ jetcarp-core = { path = "crates/jetcarp-core", version = "=0.4.2" }
 jetcarp-store = { path = "crates/jetcarp-store", version = "=0.4.2" }
 jetcarp-search = { path = "crates/jetcarp-search", version = "=0.4.2" }
 jetcarp-gpu = { path = "crates/jetcarp-gpu", version = "=0.4.2" }
-jetcarp-api = { path = "crates/jetcarp-api", version = "=0.4.2" }
+jetcarp-api = { path = "crates/jetcarp-api", version = "=0.4.2", default-features = false }
 jetcarp-mcp = { path = "crates/jetcarp-mcp", version = "=0.4.2" }
-jetcarp-script = { path = "crates/jetcarp-script", version = "=0.4.2" }
-jetcarp-display = { path = "crates/jetcarp-display", version = "=0.4.2" }
+jetcarp-script = { path = "crates/jetcarp-script", version = "=0.4.2", default-features = false }
+jetcarp-display = { path = "crates/jetcarp-display", version = "=0.4.2", default-features = false }
 jetcarp-app = { path = "crates/jetcarp-app", version = "=0.4.2" }
 jetcarp-host = { path = "crates/jetcarp-host", version = "=0.4.2" }
 jetcarp-pack = { path = "crates/jetcarp-pack", version = "=0.4.2" }
