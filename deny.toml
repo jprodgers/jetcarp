@@ -31,9 +31,20 @@ ignore = [
     { id = "RUSTSEC-2024-0429", reason = "glib 0.18's VariantStrIter, which JETCARP never uses: #119" },
 ]
 
-# SECURITY.md promises that JETCARP makes no network connections. No crate that is an HTTP, TLS,
+# SECURITY.md says that JETCARP makes no network connections today. So that none comes in by
+# accident (a dependency update that pulls in an HTTP client, say), no crate that is an HTTP, TLS,
 # DNS, WebSocket or peer-to-peer client or server may enter the tree, directly or through another
-# crate. Networking is planned for a later version (#169, #170); this list changes with it.
+# crate, unless an entry below allows it.
+#
+# Networking is planned (an HTTP MCP endpoint, #115; online packs and a BitTorrent client, #169,
+# #170), and is added on purpose: the pull request that adds a network crate allows it here, for
+# the one JETCARP crate that uses it, with `wrappers` and a reason, and updates SECURITY.md:
+#
+#     { crate = "tiny_http", wrappers = ["jetcarp-mcp"], reason = "the MCP server's HTTP endpoint (#115)" },
+#
+# Any other crate that pulls it in still fails the check (tested: tiny_http allowed for
+# jetcarp-mcp passes there, and fails from jetcarp-core). A crate the allowed one brings in that is
+# also on the list needs the same, with the allowed crate as its wrapper.
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"
