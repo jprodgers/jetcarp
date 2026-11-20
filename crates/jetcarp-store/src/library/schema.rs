@@ -490,17 +490,17 @@ CREATE INDEX media_hash ON media (hash);
 /// Is this a library of this schema (`Ok(true)`), a new empty file (`Ok(false)`), or neither
 /// (an error saying why it is refused)?
 fn check(c: &Connection) -> Result<bool, String> {
-    let version: i64 = c
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .map_err(e)?;
-    let app: i64 = c
-        .query_row("PRAGMA application_id", [], |r| r.get(0))
-        .map_err(e)?;
-    let tables: i64 = c
+    // In one statement, so from one snapshot of the file. Read one by one, outside a
+    // transaction, another program's commit of a new library could fall between them: its
+    // mark seen without its version ("no schema version (0)"), or its tables without its mark
+    // ("not a JETCARP library").
+    let (version, app, tables): (i64, i64, i64) = c
         .query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type = 'table'",
+            "SELECT (SELECT user_version FROM pragma_user_version),
+                    (SELECT application_id FROM pragma_application_id),
+                    (SELECT count(*) FROM sqlite_master WHERE type = 'table')",
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .map_err(e)?;
     if app == APPLICATION_ID {
