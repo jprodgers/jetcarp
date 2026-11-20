@@ -80,22 +80,7 @@ fn every_golden_pack_reads_and_checks() {
         );
         assert!(r.sample.failures.is_empty(), "{name}: {:?}", r.sample);
         assert_eq!(r.sample.checked, r.patterns_added - r.flagged, "{name}");
-        // The golden packs were written when every rule family was at semantics version 1: the
-        // records of a family whose meaning has changed since (B/S rules', in 0.4.3) are
-        // flagged for `library reverify`, and no others.
-        let listed = lib.list().unwrap();
-        let moved = listed
-            .iter()
-            .filter(|p| {
-                jetcarp_core::semantics::of_notation(&p.rule).is_some_and(|(_, v)| v != "1")
-            })
-            .count() as u64;
-        assert_eq!(r.flagged, moved, "{name}");
-        // Those are left out of the sample; they verify under this engine's meaning too.
-        for p in listed.iter().filter(|p| p.needs_reverify) {
-            verify(p, default_periods(p.period))
-                .unwrap_or_else(|e| panic!("{name}: {} no longer verifies: {e}", p.id));
-        }
+        assert_eq!(r.flagged, 0, "{name}");
         match name.as_str() {
             "retraction" => {
                 assert_eq!(v.manifest.parents.len(), 1);

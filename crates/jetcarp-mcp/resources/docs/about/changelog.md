@@ -29,10 +29,11 @@ that will declare them stable.
   run from an empty world, so empty space still stays dark and the result is exact on any tiling;
   where every tile has the same number of neighbours nothing changes. A B0 rule also counts the
   cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
-  runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. The Life-like
-  [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is now 2:
-  scenes of such rules replay to other states, and pattern records verified under version 1 are
-  flagged for `jetcarp library reverify`, though no search stores B0 patterns.
+  runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. B0 rules are now a
+  [rule-semantics family](../reference/library-format.md#rule-semantics-versions) of their own,
+  `lifelike_b0`, at version 2: scenes of such rules replay to other states, and a library flags
+  any B0 pattern record for `jetcarp library reverify` (no search stores B0 patterns). Other B/S
+  rules keep `lifelike` at version 1, so their records are not flagged.
   ([B0 rules](../automata/life-like.md#b0-rules),
   [#171](https://github.com/jprodgers/jetcarp/issues/171))
 - **WireWorld can be added without a start on any tiling.** Its default start, the clock-loop

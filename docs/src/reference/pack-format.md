@@ -474,8 +474,10 @@ twelve periodic tilings, and JETCARP's tests check that the layout above gives e
 Geometry pins catch changed tiles; rule-semantics versions catch a changed rule. `engine.rule_semantics`
 maps every rule family JETCARP has to its version, a positive integer written as a string; the
 families and their versions are listed in [Library format](library-format.md#rule-semantics-versions),
-and every one is `"1"` in JETCARP 0.4.0. Each `rules` row, each pattern and each ant carries its
-family and the version it was verified under (`family`, `semantics`). An importer flags a record
+and every one is `"1"` in JETCARP 0.4.0. JETCARP 0.4.3 added `lifelike_b0`, the B/S rules with birth on
+0, at `"2"`: a pack from before files such rules under `lifelike`, so an importer takes a record's
+family from its rule. Each `rules` row, each pattern and each ant carries its family and the version
+it was verified under (`family`, `semantics`). An importer flags a record
 whose version differs from its own engine's for that family, or whose family it does not have,
 as it flags a changed pin ([importing](#importing)).
 

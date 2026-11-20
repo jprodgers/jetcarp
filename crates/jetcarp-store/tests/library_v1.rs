@@ -373,11 +373,9 @@ fn a_record_whose_rule_semantics_differ_is_flagged_on_opening_and_reverify_clear
 
 // A library made before rule-semantics versions (schema 2 without `family` and `semantics`)
 // gains them on opening: each pattern its rule's family and version 1, and nothing is flagged
-// but a record whose rule this engine cannot read and records of a family whose version is no
-// longer 1 (B/S rules' is 2 since 0.4.3).
+// but a record whose rule this engine cannot read.
 #[test]
 fn a_library_from_before_rule_semantics_gains_them_on_opening() {
-    let moved = |f: &str| (jetcarp_core::semantics::version(f) != Some("1")) as i64;
     let lib = temp_lib("presemantics");
     let g = one("B3/S23", GLIDER);
     let b = one("B3/S23", "oo/oo");
@@ -408,10 +406,7 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
         .unwrap();
     }
     let lib = Library::open(&path);
-    assert_eq!(
-        lib.info().unwrap().needs_reverify,
-        1 + moved("lifelike") + moved("cyclic")
-    );
+    assert_eq!(lib.info().unwrap().needs_reverify, 1);
     assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
     let c = Connection::open(&path).unwrap();
     let rows: Vec<(String, String, String, i64)> = c
@@ -423,9 +418,9 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
         .unwrap();
     for (id, family, sem, flag) in rows {
         let want = if id == g.id {
-            ("lifelike", moved("lifelike"))
+            ("lifelike", 0)
         } else if id == b.id {
-            ("cyclic", moved("cyclic"))
+            ("cyclic", 0)
         } else {
             ("", 1)
         };
@@ -442,6 +437,49 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
         .unwrap();
     assert!(indexed);
     assert_eq!(lib.get(&g.id).unwrap().semantics, "1");
+}
+
+// B/S rules with birth on 0 became a family of their own (`lifelike_b0`, version 2) in 0.4.3,
+// when their meaning changed (#171); other B/S rules stayed `lifelike`, version 1. A record of a
+// B0 rule filed under `lifelike` before then moves to its family on opening and is flagged; a
+// record of another B/S rule is not.
+#[test]
+fn a_b0_record_filed_as_lifelike_moves_to_its_family_and_is_flagged() {
+    let lib = temp_lib("b0family");
+    let g = one("B3/S23", GLIDER);
+    let b = one("B3/S23", "oo/oo");
+    for r in [&g, &b] {
+        lib.add(r.clone()).unwrap();
+    }
+    let path = lib.path().to_path_buf();
+    drop(lib);
+    {
+        let c = Connection::open(&path).unwrap();
+        c.execute(
+            "UPDATE patterns SET rule = 'B0/S8', family = 'lifelike', semantics = '1'
+             WHERE id = ?1",
+            [&b.id],
+        )
+        .unwrap();
+        c.execute(
+            "UPDATE patterns SET family = 'lifelike', semantics = '1' WHERE id = ?1",
+            [&g.id],
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&path);
+    assert_eq!(lib.info().unwrap().needs_reverify, 1);
+    assert!(lib.get(&b.id).unwrap().needs_reverify);
+    assert!(!lib.get(&g.id).unwrap().needs_reverify);
+    let family = |id: &str| -> String {
+        raw(&lib)
+            .query_row("SELECT family FROM patterns WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap()
+    };
+    assert_eq!(family(&b.id), "lifelike_b0");
+    assert_eq!(family(&g.id), "lifelike");
 }
 
 /// A bounded search on a Spectre patch of this level, run as a job into the library.
