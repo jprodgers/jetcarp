@@ -82,11 +82,15 @@ folder. The choice is kept in `paths.json` in JETCARP's settings folder (see
 each, ticked to import. A pack already in your library is shown as such and not imported again.
 Researcher and Everything also have **Add packs from a folder…**, for packs you were given or
 downloaded: choose a pack store, an export, or a folder holding several. **Remove** leaves a folder
-out again.
+out again. Each pack says who signed it, with the start of their key (hover for the whole key). A
+pack from your own folders whose key no pack in your library was signed with is marked **New key:
+never seen in this library**: worth a look if you expected it from someone whose packs you already
+have ([Packs](../guides/packs.md#check-a-pack) says more). Setup imports only packs their publisher
+signed.
 
-<img src="../images/getting-started/setup-4-packs.png" alt="The packs page for Explorer: the starter pack ticked, with its patterns, Quick Start entries and size" width="600">
+<img src="../images/getting-started/setup-4-packs.png" alt="The packs page for Explorer: the starter pack ticked, with its patterns, Quick Start entries and size, and who signed it" width="600">
 
-<img src="../images/getting-started/setup-4-packs-researcher.png" alt="The packs page for Researcher: the starter pack, and a folder added with Add packs from a folder, holding a Quick Start atlas" width="600">
+<img src="../images/getting-started/setup-4-packs-researcher.png" alt="The packs page for Researcher: the starter pack, signed by Jimmie Rodgers, and a folder added with Add packs from a folder, holding a pack signed by Ada Example and marked New key: never seen in this library" width="600">
 
 **Desktop** (Desktop art and Everything). The desktop offers, each off until you tick it.
 
@@ -99,7 +103,8 @@ import or build the button says **Finish**.
 
 <img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, about 83 MB and 11 minutes" width="600">
 
-**Setting up.** Each job with its progress. They run in the background, so **Continue in the
+**Setting up.** Each job with its progress; each import says who signed the pack and what your
+library knew of their key, with a new key marked again below it. They run in the background, so **Continue in the
 background** closes the window and they carry on; **Tools → Hunts…** shows them too, and the new
 entries appear in the Quick Start as they arrive. A job that was cut off, because the app closed or
 the computer restarted, has a **Resume** button here and in the Hunts window. When everything is

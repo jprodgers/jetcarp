@@ -848,6 +848,13 @@ pub struct ImportOut {
     pub publisher_name: String,
     /// `publisher` (signed by its publisher) or `unsigned`.
     pub signed: String,
+    /// What the library knew of the publisher's key before this import (signed versions only):
+    /// `new` (no pack signed by it imported here before), `known`, `own` (this computer's own
+    /// publisher key) or `shipped` (the pack came with JETCARP).
+    pub key: Option<String>,
+    /// Who signed it, in words (`signed by NAME, key SHA256:...; new key: never seen in this
+    /// library`).
+    pub signed_by: String,
     pub dry_run: bool,
     /// The whole report (counts, the verification sample, notes).
     pub report: Value,
@@ -858,21 +865,11 @@ impl Report for ImportOut {
     fn text(&self) -> String {
         let r = &self.report;
         let mut s = format!(
-            "{} {} (feed {}, {}{}, {})\n",
+            "{} {} (feed {})\n  {}\n",
             if self.dry_run { "checked" } else { "imported" },
             self.manifest,
             self.feed,
-            self.publisher,
-            if self.publisher_name.is_empty() {
-                String::new()
-            } else {
-                format!(" {}", self.publisher_name)
-            },
-            if self.signed == "publisher" {
-                "signed by its publisher"
-            } else {
-                "not signed"
-            }
+            self.signed_by
         );
         let _ = writeln!(
             s,
@@ -964,6 +961,14 @@ fn import_out(r: pimport::Imported) -> ImportOut {
         publisher: r.publisher.clone(),
         publisher_name: r.publisher_name.clone(),
         signed: r.signed.clone(),
+        key: r.key.map(|k| k.name().to_string()),
+        signed_by: pimport::signed_words(
+            &r.publisher,
+            &r.publisher_name,
+            r.signed == "publisher",
+            r.key,
+            false,
+        ),
         dry_run: r.dry_run,
         notes: r.notes.clone(),
         report: serde_json::to_value(&r).unwrap_or_default(),
@@ -1043,6 +1048,10 @@ pub struct InfoOut {
     pub publisher_name: String,
     /// A signature by the publisher's key verifies.
     pub signed: bool,
+    /// What this library knows of the publisher's key (signed versions only): `new` (no pack
+    /// signed by it imported here yet), `known`, `own` (this computer's own publisher key) or
+    /// `shipped` (the pack came with JETCARP).
+    pub key: Option<String>,
     /// Signatures that did not verify, and why.
     pub bad_signatures: Vec<String>,
     /// Rows, parts and bytes of each table.
@@ -1082,7 +1091,10 @@ impl Report for InfoOut {
             Some(b) => format!(
                 "signed, but a signature does not verify: the version was changed after it was signed, or the signature is damaged ({b})"
             ),
-            None if self.signed => "signed by its publisher".into(),
+            None if self.signed => match self.key.as_deref().and_then(pimport::KeySeen::parse) {
+                Some(k) => format!("signed by its publisher; {}", k.words()),
+                None => "signed by its publisher".into(),
+            },
             None => "not signed by its publisher".into(),
         };
         let _ = writeln!(
@@ -1173,6 +1185,17 @@ impl Op for PackInfo {
             publisher: m.publisher.clone(),
             publisher_name: v.signed.name.clone(),
             signed: v.signed.by_publisher,
+            key: if v.signed.by_publisher && v.signed.bad.is_empty() {
+                if pimport::came_with_jetcarp(&path) {
+                    Some(pimport::KeySeen::Shipped.name().to_string())
+                } else {
+                    pimport::key_seen(&cx.library(), &m.publisher)
+                        .ok()
+                        .map(|k| k.name().to_string())
+                }
+            } else {
+                None
+            },
             bad_signatures: v.signed.bad.clone(),
             tables,
             searches: m.searches.keys().cloned().collect(),
@@ -1218,6 +1241,7 @@ mod tests {
             publisher: "SHA256:abc".into(),
             publisher_name: String::new(),
             signed,
+            key: None,
             bad_signatures: bad.iter().map(|b| b.to_string()).collect(),
             tables: Default::default(),
             searches: vec![],
@@ -1239,6 +1263,14 @@ mod tests {
             info(false, &[])
                 .text()
                 .contains(", not signed by its publisher\n")
+        );
+        // What the library knows of the key follows a good signature.
+        let mut known = info(true, &[]);
+        known.key = Some("new".into());
+        assert!(
+            known
+                .text()
+                .contains(", signed by its publisher; new key: never seen in this library\n")
         );
         let t = info(false, &["sigs/x.sig: signature does not verify"]).text();
         assert!(

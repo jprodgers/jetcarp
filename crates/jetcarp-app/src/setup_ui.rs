@@ -23,7 +23,7 @@ use eframe::egui::{self, Color32, RichText};
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::setup::{
-    self, Applied, ApplyIn, DataDirIn, PackEntry, Profile, SetupJob, SetupStatus,
+    self, Applied, ApplyIn, DataDirIn, KeySeen, PackEntry, Profile, SetupJob, SetupStatus,
 };
 use jetcarp_api::ops::system::human_bytes;
 use std::collections::BTreeMap;
@@ -925,6 +925,25 @@ impl Wizard {
                 if !e.description.is_empty() {
                     ui.label(RichText::new(&e.description).weak());
                 }
+                if let Some(w) = e.signed_by() {
+                    ui.label(RichText::new(capitalise(&w)).small())
+                        .on_hover_text(format!("The publisher's key: {}", e.publisher));
+                    if !e.signed {
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            RichText::new("Setup imports only packs their publisher signed.")
+                                .small(),
+                        );
+                    }
+                }
+                // The packs that came with JETCARP are under their own heading already.
+                if let Some((words, new)) = e
+                    .key_seen()
+                    .filter(|k| *k != KeySeen::Shipped)
+                    .map(key_line)
+                {
+                    key_label(ui, &words, new);
+                }
                 if e.imported {
                     ui.label(RichText::new("Already in your library.").small().weak());
                 }
@@ -1260,7 +1279,13 @@ impl Wizard {
                         .small(),
                     );
                 }
+                // An import's line ends with who signed the pack; a key new to the library is
+                // said again below it, where the eye goes.
                 ui.label(RichText::new(&j.line).small().weak());
+                if j.key.as_deref().and_then(KeySeen::parse) == Some(KeySeen::New) {
+                    let (words, new) = key_line(KeySeen::New);
+                    key_label(ui, &words, new);
+                }
             });
         }
         if let Some((job, kind)) = resume {
@@ -1294,6 +1319,32 @@ impl Wizard {
     }
 }
 
+/// What the library knows of a pack's key, as the setup window says it, and whether to draw
+/// the eye to it (a key never seen in this library).
+fn key_line(k: KeySeen) -> (String, bool) {
+    (format!("{}.", capitalise(k.words())), k == KeySeen::New)
+}
+
+/// [`key_line`]'s words: a new key in the colour the window uses for what needs a look, with
+/// what it means on hover; any other plainly.
+fn key_label(ui: &mut egui::Ui, words: &str, new: bool) {
+    if new {
+        ui.label(
+            RichText::new(words)
+                .small()
+                .strong()
+                .color(Color32::from_rgb(255, 170, 90)),
+        )
+        .on_hover_text(
+            "No pack signed by this key has been imported into this library before. If you \
+             expected a pack from someone whose packs you already have, check that its key is \
+             theirs.",
+        );
+    } else {
+        ui.label(RichText::new(words).small().weak());
+    }
+}
+
 /// The first letter in capitals.
 fn capitalise(s: &str) -> String {
     let mut c = s.chars();
@@ -1312,6 +1363,25 @@ fn short_date(d: &str) -> &str {
 mod tests {
     use super::*;
     use crate::offscreen::Offscreen;
+
+    /// What the window says of a pack's key: a key never seen in this library draws the eye;
+    /// the others are said plainly.
+    #[test]
+    fn a_key_never_seen_draws_the_eye() {
+        assert_eq!(
+            key_line(KeySeen::New),
+            ("New key: never seen in this library.".to_string(), true)
+        );
+        assert_eq!(
+            key_line(KeySeen::Known),
+            (
+                "Known key: this library has imported packs it signed.".to_string(),
+                false
+            )
+        );
+        assert_eq!(key_line(KeySeen::Own).0, "Your own publisher key.");
+        assert_eq!(key_line(KeySeen::Shipped).0, "The pack came with JETCARP.");
+    }
 
     /// Frames of the wizard's window until it settles; the last one saved as `<dir>/<name>.png`.
     fn shot(o: &mut Offscreen, w: &mut Wizard, dir: &Path, name: &str) {

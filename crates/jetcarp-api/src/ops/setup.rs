@@ -40,6 +40,7 @@ use crate::ctx::{Ctx, Paths};
 use crate::error::ApiError;
 use crate::op::{NoInput, Op, Progress, Report};
 use jetcarp_core::paths as cpaths;
+pub use jetcarp_pack::import::KeySeen;
 use jetcarp_pack::import_job::{KIND_NAME as PACK_IMPORT, PackImportSpec};
 use jetcarp_pack::read::Source;
 use jetcarp_search::jobs::{self, JobSpec};
@@ -279,6 +280,16 @@ pub struct PackEntry {
     pub ants: u64,
     /// The explore searches it carries.
     pub searches: usize,
+    /// Its publisher's key (fingerprint).
+    pub publisher: String,
+    /// Who the publisher's key statement names, if anyone.
+    pub publisher_name: String,
+    /// A signature by the publisher's key verifies and no signature fails: setup imports only
+    /// such packs.
+    pub signed: bool,
+    /// What the library knows of the publisher's key (signed packs only): `new`, `known`, `own`
+    /// or `shipped` (`jetcarp_pack::import::KeySeen`).
+    pub key: Option<String>,
     /// It is the starter pack.
     pub starter: bool,
     /// This version is in the library already.
@@ -341,6 +352,40 @@ impl PackEntry {
         parts.join(", ")
     }
 
+    /// Who signed it, in words, its key cut short (`signed by NAME, key SHA256:3eidC4LN3iNQ…`);
+    /// what the library knows of the key is [`PackEntry::key_seen`]. None for a pack that could
+    /// not be read.
+    pub fn signed_by(&self) -> Option<String> {
+        if self.error.is_some() || self.publisher.is_empty() {
+            return None;
+        }
+        Some(jetcarp_pack::import::signed_words(
+            &self.publisher,
+            &self.publisher_name,
+            self.signed,
+            None,
+            true,
+        ))
+    }
+
+    /// What the library knows of its publisher's key (signed packs only).
+    pub fn key_seen(&self) -> Option<KeySeen> {
+        self.key.as_deref().and_then(KeySeen::parse)
+    }
+
+    /// [`PackEntry::signed_by`] with what the library knows of the key, for the command line
+    /// (`signed by NAME, key SHA256:3eidC4LN3iNQ…; new key: never seen in this library`).
+    pub fn signed_by_and_key(&self) -> Option<String> {
+        self.signed_by()?;
+        Some(jetcarp_pack::import::signed_words(
+            &self.publisher,
+            &self.publisher_name,
+            self.signed,
+            self.key_seen(),
+            true,
+        ))
+    }
+
     fn spec(&self) -> PackImportSpec {
         PackImportSpec {
             path: self.path.clone(),
@@ -367,12 +412,27 @@ fn is_pack(p: &Path) -> bool {
 
 /// The packs at `path`: a store (each feed), an export, or a folder of them (one level down).
 pub fn packs_in(path: &Path, lib: Option<&Library>) -> Vec<PackEntry> {
-    let imported: std::collections::HashSet<String> = lib
-        .and_then(|l| l.pack_imports().ok())
-        .unwrap_or_default()
-        .into_iter()
-        .map(|r| r.manifest)
-        .collect();
+    let imports = lib.and_then(|l| l.pack_imports().ok()).unwrap_or_default();
+    let imported: std::collections::HashSet<String> =
+        imports.iter().map(|r| r.manifest.clone()).collect();
+    let revoked = lib.and_then(|l| l.revoked_keys().ok()).unwrap_or_default();
+    let own = jetcarp_pack::import::own_publisher_key();
+    // As an import judges it: a pack that came with JETCARP, this computer's own key, then the
+    // library's own imports.
+    let key_of = |folder: &Path, publisher: &str| {
+        if jetcarp_pack::import::came_with_jetcarp(folder) {
+            KeySeen::Shipped
+        } else if own.as_deref() == Some(publisher) {
+            KeySeen::Own
+        } else if imports
+            .iter()
+            .any(|r| r.publisher == publisher && r.signed == "publisher")
+        {
+            KeySeen::Known
+        } else {
+            KeySeen::New
+        }
+    };
     let mut folders: Vec<PathBuf> = if is_pack(path) {
         vec![path.to_path_buf()]
     } else {
@@ -440,6 +500,18 @@ pub fn packs_in(path: &Path, lib: Option<&Library>) -> Vec<PackEntry> {
                     e.ants = rows("ants");
                     e.searches = v.manifest.searches.len();
                     e.imported = imported.contains(&v.hash);
+                    e.publisher = v.manifest.publisher.clone();
+                    e.publisher_name = v.signed.name.clone();
+                    e.signed = v.signed.by_publisher
+                        && v.signed.bad.is_empty()
+                        && !v
+                            .signed
+                            .publisher_signers
+                            .iter()
+                            .all(|k| revoked.contains(k));
+                    if e.signed {
+                        e.key = Some(key_of(&f, &e.publisher).name().to_string());
+                    }
                 }
                 Err(err) => e.error = Some(err),
             }
@@ -466,6 +538,10 @@ pub fn bundled_packs(dir: Option<&Path>, lib: Option<&Library>) -> Vec<PackEntry
     let any = v.iter().any(named);
     for e in &mut v {
         e.starter = e.error.is_none() && (!any || named(e));
+        // They came with the program: their key is as trusted as the program itself.
+        if e.signed {
+            e.key = Some(KeySeen::Shipped.name().to_string());
+        }
     }
     v
 }
@@ -798,6 +874,12 @@ pub struct SetupJob {
     /// Units done (a build's runs screened; an import's 1 once it is done).
     pub done: u64,
     pub line: String,
+    /// An import's signer, in words, its key cut short (`signed by NAME, key SHA256:…`), once
+    /// it is done.
+    pub signed_by: Option<String>,
+    /// What the library knew of that key before the import: `new`, `known`, `own` or
+    /// `shipped` (`jetcarp_pack::import::KeySeen`).
+    pub key: Option<String>,
 }
 
 impl SetupJob {
@@ -849,6 +931,23 @@ pub fn setup_job(cx: &Ctx, lib: &Library, job: i64) -> Option<SetupJob> {
         done: sum.as_ref().map(|s| s.done).unwrap_or(0),
         fraction,
         line: super::jobs::job_line(lib, k, &row, &progress),
+        signed_by: progress.get("report").and_then(|r| {
+            let publisher = r.get("publisher")?.as_str().filter(|p| !p.is_empty())?;
+            Some(jetcarp_pack::import::signed_words(
+                publisher,
+                r.get("publisher_name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or(""),
+                r.get("signed").and_then(|n| n.as_str()) == Some("publisher"),
+                None,
+                true,
+            ))
+        }),
+        key: progress
+            .get("report")
+            .and_then(|r| r.get("key"))
+            .and_then(|k| k.as_str())
+            .map(str::to_string),
     })
 }
 
@@ -1077,6 +1176,9 @@ impl Report for SetupStatus {
                                 format!("; {}", tags.join(", "))
                             }
                         );
+                        if let Some(w) = e.signed_by_and_key() {
+                            let _ = writeln!(s, "    {w}");
+                        }
                     }
                 }
             }
@@ -1339,14 +1441,17 @@ fn plan_import(e: &PackEntry, verify: &Option<String>) -> Planned {
         kind: PACK_IMPORT,
         step: "pack_import",
         what: format!(
-            "import {} ({}{})",
+            "import {} ({}{}){}",
             e.name(),
             e.contents(),
             if e.starter && !e.name().to_ascii_lowercase().contains("starter") {
                 ", the starter pack"
             } else {
                 ""
-            }
+            },
+            e.signed_by_and_key()
+                .map(|w| format!(", {w}"))
+                .unwrap_or_default()
         ),
         spec: JobSpec {
             strategy: PACK_IMPORT.into(),

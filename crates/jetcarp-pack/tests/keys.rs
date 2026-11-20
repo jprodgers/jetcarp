@@ -131,6 +131,12 @@ fn a_revoked_publisher_key_signs_nothing_and_stays_revoked() {
     std::fs::write(st.key_path(p.signer.fingerprint()).unwrap(), original).unwrap();
     let r = jetcarp_pack::import::import(&lib2, &allow, &|_| {}).unwrap();
     assert_eq!(r.signed, "unsigned");
+    // Unsigned: no word on the key, and these imports make it no better known.
+    assert_eq!(r.key, None);
+    assert_eq!(
+        jetcarp_pack::import::key_seen_with(&lib2, p.signer.fingerprint(), None).unwrap(),
+        jetcarp_pack::import::KeySeen::New
+    );
 }
 
 trait Key {
@@ -140,4 +146,92 @@ impl Key for publish::Published {
     fn publisher_key(&self, p: &publish::Publisher) -> String {
         p.signer.fingerprint().to_string()
     }
+}
+
+/// An import says who signed it and what the library knew of the key: new the first time
+/// (a check, which records nothing, too), known once a signed version was imported, this
+/// computer's own key as such; and an import of an unsigned version, allowed by hand, makes no
+/// key known.
+#[test]
+fn an_import_names_its_signer_and_whether_the_key_is_new() {
+    use jetcarp_pack::import::{self, KeySeen};
+    let dir = temp("seen");
+    let lib = small_library(&dir);
+    let p = publisher(41, "Ada Test");
+    let store = dir.join("store");
+    let out =
+        publish::publish(&lib, &p, &mut book(&[]), &options("seen", &store), &|_| {}).unwrap();
+    let fp = p.signer.fingerprint().to_string();
+    let lib2 = jetcarp_store::Library::open(dir.join("lib2"));
+    let mut o = import::Options {
+        path: store.clone(),
+        manifest: Some(out.manifest.clone()),
+        verify: import::VerifyMode::None,
+        dry_run: true,
+        ..Default::default()
+    };
+    let checked = import::import(&lib2, &o, &|_| {}).unwrap();
+    assert_eq!(checked.key, Some(KeySeen::New));
+    o.dry_run = false;
+    let mut logged = vec![];
+    let first = {
+        let log = std::sync::Mutex::new(&mut logged);
+        import::import(&lib2, &o, &|l| log.lock().unwrap().push(l.to_string())).unwrap()
+    };
+    assert_eq!(
+        (first.signed.as_str(), first.key),
+        ("publisher", Some(KeySeen::New))
+    );
+    assert!(
+        logged
+            .iter()
+            .any(|l| l.contains("new key: never seen in this library")),
+        "{logged:?}"
+    );
+    let words = import::signed_words(
+        &first.publisher,
+        &first.publisher_name,
+        true,
+        first.key,
+        false,
+    );
+    assert_eq!(
+        words,
+        format!("signed by Ada Test, key {fp}; new key: never seen in this library")
+    );
+    // The library's record of the import keeps what it knew then.
+    let rec = lib2.pack_imports().unwrap();
+    assert_eq!(rec.last().unwrap().report["key"], "new");
+    // Importing again: the key is known now.
+    let again = import::import(&lib2, &o, &|_| {}).unwrap();
+    assert_eq!(again.key, Some(KeySeen::Known));
+    assert_eq!(
+        import::key_seen_with(&lib2, &fp, None).unwrap(),
+        KeySeen::Known
+    );
+    // This computer's own key comes first; a fresh library knows nothing.
+    assert_eq!(
+        import::key_seen_with(&lib2, &fp, Some(&fp)).unwrap(),
+        KeySeen::Own
+    );
+    let lib3 = jetcarp_store::Library::open(dir.join("lib3"));
+    assert_eq!(
+        import::key_seen_with(&lib3, &fp, None).unwrap(),
+        KeySeen::New
+    );
+    // In words: unsigned, no name, cut short.
+    assert_eq!(
+        import::signed_words(&fp, "", false, None, false),
+        format!("not signed by its publisher (key {fp})")
+    );
+    assert!(
+        import::signed_words(&fp, "", true, Some(KeySeen::Known), false)
+            .starts_with("signed by its publisher, key SHA256:")
+    );
+    let short = import::short_key(&fp);
+    assert!(
+        short.ends_with('…') && fp.starts_with(short.trim_end_matches('…')),
+        "{short}"
+    );
+    assert_eq!(short.chars().count(), "SHA256:".len() + 13);
 }
