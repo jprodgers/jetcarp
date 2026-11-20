@@ -392,6 +392,145 @@ pub fn too_long(e: &std::io::Error) -> Option<String> {
         .map(|t| t.0.clone())
 }
 
+/// The names Windows keeps for its devices. A file or folder by one of these names, with or
+/// without an extension, cannot be made or opened as an ordinary file on many Windows systems, and
+/// tools there struggle to remove one made elsewhere.
+const RESERVED: [&str; 30] = [
+    "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+    "COM8", "COM9", "COM¹", "COM²", "COM³", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6",
+    "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
+];
+
+/// The Windows device name `name` stands for, if any: the part before its first `.`, with
+/// trailing spaces dropped, compared without regard to letter case (`CON`, `con.png`,
+/// `Nul.tar.gz`, `AUX ` and `com1.` all are; `console.json`, `com10.json` and `lpt.json` are not).
+pub fn reserved_on_windows(name: &str) -> Option<&'static str> {
+    let base = name.split('.').next().unwrap_or(name).trim_end_matches(' ');
+    let upper = base.to_uppercase();
+    RESERVED.iter().find(|r| **r == upper).copied()
+}
+
+/// Nothing if `name` (one file or folder name) can be copied to any system; else the sentence
+/// that refuses it. A `:` (on Windows it names a hidden data stream of a file: `plain.json:other`
+/// writes beside `plain.json`, out of sight), Windows' device names ([`reserved_on_windows`]),
+/// and a name ending in a dot or a space (Windows drops those, so `scene.json.` would become
+/// `scene.json` there) are refused on every system, so that folders and scenes can be copied
+/// between systems. `.` and `..` are not names and keep their meaning. It looks only at the text,
+/// so it reads the same whether or not the name exists.
+pub fn check_name(name: &str) -> Result<(), String> {
+    if name == "." || name == ".." {
+        return Ok(());
+    }
+    if name.contains(':') {
+        return Err(format!(
+            "a `:` in a name (`{name}`) is refused on every system: on Windows it names a hidden \
+             data stream, so the name cannot be copied there"
+        ));
+    }
+    if let Some(device) = reserved_on_windows(name) {
+        let shown = if name == device {
+            format!("`{name}`")
+        } else {
+            format!("`{name}` (as `{device}`)")
+        };
+        return Err(format!(
+            "the name {shown} is reserved on Windows; JETCARP refuses it on every system so that \
+             folders and scenes can be copied between systems"
+        ));
+    }
+    for (end, what) in [('.', "a dot"), (' ', "a space")] {
+        if name.ends_with(end) {
+            return Err(format!(
+                "the name `{name}` ends in {what}; Windows drops it, so JETCARP refuses it on \
+                 every system so that folders and scenes can be copied between systems"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// [`check_name`] for each name in `rel` (its folders and its last name). A root, a drive (`C:`)
+/// and `.` or `..` are not names.
+pub fn check_names(rel: &Path) -> Result<(), String> {
+    for c in rel.components() {
+        if let std::path::Component::Normal(n) = c {
+            check_name(&n.to_string_lossy())?;
+        }
+    }
+    Ok(())
+}
+
+/// One part of a path as text: a name (`Some`), or a drive or root (`None` names, the text kept
+/// for comparing).
+type Part = (bool, String);
+
+/// The parts of `p` made absolute against the working directory, with `.` and `..` worked out by
+/// name and nothing looked up (unlike [`std::path::absolute`] on Windows, which can turn a device
+/// name into the device). They stay text and are never put back together into a path: on
+/// Windows a name such as `a:b.png` pushed onto a path on its own reads as the drive `A:` and
+/// replaces everything before it.
+fn lexical_parts(p: &Path) -> Vec<Part> {
+    let mut out: Vec<Part> = Vec::new();
+    for c in joined(p).components() {
+        match c {
+            std::path::Component::ParentDir => {
+                if out.last().is_some_and(|(name, _)| *name) {
+                    out.pop();
+                }
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(n) => out.push((true, n.to_string_lossy().into_owned())),
+            c => out.push((false, c.as_os_str().to_string_lossy().into_owned())),
+        }
+    }
+    out
+}
+
+/// The names that follow `dir`'s parts in `path`'s, if `path` is under `dir` by name: letter case
+/// ignored on Windows and macOS, whose usual file systems ignore it.
+fn below_by_name(dir: &[Part], path: &[Part]) -> Option<Vec<String>> {
+    let fold = |s: &str| {
+        if cfg!(any(windows, target_os = "macos")) {
+            s.to_lowercase()
+        } else {
+            s.to_string()
+        }
+    };
+    if path.len() < dir.len() {
+        return None;
+    }
+    for ((_, d), (_, p)) in dir.iter().zip(path) {
+        if fold(d) != fold(p) {
+            return None;
+        }
+    }
+    Some(path[dir.len()..].iter().map(|(_, n)| n.clone()).collect())
+}
+
+/// [`check_names`] for the names `path` has below the folder `dir`, worked out by name before
+/// anything is looked up. The folder's own path is not checked: it is the person's own. A path
+/// not under `dir` by name passes here (it is outside, or reaches `dir` another way, and the
+/// caller checks what it resolves to: [`check_names_beyond`]).
+pub fn check_names_below(dir: &Path, path: &Path) -> Result<(), String> {
+    match below_by_name(&lexical_parts(dir), &lexical_parts(path)) {
+        Some(names) => names.iter().try_for_each(|n| check_name(n)),
+        None => Ok(()),
+    }
+}
+
+/// [`check_name`] for each name of `full` after the parts of `base` (a path `full` is known to
+/// start with: a resolved path and its resolved folder). The names are read from `full` itself,
+/// whose drive and root come first, rather than from what `strip_prefix` leaves, which on Windows
+/// would read a first name such as `a:b.png` as a drive.
+pub fn check_names_beyond(base: &Path, full: &Path) -> Result<(), String> {
+    for c in full.components().skip(base.components().count()) {
+        if let std::path::Component::Normal(n) = c {
+            check_name(&n.to_string_lossy())?;
+        }
+    }
+    Ok(())
+}
+
 /// `p` as the file system will see it when a file is opened or made there: made absolute, the
 /// deepest part of it that exists resolved with every symbolic link followed
 /// ([`std::fs::canonicalize`]), and the rest, which does not exist yet, joined on with its `.`
@@ -516,12 +655,25 @@ fn resolve_links(p: &Path, links: u32) -> std::io::Result<PathBuf> {
 /// made between the check and the write would need something that can already write in `dir`.
 ///
 /// A refusal names the path as JETCARP would write it, never where the link leads, and reads
-/// the same whether or not that place exists. A path of [`MAX_PATH_BYTES`] or more is refused
-/// in its own words ([`check_length`]).
+/// the same whether or not that place exists. A path of [`MAX_PATH_BYTES`] or more, and a name
+/// below `dir` that cannot be copied to every system ([`check_name`]: a `:`, a Windows device
+/// name), are refused in their own words, before anything is looked up.
 pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
     // A name in `dir`, or a path already under it (`dir.join(name)`, as several writers pass):
     // joining that onto a relative `dir` again would double it.
     let path = path.as_ref();
+    // On Windows a name that starts with one letter and a `:` (`a:b.png`) reads as a drive, and
+    // joining it onto `dir` would replace `dir`: refuse it as the name it is.
+    if !path.is_absolute()
+        && matches!(
+            path.components().next(),
+            Some(std::path::Component::Prefix(_))
+        )
+    {
+        let first = path.to_string_lossy();
+        let first = first.split(['/', '\\']).next().unwrap_or_default();
+        check_name(first)?;
+    }
     let path = if path.starts_with(dir) {
         path.to_path_buf()
     } else {
@@ -534,9 +686,13 @@ pub fn inside(dir: &Path, path: impl AsRef<Path>) -> Result<PathBuf, String> {
             path.display()
         )
     };
+    check_length(&path)?;
+    check_names_below(dir, &path)?;
     let real = resolve(&path).map_err(|e| too_long(&e).unwrap_or_else(refused))?;
     let base = resolve(dir).map_err(|_| refused())?;
     let rest = real.strip_prefix(&base).map_err(|_| refused())?;
+    // The names the write will really make, if a link on the way changed them.
+    check_names_beyond(&base, &real)?;
     let open = if rest.as_os_str().is_empty() {
         dir.to_path_buf()
     } else {
@@ -661,6 +817,229 @@ mod length_tests {
         );
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "{}");
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("jetcarp-names-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Windows' device names, with any extension, in any letter case, with trailing spaces or
+    /// dots, are reserved; names that only start with the same letters are not.
+    #[test]
+    fn windows_device_names_are_known_in_every_form() {
+        for name in [
+            "CON",
+            "con",
+            "Con",
+            "PRN",
+            "AUX",
+            "NUL",
+            "nul.json",
+            "con.png",
+            "Nul.tar.gz",
+            "AUX ",
+            "com1.",
+            "COM0",
+            "COM9.json",
+            "LPT0",
+            "lpt9.txt",
+            "COM¹",
+            "com².png",
+            "LPT³",
+            "CON .txt",
+        ] {
+            assert!(reserved_on_windows(name).is_some(), "{name:?}");
+            let e = check_name(name).unwrap_err();
+            assert!(e.contains("is reserved on Windows"), "{e}");
+            assert!(e.contains("refuses it on every system"), "{e}");
+        }
+        for name in [
+            "console.json",
+            "nullable.png",
+            "com10.json",
+            "lpt.json",
+            "auxiliary",
+            "prnt",
+            "COM",
+            "LPT10",
+            "my-con.json",
+            "concat",
+            ".con",
+            " CON",
+        ] {
+            assert!(reserved_on_windows(name).is_none(), "{name:?}");
+            assert!(check_name(name).is_ok(), "{name:?}");
+        }
+        assert_eq!(
+            check_name("CON").unwrap_err(),
+            "the name `CON` is reserved on Windows; JETCARP refuses it on every system so that \
+             folders and scenes can be copied between systems"
+        );
+        assert!(
+            check_name("nul.json")
+                .unwrap_err()
+                .contains("`nul.json` (as `NUL`)")
+        );
+    }
+
+    /// A `:` in a file's name or a folder's is refused in every place.
+    #[test]
+    fn a_colon_in_a_name_is_refused() {
+        assert_eq!(
+            check_name("plain.json:other").unwrap_err(),
+            "a `:` in a name (`plain.json:other`) is refused on every system: on Windows it names \
+             a hidden data stream, so the name cannot be copied there"
+        );
+        for rel in [
+            "plain.json:other",
+            "plain.json::$DATA",
+            "plain.json:other:$DATA",
+            "run 12:30/scene.json",
+            "a/b:c/d.png",
+        ] {
+            let e = check_names(Path::new(rel)).unwrap_err();
+            assert!(e.contains("a `:` in a name"), "{rel}: {e}");
+        }
+    }
+
+    /// A name ending in a dot or a space is refused, as a file and as a folder on the way; `.`
+    /// and `..` keep their meaning, and dots inside a name are fine.
+    #[test]
+    fn a_name_ending_in_a_dot_or_a_space_is_refused() {
+        assert_eq!(
+            check_name("scene.json.").unwrap_err(),
+            "the name `scene.json.` ends in a dot; Windows drops it, so JETCARP refuses it on \
+             every system so that folders and scenes can be copied between systems"
+        );
+        assert_eq!(
+            check_name("scene.json ").unwrap_err(),
+            "the name `scene.json ` ends in a space; Windows drops it, so JETCARP refuses it on \
+             every system so that folders and scenes can be copied between systems"
+        );
+        for name in ["name.", "name ", "...", "a.b.", "x. ", "run  "] {
+            assert!(check_name(name).is_err(), "{name:?}");
+        }
+        for name in [".", "..", "a.b.json", ".hidden", "v1.2.3.png", " lead"] {
+            assert!(check_name(name).is_ok(), "{name:?}");
+        }
+        assert!(check_names(Path::new("dir./x.json")).is_err());
+        assert!(check_names(Path::new("dir /x.json")).is_err());
+        assert!(check_names(Path::new(".../x.json")).is_err());
+        assert!(check_names(Path::new("./a/../b/a.b.json")).is_ok());
+        let dir = scratch("dots");
+        for rel in ["name.", "name ", "...", "dir./x.json", "sub/dir /x.png"] {
+            let e = inside(&dir, rel).unwrap_err();
+            assert!(e.contains("ends in a"), "{rel}: {e}");
+        }
+        assert!(!dir.join("dir.").exists() && !dir.join("sub").exists());
+        assert_eq!(inside(&dir, "a.b.json").unwrap(), dir.join("a.b.json"));
+        assert_eq!(inside(&dir, "x/../a.c.json").unwrap(), dir.join("a.c.json"));
+        assert!(check_names_below(&dir, &dir.join("deep/./../ok.json")).is_ok());
+        assert!(check_names_below(&dir, &dir.join("deep./x.json")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Every folder on the way is checked, not only the last name, and `.` and `..` are not
+    /// names.
+    #[test]
+    fn every_name_on_the_way_is_checked() {
+        assert!(check_names(Path::new("AUX/x.json")).is_err());
+        assert!(check_names(Path::new("a/con/b/x.json")).is_err());
+        assert!(check_names(Path::new("a/./b/../x.json")).is_ok());
+        assert!(check_names(Path::new("/srv/out/x.json")).is_ok());
+    }
+
+    /// Below a folder, the names are checked by name before anything is looked up, `..` worked
+    /// out (so `deep/../CON.json` is `CON.json`); the folder's own path is not checked.
+    #[test]
+    fn names_below_a_folder_are_checked_and_the_folder_itself_is_not() {
+        let root = scratch("below");
+        let dir = root.join("aux"); // the person's own folder may have any name
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(check_names_below(&dir, &dir.join("scene.json")).is_ok());
+        assert!(check_names_below(&dir, &dir.join("CON.json")).is_err());
+        assert!(check_names_below(&dir, &dir.join("deep/../nul.json")).is_err());
+        assert!(check_names_below(&dir, &dir.join("ok/AUX/x.png")).is_err());
+        // Not under the folder by name: left to what it resolves to.
+        assert!(check_names_below(&dir, &root.join("elsewhere/CON")).is_ok());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A name JETCARP writes inside a folder is refused in the same words whether or not it
+    /// exists, and before anything is made; ordinary names are written.
+    #[test]
+    fn inside_refuses_names_every_system_cannot_hold() {
+        let dir = scratch("inside");
+        for rel in [
+            "CON",
+            "nul.json",
+            "AUX/x.json",
+            "plain.json:other",
+            "sub/a:b.png",
+            "a:b.png",
+        ] {
+            let e = inside(&dir, rel).unwrap_err();
+            assert!(
+                e.contains("reserved on Windows") || e.contains("a `:` in a name"),
+                "{rel}: {e}"
+            );
+            assert!(!e.contains("symbolic link"), "{rel}: {e}");
+        }
+        assert!(!dir.join("AUX").exists() && !dir.join("sub").exists());
+        // The same answer once a folder on the way exists.
+        let missing = inside(&dir, "made/CON.png").unwrap_err();
+        std::fs::create_dir_all(dir.join("made")).unwrap();
+        assert_eq!(inside(&dir, "made/CON.png").unwrap_err(), missing);
+        for rel in ["console.json", "nullable.png", "com10.json", "lpt.json"] {
+            assert_eq!(inside(&dir, rel).unwrap(), dir.join(rel));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// On Windows a name that starts with one letter and a `:` reads as a drive when it stands
+    /// alone; it is still a name below a folder, with either separator, and still refused. (The
+    /// paths are built from text, not with `join`, which would let such a name replace them.)
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_name_like_a_drive_is_still_refused_as_a_name() {
+        let dir = scratch("drive-like");
+        for rel in [
+            "sub/a:b.png",
+            r"sub\a:b.png",
+            r"x/y\a:b.png",
+            "a:b.png",
+            r"a:b\c.png",
+        ] {
+            let e = inside(&dir, rel).unwrap_err();
+            assert!(e.contains("a `:` in a name"), "{rel}: {e}");
+        }
+        let under = |rel: &str| PathBuf::from(format!("{}\\{rel}", dir.display()));
+        for rel in ["a:b.png", "sub/a:b.png", r"sub\x/a:b.png"] {
+            assert!(check_names_below(&dir, &under(rel)).is_err(), "{rel}");
+            assert!(check_names_beyond(&dir, &under(rel)).is_err(), "{rel}");
+        }
+        assert!(check_names_beyond(&dir, &under("sub/ok.png")).is_ok());
+        assert!(!dir.join("sub").exists() && !dir.join("x").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A drive at the start of a Windows path is not a name, so `C:\…` is not refused as a `:`.
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_letter_is_not_a_name() {
+        assert!(check_names(Path::new(r"C:\Users\x\scene.json")).is_ok());
+        let dir = scratch("drive");
+        let p = inside(&dir, "scene.json").unwrap();
+        assert!(p.to_string_lossy().contains(':'));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

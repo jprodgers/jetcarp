@@ -46,7 +46,9 @@ as long as it runs.
   once its symbolic links are followed, is refused with an error that names the folders, and each
   file a tool names itself inside such a folder is checked the same way. A path of 4,096 bytes or
   more is refused on every system, with an error that gives its length (on macOS the system's own
-  limit, 1,024 bytes, comes first). See [Folders and environment variables](folders.md).
+  limit, 1,024 bytes, comes first), and so is a name that cannot be copied to every system: one
+  with a `:`, a Windows device name such as `CON` or `nul.json`, or one ending in a dot or a space
+  ([Names](folders.md#names)). See [Folders and environment variables](folders.md).
 - **Limits per call.** Worlds of at most 4 million cells, counting every cell, several to a unit
   cell on trihex and the k-uniform tilings (a refusal names sides that fit); at most 1,000,000
   generations and 2 billion cell updates (cells times generations) per `world_step`; scripts of at

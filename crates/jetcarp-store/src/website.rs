@@ -329,7 +329,8 @@ fn links(
 }
 
 fn safe(id: &str) -> String {
-    id.chars()
+    let mut s: String = id
+        .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
                 c
@@ -337,7 +338,13 @@ fn safe(id: &str) -> String {
                 '_'
             }
         })
-        .collect()
+        .collect();
+    // An id that is a Windows device name (`con`, `aux`) gets a `_`, so that the site can be
+    // copied to any system ([`jetcarp_core::paths::reserved_on_windows`]).
+    if jetcarp_core::paths::reserved_on_windows(&s).is_some() {
+        s.push('_');
+    }
+    s
 }
 
 /// A pattern as the website sees it: the rule-free record without curation notes or
@@ -731,4 +738,22 @@ pub fn export(lib: &Library, dir: &Path, o: &ExportOptions) -> Result<ExportRepo
         report.written.push("manifest.json".into());
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::safe;
+
+    /// Ids become file names every system can hold: anything but letters, digits, `-` and `_`
+    /// becomes `_`, and a Windows device name gets a `_` after it.
+    #[test]
+    fn ids_become_names_every_system_can_hold() {
+        assert_eq!(safe("glider-gun_2"), "glider-gun_2");
+        assert_eq!(safe("a:b/c"), "a_b_c");
+        assert_eq!(safe("con"), "con_");
+        assert_eq!(safe("AUX"), "AUX_");
+        assert_eq!(safe("com1"), "com1_");
+        assert_eq!(safe("console"), "console");
+        assert_eq!(safe("lpt10"), "lpt10");
+    }
 }
