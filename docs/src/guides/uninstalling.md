@@ -86,22 +86,52 @@ list whose files have gone.
 
 ## 2. JETCARP's folders
 
-Two options of `jetcarp uninstall` also delete JETCARP's folders:
+These options of `jetcarp uninstall` also delete JETCARP's folders:
 
 | Option | Deletes |
 | --- | --- |
-| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures. A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be |
-| `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases. **This cannot be undone** |
+| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **Your publisher key and rater book are kept too** (`pack/`: the key, its public half, `publisher.json` and `raters.json`), and the report says where: the key is your identity as the publisher of every pack you have signed, and the rater book holds your raters' names and their consent, and neither can be made again |
+| `--publisher-key` | With `--settings`, the publisher key and rater book as well. Copy `pack/` out first if you might publish again. Without `--settings` it is refused |
+| `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases, but only when everything in it is JETCARP's (below). **This cannot be undone** |
 
-To undo everything and delete both folders:
+To undo everything and delete both folders, keeping your publisher key and rater book if you made
+them:
 
 ```sh
 jetcarp uninstall --yes --settings --data
 ```
 
+The report then ends with where they are kept:
+
+```text
+Kept your publisher key and rater book, in /home/ada/.config/jetcarp/pack (publisher_ed25519, publisher_ed25519.pub, publisher.json, raters.json): the key is the identity behind every pack you signed, and the rater book holds your raters' names and their consent. Add --publisher-key to delete them too.
+```
+
+To delete those too, add `--publisher-key`.
+
 On macOS the data folder is inside the settings folder. With both options, the data folder is
 deleted first and then the settings folder; `--settings` alone deletes the settings and keeps the
 data folder inside it.
+
+`--data` and `--settings` delete their folders only when everything in each is JETCARP's. In the
+data folder that is the library and the files SQLite keeps beside it, its folder of job locks, and
+`media/`, `searches/` and `explore/` laid out as JETCARP lays them out (on Windows, also the
+runtime files and the screen saver, which share the folder). In the settings folder it is the
+settings files [Folders](../reference/folders.md#what-lives-in-each-folder) lists, the folders of
+screensaver profiles, rotations, desktop stills and *Fit to this computer*'s pictures, and `pack/`
+with the publisher's files (and the data folder, where it is inside). A folder holding anything
+else, such as a folder of documents that `JETCARP_DATA_DIR`, `JETCARP_CONFIG_DIR` or a data folder
+chosen in setup names by mistake, is refused before anything is done, even with `--yes`: both
+folders are checked first, and the uninstall names each folder it refuses, where its name came
+from and what in it is not JETCARP's, and changes nothing. Correct the variable or the choice
+(deleting `paths.json` in the settings folder brings the usual data folder back) and run it again;
+or, if it really is JETCARP's folder and you want it gone, delete it yourself. Without the option,
+the uninstall undoes the rest and keeps the folder. A library alone does not make a folder
+JETCARP's, since JETCARP makes `library.sqlite` in whatever folder it is given. A folder that is a
+link to another folder (a symbolic link, or a junction on Windows) is not looked into: the option
+removes the link and leaves the folder it leads to exactly as it is, with what would otherwise be
+kept, such as the picture the desktop shows or the data folder inside. A link inside either folder
+is removed as a link too, never followed.
 
 The output folder, with your pictures, wallpapers, script runs and sweeps, is never deleted. If you
 want to keep your pattern library, copy `library.sqlite` (and its `media` folder) out of the data

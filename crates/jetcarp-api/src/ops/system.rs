@@ -30,8 +30,17 @@ pub fn folder_size(p: &Path) -> u64 {
 /// folder this way, keeping the picture the desktop shows (a still the host left, or on Windows
 /// the copy of the user's own picture that was put back), so the desktop is never left pointing at
 /// a deleted file, and keeping the data folder when it is inside and was not asked for (macOS).
-/// Keeping `dir` itself keeps everything. Symbolic links are removed, not followed.
+/// Keeping `dir` itself keeps everything.
+///
+/// A link, a symbolic link or on Windows a junction, is removed as a link and never followed,
+/// whether it is `dir` itself or something inside it: nothing behind it is read, emptied or
+/// deleted. When `dir` is a link, only the link goes, and what `keep` names behind it stays where
+/// it is, untouched (so nothing is reported kept).
 pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
+    if is_link(dir) {
+        remove_link(dir)?;
+        return Ok(Vec::new());
+    }
     let root = canonical(dir);
     let mut inside: Vec<PathBuf> = keep
         .iter()
@@ -54,6 +63,8 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
             let p = e?.path();
             if keep.contains(&p) {
                 left = true;
+            } else if is_link(&p) {
+                remove_link(&p)?;
             } else if std::fs::symlink_metadata(&p)?.is_dir() {
                 if empty(&p, keep)? {
                     std::fs::remove_dir(&p)?;
@@ -68,6 +79,19 @@ pub fn remove_dir_keeping(dir: &Path, keep: &[PathBuf]) -> std::io::Result<Vec<P
     }
     empty(&root, &inside)?;
     Ok(inside)
+}
+
+/// Whether `p` is a link to somewhere else: a symbolic link, or on Windows a junction (std counts
+/// both as symbolic links; neither is followed here).
+pub fn is_link(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// Removes the link `p` itself, never what it leads to: `remove_file` for a link on Unix and a
+/// file link on Windows, `remove_dir` for a junction or a link to a folder on Windows, which
+/// removes the link only.
+fn remove_link(p: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(p).or_else(|e| std::fs::remove_dir(p).map_err(|_| e))
 }
 
 /// `p` with its symbolic links followed, or as it is when that fails.
@@ -452,10 +476,20 @@ pub struct UninstallIn {
     /// Do it. Without this, only say what would be done.
     #[serde(default)]
     pub yes: bool,
-    /// Also delete the settings folder (except a picture the desktop still shows).
+    /// Also delete the settings folder (except a picture the desktop still shows, and the
+    /// publisher's files unless `publisher_key`), only when everything in it is JETCARP's: a
+    /// folder holding anything else is refused.
     #[serde(default)]
     pub settings: bool,
-    /// Also delete the data folder (the catalog, search databases, packs). Cannot be undone.
+    /// With `settings`, also delete the publisher's files in the settings folder's `pack/`: the
+    /// publisher key and its public half, `publisher.json`, and the rater book. `settings` keeps
+    /// them otherwise, since the key is the identity behind every pack the publisher signed and
+    /// the rater book holds raters' names and their consent; neither can be made again. Refused
+    /// without `settings`.
+    #[serde(default)]
+    pub publisher_key: bool,
+    /// Also delete the data folder (the catalog, search databases, packs), only when everything
+    /// in it is JETCARP's: a folder holding anything else is refused. Cannot be undone.
     #[serde(default)]
     pub data: bool,
 }
@@ -481,6 +515,47 @@ pub struct KeptFolder {
     pub bytes: u64,
 }
 
+/// The publisher's files kept in the settings folder.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct KeptPublisher {
+    /// Their folder, `<settings>/pack`.
+    pub folder: PathBuf,
+    /// The files kept there, by name: those of `publisher_ed25519`, `publisher_ed25519.pub`,
+    /// `publisher.json` and `raters.json` that are there.
+    pub files: Vec<String>,
+}
+
+impl KeptPublisher {
+    /// The report's sentence: what is kept, where, why, and how to delete it.
+    pub fn sentence(&self) -> String {
+        let key = self.files.iter().any(|f| f != "raters.json");
+        let raters = self.files.iter().any(|f| f == "raters.json");
+        let (what, why, them) = match (key, raters) {
+            (true, true) => (
+                "your publisher key and rater book",
+                "the key is the identity behind every pack you signed, and the rater book holds \
+                 your raters' names and their consent",
+                "them",
+            ),
+            (true, false) => (
+                "your publisher key",
+                "it is the identity behind every pack you signed",
+                "it",
+            ),
+            _ => (
+                "your rater book",
+                "it holds your raters' names and their consent",
+                "it",
+            ),
+        };
+        format!(
+            "Kept {what}, in {} ({}): {why}. Add --publisher-key to delete {them} too.",
+            self.folder.display(),
+            self.files.join(", ")
+        )
+    }
+}
+
 /// What uninstalling did, or would do.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct UninstallReport {
@@ -491,6 +566,8 @@ pub struct UninstallReport {
     pub kept_data: Option<KeptFolder>,
     /// The settings folder, when it was kept.
     pub kept_settings: Option<PathBuf>,
+    /// The publisher's files `--settings` keeps (without `--publisher-key`), when there are any.
+    pub kept_publisher: Option<KeptPublisher>,
     /// The output folder (never deleted).
     pub output: PathBuf,
     /// How this program was installed, and what removes it; none when that can't be told.
@@ -696,32 +773,28 @@ impl Report for UninstallReport {
                 }
             }
         }
+        let mut kept = Vec::new();
+        if let Some(p) = &self.kept_publisher {
+            kept.push(p.sentence());
+        }
         if let Some(k) = &self.kept_data {
-            let _ = writeln!(
-                s,
-                "\nKept the data folder {} ({}); add --data to delete it.",
+            kept.push(format!(
+                "Kept the data folder {} ({}); add --data to delete it.",
                 k.path.display(),
                 human_bytes(k.bytes)
-            );
+            ));
         }
         if let Some(k) = &self.kept_settings {
-            let _ = writeln!(
-                s,
-                "{}Kept the settings folder {}; add --settings to delete it.",
-                if self.kept_data.is_some() { "" } else { "\n" },
+            kept.push(format!(
+                "Kept the settings folder {}; add --settings to delete it.",
                 k.display()
-            );
+            ));
         }
-        let _ = writeln!(
-            s,
-            "{}Your pictures and exports in {} are never deleted.",
-            if self.kept_data.is_none() && self.kept_settings.is_none() {
-                "\n"
-            } else {
-                ""
-            },
+        kept.push(format!(
+            "Your pictures and exports in {} are never deleted.",
             self.output.display()
-        );
+        ));
+        let _ = writeln!(s, "\n{}", kept.join("\n"));
         if self.done
             && self
                 .steps
@@ -797,6 +870,380 @@ fn dir_is_empty(d: &Path) -> bool {
     std::fs::read_dir(d).is_ok_and(|mut e| e.next().is_none())
 }
 
+// What `uninstall --data` and `uninstall --settings` count as JETCARP's (#195). Each deletes its
+// folder whole, so first it makes sure everything in the folder is something JETCARP keeps there.
+// No release has written a marker into either folder, so this recognises the folders older
+// versions made too; a folder named by mistake (`JETCARP_DATA_DIR`, `paths.json` or
+// `JETCARP_CONFIG_DIR` pointing at a folder of documents) holds something else.
+//
+// **The lists live here: `DATA_FILES` and `DATA_FOLDERS`, `SETTINGS_FILES` and `SETTINGS_FOLDERS`
+// (with `PACK_FILES`).** A file or folder JETCARP comes to keep in the data or settings folder must
+// be added to them, as well as to `folders.md` ("What lives in each folder"), or `uninstall` will
+// refuse a folder that holds it. The uninstall test (`tests/uninstall_folders.rs`) fills a
+// folder with every name on them.
+
+/// What may be inside one of JETCARP's folders.
+#[derive(Clone, Copy)]
+enum Inside {
+    /// Anything: JETCARP's own pictures, the search databases of older versions.
+    Anything,
+    /// Files only, of any name: job locks, saved profiles and rotations.
+    Files,
+    /// Folders named by two hexadecimal digits (`media/`).
+    HexFolders,
+    /// Folders named by a UUID (`searches/`).
+    UuidFolders,
+    /// These files, and their temporary files while being written.
+    Named(&'static [&'static str]),
+}
+
+/// The files JETCARP keeps at the top of a data folder: the library and what SQLite keeps beside
+/// it; and, on Windows, where the data folder is also the runtime folder and the screen saver's
+/// (`%LOCALAPPDATA%\jetcarp`, whose name Windows reads in any case), the host's and the tuner's
+/// locks, the app's and the host's endpoint files, and `JETCARP.scr`.
+const DATA_FILES: &[&str] = &[
+    "library.sqlite",
+    "library.sqlite-wal",
+    "library.sqlite-shm",
+    "library.sqlite-journal",
+    "host.lock",
+    "tune.lock",
+    "host-endpoint.json",
+    "app-endpoint.json",
+    "JETCARP.scr",
+];
+
+/// The folders JETCARP keeps in a data folder: the library's job locks, its media
+/// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), and the search databases'
+/// folder ([`jetcarp_core::paths::explore_dir`]).
+const DATA_FOLDERS: &[(&str, Inside)] = &[
+    ("library.sqlite-jobs", Inside::Files),
+    ("media", Inside::HexFolders),
+    ("searches", Inside::UuidFolders),
+    ("explore", Inside::Anything),
+];
+
+/// The files JETCARP keeps at the top of the settings folder: the app's, the host's and setup's
+/// settings, the data folder chosen in setup, the answer to the photosensitive seizure warning,
+/// the GPU setting and its self-tests, the host's command, the user's own desktop picture, and
+/// the two macOS screen saver records.
+const SETTINGS_FILES: &[&str] = &[
+    "app.json",
+    "host.json",
+    "setup.json",
+    "paths.json",
+    "photosensitivity.json",
+    "gpu.json",
+    "gpu-checks.json",
+    "host-program",
+    "desktop-picture.json",
+    "screen-saver-before.plist",
+    "wallpaper-store-before-saver-remove.plist",
+];
+
+/// The publisher's files (`<settings>/pack/`): the private key and its public half, who the
+/// publisher is, and the rater book.
+const PACK_FILES: &[&str] = &[
+    "publisher_ed25519",
+    "publisher_ed25519.pub",
+    "publisher.json",
+    "raters.json",
+];
+
+/// The folders JETCARP keeps in the settings folder: screensaver profiles, rotations, the
+/// pictures of *Fit to this computer*, the host's desktop stills, and the publisher's files.
+const SETTINGS_FOLDERS: &[(&str, Inside)] = &[
+    ("screensavers", Inside::Files),
+    ("rotations", Inside::Files),
+    ("tune", Inside::Anything),
+    ("desktop-pictures", Inside::Anything),
+    ("pack", Inside::Named(PACK_FILES)),
+];
+
+/// A temporary file JETCARP writes beside one of `names` and then renames into place
+/// (`setup.json.tmp-123`, `raters.tmp123`, `gpu.json.tmp`, `.host-endpoint.json.123.tmp`): the
+/// name or its stem, then `tmp` with only digits, dots and dashes about it.
+fn being_written(name: &str, names: &[&str]) -> bool {
+    let n = name.strip_prefix('.').unwrap_or(name);
+    names.iter().any(|known| {
+        let stem = known.split('.').next().unwrap_or(known);
+        [*known, stem].iter().any(|k| {
+            n.strip_prefix(k)
+                .filter(|rest| rest.starts_with('.'))
+                .and_then(|rest| rest.split_once("tmp"))
+                .is_some_and(|(a, b)| {
+                    format!("{a}{b}")
+                        .chars()
+                        .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+                })
+        })
+    })
+}
+
+/// What a system leaves in any folder it has shown (Finder, Explorer), which says nothing about
+/// whose the folder is.
+fn system_litter(name: &str) -> bool {
+    matches!(
+        name,
+        ".DS_Store" | ".localized" | "Thumbs.db" | "desktop.ini"
+    ) || name.starts_with("._")
+}
+
+/// A search's folder name: a UUID (`8-4-4-4-12` hexadecimal digits).
+fn uuid_like(name: &str) -> bool {
+    name.len() == 36
+        && name.char_indices().all(|(i, c)| {
+            if matches!(i, 8 | 13 | 18 | 23) {
+                c == '-'
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
+}
+
+/// Whether `p` is a folder of its own, not a link to one: a link is not looked into, since
+/// deleting it removes only the link.
+fn real_dir(p: &Path) -> bool {
+    p.is_dir() && !is_link(p)
+}
+
+/// What in the folder `dir` JETCARP did not put there, as paths inside it (empty: everything in
+/// it is JETCARP's, or it holds nothing), given what JETCARP keeps in it: `files` (with their
+/// temporary files while being written) and `folders`, each with what may be inside. `also` is
+/// one more entry to count as JETCARP's (the data folder inside the settings folder, as on macOS,
+/// which `--data` checks on its own or the uninstall keeps).
+fn not_jetcarps(
+    dir: &Path,
+    files: &[&str],
+    folders: &[(&str, Inside)],
+    also: Option<&str>,
+) -> Vec<String> {
+    /// An entry: a file, a folder, or a link (a symbolic link or a junction), which is never
+    /// followed: deleting the folder removes the link, not where it leads.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Kind {
+        File,
+        Folder,
+        Link,
+    }
+    let entries = |d: &Path| -> Result<Vec<(String, Kind)>, String> {
+        std::fs::read_dir(d)
+            .map_err(|e| e.to_string())?
+            .map(|e| {
+                let e = e.map_err(|e| e.to_string())?;
+                let t = e.file_type().map_err(|e| e.to_string())?;
+                let kind = if t.is_symlink() {
+                    Kind::Link
+                } else if t.is_dir() {
+                    Kind::Folder
+                } else {
+                    Kind::File
+                };
+                Ok((e.file_name().to_string_lossy().into_owned(), kind))
+            })
+            .collect()
+    };
+    let mut odd = Vec::new();
+    let top = match entries(dir) {
+        Ok(t) => t,
+        Err(e) => return vec![format!("(it cannot be read: {e})")],
+    };
+    for (name, kind) in top {
+        if system_litter(&name) || also == Some(name.as_str()) {
+            continue;
+        }
+        // A link counts by its name alone: only the link is removed, so what it leads to is
+        // never at stake.
+        let file_name = files.contains(&name.as_str()) || being_written(&name, files);
+        let folder = folders.iter().find(|(f, _)| *f == name).map(|&(_, i)| i);
+        match (kind, file_name, folder) {
+            (Kind::File, true, _) | (Kind::Link, true, _) | (Kind::Link, _, Some(_)) => continue,
+            (Kind::Folder, _, Some(inside)) => {
+                let ok = |n: &str, k: Kind| {
+                    let d = k == Kind::Folder;
+                    let link = k == Kind::Link;
+                    match inside {
+                        Inside::Anything => true,
+                        Inside::Files => !d,
+                        Inside::HexFolders => {
+                            (d || link) && n.len() == 2 && n.chars().all(|c| c.is_ascii_hexdigit())
+                        }
+                        Inside::UuidFolders => (d || link) && uuid_like(n),
+                        Inside::Named(names) => {
+                            !d && (names.contains(&n) || being_written(n, names))
+                        }
+                    }
+                };
+                if matches!(inside, Inside::Anything) {
+                    continue;
+                }
+                match entries(&dir.join(&name)) {
+                    Ok(list) => odd.extend(
+                        list.into_iter()
+                            .filter(|(n, k)| !system_litter(n) && !ok(n, *k))
+                            .map(|(n, _)| format!("{name}/{n}")),
+                    ),
+                    Err(e) => odd.push(format!("{name}/ (it cannot be read: {e})")),
+                }
+            }
+            _ => odd.push(name),
+        }
+    }
+    odd.sort();
+    odd
+}
+
+/// A folder `uninstall` will not delete: which (`data` or `settings`), where, what in it is not
+/// JETCARP's, where its name came from, and what to do if that was a mistake.
+struct Refused {
+    which: &'static str,
+    folder: PathBuf,
+    odd: Vec<String>,
+    named: String,
+    mistake: String,
+}
+
+/// The data folder's refusal, if `--data` must refuse it.
+fn check_data(data: &Path, settings: Option<&Path>) -> Option<Refused> {
+    use jetcarp_core::paths::{DataSource, PATHS_FILE};
+    if !real_dir(data) {
+        return None;
+    }
+    let odd = not_jetcarps(data, DATA_FILES, DATA_FOLDERS, None);
+    if odd.is_empty() {
+        return None;
+    }
+    let source = jetcarp_core::paths::data_dir_source(settings).1;
+    let (named, mistake) = match source {
+        DataSource::Env => (
+            " (named by JETCARP_DATA_DIR)".to_string(),
+            "If JETCARP_DATA_DIR names the data folder by mistake, correct or unset it and uninstall again. "
+                .to_string(),
+        ),
+        DataSource::Chosen => (
+            " (chosen in setup, in paths.json)".to_string(),
+            format!(
+                "If the data folder was chosen by mistake, delete {} to go back to the default one, and uninstall again. ",
+                settings
+                    .map(|s| s.join(PATHS_FILE).display().to_string())
+                    .unwrap_or_else(|| PATHS_FILE.into())
+            ),
+        ),
+        DataSource::Default => (String::new(), String::new()),
+    };
+    Some(Refused {
+        which: "data",
+        folder: data.to_path_buf(),
+        odd,
+        named,
+        mistake,
+    })
+}
+
+/// The settings folder's refusal, if `--settings` must refuse it. The data folder inside it (as
+/// on macOS) is the data folder's own matter: `--data` checks it, and without `--data` it is kept.
+fn check_settings(settings: &Path, data: &Path) -> Option<Refused> {
+    if !real_dir(settings) {
+        return None;
+    }
+    let inside = within(data, settings)
+        .then(|| {
+            data.strip_prefix(settings)
+                .ok()
+                .map(Path::to_path_buf)
+                .or_else(|| {
+                    canonical(data)
+                        .strip_prefix(canonical(settings))
+                        .ok()
+                        .map(Path::to_path_buf)
+                })
+        })
+        .flatten();
+    let first = inside
+        .as_deref()
+        .and_then(|r| r.components().next())
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
+    let odd = not_jetcarps(settings, SETTINGS_FILES, SETTINGS_FOLDERS, first.as_deref());
+    if odd.is_empty() {
+        return None;
+    }
+    let env = std::env::var_os("JETCARP_CONFIG_DIR").filter(|v| !v.is_empty());
+    let by_env = env.is_some_and(|v| Path::new(&v) == settings);
+    Some(Refused {
+        which: "settings",
+        folder: settings.to_path_buf(),
+        odd,
+        named: if by_env {
+            " (named by JETCARP_CONFIG_DIR)".into()
+        } else {
+            String::new()
+        },
+        mistake: if by_env {
+            "If JETCARP_CONFIG_DIR names the settings folder by mistake, correct or unset it and uninstall again. "
+                .into()
+        } else {
+            String::new()
+        },
+    })
+}
+
+/// `uninstall`'s refusal of the folders it was asked to delete and will not (#195): each named,
+/// with where its name came from and what in it JETCARP did not put there (the first three, then
+/// how many more).
+fn refuse(refused: &[Refused]) -> ApiError {
+    let parts: Vec<String> = refused
+        .iter()
+        .map(|r| {
+            let shown: Vec<&str> = r.odd.iter().take(3).map(String::as_str).collect();
+            let more = if r.odd.len() > 3 {
+                format!(" and {} more", r.odd.len() - 3)
+            } else {
+                String::new()
+            };
+            format!(
+                "the {} folder {}{} holds what JETCARP did not put there: {}{more}",
+                r.which,
+                r.folder.display(),
+                r.named,
+                shown.join(", ")
+            )
+        })
+        .collect();
+    let flags: Vec<String> = refused.iter().map(|r| format!("--{}", r.which)).collect();
+    let (rule, gone, without) = if refused.len() == 1 {
+        (
+            format!(
+                "`{}` deletes the {} folder only when everything in it is JETCARP's",
+                flags[0], refused[0].which
+            ),
+            format!(
+                "If it really is JETCARP's {} folder and you want it gone, delete it yourself.",
+                refused[0].which
+            ),
+            format!(
+                "Without {}, the uninstall undoes the rest and keeps the folder.",
+                flags[0]
+            ),
+        )
+    } else {
+        (
+            format!(
+                "`{}` delete their folders only when everything in each is JETCARP's",
+                flags.join("` and `")
+            ),
+            "If they really are JETCARP's folders and you want them gone, delete them yourself."
+                .to_string(),
+            format!(
+                "Without {}, the uninstall undoes the rest and keeps the folders.",
+                flags.join(" and ")
+            ),
+        )
+    };
+    let mistakes: String = refused.iter().map(|r| r.mistake.as_str()).collect();
+    ApiError::conflict(format!("{}. {rule}, so nothing was done", parts.join("; ")))
+        .hint(format!("{mistakes}{gone} {without}"))
+}
+
 /// Deletes the host's lock file once no host holds it (waiting a little for a host that is
 /// stopping), then its folder if that is left empty and is JETCARP's own runtime folder (not the
 /// settings or data folder, as on Windows, where they are one).
@@ -844,6 +1291,36 @@ impl Op for SystemUninstall {
     fn run(cx: &Ctx, a: UninstallIn, _: &dyn Progress) -> Result<UninstallReport, ApiError> {
         /// A step's work: a note on success (files kept), or why it failed.
         type Run = Box<dyn Fn() -> Result<Option<String>, String> + Send + Sync>;
+        if a.publisher_key && !a.settings {
+            return Err(ApiError::invalid(
+                "--publisher-key only means something with --settings: it deletes the publisher's \
+                 files (the publisher key and the rater book) that --settings keeps otherwise",
+            )
+            .hint("`jetcarp uninstall --settings --publisher-key` deletes the settings folder with them."));
+        }
+        let paths = cx.paths();
+        // `--data` and `--settings` delete their folders whole, so first make sure each is
+        // JETCARP's (#195), both before anything is done or listed. A folder that is a link is not
+        // looked into: only the link is removed, and the folder it leads to is left alone.
+        let refused: Vec<Refused> = [
+            a.data
+                .then(|| check_data(&paths.data, paths.settings.as_deref()))
+                .flatten(),
+            a.settings
+                .then(|| {
+                    paths
+                        .settings
+                        .as_deref()
+                        .and_then(|c| check_settings(c, &paths.data))
+                })
+                .flatten(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !refused.is_empty() {
+            return Err(refuse(&refused));
+        }
         let mut steps: Vec<(String, Run)> = cx
             .platform
             .undo_steps()
@@ -853,7 +1330,6 @@ impl Op for SystemUninstall {
                 (s.what, Box::new(move || run().map(|()| None)) as Run)
             })
             .collect();
-        let paths = cx.paths();
         // What the host and the job runners leave behind once nothing holds them: the host's
         // single-instance lock, and the empty folder of job locks beside the catalog.
         if let Some(lock) = jetcarp_core::paths::runtime_file("host.lock").filter(|p| p.is_file()) {
@@ -892,34 +1368,91 @@ impl Op for SystemUninstall {
             .as_deref()
             .is_some_and(|c| data.exists() && within(&data, c));
         let mut settings_step: Option<(String, Run)> = None;
-        if let Some(c) = paths.settings.clone().filter(|c| c.exists()) {
+        let mut kept_publisher: Option<KeptPublisher> = None;
+        if let Some(c) = paths.settings.clone().filter(|c| c.exists() || is_link(c)) {
             if a.settings {
                 // Asked when the step runs, after the steps before it have put the user's own
                 // picture back.
                 let platform = cx.platform.clone();
                 let keep_data = (data_inside && !a.data).then(|| data.clone());
-                settings_step = Some((
-                    format!(
-                        "delete the settings folder {}{}",
-                        c.display(),
-                        if keep_data.is_some() {
-                            ", except the data folder inside it"
+                // The publisher's files stay unless asked for (`--publisher-key`): the key is the
+                // identity behind every pack the publisher signed, and the rater book holds
+                // raters' names and their consent. Only files of their own count (a link is
+                // removed as a link).
+                let keep_publisher: Vec<PathBuf> = if a.publisher_key || is_link(&c) {
+                    Vec::new()
+                } else {
+                    PACK_FILES
+                        .iter()
+                        .map(|f| c.join("pack").join(f))
+                        .filter(|f| std::fs::symlink_metadata(f).is_ok_and(|m| m.is_file()))
+                        .collect()
+                };
+                if !keep_publisher.is_empty() {
+                    kept_publisher = Some(KeptPublisher {
+                        folder: c.join("pack"),
+                        files: keep_publisher
+                            .iter()
+                            .filter_map(|f| f.file_name())
+                            .map(|f| f.to_string_lossy().into_owned())
+                            .collect(),
+                    });
+                }
+                let except: Vec<&str> = [
+                    keep_data.is_some().then_some("the data folder inside it"),
+                    (!keep_publisher.is_empty()).then_some(
+                        if keep_publisher.iter().any(|f| !f.ends_with("raters.json")) {
+                            if keep_publisher.iter().any(|f| f.ends_with("raters.json")) {
+                                "your publisher key and rater book"
+                            } else {
+                                "your publisher key"
+                            }
                         } else {
-                            ""
-                        }
+                            "your rater book"
+                        },
                     ),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                settings_step = Some((
+                    if is_link(&c) {
+                        format!(
+                            "remove the link {} (the settings folder it leads to is left as it is)",
+                            c.display()
+                        )
+                    } else if except.is_empty() {
+                        format!("delete the settings folder {}", c.display())
+                    } else {
+                        format!(
+                            "delete the settings folder {}, except {}",
+                            c.display(),
+                            except.join(" and ")
+                        )
+                    },
                     Box::new(move || {
-                        if !c.exists() {
+                        if !c.exists() && !is_link(&c) {
                             return Ok(Some("already gone".into()));
+                        }
+                        // A link is removed as a link: nothing behind it is touched, not even what
+                        // would be kept (remove_dir_keeping).
+                        if is_link(&c) {
+                            return remove_link(&c).map(|()| None).map_err(|e| e.to_string());
                         }
                         let mut keep = platform.desktop_files();
                         keep.extend(keep_data.clone());
+                        keep.extend(keep_publisher.iter().cloned());
                         let kept = remove_dir_keeping(&c, &keep).map_err(|e| e.to_string())?;
-                        // The pictures kept, not the data folder the step's name says it keeps.
-                        let data = keep_data.as_deref().map(canonical);
+                        // The pictures kept, not the data folder or the publisher's files the
+                        // step's name says it keeps.
+                        let named: Vec<PathBuf> = keep_data
+                            .iter()
+                            .chain(&keep_publisher)
+                            .map(|k| canonical(k))
+                            .collect();
                         let shown: Vec<String> = kept
                             .iter()
-                            .filter(|k| Some(*k) != data.as_ref())
+                            .filter(|k| !named.contains(k))
                             .map(|k| k.display().to_string())
                             .collect();
                         Ok((!shown.is_empty())
@@ -938,7 +1471,23 @@ impl Op for SystemUninstall {
             }
         }
         let mut data_step: Option<(String, Run)> = None;
-        if a.data && data.exists() {
+        if a.data && is_link(&data) {
+            // A link is removed as a link: nothing behind it is read or deleted.
+            let d = data.clone();
+            data_step = Some((
+                format!(
+                    "remove the link {} (the data folder it leads to is left as it is)",
+                    data.display()
+                ),
+                Box::new(move || match remove_link(&d) {
+                    Ok(()) => Ok(None),
+                    Err(_) if std::fs::symlink_metadata(&d).is_err() => {
+                        Ok(Some("already gone".into()))
+                    }
+                    Err(e) => Err(e.to_string()),
+                }),
+            ));
+        } else if a.data && data.exists() {
             let size = human_bytes(folder_size(&data));
             let d = data.clone();
             data_step = Some((
@@ -993,6 +1542,7 @@ impl Op for SystemUninstall {
             steps,
             kept_data,
             kept_settings,
+            kept_publisher,
             output: paths.output,
             installed_with: jetcarp_core::paths::program_path()
                 .and_then(|exe| installed_with(&exe, cfg!(windows))),

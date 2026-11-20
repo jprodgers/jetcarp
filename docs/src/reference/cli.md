@@ -2986,11 +2986,12 @@ Undo what JETCARP set up outside its folders (the host and its still on the desk
 Usage: jetcarp uninstall [OPTIONS]
 
 Options:
-      --json      Print the result as JSON instead of text (commands that report a result)
-      --yes       Do it. Without this, only show what would be done
-      --settings  Also delete JETCARP's settings folder (except a picture the desktop still shows)
-      --data      Also delete JETCARP's data folder (the pattern library, search databases, packs). This cannot be undone
-  -h, --help      Print help
+      --json           Print the result as JSON instead of text (commands that report a result)
+      --yes            Do it. Without this, only show what would be done
+      --settings       Also delete JETCARP's settings folder (except a picture the desktop still shows), only when everything in it is JETCARP's: a folder holding anything else is refused, and nothing is done. Your publisher key and rater book (pack/) are kept unless you add --publisher-key
+      --publisher-key  With --settings, also delete your publisher key and rater book (pack/ in the settings folder), which --settings keeps otherwise: the key is the identity behind every pack you signed, and the rater book holds your raters' names and their consent
+      --data           Also delete JETCARP's data folder (the pattern library, search databases, packs), only when everything in it is JETCARP's: a folder holding anything else is refused, and nothing is done. This cannot be undone
+  -h, --help           Print help
 ```
 
 <!-- END GENERATED: docs/tools/gen-cli.py -->

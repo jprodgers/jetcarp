@@ -43,6 +43,7 @@ fn a_data_folder_inside_the_settings_folder() {
             yes,
             settings,
             data,
+            publisher_key: false,
         };
         SystemUninstall::run(&cx, a, &Quiet).unwrap()
     };

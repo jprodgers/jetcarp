@@ -75,6 +75,7 @@ fn json_of_paths_uninstall_and_calls_by_name() {
             "done",
             "installed_with",
             "kept_data",
+            "kept_publisher",
             "kept_settings",
             "output",
             "steps"

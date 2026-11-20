@@ -540,6 +540,7 @@ fn run() -> Result<()> {
                 yes: a.yes,
                 settings: a.settings,
                 data: a.data,
+                publisher_key: a.publisher_key,
             };
             show(&system::SystemUninstall::run(&cx, a, &Quiet)?, json)?;
         }

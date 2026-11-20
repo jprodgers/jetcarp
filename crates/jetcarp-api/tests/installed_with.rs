@@ -162,6 +162,7 @@ fn the_report_ends_with_the_command_that_applies() {
         steps: vec![],
         kept_data: None,
         kept_settings: None,
+        kept_publisher: None,
         output: PathBuf::from("/home/ada/Pictures/JETCARP"),
         installed_with,
     };
