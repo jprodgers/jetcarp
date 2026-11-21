@@ -72,6 +72,21 @@ day later (0.4.2: 17 November here, 18 November there).
   under version 1 are flagged for `jetcarp library reverify`.
   ([Larger than Life](../automata/larger-than-life.md#on-any-tiling),
   [#172](https://github.com/jprodgers/jetcarp/issues/172))
+- **`jetcarp host status` no longer says "GPU none" for a host that hasn't opened its GPU yet.** A
+  host started at login with nothing to show opens the GPU with its first window; until then the
+  status says "GPU not opened yet (nothing shown yet)", and its screens that the GPU "is opened when
+  the scene is first shown", where both said there was no GPU. A host that lost its GPU says that.
+  ([#141](https://github.com/jprodgers/jetcarp/issues/141))
+- **On GNOME, setup says plainly to log out once after turning the live wallpaper on.** GNOME loads
+  JETCARP's extension only at login, and until then the scene shows in a window, which said nothing
+  about it; the only word was small print in setup. Setup now ends with "Log out and back in once to
+  see the live wallpaper on your desktop", the window's title says the same, and the host's note no
+  longer says to install an extension that setup already installed.
+  ([#139](https://github.com/jprodgers/jetcarp/issues/139))
+- **The background host no longer steps and draws a screen nobody can see.** A screen kept for a
+  monitor that wasn't connected when the host started, with the main monitor taken by another
+  screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
+  comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits

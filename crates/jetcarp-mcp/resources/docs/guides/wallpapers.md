@@ -215,7 +215,11 @@ how the screens are paced, and, while it is paused by hand, `paused: by hand`. A
 itself, so it is told apart from a pause: `held: on battery (resumes by itself)`, and likewise while
 the processor is busy, and while the desktop holds it (windows cover it, or the screen is locked or
 off). Its `note:` lines are the host's recent messages, such
-as the GPU it took. Just after `next` the new item is *starting* until its world is built.
+as the GPU it took. Just after `next` the new item is *starting* until its world is built. A host
+that has not opened its GPU yet (started at login, with nothing shown so far) says `GPU not opened
+yet`, not `none`. A screen kept for a monitor that isn't connected moves to the main monitor if
+nothing else shows there; otherwise it waits, neither stepping nor drawing, and `status` says
+`(not connected: waiting for it, neither stepping nor drawing)` until the monitor comes back.
 
 A host started before the [photosensitive seizure warning](../getting-started/photosensitivity.md)
 was answered (at login after an upgrade, say) holds every screen at its first picture, and `status`
