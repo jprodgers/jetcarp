@@ -500,11 +500,12 @@ impl ScriptsWindow {
                 self.saved = self.text.clone();
                 self.path = None;
             }
-            if ui.button("Open…").clicked()
-                && let Some(p) = rfd::FileDialog::new()
+            let clicked = ui.button("Open…").clicked();
+            if let Some(p) = crate::file_dialog::on_click(ui.ctx(), "scripts.open", clicked, || {
+                rfd::FileDialog::new()
                     .add_filter("Rhai script", &["rhai"])
                     .pick_file()
-            {
+            }) {
                 match std::fs::read_to_string(&p) {
                     Ok(t) => {
                         self.text = t;
@@ -521,23 +522,25 @@ impl ScriptsWindow {
                 let s = ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 s && self.path.is_some()
             } {
-                let path = if save_as || self.path.is_none() {
-                    rfd::FileDialog::new()
-                        .add_filter("Rhai script", &["rhai"])
-                        .set_file_name("script.rhai")
-                        .save_file()
-                } else {
-                    self.path.clone()
-                };
-                if let Some(p) = path {
-                    match std::fs::write(&p, &self.text) {
-                        Ok(()) => {
-                            self.saved = self.text.clone();
-                            self.path = Some(p);
-                        }
-                        Err(e) => self.log.push(format!("could not save: {e}")),
-                    }
+                if save_as || self.path.is_none() {
+                    // The text as it is now, whatever is typed while the dialog is open.
+                    let text = self.text.clone();
+                    crate::file_dialog::open(ui.ctx(), "scripts.save_as", move || {
+                        rfd::FileDialog::new()
+                            .add_filter("Rhai script", &["rhai"])
+                            .set_file_name("script.rhai")
+                            .save_file()
+                            .map(|p| (p, text))
+                    });
+                } else if let Some(p) = self.path.clone() {
+                    let text = self.text.clone();
+                    self.save_script(p, text);
                 }
+            }
+            if let Some((p, text)) =
+                crate::file_dialog::take::<(std::path::PathBuf, String)>("scripts.save_as")
+            {
+                self.save_script(p, text);
             }
             ui.separator();
             match &self.check {
@@ -554,6 +557,17 @@ impl ScriptsWindow {
         let h = ui.available_height() - 4.0;
         let err = self.check.as_ref().and_then(|e| e.line);
         rhai_edit::editor(ui, &mut self.text, err, h);
+    }
+
+    /// Writes `text` to `p`, which becomes the script's file.
+    fn save_script(&mut self, p: std::path::PathBuf, text: String) {
+        match std::fs::write(&p, &text) {
+            Ok(()) => {
+                self.saved = text;
+                self.path = Some(p);
+            }
+            Err(e) => self.log.push(format!("could not save: {e}")),
+        }
     }
 
     fn help_tab(&mut self, ui: &mut egui::Ui) {

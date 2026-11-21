@@ -53,13 +53,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, and Golly)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers golly
       - name: The Windows installer parses, and a refusal is one clean line (#117)
         # Windows PowerShell 5.1, as people run it. Nothing else checks install.ps1.
         if: runner.os == 'Windows'
@@ -126,6 +126,11 @@ jobs:
         run: |
           cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
+      - name: Golly reads JETCARP's RLE as the same cells and runs it to the same generations (#145)
+        if: runner.os == 'Linux'
+        run: |
+          command -v bgolly || { echo "::error::the golly package has no bgolly"; exit 1; }
+          cargo test --workspace --release ${{ matrix.features }} --test golly -- --ignored
       - name: The tests left no folders or files of theirs in the temp folder (#121)
         shell: bash
         run: |
