@@ -11,6 +11,22 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **MCP over HTTP, for clients that connect to a URL.** `jetcarp mcp --http [PORT]` serves the MCP
+  server's tools over MCP's Streamable HTTP transport, at `http://127.0.0.1:PORT/mcp` (port 47812
+  unless you give one), so clients such as Postman and web-based tools, which don't start a
+  program, can use JETCARP. It says where it listens, with the whole URL and the
+  `Authorization: Bearer` header to send (`--json` prints them as JSON). The app's *AI control*
+  window offers the same endpoint for the world in its window, with the URL, the whole token and
+  the header each behind a *Copy* button. It listens only when started, on `127.0.0.1` alone, and
+  every request needs its token, made afresh each time and kept in a file only you can read;
+  requests addressed to other host names or sent from web pages at other origins (DNS rebinding)
+  are refused, and request sizes, times and connections are limited. Each session gets the tools
+  and folders of `jetcarp mcp` over stdio, and a private world of its own, or the app's.
+  `httparse` reads the requests; `deny.toml` allows it for the MCP server only.
+  ([MCP tools](../reference/mcp.md#over-http), [Driving JETCARP from an AI
+  assistant](../tutorials/mcp.md#1-connect-your-assistant),
+  [#115](https://github.com/jprodgers/jetcarp/issues/115), from
+  [#114](https://github.com/jprodgers/jetcarp/issues/114))
 - **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
   Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
   and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,

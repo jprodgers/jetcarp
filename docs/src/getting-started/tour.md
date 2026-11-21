@@ -146,7 +146,7 @@ on another monitor.
 | *Palettes* | *CA* | Browse, make and apply palettes ([Palettes and colouring](../guides/palettes.md)) |
 | *Accessibility* | *Settings* | Reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Scripts and sweeps* | *Tools* | Rhai scripts, and sweeps of many rules built from a form ([Scripting a rule sweep](../tutorials/scripting-a-sweep.md)) |
-| *AI control* | *Tools* | Let an AI assistant act on this world, through `jetcarp mcp --app` ([Driving JETCARP from an AI assistant](../tutorials/mcp.md)) |
+| *AI control* | *Tools* | Let an AI assistant act on this world, through `jetcarp mcp --app`, or over HTTP for a client that connects to a URL ([Driving JETCARP from an AI assistant](../tutorials/mcp.md)) |
 | *Tile editor* | *Tiling* | Move a tile's corners and bend its edges ([Drawing and editing tiles](../guides/drawing-tiles.md#the-tile-editor)) |
 | *Unit cell editor* | *Tiling* | Edit a periodic tiling's lattice and every tile of its unit cell ([Drawing and editing tiles](../guides/drawing-tiles.md#the-unit-cell-editor)) |
 

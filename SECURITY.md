@@ -15,7 +15,8 @@ newest release gets fixes.
 **It makes no network connections.** JETCARP 0.4 contains no HTTP client, no DNS lookups and no
 TLS: it never connects to the internet, checks for updates, or sends anything anywhere. There is
 no telemetry, no analytics and no crash reporting. The only network sockets it opens are local
-ones, on `127.0.0.1`, described below. (On Linux the windowing libraries also reach the display
+ones, on `127.0.0.1`, described below; its one HTTP server, the MCP server's endpoint, listens only
+when you start it. (On Linux the windowing libraries also reach the display
 server and the desktop's message bus, through local sockets that are not network sockets.) Packs and other files reach it only when you give them to it.
 Networking (downloading packs, for one) is planned for a later version, and will happen only when
 you ask for it.
@@ -45,13 +46,30 @@ when set), which only your user can read: on Linux and macOS the folder is made 
 cannot be; on Windows, through the permissions of your own profile folder. Anything that can read
 that file, which means any program running as you, can control JETCARP; that is the boundary the
 token draws. `jetcarp mcp`, the MCP server, reads that file to reach the app or host, and
-otherwise talks only over its standard input and output to the AI client that started it.
+otherwise talks only to its AI client: over its standard input and output, or, when you start it
+with `--http`, over the HTTP endpoint below.
+
+**The MCP server's HTTP endpoint.** `jetcarp mcp --http`, and the app while you tick *Also serve
+MCP over HTTP* in its AI control window, serve the MCP server over HTTP, for AI clients that connect
+to a URL. Nothing listens for HTTP unless you start it so: the app's endpoint closes when you untick
+it or switch AI control off, and is off again at the next launch. It is bound to `127.0.0.1`, which
+other computers cannot reach. Every request must carry a 128-bit token as `Authorization: Bearer`,
+made afresh, from the operating system's random source, each time the endpoint starts, and kept
+with its URL in a file in the runtime folder above that only your user can read, as the link's
+token is; a request without it, or with another, is refused, and the comparison takes the same
+time whichever character is wrong. So that no web page can reach it through your browser, a
+request must be addressed to `127.0.0.1` or `localhost` on its port (its `Host`), any `Origin` must
+be the endpoint's own, bodies must be JSON, and no answer lets another origin read it: a page that
+has its own name resolve to `127.0.0.1` (DNS rebinding) is refused. Requests are limited in size
+(heads of 16 KiB, bodies of 16 MiB) and time, and to 16 connections at once. A client over HTTP
+has the same tools, on the same folders, as one over standard input and output.
 
 **An AI client connected to JETCARP can do what its tools allow:** change and run worlds, run
 searches, curate the library, write pictures and run Rhai scripts. Its tools read and write files
 only in JETCARP's output folder, the library's folder and folders you name with
 `jetcarp mcp --allow`; it cannot make your pack-signing key or record anyone's consent to publish
-their ratings. Connect only clients you trust, and switch AI control off when you are not using it.
+their ratings. Connect only clients you trust, and switch AI control and the HTTP endpoint off when
+you are not using them.
 
 **Files it writes** are listed in [Folders and environment variables](docs/src/reference/folders.md)
 and [Uninstalling](docs/src/guides/uninstalling.md): its settings, data and output folders, the

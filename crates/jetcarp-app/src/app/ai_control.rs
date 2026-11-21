@@ -212,6 +212,12 @@ impl JetcarpApp {
         self.ai.listener.as_ref().map(|l| l.port)
     }
 
+    /// The port MCP over HTTP listens on, when on.
+    #[cfg(test)]
+    pub(super) fn ai_http_port(&self) -> Option<u16> {
+        self.ai.http.as_ref().map(|l| l.port)
+    }
+
     pub(super) fn ai_window(&mut self, ctx: &egui::Context) {
         if !self.ai.window_open {
             return;
@@ -486,7 +492,12 @@ mod tests {
         assert!(ai.listener.is_some(), "AI control stays on");
 
         ai.http_on(0, Some(file.clone()), wake.clone());
-        let port = ai.http.as_ref().expect("ticked again").port;
+        let port = {
+            let h = ai.http.as_ref().expect("ticked again");
+            assert_ne!(h.token, token, "a new token each time it is ticked");
+            assert_eq!(http_status(h.port, Some(&token)), Some(401), "the old one fails");
+            h.port
+        };
         ai.switch_off();
         assert!(
             ai.http.is_none() && !file.exists(),

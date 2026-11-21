@@ -2842,6 +2842,7 @@ Options:
       --allow <DIR>    Let the tools read and write in this folder too (repeatable)
       --port <PORT>    App port (default: the one the app recorded when AI control was switched on)
       --token <TOKEN>  App token (default: the recorded one)
+      --http [<PORT>]  Serve MCP over HTTP (Streamable HTTP) instead of standard input and output, at http://127.0.0.1:PORT/mcp on this computer only (default port 47812, or a free one when that is taken). Clients send the token it prints as an `Authorization: Bearer` header. With --json, prints the URL and token as JSON. Ctrl-C stops it
   -h, --help           Print help
 ```
 
