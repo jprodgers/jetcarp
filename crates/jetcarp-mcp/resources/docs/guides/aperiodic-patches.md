@@ -13,8 +13,8 @@ them, and following movers.
 
 | Level | Hat, Penrose kites and darts, Penrose rhombs | Spectre |
 | --- | --- | --- |
-| 1 | 10 tiles | |
-| 2 | 70 | |
+| 1 | 10 tiles | 9 tiles |
+| 2 | 70 | 71 |
 | 3 | 500 | 559 |
 | 4 | 4,000 | 4,401 |
 | 5 | 35,000 | 34,649 |

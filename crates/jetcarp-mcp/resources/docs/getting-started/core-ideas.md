@@ -115,7 +115,8 @@ More: [The pattern library](../guides/pattern-library.md).
 
 Searches can run for minutes or for weeks, so each one runs as a *job*: a record in the catalogue with
 the search's settings, its progress and a checkpoint. A job can be stopped, closed with the program
-and carried on later, on this machine, and it ends exactly as an uninterrupted run would. The command
+and carried on later, on this machine, and it ends exactly as an uninterrupted run would (but for
+the exploratory search, which [continues from its saved archive instead](../research/reproducibility.md#what-is-not-guaranteed-yet)). The command
 line starts searches with `jetcarp search <strategy>` (soup hunts, ant searches, rule censuses, the
 evolutionary glider search and others) and manages them with `jetcarp jobs`.
 

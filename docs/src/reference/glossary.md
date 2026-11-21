@@ -275,7 +275,7 @@ scene or a Quick Start entry), and optionally its palette, colouring, reseeding,
 ## R
 
 **Receipt.** A planned record of a verification check on a pack, not yet in this release. See
-[Reproducibility](../research/reproducibility.md#planned-verification-receipts-for-packs).
+[Reproducibility](../research/reproducibility.md#checking-packs-and-receipts-to-come).
 
 **Reseed.** Putting new cells into a world that has settled, by hand or by an automatic policy. See
 [Reseeding](../guides/reseeding.md).

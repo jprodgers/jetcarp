@@ -2,7 +2,8 @@
 
 JETCARP is built so that a run can be repeated exactly: the same scene reaches the same state, bit for
 bit, on one thread or thirty-two, on the CPU or the GPU, and, by design, on any operating system. A
-search stopped halfway and carried on later ends exactly where an uninterrupted one would. This page
+search stopped halfway and carried on later ends exactly where an uninterrupted one would, the
+exploratory search aside ([below](#what-is-not-guaranteed-yet)). This page
 says how that is achieved, how it is tested, and what is not guaranteed yet.
 
 ## Deterministic randomness
@@ -136,7 +137,7 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   must JACA's glow and counts.
 - **The exploratory search's batches** (`batch.rs`): populations, changes, hashes and frames of many
   worlds stepped together.
-- **Soup hunts** (`hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must
+- **Soup hunts** (`crates/jetcarp-search/tests/gpu_hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must
   leave exactly the catalogue a CPU-only hunt leaves.
 - **Large sandpiles** (`pile.rs`): the same pile, toppling count and sweep count at every step.
 
@@ -144,7 +145,8 @@ These tests are skipped, with a note, on a machine with no usable graphics adapt
 
 ## Interrupted searches end where uninterrupted ones would
 
-Every search in JETCARP runs as a *job* in the catalogue (see [Search methods](search-methods.md)). A
+All but the exploratory search, which continues from its saved archive rather than resuming exactly
+([below](#what-is-not-guaranteed-yet)). Every search in JETCARP runs as a *job* in the catalogue (see [Search methods](search-methods.md)). A
 job runs in steps of a few seconds and writes each step's finds, its progress and a checkpoint in one
 transaction, so stopping it, a crash or a reboot loses at most the step in flight. Results are merged
 in a fixed order (soups by index, for example, with each new pattern's record taken from the lowest
@@ -187,16 +189,21 @@ described with the method.
 - **Hashes are not proofs.** A 64-bit hash is not cryptographic, and two different states could share
   one. Where it matters, as in pattern verification, JETCARP compares the states themselves.
 
-## Planned: verification receipts for packs
+## Checking packs, and receipts to come
 
 <div class="checked">
 
-**Planned, not in JETCARP 0.4.0.** Packs, the format for sharing catalogues and search results, come
-in a later release. The plan is that importing a pack checks the SHA-256 of every file against its
-manifest and the pack's geometry pins against the running engine, then re-runs a random sample of its
-records, chosen on the importing machine from a seed it records: 3,000 by default, and if all pass,
-fewer than about 0.1% of the pack's records are wrong, with 95% confidence (the "rule of three"),
-whatever its size. A full re-run is available on request. Each check writes a small *receipt*: the
+**Packs** (since JETCARP 0.4.2), the format for sharing catalogues and search results, are checked
+when they are imported ([Packs](../guides/packs.md#import-a-pack)): every file against its SHA-256,
+the version against its publisher's signature, every pattern's id against the pattern, and the
+pack's geometry pins and rule meanings against the running engine (a pattern from another engine
+version is kept and flagged for `jetcarp library reverify`). Then 3,000 of the new patterns are run
+again (fewer if the pack has fewer), chosen at random but seeded by the pack's version id, so the
+same pack always checks the same sample. If all pass, fewer than about 0.1% of the pack's patterns
+are wrong, with 95% confidence (the "rule of three"), whatever its size. `--verify full` runs every
+new pattern.
+
+**Planned, not yet in JETCARP: receipts.** Each check would write a small *receipt*: the
 pack's manifest hash, the mode and sample seed, the records checked and passed and any that failed,
 the JETCARP version, the geometry pins, the operating system and processor, the date, and who ran it.
 Later, receipts could be signed and collected in a public, append-only list, so that a pack can show

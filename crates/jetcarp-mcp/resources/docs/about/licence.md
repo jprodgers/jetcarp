@@ -15,9 +15,9 @@ Contributions are accepted under the same dual licence (see [Contributing](contr
 
 ## Data from JETCARP's searches
 
-Packs, the format for sharing catalogues and search results, come in a later release. Packs made by
-JETCARP's own searches will be released under the Creative Commons CC0 1.0 public-domain dedication
-(`CC0-1.0`). People who make packs of their own can choose another open licence for them.
+Packs are the format for sharing catalogues and search results ([Packs](../guides/packs.md)). Packs
+made by JETCARP's own searches, the starter pack that comes with JETCARP among them, are released
+under the Creative Commons CC0 1.0 public-domain dedication (`CC0-1.0`). People who make packs of their own can choose another open licence for them.
 
 ## Third-party work
 

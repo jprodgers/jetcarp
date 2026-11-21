@@ -21,8 +21,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   state hash, generation, status and command log as the CPU, over every family the GPU runs, every
   kind of edge, and runs from 1 to 180 generations; hunts with and without the GPU must leave the same
   catalogue. A GPU that cannot run something must fall back to the CPU, never run it differently.
-- **Searches survive interruption.** Every kind of job, stopped and resumed (on the same runner or
-  another), must end with exactly the results of one that ran through.
+- **Searches survive interruption.** Every kind of job but the exploratory search, stopped and
+  resumed (on the same runner or another), must end with exactly the results of one that ran through;
+  the exploratory search continues from its saved archive instead
+  ([what is not guaranteed yet](../research/reproducibility.md#what-is-not-guaranteed-yet)).
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
@@ -92,7 +94,7 @@ four vendors (as of 0.4.2):
 The test plan for a candidate is written down before it is tested: a document listing each step,
 what to run, and what counts as a pass. It is carried out in three parts.
 
-**Phase 1, unattended**, on every machine:
+**Phase 1, unattended**, on each machine:
 
 - **Parity on every GPU.** 371 scenes (every built-in Quick Start scene, 364, and 7 sandpiles that
   drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
@@ -125,7 +127,7 @@ what to run, and what counts as a pass. It is carried out in three parts.
   account, and **two monitors**.
 
 **R, a check of every fix.** Each candidate's plan lists every problem fixed since the last one,
-with a step that shows the fix working, run on every machine.
+with a step that shows the fix working, run on the machines it applies to.
 
 **A pre-check before the tag** (since `rc.4`): the suite and both parity sets run on every machine's
 adapters from the release branch before the candidate is tagged, with the scripted checks of what
@@ -136,6 +138,15 @@ the candidate changed, so a candidate starts from a branch already known to pass
 background host or the simulation. So the Acer's and the Mac's overnight runs on `rc.4` counted for it
 (the Framework's ran on `rc.5`). Its sittings ran on
 `rc.4` or `rc.5`, and every machine ran parity, the suite and each fix's check again on `rc.5`.
+
+**What each candidate actually got.** The lists above are what a candidate's plan draws on, not what
+every candidate had on every machine. In the 0.4.2 cycle the eight-hour overnight run happened four
+times (the Mac on a branch build, the Acer and the Mac on `rc.4`, the Framework on `rc.5`), none on
+`rc.1` to `rc.3`. The four-hour search ran on `rc.3` on all three machines (`rc.2`'s plan asked for
+two hours). No candidate had every sitting on every machine: the sittings were spread across the
+candidates. In `rc.4`'s check of every fix, 12 of the 22 rows were for all three machines and 9 for
+one. Each candidate's plan, with every machine's results, is in
+[jetcarp-testing](https://github.com/jprodgers/jetcarp-testing).
 
 The unattended steps, and the commands within the sittings, are run by a Claude Code session on each
 machine, working from the written plan. It records every step with its evidence (commands, outputs,
@@ -156,15 +167,22 @@ fixes them. The plans, logs and results are published in
   from 45 seconds to 12 minutes to size the desktop background for a machine, against Jimmie's target
   of 10 to 30 seconds, so 0.4.2 ships without it and a faster design is planned for 0.4.3 (#112,
   #113).
-- **Fixes come with tests.** Where a test can be written, it is, and it is checked to fail without
-  the fix. Some fixes can only be checked on a particular system (how macOS treats a hidden window,
-  for example); those are checked by hand there, in the next candidate's R.
+- **Fixes come with tests.** Where a test can be written, it is. Some fixes can only be checked on a
+  particular system (how macOS treats a hidden window, for example); those are checked by hand
+  there, in the next candidate's R. In the 0.4.2 cycle, 74 of the 102 closed issues have a test
+  change in a commit that cites them; 14 fixes have neither a test nor a stated reason, and that a
+  test failed without its fix is written down for five. From 0.4.3, each issue is closed with a note
+  naming its fix, its test and that the test failed before the fix, or why there is no test.
 - **The book is updated with each change**, and every candidate gets a full audit of the book before
   its tag: every page that mentions something changed, the app's pictures, and the changelog.
 - **A candidate is tagged** only when CI passes on all three systems, and only on Jimmie's go.
-- **Security problems** are reported and fixed privately, as
-  [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says, and described in
-  public only once fixed.
+- **Security problems** are reported privately, as
+  [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says. In the 0.4.2 cycle
+  what stayed private was the problem: no public issue, its test records withheld and its advisory
+  drafted privately until the release. The fixes went onto the public release branch, so their
+  commits were public before 0.4.2 came out, while 0.4.1 was the current release. From 0.4.3, a fix
+  for a problem not yet made public is made in its advisory's private fork on GitHub and merged when
+  the release is made.
 
 A step that turns out to have been set up wrong is run again, and the result recorded as the second
 run's, with a note. A step that fails in a way that may be chance (a hang in one run of thirty) is
@@ -194,7 +212,7 @@ A record of one cycle, from the first issue to the release, after five candidate
 | Stage | Issues filed | Found by |
 |---|---|---|
 | Development, before the first candidate | 12 (#2–#13) | reading, using and porting the code, an audit of the GPU code, a long search, everyday use |
-| `rc.1`'s testing | 32 (#15–#46) | the three machines, CI (3), the book audit (3) |
+| `rc.1`'s testing | 32 (#15–#46) | the Acer (23), the Framework (3), CI (3), the book audit (3) |
 | `rc.2`'s testing | 31 (#47–#78, less #70), and one security problem, handled privately | the three machines, a full pass |
 | `rc.3`'s testing | 37 (#80–#116) | the three machines (30: 4 in Phase 1, 25 in the Mac's sittings, 1 in the Acer's), writing the book (1), a user's report and one issue split from it (#114, #115), Jimmie's decisions (4: the seizure warning #96 and its roadmap item #97; holding Fit back, #112 and #113) |
 | `rc.4`'s pre-check, on the branch | 6 (#117–#122) | the Acer (3: #117, #121, #122), the book audit (#118), a Dependabot alert (#119), CI and the Acer (#120) |
@@ -202,12 +220,14 @@ A record of one cycle, from the first issue to the release, after five candidate
 | `rc.5`'s testing | 7 (#138–#144) | the Framework (3: the suite run with the GPU taken away, #138; a newcomer's first hour, #139, #140), the Mac (2), the Acer (2) |
 
 Of the 141 issues filed in the cycle (#2–#144), 101 were fixed or done for 0.4.2 (each checked on the
-next candidate), 36 were moved to 0.4.3, one is on the roadmap (#97), one was answered in part (#114,
-below), and two were closed with no change: a Dependabot alert for a crate that no build compiles (#119),
-and a rule applied only when its box loses focus, which is by design (#132). Three
-came from outside: a user's report (#1, from 0.4.1), a question on the ConwayLife forum (#70), and a
-user's report on the MCP server (#114), answered with a fix in 0.4.2 and an issue for 0.4.3 (#115). Every issue says where it was found,
-and the [changelog](changelog.md) lists the fixes with their issues.
+next candidate), 37 were moved to 0.4.3 (the strobe guard, #97, first meant for later, among them),
+one was answered in part (#114, below), and two were closed with no change: a Dependabot alert for a
+crate that no build compiles (#119), and a rule applied only when its box loses focus, which is by
+design (#132). One came from outside: a user's report on the MCP server (#114), answered with a fix in
+0.4.2 and an issue for 0.4.3 (#115); the same user's report on 0.4.1 (#1) came before the cycle. A
+question on the ConwayLife forum became #70, filed by the maintainer. Every issue says where it was
+found, and the [changelog](changelog.md) lists the fixes to problems that 0.4.1 had, with their
+issues.
 
 ## What guards each security promise
 
@@ -253,7 +273,8 @@ keeps them free of it.
   be rerun. Results are kept with their evidence so such mistakes can be found.
 - **Withheld records.** The test plans, logs and results are public, in
   [jetcarp-testing](https://github.com/jprodgers/jetcarp-testing): a copy of the repository the test
-  sessions worked in, less the records of a security problem handled privately (withheld until it
-  is described publicly) and a few personal details. Its `WITHHELD.md` lists what is left out.
+  sessions worked in, less a few personal details. The records of a security problem not yet fixed
+  in a release are left out until that release (the two problems of the 0.4.2 cycle are in it now).
+  Its `WITHHELD.md` lists what is left out.
 - **Expert review.** The check by people who know the field best, the ConwayLife community, is still
   to come.
