@@ -146,6 +146,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An adapter named in `JETCARP_GPU` is looked for again before another is used.** On a laptop
+  whose discrete GPU sleeps when idle, one run in 335 with `JETCARP_GPU=RTX` on DirectX 12 didn't
+  find it and ran on the integrated GPU, saying so only in its backend note. When the adapter asked
+  for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
+  and says so on the error stream too. ([GPU](../guides/gpu.md),
+  [#82](https://github.com/jprodgers/jetcarp/issues/82))
 - **A number past 32 bits is refused, not wrapped round to a small one.** A size of
   `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
   list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'

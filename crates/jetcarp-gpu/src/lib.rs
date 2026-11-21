@@ -2162,8 +2162,8 @@ pub fn adapter_reports_with(test: bool) -> Vec<AdapterReport> {
 fn adapter_list(test: bool) -> Vec<AdapterReport> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
     let policy = select::Policy::load();
+    let adapters = select::adapters_for(&instance, &policy.want);
     let chosen = select::pick_tested(&adapters, &policy, select::Purpose::Compute, None, test)
         .ok()
         .map(|c| c.info);
