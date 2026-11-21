@@ -359,7 +359,7 @@ impl JetcarpApp {
                         );
                     });
                     if let Some(why) = &info.stale {
-                        ui.colored_label(Color32::from_rgb(0xff, 0xb0, 0x60), format!("{why}: run it again."));
+                        ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)), format!("{why}: run it again."));
                     }
                     egui::CollapsingHeader::new("Its parts")
                         .id_salt("machine-parts")
@@ -382,7 +382,7 @@ impl JetcarpApp {
                                             p.unit
                                         );
                                         if p.correct == Some(false) {
-                                            ui.colored_label(Color32::LIGHT_RED, v + ", wrong answer");
+                                            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), v + ", wrong answer");
                                         } else {
                                             ui.label(v);
                                         }
@@ -390,7 +390,7 @@ impl JetcarpApp {
                                     }
                                 });
                             for p in &s.problems {
-                                ui.colored_label(Color32::LIGHT_RED, p);
+                                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), p);
                             }
                         });
                 }
@@ -436,7 +436,7 @@ impl JetcarpApp {
             }
             if let Some((n, err)) = &m.note {
                 if *err {
-                    ui.colored_label(Color32::LIGHT_RED, n);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), n);
                 } else {
                     ui.label(n);
                 }
@@ -469,7 +469,7 @@ impl JetcarpApp {
                         let now = RichText::new(e.text());
                         ui.label(match e.source {
                             Source::Own => now.strong(),
-                            Source::Ceiling => now.color(Color32::from_rgb(0xff, 0xb0, 0x60)),
+                            Source::Ceiling => now.color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60))),
                             Source::Suggested => now,
                         });
                         ui.label(limits::value_text(e.unit, e.suggestion))

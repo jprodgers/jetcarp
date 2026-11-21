@@ -87,7 +87,8 @@ impl JetcarpApp {
 
     /// Load a scene; a large tiling is built in the background.
     pub(super) fn load_scene_bg(&mut self, scene: &Scene) {
-        self.load_scene_bg_as(scene, self.autoplay);
+        let play = self.opens_running();
+        self.load_scene_bg_as(scene, play);
     }
 
     /// [`Self::load_scene_bg`], running once loaded or not (`play`). A scene over this machine's
@@ -103,6 +104,8 @@ impl JetcarpApp {
         if !heavy(&scene.tiling) {
             return self.load_scene_as(scene, play);
         }
+        let filled = self.with_default_palettes(scene);
+        let scene: &Scene = &filled;
         let s = scene.clone();
         self.start_build(
             describe(&scene.tiling),
@@ -120,14 +123,14 @@ impl JetcarpApp {
     /// its drawing geometry in the background.
     pub(super) fn show_world_bg(&mut self, world: World, scene: Scene) {
         self.cancel_build();
+        let play = self.opens_running();
         if !heavy(&world.topo.spec) && world.topo.len() < BACKGROUND_CELLS as usize {
             self.world = world;
-            self.after_scene(&scene, None, self.autoplay);
+            self.after_scene(&scene, None, play);
             self.screen = Screen::Sim;
             return;
         }
         let what = describe(&world.topo.spec);
-        let play = self.autoplay;
         self.start_build(what, Some(Box::new(scene)), play, move |id| {
             let g = Geometry::build(&world.topo, id);
             Ok(Built::World(Box::new(world), g))

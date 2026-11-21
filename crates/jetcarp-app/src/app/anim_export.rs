@@ -139,7 +139,7 @@ impl JetcarpApp {
                 let frames = self.anim.gens / self.anim.every.max(1) + 1;
                 if frames > max_frames() {
                     ui.colored_label(
-                        egui::Color32::LIGHT_RED,
+                        crate::theme::ink(ui, egui::Color32::LIGHT_RED),
                         format!(
                             "{frames} frames is over this machine's limit of {}: fewer generations, or a frame every more",
                             max_frames()
@@ -235,7 +235,11 @@ impl JetcarpApp {
             );
             // The strobe guard: checked before anything is saved.
             let refs: Vec<&Image> = frames.iter().collect();
-            let check = jetcarp_core::strobe::export::check(&refs, delay_ms);
+            let check = jetcarp_core::strobe::export::check(
+                &refs,
+                delay_ms,
+                jetcarp_core::photosensitivity::at_risk(),
+            );
             if check.harmful {
                 job.lock().unwrap().held = Some(Held {
                     frames,
@@ -435,7 +439,14 @@ pub(crate) fn guarded_bytes(
             encode::decode_gif(b)
         }
     };
-    jetcarp_core::strobe::export::guard(frames, delay_ms, soften, &enc, &dec)
+    jetcarp_core::strobe::export::guard(
+        frames,
+        delay_ms,
+        soften,
+        jetcarp_core::photosensitivity::at_risk(),
+        &enc,
+        &dec,
+    )
 }
 
 /// The part of the world a frame shows: `width` x `height` pixels, world point `center` in the
@@ -487,7 +498,7 @@ mod tests {
         };
         let frames = render_frames(&mut w, &frame, 40, 1, &|_| {}).unwrap();
         let refs: Vec<&Image> = frames.iter().collect();
-        let check = jetcarp_core::strobe::export::check(&refs, 50);
+        let check = jetcarp_core::strobe::export::check(&refs, 50, false);
         assert!(check.harmful, "{check:?}");
         for webp in [false, true] {
             let g = guarded_bytes(&frames, webp, 50, true).unwrap();
@@ -498,7 +509,14 @@ mod tests {
                 encode::decode_gif(&g.bytes).unwrap()
             };
             let back: Vec<&Image> = back.iter().collect();
-            assert!(!jetcarp_core::strobe::export::check(&back, g.delay_ms).harmful);
+            assert!(
+                !jetcarp_core::strobe::export::check(
+                    &back,
+                    g.delay_ms,
+                    jetcarp_core::photosensitivity::at_risk()
+                )
+                .harmful
+            );
             assert!(g.note().unwrap().contains("strobe guard saved"));
             // Unguarded, the same frames are saved as drawn.
             let raw = guarded_bytes(&frames, webp, 50, false).unwrap();

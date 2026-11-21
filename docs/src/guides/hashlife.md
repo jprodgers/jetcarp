@@ -102,7 +102,13 @@ rather than `jetcarp verify`). `--png FILE` draws it with JETCARP's renderer up 
 overrides the rule (RLE files default to their header's rule, else `B3/S23`).
 
 `--torus` jumps a scene in place instead, and `--compare cpu` (or `gpu`) also runs the ordinary
-engine and checks that every cell agrees:
+engine and checks that every cell agrees. Here `torus.json` is Life on a 256 by 256 wrapped grid,
+from the empty world's 30% soup:
+
+```json
+{"name": "t", "tiling": {"family": "square", "size": {"rect": {"w": 256, "h": 256}}, "boundary": "wrap"},
+ "rng_state": 1, "cas": [{"rule": "B3/S23"}]}
+```
 
 ```sh
 jetcarp hashlife torus.json --torus --gens 5000 --compare cpu
@@ -116,7 +122,7 @@ mode:       torus (Square (parallelogram) (square): 65536 cells, 256x256 unit ce
 generation: 5000 (+5000 in 0.200s)
 population: 1969
 states:     730e938cfe04df96
-hash:       4cd23522a2a2780b
+hash:       7600365fb38a7d961a943f06f6b0e13dfbd134b6b6993d1e764ead871a4cf878
 nodes:      71640 live, 71640 peak, 0 collections
 compare:    cpu (32 threads) 3.539s, states equal
 ```

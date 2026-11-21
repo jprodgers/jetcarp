@@ -25,6 +25,7 @@
 - [Several automata at once](guides/several-automata.md)
 - [Drawing and editing tiles](guides/drawing-tiles.md)
 - [Palettes and colouring](guides/palettes.md)
+- [Accessibility settings](guides/accessibility-settings.md)
 - [Reseeding](guides/reseeding.md)
 - [Wallpapers, screensavers and the background host](guides/wallpapers.md)
 - [Rotations](guides/rotations.md)

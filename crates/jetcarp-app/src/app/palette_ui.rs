@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn builtins_include_light_ones() {
-        assert_eq!(render::PALETTES.len(), 30);
+        assert_eq!(render::PALETTES.len(), 33);
         for light in ["Candy", "Glacier", "Desert", "Paper"] {
             let p = Palette::builtin(light).unwrap();
             assert_eq!(

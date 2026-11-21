@@ -358,6 +358,13 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
         if pane.0 == GRID {
             self.app.grid_view(ui);
         } else if let Some(def) = pane_def(&pane.0) {
+            // Docked panes sit on the grid's dark backdrop, which suits the standard dark theme;
+            // the light and high-contrast themes give them their own panel colour, which their
+            // text is chosen against.
+            let v = ui.visuals();
+            if !v.dark_mode || crate::a11y::high_contrast(ui.ctx()) {
+                ui.painter().rect_filled(ui.max_rect(), 0.0, v.panel_fill);
+            }
             pane_scroll(self.app, ui, def);
         }
         egui_tiles::UiResponse::None

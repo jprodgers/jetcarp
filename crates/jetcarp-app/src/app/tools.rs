@@ -132,6 +132,7 @@ impl JetcarpApp {
         self.catalog_windows(ctx);
         self.shortcuts_window(ctx);
         self.about_window(ctx);
+        self.accessibility_window(ctx);
         // AI control acts on whatever is shown, and its menu item works on both screens; the
         // window drawn only with a world open left it unreachable from the Quick Start (issue #1).
         self.ai_window(ctx);

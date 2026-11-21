@@ -28,7 +28,9 @@
 //!
 //! The windows found, at any scale, cover a share of the screen. Over [`AREA_SHARE`] with more than
 //! five pairs of stripes across it is a harmful pattern; harmful for [`FAIL_SECONDS`] it fails, as
-//! IRIS counts it. Whether the pattern moves or flickers (its samples change between checks) is
+//! IRIS counts it. For someone who answered the seizure warning *at risk*, a pattern of similar
+//! parts, regular or not, is harmful too ([`super::similar`], IRIS's own rule;
+//! [`PatternMeter::set_at_risk`]). Whether the pattern moves or flickers (its samples change between checks) is
 //! reported, not used: the quarter applies either way.
 
 use super::frame::LumImage;
@@ -123,6 +125,10 @@ pub struct PatternReading {
     pub pairs: f32,
     /// The striped area's samples changed since the last check: the stripes move or flicker.
     pub changing: bool,
+    /// The most similar parts the at-risk rule found ([`super::similar`]; 0 by the usual rule).
+    pub parts: u32,
+    /// The pattern is harmful by the at-risk rule (similar parts), whether or not by stripes.
+    pub similar: bool,
     pub level: PatternLevel,
 }
 
@@ -418,6 +424,8 @@ pub struct PatternMeter {
     /// stripes under 8 pixels a pair are finer than six cycles a degree, and the check costs a
     /// quarter as much.
     first: u32,
+    /// The at-risk rule is on too ([`super::similar`]).
+    at_risk: bool,
     since: Option<f64>,
     last_img: Option<LumImage>,
     last_found: Found,
@@ -451,10 +459,21 @@ impl PatternMeter {
         self.screen_px = screen_px;
     }
 
+    /// Someone who answered the seizure warning *at risk* is watching: a pattern of similar
+    /// parts counts too ([`super::similar`]).
+    pub fn set_at_risk(&mut self, at_risk: bool) {
+        self.at_risk = at_risk;
+    }
+
+    pub fn at_risk(&self) -> bool {
+        self.at_risk
+    }
+
     pub fn reset(&mut self) {
         *self = PatternMeter {
             screen_px: self.screen_px,
             first: self.first,
+            at_risk: self.at_risk,
             ..Default::default()
         };
     }
@@ -471,7 +490,7 @@ impl PatternMeter {
 
     /// Checks the frame whose half image is `img`, shown at time `t`.
     pub fn update(&mut self, img: &LumImage, t: f64) -> PatternReading {
-        let (found, contrast, period_px) = find(img, self.first);
+        let (mut found, contrast, period_px) = find(img, self.first);
         let (fw, fh) = (img.width * 2, img.height * 2);
         let frame_px = fw as f64 * fh as f64;
         let screen = self.screen_px.filter(|s| *s > frame_px).unwrap_or(frame_px);
@@ -511,7 +530,43 @@ impl PatternMeter {
             }
             _ => false,
         };
-        let harmful = share as f64 > AREA_SHARE && pairs > MIN_PAIRS;
+        let mut harmful = share as f64 > AREA_SHARE && pairs > MIN_PAIRS;
+        let mut share = share;
+        // The at-risk rule: similar parts, veiled over the rectangle around them, far enough to
+        // bring their light parts under the rule's light level.
+        let (mut parts, mut similar) = (0, false);
+        if self.at_risk {
+            let p = super::similar::find(img);
+            parts = p.count as u32;
+            if p.harmful() {
+                similar = true;
+                harmful = true;
+                share = share.max(p.share);
+                // The veil's grey, as [`super::guard::veil_for`] takes it from the mean.
+                let mean = (p.light + p.dark) / 2.0;
+                let grey = mean.min(super::guard::VEIL_GREY_MAX);
+                let dim = if p.light > 0.2 {
+                    (p.light - 0.2) / (p.light - grey).max(1e-3)
+                } else {
+                    0.0
+                };
+                let strong = 1.0 - super::guard::VEIL_CONTRAST / (p.light - p.dark).max(1e-3);
+                let amount = dim.max(strong).clamp(0.0, 0.98);
+                // As a contrast, so the veil ([`super::guard::veil_for`]) takes that amount.
+                let as_contrast = super::guard::VEIL_CONTRAST / (1.0 - amount);
+                let (x0, y0) = (p.region[0] * fw as f32, p.region[1] * fh as f32);
+                let (x1, y1) = (p.region[2] * fw as f32, p.region[3] * fh as f32);
+                for ty in (y0 as u32 / TILE)..(y1.ceil() as u32).div_ceil(TILE).min(found.rows) {
+                    for tx in (x0 as u32 / TILE)..(x1.ceil() as u32).div_ceil(TILE).min(found.cols)
+                    {
+                        let t = &mut found.tiles[(ty * found.cols + tx) as usize];
+                        if t.is_none_or(|(c, _)| as_contrast > c) {
+                            *t = Some((as_contrast, mean));
+                        }
+                    }
+                }
+            }
+        }
         if harmful {
             self.since.get_or_insert(t);
         } else {
@@ -539,6 +594,8 @@ impl PatternMeter {
             period_px,
             pairs,
             changing,
+            parts,
+            similar,
             level,
         };
         self.last

@@ -56,6 +56,10 @@ pub struct Baked {
     /// was when the bundle was built: the sandboxed saver cannot read it. On when missing.
     #[serde(default = "guard_default")]
     pub strobe_guard: bool,
+    /// The saved answer to the seizure warning was *at risk* when the bundle was built: the
+    /// guard's stricter stripe rule ([`jetcarp_core::strobe::similar`]).
+    #[serde(default)]
+    pub strobe_at_risk: bool,
 }
 
 fn guard_default() -> bool {
@@ -107,6 +111,7 @@ pub fn bake(
         strobe_guard: jetcarp_core::photosensitivity::guard_on(
             jetcarp_core::photosensitivity::GuardPlace::Desktop,
         ),
+        strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
     };
     Ok((baked, warnings))
 }

@@ -30,7 +30,7 @@ pub fn menu(ui: &mut egui::Ui, world: &World, gens: &mut String) -> Option<JumpA
     });
     let n = hashlife::parse_gens(gens);
     if let Err(e) = &n {
-        ui.colored_label(egui::Color32::LIGHT_RED, e);
+        ui.colored_label(crate::theme::ink(ui, egui::Color32::LIGHT_RED), e);
     }
     let torus = hashlife::torus_problem(world);
     let plane = hashlife::plane_problem(world);

@@ -63,6 +63,7 @@ impl Harness {
         // As a first launch looks, whatever an earlier test left in the settings file.
         app.setup.open = false;
         app.shell.layout = panes::Layout::default();
+        app.a11y.settings = Default::default();
         for t in menu::ToolWin::ALL {
             app.set_tool_open(t, false);
         }
@@ -1282,4 +1283,66 @@ fn shots_this_computer() {
     assert_eq!(h.app.world.topo.len(), 16_000_000, "built when asked");
     Own::default().save(&settings).unwrap();
     machine::reload();
+}
+
+/// Settings → Accessibility (`guides/accessibility-settings.md`, #217, #218, #220): the window in
+/// the standard dark theme, then a JACA world in Cobalt and Saffron (the palettes chosen for
+/// colour-vision deficiency) with its panes and the window, in the high-contrast theme, dark and
+/// light. The scene is the book's own, so it needs no library.
+#[test]
+#[ignore]
+fn shots_accessibility() {
+    use crate::a11y::Follow;
+    use crate::theme::Brightness;
+    let Some(mut h) = Harness::new(1200, 800) else {
+        return;
+    };
+    // As on a desktop that asks for neither.
+    let none = crate::a11y::Reading {
+        reduce_motion: Some(false),
+        high_contrast: Some(false),
+    };
+    h.app.a11y.watch = crate::a11y::Watch::new(Box::new(crate::a11y::Fixed::new(none)));
+    let scene = Scene::from_json(include_str!(
+        "../../../../docs/scenes/guides/accessibility-jaca.json"
+    ))
+    .unwrap();
+    h.app.load_scene_bg(&scene);
+    h.built();
+    h.app.exec(Command::Step { gens: 120 });
+    h.app.playing = false;
+    h.app.message = None;
+    h.action(menu::Action::Tool(menu::ToolWin::Accessibility));
+    h.run(1.0, 0.05, |_| false);
+    // The window alone: dragged by its title bar onto the grid, the pointer out of it.
+    let win = h.find("Accessibility");
+    let bar = egui::pos2(win.center().x, win.min.y + 10.0);
+    h.drag(bar, egui::pos2(760.0, 60.0));
+    h.hover(egui::pos2(2.0, 798.0));
+    let parts = [
+        h.find("Accessibility"),
+        h.find("Reduced motion"),
+        h.find("Palettes for scenes that name none"),
+        h.find("JACA −1 cells"),
+        h.find(
+            "Use the palettes chosen for colour-vision deficiency (Lantern; JACA: Cobalt and Saffron)",
+        ),
+    ];
+    h.shot_part("accessibility-window", Harness::around(&parts, 14.0));
+    for (b, name) in [
+        (Brightness::Dark, "accessibility-high-contrast-dark"),
+        (Brightness::Light, "accessibility-high-contrast-light"),
+    ] {
+        h.app.a11y.settings.high_contrast = Follow::On;
+        h.app.a11y.settings.brightness = b;
+        h.run(1.0, 0.05, |_| false);
+        h.hover(egui::pos2(2.0, 798.0));
+        h.shot(name);
+    }
+    // A check, not for the book: the Quick Start in the light form.
+    h.app.set_tool_open(menu::ToolWin::Accessibility, false);
+    h.action(menu::Action::QuickStart);
+    h.quick_start_loaded();
+    h.shot("accessibility-check-quick-start-light");
+    h.app.a11y.settings = Default::default();
 }

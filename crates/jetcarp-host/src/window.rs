@@ -469,6 +469,7 @@ impl App {
         surface.configure(&gpu.device, &config);
         let mut painter =
             Painter::guarded(&gpu.device, config.format, self.core.desktop_guard_on());
+        painter.set_guard_at_risk(self.core.desktop_guard_at_risk());
         painter.set_readable(readable);
         painter.insets = self.caption_insets(el, target);
         Ok(Output {
@@ -779,6 +780,8 @@ impl App {
         };
         o.starved_since = None;
         o.painter.set_guard_on(self.core.desktop_guard_on());
+        o.painter
+            .set_guard_at_risk(self.core.desktop_guard_at_risk());
         o.painter.paint(
             &gpu.device,
             &gpu.queue,

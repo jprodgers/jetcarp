@@ -510,9 +510,12 @@ impl TileEditor {
         ui.separator();
         let bad = edges::self_intersects(&self.outline());
         if bad {
-            ui.colored_label(Color32::LIGHT_RED, "Edges cross: tiles would overlap");
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::LIGHT_RED),
+                "Edges cross: tiles would overlap",
+            );
         } else {
-            ui.colored_label(Color32::LIGHT_GREEN, "Valid tile");
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_GREEN), "Valid tile");
         }
         if let Some((d, n)) = self.check
             && n > 0

@@ -184,7 +184,7 @@ impl JetcarpApp {
                 }
             }
             if let Some(e) = &self.ai.error {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             if let Some(l) = &self.ai.listener {
                 egui::Grid::new("ai_grid").num_columns(2).show(ui, |ui| {

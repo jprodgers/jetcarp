@@ -250,6 +250,10 @@ pub struct MediaOptions {
     /// The strobe guard (#149): an animation that flashes or shows strong stripes is saved
     /// softened ([`crate::strobe::export`]). Off only when the person turned the app's guard off.
     pub strobe_guard: bool,
+    /// The person answered the seizure warning *at risk*: the guard's stricter stripe rule, similar
+    /// parts regular or not ([`crate::strobe::similar`]).
+    #[serde(default)]
+    pub strobe_at_risk: bool,
 }
 
 impl Default for MediaOptions {
@@ -264,6 +268,7 @@ impl Default for MediaOptions {
             force: false,
             style: MediaStyle::default(),
             strobe_guard: true,
+            strobe_at_risk: false,
         }
     }
 }
@@ -329,12 +334,14 @@ impl Animation {
     }
     /// Encode the animation through the strobe guard ([`crate::strobe::export::guard`]): checked,
     /// softened if it flashes or shows strong stripes and `guard` is on, and checked again as
-    /// saved. The format is chosen as [`encode`](Self::encode) chooses it.
+    /// saved; by the stricter stripe rule if `at_risk`. The format is chosen as
+    /// [`encode`](Self::encode) chooses it.
     pub fn encode_guarded(
         &self,
         format: MediaFormat,
         style: &MediaStyle,
         guard: bool,
+        at_risk: bool,
     ) -> Result<(MediaFormat, crate::strobe::export::Guarded), String> {
         let f = match format {
             MediaFormat::Auto => self.auto_format(style),
@@ -349,7 +356,8 @@ impl Animation {
             MediaFormat::Gif => encode::decode_gif(bytes),
             _ => encode::decode_webp(bytes),
         };
-        let g = crate::strobe::export::guard(&self.frames, self.delay_ms, guard, &enc, &dec)?;
+        let g =
+            crate::strobe::export::guard(&self.frames, self.delay_ms, guard, at_risk, &enc, &dec)?;
         Ok((f, g))
     }
     pub fn poster_image(&self) -> &Image {

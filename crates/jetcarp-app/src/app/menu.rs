@@ -24,10 +24,11 @@ pub(super) enum ToolWin {
     Wallpaper,
     Safety,
     Machine,
+    Accessibility,
 }
 
 impl ToolWin {
-    pub const ALL: [ToolWin; 17] = [
+    pub const ALL: [ToolWin; 18] = [
         ToolWin::Scripts,
         ToolWin::Results,
         ToolWin::Library,
@@ -45,6 +46,7 @@ impl ToolWin {
         ToolWin::Wallpaper,
         ToolWin::Safety,
         ToolWin::Machine,
+        ToolWin::Accessibility,
     ];
 
     /// The window's key in `crate::popout` (and the settings file).
@@ -67,6 +69,7 @@ impl ToolWin {
             ToolWin::Wallpaper => super::wallpaper_ui::KEY,
             ToolWin::Safety => "safety",
             ToolWin::Machine => super::machine_ui::KEY,
+            ToolWin::Accessibility => "accessibility",
         }
     }
 
@@ -94,6 +97,7 @@ impl ToolWin {
             ToolWin::Safety => "Safety…",
             ToolWin::Wallpaper => "Export wallpaper…",
             ToolWin::Machine => "This computer…",
+            ToolWin::Accessibility => "Accessibility…",
         }
     }
 
@@ -128,6 +132,9 @@ impl ToolWin {
             ToolWin::Shortcuts => "Every keyboard shortcut",
             ToolWin::About => "Version and where things are",
             ToolWin::Safety => "The strobe guard: what it does now, and its switches",
+            ToolWin::Accessibility => {
+                "Reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none"
+            }
             ToolWin::Wallpaper => {
                 "Desktop-sized PNGs: each monitor, the span of all monitors, presets, or any size"
             }
@@ -588,7 +595,13 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             C(Custom::Displays),
         ],
     ),
-    ("Settings", &[A(A_::Tool(ToolWin::Safety))]),
+    (
+        "Settings",
+        &[
+            A(A_::Tool(ToolWin::Safety)),
+            A(A_::Tool(ToolWin::Accessibility)),
+        ],
+    ),
     (
         "Help",
         &[
@@ -648,6 +661,7 @@ impl JetcarpApp {
             ToolWin::Wallpaper => self.wallpaper.open,
             ToolWin::Safety => self.strobe.window_open,
             ToolWin::Machine => self.machine.open,
+            ToolWin::Accessibility => self.a11y.window_open,
         }
     }
 
@@ -672,6 +686,7 @@ impl JetcarpApp {
                 ToolWin::Wallpaper => self.wallpaper.open = false,
                 ToolWin::Safety => self.strobe.window_open = false,
                 ToolWin::Machine => self.machine.open = false,
+                ToolWin::Accessibility => self.a11y.window_open = false,
             }
             return;
         }
@@ -716,6 +731,7 @@ impl JetcarpApp {
                 self.machine.open = true;
                 self.machine.reload();
             }
+            ToolWin::Accessibility => self.a11y.window_open = true,
         }
     }
 
@@ -828,7 +844,7 @@ impl JetcarpApp {
             );
             if let Ok(v) = std::env::var("JETCARP_GPU") {
                 ui.colored_label(
-                    egui::Color32::LIGHT_RED,
+                    crate::theme::ink(ui, egui::Color32::LIGHT_RED),
                     format!("JETCARP_GPU={v} is set, and overrides this"),
                 );
             }

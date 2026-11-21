@@ -27,7 +27,8 @@ Click one to filter by it and again to stop; filters of different kinds combine.
 - **Sort** orders the cards: *Featured* (a shuffled selection of the best of every category, new at
   each start), *Score*, *Rule* or *Tiling*. **Shuffle** draws another *Featured* selection.
 - **Cards** sets their size, and **Live** whether they run (up to 120 at once, only those on
-  screen). **Clear** clears the search and every filter, and the count at the right says how many
+  screen). When your system asks for reduced motion, *Live* starts off and the cards show stills
+  ([Accessibility settings](../guides/accessibility-settings.md#reduced-motion)). **Clear** clears the search and every filter, and the count at the right says how many
   entries are shown.
 - **Popular, recent, random** opens three rows: the entries you open most, those you opened last,
   and a random few.
@@ -53,7 +54,8 @@ Start](../tutorials/building-quick-start.md) shows how to make more.
 ## A world
 
 Click a card to open its entry. (Shift-click opens the small version its card runs, when there is
-one.) The world opens running, with the grid on the right and the panes on the left:
+one.) The world opens running, with the grid on the right and the panes on the left; when your
+system asks for reduced motion it opens paused, with a note saying so, and Space runs it:
 
 <img src="../images/getting-started/tour-world.webp" alt="A world open in the app: a hexagonal Greenberg-Hastings spiral on an isohedral tiling fills the grid; the menu bar shows the scene's name, running, the generation, the hash and the frame rate; the Scene and CAs panes are on the left; the status bar is at the bottom" width="700">
 
@@ -120,7 +122,7 @@ and *Window → Reset layout* puts everything back:
 | *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Clear every CA*, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |
 | *Tools* | The tool windows below, *Sweep this world…*, the *Objects* pane |
 | *Window* | Every pane and tool window, *Hide all panes*, *Reset layout*, *Displays* |
-| *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches |
+| *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches; *Accessibility…*: reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
 
 *Help → Keyboard shortcuts…* lists the menus' shortcuts. Single-key shortcuts such as Space and R
@@ -142,6 +144,7 @@ on another monitor.
 | *Large sandpile* | *Tools* | Settle millions of sandpile grains on an unbounded grid ([Large sandpiles](../guides/large-sandpiles.md)) |
 | *HashLife view* | *Tools* | This world's pattern on the unbounded plane, jumped any distance ([HashLife](../guides/hashlife.md#in-the-app)) |
 | *Palettes* | *CA* | Browse, make and apply palettes ([Palettes and colouring](../guides/palettes.md)) |
+| *Accessibility* | *Settings* | Reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Scripts and sweeps* | *Tools* | Rhai scripts, and sweeps of many rules built from a form ([Scripting a rule sweep](../tutorials/scripting-a-sweep.md)) |
 | *AI control* | *Tools* | Let an AI assistant act on this world, through `jetcarp mcp --app` ([Driving JETCARP from an AI assistant](../tutorials/mcp.md)) |
 | *This computer* | *Tools* | The computer's hardware, its JETCARP Hardware Score, and the limits set from them ([This computer](../guides/this-computer.md)) |

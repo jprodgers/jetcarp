@@ -667,6 +667,15 @@ impl Ctx {
                 .is_none_or(|d| guard_on_in(d, GuardPlace::App))
     }
 
+    /// Whether animations saved through this context use the guard's stricter stripe rule: the
+    /// answer saved is *at risk*.
+    pub fn strobe_at_risk(&self) -> bool {
+        self.paths()
+            .settings
+            .as_deref()
+            .is_some_and(jetcarp_core::photosensitivity::at_risk_in)
+    }
+
     /// An interactive caller (the MCP server): [`Limits::INTERACTIVE`].
     pub fn interactive() -> Ctx {
         Ctx {
