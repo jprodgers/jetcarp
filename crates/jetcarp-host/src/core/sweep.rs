@@ -2,7 +2,9 @@
 //! the host shows its rotation's most demanding scene at a few sizes, about a second each, every
 //! screen at once, measures its own load meanwhile, takes a picture of each, and saves each
 //! screen's sizes ([`jetcarp_display::tuning`], planned as `jetcarp host tune` plans them:
-//! [`ScreenFit`]).
+//! [`ScreenFit`]). A rotation mixing scenes that step on the GPU and on the processor has its most
+//! demanding scene on each measured, one after the other. A fit's first round warms up longer
+//! ([`round_warmup`]), so a fit just after the host started measures as later ones do.
 //!
 //! While a screen is fitted, its own stage is set aside and a stage showing its measured scene
 //! stands in; the screens not being measured are paused, so the host's load is the measured
@@ -27,7 +29,7 @@ use jetcarp_display::simgpu::SimStatus;
 use jetcarp_display::stage::Stage;
 use jetcarp_display::tuning::{
     Measure, TuneEvent, TuneRequest, area_shares, attribute, crop_name, crop_size, fps_range,
-    warmup,
+    round_warmup, warmup,
 };
 use jetcarp_gpu::select::Mode;
 use serde_json::{Value, json};
@@ -74,8 +76,10 @@ enum Phase {
 
 /// One screen's trial this round.
 struct OnShow {
-    /// The fit, in [`HostSweep::fits`], and the size's index in its search.
+    /// The fit, in [`HostSweep::fits`], its measured scene, and the size's index in that scene's
+    /// search.
     fit: usize,
+    measure: usize,
     index: usize,
     builds: u64,
     built: bool,
@@ -94,6 +98,10 @@ pub(crate) struct HostSweep {
     fits: Vec<ScreenFit>,
     /// Each fitted screen's own stage, while a trial's stands in for it.
     parked: Vec<(usize, Stage)>,
+    /// Which measured scene each screen's stand-in shows: (screen, measured scene).
+    showing: Vec<(usize, usize)>,
+    /// Rounds measured so far: the first warms up longer.
+    rounds: usize,
     round: Vec<OnShow>,
     phase: Phase,
     painter: Option<Painter>,
@@ -139,8 +147,8 @@ impl HostSweep {
             "screens": self.fitting(),
             "on_show": self.round.iter().map(|o| {
                 let f = &self.fits[o.fit];
-                json!({"screen": f.screen, "scene": f.label(),
-                       "size": f.search.as_ref().map(|s| s.sizes[o.index])})
+                json!({"screen": f.screen, "scene": f.label(o.measure),
+                       "size": f.measures.get(o.measure).map(|m| m.search.sizes[o.index])})
             }).collect::<Vec<_>>(),
             "trials": self.trials,
             "scenes": self.total,
@@ -290,6 +298,8 @@ impl Core {
             limits,
             fits,
             parked: vec![],
+            showing: vec![],
+            rounds: 0,
             round: vec![],
             phase: Phase::Idle,
             painter: None,
@@ -532,33 +542,46 @@ impl Core {
         Ok(stage)
     }
 
-    /// The next round: each screen still searching shows its next size.
+    /// The next round: each screen still searching shows its next size, of one of its measured
+    /// scenes (the GPU's, then the processor's: a screen shows one scene at a time).
     fn start_round(&mut self, sw: &mut HostSweep, now: f64) -> Result<Step, String> {
-        let next: Vec<(usize, usize)> = sw
+        let next: Vec<(usize, usize, usize)> = sw
             .fits
             .iter()
             .enumerate()
-            .filter_map(|(k, f)| f.search.as_ref()?.next().map(|i| (k, i)))
+            .filter_map(|(k, f)| f.next_trial().map(|(m, i)| (k, m, i)))
             .collect();
         if next.is_empty() {
             return Ok(Step::Done);
         }
-        let measured = sw.fits.iter().filter(|f| f.search.is_some()).count();
+        let numbered: Vec<(usize, usize)> = sw
+            .fits
+            .iter()
+            .enumerate()
+            .flat_map(|(k, f)| (0..f.measures.len()).map(move |m| (k, m)))
+            .collect();
         sw.round.clear();
-        for (k, i) in next {
+        for (k, m, i) in next {
             let f = &sw.fits[k];
             let screen = f.screen;
-            let Some(slot) = f.slot.clone() else { continue };
             if screen >= self.screens.len() {
                 continue;
             }
-            let search = f.search.as_ref().expect("searching");
-            let size = search.sizes[i];
-            let p = &f.scenes[f.measured.expect("measured")];
-            if !sw.parked.iter().any(|(s, _)| *s == screen) {
-                let stage = self.sweep_stage(&f.rotation, &slot, f.canvas, f.scale)?;
-                let own = std::mem::replace(&mut self.screens[screen].stage, stage);
-                sw.parked.push((screen, own));
+            let ms = &f.measures[m];
+            let size = ms.search.sizes[i];
+            let p = &f.scenes[ms.scene];
+            let parked = sw.parked.iter().any(|(s, _)| *s == screen);
+            let shown = sw.showing.iter().find(|(s, _)| *s == screen).map(|x| x.1);
+            if !parked || shown != Some(m) {
+                // A stand-in showing this measured scene: the screen's own stage set aside the
+                // first time, the other measured scene's stand-in let go after.
+                let stage = self.sweep_stage(&f.rotation, &ms.slot, f.canvas, f.scale)?;
+                let replaced = std::mem::replace(&mut self.screens[screen].stage, stage);
+                if !parked {
+                    sw.parked.push((screen, replaced));
+                }
+                sw.showing.retain(|(s, _)| *s != screen);
+                sw.showing.push((screen, m));
             }
             let stage = &mut self.screens[screen].stage;
             let builds = stage.builds();
@@ -572,15 +595,16 @@ impl Core {
             ));
             self.sweep_events.push(TuneEvent::Rung {
                 screen,
-                number: sw.fits[..=k].iter().filter(|f| f.search.is_some()).count(),
-                of: measured,
+                number: numbered.iter().position(|&x| x == (k, m)).unwrap_or(0) + 1,
+                of: numbered.len(),
                 scene: p.label.clone(),
                 size,
-                rung: search.tried() + 1,
-                rungs: search.planned(),
+                rung: ms.search.tried() + 1,
+                rungs: ms.search.planned(),
             });
             sw.round.push(OnShow {
                 fit: k,
+                measure: m,
                 index: i,
                 builds,
                 built: false,
@@ -615,15 +639,16 @@ impl Core {
                         continue;
                     };
                     let said = screen.stage.take_notes();
+                    let label = f.label(o.measure);
+                    let ms = &mut f.measures[o.measure];
                     if screen.stage.builds() > o.builds && screen.stage.world().is_some() {
                         let world = screen.stage.world().expect("built");
                         let paced = screen.stage.pace().speed > 0.0;
-                        let slot = f.slot.as_ref().expect("its slot");
-                        let on = steps_on_gpu(&slot.profile, paced, &screen.sim, world);
+                        let on = steps_on_gpu(&ms.slot.profile, paced, &screen.sim, world);
                         screen.stage.set_world_gpu(on);
                         o.built = true;
                     } else if screen.stage.paused() || now - since > BUILD_LIMIT {
-                        let search = f.search.as_mut().expect("searching");
+                        let search = &mut ms.search;
                         let why = format!(
                             "{}: {}",
                             search.sizes[o.index].describe(),
@@ -634,8 +659,8 @@ impl Core {
                             }
                         );
                         search.failed(o.index, &why);
-                        f.failed.push(why.clone());
-                        notes.push(format!("{}: {why}", f.label()));
+                        ms.failed.push(why.clone());
+                        notes.push(format!("{label}: {why}"));
                         o.built = true;
                         o.index = usize::MAX;
                     } else {
@@ -660,7 +685,8 @@ impl Core {
                     let _ = e.share();
                 }
                 sw.phase = Phase::Warm {
-                    until: now + warmup(sw.seconds),
+                    // A fit's first round warms up longer: a cold start is slower.
+                    until: now + round_warmup(sw.seconds, sw.rounds == 0),
                     gpu0: crate::power::process_gpu_time(),
                 };
                 Ok(Step::Going)
@@ -720,6 +746,7 @@ impl Core {
                     return Ok(Step::Going);
                 }
                 self.record(sw);
+                sw.rounds += 1;
                 sw.phase = Phase::Idle;
                 Ok(Step::Going)
             }
@@ -789,9 +816,10 @@ impl Core {
                 gpu_timing: sw_timing(clock),
                 cells: st.cells as u64,
             };
-            let l = f.limits;
-            let label = f.label();
-            let search = f.search.as_mut().expect("searching");
+            let label = f.label(o.measure);
+            let ms = &mut f.measures[o.measure];
+            let l = ms.limits;
+            let search = &mut ms.search;
             let shown = search.record(o.index, st.cell_px, &m, &l).size;
             // The picture, drawn by a painter of the fit's own from the stage on show.
             let image = match &self.gpu {
@@ -865,6 +893,7 @@ mod tests {
             let sw = core.sweep.as_mut().unwrap();
             sw.round = vec![OnShow {
                 fit: 0,
+                measure: 0,
                 index: 0,
                 builds: 0,
                 built: true,

@@ -30,8 +30,8 @@ use jetcarp_display::stage::{self, Lookup, Stage};
 use jetcarp_display::tuning::{
     self, MARGIN, Measure, Pick, Planned, SWEEP_MAX_CELLS, SceneLimits, ScreenShare, Search,
     TRIAL_SECONDS, TuneEvent, TuneRequest, area_shares, attribute, cells_at, crop_name, crop_size,
-    device_cost, fps_range, lattice_ladder, most_demanding, patch_ladder, scene_fps, scene_groups,
-    screen_results, warmup,
+    device_cost, fps_range, lattice_ladder, patch_ladder, scene_fps, scene_groups, screen_results,
+    warmup,
 };
 use jetcarp_gpu::GpuSim;
 use jetcarp_gpu::select::Mode;
@@ -77,9 +77,11 @@ pub struct TuneArgs {
     #[arg(long)]
     pub screen: Option<usize>,
     /// Which size each scene is left at: recommended (the finest within the limits; the default),
-    /// finest (the finest tried), own (the scene's own), or a cell size in pixels. Without it, a
-    /// size chosen before is kept while it is still within the limits. With it, the last fit's
-    /// sizes are used while they are current; nothing is measured.
+    /// finest (the finest tried), own (the scene's own), or a cell size in pixels. Recommended
+    /// gives the rest of a rotation at most twice the measured scene's cells; the others are
+    /// choices, and go past that. Without it, a size chosen before is kept while it is still within
+    /// the limits. With it, the last fit's sizes are used while they are current; nothing is
+    /// measured.
     #[arg(long, value_name = "WHICH")]
     pub pick: Option<String>,
     /// With --pick: measure again, even though the last fit is still current.
@@ -92,7 +94,8 @@ pub struct TuneArgs {
     /// was fitted for before, else its monitor's).
     #[arg(long, value_parser = crate::parse_canvas)]
     pub canvas: Option<[f64; 2]>,
-    /// Seconds each size shows for (the last three quarters are measured).
+    /// Seconds each size shows for (the last three quarters are measured; a fit's first sizes warm
+    /// up half a second longer).
     #[arg(long, default_value_t = TRIAL_SECONDS)]
     pub trial_seconds: f64,
     /// Measure and report, but save nothing.
@@ -493,7 +496,21 @@ impl Speeds {
     }
 }
 
-/// One screen's fit: its scenes, the one measured, its share of the limits and its search.
+/// One scene a fit measures on a screen, and its search.
+pub(crate) struct Measuring {
+    /// Its index in the screen's scenes, and its slot in the rotation.
+    pub scene: usize,
+    pub slot: Slot,
+    pub search: Search,
+    /// Its limits: its screen's share, at its frame rate.
+    pub limits: SceneLimits,
+    pub fps: f32,
+    /// Sizes that could not be shown, and why.
+    pub failed: Vec<String>,
+}
+
+/// One screen's fit: its scenes, the ones measured (the most demanding on each device), and its
+/// share of the limits.
 pub(crate) struct ScreenFit {
     pub screen: usize,
     pub rotation: String,
@@ -502,23 +519,17 @@ pub(crate) struct ScreenFit {
     pub refresh: Option<f32>,
     pub share: f64,
     pub scenes: Vec<Planned>,
-    /// The index in `scenes` of the one measured, and its slot in the rotation.
-    pub measured: Option<usize>,
-    pub slot: Option<Slot>,
-    pub search: Option<Search>,
-    /// The measured scene's limits: its screen's share, at its frame rate.
-    pub limits: SceneLimits,
-    pub fps: f32,
+    /// The scenes measured, each by its own search: on the GPU, then on the processor.
+    pub measures: Vec<Measuring>,
     /// What was saved for this screen's rotation before.
     pub before: Option<Tuning>,
-    /// Sizes tried, and why it stopped early when it did.
-    pub failed: Vec<String>,
 }
 
 impl ScreenFit {
-    /// Plans screen `screen`'s fit: its scenes, the most demanding to measure, and where its
-    /// search starts (a size chosen before, else the one recommended last time, kept while it
-    /// stays within the noise, #94; else the score's guess).
+    /// Plans screen `screen`'s fit: its scenes, the most demanding on each device to measure
+    /// ([`tuning::scenes_to_measure`]), and where each search starts (a size chosen before, else the
+    /// one recommended last time, kept while it stays within the noise, #94; else the score's
+    /// guess).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn plan(
         job: &Job,
@@ -539,43 +550,46 @@ impl ScreenFit {
         let scenes = plan_scenes(
             &job.slots, lookup, job.canvas, job.scale, max_cells, limits, &pacer, devices, reads,
         );
-        let measured = most_demanding(&scenes);
         let before = settings.tuning_for(job.screen, &job.rotation).cloned();
-        let fps = measured.map_or(30.0, |m| scenes[m].fps);
-        let l = SceneLimits::of(limits, fps, share);
-        let slot = measured.and_then(|m| {
-            job.slots
-                .iter()
-                .find(|s| s.label == scenes[m].label)
-                .cloned()
+        let same = before.as_ref().is_some_and(|t| {
+            t.fits_monitor(job.canvas, job.scale, job.refresh)
+                && t.limits.cpu_percent == limits.cpu_percent
+                && t.limits.gpu_percent == limits.gpu_percent
+                && t.limits.fps == limits.fps
+                && (t.share - share).abs() < 1e-3
         });
-        let search = measured.map(|m| {
-            let p = &scenes[m];
-            let saved = before
-                .as_ref()
-                .and_then(|t| t.scenes.iter().find(|s| s.names(&p.label)));
-            let same = before.as_ref().is_some_and(|t| {
-                t.fits_monitor(job.canvas, job.scale, job.refresh)
-                    && t.limits.cpu_percent == limits.cpu_percent
-                    && t.limits.gpu_percent == limits.gpu_percent
-                    && t.limits.fps == limits.fps
-                    && (t.share - share).abs() < 1e-3
-            });
-            // The size recommended last time, where it was measured as now (#94).
-            let keep = saved.filter(|s| s.measured && same).map(|s| s.recommended);
-            let chosen = saved.filter(|s| s.chosen).map(|s| {
-                // A choice kept as the scene's own size is its own.
-                if s.size().level.is_none() && (s.size().px - p.design).abs() < 1e-3 {
-                    p.own
-                } else {
-                    s.size()
-                }
-            });
-            let first = chosen
-                .or(keep)
-                .or_else(|| speeds.guess(p, job.canvas, &l, p.gpu));
-            Search::new(p.sizes.clone(), p.own, first, keep)
-        });
+        let measures = tuning::scenes_to_measure(&scenes)
+            .into_iter()
+            .filter_map(|m| {
+                let p = &scenes[m];
+                let slot = job.slots.iter().find(|s| s.label == p.label).cloned()?;
+                let l = SceneLimits::of(limits, p.fps, share);
+                let saved = before
+                    .as_ref()
+                    .and_then(|t| t.scenes.iter().find(|s| s.names(&p.label)));
+                // The size recommended last time, where it was measured as now (#94).
+                let keep = saved.filter(|s| s.measured && same).map(|s| s.recommended);
+                let chosen = saved.filter(|s| s.chosen).map(|s| {
+                    // A choice kept as the scene's own size is its own.
+                    if s.size().level.is_none() && (s.size().px - p.design).abs() < 1e-3 {
+                        p.own
+                    } else {
+                        s.size()
+                    }
+                });
+                let first = chosen
+                    .or(keep)
+                    .or_else(|| speeds.guess(p, job.canvas, &l, p.gpu));
+                Some(Measuring {
+                    scene: m,
+                    slot,
+                    search: Search::new(p.sizes.clone(), p.own, first, keep),
+                    limits: l,
+                    fps: p.fps,
+                    failed: vec![],
+                })
+            })
+            .collect();
         ScreenFit {
             screen: job.screen,
             rotation: job.rotation.clone(),
@@ -584,33 +598,40 @@ impl ScreenFit {
             refresh: job.refresh,
             share,
             scenes,
-            measured,
-            slot,
-            search,
-            limits: l,
-            fps,
+            measures,
             before,
-            failed: vec![],
         }
+    }
+
+    /// The next size to show: of the first measured scene still searching (a screen shows one at
+    /// a time), as (that scene, the size's index in its search).
+    pub(crate) fn next_trial(&self) -> Option<(usize, usize)> {
+        self.measures
+            .iter()
+            .enumerate()
+            .find_map(|(k, m)| m.search.next().map(|i| (k, i)))
     }
 
     /// Its share of the limits, for the opening line.
     pub(crate) fn share_line(&self, limits: &TuneLimits) -> ScreenShare {
+        let measured: Vec<String> = (0..self.measures.len()).map(|k| self.label(k)).collect();
         ScreenShare {
             screen: self.screen,
             canvas: [self.canvas[0].round() as u32, self.canvas[1].round() as u32],
             share: self.share,
             cpu_percent: limits.cpu_percent * self.share as f32,
             gpu_percent: limits.gpu_percent * self.share as f32,
-            scene: self.measured.map(|m| self.scenes[m].label.clone()),
+            scene: measured.first().cloned(),
+            measured,
             scenes: self.scenes.len(),
         }
     }
 
-    /// The measured scene's label.
-    pub(crate) fn label(&self) -> String {
-        self.measured
-            .map_or(String::new(), |m| self.scenes[m].label.clone())
+    /// The label of measured scene `k`.
+    pub(crate) fn label(&self, k: usize) -> String {
+        self.measures
+            .get(k)
+            .map_or(String::new(), |m| self.scenes[m.scene].label.clone())
     }
 
     /// Every scene's result.
@@ -620,20 +641,24 @@ impl ScreenFit {
                 .as_ref()
                 .and_then(|t| t.scenes.iter().find(|s| s.names(label)).cloned())
         };
+        let measured: Vec<(usize, &Search)> =
+            self.measures.iter().map(|m| (m.scene, &m.search)).collect();
         let mut out = screen_results(
             &self.scenes,
-            self.measured,
-            self.search.as_ref(),
+            &measured,
             self.canvas,
             gpu_timing,
             pick,
             &before,
         );
-        if let (Some(m), false) = (self.measured, self.failed.is_empty())
-            && let Some(t) = out.iter_mut().find(|t| t.scene == self.scenes[m].label)
-        {
-            let notes: Vec<String> = t.note.iter().cloned().chain(self.failed.clone()).collect();
-            t.note = Some(notes.join("; "));
+        for m in self.measures.iter().filter(|m| !m.failed.is_empty()) {
+            if let Some(t) = out
+                .iter_mut()
+                .find(|t| t.scene == self.scenes[m.scene].label)
+            {
+                let notes: Vec<String> = t.note.iter().cloned().chain(m.failed.clone()).collect();
+                t.note = Some(notes.join("; "));
+            }
         }
         out
     }
@@ -651,7 +676,7 @@ impl ScreenFit {
             canvas: [self.canvas[0].round() as u32, self.canvas[1].round() as u32],
             scale: self.scale,
             limits,
-            fps: self.fps,
+            fps: self.measures.first().map_or(30.0, |m| m.fps),
             scenes,
             share: self.share,
             hz: self.refresh,
@@ -891,26 +916,33 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
     let mut hold = Hold::start(status.is_some());
     let mut rig = Rig::new(gpu, &settings, lookup);
     let mut trials = 0;
-    let measured_count = fits.iter().filter(|f| f.search.is_some()).count();
+    // Every scene measured, counted across the screens, for the progress lines.
+    let numbered: Vec<(usize, usize)> = fits
+        .iter()
+        .enumerate()
+        .flat_map(|(k, f)| (0..f.measures.len()).map(move |m| (k, m)))
+        .collect();
+    let mut first = true;
     loop {
-        // Each screen still searching shows its next size; every one is measured at once.
-        let round: Vec<(usize, usize)> = fits
+        // Each screen still searching shows its next size (of one measured scene at a time);
+        // every screen is measured at once.
+        let round: Vec<(usize, usize, usize)> = fits
             .iter()
             .enumerate()
-            .filter_map(|(k, f)| f.search.as_ref()?.next().map(|i| (k, i)))
+            .filter_map(|(k, f)| f.next_trial().map(|(m, i)| (k, m, i)))
             .collect();
         if round.is_empty() {
             break;
         }
-        for &(k, i) in &round {
+        for &(k, m, i) in &round {
             let f = &fits[k];
-            let s = f.search.as_ref().expect("searching");
+            let s = &f.measures[m].search;
             hold.renew();
             out.event(&TuneEvent::Rung {
                 screen: f.screen,
-                number: fits[..=k].iter().filter(|f| f.search.is_some()).count(),
-                of: measured_count,
-                scene: f.label(),
+                number: numbered.iter().position(|&x| x == (k, m)).unwrap_or(0) + 1,
+                of: numbered.len(),
+                scene: f.label(m),
                 size: s.sizes[i],
                 rung: s.tried() + 1,
                 rungs: s.planned(),
@@ -918,32 +950,35 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
         }
         let specs: Vec<TrialSpec> = round
             .iter()
-            .map(|&(k, i)| {
+            .map(|&(k, m, i)| {
                 let f = &fits[k];
-                let p = &f.scenes[f.measured.expect("measured")];
+                let ms = &f.measures[m];
+                let p = &f.scenes[ms.scene];
                 TrialSpec {
                     rotation: f.rotation.clone(),
                     canvas: f.canvas,
                     scale: f.scale,
                     refresh: f.refresh,
-                    slot: f.slot.clone().expect("its slot"),
+                    slot: ms.slot.clone(),
                     label: p.label.clone(),
                     design: p.design,
-                    size: f.search.as_ref().expect("searching").sizes[i],
+                    size: ms.search.sizes[i],
                 }
             })
             .collect();
-        let results = rig.round(&specs, args.trial_seconds, &mut || hold.renew());
+        let results = rig.round(&specs, args.trial_seconds, first, &mut || hold.renew());
+        first = false;
         trials += round.len();
-        for (&(k, i), r) in round.iter().zip(results) {
+        for (&(k, m, i), r) in round.iter().zip(results) {
             let f = &mut fits[k];
-            let l = f.limits;
             let screen = f.screen;
-            let label = f.label();
-            let s = f.search.as_mut().expect("searching");
+            let label = f.label(m);
+            let ms = &mut f.measures[m];
+            let l = ms.limits;
+            let s = &mut ms.search;
             match r {
-                Ok((m, shown_px, image)) => {
-                    let r = s.record(i, shown_px, &m, &l).clone();
+                Ok((meas, shown_px, image)) => {
+                    let r = s.record(i, shown_px, &meas, &l).clone();
                     let name = crop_name(screen, &label, &r.size);
                     let crop = image.and_then(|i| save_crop(&name, &i, args.crops.as_deref()));
                     if let Some(last) = s.rungs.last_mut() {
@@ -958,7 +993,7 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
                 Err(e) => {
                     let why = format!("{}: {e}", s.sizes[i].describe());
                     s.failed(i, &why);
-                    f.failed.push(why);
+                    ms.failed.push(why);
                 }
             }
         }
@@ -1585,6 +1620,7 @@ impl Rig {
         &mut self,
         specs: &[TrialSpec],
         seconds: f64,
+        first: bool,
         renew: &mut dyn FnMut(),
     ) -> Vec<Measured> {
         let mut trials: Vec<Result<Trial, String>> =
@@ -1597,7 +1633,8 @@ impl Rig {
             let _ = e.share();
         }
         let t0 = Instant::now();
-        let warm_for = warmup(seconds);
+        // A fit's first round warms up longer: a cold start is slower than a warm one.
+        let warm_for = tuning::round_warmup(seconds, first);
         let run = |rig: &Rig, trials: &mut [Result<Trial, String>], until: f64, clock: Clock| {
             loop {
                 let now = t0.elapsed().as_secs_f64();
@@ -1664,7 +1701,12 @@ impl Rig {
         let meter = ProcessMeter::start();
         let counted0 = crate::power::process_gpu_time();
         let m0 = Instant::now();
-        run(self, &mut trials, warm_for + (seconds - warm_for), clock);
+        run(
+            self,
+            &mut trials,
+            warm_for + (seconds - warmup(seconds)),
+            clock,
+        );
         let wall = m0.elapsed().as_secs_f64().max(1e-9);
         let cpu = meter.map_or(0.0, |m| m.share());
         let process_gpu = match clock {
@@ -1863,7 +1905,7 @@ mod tests {
         assert_eq!(plan[0].also, ["B36/S23"]);
         let (sq, tri) = (plan[0].cost.unwrap(), plan[1].cost.unwrap());
         assert!(tri > sq, "triangles {tri} against squares {sq}");
-        assert_eq!(most_demanding(&plan), Some(1));
+        assert_eq!(tuning::most_demanding(&plan), Some(1));
     }
 
     #[test]

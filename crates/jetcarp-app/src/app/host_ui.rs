@@ -1430,7 +1430,8 @@ fn performance_ui(
         if !rest.is_empty() {
             ui.label(
                 RichText::new(if measured {
-                    "The other scenes take their sizes from it, by their cost:"
+                    "The other scenes take their sizes from the scene measured on their device, \
+                     by their cost, at most twice its cells unless you choose:"
                 } else {
                     "The other scenes:"
                 })
@@ -1575,13 +1576,18 @@ fn scene_row(
         }
         if scene.measured && choosable {
             ui.label(
-                RichText::new("measured: its rotation's most demanding scene")
-                    .small()
-                    .weak(),
+                RichText::new(if scene.gpu {
+                    "measured: the most demanding scene that steps on the GPU"
+                } else {
+                    "measured: the most demanding scene that steps on the processor"
+                })
+                .small()
+                .weak(),
             )
             .on_hover_text(
-                "Fit measures one scene a screen, the one with the most work a cell; the size \
-                 chosen here serves the whole rotation, each cheaper scene going finer by its cost",
+                "Fit measures the scene with the most work a cell of those that step on the GPU, \
+                 and of those that step on the processor; the size chosen here serves the other \
+                 scenes on its device, each cheaper scene going finer by its cost",
             );
         }
         if scene.placed {
@@ -1722,6 +1728,12 @@ fn other_scenes(
                     format!("{:.0}% of the measured scene's work a cell", x.cost * 100.0)
                 } else {
                     format!("{:.1} times the measured scene's work a cell", x.cost)
+                };
+                // The soft cap on the estimate: said where the size is shown.
+                let why = if x.capped && !x.chosen {
+                    format!("{why}; held to twice the measured scene's cells: choose a finer size to go further")
+                } else {
+                    why
                 };
                 let l = ui.label(RichText::new(why).small().weak());
                 if let Some(n) = &x.note {

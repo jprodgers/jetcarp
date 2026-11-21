@@ -1083,6 +1083,69 @@ fn a_fit_measures_one_scene_a_screen_in_a_few_sizes() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A rotation mixing scenes that step on the GPU with scenes that step on the processor is
+/// measured on both: the most demanding of each, each by its own search (#113). Life steps on the
+/// GPU; Wolfram's rule 30 from a soup steps on the processor. Each
+/// other scene is sized from the one measured on its own device.
+#[test]
+fn a_rotation_mixing_devices_is_measured_on_both() {
+    let dir = home("mixed");
+    rotation_on(
+        &dir,
+        json!({"name": "Mixed devices", "look": {"cell_px": 4.0, "speed": 30.0, "refill": true},
+        "items": [
+            {"source": {"kind": "series", "rules": "B3/S23"}},
+            {"source": {"kind": "series", "rules": "B36/S23"}},
+            {"source": {"kind": "series", "rules": "W30", "seed": "random:0.3"}}
+        ]}),
+        1,
+    );
+    let (events, out) = tune(&dir, &["--canvas", "640x360"]);
+    if events[0]["gpu"].is_null() {
+        // No GPU: every scene steps on the processor, and one is measured.
+        return;
+    }
+    let measured: std::collections::BTreeSet<&str> = events
+        .iter()
+        .filter(|e| e["event"] == "measured")
+        .map(|e| e["scene"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        measured.into_iter().collect::<Vec<_>>(),
+        ["B3/S23", "W30"],
+        "one scene on each device\n{out}"
+    );
+    let scenes = &saved(&dir)["screens"][0]["tuning"]["scenes"];
+    let at = |name: &str| {
+        scenes
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["scene"] == name)
+            .unwrap()
+            .clone()
+    };
+    let (life, rows, brian) = (at("B3/S23"), at("W30"), at("B36/S23"));
+    assert_eq!(
+        (life["measured"].as_bool(), life["gpu"].as_bool()),
+        (Some(true), Some(true))
+    );
+    assert_eq!(
+        (rows["measured"].as_bool(), rows["gpu"].as_bool()),
+        (Some(true), None)
+    );
+    assert!(!rows["rungs"].as_array().unwrap().is_empty(), "{rows}");
+    // B36/S23 is sized from Life, on its own device: no note about another device.
+    assert!(brian.get("measured").is_none(), "{brian}");
+    assert!(
+        !brian.to_string().contains("the measured scene on"),
+        "{brian}"
+    );
+    let done = events.last().unwrap();
+    assert!(done["seconds"].as_f64().unwrap() < 30.0, "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A rule series is fitted as one scene (#109): the Wolfram series' first 41 rules are one
 /// scene, its first rule measured, and the host shows every rule at the size found.
 #[test]

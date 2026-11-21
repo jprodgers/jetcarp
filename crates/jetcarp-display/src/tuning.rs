@@ -71,6 +71,21 @@ pub fn warmup(seconds: f64) -> f64 {
     (seconds * 0.25).min(0.5)
 }
 
+/// Seconds more a fit's first round warms up: a cold start (shaders compiled, the first uploads,
+/// every screen's first world built at once) took longer than its warm-up, and two screens' first
+/// fit could judge a size over that every fit after found within.
+pub const FIRST_WARMUP: f64 = 0.5;
+
+/// The warm-up of a round of a fit ([`warmup`], and [`FIRST_WARMUP`] more for its first).
+pub fn round_warmup(seconds: f64, first: bool) -> f64 {
+    warmup(seconds) + if first { FIRST_WARMUP } else { 0.0 }
+}
+
+/// How far past the measured scene's cells the estimate of where its loads cross the limits may
+/// go, so the other scenes go no finer than this many times its cells' worth of work unless
+/// someone chooses: a soft cap, which a size chosen in the pane, or a pick, goes past.
+pub const SOFT_CAP: f64 = 2.0;
+
 /// What one size measured.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
 pub struct Measure {
@@ -239,10 +254,11 @@ pub fn load(m: &Measure, l: &SceneLimits) -> f64 {
 /// About how many cells the measured scene could hold on its limits' line, from its cards (the
 /// sizes tried, with their loads, [`load`]): where the loads cross 1, between the finest size
 /// within the limits and the next finer over them; with nothing finer over them, the finest
-/// within them scaled by its load, at most four times its cells. A load that grows linearly with
-/// the cells from any base of its own (a frame's fixed cost) crosses later, so this errs low.
-/// None without a card within the limits (or with cards from before 0.4.3, which have no loads).
-pub fn line_cells(cards: &[Rung]) -> Option<f64> {
+/// within them scaled by its load. A load that grows linearly with the cells from any base of its
+/// own (a frame's fixed cost) crosses later, so this errs low. Returns it held to [`SOFT_CAP`]
+/// times that size's cells, and as estimated. None without a card within the limits (or with
+/// cards from before 0.4.3, which have no loads).
+pub fn line_estimate(cards: &[Rung]) -> Option<(f64, f64)> {
     let fit = cards
         .iter()
         .filter(|r| r.load > 0.0 && r.load <= 1.0)
@@ -252,13 +268,19 @@ pub fn line_cells(cards: &[Rung]) -> Option<f64> {
         .iter()
         .filter(|r| r.load > 1.0 && r.cells > fit.cells)
         .min_by_key(|r| r.cells);
-    Some(match over {
+    let free = match over {
         Some(o) => {
             let (c1, q1) = (o.cells as f64, o.load as f64);
             (c0 + (1.0 - q0) / (q1 - q0) * (c1 - c0)).clamp(c0, c1)
         }
-        None => c0 / q0.max(0.25),
-    })
+        None => c0 / q0.max(0.05),
+    };
+    Some((free.min(c0 * SOFT_CAP), free))
+}
+
+/// [`line_estimate`], held to [`SOFT_CAP`]: the cells the other scenes' sizes come from by default.
+pub fn line_cells(cards: &[Rung]) -> Option<f64> {
+    line_estimate(cards).map(|(capped, _)| capped)
 }
 
 /// Whether a load ([`load`]) is within the measurement's noise of its line, either side.
@@ -901,15 +923,15 @@ impl Planned {
     }
 }
 
-/// The scene of a screen's rotation a fit measures: the most demanding of those it can size, by
-/// [`Planned::cost`] (those that run as fast as they can only when nothing else can be). None
-/// when none can be sized.
-pub fn most_demanding(scenes: &[Planned]) -> Option<usize> {
+/// The most demanding scene of those a fit can size, by [`Planned::cost`] (those that run as fast
+/// as they can only when nothing else can be), of those `which` lets through. None when none can
+/// be sized.
+fn most_demanding_of(scenes: &[Planned], which: impl Fn(&Planned) -> bool) -> Option<usize> {
     let pick = |paced: bool| {
         scenes
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.sizable() && p.unpaced != paced)
+            .filter(|(_, p)| p.sizable() && p.unpaced != paced && which(p))
             .max_by(|(ia, a), (ib, b)| {
                 a.cost
                     .unwrap_or(0.0)
@@ -920,6 +942,22 @@ pub fn most_demanding(scenes: &[Planned]) -> Option<usize> {
             .map(|(i, _)| i)
     };
     pick(true).or_else(|| pick(false))
+}
+
+/// The most demanding scene of a screen's rotation, on either device.
+pub fn most_demanding(scenes: &[Planned]) -> Option<usize> {
+    most_demanding_of(scenes, |_| true)
+}
+
+/// The scenes a fit measures on a screen: the most demanding that steps on the GPU, and the most
+/// demanding that steps on the processor, each by a search of its own, so a rotation mixing the
+/// two is measured on both; the GPU's first. Empty when none can
+/// be sized.
+pub fn scenes_to_measure(scenes: &[Planned]) -> Vec<usize> {
+    [true, false]
+        .into_iter()
+        .filter_map(|gpu| most_demanding_of(scenes, |p| p.gpu == gpu))
+        .collect()
 }
 
 /// The measured scene's result: its cards, the recommended size, and the size chosen
@@ -965,20 +1003,100 @@ pub fn measured_scene(
     t
 }
 
-/// Another scene's result: its size from the measured scene's, `base_cells` cells at a cost of
-/// `base_cost` a cell, by their cost ratio ([`derive`]); a placed pattern, or a scene not rebuilt
-/// to fill the screen, at its own size. A pick (`--pick`) or a size chosen before (kept while it
-/// holds no more work than the measured scene's) decides as for the measured scene.
+/// What the other scenes' sizes come from: a measured scene's work, in cells at its cost a cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Basis {
+    /// The cells by default: held to [`SOFT_CAP`] times its size's ([`line_cells`]).
+    pub capped: u64,
+    /// The cells as estimated, which a size someone chose may hold.
+    pub free: u64,
+    /// Its work a cell ([`Planned::cost`]).
+    pub cost: Option<f64>,
+}
+
+/// A measured scene's cells for the other scenes: held to [`SOFT_CAP`], as estimated, and at its
+/// own size. Once someone chose its size, all three are its cells there.
+pub fn bases(measured: &TunedScene, canvas: [f64; 2]) -> (u64, u64, u64) {
+    let size = measured.size();
+    let at_size = measured
+        .rung()
+        .map(|r| r.cells)
+        .filter(|&c| c > 0)
+        .unwrap_or_else(|| cells_at(&measured.tiling, canvas, &size));
+    if measured.chosen {
+        return (at_size, at_size, at_size);
+    }
+    match line_estimate(&measured.rungs) {
+        Some((capped, free)) => {
+            let capped = capped.round() as u64;
+            (capped, free.round() as u64, at_size.min(capped))
+        }
+        None => (at_size, at_size, at_size),
+    }
+}
+
+/// The cells the other scenes' sizes come from by default, in the measured scene's work: where
+/// its loads cross the limits' line, held to [`SOFT_CAP`] times its cells ([`line_cells`]), so a
+/// scene of the same cost may go finer than the measured scene's ladder had room for; or, once
+/// someone chose its size, its cells there.
+pub fn base_cells(measured: &TunedScene, canvas: [f64; 2]) -> u64 {
+    bases(measured, canvas).0
+}
+
+/// What a scene on `gpu` is sized from: the scene measured on its own device, else (none was) the
+/// first measured, at no more than its own size, and the words saying so.
+fn basis_for(
+    gpu: bool,
+    measured: &[(&TunedScene, Option<f64>)],
+    canvas: [f64; 2],
+) -> Option<(Basis, Option<String>)> {
+    if let Some((t, cost)) = measured.iter().find(|(t, _)| t.gpu == gpu) {
+        let (capped, free, _) = bases(t, canvas);
+        return Some((
+            Basis {
+                capped,
+                free,
+                cost: *cost,
+            },
+            None,
+        ));
+    }
+    let (t, cost) = measured.first()?;
+    let (_, _, at_size) = bases(t, canvas);
+    let device = |gpu: bool| if gpu { "the GPU" } else { "the processor" };
+    Some((
+        Basis {
+            capped: at_size,
+            free: at_size,
+            cost: *cost,
+        },
+        Some(format!(
+            "steps on {}, the measured scene on {}: sized by estimate, no finer than the measured \
+             scene's work",
+            device(gpu),
+            device(t.gpu)
+        )),
+    ))
+}
+
+/// The words on a scene held to [`SOFT_CAP`].
+pub const CAPPED: &str = "held to twice the measured scene's cells; choose a finer size to go \
+                          further";
+
+/// Another scene's result: its size from the measured scene's (`basis`), by their cost ratio
+/// ([`derive_kept`]), held to [`SOFT_CAP`] times its cells (and saying so); a placed pattern, or a
+/// scene not rebuilt to fill the screen, at its own size. A pick (`--pick`) decides as for the
+/// measured scene, and a size chosen before is kept while it holds no more work than the measured
+/// scene's estimate allows, past the cap.
 pub fn derived_scene(
     p: &Planned,
     canvas: [f64; 2],
-    base_cells: u64,
-    base_cost: Option<f64>,
+    basis: Option<Basis>,
     gpu_timing: GpuTiming,
     pick: Option<Pick>,
     before: Option<&TunedScene>,
 ) -> TunedScene {
-    let ratio = match (p.cost, base_cost) {
+    let ratio = match (p.cost, basis.and_then(|b| b.cost)) {
         (Some(c), Some(b)) if b > 0.0 => c / b,
         _ => 1.0,
     };
@@ -989,12 +1107,22 @@ pub fn derived_scene(
     let prev = before
         .filter(|b| !b.chosen && !b.measured)
         .map(TunedScene::size);
-    let recommended = if p.sizable() && base_cells > 0 {
-        derive_kept(&p.sizes, cells, ratio, base_cells, prev)
-    } else {
-        p.own
+    let (recommended, held) = match basis {
+        Some(b) if p.sizable() && b.capped > 0 => {
+            let r = derive_kept(&p.sizes, cells, ratio, b.capped, prev);
+            let free = derive(&p.sizes, cells, ratio, b.free.max(b.capped));
+            (r, cells(&free) > cells(&r))
+        }
+        _ => (p.own, false),
     };
+    let free_cells = basis.map_or(0, |b| b.free.max(b.capped));
     let mut note = p.note.clone();
+    let mut add = |words: String| {
+        note = Some(match note.take() {
+            Some(n) => format!("{n}; {words}"),
+            None => words,
+        });
+    };
     let (size, chosen) = match pick {
         Some(Pick::Own) => (p.own, true),
         Some(Pick::Px(px)) if resizable => match nearest_level(&p.sizes, px) {
@@ -1003,25 +1131,25 @@ pub fn derived_scene(
         },
         Some(Pick::Recommended | Pick::Finest) => (recommended, false),
         _ => match before.filter(|b| b.chosen) {
-            Some(b) if cells(&b.size()) as f64 * ratio <= base_cells as f64 * (1.0 + NOISE) => {
+            Some(b) if cells(&b.size()) as f64 * ratio <= free_cells as f64 * (1.0 + NOISE) => {
                 (b.size(), true)
             }
             Some(b) => {
-                let words = format!(
+                add(format!(
                     "the size chosen before, {}, holds more work than the measured scene's size \
                      allows here; showing {}",
                     b.size().describe(),
                     recommended.describe()
-                );
-                note = Some(match note {
-                    Some(n) => format!("{n}; {words}"),
-                    None => words,
-                });
+                ));
                 (recommended, false)
             }
             None => (recommended, false),
         },
     };
+    let capped = held && !chosen;
+    if capped {
+        add(CAPPED.to_string());
+    }
     let size = if size.same(&p.own) {
         Size::px(p.design)
     } else {
@@ -1040,101 +1168,50 @@ pub fn derived_scene(
         cost: if resizable { ratio as f32 } else { 0.0 },
         also: p.also.clone(),
         gpu: p.gpu,
+        capped,
         ..Default::default()
     };
     t.set_size(size);
     t
 }
 
-/// The cells the other scenes' sizes come from, in the measured scene's work: where its loads
-/// cross the limits' line ([`line_cells`]), so a scene of the same cost may go finer than the
-/// measured scene's ladder had room for; or, once someone chose its size, its cells there.
-pub fn base_cells(measured: &TunedScene, canvas: [f64; 2]) -> u64 {
-    let size = measured.size();
-    let at_size = measured
-        .rung()
-        .map(|r| r.cells)
-        .filter(|&c| c > 0)
-        .unwrap_or_else(|| cells_at(&measured.tiling, canvas, &size));
-    if measured.chosen {
-        return at_size;
-    }
-    line_cells(&measured.rungs).map_or(at_size, |c| c.round() as u64)
-}
-
-/// A screen's results: the measured scene's ([`measured_scene`]) and every other's
-/// ([`derived_scene`]), in the rotation's order. `before` gives what was saved for each label.
-#[allow(clippy::too_many_arguments)]
+/// A screen's results: the measured scenes' ([`measured_scene`], one for each device measured,
+/// by its index in `scenes` and its search) and every other's ([`derived_scene`], sized from the
+/// scene measured on its own device), in the rotation's order. `before` gives what was saved for
+/// each label.
 pub fn screen_results(
     scenes: &[Planned],
-    measured: Option<usize>,
-    search: Option<&Search>,
+    measured: &[(usize, &Search)],
     canvas: [f64; 2],
     gpu_timing: GpuTiming,
     pick: Option<Pick>,
     before: &dyn Fn(&str) -> Option<TunedScene>,
 ) -> Vec<TunedScene> {
-    let first = match (measured, search) {
-        (Some(m), Some(s)) => Some(measured_scene(
-            &scenes[m],
-            s,
-            gpu_timing,
-            pick,
-            before(&scenes[m].label).as_ref(),
-        )),
-        _ => None,
-    };
-    // The work the rest may have: the measured scene's cells on its limits' line, or at the size
-    // chosen for it. A scene that steps on the other device (the processor where the measured
-    // scene used the GPU, or the other way about) has only the estimate of their costs to go by,
-    // so it is not sized past the measured scene's own size.
-    let (line, at_size, base_cost, base_gpu) = match (&first, measured) {
-        (Some(t), Some(m)) => {
-            let size = t.size();
-            let at_size = t
-                .rung()
-                .map(|r| r.cells)
-                .filter(|&c| c > 0)
-                .unwrap_or_else(|| cells_at(&t.tiling, canvas, &size));
-            let line = base_cells(t, canvas);
-            (line, at_size.min(line), scenes[m].cost, scenes[m].gpu)
-        }
-        _ => (0, 0, None, false),
-    };
+    let done: Vec<(usize, TunedScene)> = measured
+        .iter()
+        .map(|&(m, s)| {
+            (
+                m,
+                measured_scene(
+                    &scenes[m],
+                    s,
+                    gpu_timing,
+                    pick,
+                    before(&scenes[m].label).as_ref(),
+                ),
+            )
+        })
+        .collect();
+    let with_cost: Vec<(&TunedScene, Option<f64>)> =
+        done.iter().map(|(m, t)| (t, scenes[*m].cost)).collect();
     scenes
         .iter()
         .enumerate()
         .map(|(i, p)| {
-            if Some(i) == measured
-                && let Some(t) = &first
-            {
+            if let Some((_, t)) = done.iter().find(|(m, _)| *m == i) {
                 return t.clone();
             }
-            if first.is_some() && p.gpu != base_gpu && p.sizable() {
-                let device = |gpu: bool| if gpu { "the GPU" } else { "the processor" };
-                let words = format!(
-                    "steps on {}, the measured scene on {}: sized by estimate, no finer than the \
-                     measured scene's work",
-                    device(p.gpu),
-                    device(base_gpu)
-                );
-                let mut t = derived_scene(
-                    p,
-                    canvas,
-                    at_size,
-                    base_cost,
-                    gpu_timing,
-                    pick,
-                    before(&p.label).as_ref(),
-                );
-                t.note = Some(match t.note {
-                    Some(n) => format!("{n}; {words}"),
-                    None => words,
-                });
-                return t;
-            }
-            let base_cells = line;
-            if first.is_none() {
+            let Some((basis, other)) = basis_for(p.gpu, &with_cost, canvas) else {
                 // Nothing measured: each at its own size, or as picked.
                 return derived_scene(
                     &Planned {
@@ -1142,82 +1219,93 @@ pub fn screen_results(
                         ..p.clone()
                     },
                     canvas,
-                    0,
                     None,
                     gpu_timing,
                     pick.filter(|k| matches!(k, Pick::Own | Pick::Px(_))),
                     before(&p.label).as_ref(),
                 );
-            }
-            derived_scene(
+            };
+            let mut t = derived_scene(
                 p,
                 canvas,
-                base_cells,
-                base_cost,
+                Some(basis),
                 gpu_timing,
                 pick,
                 before(&p.label).as_ref(),
-            )
+            );
+            if let (Some(words), true) = (other, p.sizable()) {
+                t.note = Some(match t.note {
+                    Some(n) => format!("{n}; {words}"),
+                    None => words,
+                });
+            }
+            t
         })
         .collect()
 }
 
-/// The sizes a saved fit's scenes show at, picked again without measuring (#77): the measured
-/// scene's from its cards, the rest from it by their cost ratios. `sizes` gives each scene's
-/// sizes (finest first), as a fit plans them.
+/// The sizes a saved fit's scenes show at, picked again without measuring (#77): each measured
+/// scene's from its cards, the rest from the one measured on their device by their cost ratios.
+/// `sizes` gives each scene's sizes (finest first), as a fit plans them.
 pub fn repick(
     scenes: &[TunedScene],
     sizes: &dyn Fn(&TunedScene) -> Vec<Size>,
     canvas: [f64; 2],
     pick: Pick,
 ) -> Vec<TunedScene> {
-    let measured = scenes.iter().find(|s| s.measured).map(|m| {
-        let (size, chosen, _) = choose(
-            &m.rungs,
-            m.recommended,
-            Size::px(m.design_px),
-            Some(pick),
-            None,
-        );
-        let mut t = m.clone();
-        t.note = None;
-        let own = m.rungs.iter().any(|r| r.own && r.size.same(&size));
-        t.set_size(if own { Size::px(m.design_px) } else { size });
-        t.chosen = chosen;
-        t
-    });
-    let line = measured.as_ref().map_or(0, |m| base_cells(m, canvas));
-    let (at_size, gpu) = measured.as_ref().map_or((0, false), |m| {
-        let size = m.size();
-        let cells = m
-            .rung()
-            .map(|r| r.cells)
-            .filter(|&c| c > 0)
-            .unwrap_or_else(|| cells_at(&m.tiling, canvas, &size));
-        (cells.min(line), m.gpu)
-    });
+    let measured: Vec<TunedScene> = scenes
+        .iter()
+        .filter(|s| s.measured)
+        .map(|m| {
+            let (size, chosen, _) = choose(
+                &m.rungs,
+                m.recommended,
+                Size::px(m.design_px),
+                Some(pick),
+                None,
+            );
+            let mut t = m.clone();
+            t.note = None;
+            let own = m.rungs.iter().any(|r| r.own && r.size.same(&size));
+            t.set_size(if own { Size::px(m.design_px) } else { size });
+            t.chosen = chosen;
+            t
+        })
+        .collect();
+    // Costs are saved as shares of the measured scene's: 1 for it.
+    let with_cost: Vec<(&TunedScene, Option<f64>)> =
+        measured.iter().map(|t| (t, Some(1.0))).collect();
     scenes
         .iter()
         .map(|s| {
             if s.measured
-                && let Some(m) = &measured
+                && let Some(m) = measured.iter().find(|m| m.scene == s.scene)
             {
                 return m.clone();
             }
-            let base = if s.gpu == gpu { line } else { at_size };
             let mut t = s.clone();
             t.note = None;
+            t.capped = false;
             let ladder = sizes(s);
             let own = Size::px(s.design_px);
-            let (size, chosen) = match pick {
-                Pick::Own => (own, true),
-                Pick::Px(px) if !ladder.is_empty() => {
+            let basis = basis_for(s.gpu, &with_cost, canvas).map(|(b, _)| b);
+            let (size, chosen) = match (pick, basis) {
+                (Pick::Own, _) => (own, true),
+                (Pick::Px(px), _) if !ladder.is_empty() => {
                     (nearest_level(&ladder, px).unwrap_or(Size::px(px)), true)
                 }
-                Pick::Px(_) => (own, true),
-                Pick::Recommended | Pick::Finest if !ladder.is_empty() && !s.placed && base > 0 => {
+                (Pick::Px(_), _) => (own, true),
+                (Pick::Recommended | Pick::Finest, Some(b))
+                    if !ladder.is_empty() && !s.placed && b.capped > 0 =>
+                {
                     let ratio = if s.cost > 0.0 { s.cost as f64 } else { 1.0 };
-                    let size = derive(&ladder, |x| cells_at(&s.tiling, canvas, x), ratio, base);
+                    let cells = |x: &Size| cells_at(&s.tiling, canvas, x);
+                    let size = derive(&ladder, cells, ratio, b.capped);
+                    let free = derive(&ladder, cells, ratio, b.free.max(b.capped));
+                    t.capped = cells(&free) > cells(&size);
+                    if t.capped {
+                        t.note = Some(CAPPED.to_string());
+                    }
                     t.recommended = size;
                     (size, false)
                 }
@@ -1252,35 +1340,29 @@ pub fn scene_sizes(t: &Tuning, s: &TunedScene) -> Vec<Size> {
     }
 }
 
-/// After the measured scene's size changed (a card chosen), every other scene nobody chose takes
-/// its size from it again, by its cost ratio.
+/// After a measured scene's size changed (a card chosen), every other scene on its device that
+/// nobody chose takes its size from it again, by its cost ratio.
 pub fn rederive(t: &mut Tuning) {
     let canvas = [t.canvas[0] as f64, t.canvas[1] as f64];
-    let Some(m) = t.scenes.iter().find(|s| s.measured) else {
+    let measured: Vec<TunedScene> = t.scenes.iter().filter(|s| s.measured).cloned().collect();
+    if measured.is_empty() {
         return;
-    };
-    let line = base_cells(m, canvas);
-    let size = m.size();
-    let at_size = m
-        .rung()
-        .map(|r| r.cells)
-        .filter(|&c| c > 0)
-        .unwrap_or_else(|| cells_at(&m.tiling, canvas, &size))
-        .min(line);
-    let gpu = m.gpu;
+    }
+    let with_cost: Vec<(&TunedScene, Option<f64>)> =
+        measured.iter().map(|m| (m, Some(1.0))).collect();
     let ladders: Vec<Vec<Size>> = t.scenes.iter().map(|s| scene_sizes(t, s)).collect();
     for (s, ladder) in t.scenes.iter_mut().zip(ladders) {
         if s.measured || s.chosen || s.placed || ladder.is_empty() || s.cost <= 0.0 {
             continue;
         }
-        let base = if s.gpu == gpu { line } else { at_size };
+        let Some((b, _)) = basis_for(s.gpu, &with_cost, canvas) else {
+            continue;
+        };
         let tiling = s.tiling.clone();
-        let size = derive(
-            &ladder,
-            |x| cells_at(&tiling, canvas, x),
-            s.cost as f64,
-            base,
-        );
+        let cells = |x: &Size| cells_at(&tiling, canvas, x);
+        let size = derive(&ladder, cells, s.cost as f64, b.capped);
+        let free = derive(&ladder, cells, s.cost as f64, b.free.max(b.capped));
+        s.capped = cells(&free) > cells(&size);
         s.recommended = size;
         let own = Size::px(s.design_px);
         s.set_size(if size.same(&own) { own } else { size });
@@ -1326,9 +1408,12 @@ pub struct ScreenShare {
     /// Its share of the processor limit, and of the GPU limit, in percent of the machine.
     pub cpu_percent: f32,
     pub gpu_percent: f32,
-    /// The scene measured for it (None: none of its scenes can be sized).
+    /// The scene measured for it (None: none of its scenes can be sized): the first of `measured`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<String>,
+    /// Every scene measured for it: the most demanding on the GPU, then on the processor.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measured: Vec<String>,
     /// Scenes in its rotation (a series counted once).
     #[serde(default)]
     pub scenes: usize,
@@ -1518,6 +1603,14 @@ impl TuneEvent {
                     s.push_str(&format!("; {}", shares_line(l, shares)));
                 }
                 for sh in shares.iter().filter(|_| !*reused) {
+                    if let [gpu, cpu] = sh.measured.as_slice() {
+                        s.push_str(&format!(
+                            "; screen {} measures {gpu} on the GPU and {cpu} on the processor, \
+                             the most demanding of its {} scenes on each",
+                            sh.screen, sh.scenes
+                        ));
+                        continue;
+                    }
                     match &sh.scene {
                         Some(n) => s.push_str(&format!(
                             "; screen {} measures {n}, the most demanding of its {} scene{}",
@@ -1636,23 +1729,25 @@ pub fn rung_line(r: &Rung) -> String {
 pub fn scene_line(screen: usize, t: &TunedScene) -> String {
     // As its cells show (a scene kept at its own size shows at its own rung's).
     let shows = t.rung().map_or(t.size(), |r| r.size);
+    let device = if t.gpu { "the GPU" } else { "the processor" };
     let what = if t.measured {
         format!(
-            "measured, {} sizes; recommended {}",
+            "measured on {device}, {} size{}; recommended {}",
             t.rungs.len(),
+            if t.rungs.len() == 1 { "" } else { "s" },
             t.recommended.describe()
         )
     } else if t.placed {
         "a placed pattern, at its own size unless chosen".to_string()
     } else if t.cost > 0.0 {
-        format!(
-            "sized from the measured scene, at {} its work a cell",
-            if (t.cost - 1.0).abs() < 0.005 {
-                "the same as".to_string()
-            } else {
-                format!("{:.2} times", t.cost)
-            }
-        )
+        if (t.cost - 1.0).abs() < 0.005 {
+            "sized from the measured scene, with the same work a cell".to_string()
+        } else {
+            format!(
+                "sized from the measured scene, at {:.2} times its work a cell",
+                t.cost
+            )
+        }
     } else {
         "its own size".to_string()
     };

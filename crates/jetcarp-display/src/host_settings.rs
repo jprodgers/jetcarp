@@ -321,6 +321,10 @@ pub struct TunedScene {
     /// one is sized no finer than the measured scene's work.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub gpu: bool,
+    /// Its recommended size was held to twice the measured scene's cells (a soft cap: the estimate
+    /// allowed a finer one, which choosing it, or a pick, gives).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub capped: bool,
 }
 
 fn is_zero(x: &f32) -> bool {
@@ -871,6 +875,7 @@ mod tests {
                 cost: 1.0,
                 also: vec!["profile Life 2".into()],
                 gpu: true,
+                capped: true,
             }],
             share: 0.64,
             hz: Some(144.0),

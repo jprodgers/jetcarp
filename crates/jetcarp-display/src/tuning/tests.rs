@@ -258,6 +258,7 @@ fn the_limits_are_one_for_the_desktop_shared_by_area() {
         cpu_percent: (10.0 * s) as f32,
         gpu_percent: (25.0 * s) as f32,
         scene: Some("Life".into()),
+        measured: vec!["Life".into()],
         scenes: 3,
     };
     let start = TuneEvent::Start {
@@ -281,6 +282,28 @@ fn the_limits_are_one_for_the_desktop_shared_by_area() {
         "{line}"
     );
     assert!(line.contains("screen 1 measures Life, the most demanding of its 3 scenes"));
+    // A rotation mixing devices is measured on both, and says so.
+    let mixed = TuneEvent::Start {
+        screens: vec![0],
+        scenes: 3,
+        fps: 30.0,
+        fps_max: None,
+        gpu: None,
+        shares: vec![ScreenShare {
+            measured: vec!["Life".into(), "W30".into()],
+            ..share(0, [640, 360], 1.0)
+        }],
+        limits: None,
+        reused: false,
+    };
+    let line = mixed.describe();
+    assert!(
+        line.contains(
+            "screen 0 measures Life on the GPU and W30 on the processor, the most demanding of \
+             its 3 scenes on each"
+        ),
+        "{line}"
+    );
     let back: TuneEvent = serde_json::from_str(&serde_json::to_string(&start).unwrap()).unwrap();
     assert_eq!(back, start);
     // Measured together, the process's time is shared by each screen's frame times.
@@ -416,8 +439,7 @@ fn the_size_found_serves_the_rotation_by_cost() {
     assert_eq!(s.recommended().0, Size::px(4.0));
     let results = screen_results(
         &scenes,
-        Some(1),
-        Some(&s),
+        &[(1, &s)],
         canvas,
         GpuTiming::Kernel,
         None,
@@ -443,8 +465,7 @@ fn the_size_found_serves_the_rotation_by_cost() {
     let picked = |p| {
         screen_results(
             &scenes,
-            Some(1),
-            Some(&s),
+            &[(1, &s)],
             canvas,
             GpuTiming::Kernel,
             Some(p),
@@ -481,8 +502,7 @@ fn the_size_found_serves_the_rotation_by_cost() {
     };
     let kept = screen_results(
         &scenes,
-        Some(1),
-        Some(&s),
+        &[(1, &s)],
         canvas,
         GpuTiming::Kernel,
         None,
@@ -492,8 +512,7 @@ fn the_size_found_serves_the_rotation_by_cost() {
     assert_eq!((life.size(), life.chosen), (Size::px(3.0), true));
     let over = screen_results(
         &scenes,
-        Some(1),
-        Some(&s),
+        &[(1, &s)],
         canvas,
         GpuTiming::Kernel,
         None,
@@ -510,9 +529,7 @@ fn the_size_found_serves_the_rotation_by_cost() {
     // Nothing that can be sized: nothing measured, every scene at its own size.
     scenes.retain(|p| !p.sizable());
     assert_eq!(most_demanding(&scenes), None);
-    let own = screen_results(&scenes, None, None, canvas, GpuTiming::None, None, &|_| {
-        None
-    });
+    let own = screen_results(&scenes, &[], canvas, GpuTiming::None, None, &|_| None);
     assert!(own.iter().all(|r| r.size().px == r.design_px && !r.chosen));
     // The costs: neighbour reads at the speed, and each frame's drawing.
     assert_eq!(
@@ -541,9 +558,20 @@ fn the_rest_are_sized_from_where_the_loads_cross_the_line() {
     // Between the finest within the limits and the next finer over them.
     let c = line_cells(&[card(100_000, 0.5), card(200_000, 1.5), card(50_000, 0.25)]).unwrap();
     assert!((c - 150_000.0).abs() < 1.0, "{c}");
-    // Nothing finer over them: scaled by its load, at most four times.
+    // Nothing finer over them: scaled by its load, held to twice its cells (a soft cap: a size
+    // chosen, or a pick, goes past it).
+    let c = line_cells(&[card(280_000, 0.6)]).unwrap();
+    assert!((c - 280_000.0 / 0.6).abs() < 1.0, "{c}");
     assert_eq!(line_cells(&[card(280_000, 0.5)]), Some(560_000.0));
-    assert_eq!(line_cells(&[card(280_000, 0.1)]), Some(1_120_000.0));
+    assert_eq!(line_cells(&[card(280_000, 0.1)]), Some(560_000.0));
+    let (capped, free) = line_estimate(&[card(280_000, 0.1)]).unwrap();
+    assert!(
+        capped == 560_000.0 && (free - 2_800_000.0).abs() < 1.0,
+        "{capped} {free}"
+    );
+    // Between a size within and one over them, held to twice too.
+    let c = line_cells(&[card(100_000, 0.2), card(300_000, 1.4)]).unwrap();
+    assert_eq!(c, 200_000.0);
     // Nothing within them, or cards from before 0.4.3: none.
     assert_eq!(line_cells(&[card(280_000, 1.3)]), None);
     assert_eq!(line_cells(&[card(280_000, 0.0)]), None);
@@ -629,9 +657,110 @@ fn the_rest_are_sized_from_where_the_loads_cross_the_line() {
         px: 2.6,
         level: Some(6),
     });
-    assert_eq!(base_cells(&m, [2560.0, 1440.0]), 933_333);
+    assert_eq!(base_cells(&m, [2560.0, 1440.0]), 560_000);
     m.chosen = true;
     assert_eq!(base_cells(&m, [2560.0, 1440.0]), 280_000);
+}
+
+/// A fit's first round warms up half a second longer, so a cold first fit (shaders, the first
+/// uploads, the other screen's first build) measures as the fits after it do: on two screens the
+/// first fit judged 2 px just over its GPU share and every fit after found it clearly within.
+#[test]
+fn a_fit_s_first_round_warms_up_longer() {
+    assert_eq!(round_warmup(1.0, false), 0.25);
+    assert_eq!(round_warmup(1.0, true), 0.75);
+    assert_eq!(round_warmup(4.0, false), 0.5);
+    assert_eq!(round_warmup(4.0, true), 1.0);
+    assert_eq!(FIRST_WARMUP, 0.5);
+}
+
+/// The other scenes go no finer than twice the measured scene's cells by default, a soft cap:
+/// the measured scene had room to spare at its finest size, so the estimate would allow more, and
+/// the scene says it was held there. A size chosen in the pane, or a pick, goes past it ("if they
+/// want to make their computer run like a slideshow, that's on them").
+#[test]
+fn the_rest_are_held_to_twice_the_measured_cells_unless_chosen() {
+    let canvas = [2560.0, 1440.0];
+    // The measured scene: a Penrose-like ladder of three sizes, its finest (4 px here) at a tenth
+    // of the limits.
+    let measured = Planned {
+        sizes: [4.0, 6.0, 8.0].map(Size::px).to_vec(),
+        ..planned("measured", 1000.0, 4.0)
+    };
+    let scenes = vec![measured.clone(), planned("cheap", 500.0, 3.0)];
+    let m = |cells: u64| Measure {
+        cpu: 0.008 * cells as f64 / 230_400.0,
+        p95: 0.002,
+        fps: 30.0,
+        cells,
+        ..Measure::default()
+    };
+    let mut s = Search::new(measured.sizes.clone(), measured.own, None, None);
+    while let Some(i) = s.next() {
+        let px = s.sizes[i].px;
+        s.record(i, px, &m(lattice_cells(canvas, px)), &limits());
+    }
+    assert_eq!(s.recommended().0, Size::px(4.0));
+    let results = screen_results(
+        &scenes,
+        &[(0, &s)],
+        canvas,
+        GpuTiming::Kernel,
+        None,
+        &|_| None,
+    );
+    let cheap = results.iter().find(|r| r.scene == "cheap").unwrap();
+    // At 4 px (230,400 cells) the measured scene used a tenth of the limits: the estimate allows
+    // ten times its cells, the cap twice, 460,800. Half the work a cell: 921,600 cells, 2 px,
+    // where the estimate alone would have given 1 px.
+    assert_eq!(cheap.size(), Size::px(2.0), "{cheap:?}");
+    assert!(cheap.capped, "{cheap:?}");
+    assert!(
+        cheap
+            .note
+            .as_deref()
+            .unwrap_or("")
+            .contains("held to twice the measured scene's cells"),
+        "{cheap:?}"
+    );
+    let line = scene_line(0, cheap);
+    assert!(
+        line.contains("held to twice the measured scene's cells"),
+        "{line}"
+    );
+    // A pick of a cell size goes past it, and so does a size chosen before.
+    let picked = screen_results(
+        &scenes,
+        &[(0, &s)],
+        canvas,
+        GpuTiming::Kernel,
+        Some(Pick::Px(1.0)),
+        &|_| None,
+    );
+    let cheap = picked.iter().find(|r| r.scene == "cheap").unwrap();
+    assert_eq!(
+        (cheap.size(), cheap.chosen, cheap.capped),
+        (Size::px(1.0), true, false)
+    );
+    let chose = |label: &str| {
+        (label == "cheap").then(|| {
+            let mut t = TunedScene {
+                scene: "cheap".into(),
+                design_px: 3.0,
+                chosen: true,
+                ..Default::default()
+            };
+            t.set_size(Size::px(1.0));
+            t
+        })
+    };
+    let kept = screen_results(&scenes, &[(0, &s)], canvas, GpuTiming::Kernel, None, &chose);
+    let cheap = kept.iter().find(|r| r.scene == "cheap").unwrap();
+    assert_eq!(
+        (cheap.size(), cheap.chosen),
+        (Size::px(1.0), true),
+        "{cheap:?}"
+    );
 }
 
 /// A scene that steps on the other device from the measured one (the Wolfram series' row rules
@@ -658,8 +787,7 @@ fn a_scene_on_the_other_device_is_not_sized_past_the_measured_one() {
     let (s, _) = search_on(canvas, 3.0, m, &limits(), Some(Size::px(4.0)), None);
     let results = screen_results(
         &scenes,
-        Some(0),
-        Some(&s),
+        &[(0, &s)],
         canvas,
         GpuTiming::Kernel,
         None,
@@ -709,8 +837,7 @@ fn a_pick_places_sizes_from_the_last_fit() {
     let (s, _) = search_on(canvas, 3.0, model(0.3, 0.1), &limits(), None, None);
     let saved = screen_results(
         &scenes,
-        Some(0),
-        Some(&s),
+        &[(0, &s)],
         canvas,
         GpuTiming::Kernel,
         None,
@@ -958,6 +1085,23 @@ fn a_scene_at_its_own_size_reports_the_size_its_cells_show_at() {
     let line = scene_line(0, &t);
     assert!(
         line.contains("recommended 2.6 px; shows at 2.6 px, 1,234 cells"),
+        "{line}"
+    );
+    // One size tried is one size, and the line names the device the scene steps on.
+    assert!(
+        line.contains("measured on the processor, 1 size;"),
+        "{line}"
+    );
+    // A scene sized from it with the same work a cell says so in words that read.
+    let same = TunedScene {
+        scene: "B36/S23".into(),
+        design_px: 3.0,
+        cost: 1.0,
+        ..Default::default()
+    };
+    let line = scene_line(0, &same);
+    assert!(
+        line.contains("sized from the measured scene, with the same work a cell;"),
         "{line}"
     );
 }

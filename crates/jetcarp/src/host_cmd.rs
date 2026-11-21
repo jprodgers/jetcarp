@@ -92,9 +92,10 @@ pub enum SaverAction {
 
 /// `jetcarp host tune`'s help while Fit is in the release.
 const TUNE_ABOUT: &str = "Fit the desktop background to this computer, in a few seconds: \
-    measure each screen's most demanding scene at a few sizes, every screen at once, and keep the \
-    finest that stays within the processor and GPU limits at a smooth frame rate; the rest of the \
-    rotation takes its size from it, a cheaper scene finer (saved). The limits are for the whole \
+    measure each screen's most demanding scene on the GPU and on the processor at a few sizes, \
+    every screen at once, and keep the finest that stays within the processor and GPU limits at a \
+    smooth frame rate; the rest of the rotation takes its size from the one on its device, a \
+    cheaper scene finer, at most twice its cells unless you choose (saved). The limits are for the whole \
     desktop, shared between the screens by their pixel area. The rules and colours stay as they \
     are. A running host measures on its screens, then shows the sizes found.";
 /// clap's own help layout, for `host tune` while Fit is in the release.
