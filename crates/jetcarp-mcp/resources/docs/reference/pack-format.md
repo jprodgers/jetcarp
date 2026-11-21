@@ -475,7 +475,7 @@ Geometry pins catch changed tiles; rule-semantics versions catch a changed rule.
 maps every rule family JETCARP has to its version, a positive integer written as a string; the
 families and their versions are listed in [Library format](library-format.md#rule-semantics-versions),
 and every one is `"1"` in JETCARP 0.4.0. JETCARP 0.4.3 added `lifelike_b0`, the B/S rules with birth on
-0, at `"2"`: a pack from before files such rules under `lifelike`, so an importer takes a record's
+0, at `"3"`: a pack from before files such rules under `lifelike`, so an importer takes a record's
 family from its rule. It also added `isotropic`, at `"1"`, for isotropic rules in Hensel's notation.
 Each `rules` row, each pattern and each ant carries its family and the version
 it was verified under (`family`, `semantics`). An importer flags a record

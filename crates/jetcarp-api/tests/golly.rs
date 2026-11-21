@@ -362,19 +362,29 @@ fn golly_states(
     std::fs::write(&input, text).unwrap();
     let _ = std::fs::remove_file(&output);
     let cmd = bgolly();
-    let mut p = Process::new(&cmd[0]);
-    p.args(&cmd[1..]);
-    if generations {
-        p.args(["-a", "Generations"]);
+    let run = || {
+        let mut p = Process::new(&cmd[0]);
+        p.args(&cmd[1..]);
+        if generations {
+            p.args(["-a", "Generations"]);
+        }
+        p.args(["-q", "-q", "-m", &gens.to_string(), "-o"])
+            .arg(&output)
+            .arg(&input)
+            .output()
+            .unwrap_or_else(|e| {
+                panic!("this test needs Golly's bgolly (or JETCARP_BGOLLY naming it): {e}")
+            })
+    };
+    // A launcher such as `flatpak-spawn` can fail now and then under many runs at once; Golly
+    // itself fails the same way every time.
+    let mut out = run();
+    for _ in 0..2 {
+        if out.status.success() {
+            break;
+        }
+        out = run();
     }
-    let out = p
-        .args(["-q", "-q", "-m", &gens.to_string(), "-o"])
-        .arg(&output)
-        .arg(&input)
-        .output()
-        .unwrap_or_else(|e| {
-            panic!("this test needs Golly's bgolly (or JETCARP_BGOLLY naming it): {e}")
-        });
     assert!(
         out.status.success(),
         "bgolly failed on {name}: {}",
@@ -516,30 +526,17 @@ fn iso_soup(
         json!({"pattern": soup(seed, SOUP, SOUP, fill), "x": x, "y": x}),
     );
     let what = format!("{} (soup {si}, fill {fill})", c.written);
-    // A rule with B0 and S8 has a live background from its first step. JETCARP stores its cells
-    // against that background from then on; Golly reads a pattern against it from the start (it
-    // runs the rule's inverse instead). So Golly starts from JETCARP's generation 1.
-    let late = match &rule {
-        jetcarp_core::rules::Rule::Isotropic(r) => r.b0() && r.survive[8] == 1,
-        jetcarp_core::rules::Rule::LifeLike { birth, survive } => {
-            birth & 1 == 1 && survive >> 8 & 1 == 1
-        }
-        _ => false,
-    };
+    // Both programs keep a B0 rule's cells against its background from generation 0: dead at
+    // the start when it flashes, live when it is live for good from the first step (#238).
     let mut seen = [[false; 256]; 2];
-    if late {
-        h.exec(Command::Step { gens: 1 }).unwrap();
-    }
     // The start: the soup's cells, with the rule as written.
     let (start_cells, _) = our_states(h.world());
     let cells: Vec<(i64, i64)> = start_cells.iter().map(|c| (c.0, c.1)).collect();
     let start = rle::write(&cells, &c.written, &[]);
-    // Copy as RLE, where it writes the rule (two states, no B0): the canonical name, which Golly
+    // Copy as RLE, where it writes the rule (two states, B0 too): the canonical name, which Golly
     // reads as the same rule and the same cells.
-    if let jetcarp_core::rules::Rule::Isotropic(r) = &rule
-        && r.states <= 2
-        && !r.b0()
-    {
+    let copied = !generations;
+    if copied {
         let copy = rle::of_world(h.world(), &[]).unwrap();
         if rle::header_rule(&copy).as_deref() != Some(ours.as_str()) {
             return Err(format!("{what}: Copy as RLE names it otherwise:\n{copy}"));
@@ -686,4 +683,98 @@ fn golly_agrees_on_isotropic_rules() {
         cases.len(),
         runs.len()
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// B0 rules copied as RLE (#238)
+
+/// A world's stored cells in Golly's layout (hexagons sheared), moved so the lowest x and y are
+/// 0, and whether any is near the dead edges.
+fn layout_cells(w: &jetcarp_core::World, hex: bool) -> (BTreeSet<(i64, i64)>, bool) {
+    let grid = Grid::of(&w.topo).unwrap();
+    let mut v = Vec::new();
+    let mut near = false;
+    for (i, &s) in w.fields[0].state.iter().enumerate() {
+        if s != 0 {
+            let (x, y) = grid.xy(i);
+            near |= x < 4 || y < 4 || x + 4 >= grid.w || y + 4 >= grid.h;
+            let (x, y) = (x as i64, y as i64);
+            v.push((if hex { rle::golly_hex_x(x, y) } else { x }, y));
+        }
+    }
+    let x0 = v.iter().map(|c| c.0).min().unwrap_or(0);
+    let y0 = v.iter().map(|c| c.1).min().unwrap_or(0);
+    (v.iter().map(|c| (c.0 - x0, c.1 - y0)).collect(), near)
+}
+
+/// B0 rules copied with Copy as RLE run in Golly from generation 0 as they go on in JETCARP: a
+/// background that flashes (copied at even generations, as Copy as RLE requires) and one live
+/// for good from the first step (copied at any), on squares (Moore and von Neumann), hexagons
+/// and with an isotropic rule. Copy as RLE refuses a flashing one at an odd generation.
+#[test]
+#[ignore = "needs Golly's bgolly; run on the release candidates"]
+fn golly_runs_copied_b0_patterns() {
+    let dir = common::scratch("golly-b0");
+    let cx = Ctx::interactive();
+    // (tiling, rule, neighbourhood, whether the background is live for good)
+    let cases = [
+        ("square", "B014/S2", "touch", false),
+        ("square", "B0123478/S01234678", "touch", true),
+        ("square", "B03/S238", "touch", true),
+        ("square", "B013/S12", "edge", false),
+        ("square", "B013/S0124", "edge", true),
+        ("hex", "B0124/S35", "touch", false),
+        ("hex", "B0135/S0256", "touch", true),
+        ("square", "B01e2a/S2-i3", "touch", false),
+        ("square", "B01e3-cnqy/S23-a8", "touch", true),
+    ];
+    let mut checked = 0;
+    for (ci, &(tiling, rule, nb, live)) in cases.iter().enumerate() {
+        let hex = tiling == "hex";
+        for at in [0u64, 1, 2, 5] {
+            let name = format!("b0-{ci}-{at}");
+            let world = json!({"tiling": tiling, "width": SIZE, "height": SIZE,
+                "boundary": "dead", "cas": [{"rule": rule, "seed": "empty", "neighborhood": nb}]});
+            let mut h = Session::new();
+            new_world(&cx, &mut h, world);
+            let x = SIZE / 2 - SOUP as i64 / 2;
+            draw(
+                &cx,
+                &mut h,
+                json!({"pattern": soup(500 + ci as u64, SOUP, SOUP, 0.4), "x": x, "y": x + 1}),
+            );
+            h.exec(Command::Step { gens: at }).unwrap();
+            let copy = rle::of_world(h.world(), &[]);
+            if !live && at % 2 == 1 {
+                let e = copy.expect_err("a flashing background at an odd generation");
+                assert!(e.contains("even generations"), "{rule}: {e}");
+                continue;
+            }
+            let copy = copy.unwrap_or_else(|e| panic!("{rule} at {at}: {e}"));
+            let (start, _) = layout_cells(h.world(), hex);
+            assert_eq!(
+                cells(&copy),
+                start,
+                "{rule} at {at}: the copy is the world's cells"
+            );
+            let mut done = 0;
+            for g in [1u64, 2, 3, 8, 30] {
+                h.exec(Command::Step { gens: g - done }).unwrap();
+                done = g;
+                let (ours, near) = layout_cells(h.world(), hex);
+                assert!(!near, "{rule}: reached the edge by generation {}", at + g);
+                let theirs = cells(&golly(&dir, &name, &copy, g));
+                assert_eq!(
+                    ours,
+                    theirs,
+                    "{rule} on {tiling} ({nb}), copied at generation {at}: generation {g} of \
+                     the copy differs ({} here, {} in Golly)",
+                    ours.len(),
+                    theirs.len()
+                );
+                checked += 1;
+            }
+        }
+    }
+    eprintln!("golly: {checked} generations of copied B0 patterns agree");
 }

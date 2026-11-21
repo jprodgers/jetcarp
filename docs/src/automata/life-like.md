@@ -166,13 +166,23 @@ Eppstein with the idea ([Golly credits](../research/bibliography.md#gollynd_cred
 JETCARP keeps each cell relative to the **background**, the rule run from an empty world: a cell is
 lit where the real state differs from what the empty world has there. Empty space stays dark, and
 each step works out the real states, applies the rule and keeps the result against the next
-background, which is exact on any tiling. Where every tile has the same number of neighbours, the
-background is all dead and all live in turn (or live for good from the first step, when the rule
-survives on that number), and this is Golly's emulation, step for step; for a rule that survives on
-that number, Golly reads a pattern against the live background from the start, so its generation 0
-is JETCARP's generation 1. A test runs both kinds against Golly on the square grid
-(`golly_agrees_on_isotropic_rules`, which also runs [isotropic rules](isotropic.md) with birth on 0,
-kept the same way). Where the tiles have
+background, which is exact on any tiling.
+
+One kind of background starts otherwise. When it turns live for good at the first step, because
+the rule survives on every neighbour count the tiles have (`S8` on the square grid, `S6` on
+hexagons, `S48` on 4.8.8), the rule starts on the **live** background: a pattern is read against it
+from generation 0, so its lit cells are the dead ones in a live plane. This is how Golly reads such
+a rule (it runs the rule's inverse: AntiLife, `B0123478/S01234678`, runs as Life), and the two
+agree generation for generation. JETCARP started these rules on the empty world before 0.4.3, one
+generation behind Golly, so **a scene from an earlier version with such a rule replays to other
+states** (see [Reproducibility](../research/reproducibility.md#b0-rules-whose-background-is-live)).
+
+Where every tile has the same number of neighbours, the background is all dead and all live in turn,
+or live for good, and this is Golly's emulation, step for step. Tests run both kinds against Golly on
+the square grid, Moore and von Neumann, and on hexagons, every generation from the start
+(`golly_agrees_on_isotropic_rules` and `golly_runs_copied_b0_patterns`, which also run
+[isotropic rules](isotropic.md) with birth on 0, kept the same way), and *Copy as RLE* writes B0
+rules where Golly reads them the same (a flashing background at even generations). Where the tiles have
 different numbers of neighbours, as on 4.8.8 (4 and 8) or an aperiodic tiling, the background can
 differ from tile to tile: on a periodic tiling it is one state per tile type, repeating after a few
 generations; on an aperiodic patch, whose edge tiles have fewer neighbours than the inner ones, it is
@@ -188,8 +198,8 @@ differ: on squares, a pattern kept still against an alternating background repea
 as the real cells do. On a patch whose background does not repeat within a few thousand
 generations, no repeat is reported.
 
-The tests check the result against running the rule by brute force: on wrapped squares, hexagons
-and Cairo pentagons, on wrapped 4.8.8, 3.6.3.6, 3.4.6.4, 3.3.4.3.4 and 4.6.12, on squares, 4.8.8 and
+The tests check the result against running the rule by brute force, from the same start: on wrapped
+squares, hexagons and Cairo pentagons, on wrapped 4.8.8, 3.6.3.6, 3.4.6.4, 3.3.4.3.4 and 4.6.12, on squares, 4.8.8 and
 3.4.6.4 with dead and live edges, and on Penrose rhombs and the hat. B0 rules also run on the GPU,
 with the same results, and under HashLife on wrap-edge lattices.
 

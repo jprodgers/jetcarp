@@ -35,13 +35,14 @@ fn ltl_von_neumann_matches_v_rule() {
     }
 }
 
-// AntiLife (B0123478/S01234678) is Life with live and dead swapped. It has S8, so after the first
-// step JETCARP stores its complement, which must evolve exactly as Life from the complemented start.
+// AntiLife (B0123478/S01234678) is Life with live and dead swapped. It has S8, so its background
+// is live from the start (#238): JETCARP stores its complement from generation 0, which must evolve
+// exactly as Life from the same cells, as Golly runs it.
 #[test]
 fn b0_emulation_antilife_is_inverted_life() {
     let mut anti = world(
         "B0123478/S01234678",
-        SeedSpec::Random { density: 0.6 },
+        SeedSpec::Random { density: 0.4 },
         Boundary::Wrap,
         3,
     );
@@ -49,7 +50,7 @@ fn b0_emulation_antilife_is_inverted_life() {
         .state
         .iter()
         .enumerate()
-        .filter(|(_, s)| **s == 0)
+        .filter(|(_, s)| **s == 1)
         .map(|(i, _)| [i as u32, 1])
         .collect();
     let mut life = world(
@@ -59,14 +60,7 @@ fn b0_emulation_antilife_is_inverted_life() {
         3,
     );
     for g in 0..50u64 {
-        let l = &life.fields[0].state;
-        let a = &anti.fields[0].state;
-        let ok = if g == 0 {
-            a.iter().zip(l).all(|(x, y)| *x == 1 - *y)
-        } else {
-            a == l
-        };
-        assert!(ok, "generation {g}");
+        assert_eq!(anti.fields[0].state, life.fields[0].state, "generation {g}");
         anti.step();
         life.step();
     }
@@ -123,6 +117,18 @@ fn bs_rule(rule: &str) -> (u32, u32, Nb) {
     (birth, survive, nb.unwrap_or(Nb::Touch))
 }
 
+/// The background a B0 rule starts from, by brute force: live when the live state is the first
+/// step's for good (every tile, live with every slot live, survives; `past` gives a slot past an
+/// edge), else the empty world.
+fn start_background(t: &Topology, r: (u32, u32, Nb), past: &dyn Fn(u32) -> u8) -> Vec<u8> {
+    let ones = vec![1u8; t.len()];
+    if r.0 & 1 == 1 && bs_step(t, r, &ones, past) == ones {
+        ones
+    } else {
+        vec![0; t.len()]
+    }
+}
+
 /// One generation of a two-state B/S rule by brute force on the neighbour graph: each neighbour
 /// slot counts its cell's state, and a slot past a lattice's edge counts `past(its tile type)`.
 fn bs_step(
@@ -150,9 +156,10 @@ fn bs_step(
 }
 
 /// Run a B0 rule from a soup, and from an empty world, `gens` generations, next to the plain rule
-/// run by brute force from the same soup and from the empty world (the background). The stored
-/// states must be the real ones relative to the background, `real xor background`, so the
-/// empty world stays empty. Returns the first mismatch.
+/// run by brute force from the same soup and from the background's start (the empty world, or the
+/// live one when it lasts: [`start_background`]). The stored states must be the real ones
+/// relative to the background, `real xor background`, so the empty world stays empty. Returns
+/// the first mismatch.
 fn b0_against_brute_force(spec: &TilingSpec, rule: &str, gens: u64) -> Result<(), String> {
     let r = bs_rule(rule);
     let mut w = World::new(spec.clone(), 11).unwrap();
@@ -164,9 +171,9 @@ fn b0_against_brute_force(spec: &TilingSpec, rule: &str, gens: u64) -> Result<()
         .unwrap();
     let t = w.topo.clone();
     let n = t.len();
-    let mut truth = w.fields[0].state.clone();
-    let mut bg = vec![0u8; n];
     let never = |_: u32| -> u8 { panic!("a wrapped lattice or a patch has no edge slots") };
+    let mut bg = start_background(&t, r, &never);
+    let mut truth: Vec<u8> = (0..n).map(|i| w.fields[0].state[i] ^ bg[i]).collect();
     for g in 1..=gens {
         w.step();
         empty.step();
@@ -261,13 +268,15 @@ fn b0_dead_and_live_edges() {
                 world
                     .add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.35 }))
                     .unwrap();
-                // The empty world's background, one state per tile type, from a wrapped copy.
+                // The background, one state per tile type, from a wrapped copy.
                 let wrapped =
                     Topology::build(&TilingSpec::rect(family, w, h, Boundary::Wrap)).unwrap();
                 let t = world.topo.clone();
                 let nt = t.lattice().unwrap().ntypes as usize;
-                let mut bg = vec![0u8; wrapped.len()];
-                let mut truth = world.fields[0].state.clone();
+                let mut bg = start_background(&wrapped, r, &|_| 0);
+                let mut truth: Vec<u8> = (0..t.len())
+                    .map(|i| world.fields[0].state[i] ^ bg[i % nt])
+                    .collect();
                 for g in 1..=24 {
                     let edge = |k: u32| match boundary {
                         Boundary::Live => 1,

@@ -161,10 +161,10 @@ A two-state rule with birth on 0 is kept relative to its background, as Life-lik
 [B0 rules](life-like.md#b0-rules) are: on the square grid the background is all dead and all live in
 turn, or live for good from the first step when the rule survives on 8, and a cell is lit where the
 real state differs from it. That background depends only on birth on 0 and survival on 8, the two
-counts with one arrangement each. Golly keeps such rules against the background too, and agrees with
-JETCARP generation by generation; for a rule that survives on 8, Golly reads a pattern against the
-live background from the start, so its generation 0 is JETCARP's generation 1. A Generations rule
-with birth on 0 runs unemulated, as Life-like Generations rules do.
+counts with one arrangement each. A rule that survives on 8 starts on the live background, as
+Golly reads it, and Golly agrees with JETCARP generation by generation from the start for both kinds.
+A Generations rule with birth on 0 runs unemulated, as Life-like Generations rules do (Golly does not
+run Generations rules with birth on 0).
 
 ### Searches and the library
 
@@ -191,8 +191,9 @@ isotropic tables of B/S rules to compare with the CPU's B/S stepper.
 
 ### Copy as RLE
 
-*Copy as RLE* writes two-state isotropic rules without B0 in the canonical form, which Golly reads
-and names the same way (the Golly test checks it).
+*Copy as RLE* writes two-state isotropic rules in the canonical form, which Golly reads and names the
+same way, and their B0 rules where Golly reads them the same: always when the background is live for
+good, at even generations when it flashes (the Golly tests check it).
 
 ### Reproducibility
 

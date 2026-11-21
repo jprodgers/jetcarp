@@ -124,6 +124,11 @@ and ranges go up to 20), two steps from a cell can come round the torus to the s
 then counts once for each. On an aperiodic patch the neighbourhood is the set of tiles within `r`
 steps, each counted once.
 
+A rule with birth on 0 runs as written: on the first step every cell with no live cell in reach is
+born, so the whole field turns on. JETCARP does not yet keep these rules relative to their
+background, as it does [Life-like B0 rules](life-like.md#b0-rules); Golly does, for two-state ones,
+so the two differ there.
+
 <figure>
 <picture>
   <source srcset="../images/automata/ltl-hat-still.png" media="(prefers-reduced-motion: reduce)">

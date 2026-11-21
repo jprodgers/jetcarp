@@ -249,7 +249,7 @@ version is not part of a record's id.
 | Family | Rules | Version |
 | --- | --- | --- |
 | `lifelike` | B/S without birth on 0: `B3/S23`, `B3/S23V` | 1 |
-| `lifelike_b0` | B/S with birth on 0: `B0/S8`, `B014/S2` | 2 (a family of its own since 0.4.3, when these rules became exact on every tiling) |
+| `lifelike_b0` | B/S with birth on 0: `B0/S8`, `B014/S2` | 3 (a family of its own since 0.4.3, when these rules became exact on every tiling, and those whose background is live for good began on it, as Golly reads them) |
 | `generations` | `B2/S/C3` | 1 |
 | `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 2 (since 0.4.3: counts above the square grid's neighbourhood size kept) |
 | `elementary` | `W30` | 1 |

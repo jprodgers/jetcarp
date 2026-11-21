@@ -44,7 +44,7 @@ The *state hash* identifies a world's present state. Since JETCARP 0.4.3 it is v
 - a digest of the scene's tiling, so that two worlds on different tilings never share a hash.
 
 Left out are what only shows (names, palettes, JACA's glow), what follows from the rest (a B0 rule's
-background, which is the rule run from an empty world for the automaton's step count; compiled
+background, which is the rule run from its start for the automaton's step count; compiled
 tables and neighbourhoods), and the history: the command log is not hashed, so two ways of reaching
 the same state give the same hash. Also left out are the counts of changed cells kept for recent
 generations, which depend on whether a front end or the GPU counted them, so a world reopened from
@@ -109,6 +109,20 @@ That is why this book gives a scene for every figure. Each picture is made from 
 `docs/scenes/` by `docs/tools/render-figures.sh` (stills) or `docs/tools/render-animations.sh`
 (animations), so a reader with JETCARP can make it again, and the pictures cannot drift from the
 program. Each result on the [Findings](findings.md) page names its scene in the same way.
+
+## B0 rules whose background is live
+
+JETCARP 0.4.3 changed where one kind of B0 rule starts (#238). A rule with birth on 0 whose
+background turns live for good at the first step, because it survives on every neighbour count the
+tiles have (`S8` on the square grid), now starts on the live background at generation 0, as Golly
+reads such a rule, and the two agree generation for generation. Before, it started on the empty
+world. So a scene from 0.4.2 or earlier with such a rule replays to other states, and its recorded
+hash no longer matches: the rule's family, `lifelike_b0`, went to version 3, and a library flags
+records of B0 rules for `jetcarp library reverify`. B0 rules whose background keeps flashing, and
+every other rule, replay as before. The pinned scenes that moved are the Quick Start entries of
+AntiLife (`B0123478/S01234678`) and InverseLife (`B0123478/S34678`), both live for good on the
+square grid; the version change alone moved the hashes of the other B0 entries, whose states are
+unchanged.
 
 ## Pinned geometry and dynamics
 

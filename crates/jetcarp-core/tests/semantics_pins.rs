@@ -33,13 +33,20 @@ enum Start {
     Engine(SeedSpec),
 }
 
-/// One family's scene: tiling, rule (in its default neighbourhood), start, generations.
+/// One family's scene: tiling, rule (in its default neighbourhood), start, generations. `family`
+/// is the scene's pin key: its family, or for a further scene of a family, the family, a colon
+/// and a label (`lifelike_b0:live`).
 struct Case {
     family: &'static str,
     tiling: TilingSpec,
     rule: &'static str,
     start: Start,
     gens: u64,
+}
+
+/// The family of a pin key (see [`Case`]).
+fn fam(key: &str) -> &str {
+    key.split(':').next().unwrap_or(key)
 }
 
 fn rect(f: &str, w: u32, h: u32, b: Boundary) -> TilingSpec {
@@ -73,6 +80,14 @@ fn cases() -> Vec<Case> {
             "lifelike_b0",
             rect("oct", 16, 16, Wrap),
             "B03/S238",
+            soup(0.35, 1, 1),
+            48,
+        ),
+        // AntiLife: survival on 8, so its background is live from the start (#238).
+        c(
+            "lifelike_b0:live",
+            rect("square", 32, 32, Wrap),
+            "B0123478/S01234678",
             soup(0.35, 1, 1),
             48,
         ),
@@ -241,6 +256,14 @@ fn cases() -> Vec<Case> {
             soup(0.35, 1, 1),
             48,
         ),
+        // With B0 and survival on 8: live from the start (#238).
+        c(
+            "isotropic:live",
+            rect("square", 32, 32, Wrap),
+            "B01e3-cnqy/S23-a8",
+            soup(0.35, 1, 1),
+            48,
+        ),
     ]
 }
 
@@ -359,20 +382,22 @@ fn bump(f: &str, v: &str, h: &str, got: &str) -> String {
 fn every_rule_family_has_a_pinned_scene() {
     let table: BTreeMap<&str, &str> = RULE_SEMANTICS.iter().copied().collect();
     let cases = cases();
-    // One scene per family of the table, each in a rule of its family.
+    // A scene for every family of the table (and a few further ones), each in a rule of its
+    // family, under keys of their own.
     let names: Vec<&str> = cases.iter().map(|c| c.family).collect();
     assert_eq!(
         names
             .iter()
-            .copied()
+            .map(|k| fam(k))
             .collect::<std::collections::BTreeSet<_>>(),
         table.keys().copied().collect(),
         "a scene for every family in RULE_SEMANTICS, and only those"
     );
-    assert_eq!(names.len(), table.len(), "one scene per family");
+    let keys: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+    assert_eq!(keys.len(), names.len(), "one scene per key");
     for c in &cases {
         let rule = jetcarp_core::rules::Rule::parse(c.rule).unwrap().0;
-        assert_eq!(family(&rule), c.family, "{}", c.rule);
+        assert_eq!(family(&rule), fam(c.family), "{}", c.rule);
     }
     let got: BTreeMap<&str, String> = cases
         .par_iter()
@@ -391,7 +416,9 @@ fn every_rule_family_has_a_pinned_scene() {
             .filter_map(|(f, h)| match pinned.get(*f) {
                 // A pin of 16 digits (before 0.4.3) is the first 8 bytes of the same SHA-256: one
                 // the new hash begins with is the same state, written in full.
-                Some((v, old)) if old != h && !h.starts_with(old.as_str()) && v == table[f] => {
+                Some((v, old))
+                    if old != h && !h.starts_with(old.as_str()) && v == table[fam(f)] =>
+                {
                     Some(bump(f, v, old, h))
                 }
                 _ => None,
@@ -403,7 +430,7 @@ fn every_rule_family_has_a_pinned_scene() {
              # in RULE_SEMANTICS when pinned, and the state hash its scene reaches.\n",
         );
         for (f, h) in &got {
-            text.push_str(&format!("{f}\t{}\t{h}\n", table[f]));
+            text.push_str(&format!("{f}\t{}\t{h}\n", table[fam(f)]));
         }
         std::fs::write(pins_path(), text).unwrap();
         return;
@@ -413,15 +440,15 @@ fn every_rule_family_has_a_pinned_scene() {
         match pinned.get(*f) {
             None => bad.push(format!("{f}: not pinned (run with JETCARP_PIN_WRITE=1)")),
             Some((v, old)) if old != h => bad.push(bump(f, v, old, h)),
-            Some((v, _)) if v != table[f] => bad.push(format!(
+            Some((v, _)) if v != table[fam(f)] => bad.push(format!(
                 "{f}: pinned at version {v}, but RULE_SEMANTICS has {}: pin it again with \
                  JETCARP_PIN_WRITE=1",
-                table[f]
+                table[fam(f)]
             )),
             Some(_) => {}
         }
     }
-    for f in pinned.keys().filter(|f| !table.contains_key(f.as_str())) {
+    for f in pinned.keys().filter(|f| !table.contains_key(fam(f))) {
         bad.push(format!("{f}: pinned, but not a family in RULE_SEMANTICS"));
     }
     assert!(

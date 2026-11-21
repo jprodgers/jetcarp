@@ -439,7 +439,7 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
     assert_eq!(lib.get(&g.id).unwrap().semantics, "1");
 }
 
-// B/S rules with birth on 0 became a family of their own (`lifelike_b0`, version 2) in 0.4.3,
+// B/S rules with birth on 0 became a family of their own (`lifelike_b0`, version 2, now 3) in 0.4.3,
 // when their meaning changed (#171); other B/S rules stayed `lifelike`, version 1. A record of a
 // B0 rule filed under `lifelike` before then moves to its family on opening and is flagged; a
 // record of another B/S rule is not.

@@ -39,10 +39,12 @@ pub const FIRST: &str = "1";
 pub const RULE_SEMANTICS: [(&str, &str); 25] = [
     // B/S rules without birth on 0: `B3/S23`, `B3/S23V`.
     ("lifelike", "1"),
-    // B/S rules with birth on 0: `B0/S8`, `B014/S2`. 2 since 0.4.3: exact where the tiles have
+    // B/S rules with birth on 0: `B0/S8`, `B014/S2`. 2 in 0.4.3: exact where the tiles have
     // different numbers of neighbours, and live past a live edge (#171); a family of their own
-    // since then, as the other B/S rules' meaning did not change.
-    ("lifelike_b0", "2"),
+    // since then, as the other B/S rules' meaning did not change. 3, also in 0.4.3: a rule whose
+    // background turns live for good at the first step starts on the live background, as Golly
+    // reads it (#238).
+    ("lifelike_b0", "3"),
     // Generations: `B2/S/C3`.
     ("generations", "1"),
     // Larger than Life: `R5,C2,S33-57,B34-45`. 2 since 0.4.3: counts above the square grid's
@@ -88,7 +90,8 @@ pub const RULE_SEMANTICS: [(&str, &str); 25] = [
     // Rule tables by name: `Table parity`.
     ("table", "1"),
     // Isotropic non-totalistic rules in Hensel's notation, on the square grid: `B2-a/S12`,
-    // `B2a/S/C3`, `B01e/S8`. New in 0.4.3 (#70), at 1.
+    // `B2a/S/C3`, `B01e/S8`. New in 0.4.3 (#70), at 1. Its B0 rules with survival on 8 started
+    // on the live background (#238) before any release, so the family stays at 1.
     ("isotropic", "1"),
 ];
 
@@ -252,15 +255,15 @@ mod tests {
         assert_eq!(FIRST, "1");
     }
 
-    // B/S rules with birth on 0 are a family of their own: their meaning changed in 0.4.3 (#171),
-    // the other B/S rules' did not, so only B0 records are flagged for re-verification.
+    // B/S rules with birth on 0 are a family of their own: their meaning changed in 0.4.3 (#171,
+    // #238), the other B/S rules' did not, so only B0 records are flagged for re-verification.
     #[test]
     fn b0_rules_are_a_family_of_their_own() {
         for (rule, fam, v) in [
             ("B3/S23", "lifelike", "1"),
             ("B36/S23V", "lifelike", "1"),
-            ("B0/S8", "lifelike_b0", "2"),
-            ("B014/S2V", "lifelike_b0", "2"),
+            ("B0/S8", "lifelike_b0", "3"),
+            ("B014/S2V", "lifelike_b0", "3"),
             // Generations rules with B0 run unemulated, as they always have.
             ("B02/S/C3", "generations", "1"),
             // Isotropic rules are one family, whatever their states and B0; written with every

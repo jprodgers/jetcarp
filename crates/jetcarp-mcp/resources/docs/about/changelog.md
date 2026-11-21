@@ -120,6 +120,20 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Changed
 
+- **B0 rules whose background is live for good start on it, as Golly reads them.** A rule with birth
+  on 0 that survives on every neighbour count the tiles have (`S8` on the square grid, such as
+  AntiLife, `B0123478/S01234678`) turns its background live for good at the first step. JETCARP now
+  starts it on that live background at generation 0, so a pattern is read against it, and JETCARP
+  and Golly agree generation for generation; before, JETCARP started on the empty world, one
+  generation behind Golly. This holds on every tiling, for B/S and isotropic rules, on the CPU and
+  the GPU and in HashLife. **Scenes from earlier versions with such a rule replay to other states.**
+  B0 rules whose background keeps flashing already matched Golly, and still do. `lifelike_b0` goes to
+  version 3, so a library flags B0 records for `jetcarp library reverify`. *Copy as RLE* now writes
+  B0 rules where Golly reads them the same: always when the background is live for good, at even
+  generations when it flashes. Tests run both kinds against Golly from generation 0.
+  ([B0 rules](../automata/life-like.md#b0-rules),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
 - **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
   64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
   (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
@@ -197,7 +211,8 @@ day later (0.4.2: 17 November here, 18 November there).
   cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
   runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. B0 rules are now a
   [rule-semantics family](../reference/library-format.md#rule-semantics-versions) of their own,
-  `lifelike_b0`, at version 2: scenes of such rules replay to other states, and a library flags
+  `lifelike_b0`, at version 2 (3 with the change to B0 rules above): scenes of such rules replay to
+  other states, and a library flags
   any B0 pattern record for `jetcarp library reverify` (no search stores B0 patterns). Other B/S
   rules keep `lifelike` at version 1, so their records are not flagged.
   ([B0 rules](../automata/life-like.md#b0-rules),

@@ -352,7 +352,20 @@ impl LatticeRule {
                 0,
             )
         } else {
-            phases_of(&steps, &order, nt, states)?
+            // A Life-like B0 rule's background starts where the world's does (`b0::Types`): live
+            // when it turns live for good at the first step, else empty.
+            let start = seq
+                .iter()
+                .find_map(|(rule, nb, _)| match *rule {
+                    Rule::LifeLike { birth, survive } if birth & 1 == 1 => Some(
+                        crate::b0::Types::new(g, *nb, birth, survive)
+                            .map(|t| t.states[..nt].to_vec()),
+                    ),
+                    _ => None,
+                })
+                .transpose()?
+                .unwrap_or_else(|| vec![0; nt]);
+            phases_of(&steps, &order, nt, states, start)?
         };
         let np = phases.len();
         let mut after2 = vec![phases.iter().map(|p| p.next).collect::<Vec<u16>>()];
@@ -545,8 +558,8 @@ impl LatticeRule {
     }
 }
 
-/// The phases of a step sequence: follow `(position in the sequence, real background)` from an
-/// empty background until it repeats, label each step by `(rule, background)`, and keep the
+/// The phases of a step sequence: follow `(position in the sequence, real background)` from the
+/// background `start` (empty, or a B0 rule's live background) until it repeats, label each step by `(rule, background)`, and keep the
 /// shortest tail and cycle that give the same labels (so a single rule without B0 has one phase
 /// however many steps per generation it runs).
 fn phases_of(
@@ -554,11 +567,12 @@ fn phases_of(
     order: &[usize],
     nt: usize,
     states: u8,
+    start: Vec<u8>,
 ) -> Result<(Vec<Phase>, usize), String> {
     let s_len = order.len();
     let mut seen: HashMap<(usize, Vec<u8>), usize> = HashMap::new();
     let mut labels: Vec<(usize, Vec<u8>)> = vec![];
-    let (mut q, mut b) = (0usize, vec![0u8; nt]);
+    let (mut q, mut b) = (0usize, start);
     let (mu0, lam0) = loop {
         if let Some(&t) = seen.get(&(q, b.clone())) {
             break (t, labels.len() - t);

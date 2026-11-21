@@ -3,16 +3,23 @@
 //! Under a B0 rule a dead cell with no live neighbours is born, so empty space does not stay
 //! empty: the whole field turns on, and unless the rule survives on every count the tiles have,
 //! it keeps flashing. JETCARP stores each cell relative to the **background**, the rule run from
-//! the empty world: `stored = real xor background`. Empty space then stays empty, and a step
-//! decodes the real states, applies the plain rule and stores the result against the next
-//! background, which is exact on any neighbour graph.
+//! its start: `stored = real xor background`. Empty space then stays empty, and a step decodes
+//! the real states, applies the plain rule and stores the result against the next background,
+//! which is exact on any neighbour graph.
+//!
+//! **The start.** The background starts from the empty world, except when it turns live for good
+//! at the first step: when every tile, live with every neighbour slot live, survives (the rule
+//! survives on every neighbour count the tiles have; `S8` on the square grid). Such a rule starts
+//! on the live background, so a pattern is read against it from generation 0, as Golly reads it
+//! (it runs the rule's inverse), and the two agree generation for generation (#238). Before 0.4.3
+//! these rules also started from the empty world, one step behind Golly.
 //!
 //! Where every tile has the same number of neighbours the background is uniform: all dead and all
-//! live in turn, or live for good from the first step when the rule survives on that number. The
-//! stored states are then bit for bit those of the usual alternating-rule emulation (Golly's,
-//! credited to David Eppstein), which JETCARP used before 0.4.3 on every tiling; where the tiles'
-//! neighbour counts differ and the survival list holds some of them but not all, that emulation
-//! was wrong from the third step (#171).
+//! live in turn, or live for good when the rule survives on that number. The stored states are
+//! then bit for bit Golly's emulation of B0 rules (the alternating one credited to David Eppstein,
+//! and the inverse rule with survival on every count), which JETCARP used before 0.4.3 on every
+//! tiling; where the tiles' neighbour counts differ and the survival list holds some of them but
+//! not all, that emulation was wrong from the third step (#171).
 //!
 //! - **Lattices.** The empty world of a periodic tiling is periodic too, so the background is one
 //!   state per tile type ([`Types`]), worked out on the unit cell: a short tail of phases and then
@@ -37,8 +44,8 @@ pub fn next_state(alive: u8, count: u32, birth: u32, survive: u32) -> u8 {
     (count < 32 && (m >> count) & 1 == 1) as u8
 }
 
-/// A lattice's background: each tile type's state in the empty world, step by step, as `tail`
-/// phases and then a cycle of the rest.
+/// A lattice's background: each tile type's state from the start (see the module notes), step by
+/// step, as `tail` phases and then a cycle of the rest.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Types {
     pub ntypes: usize,
@@ -60,7 +67,11 @@ impl Types {
             |b: &[u8], k: usize| -> u32 { offsets[k].iter().map(|o| b[o.k as usize] as u32).sum() };
         let mut seen: HashMap<Vec<u8>, usize> = HashMap::new();
         let mut phases: Vec<Vec<u8>> = Vec::new();
-        let mut b = vec![0u8; nt];
+        // The live background, when it is the first step's for good; else the empty world.
+        let ones = vec![1u8; nt];
+        let lives =
+            birth & 1 == 1 && (0..nt).all(|k| next_state(1, live(&ones, k), birth, survive) == 1);
+        let mut b = if lives { ones } else { vec![0u8; nt] };
         let tail = loop {
             if let Some(&p) = seen.get(&b) {
                 break p;
@@ -116,7 +127,7 @@ impl Types {
     }
 }
 
-/// A patch's background: every cell's state in the empty world after `tick` steps.
+/// A patch's background: every cell's state `tick` steps after the start (see the module notes).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cells {
     pub tick: u64,
@@ -141,13 +152,29 @@ fn cells_next(topo: &Topology, nb: Nb, birth: u32, survive: u32, b: &[u8]) -> Ve
         .collect()
 }
 
+/// A patch's background at the start: every cell live when the first step's live background
+/// lasts (every cell, live with its neighbours live, survives), else the empty world.
+fn cells_start(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Vec<u8> {
+    let ones = vec![1u8; topo.len()];
+    if birth & 1 == 1 && cells_next(topo, nb, birth, survive, &ones) == ones {
+        ones
+    } else {
+        vec![0; topo.len()]
+    }
+}
+
 /// A patch's background as `(tail, period)`, when it repeats within the budget (Brent's cycle
-/// finding, from the empty world).
-fn cells_cycle(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Option<(u64, u64)> {
+/// finding, from `x0`, the start).
+fn cells_cycle(
+    topo: &Topology,
+    nb: Nb,
+    birth: u32,
+    survive: u32,
+    x0: Vec<u8>,
+) -> Option<(u64, u64)> {
     let n = topo.len();
     let budget = (CYCLE_WORK / n.max(1)).min(CYCLE_STEPS);
     let step = |b: &[u8]| cells_next(topo, nb, birth, survive, b);
-    let x0 = vec![0u8; n];
     let (mut power, mut lam) = (1usize, 1usize);
     let (mut tortoise, mut hare) = (x0.clone(), step(&x0));
     let mut steps = 1;
@@ -193,29 +220,38 @@ pub struct Background {
     pub birth: u32,
     pub survive: u32,
     pub kind: Kind,
-    /// The background's `(tail, period)` in steps from the empty world, when known: always on a
+    /// The background's `(tail, period)` in steps from the start, when known: always on a
     /// lattice; on a patch when it repeats soon enough to be found ([`Background::new`]).
     pub cycle: Option<(u64, u64)>,
+    /// Whether it starts live (see the module notes); else from the empty world.
+    pub starts_live: bool,
 }
 
 impl Background {
-    /// The background of `(birth, survive)` with neighbourhood `nb` on `topo`, at the empty
-    /// world. On a patch this looks for the background's cycle, for at most 2^26 cell updates
-    /// and 4,096 steps.
+    /// The background of `(birth, survive)` with neighbourhood `nb` on `topo`, at its start (see
+    /// the module notes). On a patch this looks for the background's cycle, for at most 2^26
+    /// cell updates and 4,096 steps.
     pub fn new(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Result<Background, String> {
-        let (kind, cycle) = match &topo.storage {
+        let (kind, cycle, starts_live) = match &topo.storage {
             Storage::Lattice(g) => {
                 let t = Types::new(g, nb, birth, survive)?;
                 let cycle = (t.tail as u64, (t.phases() - t.tail) as u64);
-                (Kind::Types(t), Some(cycle))
+                let live = t.ntypes > 0 && t.uniform(0) == Some(1);
+                (Kind::Types(t), Some(cycle), live)
             }
-            Storage::Explicit(_) => (
-                Kind::Cells(Cells {
-                    tick: 0,
-                    states: vec![0; topo.len()],
-                }),
-                cells_cycle(topo, nb, birth, survive),
-            ),
+            Storage::Explicit(_) => {
+                let start = cells_start(topo, nb, birth, survive);
+                let live = start.first() == Some(&1);
+                let cycle = cells_cycle(topo, nb, birth, survive, start.clone());
+                (
+                    Kind::Cells(Cells {
+                        tick: 0,
+                        states: start,
+                    }),
+                    cycle,
+                    live,
+                )
+            }
         };
         Ok(Background {
             nb,
@@ -223,6 +259,7 @@ impl Background {
             survive,
             kind,
             cycle,
+            starts_live,
         })
     }
 
@@ -234,6 +271,7 @@ impl Background {
             survive: self.survive,
             kind: Kind::Cells(Cells { tick, states }),
             cycle: self.cycle,
+            starts_live: self.starts_live,
         }
     }
 
@@ -250,7 +288,7 @@ impl Background {
             }
     }
 
-    /// The phase `t` steps after the empty world: equal for two step counts exactly when the
+    /// The phase `t` steps after the start: equal for two step counts exactly when the
     /// background is the same at both, and so goes on the same. A background whose cycle is not
     /// known gives every step count a value of its own (from 2^63), which matches no other.
     pub fn phase_key(&self, t: u64) -> u64 {
@@ -262,8 +300,8 @@ impl Background {
     }
 }
 
-/// The background of a B0 CA after `tick` steps, made (or stepped from the empty world) in `slot`
-/// when `slot` holds none for this rule, neighbourhood and step count. `None` when a lattice's
+/// The background of a B0 CA after `tick` steps, made (or stepped from its start) in `slot` when
+/// `slot` holds none for this rule, neighbourhood and step count. `None` when a lattice's
 /// background takes too long to repeat ([`MAX_PHASES`]), which adding the CA refuses.
 pub fn ready(
     slot: &mut Option<std::sync::Arc<Background>>,
@@ -277,9 +315,11 @@ pub fn ready(
         .is_some_and(|b| b.fits(nb, birth, survive, tick))
     {
         // A patch's background at another step count keeps its cycle; its states are stepped
-        // from the empty world, only as far as that step count's phase when the cycle is known.
+        // from the start, only as far as that step count's phase when the cycle is known.
         let mut b = match slot.as_deref() {
-            Some(old) if old.is_for(nb, birth, survive) => old.with_cells(0, vec![0; topo.len()]),
+            Some(old) if old.is_for(nb, birth, survive) => {
+                old.with_cells(0, vec![old.starts_live as u8; topo.len()])
+            }
             _ => Background::new(topo, nb, birth, survive).ok()?,
         };
         let steps = match b.phase_key(tick) {
@@ -311,16 +351,37 @@ mod tests {
         Types::new(t.lattice().unwrap(), nb, birth, survive).unwrap()
     }
 
-    // One tile type: dead and live in turn without survival on the full count, live for good
-    // with it.
+    // One tile type: dead and live in turn without survival on the full count; with it, live
+    // from the start (#238), where it was dead for the first generation before.
     #[test]
     fn uniform_backgrounds_alternate_or_stay_live() {
         let a = types("square", Nb::Touch, "B014/S2");
         assert_eq!((a.tail, a.states.clone()), (0, vec![0, 1]));
         assert_eq!((a.phase(0), a.phase(1), a.phase(7)), (0, 1, 1));
         let b = types("square", Nb::Touch, "B0123478/S01234678");
-        assert_eq!((b.tail, b.states.clone()), (1, vec![0, 1]));
-        assert_eq!((b.phase(0), b.phase(1), b.phase(1000)), (0, 1, 1));
+        assert_eq!((b.tail, b.states.clone()), (0, vec![1]));
+        assert_eq!((b.phase(0), b.phase(1), b.phase(1000)), (0, 0, 0));
+        // On hexagons the full count is 6, on 4.8.8 the squares' 4 and the octagons' 8.
+        assert_eq!(types("hex", Nb::Touch, "B0/S6").states, vec![1]);
+        assert_eq!(types("hex", Nb::Touch, "B0/S8").states, vec![0, 1]);
+        assert_eq!(types("oct", Nb::Touch, "B0/S48").uniform(0), Some(1));
+        assert_eq!(types("oct", Nb::Touch, "B0/S8").uniform(0), Some(0));
+    }
+
+    // A patch whose every tile survives on its own neighbour count starts live; one that does
+    // not starts from the empty world.
+    #[test]
+    fn patch_backgrounds_start_live_with_full_survival() {
+        let t =
+            Topology::build(&TilingSpec::new("hat").with_size(crate::SizeSpec::Level(2))).unwrap();
+        let all: u32 = (0..=31).fold(0, |m, c| m | 1 << c);
+        let full = Background::new(&t, Nb::Touch, 1, all).unwrap();
+        assert!(full.starts_live);
+        assert_eq!(full.cycle, Some((0, 1)));
+        let Kind::Cells(c) = &full.kind else { panic!() };
+        assert!(c.states.iter().all(|&s| s == 1));
+        let flashing = Background::new(&t, Nb::Touch, 1, 1 << 8).unwrap();
+        assert!(!flashing.starts_live);
     }
 
     // 4.8.8 with B0/S8: octagons (8 neighbours) survive the first full step, squares (4) do not;

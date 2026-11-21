@@ -7,6 +7,12 @@
 //! them). Everything else is refused with its reason. The rest of the exchange with Golly and
 //! LifeViewer is #152.
 //!
+//! **B0 rules.** JETCARP keeps a B0 rule's cells relative to its background, as Golly does
+//! (`jetcarp_core::b0`): a background that keeps flashing starts dead, one live for good from the
+//! first step starts live. Golly reads a pattern as at generation 0, so a copy is written only
+//! when the background is as it starts: always for a background live for good, at even
+//! generations for one that flashes.
+//!
 //! **Hexagons.** JETCARP's hexagon grid has offset rows: an odd row sits half a cell to the right,
 //! so a cell's neighbours depend on its row's parity. Golly and LifeViewer use a sheared square
 //! grid instead, whose six neighbours are the Moore neighbourhood less its top-right and
@@ -173,12 +179,18 @@ pub fn of_world(w: &World, comments: &[String]) -> Result<String, String> {
             ca.rule.notation()
         ));
     }
-    if ca.rule.is_b0() {
-        return Err(
-            "Copy as RLE leaves out rules with B0 for now: JETCARP keeps their cells relative to \
-             a background that Golly and LifeViewer don't share"
-                .into(),
-        );
+    if let Some((birth, survive)) = ca.rule.b0_masks() {
+        // On these grids every tile has the same neighbours, so the background is one state.
+        let g = w.topo.lattice().ok_or("this tiling has no lattice")?;
+        let t = jetcarp_core::b0::Types::new(g, ca.nb, birth, survive)?;
+        if t.state(t.phase(ca.ticks), 0) != t.state(0, 0) {
+            return Err(format!(
+                "this B0 rule's background flashes, and Golly reads a pattern against the \
+                 background as it starts, so Copy as RLE writes its pattern at even generations; \
+                 this is generation {}",
+                w.generation
+            ));
+        }
     }
     let mut rule = notation_on(&ca.rule, ca.nb);
     if hex {
@@ -253,11 +265,12 @@ mod tests {
         let w = world("square", "B2kicen/S21", &[(3, 3), (4, 3)]);
         let t = of_world(&w, &[]).unwrap();
         assert_eq!(header_rule(&t).as_deref(), Some("B2-a/S12"), "{t}");
-        // Generations and B0 are left out, as for B/S rules.
-        for rule in ["B2a/S/C3", "B01e/S8"] {
-            let w = world("square", rule, &[(3, 3), (4, 3)]);
-            assert!(of_world(&w, &[]).is_err(), "{rule}");
-        }
+        // Generations are left out, as for B/S rules; B0 is written (see below).
+        let w = world("square", "B2a/S/C3", &[(3, 3), (4, 3)]);
+        assert!(of_world(&w, &[]).is_err());
+        let w = world("square", "B01e/S8", &[(3, 3), (4, 3)]);
+        let t = of_world(&w, &[]).unwrap();
+        assert_eq!(header_rule(&t).as_deref(), Some("B01e/S8"), "{t}");
     }
 
     #[test]
@@ -335,8 +348,18 @@ mod tests {
         assert!(e.contains("square grid and the hexagon grid"), "{e}");
         let e = of_world(&world("square", "B2/S/C3", &[(2, 2)]), &[]).unwrap_err();
         assert!(e.contains("two-state B/S"), "{e}");
-        let e = of_world(&world("square", "B03/S23", &[(2, 2)]), &[]).unwrap_err();
-        assert!(e.contains("B0"), "{e}");
+        // A flashing B0 background is copied only as it starts: at even generations.
+        let mut w = world("square", "B03/S23", &[(2, 2), (3, 2), (2, 3)]);
+        assert!(of_world(&w, &[]).is_ok());
+        w.apply(jetcarp_core::Command::Step { gens: 1 }).unwrap();
+        let e = of_world(&w, &[]).unwrap_err();
+        assert!(e.contains("even generations"), "{e}");
+        w.apply(jetcarp_core::Command::Step { gens: 1 }).unwrap();
+        assert!(of_world(&w, &[]).map_or_else(|e| !e.contains("even generations"), |_| true));
+        // One live for good is copied at any generation.
+        let mut w = world("square", "B0123478/S01234678", &[(2, 2), (3, 2), (2, 3)]);
+        w.apply(jetcarp_core::Command::Step { gens: 1 }).unwrap();
+        assert!(of_world(&w, &[]).is_ok());
         let e = of_world(&world("square", "B3/S23", &[]), &[]).unwrap_err();
         assert!(e.contains("no live cells"), "{e}");
     }
