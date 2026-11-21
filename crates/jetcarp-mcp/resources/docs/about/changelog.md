@@ -60,6 +60,12 @@ day later (0.4.2: 17 November here, 18 November there).
   [Search methods](../research/search-methods.md#explore),
   [#239](https://github.com/jprodgers/jetcarp/issues/239))
 
+- **The setup window chooses what its Quick Start build searches.** Under the build, *What it
+  searches* reads *All*; opened, an *All* box ticks or clears every one, and a box for each group
+  of tilings and each rule family narrows it, and it then reads *Custom*. *All* is every tiling and
+  every family, isotropic rules included, and it is what `jetcarp setup` builds too, where before
+  a first build left isotropic rules out. ([First run](../getting-started/first-run.md),
+  [#239](https://github.com/jprodgers/jetcarp/issues/239))
 - **Isotropic rule ranges.** A pattern on the square grid's touching neighbours now carries the
   isotropic rules it runs in exactly as stored: the births and survivals its evolution needs, and
   those it must not have, among the 51 arrangements of the live neighbours that Hensel's notation
