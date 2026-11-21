@@ -268,7 +268,7 @@ Example:
 | `cells.erase` | boolean | Set the listed or pattern cells to empty instead. |
 | `cells.indices` | any | Cells by index, as index or [index, state] (the only form on aperiodic tilings). |
 | `cells.pattern` | string | Text picture, one line per row: '.' empty, 'O' (or '*', '#', 'X') live, '1'-'9' states. |
-| `cells.rle` | string | Run-length encoded pattern (LifeWiki RLE; header lines are ignored). |
+| `cells.rle` | string | Run-length encoded pattern (LifeWiki RLE). The header's rule is read for one thing: on the hexagon grid, a rule ending in `H` (Golly's hexagonal layout) is turned into the grid's offset rows. |
 | `cells.state` | integer | State for cells given without one (default 1). |
 | `cells.x` | integer | Column of the pattern's top-left corner (default: centred). |
 | `cells.y` | integer | Row of the pattern's top-left corner (default: centred). |

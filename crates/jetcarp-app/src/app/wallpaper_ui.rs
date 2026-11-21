@@ -940,8 +940,12 @@ impl JetcarpApp {
                 ui.label("Folder");
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(dir.display().to_string()).monospace().small());
-                    if ui.small_button("Choose…").clicked()
-                        && let Some(d) = rfd::FileDialog::new().set_directory(&dir).pick_folder()
+                    let clicked = ui.small_button("Choose…").clicked();
+                    let start = dir.clone();
+                    if let Some(d) =
+                        crate::file_dialog::on_click(ui.ctx(), "wallpaper.folder", clicked, move || {
+                            rfd::FileDialog::new().set_directory(start).pick_folder()
+                        })
                     {
                         s.folder = Some(d);
                     }

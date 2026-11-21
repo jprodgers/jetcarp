@@ -1301,6 +1301,7 @@ fn shots_accessibility() {
     let none = crate::a11y::Reading {
         reduce_motion: Some(false),
         high_contrast: Some(false),
+        dark: None,
     };
     h.app.a11y.watch = crate::a11y::Watch::new(Box::new(crate::a11y::Fixed::new(none)));
     let scene = Scene::from_json(include_str!(

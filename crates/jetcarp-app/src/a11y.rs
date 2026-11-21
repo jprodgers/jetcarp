@@ -29,6 +29,9 @@ pub struct Reading {
     pub reduce_motion: Option<bool>,
     /// The system asks for high contrast.
     pub high_contrast: Option<bool>,
+    /// The system's style is dark (`Some(false)`: light), where the app reads it itself: on Linux
+    /// (#137). Elsewhere `None`, and egui follows the system through winit.
+    pub dark: Option<bool>,
 }
 
 /// Reads the system's accessibility settings. [`Os`] reads the real ones; tests stand in.
@@ -214,6 +217,7 @@ mod windows {
         Reading {
             reduce_motion,
             high_contrast,
+            dark: None,
         }
     }
 }
@@ -242,6 +246,7 @@ mod macos {
             Reading {
                 reduce_motion: Some(reduce),
                 high_contrast: Some(contrast),
+                dark: None,
             }
         }
     }
@@ -326,6 +331,7 @@ mod linux {
                     .bool_of("org.gnome.desktop.interface", "enable-animations")
                     .map(|on| !on),
                 high_contrast: p.bool_of("org.gnome.desktop.a11y.interface", "high-contrast"),
+                dark: p.dark(),
             }
         }
 
@@ -353,12 +359,14 @@ mod linux {
                     self.u32_of("org.freedesktop.appearance", "contrast")
                         .map(|v| v == 1)
                 });
-            if reduce_motion.is_some() || high_contrast.is_some() {
+            let dark = self.dark();
+            if reduce_motion.is_some() || high_contrast.is_some() || dark.is_some() {
                 self.answered = true;
             }
             let mut r = Reading {
                 reduce_motion,
                 high_contrast,
+                dark,
             };
             if !self.answered {
                 // No portal (a desktop without one, or none running yet): GNOME's own tool.
@@ -370,9 +378,41 @@ mod linux {
                     r.high_contrast =
                         gsettings("org.gnome.desktop.a11y.interface", "high-contrast");
                 }
+                if r.dark.is_none() {
+                    r.dark = gsettings_text("org.gnome.desktop.interface", "color-scheme")
+                        .map(|v| dark_of_gnome(&v));
+                }
             }
             r
         }
+
+        /// The portal's `color-scheme`: 1 asks for dark, 2 for light, and 0 says nothing, which is
+        /// what GNOME's *Light* style sets (its `color-scheme` is then `default`), so it is light.
+        fn dark(&self) -> Option<bool> {
+            self.u32_of("org.freedesktop.appearance", "color-scheme")
+                .map(dark_of_portal)
+        }
+    }
+
+    pub(super) fn dark_of_portal(v: u32) -> bool {
+        v == 1
+    }
+
+    /// GNOME's own `color-scheme`: `'prefer-dark'`, `'prefer-light'` or `'default'` (light).
+    pub(super) fn dark_of_gnome(v: &str) -> bool {
+        v.trim().trim_matches('\'') == "prefer-dark"
+    }
+
+    fn gsettings_text(schema: &str, key: &str) -> Option<String> {
+        let out = std::process::Command::new("gsettings")
+            .args(["get", schema, key])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
     fn gsettings(schema: &str, key: &str) -> Option<bool> {
@@ -536,6 +576,7 @@ mod tests {
         let sys = Fixed::new(Reading {
             reduce_motion: Some(true),
             high_contrast: None,
+            dark: None,
         });
         let mut w = Watch::new(Box::new(sys.clone()));
         assert!(w.poll(0.0), "the first poll reads");
@@ -543,6 +584,7 @@ mod tests {
         sys.set(Reading {
             reduce_motion: Some(false),
             high_contrast: Some(true),
+            dark: None,
         });
         assert!(!w.poll(READ_EVERY * 0.5), "not yet");
         assert_eq!(w.reading.reduce_motion, Some(true));
@@ -653,5 +695,18 @@ mod tests {
             eprintln!("through the portal: {p:?}");
             assert_eq!(p, r, "the portal answers, and agrees");
         }
+    }
+
+    /// The portal's and GNOME's own words for the style (#137).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_style_s_words_on_linux() {
+        use super::linux::{dark_of_gnome, dark_of_portal};
+        assert!(dark_of_portal(1));
+        assert!(!dark_of_portal(2));
+        assert!(!dark_of_portal(0), "GNOME's Light style is 'no preference'");
+        assert!(dark_of_gnome("'prefer-dark'"));
+        assert!(!dark_of_gnome("'prefer-light'"));
+        assert!(!dark_of_gnome("'default'"));
     }
 }

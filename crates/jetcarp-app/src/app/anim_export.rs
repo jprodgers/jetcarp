@@ -182,13 +182,22 @@ impl JetcarpApp {
         } else {
             ("gif", "Animated GIF")
         };
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter(filter, &[ext])
-            .set_file_name(format!("jetcarp.{ext}"))
-            .save_file()
-        else {
-            return;
-        };
+        crate::file_dialog::open(&self.dialog_ctx(), "anim.export", move || {
+            rfd::FileDialog::new()
+                .add_filter(filter, &[ext])
+                .set_file_name(format!("jetcarp.{ext}"))
+                .save_file()
+        });
+    }
+
+    /// Called every frame: starts the animation export once its file has been chosen (#136).
+    pub(super) fn anim_export_answer(&mut self) {
+        if let Some(path) = crate::file_dialog::take::<std::path::PathBuf>("anim.export") {
+            self.anim_export_to(path);
+        }
+    }
+
+    fn anim_export_to(&mut self, path: std::path::PathBuf) {
         let [cw, ch] = self.canvas_px();
         let f = self.anim.side as f64 / cw.max(ch).max(1.0);
         let (w, h) = (

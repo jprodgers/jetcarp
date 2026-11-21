@@ -33,13 +33,19 @@ day later (0.4.2: 17 November here, 18 November there).
 - **A high-contrast theme for the app,** dark and light: text at 7:1 or more against its
   background, thicker outlines at 3:1 or more, and a thick ring round whatever has the keyboard.
   It follows Windows' contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and
-  *Settings → Accessibility* overrides them, and chooses light or dark (on Linux, the way to a
-  light app until [#137](https://github.com/jprodgers/jetcarp/issues/137) is fixed). A test
+  *Settings → Accessibility* overrides them, and chooses light or dark. A test
   computes every contrast the theme uses. The docked panes now take the theme's panel colour in
   the light and high-contrast themes, where they kept the grid's dark backdrop.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#220](https://github.com/jprodgers/jetcarp/issues/220))
-
+- **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
+  pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
+  ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon
+  grid, in Golly's layout for hexagons. A hexagon RLE marked `H` placed on JETCARP's hexagon grid
+  (a world edit's `rle`) is turned back, so a copy pastes back as the same pattern. A test checks
+  it against Golly on every change: Golly reads the copy as the same cells and runs it to the same
+  generations, on squares and hexagons.
+  ([Copy as RLE](../guides/pattern-library.md#copy-as-rle), [#145](https://github.com/jprodgers/jetcarp/issues/145))
 - **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
@@ -152,6 +158,25 @@ day later (0.4.2: 17 November here, 18 November there).
   for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
   and says so on the error stream too. ([GPU](../guides/gpu.md),
   [#82](https://github.com/jprodgers/jetcarp/issues/82))
+- **On GNOME (Wayland), the app is drawn right when it opens at its saved size.** It was drawn
+  for the default size inside a window of the saved one: squeezed into part of the window, or
+  scaled up and grainy with clicks landing away from the pointer, until the window was resized by
+  hand. Wayland applies a size at once and says nothing, and the size was set behind egui's back,
+  so its drawing surface kept the old size. Found in 0.4.1 and 0.4.2's testing.
+  ([#140](https://github.com/jprodgers/jetcarp/issues/140))
+- **On Linux, the window keeps answering while a file dialog is open.** Open, save, export and
+  the other file dialogs held up the app's window until they closed, so GNOME briefly said JETCARP
+  might not be responding, and a request to close the window went unanswered. On Linux each
+  dialog now runs beside the window. While one is open the world waits, as before, so what is
+  saved or exported is what was showing when it was asked for. Windows and macOS were not
+  affected. ([#136](https://github.com/jprodgers/jetcarp/issues/136))
+- **On Linux, the app follows the system's light or dark style.** It stayed dark whatever the
+  desktop was set to; it now reads the style from the desktop's settings portal (or GNOME's own
+  setting), as it does on Windows and macOS, and *Settings → Accessibility* can still choose either.
+  In the light theme, the Quick Start's list of categories, tilings and rule families was pale grey
+  on white, and is now drawn in the theme's colours.
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
+  [#137](https://github.com/jprodgers/jetcarp/issues/137))
 - **A number past 32 bits is refused, not wrapped round to a small one.** A size of
   `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
   list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'
