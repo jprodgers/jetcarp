@@ -224,6 +224,41 @@ search on the processor and `--gpu` on the GPU whatever the setting, in this and
 jetcarp search explore --minutes 60 --label first-look
 ```
 
+### Choosing what to search
+
+By itself an explore search draws from every tiling it knows and every rule family but isotropic
+rules, which is the way to fill out your Quick Start. To search narrowly, tell it what to search,
+or what to leave out:
+
+```sh
+jetcarp search explore --minutes 30 --tiling-groups hexagon,triangle --families life_like,generations
+jetcarp search explore --minutes 30 --families isotropic
+jetcarp search explore --minutes 60 --skip-tiling-groups aperiodic --skip-families sandpile,lenia
+```
+
+- **Tilings.** `--tilings` takes tiling ids (`square`, `hex`, `k2-001`), and `--tiling-groups`
+  whole groups of them: `square`, `hexagon`, `triangle`, `pentagon` (Cairo), `archimedean`,
+  `k-uniform`, `isohedral` and `aperiodic`, the groups the search's niches use. The `square` group
+  holds the square grid and the tilings with its neighbours (quad, glide, fourfold), and `hexagon`
+  the hexagon grids and theirs (brick, herringbone, lizard).
+- **Rule families.** `--families` takes `life_like`, `generations`, `jaca`, `cyclic`, `rps`,
+  `greenberg_hastings`, `hodgepodge`, `priority`, `wireworld`, `spectre_glider`, `turmite`,
+  `layered`, `wolfram`, `hex_wolfram`, `hex_tri`, `margolus`, `lenia`, `forest_fire`, `sandpile`,
+  `table`, `ltl` and `isotropic`. [Isotropic rules](../automata/isotropic.md) are searched only
+  when named here, and on the processor: the GPU's batches don't run them yet.
+- **Leaving some out.** `--skip-tilings`, `--skip-tiling-groups` and `--skip-families` take the
+  same names and leave those out of what the others chose.
+- **Families tied to one grid.** Isotropic rules, the elementary rules (`wolfram`), Margolus blocks
+  and rule tables run on the square grid only, `hex_wolfram` on the hexagon grid and `hex_tri` on
+  the flat-topped one. When the families named run only there, the search draws only from those
+  tilings, and a family named that none of the tilings chosen can run is refused with the reason.
+
+The job keeps the choice in its spec (`jetcarp jobs status JOB --json` shows it), says it in its
+title, and keeps to it when it carries on. `jetcarp quickstart build` takes the same flags, and
+scripts and MCP's `search_start` take the same keys in an explore search's settings
+(`tiling_groups`, `skip_families`, ...). A search that chooses nothing, and one made before 0.4.3,
+draws exactly as before.
+
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
 on), and runs still going on the processor then are given up, unrecorded. A run on the processor
 stops at 8 seconds (a confirmation run at 32) and is kept as a run of the generations it reached.
@@ -284,7 +319,11 @@ stores replays exactly, wherever it is replayed.
 ## In the app
 
 *Tools → Hunts…* starts, watches, stops and resumes searches, and lists every job with its progress
-and finds. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do the same for their
+and finds. Its *Start an explore search…* has a checkbox for each group of tilings and each rule
+family, with *All*, *None* and (for the families) *Default* beside them, and the search's minutes,
+seed, GPU and threads. It opens with everything but isotropic rules ticked, which is the default
+search; untick boxes to search narrowly. Tab reaches every box, and screen readers name each one by
+its words. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do the same for their
 strategies, *Tools → Catalog tools…* runs collisions and the evolutionary search, and
 *Tools → Pattern library…* browses what all of them found. A job started in the app can be stopped
 or resumed from the command line, and the other way round. In the *Hunts* window, a job whose

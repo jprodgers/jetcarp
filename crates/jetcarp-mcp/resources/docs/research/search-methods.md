@@ -441,7 +441,7 @@ for the starting patterns and tilings tried least. An elite is taken as a parent
 quality: four picks in five are a tournament of four niches drawn at random, won by the niche whose
 best run scores highest, and the fifth takes a niche at random, so the search never settles on its
 current best. A GPU loop runs the rules the graphics card
-supports in large batches while a CPU loop runs the rest. A run on the processor that would take
+supports in large batches while a CPU loop runs the rest (see *What it draws from*, below). A run on the processor that would take
 longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
 run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
 exactly. A run's time is its own: while it waits for its step's parallel work, its thread may take
@@ -469,6 +469,38 @@ runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow ca
 newest runs, the archive, the runs the search has confirmed, how often it has tried each tiling,
 family and kind of starting pattern, and every candidate it has tried. A stopped search loads that
 saved state and carries on, without reading its millions of runs again.
+
+**What it draws from.** A round's tiling is drawn in proportion to a weight: 6 for the square,
+hexagon and triangle grids, 1.5 to 3 for the Cairo pentagons, the Archimedean tilings and the
+aperiodic patches, 0.5 to 0.7 for the brick, herringbone, lizard, quad, glide and fourfold tilings,
+0.1 for each isohedral type and 0.02 for each k-uniform tiling of the catalogue, and a twentieth of
+its weight for a tiling whose neighbours are those of one before it. The GPU loop draws its families
+by weight (Life-like 30, Generations 25, JACA 10, priority rules 8, cyclic, rock-paper-scissors,
+Greenberg-Hastings and hodgepodge 4 each, WireWorld and the spectre glider 1), and one of its rounds
+in eight is of Larger than Life. The CPU loop draws its own (turmites 25, layered rules and Margolus
+blocks 20, the three elementary families 8 each, sandpiles 4, Lenia and forest fire 3, rule tables
+1), and the GPU's too when there is no GPU. CPU rounds are few, so a quarter go to the least-tried of
+the families tied to one grid (the elementary rules, Margolus blocks and rule tables on the square
+grid, the hexagonal elementary rules on theirs), on that grid, and half to the least-tried tiling.
+
+A search can be limited to some tilings, groups of tilings and families, and told to leave some out
+(`--tilings`, `--tiling-groups`, `--families` and their `--skip-` forms; see
+[Choosing what to search](../guides/searching.md#choosing-what-to-search)). The weights of what is
+left stay as they were. [Isotropic rules](../automata/isotropic.md) are drawn only when a search
+names them, on the processor at a weight of 8, so a search that names no families draws exactly as
+it did before they came. A draw is a Life-like rule of the eight touching neighbours, drawn as the
+Life-like family draws one, with one to six of its letters (Hensel's arrangements, for birth and
+for survival) turned on or off, so most stay near a B/S rule as the known isotropic rules do; a
+quarter are Generations rules of 3 to 8 states, none is born on 0, and none is left with every
+letter or none of each count, which would be the B/S rule itself. A variation turns one letter on
+or off, or changes a Generations rule's states by one. The search's spec keeps what it was told,
+so it carries on, and replays, with it. A search made from 0.4.3 leaves out the tilings none of its
+families can run on, refuses a family named that none of its tilings can run, and, when every
+family its CPU loop runs is tied to one grid (isotropic rules alone), sends every CPU round there;
+a search made before keeps its whole tiling list (its spec has no `schedule`), so it carries on
+drawing as before. A search that chooses nothing draws the same either way: a test pins the tiling
+list, the catalogue rules and the candidates of the first rounds of an older search and of one made
+now, as 0.4.2's code made them.
 
 **How it scores.** Each run is reduced to a fixed set of measurements (when it settled, its density
 and activity early and late, entropy, smoothness, the sizes and number of its parts, how far things

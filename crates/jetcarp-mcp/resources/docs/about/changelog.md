@@ -11,6 +11,23 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **Choosing what an explore search searches.** `jetcarp search explore` and `jetcarp quickstart
+  build` take `--tiling-groups` (square, hexagon, triangle, pentagon, archimedean, k-uniform,
+  isohedral, aperiodic) beside `--tilings`, and `--skip-tilings`, `--skip-tiling-groups` and
+  `--skip-families` to leave some out; an explore search's settings in `search.start`, MCP's
+  `search_start` and scripts take the same keys. In the app, *Start an explore search…* in the
+  *Hunts* window has a checkbox for every group of tilings and every rule family, reached with Tab
+  and named for screen readers. Isotropic rules join the families the search samples, only when
+  named, and on the processor (the GPU's batches don't run them yet). The job keeps the choice in
+  its spec and its title, and replays with it. A search that chooses nothing, and one made before,
+  draw exactly as before, which a test pins from 0.4.2's code. A search made now that names only
+  families tied to one grid (isotropic, elementary) leaves out the tilings they cannot run on, and
+  one that names a family none of its tilings can run, or `von_neumann`, which the search never
+  sampled, is refused with the reason. The GPU self-test now draws an isotropic rule too.
+  ([Searching](../guides/searching.md#choosing-what-to-search),
+  [Search methods](../research/search-methods.md#explore),
+  [#239](https://github.com/jprodgers/jetcarp/issues/239))
+
 - **Isotropic rule ranges.** A pattern on the square grid's touching neighbours now carries the
   isotropic rules it runs in exactly as stored: the births and survivals its evolution needs, and
   those it must not have, among the 51 arrangements of the live neighbours that Hensel's notation
