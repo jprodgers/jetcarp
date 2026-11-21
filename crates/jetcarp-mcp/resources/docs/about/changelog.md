@@ -117,6 +117,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An adapter named in `JETCARP_GPU` is looked for again before another is used.** On a laptop
+  whose discrete GPU sleeps when idle, one run in 335 with `JETCARP_GPU=RTX` on DirectX 12 didn't
+  find it and ran on the integrated GPU, saying so only in its backend note. When the adapter asked
+  for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
+  and says so on the error stream too. ([GPU](../guides/gpu.md),
+  [#82](https://github.com/jprodgers/jetcarp/issues/82))
 - **On Linux, the app follows the system's light or dark style.** It stayed dark whatever the
   desktop was set to; it now reads the style from the desktop's settings portal (or GNOME's own
   setting), as it does on Windows and macOS, and *Settings → Accessibility* can still choose either.
