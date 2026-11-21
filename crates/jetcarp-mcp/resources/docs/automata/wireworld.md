@@ -72,7 +72,8 @@ depend on its geometry, though: a junction that is a diode on squares is just a 
 hexagons. On another tiling you have to find new gates, which is part of the fun. Given no start of
 its own, WireWorld begins with clock loops on the square grid (the `wire_demo` seed) and, on any
 other tiling, with wiring along the borders of random regions, about one region per 70 cells, each
-carrying four signals (the `circuit` seed; see [Scene format](../reference/scene-format.md)).
+carrying four signals (the `circuit` seed, `circuit:40:160` from the command line, scripts and
+the MCP tools; see [Scene format](../reference/scene-format.md)).
 Touch neighbours are the default, as in the classic rule; edge neighbours make thin wires behave
 differently at corners. WireWorld can be stepped on the GPU on lattice tilings, and HashLife can
 jump wrap-edge lattice worlds far ahead.

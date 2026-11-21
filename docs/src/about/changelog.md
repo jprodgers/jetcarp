@@ -9,6 +9,10 @@ that will declare them stable.
 
 ### Added
 
+- **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
+  take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
+  `reference seeds` lists them; before, only a scene file could name a circuit.
+  ([Scripting](../reference/scripting.md))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when
