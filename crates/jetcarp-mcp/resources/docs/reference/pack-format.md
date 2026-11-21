@@ -714,7 +714,12 @@ means its palette for good; a later JETCARP may add names to the list, never cha
 `Ember`, `Tide`, `Prism`, `Mono`, `Ink`, `Aurora`, `Synthwave`, `Moss`, `Candy`, `Lava`, `Glacier`,
 `Phosphor`, `Koi`, `Desert`, `Thermal`, `Deep Sea`, `Paper`, `Blueprint`, `Neon`, `Autumn`,
 `Verdigris`, `Marigold`, `Coral`, `Orchid`, `Citrus`, `Riso`, `Bone`, `Ultramarine`,
-`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`.
+`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`, `Dusk`, `Furnace`, `Kelp`, `Abyss`,
+`Rosewood`, `Harbour`, `Lagoon`, `Heather`, `Graphite`, `Honey`, `Spruce`, `Fjord`, `Copper`,
+`Peony`, `Sulphur`, `Frost`, `Sepia`, `Midnight Garden`, `Lava Flow`, `Nebula`, `Vellum`, `Linen`,
+`Ink Wash`, `Bluebell`, `Fern`, `Brick`, `Mulberry`, `Driftwood`, `Tidewheel`, `Compass Rose`,
+`Indigo`, `Marmalade`, `Sky`, `Rust`, `Iris`, `Gold`, `Lapis`, `Amber`, `Ice`, `Ember Red`, `Delft`,
+`Ochre`.
 <!-- /palette-registry -->
 
 ### Media
