@@ -427,6 +427,10 @@ fn our_states(w: &jetcarp_core::World) -> (BTreeSet<(i64, i64, u32)>, bool) {
     (normalised(v), near)
 }
 
+/// Which classes of arrangement (count and letter) a soup's dead (0) and live (1) cells had at
+/// the start.
+type Seen = [[bool; 256]; 2];
+
 /// One isotropic case: the rule as written, and the soups' fills.
 struct IsoCase {
     written: String,
@@ -501,13 +505,7 @@ fn iso_cases() -> Vec<IsoCase> {
 /// generation. Returns the classes of arrangement (count and letter, `isotropic::classes`) its
 /// dead cells (0) and live cells (1) had at the start, for the coverage check, or the first
 /// generation that differs.
-fn iso_soup(
-    dir: &Path,
-    ci: usize,
-    c: &IsoCase,
-    si: usize,
-    fill: f64,
-) -> Result<[[bool; 256]; 2], String> {
+fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> Result<Seen, String> {
     let cx = Ctx::interactive();
     let (rule, _) = jetcarp_core::rules::Rule::parse(&c.written)
         .unwrap_or_else(|e| panic!("{}: {e}", c.written));
@@ -608,7 +606,7 @@ fn golly_agrees_on_isotropic_rules() {
         .enumerate()
         .flat_map(|(ci, c)| c.fills.iter().enumerate().map(move |(si, &f)| (ci, si, f)))
         .collect();
-    let results: Vec<(usize, Result<[[bool; 256]; 2], String>)> = runs
+    let results: Vec<(usize, Result<Seen, String>)> = runs
         .par_iter()
         .map(|&(ci, si, fill)| (ci, iso_soup(&dir, ci, &cases[ci], si, fill)))
         .collect();
@@ -631,7 +629,7 @@ fn golly_agrees_on_isotropic_rules() {
             .collect::<Vec<_>>()
             .join("\n")
     );
-    let seen: Vec<(usize, [[bool; 256]; 2])> = results
+    let seen: Vec<(usize, Seen)> = results
         .into_iter()
         .map(|(ci, r)| (ci, r.unwrap()))
         .collect();
