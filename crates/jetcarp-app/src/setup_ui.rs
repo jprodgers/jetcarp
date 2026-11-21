@@ -23,10 +23,12 @@ use crate::desktop_offers::Offer;
 use eframe::egui::{self, Color32, RichText};
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{Op, Quiet};
+use jetcarp_api::ops::search::ExploreIn;
 use jetcarp_api::ops::setup::{
     self, Applied, ApplyIn, DataDirIn, KeySeen, PackEntry, Profile, SetupJob, SetupStatus,
 };
 use jetcarp_api::ops::system::human_bytes;
+use jetcarp_core::explore::space::Fam;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -143,6 +145,10 @@ pub struct Wizard {
     pub extra: Vec<(PathBuf, Vec<PackEntry>)>,
     pub build_on: bool,
     pub minutes: f64,
+    /// What the Quick Start build searches: the tiling groups and the rule families, ticked or
+    /// not. Every one at first (*All*), isotropic rules included.
+    pub groups: Vec<(&'static str, bool)>,
+    pub families: Vec<(Fam, bool)>,
     /// Measure this computer first (the JETCARP Hardware Score, about a minute): ticked by
     /// default.
     pub measure_on: bool,
@@ -201,6 +207,14 @@ impl Wizard {
             extra: vec![],
             build_on: false,
             minutes: 0.0,
+            groups: jetcarp_core::explore::space::TILING_GROUPS
+                .iter()
+                .map(|g| (*g, true))
+                .collect(),
+            families: jetcarp_search::explore::job::sampled_families()
+                .into_iter()
+                .map(|f| (f, true))
+                .collect(),
             measure_on: true,
             measuring: Default::default(),
             offers: Offer::ALL.iter().map(|o| (offer_key(*o), false)).collect(),
@@ -495,6 +509,45 @@ impl Wizard {
         self.extra.push((dir, found));
     }
 
+    /// Whether the Quick Start build searches everything: every tiling group and every rule
+    /// family ticked (*All*).
+    pub fn search_all(&self) -> bool {
+        self.groups.iter().all(|g| g.1) && self.families.iter().all(|f| f.1)
+    }
+
+    /// Why the Quick Start build's choice can't run, if it can't.
+    pub fn search_problem(&self) -> Option<&'static str> {
+        if !self.build_on {
+            None
+        } else if !self.groups.iter().any(|g| g.1) {
+            Some("Tick at least one group of tilings.")
+        } else if !self.families.iter().any(|f| f.1) {
+            Some("Tick at least one rule family.")
+        } else {
+            None
+        }
+    }
+
+    /// The Quick Start build's search: none for *All* (setup's own default, every tiling and
+    /// every family), else the groups (when not every one) and the families ticked.
+    pub fn search_input(&self) -> Option<ExploreIn> {
+        if self.search_all() {
+            return None;
+        }
+        let groups: Vec<&str> = self.groups.iter().filter(|g| g.1).map(|g| g.0).collect();
+        let families: Vec<&str> = self
+            .families
+            .iter()
+            .filter(|f| f.1)
+            .map(|f| f.0.name())
+            .collect();
+        Some(ExploreIn {
+            tiling_groups: (groups.len() < self.groups.len()).then(|| serde_json::json!(groups)),
+            families: Some(serde_json::json!(families)),
+            ..Default::default()
+        })
+    }
+
     /// What `setup.apply` is asked to do.
     pub fn apply_input(&self) -> Option<ApplyIn> {
         let p = self.profile?;
@@ -516,6 +569,11 @@ impl Wizard {
             ),
             // As JETCARP's GPU setting says.
             gpu: None,
+            search: if self.build_on {
+                self.search_input()
+            } else {
+                None
+            },
             background: true,
             measure: Some(self.measure_on),
             ..Default::default()
@@ -821,7 +879,10 @@ impl Wizard {
                             .apply_input()
                             .is_some_and(|a| self.would_run_nothing(&a));
                         let label = if nothing { "Finish" } else { "Start" };
-                        let b = ui.button(RichText::new(label).strong());
+                        let b = ui.add_enabled(
+                            self.search_problem().is_none(),
+                            egui::Button::new(RichText::new(label).strong()),
+                        );
                         self.key_main(&b);
                         if b.clicked() {
                             self.next();
@@ -1341,6 +1402,9 @@ impl Wizard {
                         );
                     }
                     ui.label(RichText::new(words.join(" ")).small().weak());
+                    if self.build_on {
+                        self.search_choice_ui(ui);
+                    }
                 });
                 ui.end_row();
                 if p.desktop_offers() {
@@ -1386,6 +1450,46 @@ impl Wizard {
                 .weak(),
             );
         }
+    }
+
+    /// What the Quick Start build searches: *All* at first; opened, an *All* box and a box for
+    /// every tiling group and rule family, and the title reads *Custom* once they differ.
+    fn search_choice_ui(&mut self, ui: &mut egui::Ui) {
+        let title = if self.search_all() {
+            "What it searches: All"
+        } else {
+            "What it searches: Custom"
+        };
+        // A fixed id, so it stays open as its title changes.
+        egui::CollapsingHeader::new(title)
+            .id_salt("setup-quick-start-search")
+            .show(ui, |ui| {
+                let mut all = self.search_all();
+                if ui
+                    .checkbox(&mut all, "All")
+                    .on_hover_text("Every tiling group and every rule family, isotropic rules too")
+                    .changed()
+                {
+                    self.groups.iter_mut().for_each(|g| g.1 = all);
+                    self.families.iter_mut().for_each(|f| f.1 = all);
+                }
+                ui.label(RichText::new("Tilings").small().strong());
+                ui.horizontal_wrapped(|ui| {
+                    for (g, on) in &mut self.groups {
+                        ui.checkbox(on, crate::dash_ui::group_label(g))
+                            .on_hover_text(crate::dash_ui::group_note(g));
+                    }
+                });
+                ui.label(RichText::new("Rule families").small().strong());
+                ui.horizontal_wrapped(|ui| {
+                    for (f, on) in &mut self.families {
+                        ui.checkbox(on, crate::dash_ui::family_label(*f));
+                    }
+                });
+                if let Some(p) = self.search_problem() {
+                    ui.colored_label(ui.visuals().error_fg_color, p);
+                }
+            });
     }
 
     fn progress_ui(&mut self, ui: &mut egui::Ui) {

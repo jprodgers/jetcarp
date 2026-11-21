@@ -52,31 +52,25 @@ fn host_control_definition() -> Value {
         actions.push("tune");
     }
     actions.extend(["scene", "quit"]);
-    let (tune, with_on, every_screen) = if fit {
-        (
-            "; tune sweeps cell sizes on screen (pick: recommended, finest, own or px)",
-            "With wallpaper, login or tune",
-            "next, previous and tune",
-        )
-    } else {
-        ("", "With wallpaper or login", "next and previous")
-    };
+    // The actions and options are told in the help topic `host` (#113): tools/list goes to
+    // the model whole with every request, so the tool only names it.
     let mut properties = json!({
-        "action": {"type": "string", "enum": actions, "description": format!("Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json{tune}; scene: a screen's scene.")},
-        "on": {"type": "boolean", "description": format!("{with_on}: on or off. Default on.")},
-        "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
-        "screen": {"type": "integer", "minimum": 0, "description": format!("Counted from 0. Default: every screen for {every_screen}, else the first.")},
+        "action": {"type": "string", "enum": actions, "description": "Default status."},
+        "on": {"type": "boolean"},
+        "name": {"type": "string"},
+        "screen": {"type": "integer", "minimum": 0},
     });
     if fit {
         properties["cpu_limit"] = json!({"type": "number"});
         properties["gpu_limit"] = json!({"type": "number"});
         properties["fps"] = json!({"type": "number"});
         properties["pick"] = json!({"type": ["string", "number"]});
+        properties["fresh"] = json!({"type": "boolean"});
     }
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.",
+        "description": "Controls the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Needs `jetcarp host start`; scenes wait for the seizure warning. Actions, options: help {\"topic\": \"host\"}.",
         "inputSchema": {"type": "object", "properties": properties, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
@@ -476,6 +470,49 @@ mod tests {
             );
         }
         assert!(!host_call_fits(&json!({"action": "status"})));
+    }
+
+    /// With Fit in the release (0.4.3, #113), `host_control` offers `tune` with its limits and a
+    /// pick, placed from the last fit while it is current (#77); `tune` without one measures.
+    #[test]
+    fn fit_is_offered_with_its_options() {
+        if !jetcarp_core::fit::FIT {
+            return;
+        }
+        let d = host_control_definition();
+        let props = &d["inputSchema"]["properties"];
+        let actions = props["action"]["enum"].as_array().unwrap();
+        assert!(actions.iter().any(|a| a == "tune"), "{actions:?}");
+        for k in ["cpu_limit", "gpu_limit", "fps", "pick", "fresh"] {
+            assert!(props.get(k).is_some(), "{k} in {props}");
+        }
+        let words = crate::help_tools::help_host();
+        assert!(
+            words.contains("- tune: fit the desktop background"),
+            "{words}"
+        );
+        for k in ["cpu_limit", "gpu_limit", "fps", "pick", "fresh", "screen"] {
+            assert!(words.contains(&format!("`{k}`")), "{k} in {words}");
+        }
+    }
+
+    /// `host_control` is short again: its long text is the help topic `host`, which its
+    /// description names, so `tools/list` stays well within its budget with every one of Fit's
+    /// options back, the frame rate and `fresh` included (#113).
+    #[test]
+    fn host_control_is_short_and_its_text_is_a_help_topic() {
+        if !jetcarp_core::fit::FIT {
+            return;
+        }
+        let d = host_control_definition();
+        let size = d.to_string().len();
+        assert!(size < 900, "host_control is {size} bytes: {d}");
+        let desc = d["description"].as_str().unwrap();
+        assert!(desc.contains(r#"help {"topic": "host"}"#), "{desc}");
+        let props = &d["inputSchema"]["properties"];
+        for k in ["cpu_limit", "gpu_limit", "fps", "pick", "fresh"] {
+            assert!(props.get(k).is_some(), "{k} in {props}");
+        }
     }
 
     /// The `host_control` calls that start showing scenes wait for the photosensitive seizure

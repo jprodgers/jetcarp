@@ -187,8 +187,11 @@ sent anywhere.
 **The JETCARP Hardware Score is its own unit.** Score v1 is the geometric mean of the five soup
 rates, in soups a second, each the fastest device that gave the right answer. No computer is pinned
 to a value: whatever number a computer gets is its number, and another is simply some multiple of
-it. The parts are kept and shown too, because the limits and (with Fast Fit) the defaults that
-depend on time come from the parts, not from the one number.
+it. The parts are kept and shown too, because the limits and the defaults that depend on time come
+from the parts, not from the one number: with no size from before,
+[Fit to this computer](wallpapers.md#fit-to-this-computer) starts its search at the size the
+one-core rate (on the processor) or the GPU's soup rate (on the GPU) says the scene's work fits in,
+and it counts a step on the GPU at the GPU's speed over the processor's.
 
 The benchmark is **versioned**. A JETCARP that changes the workloads raises the version, and an
 older score is then shown as from an older benchmark, with a suggestion to measure again. A computer

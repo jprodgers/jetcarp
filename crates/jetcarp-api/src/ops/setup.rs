@@ -594,6 +594,20 @@ fn free_space_at(_: &Path) -> Option<u64> {
     None
 }
 
+/// The Quick Start build's search when setup is given none: every tiling, and every rule family
+/// the explore search samples named, so isotropic rules (searched elsewhere only when named) are
+/// in it too, as the setup window's *All* has them.
+pub fn quick_start_everything() -> ExploreIn {
+    let families: Vec<&str> = jetcarp_search::explore::job::sampled_families()
+        .into_iter()
+        .map(|f| f.name())
+        .collect();
+    ExploreIn {
+        families: Some(serde_json::json!(families)),
+        ..Default::default()
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // The data folder
 
@@ -1312,7 +1326,8 @@ pub struct ApplyIn {
     /// GPU setting says (automatic: the GPU when there is a usable one).
     #[serde(default)]
     pub gpu: Option<bool>,
-    /// The Quick Start build's search settings (default: every tiling and rule family).
+    /// The Quick Start build's search settings (default: every tiling and every rule family the
+    /// explore search samples, isotropic rules included, as the setup window's *All*).
     #[serde(default)]
     pub search: Option<ExploreIn>,
     /// How much of each pack is verified again on import: sample (default), full, none.
@@ -1419,7 +1434,7 @@ fn plan_build(
     }
     let input = super::quickstart::BuildIn {
         minutes: Some(minutes),
-        search: a.search.clone().unwrap_or_default(),
+        search: a.search.clone().unwrap_or_else(quick_start_everything),
         gpu: a.gpu,
         ..Default::default()
     };
@@ -1774,6 +1789,40 @@ impl Op for SetupApply {
     type Out = Applied;
     fn run(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         apply(cx, a, p)
+    }
+}
+
+#[cfg(test)]
+mod quick_start_tests {
+    use super::*;
+
+    /// With no search given, the Quick Start build searches everything, every family named so
+    /// isotropic rules (opt-in elsewhere) are in it; a search given is used as it is (#239).
+    #[test]
+    fn the_quick_start_build_searches_everything_unless_told_otherwise() {
+        let gpu = GpuStatus {
+            usable: false,
+            name: String::new(),
+            note: String::new(),
+        };
+        let a = ApplyIn {
+            profile: "explorer".into(),
+            ..Default::default()
+        };
+        let p = plan_build(5.0, &a, &gpu, false).unwrap().expect("a build");
+        // The spec keeps the families as it writes them (`wire_world`, not `wireworld`).
+        let every = serde_json::to_value(jetcarp_search::explore::job::sampled_families()).unwrap();
+        assert_eq!(p.spec.spec["families"], every, "{}", p.spec.spec);
+        assert!(every.as_array().unwrap().contains(&"isotropic".into()));
+        let a = ApplyIn {
+            search: Some(ExploreIn {
+                families: Some(serde_json::json!(["life_like"])),
+                ..Default::default()
+            }),
+            ..a
+        };
+        let p = plan_build(5.0, &a, &gpu, false).unwrap().expect("a build");
+        assert_eq!(p.spec.spec["families"], serde_json::json!(["life_like"]));
     }
 }
 

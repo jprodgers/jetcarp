@@ -96,16 +96,73 @@ fn grid_specific_families_fit_their_native_tilings_at_search_size() {
         (Fam::Wolfram, "square"),
         (Fam::Margolus, "square"),
         (Fam::Table, "square"),
+        (Fam::Isotropic, "square"),
         (Fam::HexWolfram, "hex"),
         (Fam::HexTri, "hex_flat"),
     ] {
         let g = Grid::build(key, 16000).unwrap();
         assert!(fam.fits(&g), "{fam:?} does not fit {key}");
+        assert_eq!(fam.only_on(), Some(key), "{fam:?}");
         assert!(
             (0..8).any(|_| sample_rule(fam, &g, Nb::Touch, &mut rng).is_some()),
             "{fam:?} sampled no rule on {key}"
         );
     }
+}
+
+/// What a family's key says it runs on (`Fam::runs_on`, which an explore search reads to leave
+/// out the tilings its families cannot run on, #239) is what its grids say (`Fam::fits`), on a
+/// tiling of every group.
+#[test]
+fn a_familys_tiling_by_key_is_the_one_its_grid_fits() {
+    let keys = [
+        "square",
+        "quad",
+        "glide",
+        "hex",
+        "hex_flat",
+        "brick",
+        "triangle",
+        "cairo",
+        "trihex",
+        "snubsq",
+        "catalog:k2-001",
+        "ih28",
+        "spectre",
+        "penrose-rhomb",
+    ];
+    for key in keys {
+        let g = Grid::build(key, 1000).unwrap();
+        for fam in ALL_FAMS {
+            assert_eq!(fam.runs_on(key), fam.fits(&g), "{fam:?} on {key}");
+        }
+    }
+}
+
+/// Isotropic draws are isotropic rules (never a plain B/S rule, never born on 0), a quarter of
+/// them Generations rules, and their variations stay isotropic (#239).
+#[test]
+fn isotropic_draws_are_isotropic_rules() {
+    let g = Grid::build("square", 1000).unwrap();
+    let mut rng = Rng::new(239);
+    let mut generations = 0;
+    for _ in 0..400 {
+        let r = sample_rule(Fam::Isotropic, &g, Nb::Touch, &mut rng).expect("a draw");
+        let Rule::Isotropic(iso) = &r else {
+            panic!("{} is not isotropic", r.notation())
+        };
+        assert!(!iso.b0(), "{} is born on 0", r.notation());
+        let (back, _) = Rule::parse(&r.notation()).unwrap();
+        assert_eq!(back.notation(), r.notation());
+        assert_eq!(Fam::of(&back), Fam::Isotropic, "{}", r.notation());
+        generations += (iso.states > 2) as u32;
+        let m = mutate_rule(&r, &g, Nb::Touch, &mut rng).expect("a variation");
+        assert_eq!(Fam::of(&m), Fam::Isotropic, "{}", m.notation());
+        assert_ne!(m.notation(), r.notation());
+    }
+    assert!((60..140).contains(&generations), "{generations} of 400");
+    let hex = Grid::build("hex", 1000).unwrap();
+    assert!(sample_rule(Fam::Isotropic, &hex, Nb::Touch, &mut rng).is_none());
 }
 
 #[test]

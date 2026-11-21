@@ -1462,10 +1462,26 @@ pub struct ExploreIn {
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub tilings: Option<Value>,
-    /// Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all).
+    /// Only the tilings of these groups: square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic; a list or text (default: every group).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub tiling_groups: Option<Value>,
+    /// Leave out these tilings (ids, as `tilings`).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub skip_tilings: Option<Value>,
+    /// Leave out the tilings of these groups (as `tiling_groups`).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub skip_tiling_groups: Option<Value>,
+    /// Only these rule families: life_like, generations, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl, isotropic; a list or text (default: every family but isotropic, which is searched only when named). Tilings none of them can run on are left out (isotropic, wolfram, margolus and table rules run on the square tiling only).
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub families: Option<Value>,
+    /// Leave out these rule families (as `families`).
+    #[serde(default)]
+    #[schemars(schema_with = "texts_schema")]
+    pub skip_families: Option<Value>,
     /// About this many cells in a screening run's grid (default 16,000; an aperiodic patch is the level nearest it, 4,000 tiles for 16,000).
     #[serde(default)]
     pub screen_cells: Option<u32>,
@@ -1510,26 +1526,56 @@ pub struct ExploreIn {
     pub parents_reviewed: Option<String>,
 }
 
-/// The rule families, for hints.
-const FAMILIES: &str = "families: life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider";
+/// The rule families the explore search samples, for hints.
+fn families_hint() -> String {
+    let names: Vec<&str> = jetcarp_search::explore::job::sampled_families()
+        .iter()
+        .map(|f| f.name())
+        .collect();
+    format!("families: {}", names.join(", "))
+}
 
 impl ExploreIn {
     /// The explore job's spec these settings make.
     pub(crate) fn spec(&self) -> Result<ExploreSpec, ApiError> {
+        use jetcarp_core::explore::space::{TILING_GROUPS, tiling_key};
         use jetcarp_search::explore::job::Settings;
         use jetcarp_search::explore::store::fam_named;
         let d = Settings::default();
         let seps = &[',', ' ', ';', '\t', '\n'];
-        let tilings = texts(self.tilings.as_ref(), "tilings", seps)?
-            .iter()
-            .map(|t| jetcarp_core::explore::space::tiling_key(t))
-            .collect();
-        let families = texts(self.families.as_ref(), "families", seps)?
-            .iter()
-            .map(|f| {
-                fam_named(f).ok_or_else(|| invalid(format!("no rule family '{f}'")).hint(FAMILIES))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let keys = |v: Option<&Value>, key: &str| -> Result<Vec<String>, ApiError> {
+            Ok(texts(v, key, seps)?.iter().map(|t| tiling_key(t)).collect())
+        };
+        let groups = |v: Option<&Value>, key: &str| -> Result<Vec<String>, ApiError> {
+            texts(v, key, seps)?
+                .iter()
+                .map(|g| {
+                    let low = g.to_ascii_lowercase();
+                    if TILING_GROUPS.contains(&low.as_str()) {
+                        Ok(low)
+                    } else {
+                        Err(invalid(format!("no tiling group '{g}'"))
+                            .hint(format!("groups: {}", TILING_GROUPS.join(", "))))
+                    }
+                })
+                .collect()
+        };
+        let fams = |v: Option<&Value>, key: &str| {
+            texts(v, key, seps)?
+                .iter()
+                .map(|f| {
+                    fam_named(f).ok_or_else(|| {
+                        invalid(format!("no rule family '{f}'")).hint(families_hint())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+        let tilings = keys(self.tilings.as_ref(), "tilings")?;
+        let skip_tilings = keys(self.skip_tilings.as_ref(), "skip_tilings")?;
+        let tiling_groups = groups(self.tiling_groups.as_ref(), "tiling_groups")?;
+        let skip_tiling_groups = groups(self.skip_tiling_groups.as_ref(), "skip_tiling_groups")?;
+        let families = fams(self.families.as_ref(), "families")?;
+        let skip_families = fams(self.skip_families.as_ref(), "skip_families")?;
         Ok(ExploreSpec {
             search: Settings {
                 screen_cells: self.screen_cells.unwrap_or(d.screen_cells),
@@ -1540,10 +1586,15 @@ impl ExploreIn {
                 batch: self.batch.unwrap_or(d.batch),
                 seed: self.seed.unwrap_or(d.seed),
                 tilings,
+                tiling_groups,
+                skip_tilings,
+                skip_tiling_groups,
                 families,
+                skip_families,
                 score: None,
                 parents: vec![],
                 sizing: d.sizing,
+                schedule: d.schedule,
             },
             gpu: self.gpu == Some(true),
             cpu: self.gpu == Some(false),
@@ -3188,6 +3239,36 @@ pub(crate) fn census_text(s: &mut String, r: &CensusReport) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// The explore settings' help (what MCP's `search_start` and the book show) names every
+    /// family the search samples, and the tiling groups, as the search has them (#239).
+    #[test]
+    fn the_explore_help_names_the_families_and_groups_there_are() {
+        let s = crate::op::input_schema::<ExploreIn>();
+        let text = |k: &str| {
+            s["properties"][k]["description"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let families = text("families");
+        let listed = families
+            .split_once("families: ")
+            .and_then(|(_, rest)| rest.split_once(';'))
+            .map(|(list, _)| list.split(", ").collect::<Vec<_>>());
+        let want: Vec<&str> = jetcarp_search::explore::job::sampled_families()
+            .iter()
+            .map(|f| f.name())
+            .collect();
+        assert_eq!(listed, Some(want), "{families}");
+        let groups = text("tiling_groups");
+        for g in jetcarp_core::explore::space::TILING_GROUPS {
+            assert!(groups.contains(g), "{g}: {groups}");
+        }
+        for k in ["skip_tilings", "skip_tiling_groups", "skip_families"] {
+            assert!(text(k).starts_with("Leave out"), "{k}");
+        }
+    }
 
     /// A cell index past what 32 bits hold, or a state past 255, is refused, never wrapped
     /// round (cell 2^32 + 300 was read as cell 300, and state 257 as 1).

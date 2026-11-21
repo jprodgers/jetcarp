@@ -1775,6 +1775,24 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
 
 /// The startup lines: where to connect, with what, and that only this computer can.
 fn announce(l: &Listener, opts: &Serve) {
+    // The notes on standard error come first: whoever stops the server once it has read the line
+    // saying it is ready (a client starting it, a test) has had them too.
+    // Keeping the token is the user's choice; what it means is said each time it is kept.
+    if let Some(p) = l.kept_file() {
+        eprintln!(
+            "jetcarp mcp: the token is kept in {}, in JETCARP's settings folder: it survives \
+             restarts and reboots, and stays valid until a new one is made (--new-token)",
+            p.display()
+        );
+    } else if let Some(e) = l.kept_error() {
+        eprintln!("jetcarp mcp: the token could not be kept ({e}), so it is new each time");
+    }
+    if opts.port.is_none() && l.port != DEFAULT_PORT {
+        eprintln!(
+            "jetcarp mcp: port {DEFAULT_PORT} is taken, so the server is on port {} instead",
+            l.port
+        );
+    }
     let file = l.file().map(|p| p.display().to_string());
     if opts.json {
         println!(
@@ -1827,22 +1845,6 @@ fn announce(l: &Listener, opts: &Serve) {
              {pages}{world} Ctrl-C stops the server.",
             l.url(),
             l.header(),
-        );
-    }
-    // Keeping the token is the user's choice; what it means is said each time it is kept.
-    if let Some(p) = l.kept_file() {
-        eprintln!(
-            "jetcarp mcp: the token is kept in {}, in JETCARP's settings folder: it survives \
-             restarts and reboots, and stays valid until a new one is made (--new-token)",
-            p.display()
-        );
-    } else if let Some(e) = l.kept_error() {
-        eprintln!("jetcarp mcp: the token could not be kept ({e}), so it is new each time");
-    }
-    if opts.port.is_none() && l.port != DEFAULT_PORT {
-        eprintln!(
-            "jetcarp mcp: port {DEFAULT_PORT} is taken, so the server is on port {} instead",
-            l.port
         );
     }
     let _ = std::io::stdout().flush();

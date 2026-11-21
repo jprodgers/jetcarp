@@ -100,7 +100,7 @@ The panes are in two groups of tabs, upper and lower:
 | *Objects* | *Find objects*: the still lifes, oscillators and spaceships in the world now, counted, and highlighted when you click a row | [Life on a new tiling](../tutorials/life-on-a-new-tiling.md) |
 | *Display* | Where the grid shows (this window, full screen, or full-screen *Outputs* on chosen monitors) and the cell size in pixels | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
 | *Screensaver* | Screensaver mode, its profiles and rotations, and the system screen saver's rotation | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
-| *Desktop background* | The background host: each screen's rotation and monitor, the lock screen, the still picture, how it runs, and its performance | [Wallpapers](../guides/wallpapers.md#the-desktop-background-pane) |
+| *Desktop background* | The background host: each screen's rotation and monitor, the lock screen, the still picture, how it runs, and *Fit to this computer* | [Wallpapers](../guides/wallpapers.md#the-desktop-background-pane) |
 | *CAs* | Each automaton in the world: its rule, neighbours, field, steps per generation, colouring and palette, with *Seed*, *Random* and *Clear* | [Several automata at once](../guides/several-automata.md), [Palettes](../guides/palettes.md) |
 | *Add* | Add an automaton from the catalog of named rules or by its notation, or load a rule table | [Rule notation](../reference/rule-notation.md), [Named rules](../automata/named-rules.md) |
 | *Sequence* | A scripted sequence: which automata run, and when to move on | [Several automata at once](../guides/several-automata.md) |

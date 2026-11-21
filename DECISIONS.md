@@ -292,6 +292,19 @@ is dated more closely than that.
   ([SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)).
 - **Stands.**
 
+### D-44. The MCP tool list has a hard limit of 48,000 bytes
+
+- **Decided:** Jimmie, 21 November 2026.
+- **The decision:** "I'm allowing the MCP's cap to be increased to 48,000-bytes, but that will be
+  our hard target." The whole `tools/list` goes to the model with every request, so it stays
+  small; it had a budget of 45,000 bytes, which Fast Fit's tool text nearly filled.
+- **How it's kept:** a test fails if the list is over 48,000 bytes. Long text goes into resources
+  and help topics (as `host_control`'s did, into the help topic `host`), rather than the limit
+  being raised.
+- **Claude's part:** the choice of raising the budget or moving text out was offered as a question
+  on Fast Fit's pull request (#242); the text was moved out, and this limit was set after.
+- **Stands.**
+
 ## Safety, privacy and openness
 
 ### D-21. A photosensitive seizure warning before anything moves, and a guard to follow

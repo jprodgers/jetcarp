@@ -194,7 +194,7 @@ text are read as meant. Anything else of the wrong type, and a number under the 
 is refused, naming the argument and what to give: "`width` must be a whole number (got "abc")".
 
 A client hands the whole tool list to the model with every request, so the list stays short
-(about 45 KB): an argument with many settings, such as each of `search_start`'s strategies or
+(48,000 bytes at most, a hard limit): an argument with many settings, such as each of `search_start`'s strategies or
 `pack`'s actions, is listed with a line about what it does and the resource that holds its
 settings in full, `jetcarp://schema/{tool}/{argument}` (for example
 `jetcarp://schema/search_start/hunt`). A client without resources gets the same JSON Schema from
@@ -238,7 +238,7 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 
 ### `help`
 
-**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice) or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {"schema": "search_start/hunt"}.
+**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice), "host" (the background host's actions, and fitting it to this computer) or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {"schema": "search_start/hunt"}.
 
 *reads only*
 
@@ -246,7 +246,7 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 | --- | --- | --- |
 | `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching" (topic pages lists them). |
 | `schema` | string | A JSON Schema: a tool argument's settings ("search_start/hunt" is jetcarp://schema/search_start/hunt), "scene.json" or "pack.json". |
-| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"pages"` | Which guide (default overview). |
+| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"host"`, `"pages"` | Which guide (default overview). |
 
 Example:
 
@@ -686,7 +686,7 @@ Example:
 | `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000; an aperiodic patch is the level nearest it, and bigger than the screening patch). |
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
 | `explore.confirm_seeds` | integer | Seeds an elite is confirmed with (default 3). |
-| `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
+| `explore.families` | array or string | Only these rule families: life_like, generations, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl, isotropic; a list or text (default: every family but isotropic, which is searched only when named). Tilings none of them can run on are left out (isotropic, wolfram, margolus and table rules run on the square tiling only). |
 | `explore.gpu` | boolean | Run the rules a GPU can run on the GPU (true) or everything on the CPU (false), in this and later runs. Default: as JETCARP's GPU setting says at each run (automatic: on the GPU when there is a usable one). |
 | `explore.max_rss_gb` | number | Stop (paused, resumable) when the process uses more memory than this many GB. |
 | `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
@@ -695,6 +695,10 @@ Example:
 | `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000; an aperiodic patch is the level nearest it, 4,000 tiles for 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
+| `explore.skip_families` | array or string | Leave out these rule families (as `families`). |
+| `explore.skip_tiling_groups` | array or string | Leave out the tilings of these groups (as `tiling_groups`). |
+| `explore.skip_tilings` | array or string | Leave out these tilings (ids, as `tilings`). |
+| `explore.tiling_groups` | array or string | Only the tilings of these groups: square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic; a list or text (default: every group). |
 | `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
 | `gpu` | boolean | Use the GPU (true) or only the CPU (false); results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic). |
 | `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |
@@ -1071,16 +1075,21 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.
+**JETCARP background host.** Controls the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Needs `jetcarp host start`; scenes wait for the seizure warning. Actions, options: help {"topic": "host"}.
 
-*`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.*
+*`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint. Its actions and options are told in the help topic `host` (`help {"topic": "host"}`), to keep the tool list short; the command line's are in [Wallpapers](../guides/wallpapers.md#the-background-host).*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; scene: a screen's scene. |
-| `name` | string | With rotation: the one to run (saved). |
-| `on` | boolean | With wallpaper or login: on or off. Default on. |
-| `screen` | integer | Counted from 0. Default: every screen for next and previous, else the first. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. |
+| `cpu_limit` | number |  |
+| `fps` | number |  |
+| `fresh` | boolean |  |
+| `gpu_limit` | number |  |
+| `name` | string |  |
+| `on` | boolean |  |
+| `pick` | string or number |  |
+| `screen` | integer |  |
 
 Example:
 

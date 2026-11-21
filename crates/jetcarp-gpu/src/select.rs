@@ -869,7 +869,7 @@ const TEST_GENS: u64 = 24;
 /// Draws of a family's rules until one runs on the GPU.
 const TEST_DRAWS: usize = 64;
 /// Changes when the self-test itself changes, so results are taken again.
-const TEST_VERSION: u32 = 3;
+const TEST_VERSION: u32 = 4;
 
 static TESTED: Mutex<Option<HashMap<String, SelfTest>>> = Mutex::new(None);
 

@@ -244,3 +244,55 @@ fn applying_blank_slate_records_it_and_shows_it_done() {
     w.back();
     assert_eq!(w.page(), Page::Progress);
 }
+
+/// The Quick Start build searches everything at first (*All*: setup's own default, so no choice
+/// is sent); unticking a group or a family makes it *Custom*, and setup is told the groups and
+/// the families ticked, isotropic rules among them; *All* ticks or clears every one; with no
+/// group or no family ticked, it can't start (#239).
+#[test]
+fn the_quick_start_search_is_all_or_custom() {
+    let d = scratch("search-choice");
+    let mut w = wizard(&d, Mock::default());
+    w.choose(Profile::Explorer);
+    assert!(w.build_on, "Explorer builds a Quick Start");
+    assert!(w.search_all());
+    assert!(
+        w.apply_input().unwrap().search.is_none(),
+        "All sends no choice"
+    );
+    // Unticked: the square group.
+    let sq = w.groups.iter().position(|g| g.0 == "square").unwrap();
+    w.groups[sq].1 = false;
+    assert!(!w.search_all());
+    let s = w.apply_input().unwrap().search.expect("a custom choice");
+    let groups = s.tiling_groups.expect("the groups ticked");
+    assert!(
+        !groups.as_array().unwrap().contains(&"square".into()),
+        "{groups}"
+    );
+    assert_eq!(groups.as_array().unwrap().len(), w.groups.len() - 1);
+    let fams = s.families.expect("the families, named");
+    assert!(
+        fams.as_array().unwrap().contains(&"isotropic".into()),
+        "{fams}"
+    );
+    assert_eq!(fams.as_array().unwrap().len(), w.families.len());
+    // Every group ticked again, one family not: the families alone are sent.
+    w.groups[sq].1 = true;
+    w.families[0].1 = false;
+    let s = w.apply_input().unwrap().search.expect("a custom choice");
+    assert!(s.tiling_groups.is_none());
+    assert_eq!(
+        s.families.unwrap().as_array().unwrap().len(),
+        w.families.len() - 1
+    );
+    // No group ticked: it can't start; no build: no choice either way.
+    w.groups.iter_mut().for_each(|g| g.1 = false);
+    assert_eq!(
+        w.search_problem(),
+        Some("Tick at least one group of tilings.")
+    );
+    w.build_on = false;
+    assert_eq!(w.search_problem(), None);
+    assert!(w.apply_input().unwrap().search.is_none());
+}
