@@ -267,3 +267,58 @@ fn a_long_step_writes_its_progress_and_sees_a_pause() {
     let p = progress(&out.progress);
     assert!(p.given_up > 0 && p.capped == 0, "{p:?}");
 }
+
+/// The runs that have ended are written while a step runs, every couple of seconds, so a search
+/// killed part way through a long step keeps them (#129). Each run here takes at least two
+/// seconds (each of its 50 generations waits 40 ms), so the first round, 16 runs on two threads,
+/// lasts at least sixteen, however fast or slow the computer: the working database gets its
+/// first runs while that round is under way, a few at a time. Before, a step's runs were written
+/// at its end, all sixteen at once. Nothing here depends on how soon the runs end.
+#[test]
+fn a_long_steps_runs_are_written_while_it_runs() {
+    let dir = scratch("written");
+    let lib = Library::open(dir.join("library.sqlite"));
+    let job = make(&lib, slow(json!({ "screen_gens": 50 })));
+    let h = Runner::new(Library::open(lib.path()))
+        .spawn(
+            job,
+            RunOptions {
+                threads: 2,
+                budget: Budget::default(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let other = Library::open(lib.path());
+    let wait = Instant::now();
+    while other.job(job).unwrap().status != JobStatus::Running {
+        assert!(
+            wait.elapsed() < Duration::from_secs(300),
+            "it did not start"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let path = db_path(&other, &other.job(job).unwrap()).unwrap();
+    let stored = || -> i64 {
+        rusqlite::Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .and_then(|c| c.query_row("SELECT COUNT(*) FROM runs", [], |r| r.get(0)))
+            .unwrap_or(0)
+    };
+    // The first runs stored, however long the computer takes to get to them.
+    let mut n = 0;
+    while n == 0 {
+        assert!(
+            wait.elapsed() < Duration::from_secs(600),
+            "no run stored in ten minutes"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+        n = stored();
+    }
+    jobs::kind("explore").request_stop(&other, job).unwrap();
+    h.wait().unwrap();
+    // At most two runs end every two seconds, so the first write holds a few, not the round.
+    assert!(
+        n < 8,
+        "the first runs stored were {n} at once: the round's runs were written at its end"
+    );
+}

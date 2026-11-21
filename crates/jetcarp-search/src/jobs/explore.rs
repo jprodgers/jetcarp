@@ -22,14 +22,22 @@
 //! **A step** runs about [`STEP_S`] seconds of rounds: GPU rounds on a thread of their own when
 //! the run has a GPU ([`ExploreRun::with_backend`]; the job's `gpu` or the run's asks for one),
 //! CPU rounds on the run's threads. A GPU that fails three steps in a row is restarted; one that
-//! cannot be, or fails forty times, is dropped and the CPU takes its families. Past `max_rss_gb`
-//! of memory the run stops (paused). The item budget counts screened runs. A time budget, and a
+//! cannot be, or fails forty times, is dropped and the CPU takes its families. The item budget
+//! counts screened runs. A time budget, and a
 //! Quick Start build's minutes, end the run on time: the last step ends with it, runs still going
 //! on the processor are given up unrecorded, and the GPU's batches are sized to end before it
 //! (one that would not is given up part way; see [`Search::step`]); a run on the processor is
-//! capped at [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway. A step under way
-//! writes the job's progress every [`PUBLISH_S`] seconds, and stops when another process pauses
-//! the job.
+//! capped at [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway. A step can last a
+//! minute or more (a round of slow runs on the processor runs to its end), so while it runs the
+//! job reads its memory every [`MEMORY_S`] seconds, gives the allocator's free pages back every
+//! [`RELEASE_S`], and every [`PUBLISH_S`] writes the runs that have ended and the job's progress,
+//! and stops when another process pauses the job (#129).
+//!
+//! **Memory** ([`Meter`]). `jobs.status` shows the newest reading and the session's highest. Past
+//! `max_rss_gb` the job first gives back what it can (the allocator's free pages, the grids
+//! the search is not using) and reads again; it stops (paused) only once the memory has stayed
+//! over the cap for [`CAP_HOLD_S`] seconds, so a moment's peak does not pause it (#81) but one
+//! that lasts does, inside a step too.
 //!
 //! **Its threads** ([`worker_threads`]): every core but [`FREE_CORES`] unless the run is given a
 //! thread count, a third of them for the GPU's batches when there is a GPU, so the computer
@@ -74,8 +82,20 @@ pub const PUBLISH_S: f64 = 2.0;
 pub const FREE_CORES: usize = 2;
 
 /// Seconds between returns of the memory allocator's free pages to the system
-/// ([`release_free_memory`]).
+/// ([`release_free_memory`]), during steps as between them: a step can last minutes, and the
+/// pages freed meanwhile (each GPU batch's frames, a few hundred MB) counted as the job's memory
+/// until it ended (#81).
 pub const RELEASE_S: f64 = 30.0;
+
+/// Seconds between readings of the job's memory while a step runs: reading it costs microseconds
+/// (`/proc/self/status`, `proc_pid_rusage`, `GetProcessMemoryInfo`), and a step can last minutes,
+/// so `jobs.status` and the memory cap see what it is now, not at the step's start (#129).
+pub const MEMORY_S: f64 = 0.5;
+
+/// Seconds the memory must stay over `max_rss_gb`, after giving back what the job can, before
+/// the job stops: a peak of a few seconds (a batch's frames, a few large runs at once) does not
+/// pause a search whose cap is near its steady level (#81).
+pub const CAP_HOLD_S: f64 = 10.0;
 
 /// Give the memory allocator's free pages back to the system. glibc keeps what the search frees
 /// (each GPU batch's frames, a few hundred MB, and the grids the cache lets go) in its arenas,
@@ -239,7 +259,10 @@ pub struct ExploreProgress {
     /// `cpu only`, or the GPU's name.
     pub backend: String,
     pub gpu_error: Option<String>,
+    /// The process's memory in GB: the newest reading (at most [`MEMORY_S`] old while a step
+    /// runs), and the highest this session.
     pub rss_gb: f64,
+    pub rss_peak_gb: f64,
     /// Per family: screened runs, mean and best score, elites.
     pub families: Vec<FamilyLine>,
     /// What loading the saved state read this session.
@@ -566,7 +589,29 @@ pub fn memory_bytes() -> Option<u64> {
     if let Some(b) = mac_footprint() {
         return Some(b);
     }
+    #[cfg(target_os = "linux")]
+    if let Some(b) = linux_resident() {
+        return Some(b);
+    }
     memory_stats::memory_stats().map(|m| m.physical_mem as u64)
+}
+
+/// This process's resident size on Linux, as `/proc/self/status` gives it (`VmRSS`): a read
+/// costs microseconds. `memory_stats` sums the `Rss` of every mapping in `/proc/self/smaps`
+/// instead, which walks all of them (with the GPU's buffers, thousands): far dearer, read every
+/// half second while a step runs (#129). A search read that way once noted a peak of 27.7 GB
+/// that its resident size, sampled from outside every half second, never came near (1.5 GB).
+#[cfg(target_os = "linux")]
+fn linux_resident() -> Option<u64> {
+    let s = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb: u64 = s
+        .lines()
+        .find_map(|l| l.strip_prefix("VmRSS:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    Some(kb << 10)
 }
 
 /// This process's physical footprint on macOS: what Activity Monitor shows as its memory, without
@@ -592,6 +637,75 @@ pub fn rss_gb() -> f64 {
     memory_bytes().map_or(0.0, |b| b as f64 / (1u64 << 30) as f64)
 }
 
+/// The job's memory as it watches it ([`MEMORY_S`], [`RELEASE_S`], [`CAP_HOLD_S`]).
+pub struct Meter {
+    /// The newest reading, in GB, and the highest this session.
+    pub rss: f64,
+    pub peak: f64,
+    /// When it was read, and when the allocator's free pages were last given back.
+    read: Instant,
+    released: Instant,
+    /// Since when the memory has been over the cap, though the job gave back what it could.
+    over_since: Option<Instant>,
+    /// Why the run stopped itself (its memory).
+    pub note: Option<String>,
+}
+
+impl Meter {
+    fn new() -> Meter {
+        let rss = rss_gb();
+        Meter {
+            rss,
+            peak: rss,
+            read: Instant::now(),
+            released: Instant::now(),
+            over_since: None,
+            note: None,
+        }
+    }
+
+    fn take(&mut self, rss: f64) {
+        self.rss = rss;
+        self.peak = self.peak.max(rss);
+        self.read = Instant::now();
+    }
+
+    /// Read the memory now, giving the allocator's free pages back first when it is time to.
+    /// Over `cap`, give back what can be (the free pages, and the grids `search` is not using)
+    /// and read again; still over, note since when, and once that is [`CAP_HOLD_S`] ago, say
+    /// why (the note) and return true: the run is to stop.
+    fn check(&mut self, cap: Option<f64>, search: &Search) -> bool {
+        if self.released.elapsed().as_secs_f64() >= RELEASE_S {
+            release_free_memory();
+            self.released = Instant::now();
+        }
+        self.take(rss_gb());
+        let Some(cap) = cap else { return false };
+        if self.rss <= cap {
+            self.over_since = None;
+            return false;
+        }
+        search.shed_grids();
+        release_free_memory();
+        self.released = Instant::now();
+        self.take(rss_gb());
+        if self.rss <= cap {
+            self.over_since = None;
+            return false;
+        }
+        let since = *self.over_since.get_or_insert_with(Instant::now);
+        if since.elapsed().as_secs_f64() < CAP_HOLD_S {
+            return false;
+        }
+        self.note = Some(format!(
+            "memory {:.1} GB has been over the cap of {cap} GB for {:.0} s",
+            self.rss,
+            since.elapsed().as_secs_f64()
+        ));
+        true
+    }
+}
+
 /// A live explore run, with or without a GPU backend.
 #[derive(Default)]
 pub struct ExploreRun {
@@ -604,7 +718,8 @@ pub struct ExploreRun {
 struct Running {
     spec: ExploreSpec,
     search: Search,
-    runs: Runs,
+    /// Its runs: written at each step's end, and every [`PUBLISH_S`] while a step runs.
+    runs: std::sync::Mutex<Runs>,
     /// The threads of the runs on the processor, and of the GPU's batches (with a GPU); all the
     /// threads the run was given ([`worker_threads`]).
     pool: rayon::ThreadPool,
@@ -619,10 +734,7 @@ struct Running {
     loaded: LoadStats,
     gpu_fails: u32,
     gpu_error: Option<String>,
-    note: Option<String>,
-    rss: f64,
-    /// When the allocator's free pages were last given back ([`release_free_memory`]).
-    released: Instant,
+    meter: std::sync::Mutex<Meter>,
     rate: Rate,
     /// A Quick Start build's atlas, once published.
     published: Option<Published>,
@@ -660,9 +772,11 @@ fn elapsed(r: &Running) -> f64 {
     r.elapsed_before + r.t0.elapsed().as_secs_f64()
 }
 
-/// Run one search step on a thread of its own, writing the job's progress every
-/// [`PUBLISH_S`] seconds while it runs, and setting `halt` (the step's stop) as soon as the
-/// run's stop flag is set or another process pauses the job. Returns the step's GPU error.
+/// Run one search step on a thread of its own and watch it: read the memory every
+/// [`MEMORY_S`] seconds (stopping the run when it stays over the cap, [`Meter::check`]), and
+/// every [`PUBLISH_S`] write the runs that have ended and the job's progress; set `halt` (the
+/// step's stop) as soon as the run's stop flag is set, the memory says stop, or another process
+/// pauses the job. Returns the step's GPU error, or the error writing its runs.
 fn step_publishing(
     cx: &RunCx<'_>,
     r: &Running,
@@ -670,11 +784,12 @@ fn step_publishing(
     gpu: Option<(&mut dyn Backend, &rayon::ThreadPool)>,
     lim: &StepLimits<'_>,
     halt: &AtomicBool,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
     use std::sync::mpsc::{RecvTimeoutError, channel};
     let (tx, rx) = channel::<()>();
     let (search, pool) = (&r.search, &r.pool);
-    std::thread::scope(|sc| {
+    let mut written: Result<(), String> = Ok(());
+    let gpu_error = std::thread::scope(|sc| {
         let worker = sc.spawn(move || {
             let e = search.step(pool, gpu, lim);
             let _ = tx.send(());
@@ -686,9 +801,24 @@ fn step_publishing(
             if cx.stopped() {
                 halt.store(true, Ordering::SeqCst);
             }
+            let mut m = r.meter.lock().unwrap();
+            if m.read.elapsed().as_secs_f64() >= MEMORY_S && m.check(r.spec.max_rss_gb, search) {
+                halt.store(true, Ordering::SeqCst);
+                cx.stop.store(true, Ordering::SeqCst);
+            }
+            drop(m);
             if last.elapsed().as_secs_f64() >= PUBLISH_S {
                 if cx.paused_elsewhere() {
                     halt.store(true, Ordering::SeqCst);
+                }
+                // The runs that have ended, written now: a search killed meanwhile keeps them.
+                if written.is_ok() {
+                    let mut d = search.take_delta();
+                    d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
+                    written = r.runs.lock().unwrap().write(&d);
+                    if written.is_err() {
+                        halt.store(true, Ordering::SeqCst);
+                    }
                 }
                 cx.publish(progress_of(r, backend, JobStatus::Running));
                 last = Instant::now();
@@ -698,7 +828,8 @@ fn step_publishing(
             Ok(e) => e,
             Err(p) => std::panic::resume_unwind(p),
         }
-    })
+    });
+    written.map(|_| gpu_error)
 }
 
 /// The progress of a live run with this backend (its name) and status, part way through a step
@@ -707,6 +838,7 @@ fn progress_of(r: &Running, backend: &str, status: JobStatus) -> Value {
     let (elites, niches) = r.search.elites();
     let per_s = r.rate.per_s(r.search.screened());
     let gpu_threads = r.gpu_pool.as_ref().map_or(0, |p| p.current_num_threads());
+    let m = r.meter.lock().unwrap();
     let mut p = ExploreProgress {
         job: r.job,
         status: super::status_name(status).into(),
@@ -723,11 +855,12 @@ fn progress_of(r: &Running, backend: &str, status: JobStatus) -> Value {
         session_s: r.t0.elapsed().as_secs_f64(),
         backend: backend.to_string(),
         gpu_error: r.gpu_error.clone(),
-        rss_gb: r.rss,
+        rss_gb: m.rss,
+        rss_peak_gb: m.peak,
         families: r.search.families(),
         loaded: Some(r.loaded.clone()),
         folder: r.folder.display().to_string(),
-        note: r.note.clone(),
+        note: m.note.clone(),
         panics: r.search.panics(),
         capped: r.search.capped(),
         given_up: r.search.given_up(),
@@ -771,7 +904,7 @@ impl Strategy for ExploreRun {
         self.st = Some(Running {
             spec,
             search,
-            runs,
+            runs: std::sync::Mutex::new(runs),
             pool,
             gpu_pool,
             threads: cx.threads,
@@ -783,9 +916,7 @@ impl Strategy for ExploreRun {
             loaded,
             gpu_fails: 0,
             gpu_error: None,
-            note: None,
-            rss: rss_gb(),
-            released: Instant::now(),
+            meter: std::sync::Mutex::new(Meter::new()),
             rate: Rate::new(screened),
             published: None,
         });
@@ -794,14 +925,12 @@ impl Strategy for ExploreRun {
 
     fn step(&mut self, cx: &RunCx<'_>, _sink: &mut Sink) -> Result<Step, String> {
         let r = self.st.as_mut().ok_or("the search was not restored")?;
-        r.rss = rss_gb();
-        if let Some(cap) = r.spec.max_rss_gb
-            && r.rss > cap
+        // Between steps too: a run whose memory has stayed over its cap stops.
+        if r.meter
+            .get_mut()
+            .unwrap()
+            .check(r.spec.max_rss_gb, &r.search)
         {
-            r.note = Some(format!(
-                "memory {:.1} GB is over the cap of {cap} GB",
-                r.rss
-            ));
             cx.stop.store(true, Ordering::SeqCst);
             return Ok(Step::More);
         }
@@ -836,7 +965,7 @@ impl Strategy for ExploreRun {
             (Some(b), Some(p)) => Some((&mut **b as &mut dyn Backend, p)),
             _ => None,
         };
-        let err = step_publishing(cx, r, &backend, gpu, &lim, &halt);
+        let err = step_publishing(cx, r, &backend, gpu, &lim, &halt)?;
         if trace() {
             let past = Instant::now()
                 .saturating_duration_since(until)
@@ -881,14 +1010,10 @@ impl Strategy for ExploreRun {
         }
         let mut d = r.search.take_delta();
         d.meta.push(("elapsed_s".into(), elapsed(r).to_string()));
-        r.runs.write(&d)?;
-        r.runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
+        let runs = r.runs.get_mut().unwrap();
+        runs.write(&d)?;
+        runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
         r.rate.note(r.search.screened());
-        // Between steps no run is under way, so nothing waits on the allocator meanwhile.
-        if r.released.elapsed().as_secs_f64() >= RELEASE_S {
-            release_free_memory();
-            r.released = Instant::now();
-        }
         Ok(Step::More)
     }
 
@@ -922,7 +1047,8 @@ impl Strategy for ExploreRun {
         let all = r.pool.current_num_threads()
             + r.gpu_pool.as_ref().map_or(0, |p| p.current_num_threads());
         let pool = worker_pool(all, "explore-publish")?;
-        let rows = crate::explore::atlas::rows_on(&r.runs, &opts, &r.spec.uuid, Some(&pool))?;
+        let runs = r.runs.get_mut().unwrap();
+        let rows = crate::explore::atlas::rows_on(runs, &opts, &r.spec.uuid, Some(&pool))?;
         let w = cx.lib.publish_atlas(cx.job, &r.spec.uuid, &rows)?;
         if trace() {
             eprintln!(

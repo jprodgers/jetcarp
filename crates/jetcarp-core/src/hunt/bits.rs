@@ -584,6 +584,70 @@ impl Universe {
         out
     }
 
+    /// The non-zero cells inside a box (`[i_min, i_max, j_min, j_max]`, absolute), sorted.
+    pub fn cells_within(&self, b: [i32; 4]) -> Vec<LCell> {
+        let Some(bb) = self.bbox else {
+            return Vec::new();
+        };
+        let (lo_j, hi_j) = (b[2].max(bb[2]), b[3].min(bb[3]));
+        let (lo_i, hi_i) = (b[0].max(bb[0]), b[1].min(bb[1]));
+        let mut out = Vec::new();
+        if lo_j > hi_j || lo_i > hi_i {
+            return out;
+        }
+        let w0 = ((lo_i - self.i0) / 64) as usize;
+        let w1 = ((hi_i - self.i0) / 64) as usize;
+        for r in (lo_j - self.j0) as usize..=(hi_j - self.j0) as usize {
+            if !self.rows_any[r] {
+                continue;
+            }
+            let j = self.j0 + r as i32;
+            let start = out.len();
+            for k in 0..self.plan.ntypes {
+                for w in w0..=w1 {
+                    // The bits of this word inside the box's columns.
+                    let base = self.i0 + 64 * w as i32;
+                    let a = (lo_i - base).clamp(0, 64);
+                    let e = (hi_i - base + 1).clamp(0, 64);
+                    if e <= a {
+                        continue;
+                    }
+                    let hi = if e == 64 { !0u64 } else { (1u64 << e) - 1 };
+                    let mask = hi & !((1u64 << a) - 1);
+                    let mut occ = 0u64;
+                    for p in 0..self.np {
+                        occ |= self.cur[self.idx(k, p, r, w)];
+                    }
+                    occ &= mask;
+                    while occ != 0 {
+                        let bit = occ.trailing_zeros() as usize;
+                        occ &= occ - 1;
+                        let alive = self.cur[self.idx(k, 0, r, w)] >> bit & 1 == 1;
+                        let s = if alive {
+                            1
+                        } else {
+                            let mut v = 0u8;
+                            for p in 1..self.np {
+                                v |= ((self.cur[self.idx(k, p, r, w)] >> bit & 1) as u8) << (p - 1);
+                            }
+                            v
+                        };
+                        out.push(LCell {
+                            j,
+                            i: base + bit as i32,
+                            k: k as u32,
+                            s,
+                        });
+                    }
+                }
+            }
+            if self.plan.ntypes > 1 {
+                out[start..].sort_unstable();
+            }
+        }
+        out
+    }
+
     /// The non-zero cells outside a region (`[i_min, i_max, j_min, j_max]`, absolute), sorted.
     pub fn cells_outside(&self, region: [i32; 4]) -> Vec<LCell> {
         let mut out = Vec::new();
