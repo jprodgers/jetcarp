@@ -1,7 +1,7 @@
 //! What the machine holds, read from the system in milliseconds, with no benchmark: memory, the
 //! processor and its cores, and each GPU's memory where the system says it.
 //!
-//! - **Linux**: `/proc/meminfo` (MemTotal, MemAvailable), `/proc/cpuinfo`, and for AMD and Intel
+//! - **Linux**: `/proc/meminfo` (MemTotal, MemAvailable), `/proc/cpuinfo`, and for AMD
 //!   GPUs `/sys/class/drm/card*/device/mem_info_vram_total` and `mem_info_gtt_total`.
 //! - **Windows**: `GlobalMemoryStatusEx`, the registry's `ProcessorNameString`, and DXGI's
 //!   dedicated and shared memory for each adapter.

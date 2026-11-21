@@ -22,7 +22,7 @@ big enough computer gets the same result from the same scene, as JETCARP promise
 | --- | --- | --- | --- |
 | Memory, and how much is free | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` and the virtual memory statistics |
 | The processor and its cores | `/proc/cpuinfo` | the registry's processor name | `sysctl machdep.cpu.brand_string` |
-| GPU memory | AMD's and Intel's `mem_info_vram_total` and `mem_info_gtt_total` under `/sys/class/drm` | DXGI's dedicated and shared memory | one pool shared with the processor |
+| GPU memory | `mem_info_vram_total` and `mem_info_gtt_total` under `/sys/class/drm`, which AMD's driver writes (other drivers' GPUs are estimated) | DXGI's dedicated and shared memory | one pool shared with the processor |
 
 A GPU whose memory the system does not report gets its limit from its buffer limits and a cautious
 share of the memory reserved for JETCARP, said as an estimate. On a computer whose firmware sets
@@ -123,8 +123,8 @@ The MCP tools (and the scripts they run) work within **an AI's share** of JETCAR
 **small** by default: worlds of up to 4 million cells, as before 0.4.3, on any computer. Raise it,
 up to **all of it**, when an AI should check on a massive grid; the MCP server takes a new share
 when it next starts (`jetcarp mcp`, or the app for its AI control). The tools' descriptions are
-written from the live values, and `reference {"what": "machine"}` shows an AI this computer, its score, its
-limits and its own. An AI can read the score; it can never run the benchmark.
+written from the live values, and `reference {"what": "machine"}` shows an AI this computer, its
+score, its limits and its own. An AI can read the score; it can never run the benchmark.
 
 ## The benchmark and the score
 

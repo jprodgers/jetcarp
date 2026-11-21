@@ -55,27 +55,33 @@ fn wizard(dir: &Path, mock: Mock) -> Wizard {
 fn pages_follow_the_profile() {
     let d = scratch("pages");
     let mut w = wizard(&d, Mock::default());
-    use Page::{Data, Desktop, Packs, Progress, Summary, Welcome};
+    use Page::{Data, Desktop, Measure, Packs, Progress, Summary, Welcome};
     let pf = Page::Profile;
-    assert_eq!(w.pages(), [Welcome, pf, Summary, Progress]);
+    // Every profile measures the computer first, unless unticked (#213).
+    assert_eq!(w.pages(), [Welcome, pf, Measure, Summary, Progress]);
     let want = [
         (
             Profile::DesktopArt,
-            vec![Welcome, pf, Desktop, Summary, Progress],
+            vec![Welcome, pf, Desktop, Measure, Summary, Progress],
         ),
         (
             Profile::Explorer,
-            vec![Welcome, pf, Packs, Summary, Progress],
+            vec![Welcome, pf, Packs, Measure, Summary, Progress],
         ),
         (
             Profile::Researcher,
-            vec![Welcome, pf, Data, Packs, Summary, Progress],
+            vec![Welcome, pf, Data, Packs, Measure, Summary, Progress],
         ),
         (
             Profile::Everything,
-            vec![Welcome, pf, Data, Packs, Desktop, Summary, Progress],
+            vec![
+                Welcome, pf, Data, Packs, Desktop, Measure, Summary, Progress,
+            ],
         ),
-        (Profile::BlankSlate, vec![Welcome, pf, Summary, Progress]),
+        (
+            Profile::BlankSlate,
+            vec![Welcome, pf, Measure, Summary, Progress],
+        ),
     ];
     for (p, pages) in want {
         w.choose(p);
@@ -114,7 +120,10 @@ fn forward_back_and_later() {
     w.next();
     assert_eq!(w.page(), Page::Packs);
     w.next();
+    assert_eq!(w.page(), Page::Measure);
+    w.next();
     assert_eq!(w.page(), Page::Summary);
+    w.back();
     w.back();
     assert_eq!(w.page(), Page::Packs);
     // Later closes and records nothing.
@@ -200,6 +209,14 @@ fn applying_blank_slate_records_it_and_shows_it_done() {
     w.open = true;
     w.next();
     w.choose(Profile::BlankSlate);
+    w.next();
+    // Measuring is ticked by default, and goes into what setup does; unticked here, so the test
+    // does not run the minute-long benchmark.
+    assert_eq!(w.page(), Page::Measure);
+    assert!(w.measure_on);
+    assert_eq!(w.apply_input().unwrap().measure, Some(true));
+    w.measure_on = false;
+    assert_eq!(w.apply_input().unwrap().measure, Some(false));
     w.next();
     assert_eq!(w.page(), Page::Summary);
     w.next();
