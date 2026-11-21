@@ -68,13 +68,19 @@ folders, as one over standard input and output.
 Two choices loosen this, for convenience, and both are off unless you make them:
 
 - **Keeping the token** (`jetcarp mcp --http --keep-token`, or *Keep this token for next time* in
-  the app) means a client need not be given a new token each time the endpoint starts. The token
-  stays in the same private file when the endpoint stops, and is taken back only if the file is
-  still readable by you alone. What it gives up: a token that never changes is worth more to
-  anyone who sees it (a screen share, a copied client configuration, a program running as you that
-  reads the file), and whoever has it keeps their access, whenever the endpoint runs, until you make
-  a new one (`--new-token`, or *New token* in the app, which refuses the old one at once). On Linux
-  the runtime folder is emptied when you log out, which ends a kept token too.
+  the app) means a client need not be given a new token each time the endpoint starts. The token is
+  kept in a private file in JETCARP's settings folder (`http-tokens/`, a folder readable by you
+  alone: on Linux and macOS mode 0700, the file 0600; on Windows through your profile folder's
+  permissions), and is taken back only if the file is still readable by you alone and was written
+  as kept. JETCARP says so each time it keeps one: on the command line in one line of its standard
+  error, in the app under the box. What it gives up: a kept token survives restarts, logouts and
+  reboots, and stays valid until you make a new one (`--new-token`, or *New token* in the app,
+  which refuses the old one at once and replaces the file; turning keeping off deletes it). A token
+  that never changes is worth more to anyone who sees it (a screen share, a copied client
+  configuration, a program running as you that reads the file, a backup or copy of your settings
+  folder; on Windows the settings folder is in your roaming profile, which some networks copy to
+  other computers), and whoever has it keeps their access, whenever the endpoint runs, until then.
+  `jetcarp uninstall --settings` deletes it with the rest of the settings folder.
 - **Allowing an origin** (`--allow-origin URL`, or *Web pages that may connect* in the app) lets a
   browser-based client from that one origin connect, with the token, and answers its pages with
   the CORS headers browsers need. Only exact origins are accepted (no wildcards, no `null`), and

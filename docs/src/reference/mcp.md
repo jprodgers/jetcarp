@@ -111,21 +111,31 @@ a 17th session ends the one unused longest.
 #### Keeping the token
 
 By default the token is new each time the endpoint starts, so a client has to be given the new one
-each time. `jetcarp mcp --http --keep-token` keeps it: the token stays in the same file, readable
-only by you, when the server stops, and the next start with `--keep-token` takes it back. The file
-then holds the token alone (`{"token": "...", "kept": true}`), since nothing is listening. A start
-without `--keep-token` makes a new token and forgets the kept one; `--new-token` makes a new one and
-keeps that, and the old one is refused from then on. In the app, *Keep this token for next time*
-does the same for its endpoint, and *New token* replaces the token while it runs, ending the
-sessions started with the old one.
+each time. `jetcarp mcp --http --keep-token` keeps it, in a private file in JETCARP's
+[settings folder](folders.md#what-lives-in-each-folder): `http-tokens/mcp-http.json` (the app's is
+`http-tokens/app-http.json`), holding the token alone (`{"token": "...", "kept": true}`). The next
+start with `--keep-token` takes it back, so a kept token survives restarts, logouts and reboots,
+and stays valid until a new one is made. Each start that keeps it says so, on one line of its
+standard error, with the file's name:
 
-A kept token is taken back only from a file that is still private (on Linux and macOS, the folder
-0700 and the file 0600) and was written as kept; otherwise the start makes a new one. The runtime
-folder on Linux, `$XDG_RUNTIME_DIR/jetcarp`, is emptied when you log out, so there the token is
-kept until then; on macOS (`~/.cache/jetcarp`) and Windows (`%LOCALAPPDATA%\jetcarp`) it is kept
-until you make a new one. The token is shown only where it always was: the startup lines, `--json`,
-and the file. [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what
-keeping it gives up.
+```text
+jetcarp mcp: the token is kept in /home/ada/.config/jetcarp/http-tokens/mcp-http.json, in JETCARP's settings folder: it survives restarts and reboots, and stays valid until a new one is made (--new-token)
+```
+
+`--new-token` makes a new token and keeps that: the kept file is replaced, and the old token is
+refused from then on. A start without `--keep-token` makes a new token and deletes the kept file.
+In the app, *Keep this token for next time* does the same for its endpoint, and says the same
+under the box while it is ticked; unticking it deletes the kept file, and *New token* replaces the
+token while the endpoint runs, ending the sessions started with the old one.
+
+The folder is made readable by you alone (on Linux and macOS, mode 0700, and the file 0600), and a
+kept token is taken back only from a file that is still private (not a link, the folder 0700 and
+the file 0600) and was written as kept; otherwise the start makes a new one. On Windows the file
+has the permissions of your own profile folder, as the runtime folder's files do. The token is
+shown only where it always was: the startup lines, `--json` and the files, never in the warning.
+`jetcarp uninstall --settings` deletes the kept tokens with the rest of the settings folder.
+[`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what keeping it
+gives up.
 
 #### Web pages (allowed origins)
 

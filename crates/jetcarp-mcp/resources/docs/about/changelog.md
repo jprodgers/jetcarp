@@ -24,7 +24,9 @@ day later (0.4.2: 17 November here, 18 November there).
   and folders of `jetcarp mcp` over stdio, and a private world of its own, or the app's.
   `httparse` reads the requests; `deny.toml` allows it for the MCP server only. Two choices, both
   off unless made: `--keep-token` (in the app, *Keep this token for next time*) keeps the token
-  for the next start, in the same private file, and `--new-token` (*New token*) replaces it; and
+  in a private file in the settings folder, where it survives restarts and reboots and stays valid
+  until `--new-token` (*New token*) replaces it, and says so each time; turning it off deletes it;
+  `jetcarp uninstall --settings` counts the file as JETCARP's; and
   `--allow-origin URL` (in the app, *Web pages that may connect*) lets a browser-based client from
   that exact origin connect, with the token, its preflight and answers given the CORS headers they
   need, while wildcards and `null` are refused. `SECURITY.md` says what each gives up.

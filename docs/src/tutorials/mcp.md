@@ -76,10 +76,11 @@ claude mcp add --transport http jetcarp-http http://127.0.0.1:47812/mcp \
 ```
 
 The token is new each time the server starts, so the client needs the new one each time, unless
-you ask for it to be kept: `jetcarp mcp --http --keep-token` keeps it for the next start, in the
-same file, and `--new-token` replaces it with a new one when you want the old one to stop working.
-Keeping it saves setting the client up again, but whoever learns it keeps their access until you
-make a new one.
+you ask for it to be kept: `jetcarp mcp --http --keep-token` keeps it in a private file in
+JETCARP's settings folder, and says so each time it starts. A kept token survives restarts and
+reboots, and stays valid until you make a new one with `--new-token`, which stops the old one
+working; starting without `--keep-token` deletes it. Keeping it saves setting the client up again,
+but whoever learns it keeps their access until then.
 
 A client that runs in a web browser sends its page's origin, and the server refuses every origin
 but its own unless you name it: `--allow-origin http://localhost:6274` lets that one page connect
@@ -315,8 +316,10 @@ next launch. `jetcarp mcp --http --app` does the same from a terminal, with `jet
 
 Below the token, two choices, both off until you make them, are saved with the app's settings:
 *Keep this token for next time* gives the client the same token the next time you tick the box,
-and *New token* replaces it at once (the old one stops working, and its clients must connect
-again). Under *Web pages that may connect*, type the exact origin of a browser-based client you
+even after a reboot, and says under it that the token is stored in JETCARP's settings folder and
+stays valid until you press *New token*. *New token* replaces it at once (the old one stops
+working, and its clients must connect again); unticking the box deletes the kept token. Under *Web
+pages that may connect*, type the exact origin of a browser-based client you
 trust, such as `http://localhost:6274`, and press *Allow*; *Remove* takes it off the list again.
 
 Attached to the app, the assistant also gets `app_display`: where the grid shows (window, full

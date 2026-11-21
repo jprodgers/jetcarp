@@ -86,7 +86,10 @@ it keeps a copy of macOS's wallpaper store as it was in `wallpaper-store-before-
 *Fit to this computer* keeps the pictures of its sweeps in `tune/`. If you publish packs, `pack/`
 holds your publisher key (`publisher_ed25519`, with `publisher_ed25519.pub`), who you are as a
 publisher (`publisher.json`) and the rater book (`raters.json`); see [Packs](../guides/packs.md).
-These are everything JETCARP keeps here, and what `jetcarp uninstall --settings` counts as
+If you keep the MCP server's HTTP token ([Keeping the token](mcp.md#keeping-the-token)),
+`http-tokens/` holds it, readable by you alone: `mcp-http.json` for `jetcarp mcp --http
+--keep-token` and `app-http.json` for the app's; not keeping it, or making a new one, deletes or
+replaces the file. These are everything JETCARP keeps here, and what `jetcarp uninstall --settings` counts as
 JETCARP's; it deletes them all but `pack/`'s four files, which go only with `--publisher-key`
 ([Uninstalling](../guides/uninstalling.md)).
 Files written by another settings version, or that cannot be read, give the defaults.
@@ -139,8 +142,8 @@ names you type (only the last one of a full path). A folder JETCARP names after 
 <a id="runtime-folder"></a>**Runtime.** One more, small folder holds the files through which the running app and the background
 host accept local control (their port and access token), and those of the MCP server's HTTP
 endpoint while it runs (its URL and token: `mcp-http-endpoint.json` for `jetcarp mcp --http`,
-`app-http-endpoint.json` for the app's; a [kept token](mcp.md#keeping-the-token) stays in its file
-after the endpoint stops): `$XDG_RUNTIME_DIR/jetcarp`, else
+`app-http-endpoint.json` for the app's; a [kept token](mcp.md#keeping-the-token) is in the
+settings folder instead): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
 the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
 every copy of JETCARP you run, whatever folders the others point at, so there is one background
