@@ -202,6 +202,8 @@ pub fn all() -> &'static [TableDef] {
                     c("date", Ty::Str),
                     n("range", Ty::Str),
                     n("mover", Ty::Str),
+                    // Format 1.1: the isotropic rule range (#238).
+                    n("iso_range", Ty::Str),
                 ],
                 sort: &["pattern_id", "rule", "publisher", "date"],
                 partition: &[],
@@ -602,6 +604,10 @@ pub struct VerificationRow {
     pub date: String,
     pub range: Option<String>,
     pub mover: Option<String>,
+    /// Format 1.1: the isotropic rule range as JSON, on the main row of patterns on the square
+    /// grid's touching neighbours ([`jetcarp_core::pattern::IsoRange`]).
+    #[serde(default)]
+    pub iso_range: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

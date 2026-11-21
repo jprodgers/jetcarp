@@ -48,6 +48,7 @@
 - [How JETCARP generalises automata to any tiling](automata/generalising.md)
 - [Life-like rules](automata/life-like.md)
 - [Generations](automata/generations.md)
+- [Isotropic rules: Hensel's notation](automata/isotropic.md)
 - [Larger than Life](automata/larger-than-life.md)
 - [Elementary (Wolfram) rules](automata/elementary.md)
 - [Hexagonal row rules: HexW and HexT](automata/hexagonal-rows.md)
@@ -108,4 +109,5 @@
 - [How JETCARP is tested](about/testing.md)
 - [Changelog](about/changelog.md)
 - [Roadmap](about/roadmap.md)
+- [Accessibility](about/accessibility.md)
 - [Contributing](about/contributing.md)

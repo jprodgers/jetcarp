@@ -736,6 +736,7 @@ pub fn mover_record(
         rule: notation,
         rules: vec![],
         range: None,
+        iso_range: None,
         neighborhood: spec.nb,
         steps_per_gen: spec.steps_per_gen,
         tiling_name: tiling_display_name(&tiling),

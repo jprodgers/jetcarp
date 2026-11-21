@@ -44,7 +44,7 @@ The *state hash* identifies a world's present state. Since JETCARP 0.4.3 it is v
 - a digest of the scene's tiling, so that two worlds on different tilings never share a hash.
 
 Left out are what only shows (names, palettes, JACA's glow), what follows from the rest (a B0 rule's
-background, which is the rule run from an empty world for the automaton's step count; compiled
+background, which is the rule run from its start for the automaton's step count; compiled
 tables and neighbourhoods), and the history: the command log is not hashed, so two ways of reaching
 the same state give the same hash. Also left out are the counts of changed cells kept for recent
 generations, which depend on whether a front end or the GPU counted them, so a world reopened from
@@ -110,6 +110,33 @@ That is why this book gives a scene for every figure. Each picture is made from 
 (animations), so a reader with JETCARP can make it again, and the pictures cannot drift from the
 program. Each result on the [Findings](findings.md) page names its scene in the same way.
 
+## B0 rules whose background is live
+
+JETCARP 0.4.3 changed where one kind of B0 rule starts (#238). A rule with birth on 0 whose
+background turns live for good at the first step, because it survives on every neighbour count the
+tiles have (`S8` on the square grid), now starts on the live background at generation 0, as Golly
+reads such a rule, and the two agree generation for generation. Before, it started on the empty
+world. So a scene from 0.4.2 or earlier with such a rule replays to other states, and its recorded
+hash no longer matches: the rule's family, `lifelike_b0`, went to version 3, and a library flags
+records of B0 rules for `jetcarp library reverify`. B0 rules whose background keeps flashing, and
+every other rule, replay as before. The pinned scenes that moved are the Quick Start entries of
+AntiLife (`B0123478/S01234678`) and InverseLife (`B0123478/S34678`), both live for good on the
+square grid; the version change alone moved the hashes of the other B0 entries, whose states are
+unchanged.
+
+## Larger than Life rules with birth on 0
+
+JETCARP 0.4.3 also began keeping two-state [Larger than Life](../automata/larger-than-life.md#rules-with-birth-on-0)
+rules with birth on 0 relative to their background, as B0 Life-like rules are, so they match Golly
+from generation 0 (#238). Before, such a rule ran as written, and at its first step every cell with
+no live cell in reach was born. So a scene from 0.4.2 or earlier with such a rule replays to other
+states, and its recorded hash no longer matches: the family, `ltl`, went to version 3, and a
+library flags Larger than Life records for `jetcarp library reverify`. Larger than Life rules
+without birth on 0, and those with more than two states, replay as before. No Quick Start entry has
+such a rule, so no pinned state moved: the version change alone moved the hashes of the eight Larger
+than Life entries (their version 1 hashes, of the states alone, are the same before and after), and
+the rule-semantics scenes gained two, `ltl:b0` and `ltl:live`.
+
 ## Pinned geometry and dynamics
 
 Three tests pin JETCARP's behaviour to recorded values, so that a change to a tiling or a rule cannot
@@ -159,7 +186,10 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   (which must fall back to the CPU, never run differently).
 - **More families** (`families.rs`): JACA (with blast radii 0 to 64, its glow and its counts),
   B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
-  Larger than Life on lattices and patches,
+  isotropic rules (two-state, Generations and B0, from an odd step count too, and the isotropic
+  tables of B/S rules against the B/S stepper),
+  Larger than Life on lattices and patches (two-state rules with B0 too, from an odd step count,
+  and the CPU going on from where the GPU stopped),
   the forest fire (at probabilities 0 and 1, and past 2^32 steps),
   sandpiles (grains dropped and lost, open patch edges, piles past 2^32 grains),
   on lattices and patches with every edge, through scripts, reseeds and period detection, and

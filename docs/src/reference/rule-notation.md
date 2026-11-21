@@ -17,8 +17,8 @@ A few things hold for every form:
   and the MCP tools accept a rule's name (`Life`, `Brian's Brain`) wherever they accept notation. A
   scene file's `rule` field must hold notation; a name there is refused with *"'Life' is not a
   rule"*. See [Named rules](#named-rules).
-- **Some rules need a particular grid.** Elementary rules, Margolus block rules and von Neumann's
-  29-state rule need the square grid, the two-parent hexagon rules the `hex` grid and the
+- **Some rules need a particular grid.** Elementary rules, Margolus block rules, isotropic rules in
+  Hensel's notation and von Neumann's 29-state rule need the square grid, the two-parent hexagon rules the `hex` grid and the
   three-parent ones the flat-top `hex_flat` grid. Everything else runs on any tiling. A rule that
   cannot run on the chosen tiling is refused with a message that says which grid it needs.
 
@@ -26,6 +26,7 @@ A few things hold for every form:
 | --- | --- | --- |
 | Life-like (birth/survival) | `B3/S23`, `B3/S23V`, `B3,10/S2,3` | [Life-like rules](../automata/life-like.md) |
 | Generations | `B2/S/C3` | [Generations](../automata/generations.md) |
+| Isotropic (Hensel's notation) | `B2-a/S12`, `B3-cnqy/S23-a` | [Isotropic rules](../automata/isotropic.md) |
 | Larger than Life | `R5,C2,S33-57,B34-45` | [Larger than Life](../automata/larger-than-life.md) |
 | Elementary | `W30`, `Rule 30` | [Elementary rules](../automata/elementary.md) |
 | Hexagonal rows | `HexW 6`, `HexT3 sum 588` | [HexW and HexT](../automata/hexagonal-rows.md) |
@@ -69,6 +70,30 @@ an ordinary B/S rule (`B3/S23/C2` is `B3/S23`). A `V` picks edge neighbours. It 
 (`B2/S/C3V`) or right after the B or S counts (`B3/S23V/C4`, `B47V/S13568/4`); JETCARP writes it at
 the end. A `V` anywhere else is refused with the rule written the right way: `B4V7/S13568/4` gives
 *"a V goes at the end of the rule or right after its B or S counts: B47/S13568/C4V"*.
+
+## Isotropic rules: Hensel's notation
+
+A B/S or Generations rule whose counts carry letters: each letter after a count names one arrangement
+of that many live neighbours among the square grid's eight touching neighbours, the same under
+turns and reflections (the [Isotropic rules](../automata/isotropic.md) page draws them all).
+
+| Form | Meaning |
+| --- | --- |
+| `B2ce/S12` | Letters after a count take only those arrangements of it |
+| `B2-a/S12` | A `-` after a count takes every arrangement but those listed (`B2-a` is `B2ceikn`) |
+| `B3/S2-3` | A count with no letters takes them all; `2-` with none listed does too |
+| `B2a/S/C3`, `B2a/S/3` | A third part makes a Generations rule, as above |
+| `B01e/S8` | Birth on 0 is allowed; 0 and 8 take no letters |
+
+The letters each count takes: `c e` for 1 and 7; `c e k a i n` for 2 and 6; `c e k a i n y q j r`
+for 3 and 5; `c e k a i n y q j r t w z` for 4. Letters may come in any order, and a count may appear
+twice, its letters adding up. JETCARP writes the rule back in the canonical form Golly's
+documentation gives: each count's letters in alphabetical order, or `-` and the letters left out
+where that is shorter (the plain form when they are the same length), and a count with every letter
+as its bare digit. A rule whose counts all have every letter or none is the B/S or Generations rule
+of those counts (`B3aceijknqry/S2aceikn3aceijknqry` is Life). Isotropic rules run on the square grid
+only, with touch neighbours: a `V` or an `H` after one is refused. A letter its count does not take
+is refused with the letters it does take.
 
 ## Larger than Life
 
@@ -234,8 +259,9 @@ automaton's `neighborhood` setting does, and the rule's default applies when nei
 scene file the setting is `"touch"` or `"edge"`. The command-line `--nb` options, script options
 and MCP tools also accept other names, in any case and with `-` or a space in place of `_`: `moore`,
 `touching`, `corner`, `vertex`, `t` or `8` for touch, and `von_neumann`, `vonneumann`, `vn`, `e` or
-`4` for edge. Ants, elementary and hexagonal row rules, Margolus rules, Lenia, Larger than Life and
-von Neumann's rule fix their own neighbourhood, and the setting is ignored for them.
+`4` for edge. Ants, elementary and hexagonal row rules, Margolus rules, isotropic rules, Lenia,
+Larger than Life and von Neumann's rule fix their own neighbourhood, and the setting is ignored for
+them.
 
 ## Checked against the program
 
@@ -243,7 +269,8 @@ von Neumann's rule fix their own neighbourhood, and the setting is ignored for t
 
 Every example on this page was parsed by JETCARP 0.4.0 through `jetcarp api call world.new` (each on
 a tiling it can run on), and the refusals were checked to fail with the messages quoted; the
-November 2026 audit parsed them again on 0.4.2. The table below is checked against the program on
+November 2026 audit parsed them again on 0.4.2, and the isotropic examples were added in 0.4.3. The
+table below is checked against the program on
 every change, by `docs/tools/check-rule-notation.py` in CI. The
 neighbourhood names are covered by JETCARP's unit tests, and `moore`, `von-neumann` and a refused
 `hex` were also tried on `jetcarp search census --nb`; the scene-file cases were run with
@@ -259,6 +286,14 @@ differs from what was typed:
 | `B2/S/3`, `B2/S/G3` | `B2/S/C3` (named *Brian's Brain*) |
 | `B3/S23/C2` | `B3/S23` |
 | `B3V/S23` | `B3/S23V` |
+| `B2kicen/S21`, `B2cekin/S12` | `B2-a/S12` (named *Just Friends*) |
+| `b3-CNQY/s23-A` | `B3-cnqy/S23-a` |
+| `B3qnyc/S2-a3` | `B3cnqy/S2-a3` |
+| `B4-qjrtwz/S` | `B4aceikny/S` |
+| `B2aceikn3/S`, `B2-3/S` | `B23/S` |
+| `B2-aceikn3/S` | `B3/S` |
+| `B3aceijknqry/S2aceikn3aceijknqry` | `B3/S23` (named *Life*) |
+| `B2a/S/3` | `B2a/S/C3` |
 | `B3/S23V/C4`, `B47V/S13568/4` | `B3/S23/C4V`, `B47/S13568/C4V` |
 | `R5,C0,M1,S34..58,B34..45,NM` | `R5,C2,S33-57,B34-45` (named *Bosco's Rule*) |
 | `Rule 30`, `Rule110`, `W 30` | `W30`, `W110`, `W30` |
@@ -283,7 +318,8 @@ differs from what was typed:
 Refused as expected: `23/3`, `S23/B3`, `W256`, `HexT 256`, `HexT sym 64`, `Layer 2/02`,
 `JACA B03/S23`, `JACA … blast 65`, `B2/S/C1`, `B2/S/C256`, `R21,…`, `…,NW0010`, `R3,C2,S2,B3,N+` on
 hexagons, `Lenia R=65`, `Priority 9: …`, `Table codd`, `Cyclic 1/1`, `Hodgepodge 255/3/3/28`, an
-incomplete turmite table, `W30`, `Margolus BBM` and `JvN29` off the square grid, `HexW 6` off `hex`,
+incomplete turmite table, `B1a/S`, `B5z/S`, `B0c/S`, `B2-a/S12V`, `B2-a/S12H`, `W30`,
+`Margolus BBM`, `B2-a/S12` and `JvN29` off the square grid, `HexW 6` off `hex`,
 `HexT 30` off `hex_flat`, the name `Coexistence`, and a name in a scene file.
 
 </div>

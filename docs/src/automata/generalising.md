@@ -154,6 +154,8 @@ JETCARP does not pretend otherwise:
   [hexagonal row rules](hexagonal-rows.md) (`HexW`, `HexT`) read the hexagons above. Their
   any-tiling counterpart is the layered family.
 - [Margolus block rules](margolus.md) update 2 × 2 blocks of squares on alternating offsets.
+- [Isotropic rules](isotropic.md) (`B2-a/S12`) name arrangements of the square grid's eight touching
+  neighbours, letter by letter; other tilings' neighbourhoods have other arrangements.
 - [Von Neumann's 29-state automaton](von-neumann.md) depends on the four compass directions; JETCARP
   refuses to place it on another tiling.
 - [Larger than Life](larger-than-life.md)'s cross-shaped neighbourhood (`N+`) has no meaning off the

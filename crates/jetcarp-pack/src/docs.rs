@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// The format's major and minor version, as documents write it.
-pub const VERSION: &str = "1.0";
+/// The format's major and minor version, as documents write it. 1.1 (JETCARP 0.4.3) added the
+/// `verifications` table's `iso_range` column, which a 1.0 reader ignores.
+pub const VERSION: &str = "1.1";
 /// The major version this reader understands.
 pub const MAJOR: u32 = 1;
 

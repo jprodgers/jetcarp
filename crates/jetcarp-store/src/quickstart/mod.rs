@@ -276,6 +276,7 @@ pub fn family_label(fam: Fam) -> &'static str {
         Fam::Table => "Table",
         Fam::VonNeumann => "Construction",
         Fam::SpectreGlider => "Spectre glider",
+        Fam::Isotropic => "Isotropic",
     }
 }
 

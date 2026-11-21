@@ -8,8 +8,9 @@
 //! read while a long hunt writes. Writes go through `BEGIN IMMEDIATE` transactions; batch them
 //! ([`Library::add_many`], [`Library::add_sightings`]) for speed.
 //!
-//! **Schema.** Version 3 ([`schema`]): `PRAGMA user_version` = 3 and the application id `JETC`.
-//! A library of schema 1 or 2 (before the 0.4 release) is brought up to 3 when it is opened. A library
+//! **Schema.** Version 4 ([`schema`]): `PRAGMA user_version` = 4 and the application id `JETC`.
+//! A library of schema 1, 2 or 3 is brought up to 4 when it is opened (3 to 4 adds patterns'
+//! isotropic rule ranges, 0.4.3). A library
 //! from a newer JETCARP is refused, and so is a catalog from before schema 1 (`catalog.sqlite`,
 //! made by a build before 0.4): there is no migration from those.
 //!
@@ -50,7 +51,7 @@
 //! between `states_min` and `states_max`) or an explicit `pattern_rules` row.
 
 use jetcarp_core::pattern::movers::MoverRecord;
-use jetcarp_core::pattern::range::{self, RuleRange, bs_parts, rule_family};
+use jetcarp_core::pattern::range::{self, IsoRange, RuleRange, bs_parts, rule_family};
 use jetcarp_core::pattern::site::Site;
 use jetcarp_core::pattern::verify::{Verification, default_periods, verify};
 use jetcarp_core::pattern::{
@@ -253,7 +254,9 @@ const PCOLS: &str = "p.id, p.name, p.rule, p.neighborhood, p.steps_per_gen, p.ti
     p.survive_max, p.states_min, p.states_max, \
     (SELECT group_concat(r.notation, char(10) ORDER BY pr.first_seen, r.id) \
        FROM pattern_rules pr JOIN rules r ON r.id = pr.rule_id WHERE pr.pattern_id = p.id), \
-    p.geometry_pin, p.engine_version, p.needs_reverify, p.semantics";
+    p.geometry_pin, p.engine_version, p.needs_reverify, p.semantics, \
+    p.iso_birth_min, p.iso_birth_max, p.iso_survive_min, p.iso_survive_max, p.iso_states_min, \
+    p.iso_states_max";
 
 fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord, String>> {
     let g_i = |i: usize| -> rusqlite::Result<i64> { row.get::<_, i64>(i) };
@@ -267,6 +270,15 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
             [g_i(27)? as u32, g_i(28)? as u32],
             [g_i(29)? as u32, g_i(30)? as u32],
             [g_i(31)? as u8, g_i(32)? as u8],
+        )),
+        None => None,
+    };
+    let iso_bits: Option<i64> = row.get(38)?;
+    let iso_range = match iso_bits {
+        Some(b) => Some(IsoRange::new(
+            [b as u64, g_i(39)? as u64],
+            [g_i(40)? as u64, g_i(41)? as u64],
+            [g_i(42)? as u8, g_i(43)? as u8],
         )),
         None => None,
     };
@@ -322,6 +334,7 @@ fn record_from_row(row: &rusqlite::Row) -> rusqlite::Result<Result<PatternRecord
                 .map(|s| s.lines().map(String::from).collect())
                 .unwrap_or_default(),
             range,
+            iso_range,
             geometry_pin: row.get(34).map_err(e)?,
             engine_version: row.get(35).map_err(e)?,
             needs_reverify: row.get::<_, i64>(36).map_err(e)? != 0,
@@ -369,6 +382,7 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
     // Compressed (a body is mostly phases and verification JSON; about a quarter the size).
     let body = unstored::pack_body(&body);
     let rg = r.range.as_ref();
+    let ir = r.iso_range.as_ref();
     let mut st = tx
         .prepare_cached(
             "INSERT INTO patterns (id, model, tiling, tiling_key, tiling_name, tile_types,
@@ -376,10 +390,12 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
                 max_cells, canonical, rule, range_bits, birth_min, birth_max, survive_min,
                 survive_max, states_min, states_max, seen, score, rating, state, name, label,
                 tags, notes, discovered_by, created, updated, body, emits, pin_key,
-                geometry_pin, needs_reverify, engine_version, family, semantics)
+                geometry_pin, needs_reverify, engine_version, family, semantics, iso_birth_min,
+                iso_birth_max, iso_survive_min, iso_survive_max, iso_states_min, iso_states_max)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                 ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
-                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44)
+                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46, ?47, ?48, ?49,
+                ?50)
              ON CONFLICT (id) DO UPDATE SET model = excluded.model, tiling = excluded.tiling,
                 tiling_key = excluded.tiling_key, tiling_name = excluded.tiling_name,
                 tile_types = excluded.tile_types, neighborhood = excluded.neighborhood,
@@ -398,7 +414,12 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
                 body = excluded.body, emits = excluded.emits, pin_key = excluded.pin_key,
                 geometry_pin = excluded.geometry_pin, needs_reverify = excluded.needs_reverify,
                 engine_version = excluded.engine_version, family = excluded.family,
-                semantics = excluded.semantics",
+                semantics = excluded.semantics, iso_birth_min = excluded.iso_birth_min,
+                iso_birth_max = excluded.iso_birth_max,
+                iso_survive_min = excluded.iso_survive_min,
+                iso_survive_max = excluded.iso_survive_max,
+                iso_states_min = excluded.iso_states_min,
+                iso_states_max = excluded.iso_states_max",
         )
         .map_err(e)?;
     st.execute(params![
@@ -446,6 +467,12 @@ fn put_pattern(tx: &Transaction, r: &PatternRecord) -> Result<(), String> {
         r.engine_version,
         semantics::family(&rule),
         sem,
+        ir.map(|x| x.birth_min as i64),
+        ir.map(|x| x.birth_max as i64),
+        ir.map(|x| x.survive_min as i64),
+        ir.map(|x| x.survive_max as i64),
+        ir.map(|x| x.states_min as i64),
+        ir.map(|x| x.states_max as i64),
     ])
     .map_err(e)?;
     Ok(())
@@ -627,6 +654,9 @@ fn add_in(
             if old.range.is_none() {
                 old.range = rec.range;
             }
+            if old.iso_range.is_none() {
+                old.iso_range = rec.iso_range;
+            }
             if old.gun.is_none() {
                 old.gun = rec.gun;
             }
@@ -721,6 +751,9 @@ pub fn prepare(mut rec: PatternRecord) -> Result<PatternRecord, String> {
     }
     if rec.range.is_none() {
         rec.range = range::rule_range(&rec)?;
+    }
+    if rec.iso_range.is_none() {
+        rec.iso_range = range::iso_range(&rec)?;
     }
     Ok(rec)
 }
@@ -1448,23 +1481,42 @@ fn where_clause(q: &Query) -> Result<(String, Vec<Sql>), String> {
             "EXISTS (SELECT 1 FROM pattern_rules pr JOIN rules r ON r.id = pr.rule_id
                 WHERE pr.pattern_id = p.id AND r.notation = {n})"
         );
+        let nb = q.neighborhood.or(nb_hint).unwrap_or(Nb::Touch);
+        // Inside an isotropic range: a rule of Hensel's notation, or a B/S rule on the touching
+        // neighbours as the isotropic rule with every letter of its counts.
+        let iso = IsoRange::masks_of(&rule)
+            .filter(|_| nb == Nb::Touch)
+            .map(|(b, s, c)| {
+                let b = arg(&mut v, Sql::Integer(b as i64));
+                let s = arg(&mut v, Sql::Integer(s as i64));
+                let c = arg(&mut v, Sql::Integer(c as i64));
+                format!(
+                    "(p.iso_birth_min IS NOT NULL
+                        AND (p.iso_birth_min & ~{b}) = 0 AND ({b} & ~p.iso_birth_max) = 0
+                        AND (p.iso_survive_min & ~{s}) = 0 AND ({s} & ~p.iso_survive_max) = 0
+                        AND {c} BETWEEN p.iso_states_min AND p.iso_states_max)"
+                )
+            });
         match bs_parts(&rule) {
             Some((b, s, c)) => {
-                let nb = q.neighborhood.or(nb_hint).unwrap_or(Nb::Touch);
                 let nb = arg(&mut v, Sql::Text(name_of(&nb)));
                 let b = arg(&mut v, Sql::Integer(b as i64));
                 let s = arg(&mut v, Sql::Integer(s as i64));
                 let c = arg(&mut v, Sql::Integer(c as i64));
+                let iso = iso.map(|x| format!(" OR {x}")).unwrap_or_default();
                 w.push(format!(
                     "p.neighborhood = {nb} AND ((p.range_bits IS NOT NULL
                         AND (p.birth_min & ~{b}) = 0
                         AND (({b} & ((1 << p.range_bits) - 1)) & ~p.birth_max) = 0
                         AND (p.survive_min & ~{s}) = 0
                         AND (({s} & ((1 << p.range_bits) - 1)) & ~p.survive_max) = 0
-                        AND {c} BETWEEN p.states_min AND p.states_max) OR {exact})"
+                        AND {c} BETWEEN p.states_min AND p.states_max){iso} OR {exact})"
                 ));
             }
-            None => w.push(exact),
+            None => match iso {
+                Some(x) => w.push(format!("({x} OR {exact})")),
+                None => w.push(exact),
+            },
         }
     } else if let Some(nb) = q.neighborhood {
         let a = arg(&mut v, Sql::Text(name_of(&nb)));

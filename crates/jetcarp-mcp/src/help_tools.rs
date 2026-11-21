@@ -309,6 +309,7 @@ const NOTATION: &str = "
 Rule notation (any of these works as `rule`):
 - Life-like B/S: B<birth counts>/S<survival counts>, e.g. B3/S23 (Life), B36/S23. Counts >= 10 use commas: B3,10/S2,3. Add V for edge-only neighbours: B3/S23V.
 - Generations: B<..>/S<..>/C<states>, e.g. B2/S/C3 (Brian's Brain). State 1 is firing; higher states are dying.
+- Isotropic non-totalistic (square grid only, Hensel's notation): letters after a count name arrangements of the eight touching neighbours, the same under rotation and reflection: B2-a/S12 (Just Friends), B3-cnqy/S23-a; `-` after a count takes every arrangement but those listed; a count alone takes them all. Letters by count: 1 and 7: c e; 2 and 6: c e k a i n; 3 and 5: c e k a i n y q j r; 4: c e k a i n y q j r t w z. Generations too: B2a/S/C3. Names come back canonical (letters in alphabetical order, the `-` form where shorter), as Golly writes them.
 - Elementary (square grid only, one row per generation from the top): W<0-255>, e.g. W30, W110.
 - Hexagonal elementary (hex grid only): HexW <0-15>, HexW3 <0-19682>.
 - Three-parent hexagonal elementary (flat-top hexagon grid `hex_flat` only; parents NW, N, NE): HexT <0-255> (index NW*4+N*2+NE), HexT3 <0-7625597484986>, HexT3 sum <0-2186> (by parent sum), HexT3 sym <n>, HexT sum <0-15>.
