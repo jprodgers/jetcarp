@@ -8,6 +8,7 @@ pub mod catalog;
 pub mod cellcheck;
 pub mod census;
 pub mod computing;
+pub mod cvd;
 pub mod detmath;
 pub mod edges;
 pub mod evolve;

@@ -757,7 +757,7 @@ impl CellEditor {
         // Lattice.
         ui.separator();
         ui.horizontal(|ui| {
-            ui.colored_label(A1_COL, "a1");
+            ui.colored_label(crate::theme::ink(ui, A1_COL), "a1");
             let before = self.cell.clone();
             let mut c = false;
             c |= ui
@@ -774,7 +774,7 @@ impl CellEditor {
                         .max_decimals(6),
                 )
                 .changed();
-            ui.colored_label(A2_COL, "a2");
+            ui.colored_label(crate::theme::ink(ui, A2_COL), "a2");
             c |= ui
                 .add(
                     egui::DragValue::new(&mut self.cell.a2[0])
@@ -993,11 +993,14 @@ impl CellEditor {
         );
         let errors = r.problems.iter().filter(|p| p.is_error()).count();
         if r.problems.is_empty() {
-            ui.colored_label(Color32::LIGHT_GREEN, "Valid tiling");
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_GREEN), "Valid tiling");
         } else if errors == 0 {
-            ui.colored_label(Color32::LIGHT_GREEN, "Valid tiling (with notes)");
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::LIGHT_GREEN),
+                "Valid tiling (with notes)",
+            );
         } else {
-            ui.colored_label(RED, format!("{errors} problem(s)"));
+            ui.colored_label(crate::theme::ink(ui, RED), format!("{errors} problem(s)"));
         }
         let mut hovered = None;
         let mut clicked = None;
@@ -1018,7 +1021,7 @@ impl CellEditor {
                     let resp = ui.add(
                         egui::Label::new(
                             RichText::new(format!("• {}", p.message()))
-                                .color(col)
+                                .color(crate::theme::ink(ui, col))
                                 .small(),
                         )
                         .sense(Sense::click()),
@@ -1036,7 +1039,7 @@ impl CellEditor {
                             "… and {} more open edges (orange on the canvas)",
                             open_shown - 4
                         ))
-                        .color(ORANGE)
+                        .color(crate::theme::ink(ui, ORANGE))
                         .small(),
                     );
                 }

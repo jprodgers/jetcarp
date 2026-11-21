@@ -211,7 +211,10 @@ impl JetcarpApp {
                 ("‖ paused", Color32::GRAY)
             };
             if ui
-                .add(egui::Button::new(RichText::new(txt).color(col)).frame(false))
+                .add(
+                    egui::Button::new(RichText::new(txt).color(crate::theme::ink(ui, col)))
+                        .frame(false),
+                )
                 .on_hover_text("Space")
                 .clicked()
             {
@@ -228,7 +231,7 @@ impl JetcarpApp {
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if let Some((m, err)) = self.message.clone() {
-                    ui.colored_label(message_color(err), m);
+                    ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
                     if ui.small_button("×").on_hover_text("Dismiss").clicked() {
                         self.message = None;
                     }
@@ -263,12 +266,15 @@ impl JetcarpApp {
                 ));
                 ui.separator();
                 if let Some(s) = self.scripts.status() {
-                    ui.label(RichText::new(s).color(Color32::from_rgb(0xff, 0xc0, 0x80)));
+                    ui.label(
+                        RichText::new(s)
+                            .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
+                    );
                     ui.separator();
                 }
                 crate::simgpu::status_ui(&self.sim, ui);
                 if !self.gpu {
-                    ui.colored_label(Color32::LIGHT_RED, "no GPU renderer");
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
                 }
             });
         });
@@ -312,7 +318,7 @@ impl JetcarpApp {
         if let Some((m, err)) = self.message.clone() {
             ui.separator();
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(message_color(err), m);
+                ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
                 if ui.small_button("×").clicked() {
                     self.message = None;
                 }

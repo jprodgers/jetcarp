@@ -60,11 +60,11 @@ impl JetcarpApp {
             });
             if let Some((m, err)) = &self.message {
                 ui.colored_label(
-                    if *err {
+                    crate::theme::ink(ui, if *err {
                         Color32::LIGHT_RED
                     } else {
                         Color32::LIGHT_GREEN
-                    },
+                    }),
                     m,
                 );
             }

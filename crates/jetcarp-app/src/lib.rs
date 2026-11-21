@@ -1,6 +1,7 @@
 //! JETCARP desktop app: egui UI over the jetcarp-core engine, tiles drawn with wgpu. The `jetcarp`
 //! program opens it with [`run`] when no subcommand is given.
 
+mod a11y;
 mod ants_ui;
 mod app;
 mod catalog_picker;
@@ -35,6 +36,7 @@ mod simgpu;
 mod span;
 mod start;
 mod sweep_form;
+mod theme;
 mod thumbs;
 mod warning_ui;
 mod window_job;

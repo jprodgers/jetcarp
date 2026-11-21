@@ -11,6 +11,34 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
+  Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
+  and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,
+  deuteranopia, tritanopia and their milder forms (simulated with Machado, Oliveira and Fernandes'
+  model), with lightness falling steadily along each ramp. The same check is run on every built-in
+  palette: `jetcarp palettes` and `reference.palettes` give each one's result (Tide, Phosphor, Koi
+  and Verdigris pass too), and the palettes reference marks them. In the app, *Settings →
+  Accessibility* makes them, or any palettes, the defaults for scenes that name none.
+  ([Palettes](../reference/palettes.md#colour-vision-deficiency),
+  [#217](https://github.com/jprodgers/jetcarp/issues/217))
+- **The app follows the system's request for reduced motion.** It reads Windows' *Show animations
+  in Windows*, macOS's *Reduce motion* and GNOME's *Reduce Animation* at start and every couple of
+  seconds. When it is on, the Quick Start's cards and the small animations in the Hunts and Ants
+  windows show stills until one is chosen, a scene opens paused with a note saying why, and the
+  interface's own animations, spinners and progress bars stand still. *Settings → Accessibility*
+  overrides the system either way; the strobe guard is unchanged.
+  ([Accessibility settings](../guides/accessibility-settings.md#reduced-motion),
+  [#218](https://github.com/jprodgers/jetcarp/issues/218))
+- **A high-contrast theme for the app,** dark and light: text at 7:1 or more against its
+  background, thicker outlines at 3:1 or more, and a thick ring round whatever has the keyboard.
+  It follows Windows' contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and
+  *Settings → Accessibility* overrides them, and chooses light or dark (on Linux, the way to a
+  light app until [#137](https://github.com/jprodgers/jetcarp/issues/137) is fixed). A test
+  computes every contrast the theme uses. The docked panes now take the theme's panel colour in
+  the light and high-contrast themes, where they kept the grid's dark backdrop.
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
+  [#220](https://github.com/jprodgers/jetcarp/issues/220))
+
 - **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
