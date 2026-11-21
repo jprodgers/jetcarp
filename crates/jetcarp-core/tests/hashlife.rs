@@ -466,13 +466,14 @@ fn b0_rules_equal_the_stepper() {
                 if let Err(e) = b.apply(Command::Jump { gens: n }) {
                     return Some(format!("{f} {rule}: {e}"));
                 }
-                // In two pieces (odd then even), so phases carry across jumps.
+                // In two pieces (odd then even), so phases carry across jumps. A jump that fails
+                // is a failure of the case, not a pass.
                 let mut c = mk();
-                c.apply(Command::Jump { gens: n / 2 + 1 }).ok()?;
-                c.apply(Command::Jump {
-                    gens: n - n / 2 - 1,
-                })
-                .ok()?;
+                for gens in [n / 2 + 1, n - n / 2 - 1] {
+                    if let Err(e) = c.apply(Command::Jump { gens }) {
+                        return Some(format!("{f} {rule} {w}x{h}: a jump of {gens}: {e}"));
+                    }
+                }
                 (a.states_hash() != b.states_hash() || a.states_hash() != c.states_hash())
                     .then(|| format!("{f} {rule} {w}x{h} gens {n}"))
             })
