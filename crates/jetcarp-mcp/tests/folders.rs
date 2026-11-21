@@ -529,7 +529,19 @@ fn a_path_of_4096_bytes_or_more_is_refused_and_a_deep_one_is_saved() {
         json!({"save_path": rel}),
     ));
     assert!(root.join("out").join(&rel).is_file());
-    let _ = std::fs::remove_dir_all(root.join("out/d"));
+    // The deepest folder first, one at a time: `remove_dir_all` keeps a handle open on every
+    // level, more than an open-file limit of 256 or 1,024 allows, and then leaves it all (#121).
+    for level in (1..=depth).rev() {
+        let dir = root.join("out").join("d/".repeat(level));
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let _ = std::fs::remove_file(entry.path());
+        }
+        let _ = std::fs::remove_dir(&dir);
+    }
+    assert!(
+        !root.join("out/d").exists(),
+        "the folders many deep are removed"
+    );
 }
 
 /// Names that cannot be copied to every system are refused in their own words, the same on every

@@ -1,6 +1,7 @@
 // JETCARP GPU batch stepper: many worlds side by side in one state buffer, each with its own rule.
 //
-// A cell is one u32 holding its state. World w's cells start at w * cfg.stride; the stride is the
+// A cell is one u32 holding its state (and a B0 rule's background in bit 8 on a patch; frames
+// and traces take the state only). World w's cells start at w * cfg.stride; the stride is the
 // topology's cell count rounded up to a multiple of the workgroup size, so a workgroup belongs to
 // exactly one world, and the padding cells at the end of a world are skipped. Dispatches are
 // (gx, gy, worlds): a workgroup's world is workgroup_id.z, which keeps per-world data uniform
@@ -63,9 +64,17 @@ fn holds(z: u32, c: ptr<function, array<u32, 8>>) -> bool {
   return (*c)[st] >= ((z >> 4u) & 255u);
 }
 
-// B0: the low d + 1 bits of m, reversed.
-fn rev_mask(m: u32, d: u32) -> u32 {
-  return reverseBits(m) >> (31u - d);
+// B0: a cell's next state under the plain B/S rule, live or not, with c live neighbours (b0.rs
+// `next_state`).
+fn life_bit(birth: u32, survive: u32, alive: u32, c: u32) -> u32 {
+  let m = select(birth, survive, alive != 0u);
+  return select(0u, (m >> min(c, 31u)) & 1u, c < 32u);
+}
+
+// B0: the background's phase after t steps from the empty world (b0.rs `Types::phase`).
+fn b0_phase(t: u32, tail: u32, phases: u32) -> u32 {
+  if (t < tail) { return t; }
+  return tail + (t - tail) % (phases - tail);
 }
 
 @compute @workgroup_size(256)
@@ -75,7 +84,9 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
   if (cell < cfg.n) {
     let base = world * cfg.stride;
     let gi = base + cell;
-    let s = src[gi];
+    // The state is the low byte; above it, only a B0 rule's background on a patch.
+    let raw = src[gi];
+    let s = raw & 0xffu;
     let p = &worlds[world];
     let kind = (*p).kind;
     let rec = topo[(*p).d * cfg.n + cell];
@@ -84,6 +95,7 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
     let hi = lo + (m & 0xffffu);
     let missing = m >> 16u;
     var v = 0u;
+    var bg = 0u;
     switch kind {
       // Life-like and Generations: only state-1 neighbours count; live edges add missing slots.
       case KIND_BS: {
@@ -240,35 +252,57 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
           }
         }
       }
-      // B0 Life-like: masks per degree, alternating with the step number (step_b0 in step.rs).
+      // B0 Life-like (step_b0 in step.rs, b0.rs): cells are stored relative to the empty
+      // world's background. c = 0, a patch: each cell carries its background in bit 8, stepped
+      // here with the plain rule. c = 1, a lattice: the background per tile type (b types, a
+      // cell's type its index mod b) at tables[a..]: the tail and the number of phases, then a
+      // word per phase and type, the state in bit 0 and the live background cells among that
+      // type's neighbour slots above it. A slot past a dead edge is in the background, so the
+      // live real neighbours are those slots' count, plus the present neighbours stored live
+      // over a dead background, less those stored live over a live one.
       default: {
         var c = 0u;
-        for (var e = lo; e < hi; e += 1u) { c += u32(src[gi + topo[e]] == 1u); }
-        let d = min((m & 0xffffu) + missing, 31u);
-        let full = select((2u << d) - 1u, 0xffffffffu, d >= 31u);
-        let bb = (*p).birth & full;
-        let ss = (*p).survive & full;
-        var bm = 0u;
-        var sm = 0u;
-        if ((((*p).survive >> d) & 1u) == 1u) {
-          if (disp.tick == 1u) {
-            bm = ~(*p).birth & full;
-            sm = ~(*p).survive & full;
-          } else {
-            bm = rev_mask(~(*p).survive & full, d);
-            sm = rev_mask(~(*p).birth & full, d);
+        var b0 = 0u;
+        var b1 = 0u;
+        if ((*p).c == 0u) {
+          var cb = 0u;
+          for (var e = lo; e < hi; e += 1u) {
+            let w = src[gi + topo[e]];
+            let b = (w >> 8u) & 1u;
+            c += u32((w & 0xffu) == 1u) ^ b;
+            cb += b;
           }
-        } else if ((disp.tick & 1u) == 1u) {
-          bm = ~(*p).birth & full;
-          sm = ~(*p).survive & full;
+          b0 = (raw >> 8u) & 1u;
+          b1 = life_bit((*p).birth, (*p).survive, b0, cb);
+          bg = b1;
         } else {
-          bm = rev_mask(ss, d);
-          sm = rev_mask(bb, d);
+          let nt = (*p).b;
+          let tail = tables[(*p).a];
+          let phases = tables[(*p).a + 1u];
+          let row0 = (*p).a + 2u + b0_phase(disp.tick - 1u, tail, phases) * nt;
+          let row1 = (*p).a + 2u + b0_phase(disp.tick, tail, phases) * nt;
+          let k = cell % nt;
+          var plain = 0u;
+          var over = 0u;
+          for (var e = lo; e < hi; e += 1u) {
+            let x = u32(src[gi + topo[e]] == 1u);
+            let b = tables[row0 + (cell + topo[e]) % nt] & 1u;
+            c += x ^ b;
+            plain += x & (1u - b);
+            over += x & b;
+          }
+          if (cfg.live != 0u) {
+            c += missing;
+          } else {
+            c = (tables[row0 + k] >> 1u) + plain - over;
+          }
+          b0 = tables[row0 + k] & 1u;
+          b1 = tables[row1 + k] & 1u;
         }
-        if (s == 0u) { v = (bm >> (c & 31u)) & 1u; } else { v = (sm >> (c & 31u)) & 1u; }
+        v = life_bit((*p).birth, (*p).survive, u32(s != 0u) ^ b0, c) ^ b1;
       }
     }
-    dst[gi] = v;
+    dst[gi] = v | (bg << 8u);
     // Three counts of at most WG (256) each, in 10 bits apiece: live, changed, state 2.
     if (v != 0u || v != s) {
       atomicAdd(&wg_counts, u32(v != 0u) | (u32(v != s) << 10u) | (u32(v == 2u) << 20u));

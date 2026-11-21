@@ -409,16 +409,52 @@ mod tests {
         assert!(!r.feed(100.0, 0), "0 turns it off");
     }
 
+    /// The calling thread's own processor time, so a test thread can be kept busy for a set
+    /// amount of processor time however busy the machine is.
+    #[cfg(unix)]
+    fn thread_cpu_time() -> std::time::Duration {
+        let mut t: libc::timespec = unsafe { std::mem::zeroed() };
+        assert_eq!(
+            unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) },
+            0
+        );
+        std::time::Duration::new(t.tv_sec.max(0) as u64, t.tv_nsec.max(0) as u32)
+    }
+
+    #[cfg(windows)]
+    fn thread_cpu_time() -> std::time::Duration {
+        use windows_sys::Win32::Foundation::FILETIME;
+        use windows_sys::Win32::System::Threading::{GetCurrentThread, GetThreadTimes};
+        let mut t: [FILETIME; 4] = unsafe { std::mem::zeroed() };
+        let [created, exited, kernel, user] = &mut t;
+        assert_ne!(
+            unsafe { GetThreadTimes(GetCurrentThread(), created, exited, kernel, user) },
+            0
+        );
+        let ticks = |f: &FILETIME| (f.dwHighDateTime as u64) << 32 | f.dwLowDateTime as u64;
+        std::time::Duration::from_nanos((ticks(&t[2]) + ticks(&t[3])).saturating_mul(100))
+    }
+
     #[test]
+    #[cfg(any(unix, windows))]
     fn this_process_s_processor_time_counts_every_thread() {
         let before = process_cpu_time().expect("this platform reads it");
         let meter = ProcessMeter::start().unwrap();
-        // Two threads busy for about 300 ms each.
+        // Two threads, each busy until it has used 300 ms of processor time itself. On a busy
+        // machine that takes longer, but the amount used is the same (#176). The wall-clock cap
+        // only keeps a starved machine from hanging the suite.
         let spin = || {
-            let t = std::time::Instant::now();
+            let start = thread_cpu_time();
+            let wall = std::time::Instant::now();
             let mut x = 0u64;
-            while t.elapsed() < std::time::Duration::from_millis(300) {
-                x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+            while thread_cpu_time().saturating_sub(start) < std::time::Duration::from_millis(300) {
+                for _ in 0..10_000 {
+                    x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+                }
+                assert!(
+                    wall.elapsed() < std::time::Duration::from_secs(120),
+                    "the machine gave this thread under 300 ms of processor time in 2 minutes"
+                );
             }
             std::hint::black_box(x);
         };
@@ -427,10 +463,11 @@ mod tests {
             s.spawn(spin);
         });
         let used = process_cpu_time().unwrap().saturating_sub(before);
-        // Both threads count (allowing for a busy test machine that gives them less).
+        // Both threads count: 600 ms between them. Windows counts processor time in clock ticks
+        // of about 15.6 ms, hence the margin; one thread alone would give about 300 ms.
         assert!(
-            used >= std::time::Duration::from_millis(350),
-            "only {used:?} of about 600 ms"
+            used >= std::time::Duration::from_millis(500),
+            "only {used:?} of at least 600 ms"
         );
         let share = meter.share();
         // A share of the whole machine. Not bounded above by the two threads here: the meter

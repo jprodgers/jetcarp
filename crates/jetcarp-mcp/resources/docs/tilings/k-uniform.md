@@ -3,7 +3,8 @@
 Allow more than one kind of corner and the eleven uniform tilings grow into an enormous family. A
 tiling by regular polygons is *k-uniform* when its corners fall into k classes: within a class every
 corner is the same, but the classes differ. JETCARP carries Brian Galebach's complete catalogue up to
-k = 6, all 1,248 tilings, and every rule runs on each of them.
+k = 6, all 1,248 tilings, and every rule not tied to one grid runs on each of them
+([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 <figure>
 <img src="../images/tilings/kuniform-k3-011.png" alt="Orange clusters on a tiling of triangles, squares and hexagons" width="720">

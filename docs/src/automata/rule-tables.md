@@ -91,7 +91,7 @@ keep their state; a `permute` table counts neighbours without regard to position
 
 ### Codd's automaton
 
-JETCARP v0.4.0 does not ship Codd's rule; adding it, written from Codd's book, is on the roadmap.
+JETCARP does not ship Codd's rule yet; adding it, written from Codd's book, is on the roadmap.
 
 ## What is new here
 

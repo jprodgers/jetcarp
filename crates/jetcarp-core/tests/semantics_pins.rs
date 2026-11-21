@@ -66,6 +66,15 @@ fn cases() -> Vec<Case> {
             soup(0.35, 1, 1),
             48,
         ),
+        // On 4.8.8, whose squares have 4 neighbours and octagons 8, so that the background
+        // differs between tile types.
+        c(
+            "lifelike_b0",
+            rect("oct", 16, 16, Wrap),
+            "B03/S238",
+            soup(0.35, 1, 1),
+            48,
+        ),
         c(
             "generations",
             rect("square", 32, 32, Wrap),

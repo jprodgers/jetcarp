@@ -2,7 +2,8 @@
 
 A tiling covers the plane with tiles, leaving no gaps and no overlaps. For a cellular automaton, what
 matters about a tiling is not the shapes of its tiles but who is next to whom: its *neighbour graph*.
-JETCARP builds that graph for every tiling it supports, and every rule runs on the graph. This page
+JETCARP builds that graph for every tiling it supports, and every rule runs on the graph but for a
+few tied to one grid's geometry ([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)). This page
 explains how the graph is made and why two very different-looking tilings can be the same thing as
 far as an automaton is concerned.
 
@@ -98,7 +99,7 @@ families tied to one grid; see [How JETCARP generalises automata](../automata/ge
 ## What is new here
 
 Nothing on this page is new as an idea. What JETCARP adds is breadth: the same graph model for the
-regular, Archimedean, k-uniform, isohedral, drawn and aperiodic tilings, so that every rule runs on all
+regular, Archimedean, k-uniform, isohedral, drawn and aperiodic tilings, so that every rule not tied to one grid runs on all
 of them. JETCARP's exploratory search also treats the tiling itself as one of the dimensions it
 explores; see [What is new in JETCARP](../research/contributions.md).
 

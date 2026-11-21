@@ -3,12 +3,18 @@
 All notable changes to JETCARP are listed here, newest first, in the style of
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Before version 1.0, a release may still
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
-that will declare them stable.
+that will declare them stable. A release's date here and in `CITATION.cff` is the day it was
+published where the maintainer lives; GitHub, PyPI and Zenodo give the date in UTC, which can be a
+day later (0.4.2: 17 November here, 18 November there).
 
 ## [0.4.3] – unreleased
 
 ### Added
 
+- **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
+  take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
+  `reference seeds` lists them; before, only a scene file could name a circuit.
+  ([Scripting](../reference/scripting.md))
 - **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
   it flashes more than three times a second or shows strong regular stripes.** Every frame is
   measured as WCAG 2.3.1 defines flashes and red flashes, with its area rule (a quarter of a 10°
@@ -65,6 +71,67 @@ that will declare them stable.
 
 ### Fixed
 
+- **A world with a B0 rule is said to repeat only when it does.** The period check compared the
+  cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
+  background's phase, so a world whose kept cells came back with the background in another phase
+  (on squares, after an odd number of generations) was reported as repeating, and a script
+  waiting for a repeat stopped, although the next generations differed. The background's phase is
+  now compared too, on the CPU and the GPU: such a world repeats with the true period (often
+  twice the old one), and on an aperiodic patch whose background does not settle within a few
+  thousand generations no repeat is reported. ([B0 rules](../automata/life-like.md#b0-rules),
+  [#211](https://github.com/jprodgers/jetcarp/issues/211))
+- **Life-like rules with birth on 0 give the right results on every tiling.** JETCARP ran a B0
+  rule as two complementary rules alternating on even and odd generations, which is exact only
+  where every tile has the same number of neighbours. On tilings whose tiles have different
+  numbers, such as 4.8.8, 3.4.6.4, most k-uniform tilings and every aperiodic patch, a rule whose
+  survival list held some of those numbers but not all, such as `B0/S8` on 4.8.8, went wrong from
+  the third generation, on the CPU and the GPU alike. Each cell is now kept relative to the rule's
+  run from an empty world, so empty space still stays dark and the result is exact on any tiling;
+  where every tile has the same number of neighbours nothing changes. A B0 rule also counts the
+  cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
+  runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. B0 rules are now a
+  [rule-semantics family](../reference/library-format.md#rule-semantics-versions) of their own,
+  `lifelike_b0`, at version 2: scenes of such rules replay to other states, and a library flags
+  any B0 pattern record for `jetcarp library reverify` (no search stores B0 patterns). Other B/S
+  rules keep `lifelike` at version 1, so their records are not flagged.
+  ([B0 rules](../automata/life-like.md#b0-rules),
+  [#171](https://github.com/jprodgers/jetcarp/issues/171))
+- **WireWorld can be added without a start on any tiling.** Its default start, the clock-loop
+  demo, is drawn for the square grid, so everywhere else adding the rule alone was refused with
+  "the WireWorld demo needs the square grid", from the command line, scripts and the MCP tools
+  alike. Off the square grid it now starts with a `circuit`: wiring along the borders of random
+  regions, about one region per 70 cells, with four signals in each. The square grid keeps the
+  demo. ([WireWorld](../automata/wireworld.md#on-any-tiling),
+  [#180](https://github.com/jprodgers/jetcarp/issues/180))
+- **Larger than Life keeps every count a rule names.** A birth or survival count above the square
+  grid's neighbourhood size (8 at range 1, 1,680 at range 20) was dropped without a word, so on
+  tilings whose neighbourhoods hold more cells, such as triangles with 12 touch neighbours, a rule
+  ran as another: `R1,C2,S0-12,B9-12` ran as `R1,C2,S0-8,B`. Counts up to 65,535 are now kept, a
+  larger one is refused with a message, and the notation reads back as written, so Majority and
+  Majorly show as `R4,C2,S40-80,B41-81` and `R7,C2,S112-224,B113-225`. On the square grid no rule
+  runs differently, but those two rules' Quick Start entries have new handles
+  (`rule:R4,C2,S40-80,B41-81`, `rule:R7,C2,S112-224,B113-225`), and so new random starts; the
+  old handles still open them, so rotations and screensaver profiles naming them keep working. Larger
+  than Life's [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is
+  now 2: scenes of such rules on other tilings replay to other states, and pattern records verified
+  under version 1 are flagged for `jetcarp library reverify`.
+  ([Larger than Life](../automata/larger-than-life.md#on-any-tiling),
+  [#172](https://github.com/jprodgers/jetcarp/issues/172))
+- **`jetcarp host status` no longer says "GPU none" for a host that hasn't opened its GPU yet.** A
+  host started at login with nothing to show opens the GPU with its first window; until then the
+  status says "GPU not opened yet (nothing shown yet)", and its screens that the GPU "is opened when
+  the scene is first shown", where both said there was no GPU. A host that lost its GPU says that.
+  ([#141](https://github.com/jprodgers/jetcarp/issues/141))
+- **On GNOME, setup says plainly to log out once after turning the live wallpaper on.** GNOME loads
+  JETCARP's extension only at login, and until then the scene shows in a window, which said nothing
+  about it; the only word was small print in setup. Setup now ends with "Log out and back in once to
+  see the live wallpaper on your desktop", the window's title says the same, and the host's note no
+  longer says to install an extension that setup already installed.
+  ([#139](https://github.com/jprodgers/jetcarp/issues/139))
+- **The background host no longer steps and draws a screen nobody can see.** A screen kept for a
+  monitor that wasn't connected when the host started, with the main monitor taken by another
+  screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
+  comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
 - **The photosensitive seizure warning's example is Hodgepodge, not B0.** Since B0 rules are drawn
   relative to their background ([#171](https://github.com/jprodgers/jetcarp/issues/171)), a B0
   rule no longer turns the whole field over at each step on screen. The warning now gives
@@ -120,6 +187,26 @@ that will declare them stable.
   `--publisher-key` is added: the key is the identity behind every pack its publisher signed, and
   the rater book holds raters' names and their consent; before, `--settings` deleted them.
   ([Uninstalling](../guides/uninstalling.md), [#195](https://github.com/jprodgers/jetcarp/issues/195))
+- **`THIRD_PARTY_LICENSES.html` lists only the libraries a release contains.** It also listed 42
+  that no release builds: a library's dependencies on one system, kept although JETCARP builds that
+  library only for another (the GTK family, which the tray icon needs only on Linux, where JETCARP
+  has no tray icon). The notices are now gathered for each release system on its own and put
+  together, and CI checks that they name exactly the libraries in each system's build.
+  ([#123](https://github.com/jprodgers/jetcarp/issues/123))
+- **The Windows install and uninstall lines save the installer to the temp folder.** Every copy
+  (the README, the book, the release notes, the installer's own help and `jetcarp uninstall`) saved
+  `jetcarp-installer.ps1` into the current folder, which fails in a PowerShell window that opens in
+  `C:\Windows\system32`; they now save it to and run it from `$env:TEMP`, and a check in CI keeps
+  every copy so. ([Installing](../getting-started/installing.md), [#143](https://github.com/jprodgers/jetcarp/issues/143))
+- **The Windows installer's last line says to open a new PowerShell window.** The window it runs from
+  can't see the new `PATH`, so `jetcarp` typed there next wasn't found, and the only word of it was
+  in the middle of the output. ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **A repeated `jetcarp uninstall --settings --data` says the folders are already gone,** instead of
+  only "Nothing to undo", which read as if the options had been ignored.
+  ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
+  your settings, data and pictures" when only the pictures were left.
+  ([#142](https://github.com/jprodgers/jetcarp/issues/142))
 
 ## [0.4.2] – 2026-11-17
 

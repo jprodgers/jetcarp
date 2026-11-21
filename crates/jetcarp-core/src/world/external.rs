@@ -236,8 +236,8 @@ impl World {
     /// field's heights are empty, as in [`Field`](super::Field)).
     ///
     /// The step counters of B0, forest fire, and Margolus CAs (`CaInstance::ticks`) advance
-    /// here, as `World::step` advances them. A repeat counts only when Margolus partitions are in
-    /// the same phase as at the snapshot, as on the CPU.
+    /// here, as `World::step` advances them. A repeat counts only when Margolus partitions and B0
+    /// backgrounds are in the same phase as at the snapshot, as on the CPU.
     ///
     /// Returns the number of generations recorded. That is all of them unless the script moved on
     /// before the last one, which means the stepper ignored [`ExternalPlan`].

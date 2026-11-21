@@ -1,6 +1,6 @@
 //! Where the packs that came with the program are looked for (`paths::bundled_packs_from`).
 
-use jetcarp_core::paths::{bundled_packs_from, plain_path, stable_name};
+use jetcarp_core::paths::{bundled_packs_from, plain_path};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
@@ -86,6 +86,7 @@ fn share_is_looked_at_only_beside_a_bin_folder() {
 #[cfg(unix)]
 #[test]
 fn the_packs_are_named_through_the_links_that_survive_an_upgrade() {
+    use jetcarp_core::paths::stable_name;
     use std::os::unix::fs::symlink;
     let d = scratch("homebrew");
     let keg = d.join("Cellar/jetcarp/0.4.0");

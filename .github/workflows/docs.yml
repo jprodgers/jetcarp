@@ -11,10 +11,9 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
+  # On every pull request, so it can be a required check (a check that runs only for some pull
+  # requests would hold the others back forever). It takes well under a minute.
   pull_request:
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -47,6 +46,12 @@ jobs:
 
       - name: The scripting reference matches the program's function list
         run: python3 docs/tools/gen-scripting.py --check
+
+      - name: The bibliography page matches its BibTeX file
+        run: python3 docs/tools/gen-bibliography.py --check
+
+      - name: Every copy of the Windows install lines saves the installer to the temp folder
+        run: python3 docs/tools/check-install-lines.py
 
       - name: Build
         run: mdbook build docs
