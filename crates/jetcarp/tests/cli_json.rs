@@ -93,12 +93,19 @@ fn run_and_verify_as_json() {
     assert_eq!(r["scene"], s);
     let hash = r["hash"].as_str().unwrap().to_string();
     let v = json_of(&["verify", sv, "--json"]);
-    assert_eq!(v, json!({"generation": 12, "hash": hash}));
+    assert_eq!(hash.len(), 64);
+    assert_eq!(
+        v,
+        json!({"generation": 12, "hash": hash, "hash_version": 2, "hash_v2": hash})
+    );
     // --expect still prints the summary, then fails.
-    let o = jetcarp(&["run", s, "--gens", "12", "--expect", "deadbeef"]);
+    let zeros = "0".repeat(64);
+    let o = jetcarp(&["run", s, "--gens", "12", "--expect", &zeros]);
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stdout).contains(&format!("hash:       {hash}")));
-    assert!(String::from_utf8_lossy(&o.stderr).contains("hash mismatch: expected deadbeef"));
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains(&format!("hash mismatch: expected {zeros}"))
+    );
     // The same run by name.
     let input = json!({"scene": s, "gens": 12}).to_string();
     let c = json_of(&["api", "call", "scene.run", &input]);

@@ -192,7 +192,7 @@ impl JetcarpApp {
             match self.stats.as_ref().and_then(|s| s.hash.clone()) {
                 Some(h) => {
                     if ui
-                        .link(RichText::new(format!("hash {}", &h[..8])).monospace())
+                        .link(RichText::new(format!("hash {}", &h[..h.len().min(16)])).monospace())
                         .on_hover_text(format!("State hash {h}. Click to copy."))
                         .clicked()
                     {

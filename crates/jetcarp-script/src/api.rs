@@ -762,7 +762,7 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
                 label.to_string()
             },
             g.world.generation,
-            &g.world.hash_hex()[..8]
+            &g.world.hash_hex()[..16]
         );
         if !c.opts.live_view {
             c.log(format!("show: {what} (no live view here)"));

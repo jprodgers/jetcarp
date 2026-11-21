@@ -29,11 +29,39 @@ Nothing in a run depends on the clock, the thread schedule or the platform's ran
 
 ## The state hash
 
-The *state hash* is a 64-bit FNV-1a hash of everything that determines what a world does next: the
-generation number; every field's cell states and ages, sandpile heights and lost grains, and Lenia's
-values by their exact bits; each automaton's bookkeeping (row cursor, step count, whether it is on);
-the ants' cells and headings; and the progress of any script or reseed policy. JETCARP prints it as 16
-hexadecimal digits. Two worlds with the same hash are, for practical purposes, in the same state.
+The *state hash* identifies a world's present state. Since JETCARP 0.4.3 it is version 2: SHA-256,
+256 bits, printed as 64 hexadecimal digits, over everything that decides what the world does next:
+
+- the generation number and the world's random-number generator;
+- every field's cell states and ages, sandpile heights and lost grains, and Lenia's values by their
+  exact bits;
+- each automaton's rule (with its family's [rule-semantics version](../reference/library-format.md#rule-semantics-versions)),
+  neighbourhood, settings and start (which a reseed uses again), its bookkeeping (row cursor, step
+  count, whether it is on, a forest fire's noise seed, a layered rule's layers), and its ants' cells,
+  headings and states;
+- the rule tables, the script and where it is, the reseed policies and what they have done, the
+  number of manual reseeds, and the period check's progress;
+- a digest of the scene's tiling, so that two worlds on different tilings never share a hash.
+
+Left out are what only shows (names, palettes, JACA's glow), what follows from the rest (a B0 rule's
+background, which is the rule run from an empty world for the automaton's step count; compiled
+tables and neighbourhoods), and the history: the command log is not hashed, so two ways of reaching
+the same state give the same hash. Also left out are the counts of changed cells kept for recent
+generations, which depend on whether a front end or the GPU counted them, so a world reopened from
+its saved scene could not bring them back. A world saved as a scene
+and reopened at any generation therefore has exactly the hash of the world that ran straight
+through, then and at every later generation. Tests check both halves: that changing any one piece of
+the state changes the hash, and that reopened worlds with scripts, reseed policies, ants, a B0 rule
+on a patch, a layered rule and a forest fire hash as unbroken ones. The code lists every piece of a
+world, so a new one cannot be added without being hashed or marked as one of those left out.
+
+**Version 1**, which JETCARP 0.4.0 to 0.4.2 wrote, is a 64-bit FNV-1a hash of the generation, every
+field and part of the automata's bookkeeping, printed as 16 hexadecimal digits. Records written then
+carry no version; JETCARP keeps version 1 unchanged and verifies them with it, so old scenes, figures
+and packs still check. A record written since says `"hash_version": 2`. Where a person only reads a
+hash, as in the app's menu bar, JETCARP shows its first 16 digits; everywhere it is kept, compared or
+copied (`jetcarp run` and `verify`, records, PNG metadata, `--json`, the MCP tools, *Copy state
+hash*) it gives all 64.
 
 Every generation is computed from the previous state alone, in parallel over cells, so the hash does
 not depend on the thread count. On one thread, in a copy of JETCARP's repository (which holds this
@@ -47,7 +75,7 @@ It ends with:
 
 ```text
 ...
-hash:       1adf6e3234b7f199
+hash:       bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 ```
 
 On every core:
@@ -60,11 +88,13 @@ It ends with the same hash:
 
 ```text
 ...
-hash:       1adf6e3234b7f199
+hash:       bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 ```
 
 `jetcarp run … --expect HASH` fails unless the run ends on that hash, which makes a check of this kind
-one line in a script. The world status that scripts and MCP tools read also gives `cells_hash`, a hash
+one line in a script. It takes either version, told apart by length: 16 hexadecimal digits are
+version 1 (`--expect 1adf6e3234b7f199` passes for this run too), 64 are version 2, and anything else
+is refused. The world status that scripts and MCP tools read also gives `cells_hash`, a hash
 of the cell states only, for comparing with engines that do not track ages, such as HashLife.
 
 ## Scenes are the unit of reproduction
@@ -186,8 +216,11 @@ described with the method.
   differently from those of CART, JETCARP's predecessor.
 - **HashLife jumps** reach the same cells as stepping but reset every live cell's age to 1, so their
   state hash differs from the stepped run's; compare `cells_hash` instead.
-- **Hashes are not proofs.** A 64-bit hash is not cryptographic, and two different states could share
-  one. Where it matters, as in pattern verification, JETCARP compares the states themselves.
+- **Hashes are not proofs.** Two different states sharing a version 2 hash would need a collision
+  of SHA-256, which nobody knows how to find, so equal hashes stand for equal states. A hash still
+  says only that two states are equal, not how either was reached, and the 64-bit version 1 is not
+  cryptographic: two states could share one by chance, or by design. Where it matters, as in pattern
+  verification, JETCARP compares the states themselves.
 
 ## Checking packs, and receipts to come
 

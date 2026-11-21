@@ -54,7 +54,6 @@ impl Harness {
             ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
         }
         let Some(o) = Offscreen::new(w, h) else {
-            eprintln!("no GPU adapter");
             return None;
         };
         o.ctx.enable_accesskit();

@@ -1,7 +1,8 @@
 //! A GPU that fails part way through a run (#13): the world is put back as it was before the run,
 //! never with its generation and log ahead of its cells, and the CPU carries on to the same world
 //! as a CPU-only run. Failures are injected after the first batch, before and after the engine
-//! records the failing batch. Skipped (with a note) when no GPU adapter is available.
+//! records the failing batch. Skipped (with a note) when no GPU adapter is available, failed under
+//! `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::*;
 use jetcarp_gpu::GpuSim;
@@ -70,7 +71,7 @@ fn a_run_that_fails_part_way_leaves_the_world_as_it_was() {
             let mut sim = match GpuSim::headless() {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("note: skipping the GPU recovery tests: {e}");
+                    jetcarp_gpu::no_gpu("the GPU recovery tests", &e);
                     return;
                 }
             };
@@ -97,9 +98,12 @@ fn a_run_that_fails_part_way_leaves_the_world_as_it_was() {
 /// on the GPU and part way on the CPU still ends as the CPU's.
 #[test]
 fn gpu_and_cpu_generations_mix_around_a_failure() {
-    let Ok(mut sim) = GpuSim::headless() else {
-        eprintln!("note: skipping the GPU recovery tests: no GPU");
-        return;
+    let mut sim = match GpuSim::headless() {
+        Ok(s) => s,
+        Err(e) => {
+            jetcarp_gpu::no_gpu("the GPU recovery tests", &e);
+            return;
+        }
     };
     for (what, sc) in cases() {
         let mut gw = World::from_scene(&sc).unwrap();

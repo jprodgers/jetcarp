@@ -278,7 +278,10 @@ job that hangs is stopped rather than left running for hours.
 - **Build and test** the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
   silicon). The runners have no GPU of their own, so on Linux the GPU tests run on Mesa's software
   renderer (lavapipe), on macOS on the runner's virtual GPU, and on Windows they are skipped (JETCARP
-  never uses Windows' software renderer, WARP). On Linux the tests run once more with the default
+  never uses Windows' software renderer, WARP). On Linux and macOS, and in the release workflow's
+  tests, `JETCARP_REQUIRE_GPU=1` makes a GPU test that finds no adapter it can use (none, or one the
+  GPU self-test turns down) fail, naming the adapter and why, rather than skip: there the GPU tests
+  cannot pass without having run. On Linux the tests run once more with the default
   folders, failing if any test writes to them. On Windows each of the folder rules' link cases must
   make its junction or symbolic link and run; the log names each one.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;

@@ -1,6 +1,6 @@
 //! CPU vs GPU: every supported rule on every storage kind and boundary must give the same state
-//! hash, generation, status, and command log after any number of generations. Skipped (with a
-//! note) when no GPU adapter is available.
+//! hash, generation, status, and command log after any number of generations. Skipped (with a note)
+//! when no GPU adapter is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::script::{CaRef, Script, ScriptStep, Trigger};
 use jetcarp_core::*;
@@ -15,7 +15,7 @@ fn gpu() -> Option<MutexGuard<'static, GpuSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU equality tests: {e}");
+            jetcarp_gpu::no_gpu("GPU equality tests", &e);
             None
         }
     });
