@@ -105,7 +105,7 @@ pub fn bake(
         slots,
         fps: settings.fps,
         caption: settings.caption,
-        max_cells: settings.max_cells,
+        max_cells: settings.cell_limit(),
         // The sandboxed saver cannot read the GPU settings: the desktop background's choice now.
         gpu: settings.gpu_policy().mode != jetcarp_gpu::select::Mode::Off,
         strobe_guard: jetcarp_core::photosensitivity::guard_on(

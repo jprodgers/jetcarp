@@ -84,6 +84,7 @@ fn data_of_jetcarps(d: &Path) {
         "host-endpoint.json",
         ".host-endpoint.json.4242.tmp",
         "JETCARP.scr",
+        "memory/4242.json",
         ".DS_Store",
         "Thumbs.db",
         "media/desktop.ini",

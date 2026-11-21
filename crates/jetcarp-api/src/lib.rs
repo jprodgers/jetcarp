@@ -38,7 +38,7 @@ pub mod sweeps;
 pub mod world;
 
 #[cfg(feature = "ops")]
-pub use ctx::{Ctx, FsPolicy, Limits, Paths, Platform};
+pub use ctx::{Ctx, FsPolicy, Limits, Paths, Platform, WorldMemory};
 pub use error::{ApiError, ErrorKind};
 #[cfg(feature = "ops")]
 pub use op::{

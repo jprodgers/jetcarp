@@ -71,13 +71,14 @@ GROUPS = [
       ("Tiling catalogue", "../tilings/catalogue.md"), ("Palettes", "palettes.md")],
      ["rules", "tilings", "isohedral", "palettes"]),
     ("Setup and upkeep", "Set JETCARP up for what you want it for, put it among your apps, where it "
-     "keeps its files, what it sees on this machine, the strobe guard's switches, and how to take it "
-     "off again.",
+     "keeps its files, what it sees on this machine, its score and limits, the strobe guard's "
+     "switches, and how to take it off again.",
      [("First run and setup", "../getting-started/first-run.md"),
       ("Open the app", "../getting-started/installing.md#open-the-app"),
-      ("Folders and environment variables", "folders.md"), ("The strobe guard", "../guides/strobe-guard.md"),
-      ("Uninstalling", "../guides/uninstalling.md")],
-     ["setup", "launcher", "paths", "doctor", "guard", "uninstall"]),
+      ("Folders and environment variables", "folders.md"),
+      ("This computer: the score and the limits", "../guides/this-computer.md"),
+      ("The strobe guard", "../guides/strobe-guard.md"), ("Uninstalling", "../guides/uninstalling.md")],
+     ["setup", "launcher", "paths", "doctor", "score", "limits", "guard", "uninstall"]),
 ]
 
 

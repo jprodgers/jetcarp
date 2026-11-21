@@ -22,9 +22,12 @@ use std::sync::Arc;
 /// The machine as the `jetcarp` program sees it.
 pub struct Machine;
 
-/// The command line's context: no limits, files anywhere, this machine.
+/// The command line's context: no limits but this machine's memory limit for a world, files
+/// anywhere, this machine.
 pub fn ctx() -> Ctx {
-    Ctx::new().with_platform(Arc::new(Machine))
+    Ctx::new()
+        .with_platform(Arc::new(Machine))
+        .with_limits(jetcarp_api::Limits::for_this_machine())
 }
 
 fn host_running() -> bool {

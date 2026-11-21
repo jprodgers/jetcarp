@@ -110,6 +110,9 @@ pub struct Limits {
     pub max_seconds: Option<f64>,
     /// Largest world (cells) a script may build.
     pub max_cells: Option<u64>,
+    /// The memory limit its worlds must fit: this machine's (the default), or an AI's share of
+    /// it (the MCP tool's runs). A world over it is refused, never made smaller.
+    pub world_memory: jetcarp_api::WorldMemory,
     /// Keep at most this many log lines in the summary (the rest are counted).
     pub max_log_lines: usize,
     /// Rhai operation limit (a runaway loop guard), if any.
@@ -124,6 +127,7 @@ impl Default for Limits {
         Limits {
             max_seconds: None,
             max_cells: None,
+            world_memory: jetcarp_api::WorldMemory::Machine,
             max_log_lines: 100_000,
             max_operations: None,
             restrict_reads: false,
@@ -695,6 +699,7 @@ impl Ctx {
         if let Some(m) = self.opts.limits.max_cells {
             limits.max_cells = m;
         }
+        limits.world_memory = self.opts.limits.world_memory;
         let cx = jetcarp_api::Ctx::new()
             .with_platform(jetcarp_api::ctx::gpu_platform())
             .with_limits(limits)
@@ -767,6 +772,19 @@ impl Ctx {
             }
         }
         Ok(())
+    }
+
+    /// A world of `cas` on `t` against this run's memory limit, before it is built.
+    pub fn check_world_memory(
+        &self,
+        t: &jetcarp_core::TilingSpec,
+        cas: &[jetcarp_core::CaSpec],
+    ) -> Result<(), String> {
+        let limits = jetcarp_api::Limits {
+            world_memory: self.opts.limits.world_memory,
+            ..jetcarp_api::Limits::NONE
+        };
+        jetcarp_api::ops::world::check_world_memory(t, cas, &limits).map_err(|e| e.to_string())
     }
 
     pub fn check_cells(&self, n: usize) -> Result<(), String> {

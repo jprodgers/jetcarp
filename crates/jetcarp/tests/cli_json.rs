@@ -897,3 +897,84 @@ fn pack_commands_publish_check_and_import() {
     assert_eq!(imp["report"]["sample"]["passed"], 1);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `jetcarp limits` shows, sets and resets the machine's limits, in the tests' own settings
+/// folder; `jetcarp score --quick` measures the processor with every answer right; doctor shows
+/// the hardware.
+#[test]
+fn limits_and_a_short_score() {
+    let entry = |v: &Value, name: &str| {
+        v["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == name)
+            .cloned()
+            .unwrap()
+    };
+    let v = json_of(&["--json", "limits"]);
+    assert_eq!(v["entries"].as_array().unwrap().len(), 12, "{v}");
+    assert!(v["memory_total"].as_u64().unwrap() > 0);
+    let o = jetcarp(&["limits", "set", "animation-frames", "1234"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let text = String::from_utf8_lossy(&o.stdout);
+    assert!(text.contains("1,234 frames"), "{text}");
+    let f = entry(&json_of(&["--json", "limits"]), "animation-frames");
+    assert_eq!(
+        (f["value"].as_f64(), f["source"].as_str()),
+        (Some(1234.0), Some("own"))
+    );
+    let bad = jetcarp(&["limits", "set", "no-such-limit", "1"]);
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("no limit called 'no-such-limit'"));
+    assert!(
+        jetcarp(&["limits", "reset", "animation-frames"])
+            .status
+            .success()
+    );
+    let f = entry(&json_of(&["--json", "limits"]), "animation-frames");
+    assert_eq!(f["source"], "suggested");
+    let s = json_of(&["--json", "score", "--quick", "--no-gpu", "--no-save"]);
+    assert!(s["score"]["score"].as_f64().unwrap() > 0.0, "{s}");
+    assert!(s["score"].get("problems").is_none(), "{s}");
+    assert!(s["machine_file"].is_null());
+    let d = json_of(&["--json", "doctor"]);
+    assert!(
+        d["machine"]["hardware"]["threads"].as_u64().unwrap() >= 1,
+        "{d}"
+    );
+}
+
+/// Each run of the program records its memory in JETCARP's pool and removes the record when it
+/// ends, however it ends: done, refused, or failed with a status of its own (`jetcarp api call`
+/// of an operation that fails exits with 1).
+#[test]
+fn a_program_leaves_no_memory_record_behind() {
+    let runtime = test_dir("JETCARP_NO_SUCH_VARIABLE", "runtime-records");
+    let _ = std::fs::remove_dir_all(&runtime);
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(args)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env(
+                "JETCARP_CONFIG_DIR",
+                test_dir("JETCARP_CONFIG_DIR", "config"),
+            )
+            .env("JETCARP_RUNTIME_DIR", &runtime)
+            .output()
+            .expect("run jetcarp")
+    };
+    let records = || {
+        std::fs::read_dir(runtime.join("memory"))
+            .map(|rd| rd.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    assert!(run(&["limits"]).status.success());
+    assert!(runtime.join("memory").is_dir(), "it recorded");
+    assert_eq!(records(), Vec::<std::ffi::OsString>::new());
+    let failed = run(&["api", "call", "world.render", "{\"no_such_option\": 1}"]);
+    assert_eq!(failed.status.code(), Some(1));
+    assert_eq!(records(), Vec::<std::ffi::OsString>::new());
+    let _ = std::fs::remove_dir_all(&runtime);
+}

@@ -236,7 +236,9 @@ JETCARP runs on the processor; see [The GPU](../guides/gpu.md)):
   `libxkbcommon-x11.so.0` on X11);
 - for the app's file dialogs, `libdbus-1.so.3` and an XDG desktop portal.
 
-`jetcarp doctor` shows the graphics adapters it found; with none, simulation runs on the CPU.
+`jetcarp doctor` shows the graphics adapters it found; with none, simulation runs on the CPU. It
+also shows what JETCARP read of the computer (processor, memory, GPU memory), its
+[JETCARP Hardware Score](../guides/this-computer.md) once measured, and the limits set from them.
 
 ### macOS
 

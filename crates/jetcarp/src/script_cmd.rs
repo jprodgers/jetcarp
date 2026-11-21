@@ -199,7 +199,7 @@ Run one with: jetcarp script --example NAME"
                 eprintln!(
                     "\nCtrl-C again: quitting; the folder can still be resumed from manifest.partial.jsonl"
                 );
-                std::process::exit(130);
+                jetcarp_core::machine::pool::exit(130);
             }
         });
     }
@@ -249,7 +249,7 @@ Run one with: jetcarp script --example NAME"
                 );
             }
         }
-        std::process::exit(130);
+        jetcarp_core::machine::pool::exit(130);
     }
     if let Some(e) = &s.error {
         bail!("{}: {e}", file.display());
