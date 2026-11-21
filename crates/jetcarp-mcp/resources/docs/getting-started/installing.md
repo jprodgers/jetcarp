@@ -387,10 +387,12 @@ Each keeps working when JETCARP is upgraded. On Linux and macOS it starts the pr
 upgrade keeps (Homebrew's `jetcarp` link, not the version's own folder); *JETCARP.app* holds a
 small launcher that starts the program, not a copy of it. On Windows, winget's and Scoop's folders
 name the version, so the Start menu entry starts a copy of the windowless launcher in a folder of
-JETCARP's own instead, beside a record of the `jetcarp.exe` it starts. Each run of `jetcarp` puts
-its own path in that record, and when the program it names has gone, as after `winget upgrade`,
-the launcher finds JETCARP on your `PATH`, where winget and Scoop keep the current version. Run
-`jetcarp launcher install` again only if you move the program by hand. Scoop adds a *JETCARP* entry
+JETCARP's own instead, beside a record of the `jetcarp.exe` it starts. When the program the record
+names has gone, as after `winget upgrade`, the launcher finds JETCARP on your `PATH`, where winget
+and Scoop keep the current version, and that run puts its own path in the record. A record naming
+a program that is still there is left alone, so a second copy of JETCARP, such as one you built
+yourself, never takes the entry over: run `jetcarp launcher install` with the one you want the
+entry to start, or again if you move the program by hand. Scoop adds a *JETCARP* entry
 of its own as well. `jetcarp launcher status` says whether it is there, `jetcarp doctor` says so
 too, `jetcarp launcher remove` takes it out (on Windows with the launcher's copy), and
 `jetcarp uninstall` removes it with the rest of what JETCARP set up. A menu entry, app or shortcut

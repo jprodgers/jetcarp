@@ -99,8 +99,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   real: JETCARP in a versioned folder makes the entry, the folder is replaced by the next
   version's on the `PATH`, and the entry's launcher must still start JETCARP, whose first run
   mends the record. How the launcher finds `jetcarp.exe` (beside itself, the record, the screen
-  saver's host command, the `PATH`, a stale record falling through), the record's mending, and a
-  removal that takes only JETCARP's two files are checked on every system with scratch folders
+  saver's host command, the `PATH`, a stale record falling through), the record's mending (only
+  when it names a program that has gone, or is missing: never in place of another program that is
+  still there), and a removal that takes only JETCARP's two files are checked on every system with
+  scratch folders
   (`crates/jetcarp/tests/jetcarpw_find.rs`). The bundle and the menu entry are also written into
   scratch folders on every system, and Homebrew's link is found from a version's own folder
   (`jetcarp-display/src/launcher.rs`). Setup's summary must tick the box for every profile when

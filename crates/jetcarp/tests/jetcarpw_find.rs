@@ -2,8 +2,9 @@
 //! `jetcarpw.exe` into a folder of JETCARP's own that no upgrade touches, with a record of the
 //! `jetcarp.exe` it starts, and points the entry at that copy. The launcher finds `jetcarp.exe`
 //! beside itself, else as the record names it, else as the host command recorded for the screen
-//! saver names it, else on the `PATH` (winget's links and Scoop's shims follow upgrades); every run
-//! of `jetcarp` puts its own path back in the record. Remove takes only those files.
+//! saver names it, else on the `PATH` (winget's links and Scoop's shims follow upgrades); a run of
+//! `jetcarp` puts its own path in the record when the program it names has gone, and never takes
+//! over a record naming another program that is still there. Remove takes only those files.
 //!
 //! What is checked here is the finding and the files, with scratch folders standing for
 //! `%LOCALAPPDATA%` and the packages' folders, on any system; the shortcut itself is made and read
@@ -149,23 +150,34 @@ fn the_start_menu_entry_starts_the_new_program_after_a_winget_upgrade() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// A run mends the record only where the launcher was copied, and only when the record names a
+/// program that has gone (as after an upgrade deleted the old folder) or is missing: a record
+/// naming a program that is still there stays as it is, even another one, so a development build
+/// or a second install never takes the Start menu entry over.
 #[test]
-fn the_record_is_healed_only_where_the_launcher_was_copied() {
+fn the_record_is_mended_only_when_its_program_has_gone() {
     let d = scratch("heal");
     let stable = d.join("launcher");
+    let record = stable.join(launcher::RECORD);
+    let named = || std::fs::read_to_string(&record).unwrap().trim().to_string();
     let me = d.join("Programs/jetcarp/jetcarp.exe");
-    // No copy, no record: nothing written.
+    // No copy: nothing written, whatever the record says.
     assert!(!launcher::heal_record_in(&stable, &me).unwrap());
     assert!(!stable.exists());
+    // Another program that is still there: left alone.
     touch(&stable.join("jetcarpw.exe"));
-    std::fs::write(stable.join(launcher::RECORD), "C:\\old\\jetcarp.exe").unwrap();
+    let other = touch(&d.join("dev/target/release/jetcarp.exe"));
+    std::fs::write(&record, format!("{}\n", other.display())).unwrap();
+    assert!(!launcher::heal_record_in(&stable, &me).unwrap());
+    assert_eq!(named(), other.display().to_string());
+    // The program it names has gone: this one takes its place.
+    std::fs::remove_file(&other).unwrap();
     assert!(launcher::heal_record_in(&stable, &me).unwrap());
-    assert_eq!(
-        std::fs::read_to_string(stable.join(launcher::RECORD))
-            .unwrap()
-            .trim(),
-        me.display().to_string()
-    );
+    assert_eq!(named(), me.display().to_string());
+    // No record beside the copy: written.
+    std::fs::remove_file(&record).unwrap();
+    assert!(launcher::heal_record_in(&stable, &me).unwrap());
+    assert_eq!(named(), me.display().to_string());
     let _ = std::fs::remove_dir_all(&d);
 }
 

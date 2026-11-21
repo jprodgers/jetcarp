@@ -18,7 +18,8 @@
 //!   upgrade touches, beside a record of the `jetcarp.exe` it starts. winget's and Scoop's folders
 //!   name the version, so an entry pointing into them would break at the next upgrade; the copy
 //!   finds the program by the record, else on the `PATH`, which their links and shims keep
-//!   current, and every run of `jetcarp` puts its own path in the record ([`heal`]).
+//!   current, and a run of `jetcarp` puts its own path in the record when the program it names
+//!   has gone ([`heal`]).
 //!
 //! Each starts this program by a path an upgrade keeps ([`program`]).
 
@@ -81,15 +82,20 @@ pub fn write_stable(dir: &Path, launcher: &Path, program: &Path) -> Result<PathB
 }
 
 /// Puts `me` in the record beside the launcher's copy in `dir`, when there is a copy and the
-/// record names another program (after an upgrade, or after another install of JETCARP ran last).
-/// Returns whether it wrote. Cheap enough for every run: a file's existence, a small read.
+/// record is missing or names a program that has gone (as after a winget or Scoop upgrade deleted
+/// the old version's folder). A record naming a program that is still there is left alone, even
+/// another one, so a development build or a second install never takes the Start menu entry
+/// over. Returns whether it wrote. Cheap enough for every run: two files' existence, a small read.
 pub fn heal_record_in(dir: &Path, me: &Path) -> Result<bool, String> {
     if !dir.join(LAUNCHER_EXE).is_file() {
         return Ok(false);
     }
     let record = dir.join(RECORD);
-    let now = std::fs::read_to_string(&record).unwrap_or_default();
-    if now.lines().next().map(str::trim) == Some(&*me.display().to_string()) {
+    let named = std::fs::read_to_string(&record)
+        .ok()
+        .and_then(|t| t.lines().next().map(|l| l.trim().to_string()))
+        .filter(|l| !l.is_empty());
+    if named.is_some_and(|p| Path::new(&p).is_file()) {
         return Ok(false);
     }
     std::fs::write(&record, format!("{}\n", me.display()))
@@ -97,8 +103,8 @@ pub fn heal_record_in(dir: &Path, me: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Windows: [`heal_record_in`] for this program, at its start (`jetcarp`'s `main`). Quiet: a
-/// record that can't be written is mended by the PATH meanwhile.
+/// Windows: [`heal_record_in`] for this program, at its start (`jetcarp`'s `main`). Quiet: until
+/// the record is mended, the launcher finds the program on the PATH.
 pub fn heal() {
     if !cfg!(windows) {
         return;

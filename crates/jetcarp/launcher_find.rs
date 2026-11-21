@@ -22,8 +22,8 @@ pub fn recorded(text: &str) -> Option<PathBuf> {
 ///
 /// 1. beside it (a release's folder, the installer's, Scoop's and winget's own);
 /// 2. as the record beside it names it ([`RECORD`]): the Start menu entry starts a copy of the
-///    launcher in a folder of JETCARP's own, which no upgrade touches, and every run of `jetcarp`
-///    puts its own path in the record;
+///    launcher in a folder of JETCARP's own, which no upgrade touches, and a run of `jetcarp` puts
+///    its own path in the record when the program it names has gone;
 /// 3. beside the program of the host command recorded in the settings folder `settings`
 ///    (`host-program`): the screen saver, a copy of the launcher named `JETCARP.scr`;
 /// 4. in a folder on the `PATH` (`path`), where winget's links and Scoop's shims lead to the
