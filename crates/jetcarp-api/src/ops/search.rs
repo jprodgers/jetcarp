@@ -900,9 +900,14 @@ fn cell_list(v: &Value) -> Result<Vec<(u32, u8)>, ApiError> {
             .iter()
             .map(|c| {
                 let c = c.as_array().filter(|c| c.len() == 2).ok_or_else(bad)?;
+                let (i, s) = (
+                    c[0].as_u64().ok_or_else(bad)?,
+                    c[1].as_u64().ok_or_else(bad)?,
+                );
                 Ok((
-                    c[0].as_u64().ok_or_else(bad)? as u32,
-                    c[1].as_u64().ok_or_else(bad)? as u8,
+                    crate::args::to_u32(i, "a cell index").map_err(invalid)?,
+                    u8::try_from(s)
+                        .map_err(|_| invalid(format!("a cell's state is {s}, more than 255")))?,
                 ))
             })
             .collect(),
@@ -3182,6 +3187,25 @@ pub(crate) fn census_text(s: &mut String, r: &CensusReport) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// A cell index past what 32 bits hold, or a state past 255, is refused, never wrapped
+    /// round (cell 2^32 + 300 was read as cell 300, and state 257 as 1).
+    #[test]
+    fn cell_lists_past_their_integers_are_refused_not_wrapped() {
+        let big = (1u64 << 32) + 300;
+        for v in [
+            json!([[big, 1]]),
+            json!([[300, 257]]),
+            json!(format!("{big}:1")),
+            json!("300:257"),
+        ] {
+            assert!(cell_list(&v).is_err(), "{v}");
+        }
+        assert_eq!(
+            cell_list(&json!([[u32::MAX, 255], [3, 1]])).unwrap(),
+            vec![(u32::MAX, 255), (3, 1)]
+        );
+    }
 
     /// A paused hunt that has run `elapsed_s` over every session, started with `started_with`.
     fn row(started_with: Value, elapsed_s: f64) -> JobRow {

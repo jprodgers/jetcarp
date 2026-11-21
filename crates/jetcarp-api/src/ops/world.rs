@@ -1254,13 +1254,25 @@ impl WorldOp for WorldPaste {
         let w = host.world();
         let ci = ca_index(w, a.ca.as_ref())?;
         let ca_id = w.cas[ci].id;
+        // Coordinates and indices past what the grid numbers them with are refused, never
+        // wrapped round onto a cell of this world.
+        let coord = |v: Int, what: &str| {
+            i32::try_from(v).map_err(|_| {
+                ApiError::invalid(format!("{what} is {v}, outside the grid's coordinates"))
+            })
+        };
         let at = match (a.x, a.y, a.index, a.at.as_deref()) {
             (Some(x), Some(y), None, None) => PasteAt::Cell {
-                x: x as i32,
-                y: y as i32,
+                x: coord(x, "x")?,
+                y: coord(y, "y")?,
             },
             (None, None, Some(i), None) => PasteAt::Index {
-                cell: i.max(0) as u32,
+                cell: u32::try_from(i).map_err(|_| {
+                    ApiError::invalid(format!(
+                        "index {i} is not a cell: indices are 0 to {} here",
+                        w.topo.len().saturating_sub(1)
+                    ))
+                })?,
             },
             (None, None, None, Some("original")) => PasteAt::Original,
             (None, None, None, Some("center")) => PasteAt::Center,
