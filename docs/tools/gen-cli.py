@@ -70,12 +70,14 @@ GROUPS = [
      [("Named rule catalogue", "../automata/named-rules.md"), ("Rule notation", "rule-notation.md"),
       ("Tiling catalogue", "../tilings/catalogue.md"), ("Palettes", "palettes.md")],
      ["rules", "tilings", "isohedral", "palettes"]),
-    ("Setup and upkeep", "Set JETCARP up for what you want it for, where it keeps its files, what "
-     "it sees on this machine, the strobe guard's switches, and how to take it off again.",
+    ("Setup and upkeep", "Set JETCARP up for what you want it for, put it among your apps, where it "
+     "keeps its files, what it sees on this machine, the strobe guard's switches, and how to take it "
+     "off again.",
      [("First run and setup", "../getting-started/first-run.md"),
+      ("Open the app", "../getting-started/installing.md#open-the-app"),
       ("Folders and environment variables", "folders.md"), ("The strobe guard", "../guides/strobe-guard.md"),
       ("Uninstalling", "../guides/uninstalling.md")],
-     ["setup", "paths", "doctor", "guard", "uninstall"]),
+     ["setup", "launcher", "paths", "doctor", "guard", "uninstall"]),
 ]
 
 

@@ -14,7 +14,8 @@ same program. Pick the one that suits the tools you already use:
 | [cargo](#with-cargo) | anywhere Rust runs | no | `cargo install jetcarp` again |
 
 Testing a release candidate? See [Release candidates](#release-candidates) below. Once JETCARP is
-installed, [open the app](#open-the-app) by running `jetcarp`.
+installed, [open the app](#open-the-app) by running `jetcarp`, or from its icon in your
+applications menu, Launchpad or the Start menu.
 
 Release builds are made for Linux on x86_64 and ARM (aarch64), Windows on x86_64, and macOS on
 Apple silicon and Intel. Linux on ARM and Intel Macs are built by the same release workflow but have
@@ -55,9 +56,12 @@ refuses the archive if its checksum does not match, and unpacks it into a folder
 | The program's folder | `~/.local/lib/jetcarp` | `%LOCALAPPDATA%\Programs\jetcarp` |
 | On your `PATH` as | a link, `~/.local/bin/jetcarp` | the folder, added to your user `PATH` |
 
-Nothing else is changed: no administrator rights are needed, no system folders are touched, and the
-shell installer never edits your shell's startup files. If `~/.local/bin` is not on your `PATH`, it
-says so and shows the line to add.
+Then the installer has the program put JETCARP among your apps, with its icon: in the applications
+menu on Linux, in `~/Applications` as *JETCARP.app* on macOS, and in the Start menu on Windows
+(`jetcarp launcher install`; see [Open the app](#open-the-app)). Nothing else is changed: no
+administrator rights are needed, no system folders are touched, and the shell installer never edits
+your shell's startup files. If `~/.local/bin` is not on your `PATH`, it says so and shows the line
+to add.
 
 The installers take options. With the shell installer, put them after `sh -s --` (or download the
 script and run `sh jetcarp-installer.sh OPTIONS`); with PowerShell, put them after the script's
@@ -68,12 +72,13 @@ the environment variable named with each.
 | --- | --- | --- | --- |
 | `--version V` | `-Version V` | `JETCARP_VERSION` | Install release `V`, such as `0.4.0` or `0.4.0-rc.1`, instead of the installer's own |
 | `--no-packs` | `-NoPacks` | `JETCARP_NO_PACKS=1` | Leave out the [starter pack](#the-starter-pack) |
+| `--no-launcher` | `-NoLauncher` | `JETCARP_NO_LAUNCHER=1` | Leave JETCARP out of the applications menu, `~/Applications` or the Start menu |
 | `--dir DIR` | `-InstallDir DIR` | `JETCARP_INSTALL_DIR` | Install into another folder |
 | `--bin-dir DIR` | | `JETCARP_BIN_DIR` | Put the link in another folder |
 | | `-NoModifyPath` | `JETCARP_NO_MODIFY_PATH=1` | Leave the user `PATH` alone |
 | `--url URL` | `-DownloadUrl URL` | `JETCARP_DOWNLOAD_URL` | Take the release files from another address, or from a folder that holds them |
 | `--gh` | `-UseGh` | `JETCARP_USE_GH=1` | Download with the [GitHub CLI](https://cli.github.com), signed in, which can read a private repository |
-| `--uninstall` | `-Uninstall` | | Remove what the installer installed |
+| `--uninstall` | `-Uninstall` | | Remove what the installer installed, its entry among your apps too |
 
 An installer only ever replaces a folder it made itself (it leaves a `.jetcarp-installer` file
 there), and refuses to replace a `jetcarp` on your `PATH` that something else put there, such as
@@ -103,7 +108,8 @@ pip install jetcarp
 The wheels are built for the same systems as the release archives, for any Python 3.8 or newer;
 there is no source package, so on other systems use [cargo](#with-cargo). The starter pack goes in
 `share/jetcarp/packs` inside the Python environment, and on macOS the screen saver's code in
-`lib/jetcarp`.
+`lib/jetcarp`. To open JETCARP from your applications menu, Launchpad or the Start menu, run
+`jetcarp launcher install` once (see [Open the app](#open-the-app)).
 
 ## With Homebrew
 
@@ -116,6 +122,10 @@ brew install jetcarp
 
 `brew install jprodgers/jetcarp/jetcarp` does both in one line. The formula installs the release
 archive; nothing is compiled. The starter pack is in `$(brew --prefix)/share/jetcarp/packs`.
+Homebrew cannot put anything in your home folder, so to open JETCARP from Launchpad and Spotlight
+(as *JETCARP.app*) or from your applications menu, run `jetcarp launcher install` once, as
+Homebrew's message after installing says (see [Open the app](#open-the-app)). It starts Homebrew's
+`jetcarp` link, which an upgrade keeps.
 
 To upgrade, run `brew update` before `brew upgrade jetcarp`. Homebrew looks at taps again only
 once a day on its own, so for a day after you last used it, `brew upgrade` alone can miss a new
@@ -132,8 +142,8 @@ scoop bucket add jetcarp https://github.com/jprodgers/scoop-jetcarp
 scoop install jetcarp
 ```
 
-Scoop adds `jetcarp` to your `PATH` and a *JETCARP* entry to the Start menu, which starts the app
-without a console window.
+Scoop adds `jetcarp` to your `PATH` and a *JETCARP* entry, with JETCARP's icon, to the Start menu
+(under *Scoop Apps*), which starts the app without a console window.
 
 ## From a release archive
 
@@ -242,7 +252,9 @@ xattr -d com.apple.quarantine jetcarp-0.4.0-aarch64-apple-darwin.tar.gz
 or, after the warning, open *System Settings → Privacy & Security* and click *Open Anyway* beside
 the message about `jetcarp`. The installers, Homebrew, pipx, uv and pip download without that mark,
 so this applies only to an archive downloaded in a browser. The screen saver bundle that
-`jetcarp host saver install` makes is signed on your Mac, ad hoc, as macOS requires.
+`jetcarp host saver install` makes is signed on your Mac, ad hoc, as macOS requires, and so is
+*JETCARP.app*, which `jetcarp launcher install` makes (the installer runs it for you); neither needs
+a Developer ID, since neither was downloaded.
 
 ### Windows
 
@@ -253,7 +265,8 @@ unpacking, open the zip's *Properties* and tick *Unblock*. The PowerShell instal
 download without the browser's mark, so this applies only to an archive downloaded in a browser.
 
 `jetcarpw.exe`, beside `jetcarp.exe`, starts JETCARP without opening a console window; shortcuts, the
-login entry and the screen saver use it.
+login entry and the screen saver use it. Both carry JETCARP's icon, which Explorer, the taskbar and
+the Start menu show.
 
 ## The starter pack
 
@@ -340,6 +353,8 @@ has the details.
 
 ## Open the app
 
+<img src="../images/jetcarp-icon.png" alt="JETCARP's icon: a black line drawing of a koi carp with jet engines, curled inside a white rounded square with a black outline" width="128">
+
 With JETCARP installed, run `jetcarp` with no arguments in a terminal. This opens the app, on Linux,
 macOS and Windows alike:
 
@@ -347,10 +362,35 @@ macOS and Windows alike:
 jetcarp
 ```
 
-On Windows, open a new terminal after installing, so that it sees the new `PATH`. With Scoop, the
-*JETCARP* entry it adds to the Start menu opens the app too, without a console window. From a
-release archive that is not on your `PATH`, run the program in its folder (`./jetcarp`, or
-`.\jetcarp.exe` on Windows).
+On Windows, open a new terminal after installing, so that it sees the new `PATH`. From a release
+archive that is not on your `PATH`, run the program in its folder (`./jetcarp`, or `.\jetcarp.exe`
+on Windows).
+
+Or open it like any other app, from its icon. The installers put it among your apps for you; after
+any other way of installing (pipx, uv, pip, Homebrew, winget, cargo, a release archive), run this
+once:
+
+```bash
+jetcarp launcher install
+```
+
+| | What it makes | Open JETCARP from |
+| --- | --- | --- |
+| Linux | `jetcarp.desktop` in `~/.local/share/applications`, and the icon at each size in `~/.local/share/icons/hicolor` (both follow `XDG_DATA_HOME`) | the applications menu: on GNOME, *Activities* and the app grid |
+| macOS | *JETCARP.app* in `~/Applications`, signed ad hoc on your Mac | Launchpad, Spotlight or Finder; keep it in the Dock from there |
+| Windows | `JETCARP.lnk` in your Start menu's folder (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), starting `jetcarpw.exe`, so no console window opens | the Start menu |
+
+Each starts the program that made it, by a path an upgrade keeps (Homebrew's `jetcarp` link, not
+the version's own folder). *JETCARP.app* holds a small launcher that starts the program, not a copy
+of it, so it needs making only once. Run `jetcarp launcher install` again if you move the program,
+or after each upgrade with winget, whose folder names the version. Scoop adds a *JETCARP* entry of
+its own, so with Scoop there is no need. `jetcarp launcher status` says whether it is there,
+`jetcarp launcher remove` takes it out, and `jetcarp uninstall` removes it with the rest of what
+JETCARP set up. A menu entry or app of the same name that JETCARP did not make is left alone.
+
+The app's windows carry the icon too: in the title bar and taskbar on Windows and X11, and in the
+Dock on macOS. On Wayland the desktop takes a window's icon from the menu entry named after it, so
+there it needs `jetcarp launcher install`.
 
 The first time, the app shows the [photosensitive seizure warning](photosensitivity.md), then asks a
 few questions to set itself up: see [First run and setup](first-run.md).

@@ -164,6 +164,19 @@ day later (0.4.2: 17 November here, 18 November there).
   cells: in the app's view, pictures, desktop pictures, exported animations, sandpile exports and
   the HashLife view. Everywhere else they are as before; no picture in this book changed.
   ([The strobe guard](../guides/strobe-guard.md#what-it-measures))
+- **An app icon, and JETCARP among your apps on every system.** JETCARP has an icon, a carp with
+  jet engines (a first drawing, to be redrawn): the app's windows show it, and on Windows
+  `jetcarp.exe` and `jetcarpw.exe` carry it, written into them by the build in plain Rust with no
+  resource compiler. `jetcarp launcher install` puts JETCARP, with the icon, in the applications
+  menu on Linux (`jetcarp.desktop` and the icon theme's sizes in `~/.local/share`), in
+  `~/Applications` as *JETCARP.app* on macOS (a launcher that starts the program, signed ad hoc on
+  the Mac, as the screen saver is, so no Developer ID is needed), and in the Start menu on Windows.
+  The installers run it for you (`--no-launcher` and `-NoLauncher` leave it out) and take it out
+  again with `--uninstall`; `jetcarp uninstall` removes it with the rest. One of the same name that
+  JETCARP did not make is left alone. `packaging/gen-icons.py` makes every PNG, the `.ico` and the
+  `.icns` from one SVG (and a simpler one for the small sizes, if one is added), and CI checks
+  them against it. ([Open the app](../getting-started/installing.md#open-the-app),
+  [#105](https://github.com/jprodgers/jetcarp/issues/105))
 
 ### Changed
 

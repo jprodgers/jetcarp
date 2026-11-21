@@ -1,7 +1,8 @@
 # First run and setup
 
-To open the app, run `jetcarp` with no arguments in a terminal, on any system. On Windows, the
-*JETCARP* entry that Scoop adds to the Start menu opens it too (see
+To open the app, run `jetcarp` with no arguments in a terminal, on any system, or open JETCARP from
+its icon in your applications menu, Launchpad or the Start menu, where the installers put it
+(`jetcarp launcher install` puts it there after any other way of installing; see
 [Installing](installing.md#open-the-app)).
 
 The first time you open the app, before anything else, it shows the

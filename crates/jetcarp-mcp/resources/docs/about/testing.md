@@ -57,6 +57,21 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   again with the starter pack's cards, patterns and ant runs in the windows
   (`screen_reader_tree_with_the_starter_pack`). What a screen reader says aloud is checked by hand
   (see [What this testing does not cover](#what-this-testing-does-not-cover)).
+- **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
+  system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
+  spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
+  program by its quoted path, and come with the icon at all eight sizes, byte for byte; on macOS
+  *JETCARP.app* must hold its `Info.plist`, its launcher naming the program and the `.icns`, and
+  pass `codesign --verify`; on Windows the Start menu's `JETCARP.lnk` must be a shell link. Then
+  `jetcarp uninstall` must list it and take every file out (on Windows, `jetcarp launcher remove`,
+  since `jetcarp uninstall` would reach the real registry), and a menu entry or app of the same
+  name that JETCARP did not make must be neither replaced nor removed
+  (`crates/jetcarp/tests/launcher.rs`). The bundle and the menu entry are also written into scratch
+  folders on every system, and Homebrew's link is found from a version's own folder
+  (`jetcarp-display/src/launcher.rs`). The Windows resource file the build script writes must hold
+  the `.ico` file's seven images as icon resources and list them in icon group 1
+  (`crates/jetcarp/tests/version_res.rs`), and the app's windows' icon must decode to the 256 px
+  picture.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.
@@ -316,12 +331,18 @@ job that hangs is stopped rather than left running for hours.
   make its junction or symbolic link and run; the log names each one.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;
   an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
-  nothing installed (the shell installer on Linux, the PowerShell one on Windows).
+  nothing installed (the shell installer on Linux, the PowerShell one on Windows). The intact install
+  must have the program add JETCARP to the system's apps, `--no-launcher` must leave that out (the
+  shell installer), and uninstalling must take the launcher out with the program: on Windows the
+  real program makes and removes the Start menu entry in the test's own `APPDATA`.
 - **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet, and the whole
   workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
-  dry run), and the generated reference pages match the program.
+  dry run), the generated reference pages match the program, and every file of the app icon matches
+  its master SVG (`packaging/gen-icons.py --check`: each PNG rendered again by librsvg, whose pixels
+  may differ only by another version's antialiasing, and the `.ico`, the `.icns` and the copies the
+  program embeds byte for byte).
 - **The dependencies,** with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) (`deny.toml`),
   on every push to `main`, every pull request and once a week, since an advisory can be published
   without anything in JETCARP changing. The check fails on a known vulnerability or unsoundness in
@@ -538,6 +559,10 @@ keeps them free of it.
 - **What a screen reader says.** The tests read the tree a screen reader is given, not what
   Narrator, NVDA, VoiceOver or Orca make of it: how each reads a role, a live region or a grid's
   active cell is checked by hand, on each system.
+- **What the desktop does with a launcher.** The tests check the files `jetcarp launcher install`
+  writes, not that GNOME's app grid, Launchpad, Spotlight, the Dock or the Start menu show JETCARP
+  with its icon, nor that Windows shows the icon inside the program: those are checked by hand, on
+  each system.
 - **The same author for the code and the tests.** The plans' detailed steps and all the test code
   were written by the AI that wrote the program, so they can share its blind spots. The checks on
   that are the hands-on sittings, the checks that compare one way of computing with another (each
