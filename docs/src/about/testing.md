@@ -109,6 +109,13 @@ what to run, and what counts as a pass. It is carried out in three parts.
   imported search must be the same as the original.
 - **A deterministic hunt** that must give the same numbers on every machine (in 0.4.2: 1,783
   distinct objects among 760,892, on all three).
+- **The hunt against Catagolue** (from 0.4.3). `docs/tools/check-catagolue.py` runs a fixed hunt
+  of 150,000 soups of Life and holds the shares of its twelve commonest objects against a copy of
+  the top of Catagolue's census kept in the repository. It fails when one lies more than 4 standard
+  errors from Catagolue's share, or the sum of their squares passes 32.9: an outside check of how
+  the hunt runs soups, cuts out ships and separates and names objects, which the project's own
+  tests cannot give (see [Soup hunt](../research/search-methods.md#soup-hunt)). JETCARP 0.4.2
+  fails it.
 - **An overnight run** of the live desktop background, eight hours, for leaks and stalls, when a
   machine can be left idle that long.
 

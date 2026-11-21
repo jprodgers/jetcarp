@@ -137,6 +137,18 @@ tiling or set of tilings (all Archimedean, k-uniform with a given k, isohedral, 
 tiling). The engine is bit-parallel: many cells are updated in one machine word. Spaceships that fly
 clear of the soup are counted and cut out, so they cannot crash back into it.
 
+**Where it comes from.** This is the method of Adam P. Goucher's apgsearch, first published as a
+Python script in September 2014, and of Catagolue, the census of its results that Goucher started in
+late February 2015: random 16 by 16 soups at density 0.5 in an infinite plane, each run until it
+stabilises, with every object in what it leaves recorded
+([LifeWiki: Apgsearch](bibliography.md#lifewikind_apgsearch);
+[LifeWiki: Catagolue](bibliography.md#lifewikind_catagolue);
+[Goucher 2015](bibliography.md#goucher2015catagolue); [Goucher 2016](bibliography.md#goucher2016apgsearch)).
+Catagolue's census of Life from asymmetric soups (`b3s23/C1`) alone holds about 7.4 × 10¹⁵ objects of
+556,000 kinds ([Goucher 2026](bibliography.md#goucher2026census)), and it covers many other rules and
+soup symmetries. JETCARP's hunt keeps apgsearch's soups, so that on the square grid its counts can be
+held against Catagolue's (below), and runs the method on any periodic tiling.
+
 **How it classifies.** A soup ends when it dies, when it explodes (more live cells than the
 population cap, by default 8 per cell of the soup and at least 2,000; or spread wider than 16 times
 the soup's longer side, and at least 512 unit cells), when it settles (its state repeats with some
@@ -165,7 +177,83 @@ exploded, about one Life soup in 370.
 **How results are checked.** Every new periodic object is [verified](#how-finds-are-verified) and
 stored with its rule range; objects already in the catalogue only gain a sighting. A GPU option
 (`--gpu`) runs the start of each soup on the graphics card, and the tests require the catalogue it
-leaves to equal a CPU-only hunt's.
+leaves to equal a CPU-only hunt's. Each release candidate also runs
+`docs/tools/check-catagolue.py`, which holds a hunt of Life against Catagolue's census (below).
+
+**How it differs from apgsearch.**
+
+- **Which soups are censused.** apgsearch censuses every soup, and classes one that grows for ever
+  as a linear-growth or pathological object. A JETCARP hunt censuses every soup that settles, dies
+  out or reaches its generation limit, and drops one that explodes with no census of what is left;
+  ships cut out of it before it exploded stay counted, which is how a hunt still finds ships in rules
+  where nearly every soup explodes. In Life, after the fix above, 181 soups in 1,000,000
+  explode, 150 of them past the population cap: big, long-lived soups.
+- **How ships are cut out.** apgsearch runs a soup until its population settles into a cycle, with
+  the escaping gliders still in it, and counts the gliders it detects escaping as gliders
+  ([LifeWiki: Apgsearch](bibliography.md#lifewikind_apgsearch)). JETCARP cuts each ship out as it
+  leaves, by the rules above, and counts it as it goes.
+- **How objects are separated.** apgsearch's classifier, part of Goucher's lifelib, takes the
+  clusters of cells within a zone of influence, and splits one that is a pseudo-object into parts
+  by colouring its islands of touching cells and merging two colours wherever a dead cell would be
+  born from one colour's cells alone but is held back by the other's (`pseudoBangBang` in
+  `classifier.h`, [Goucher 2016](bibliography.md#goucher2016apgsearch)). JETCARP groups cells within
+  two neighbour steps and splits a group into the parts whose runs alone add up exactly to the run of
+  the whole ([Compounds](#compounds)). Both keep cells that touch as one object, so the ship-tie,
+  two ships touching at a corner, is one still life to each. JETCARP's steps use only the tiling's
+  neighbour graph, so they run on every periodic tiling.
+- **Names.** Catagolue names an object by its apgcode, JETCARP by its rule-free
+  [id](#how-finds-are-verified). The comparison below works out each object's apgcode from its cells.
+
+**What a hunt's counts are.** The objects left by every soup that settled, died out or ran out of
+generations, plus every ship cut out of any soup on the way, with puffers and guns where the hunt
+detects them. They are not an unbiased census of all soups: exploded soups leave no census, so the
+objects of big, long-lived soups are slightly under-counted; objects with a period above 64, and
+soups that have not settled by 20,000 generations (classed as they stand, their unsettled parts as
+*other*), are not followed further; and a ship that will hit something later, such as a glider
+overtaken by a faster ship, is counted as it left. Counts from tilings and rules where most soups
+explode are mostly the ships that escaped.
+
+**Compared with Catagolue.** A hunt of a million soups of Life (`--seed 11`) against Catagolue's
+census, fetched on 20 November 2026 ([Goucher 2026](bibliography.md#goucher2026census)), the sixteen
+commonest objects. Objects from one soup are not independent (a soup that leaves one beehive tends to
+leave more), so *z* is the difference over its standard error measured soup by soup, not over a
+binomial count's:
+
+| Object | apgcode | JETCARP | Catagolue | Difference | *z* |
+| --- | --- | --- | --- | --- | --- |
+| block | `xs4_33` | 30.8709% | 30.8874% | −0.05% | −1.5 |
+| blinker | `xp2_7` | 28.6879% | 28.6852% | +0.01% | +0.2 |
+| beehive | `xs6_696` | 16.3660% | 16.3679% | −0.01% | −0.2 |
+| glider | `xq4_153` | 8.8019% | 8.7913% | +0.12% | +1.7 |
+| loaf | `xs7_2596` | 4.8209% | 4.8289% | −0.17% | −1.7 |
+| boat | `xs5_253` | 4.4639% | 4.4565% | +0.17% | +1.6 |
+| ship | `xs6_356` | 3.0811% | 3.0761% | +0.16% | +1.5 |
+| tub | `xs4_252` | 0.9741% | 0.9722% | +0.19% | +0.9 |
+| pond | `xs8_6996` | 0.9454% | 0.9456% | −0.01% | −0.1 |
+| long boat | `xs7_25ac` | 0.3146% | 0.3131% | +0.46% | +1.2 |
+| toad | `xp2_7e` | 0.2174% | 0.2189% | −0.65% | −1.4 |
+| ship-tie | `xs12_g8o653z11` | 0.1572% | 0.1589% | −1.07% | −1.5 |
+| beacon | `xp2_318c` | 0.0684% | 0.0684% | −0.07% | −0.1 |
+| barge | `xs6_25a4` | 0.0652% | 0.0658% | −0.85% | −1.0 |
+| a 14-cell still life | `xs14_g88m952z121` | 0.0542% | 0.0538% | +0.81% | +0.7 |
+| mango | `xs8_69ic` | 0.0240% | 0.0242% | −1.03% | −0.8 |
+
+The shares agree within chance (the sum of the sixteen *z*² is 20.9, about what chance gives for
+sixteen). JETCARP 0.4.2 counted the glider 0.35% high on these soups (*z* = 4.7): the gliders that
+were never cut stayed in soups that were then dropped, while the gliders cut from those soups before
+were still counted. The November 2026 audit also found the ship-tie short: by 5% in a hunt of
+150,000 soups and by 16% in one of 20,000 (*z* = −3.6 and −4.1 against a binomial count). That is
+not the separation: in those soups every ship-tie left at the end was counted whole, as one object.
+The ship-tie's counts are also more spread from soup to soup than a binomial count's (their variance
+is 1.7 times as large), and it was the largest of the differences among the thirty-odd kinds
+compared. This fresh hunt, seven times as large, shows −1.1% (*z* = −1.5): within chance, though a
+deficit of a percent or so cannot be ruled out.
+
+`docs/tools/check-catagolue.py` runs the audit's hunt (`--seed 7`, 150,000 soups) for every release
+candidate, against a copy of the top of Catagolue's table kept in `docs/data/catagolue-b3s23-C1.tsv`,
+and fails when any of the twelve commonest objects lies more than 4 standard errors from
+Catagolue's share, or the sum of their *z*² passes 32.9 (the 0.1% point for twelve). JETCARP 0.4.2
+fails it (35.4) and 0.4.3 passes (27.3).
 
 **Command.** `jetcarp search hunt --rules "B3/S23 B36/S23" --tilings archimedean --soups 100000`.
 

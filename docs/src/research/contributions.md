@@ -410,6 +410,18 @@ of known rules to known graphs, and we do not count them as discoveries. See
 
 ## What we do not claim
 
+- **The soup hunt as a method.** Dropping small random soups (16 × 16 cells at density 0.5) on an
+  unbounded plane, running each until it settles and classing every object left is the method of
+  Adam P. Goucher's apgsearch, whose results have gone into his Catagolue census since February
+  2015: about 7.4 × 10¹⁵ objects from asymmetric soups of Life alone
+  ([LifeWiki: Apgsearch](bibliography.md#lifewikind_apgsearch);
+  [LifeWiki: Catagolue](bibliography.md#lifewikind_catagolue);
+  [Goucher 2015](bibliography.md#goucher2015catagolue);
+  [Goucher 2016](bibliography.md#goucher2016apgsearch)). Catagolue censuses many other rules and
+  soup symmetries too. JETCARP's hunt applies the method to
+  Life-like and Generations rules on any periodic tiling; on the square grid its counts of Life agree
+  with Catagolue's. It differs in which soups it censuses, how it cuts out escaping ships and how it
+  separates objects; see [Soup hunt](search-methods.md#soup-hunt).
 - **Age colouring**, including colouring cells by how long they have been alive and fading destroyed
   cells: Chris Rowett's LifeViewer and other programs did this first
   ([LifeWiki: LifeViewer](bibliography.md#lifewikind_lifeviewer);

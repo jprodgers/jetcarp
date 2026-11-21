@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 266 works cited across the JETCARP documentation. Every entry was
+These are the 271 works cited across the JETCARP documentation. Every entry was
 checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
 the author's or project's own page, or LifeWiki) when the history research was compiled in
 November 2026. Web pages are given with the date they were read. Each entry's anchor is its
@@ -216,6 +216,12 @@ BibTeX key, so you can link to it directly.
 
 <span id="goucher2012gliders"></span>Goucher, Adam P. (2012). “Gliders in Cellular Automata on Penrose Tilings”. *Journal of Cellular Automata* 7(5–6): 385–392. <small>`goucher2012gliders`</small>
 
+<span id="goucher2015catagolue"></span>Goucher, Adam P. (2015). “Catagolue”. Online census of objects from random soups. <https://catagolue.hatsya.com/>; accessed 2026-11-20. <small>`goucher2015catagolue`</small>
+
+<span id="goucher2016apgsearch"></span>Goucher, Adam P. (2016). “apgsearch 5 (apgluxe), the soup searcher for Catagolue”. Source code, GitLab repository apgoucher/apgmera. <https://gitlab.com/apgoucher/apgmera>; accessed 2026-11-20. <small>`goucher2016apgsearch`</small>
+
+<span id="goucher2026census"></span>Goucher, Adam P. and Catagolue contributors (2026). “Catagolue census of Conway's Life from asymmetric 16 by 16 soups (b3s23/C1)”. Catagolue. <https://catagolue.hatsya.com/census/b3s23/C1>; accessed 2026-11-20. <small>`goucher2026census`</small>
+
 <span id="grassberger2002critical"></span>Grassberger, Peter (2002). “Critical behaviour of the Drossel-Schwabl forest fire model”. *New Journal of Physics* 4: 17. doi:[10.1088/1367-2630/4/1/317](https://doi.org/10.1088/1367-2630/4/1/317). <small>`grassberger2002critical`</small>
 
 <span id="gravner1998cellular"></span>Gravner, Janko and David Griffeath (1998). “Cellular Automaton Growth on ℤ²: Theorems, Examples, and Problems”. *Advances in Applied Mathematics* 21(2): 241–304. doi:[10.1006/aama.1998.0599](https://doi.org/10.1006/aama.1998.0599). <small>`gravner1998cellular`</small>
@@ -336,11 +342,15 @@ BibTeX key, so you can link to it directly.
 
 <span id="lifewikind_34life"></span>LifeWiki contributors (2026). “OCA:3-4 Life”. LifeWiki. <https://conwaylife.com/wiki/OCA:3-4_Life>; accessed 2026-11-10. <small>`lifewikind_34life`</small>
 
+<span id="lifewikind_apgsearch"></span>LifeWiki contributors (2026). “Apgsearch”. LifeWiki. <https://conwaylife.com/wiki/Apgsearch>; accessed 2026-11-20. <small>`lifewikind_apgsearch`</small>
+
 <span id="lifewikind_b3678s23"></span>LifeWiki contributors (2026). “OCA:B3678/S23”. LifeWiki. <https://conwaylife.com/wiki/OCA:B3678/S23>; accessed 2026-11-10. <small>`lifewikind_b3678s23`</small>
 
 <span id="lifewikind_briansbrain"></span>LifeWiki contributors (2026). “Brian's Brain”. LifeWiki. <https://conwaylife.com/wiki/Brian%27s_Brain>; accessed 2026-11-10. <small>`lifewikind_briansbrain`</small>
 
 <span id="lifewikind_castles"></span>LifeWiki contributors (2026). “OCA:Castles”. LifeWiki. <https://conwaylife.com/wiki/OCA:Castles>; accessed 2026-11-10. <small>`lifewikind_castles`</small>
+
+<span id="lifewikind_catagolue"></span>LifeWiki contributors (2026). “Catagolue”. LifeWiki. <https://conwaylife.com/wiki/Catagolue>; accessed 2026-11-20. <small>`lifewikind_catagolue`</small>
 
 <span id="lifewikind_conwayslife"></span>LifeWiki contributors (2025). “Conway's Game of Life”. LifeWiki. <https://conwaylife.com/wiki/Conway%27s_Game_of_Life>; accessed 2026-11-10. <small>`lifewikind_conwayslife`</small>
 

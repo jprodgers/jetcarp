@@ -11,7 +11,13 @@ find what they found. How each strategy works, and how its finds are checked, is
 ## Your first hunt
 
 The *soup hunt* drops small random soups on an unbounded plane, runs each until it settles, and
-classes every object left behind. With no options it hunts Conway's Life on squares:
+classes every object left behind. This is the method of Adam P. Goucher's apgsearch and of his
+Catagolue census, which has classed about 7.4 × 10¹⁵ objects from asymmetric soups of Life alone
+([Goucher 2016](../research/bibliography.md#goucher2016apgsearch);
+[Goucher 2015](../research/bibliography.md#goucher2015catagolue)), and the hunt's soups are
+apgsearch's, so a hunt of Life on squares can be compared with Catagolue: it agrees
+within chance (see [Soup hunt](../research/search-methods.md#soup-hunt), which also says how the two
+differ). With no options it hunts Conway's Life on squares:
 
 ```sh
 jetcarp search hunt --soups 20000

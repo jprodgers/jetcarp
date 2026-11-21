@@ -141,6 +141,14 @@ day later (0.4.2: 17 November here, 18 November there).
   0.7% above Catagolue's census before, is within chance of it. A hunt of Life runs about a tenth
   slower. ([Soup hunt](../research/search-methods.md#soup-hunt),
   [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The book credits apgsearch and Catagolue, and says how a hunt compares with them.** The soup
+  hunt's defaults are those of Adam P. Goucher's apgsearch and of his Catagolue census, which the
+  book did not mention; *Search methods*, *Searching for patterns* and *What is new in JETCARP* now
+  credit them and set out how JETCARP's hunt differs, what its counts are and are not, and how they
+  compare with Catagolue's. `docs/tools/check-catagolue.py`, run for each release candidate, compares
+  the shares of the twelve commonest objects of a fixed hunt of Life with a pinned copy of the top of
+  Catagolue's census. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
 
 ## [0.4.2] – 2026-11-17
 
