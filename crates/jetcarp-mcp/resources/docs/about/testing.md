@@ -52,8 +52,9 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   (`golly_agrees_on_larger_than_life`). With rules with birth on 0 run as written, as JETCARP ran
   them before 0.4.3, all ten of their soups differ from Golly at the first generation. It needs
   Golly 4.0 or later, the first to read Larger than Life's `R2,C2,S3-6,B3-4` notation and to
-  emulate birth on 0. CI's Linux job installs Ubuntu's Golly 3.3, so there it runs the other three
-  tests and skips this one, saying so; it was run with Golly 5.0 on the development desktop.
+  emulate birth on 0. Ubuntu packages only Golly 3.3, so CI's Linux job builds `bgolly` 4.0 (the
+  oldest Golly that reads everything JETCARP writes) and 5.0 (the newest) from their source, each
+  download checked against its SHA-256, and runs every one of these tests with each.
 - **The benchmark's answers.** A short run of the benchmark behind the
   [JETCARP Hardware Score](../guides/this-computer.md) (each workload once) must give its stored
   answers on the processor, and on the GPU where there is one (Mesa's software renderer in CI), and
