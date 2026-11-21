@@ -183,6 +183,29 @@ jobs:
           python3 docs/tools/gen-shortcuts.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/check-rule-notation.py --jetcarp target/release/jetcarp
 
+  debug:
+    # Release builds check neither arithmetic for overflow nor debug assertions, so the tests run
+    # again in the dev profile (optimised a little, its dependencies fully). A WebP bug hid from
+    # the release run that way until 0.4.3 (#243).
+    name: Test in a debug build (Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      JETCARP_GPU: software
+      JETCARP_REQUIRE_GPU: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: Test (debug build)
+        run: cargo test --workspace --no-fail-fast
+
   fmt:
     name: Formatting
     runs-on: ubuntu-24.04

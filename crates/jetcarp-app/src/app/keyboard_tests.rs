@@ -793,8 +793,17 @@ fn child_tabs_cards_and_the_setup_window_from_the_keyboard() {
     // A Quick Start card's menu.
     k.app.run_action(&k.ctx.clone(), menu::Action::QuickStart);
     k.app.menu.view.live = false;
-    k.frames(10);
-    let (handle, _) = k.app.menu.test_first_card().expect("a card drawn");
+    // Until a card is drawn: ten frames are enough here, not on a slow CI runner.
+    let t = std::time::Instant::now();
+    let mut first = None;
+    while first.is_none() && t.elapsed().as_secs() < 20 {
+        k.frames(1);
+        first = k.app.menu.test_first_card();
+        if first.is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+    let (handle, _) = first.expect("a card drawn");
     let title = k
         .app
         .menu

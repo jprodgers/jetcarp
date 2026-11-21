@@ -1132,14 +1132,18 @@ mod tests {
         let mut stills = Stills::default();
         let click = |ctx: &egui::Context, stills: &mut Stills, clicked: bool| -> f64 {
             let mut t = -1.0;
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            // Nothing draws the fonts' textures here: their changes are let go, or a debug build
+            // panics as the frame's output is dropped.
+            ctx.run_ui(Default::default(), |ui| {
                 let mut resp = ui.allocate_response(egui::vec2(10.0, 10.0), egui::Sense::click());
                 // A click as egui reports it.
                 if clicked {
                     resp.flags |= egui::response::Flags::FAKE_PRIMARY_CLICKED;
                 }
                 t = stills.time(&resp, "find", 3.5);
-            });
+            })
+            .textures_delta
+            .clear();
             t
         };
         assert_eq!(
@@ -1166,9 +1170,11 @@ mod tests {
     fn the_spinner_is_still_with_reduced_motion() {
         let ctx = egui::Context::default();
         let run = |ctx: &egui::Context| {
-            let out = ctx.run_ui(Default::default(), |ui| {
+            let mut out = ctx.run_ui(Default::default(), |ui| {
                 spinner(ui);
             });
+            // Nothing draws the fonts' textures here: let their changes go.
+            out.textures_delta.clear();
             out.viewport_output
                 .values()
                 .any(|v| v.repaint_delay == std::time::Duration::ZERO)
