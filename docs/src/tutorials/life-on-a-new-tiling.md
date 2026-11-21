@@ -133,7 +133,7 @@ scene:      life-k2-007.json
 tiling:     Periodic (custom or catalog) (periodic): 9880 cells, 52x38 unit cells, 5 tile type(s), storage periodic, edges wrap
 backend:    cpu (32 threads)
 generation: 500
-hash:       6f05d1213042e5e6
+hash:       82e916f00b6230ab55e8e1613790cc8ee6c9cfcdc9312d418c42e68a86316bd9
 status:     Running
 done:       no
 field 0:    shared binary, 81 live: Life [B3/S23]
@@ -142,9 +142,9 @@ saved:      life-k2-007-500.json
 time:       0.11s on 32 threads
 ```
 
-The hash is the one the app showed at generation 500 (`hash 6f05d121` in the menu bar): the same
-world, tile for tile. `jetcarp verify life-k2-007-500.json` replays the saved scene and checks that it
-reaches the hash again. `jetcarp objects` is the *Objects* pane:
+The hash is the one the app showed at generation 500 (its first 16 digits, `hash 82e916f00b6230ab`,
+are in the menu bar): the same world, tile for tile. `jetcarp verify life-k2-007-500.json` replays
+the saved scene and checks that it reaches the hash again. `jetcarp objects` is the *Objects* pane:
 
 ```sh
 jetcarp objects life-k2-007.json --gens 500
@@ -154,7 +154,7 @@ It prints, in part:
 
 ```text
 …
-generation: 500  hash 6f05d1213042e5e6
+generation: 500  hash 82e916f00b6230ab55e8e1613790cc8ee6c9cfcdc9312d418c42e68a86316bd9
 rule:       B3/S23 (CA 1, field 0), 81 live cells
 objects:    18 (still lifes 5, oscillators 12, spaceships 1, other 0), 4 symmetries, periods up to 64
 …

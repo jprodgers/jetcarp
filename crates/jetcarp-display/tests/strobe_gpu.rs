@@ -11,7 +11,8 @@
 //! moved a gradient pixel across the saturation test, a step of over 100 in its red measure, and a
 //! tile's mean by about 1.)
 //!
-//! Each test skips itself when the machine has no GPU adapter. `gpu_cost` (ignored; run with
+//! Each test skips itself when the machine has no usable GPU adapter, and fails instead under
+//! `JETCARP_REQUIRE_GPU=1` ([`jetcarp_gpu::no_gpu`]). `gpu_cost` (ignored; run with
 //! `-- --ignored --nocapture`) times the pass at common screen sizes.
 
 use jetcarp_core::strobe::frame::{reduce, reduce_both};
@@ -24,15 +25,25 @@ struct Gpu {
     timestamps: bool,
 }
 
+/// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
+/// `JETCARP_REQUIRE_GPU=1`).
 fn gpu() -> Option<Gpu> {
+    const WHAT: &str = "the strobe guard's GPU pass tests";
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let choice =
-        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
+            Ok(c) => c,
+            Err(e) => {
+                jetcarp_gpu::no_gpu(WHAT, &e);
+                return None;
+            }
+        };
     if let Err(e) = &choice.usable {
-        eprintln!("skipped: {e}");
+        jetcarp_gpu::no_gpu(WHAT, e);
         return None;
     }
+    let name = choice.info.name.clone();
     let adapter = choice.adapter;
     let ts = wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
     let timestamps = adapter.features().contains(ts);
@@ -40,7 +51,13 @@ fn gpu() -> Option<Gpu> {
     if timestamps {
         desc.required_features |= ts;
     }
-    let (device, queue) = pollster::block_on(adapter.request_device(&desc)).ok()?;
+    let (device, queue) = match pollster::block_on(adapter.request_device(&desc)) {
+        Ok(d) => d,
+        Err(e) => {
+            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
+            return None;
+        }
+    };
     eprintln!("adapter: {}", adapter.get_info().name);
     Some(Gpu {
         device,

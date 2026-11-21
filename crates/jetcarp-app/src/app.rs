@@ -18,6 +18,7 @@ use jetcarp_core::world::Applied;
 use jetcarp_core::*;
 use std::sync::Arc;
 
+mod accessibility;
 /// Opt-in local endpoint for AI control (MCP). A child module so it can use `try_exec`.
 mod ai_control;
 mod anim_export;
@@ -215,6 +216,8 @@ pub struct JetcarpApp {
     /// The command line's launch flags, held back while the warning shows (screensaver mode and
     /// full-screen outputs among them).
     pending_launch: Option<crate::cli::LaunchArgs>,
+    /// Settings → Accessibility, and the system's settings it follows (`accessibility.rs`).
+    a11y: accessibility::A11yRt,
 }
 
 /// What the status and menu bars show about the world, kept until its revision changes.
@@ -241,7 +244,8 @@ impl JetcarpApp {
         } else {
             false
         };
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        // The theme (standard or high contrast, light or dark) is put in place with the settings
+        // below (`a11y_frame`).
         // Ubuntu Light (the default proportional font) has few symbols; fall back to Hack for
         // arrows, boxes, and dots in labels and buttons.
         let mut fonts = egui::FontDefinitions::default();
@@ -338,9 +342,12 @@ impl JetcarpApp {
             setup: crate::setup_ui::Wizard::for_app(),
             warning: crate::warning_ui::Warning::for_app(),
             pending_launch: None,
+            a11y: Default::default(),
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
+        // Reduced motion and the theme, before the first scene opens or the first frame draws.
+        app.a11y_frame(&cc.egui_ctx);
         let mut app = app.with_autoshot(&cc.egui_ctx);
         // The photosensitive seizure warning comes first (#96): until it has been answered, the
         // launch waits.
@@ -572,6 +579,8 @@ impl eframe::App for JetcarpApp {
         }
         self.shell.monitors.update(frame);
         self.window_place(&ctx, frame);
+        // The system's reduced motion and contrast, as Settings → Accessibility follows them.
+        self.a11y_frame(&ctx);
         // The photosensitive seizure warning, alone, until it has been answered (#96): no outputs,
         // screensaver, tool windows or setup. A screenshot run still ends, picturing it.
         if self.warning.showing {

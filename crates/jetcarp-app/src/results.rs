@@ -431,7 +431,7 @@ impl ResultsBrowser {
                     self.add_favourites_to_library();
                 }
                 if busy {
-                    ui.spinner();
+                    crate::a11y::spinner(ui);
                 }
             }
             if let Some(f) = self.folder().map(Path::to_path_buf) {
@@ -448,7 +448,7 @@ impl ResultsBrowser {
             }
         });
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let Some(m) = &self.manifest else {
             thumbs::empty_note(
@@ -766,7 +766,7 @@ impl ResultsBrowser {
                 ui.ctx().copy_text(text(&r, "rule").to_string());
             }
             if let Some((_, what)) = &self.loading {
-                ui.spinner();
+                crate::a11y::spinner(ui);
                 ui.label(RichText::new(format!("opening {what}…")).weak());
             }
         });

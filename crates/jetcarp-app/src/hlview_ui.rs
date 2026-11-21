@@ -304,7 +304,7 @@ impl HlView {
                 self.scale *= 2.0;
             }
             if self.busy() {
-                ui.spinner();
+                crate::a11y::spinner(ui);
             }
             ui.separator();
             ui.label("Colours");
@@ -339,7 +339,7 @@ impl HlView {
             ui.label(egui::RichText::new(&self.status).small());
         }
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let size = ui.available_size().max(Vec2::new(200.0, 150.0));
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
@@ -543,16 +543,34 @@ impl HlView {
             let c = self.colors.state(v, states, self.wire);
             painter.rect_filled(rect, 0.0, Color32::from_rgb(c[0], c[1], c[2]));
         }
-        let stroke = egui::Stroke::new(
-            if self.scale * self.cell_size() > 8.0 {
-                1.0
-            } else {
-                0.0
-            },
-            self.outline,
-        );
+        let width = if self.scale * self.cell_size() > 8.0 {
+            1.0
+        } else {
+            0.0
+        };
+        let outline = self.outline.to_array();
         for li in 0..plane.layers.len() {
-            for (i, j, k, v) in plane.layer_cells_in(li, i0, j0, w, h) {
+            let cells = plane.layer_cells_in(li, i0, j0, w, h);
+            // Outlines faint where they would form strong stripes, as the processor's pictures
+            // draw them: tiles in an even field (the same state as the same tile's neighbours
+            // along both axes) of a regular grid (one tile a cell), over a quarter of the view.
+            let state: std::collections::HashMap<(i64, i64, u32), u8> =
+                cells.iter().map(|&(i, j, k, v)| ((i, j, k), v)).collect();
+            let even = |i: i64, j: i64, k: u32, v: u8| {
+                [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                    .iter()
+                    .all(|&(di, dj)| state.get(&(i + di, j + dj, k)) == Some(&v))
+            };
+            let tile_px = self.scale * self.cell_size();
+            let fields = cells
+                .iter()
+                .filter(|&&(i, j, k, v)| even(i, j, k, v))
+                .count() as f64
+                * tile_px
+                * tile_px
+                / (rect.width() * rect.height()).max(1.0) as f64;
+            let fade = g.types.len() == 1 && fields > jetcarp_core::strobe::AREA_SHARE;
+            for &(i, j, k, v) in &cells {
                 if bg.get(k as usize) == Some(&v) {
                     continue;
                 }
@@ -566,10 +584,15 @@ impl HlView {
                     .map(|&q| self.world_to_screen(rect, t.apply(q)))
                     .collect();
                 let c = self.colors.state(v, states, self.wire);
+                let o = if fade && even(i, j, k, v) {
+                    jetcarp_core::render::outline_over([c[0], c[1], c[2], 255], outline)
+                } else {
+                    outline
+                };
                 painter.add(egui::Shape::convex_polygon(
                     pts,
                     Color32::from_rgb(c[0], c[1], c[2]),
-                    stroke,
+                    egui::Stroke::new(width, Color32::from_rgb(o[0], o[1], o[2])),
                 ));
             }
         }

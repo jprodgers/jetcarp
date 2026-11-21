@@ -20,7 +20,9 @@ to fit whatever the view shows, so a world you have zoomed into is still exporte
 shows the size it will be, such as *Export the world as PNG (2400 × 1600)…*. *Export size*, just
 below it, sets the scale: *fit* gives 2400 pixels on the longer side, and a number gives that many
 pixels per tile (up to 64). Large images are written in strips, so they need little memory. Tile
-outlines are drawn where tiles are at least 7 pixels across.
+outlines are drawn where tiles are at least 7 pixels across, faint over a large, even, bright field
+of a square or hexagonal grid, where they would make strong stripes
+([the strobe guard](strobe-guard.md#what-it-measures)).
 
 *File → Export the view as PNG…* saves what the grid shows now instead: the same centre and zoom, at
 the screen's resolution (the grid's size in pixels, or the outputs' span when the grid is shown on

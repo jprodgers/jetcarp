@@ -109,10 +109,8 @@ impl JetcarpApp {
     pub(super) fn profile_load(&mut self, p: &Profile) -> Result<(), String> {
         let (p, scene, err) = profiles::resolve(p, &|id| self.menu.scene_of(id));
         let sc = profiles::apply_profile(&p, scene, Some(self.canvas_px()));
-        let autoplay = self.autoplay;
-        self.autoplay = true;
-        self.load_scene_bg(&sc);
-        self.autoplay = autoplay;
+        // A profile always runs, whatever reduced motion says: it was asked for.
+        self.load_scene_bg_as(&sc, true);
         if p.refill && profiles::is_lattice(&sc) {
             self.t_size = SizeChoice::Fill;
         }
@@ -414,7 +412,7 @@ impl JetcarpApp {
             } else {
                 ui.visuals().weak_text_color()
             };
-            ui.label(RichText::new(t).small().color(c));
+            ui.label(RichText::new(t).small().color(crate::theme::ink(ui, c)));
         }
         if self.display.saver_ui.dirty_at.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
@@ -452,7 +450,7 @@ impl JetcarpApp {
                 });
                 if !names.contains(&c.profile) {
                     ui.colored_label(
-                        Color32::from_rgb(255, 170, 90),
+                        crate::theme::ink(ui, Color32::from_rgb(255, 170, 90)),
                         format!("No profile named {:?}: Life shows instead.", c.profile),
                     );
                 }
@@ -611,7 +609,10 @@ impl JetcarpApp {
             self.saver_select(&n);
         }
         for e in self.display.profiles.errors.clone() {
-            ui.colored_label(Color32::from_rgb(255, 110, 110), RichText::new(e).small());
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)),
+                RichText::new(e).small(),
+            );
         }
         ui.horizontal_wrapped(|ui| {
             let sim = self.screen == Screen::Sim && !self.world.cas.is_empty();
@@ -1090,7 +1091,7 @@ impl JetcarpApp {
                 ui.label(RichText::new("No policies: no reseeding.").small().weak());
             }
             if let Err(e) = reseed_ui::validate_all(policies) {
-                ui.colored_label(Color32::from_rgb(255, 110, 110), e);
+                ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)), e);
             }
         }
         if let Some(c) = draft.reseed_cells {
@@ -1128,7 +1129,7 @@ impl JetcarpApp {
             if let Some(t) = &mut self.display.saver_ui.tune {
                 t.poll();
                 if t.results.is_none() {
-                    ui.spinner();
+                    crate::a11y::spinner(ui);
                     ui.label(
                         RichText::new(format!("trying {} of {}…", t.progress.0 + 1, t.progress.1.max(1)))
                             .small(),
@@ -1172,7 +1173,7 @@ impl JetcarpApp {
                         });
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(Color32::from_rgb(255, 110, 110), e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)), e);
                 }
                 None => {}
             }

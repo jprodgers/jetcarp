@@ -121,7 +121,7 @@ fn row(ui: &mut egui::Ui, p: Option<&Palette>, label: &str, selected: bool) -> b
             label,
             egui::FontId::proportional(13.0),
             if selected {
-                Color32::from_rgb(255, 200, 80)
+                crate::theme::ink(ui, Color32::from_rgb(255, 200, 80))
             } else {
                 ui.visuals().text_color()
             },

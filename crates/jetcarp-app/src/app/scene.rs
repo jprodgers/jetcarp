@@ -11,12 +11,16 @@ impl JetcarpApp {
     /// Load a scene now (AI control expects the world in place when this returns). The UI uses
     /// `load_scene_bg`, which builds large tilings in the background.
     pub(super) fn load_scene(&mut self, scene: &Scene) {
-        self.load_scene_as(scene, self.autoplay);
+        let play = self.opens_running();
+        self.load_scene_as(scene, play);
     }
 
-    /// [`Self::load_scene`], running afterwards or not (`play`).
+    /// [`Self::load_scene`], running afterwards or not (`play`). Automata the scene names no
+    /// palette for take the defaults of Settings → Accessibility.
     pub(super) fn load_scene_as(&mut self, scene: &Scene, play: bool) {
         self.cancel_build();
+        let filled = self.with_default_palettes(scene);
+        let scene: &Scene = &filled;
         match World::from_scene(scene) {
             Ok(w) => {
                 self.world = w;
@@ -52,9 +56,13 @@ impl JetcarpApp {
             }
         }
         self.screen = Screen::Sim;
-        // What loading let pass (a palette this JETCARP does not know) goes in the status line.
-        let warnings = self.world.warnings();
-        self.message = (!warnings.is_empty()).then(|| (warnings.join("; "), false));
+        // What loading let pass (a palette this JETCARP does not know) goes in the status line,
+        // after the note of a scene opened paused for reduced motion.
+        let mut notes = self.world.warnings().to_vec();
+        if std::mem::take(&mut self.a11y.paused_open) && !play {
+            notes.insert(0, accessibility::PAUSED_NOTE.to_string());
+        }
+        self.message = (!notes.is_empty()).then(|| (notes.join("; "), false));
     }
 
     /// Show a world built elsewhere (a script's `show(w)`, a sweep result) in the main view.
