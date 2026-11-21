@@ -63,10 +63,11 @@ EXAMPLES = {
 
 # Where a tool comes from, when not every server lists it.
 ONLY = {
-    "app_display": "Listed by the app's own server, and by `jetcarp mcp`, which passes it to the app "
-                   "once attached (`use_app`); an error otherwise.",
-    "use_app": "`jetcarp mcp` (stdio) only.",
-    "host_control": "`jetcarp mcp` (stdio) only.",
+    "app_display": "Listed by the app's own server (AI control, and its HTTP endpoint), and by "
+                   "`jetcarp mcp`, which passes it to the app once attached (`use_app`); an error "
+                   "otherwise.",
+    "use_app": "`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.",
+    "host_control": "`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.",
 }
 
 

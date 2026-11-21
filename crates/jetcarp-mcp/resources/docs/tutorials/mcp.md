@@ -49,6 +49,58 @@ prints it (on Windows, `where jetcarp`).
 **Other clients.** Most take the same JSON, or ask for a command (`jetcarp`) and its arguments
 (`mcp`) in a form. The [MCP tools](../reference/mcp.md) reference lists the server's options.
 
+**Clients that connect to a URL (HTTP).** A few clients don't start a program: they connect to a
+server's address instead (Postman, web-based tools, remote setups). For them, `jetcarp mcp --http`
+serves the same tools over MCP's *Streamable HTTP* transport, on your computer only. Start it in a
+terminal and leave it running:
+
+```sh
+jetcarp mcp --http
+```
+
+```text
+JETCARP's MCP server is answering HTTP clients (MCP Streamable HTTP) on this computer only.
+  URL:    http://127.0.0.1:47812/mcp
+  Header: Authorization: Bearer 3f9c0a5e2b7d41c8a6e09f1d2c4b8a73
+It listens on 127.0.0.1, which other computers cannot reach. The token is new each time it starts, and is recorded in /run/user/1000/jetcarp/mcp-http-endpoint.json, which only you can read.
+Each session has a private world of its own. Ctrl-C stops the server.
+```
+
+Give the client the URL and the header. A client that asks for a *bearer token* wants only the
+token, the part after `Bearer`. Claude Code can connect this way too, though `jetcarp mcp` itself
+suits it better:
+
+```sh
+claude mcp add --transport http jetcarp-http http://127.0.0.1:47812/mcp \
+  --header "Authorization: Bearer 3f9c0a5e2b7d41c8a6e09f1d2c4b8a73"
+```
+
+The token is new each time the server starts, so the client needs the new one each time, unless
+you ask for it to be kept: `jetcarp mcp --http --keep-token` keeps it in a private file in
+JETCARP's settings folder, and says so each time it starts. A kept token survives restarts and
+reboots, and stays valid until you make a new one with `--new-token`, which stops the old one
+working; starting without `--keep-token` deletes it. Keeping it saves setting the client up again,
+but whoever learns it keeps their access until then.
+
+A client that runs in a web browser sends its page's origin, and the server refuses every origin
+but its own unless you name it: `--allow-origin http://localhost:6274` lets that one page connect
+(with the token, still), and you can give the option once for each. Name only pages you trust,
+exactly; no wildcards are accepted.
+
+To try the endpoint by hand, `curl` starts a session (give it your own token):
+
+```sh
+curl -i http://127.0.0.1:47812/mcp \
+  -H 'Authorization: Bearer 3f9c0a5e2b7d41c8a6e09f1d2c4b8a73' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "curl", "version": "1"}}}'
+```
+
+The answer's `Mcp-Session-Id` header names the session, and every later request sends it too. The
+[MCP tools](../reference/mcp.md#over-http) reference has the rest: a tool call, how a session ends,
+and what the server refuses. Only programs on your computer can connect, and only with the token.
+
 To check the connection, ask the assistant *"What can the JETCARP tools do?"* A good assistant
 calls `help` first: it explains how the tools fit together, with worked examples.
 
@@ -235,9 +287,10 @@ window instead:
    it has just made. The address the window shows is the private link through which JETCARP's MCP
    server reaches the app, not an MCP endpoint of its own: it speaks JETCARP's protocol, not HTTP,
    so point the assistant at `jetcarp mcp` (or `jetcarp mcp --app`, which the window shows with a
-   *Copy* button), never at the address.
+   *Copy* button), never at the address. (A client that connects to a URL has an endpoint of its
+   own: see [Over HTTP](#over-http) below.)
 
-   <img src="../images/tutorials/mcp-ai-control.webp" alt="The AI control window: a line on connecting an assistant to JETCARP's MCP server with the command below it, the command jetcarp mcp --app with a Copy button, Allow AI control (127.0.0.1 only) ticked, the address 127.0.0.1:47811, the start of the token with a Copy button, Open connections 0, Tool calls 0, and a note that the address is the private link that command uses to reach the window, not an MCP endpoint for HTTP clients" width="404">
+   <img src="../images/tutorials/mcp-ai-control.webp" alt="The AI control window: a line on connecting an assistant to JETCARP's MCP server with the command below it, the command jetcarp mcp --app with a Copy button, Allow AI control (127.0.0.1 only) ticked, the address 127.0.0.1:47811, the start of the token with a Copy button, Open connections 0, Tool calls 0, and a note that the address is the private link that command uses to reach the window, not an MCP endpoint for HTTP clients; below it, Also serve MCP over HTTP (127.0.0.1 only) ticked, the URL http://127.0.0.1:47812/mcp, the whole token and the header Authorization: Bearer, each with a Copy button, Open connections 0, Sessions 0, a note on what to give the client, Keep this token for next time (not ticked), a New token button, and Web pages that may connect, listing http://localhost:6274 with a Remove button above a field for another origin and an Allow button" width="435">
 
 2. Ask the assistant to use the app. It calls `use_app`, which finds the app's port and token in
    JETCARP's runtime folder and attaches; from then on the world tools act on the window you are
@@ -252,6 +305,22 @@ To start attached every time, register the server with `--app` as well:
 ```sh
 claude mcp add --scope user jetcarp-app -- jetcarp mcp --app
 ```
+
+<a id="over-http"></a>**Over HTTP.** A client that connects to a URL can drive the app's world
+without `jetcarp mcp`: with AI control on, tick *Also serve MCP over HTTP* in the same window. It
+shows the URL (`http://127.0.0.1:47812/mcp`, or another port when that one is taken), the token and
+the header, each with a *Copy* button, for the client's settings. Every session acts on the world
+in the window, with the tools AI control offers (not `use_app` and `host_control`, which belong to
+`jetcarp mcp`). Unticking it, or switching AI control off, closes it, and it is off again at the
+next launch. `jetcarp mcp --http --app` does the same from a terminal, with `jetcarp mcp`'s tools.
+
+Below the token, two choices, both off until you make them, are saved with the app's settings:
+*Keep this token for next time* gives the client the same token the next time you tick the box,
+even after a reboot, and says under it that the token is stored in JETCARP's settings folder and
+stays valid until you press *New token*. *New token* replaces it at once (the old one stops
+working, and its clients must connect again); unticking the box deletes the kept token. Under *Web
+pages that may connect*, type the exact origin of a browser-based client you
+trust, such as `http://localhost:6274`, and press *Allow*; *Remove* takes it off the list again.
 
 Attached to the app, the assistant also gets `app_display`: where the grid shows (window, full
 screen, a span of monitors), the screensaver and its profiles, the cell size and keep-awake. Ask
@@ -291,7 +360,12 @@ The tools are made so that an assistant cannot do much harm by mistake, and cann
 - **What it cannot do.** It cannot make your pack-signing key or record anyone's consent to publish
   their ratings: those are for you, at a command line (`jetcarp pack key`, `jetcarp pack rater`).
   Removing records (`library_curate` with `remove`) is allowed; a careful assistant asks first.
-- **AI control.** Switch it on only while you use it.
+- **AI control and HTTP.** Switch them on only while you use them. The HTTP endpoint, from
+  `jetcarp mcp --http` or the app, answers only on `127.0.0.1` and only with its token, and refuses
+  requests from web pages (an `Origin` other than its own) unless you have named their origin, so
+  a website open in your browser cannot reach it. A kept token, and each origin you name, trade a
+  little of that for convenience: [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)
+  says what each one gives up.
 
 ## Where next
 

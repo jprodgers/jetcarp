@@ -2860,12 +2860,16 @@ MCP server on stdin/stdout so AI assistants (Claude Code, Claude Desktop, LM Stu
 Usage: jetcarp mcp [OPTIONS]
 
 Options:
-      --app            Act on the world in the running JETCARP app (switch on AI control there first)
-      --json           Print the result as JSON instead of text (commands that report a result)
-      --allow <DIR>    Let the tools read and write in this folder too (repeatable)
-      --port <PORT>    App port (default: the one the app recorded when AI control was switched on)
-      --token <TOKEN>  App token (default: the recorded one)
-  -h, --help           Print help
+      --app                 Act on the world in the running JETCARP app (switch on AI control there first)
+      --json                Print the result as JSON instead of text (commands that report a result)
+      --allow <DIR>         Let the tools read and write in this folder too (repeatable)
+      --port <PORT>         App port (default: the one the app recorded when AI control was switched on)
+      --token <TOKEN>       App token (default: the recorded one)
+      --http [<PORT>]       Serve MCP over HTTP (Streamable HTTP) instead of standard input and output, at http://127.0.0.1:PORT/mcp on this computer only (default port 47812, or a free one when that is taken). Clients send the token it prints as an `Authorization: Bearer` header. With --json, prints the URL and token as JSON. Ctrl-C stops it
+      --keep-token          With --http: keep the token for the next start, and take the one kept. It is kept in a private file in the settings folder, survives restarts and reboots, and stays valid until --new-token. Without it, the kept token is deleted
+      --new-token           With --http: make a new token even when one is kept, and keep it; the old one stops working
+      --allow-origin <URL>  With --http: let web pages from this exact origin connect, such as https://client.example or http://localhost:6274 (repeatable; no wildcards). They still need the token
+  -h, --help                Print help
 ```
 
 ## Lists

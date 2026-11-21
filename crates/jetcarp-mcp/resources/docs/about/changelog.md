@@ -132,6 +132,31 @@ day later (0.4.2: 17 November here, 18 November there).
   it against Golly on every change: Golly reads the copy as the same cells and runs it to the same
   generations, on squares and hexagons.
   ([Copy as RLE](../guides/pattern-library.md#copy-as-rle), [#145](https://github.com/jprodgers/jetcarp/issues/145))
+- **MCP over HTTP, for clients that connect to a URL.** `jetcarp mcp --http [PORT]` serves the MCP
+  server's tools over MCP's Streamable HTTP transport, at `http://127.0.0.1:PORT/mcp` (port 47812
+  unless you give one), so clients such as Postman and web-based tools, which don't start a
+  program, can use JETCARP. It says where it listens, with the whole URL and the
+  `Authorization: Bearer` header to send (`--json` prints them as JSON). The app's *AI control*
+  window offers the same endpoint for the world in its window, with the URL, the whole token and
+  the header each behind a *Copy* button. It listens only when started, on `127.0.0.1` alone, and
+  every request needs its token, made afresh each time and recorded in a file only you can read;
+  requests addressed to other host names or sent from web pages at other origins (DNS rebinding)
+  are refused, and request sizes, times and connections are limited. Each session gets the tools
+  and folders of `jetcarp mcp` over stdio, and a private world of its own, or the app's.
+  `httparse` reads the requests; `deny.toml` allows it for the MCP server only. Two choices, both
+  off unless made: `--keep-token` (in the app, *Keep this token for next time*) keeps the token
+  in a private file in the settings folder, where it survives restarts and reboots and stays valid
+  until `--new-token` (*New token*) replaces it, and says so each time; turning it off deletes it;
+  `jetcarp uninstall --settings` counts the file as JETCARP's; and
+  `--allow-origin URL` (in the app, *Web pages that may connect*) lets a browser-based client from
+  that exact origin connect, with the token, its preflight and answers given the CORS headers they
+  need, while wildcards and `null` are refused. `SECURITY.md` says what each gives up.
+  ([MCP tools](../reference/mcp.md#over-http), [Driving JETCARP from an AI
+  assistant](../tutorials/mcp.md#1-connect-your-assistant),
+  [#115](https://github.com/jprodgers/jetcarp/issues/115), from
+  [#114](https://github.com/jprodgers/jetcarp/issues/114), and
+  [#236](https://github.com/jprodgers/jetcarp/pull/236))
+
 - **An explore search records where each run came from.** A screened run's `parent` now names the
   run it was made from: the elite a variation, a new starting pattern, a transplant or a balance
   variant came from, or the run of the job given with `--parents-from`, whose job is in the new
