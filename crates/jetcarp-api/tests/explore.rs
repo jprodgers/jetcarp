@@ -169,6 +169,96 @@ fn explore_searches_start_stop_and_continue_through_the_ops() {
     assert!(!folder.exists());
 }
 
+/// An explore search told which tilings and families to search, through `search.start` (as MCP
+/// and scripts start one, #239): its job keeps the choice in its spec, says it in its title, and
+/// draws only from it, also when carried on. Choices that leave nothing to search are refused
+/// with what is wrong.
+#[test]
+fn an_explore_search_searches_only_what_it_was_told_to() {
+    let dir = scratch("explore-choice");
+    let cx = ctx(&dir);
+    let spec = json!({
+        "tiling_groups": "square, hexagon", "skip_tilings": ["brick"],
+        "families": "life_like isotropic cyclic", "skip_families": "cyclic",
+        "screen_cells": 400, "screen_gens": 48,
+        "confirm_cells": 900, "confirm_gens": 64, "confirm_seeds": 1, "seed": 4,
+    });
+    let r = call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "explore", "spec": spec, "budget": {"items": 120}, "threads": 2}),
+    )
+    .unwrap();
+    let job = r["job"].as_i64().unwrap();
+    let st = call_json(&cx, "jobs.status", json!({"job": job})).unwrap();
+    let sp = &st["spec"];
+    assert_eq!(sp["tiling_groups"], json!(["square", "hexagon"]), "{sp}");
+    assert_eq!(sp["skip_tilings"], json!(["brick"]));
+    assert_eq!(sp["families"], json!(["life_like", "isotropic", "cyclic"]));
+    assert_eq!(sp["skip_families"], json!(["cyclic"]));
+    assert_eq!(sp["schedule"], 2);
+    assert_eq!(
+        st["title"],
+        "square, hexagon tilings but brick, life_like, isotropic"
+    );
+    // Carried on, it keeps to the same choice.
+    call_json(
+        &cx,
+        "jobs.resume",
+        json!({"job": job, "budget": {"items": 120}, "threads": 2}),
+    )
+    .unwrap();
+    let v = call_json(&cx, "search.runs", json!({"job": job, "limit": 0})).unwrap();
+    let runs = v["runs"].as_array().unwrap();
+    assert!(runs.len() >= 240, "{}", runs.len());
+    let fam = |x: &Value| x["family"].as_str().unwrap().to_string();
+    let mut fams: Vec<String> = runs.iter().map(fam).collect();
+    fams.sort();
+    fams.dedup();
+    assert_eq!(fams, ["isotropic", "life_like"]);
+    for x in runs {
+        let t = x["tiling"].as_str().unwrap();
+        assert_ne!(t, "brick");
+        assert!(
+            [
+                "square", "quad", "glide", "fourfold", "hex", "hex_flat", "herring", "lizard"
+            ]
+            .contains(&t),
+            "{t}"
+        );
+        if fam(x) == "isotropic" {
+            assert_eq!(t, "square");
+        }
+    }
+    for (spec, want) in [
+        (
+            json!({"tiling_groups": "squares"}),
+            "no tiling group 'squares'",
+        ),
+        (
+            json!({"skip_families": "nonesuch"}),
+            "no rule family 'nonesuch'",
+        ),
+        (
+            json!({"tiling_groups": "aperiodic", "families": "isotropic"}),
+            "isotropic rules run only on the square tiling",
+        ),
+        (
+            json!({"families": "von_neumann"}),
+            "does not sample von_neumann rules",
+        ),
+    ] {
+        let e = call_json(
+            &cx,
+            "search.start",
+            json!({"strategy": "explore", "spec": spec}),
+        )
+        .unwrap_err();
+        assert_eq!(e.kind, ErrorKind::Invalid, "{e}");
+        assert!(e.to_string().contains(want), "{e}");
+    }
+}
+
 #[test]
 fn an_explore_jobs_runs_are_listed_drawn_reviewed_clipped_and_published() {
     let dir = scratch("explore-runs");

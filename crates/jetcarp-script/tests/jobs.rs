@@ -81,3 +81,40 @@ fn labelled_jobs_census_jobs_and_rule_neighbours() {
         sums.iter().map(|s| s.title.clone()).collect::<Vec<_>>()
     );
 }
+
+/// An explore search a script starts (through `search.start`, #239) told which tilings and rule
+/// families to search: its runs keep to them, isotropic rules among them, and the families left
+/// out never come.
+#[test]
+fn a_script_starts_an_explore_search_of_the_tilings_and_families_it_names() {
+    let root = temp_root("explore-choice");
+    let s = ok(
+        r#"
+        let r = jetcarp("search.start", #{ strategy: "explore",
+            spec: #{ tilings: "square, hex", families: ["isotropic", "life_like", "cyclic"],
+                     skip_families: "cyclic", screen_cells: 400, screen_gens: 48,
+                     confirm_cells: 400, confirm_gens: 48, confirm_seeds: 1, seed: 2 },
+            budget: #{ items: 100 }, threads: 2 });
+        let runs = jetcarp("search.runs", #{ job: r.job, limit: 0 }).runs;
+        let fams = #{};
+        let bad = 0;
+        for x in runs {
+            fams[x.family] = true;
+            if x.family == "isotropic" && x.tiling != "square" { bad += 1; }
+        }
+        let names = fams.keys();
+        names.sort();
+        print(`families ${names}`);
+        print(`isotropic off the square grid ${bad}`);
+        print(`runs ${runs.len() >= 100}`);
+        "#,
+        opts(&root),
+    );
+    for want in [
+        "families [\"isotropic\", \"life_like\"]",
+        "isotropic off the square grid 0",
+        "runs true",
+    ] {
+        assert!(s.log.iter().any(|l| l == want), "{want}: {:?}", s.log);
+    }
+}

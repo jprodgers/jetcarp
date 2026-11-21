@@ -350,13 +350,8 @@ enum QuickstartSub {
         /// Minutes to search before publishing.
         #[arg(long, default_value_t = 10.0)]
         minutes: f64,
-        /// Only these tilings (ids such as hex or k2-017, separated by commas or spaces; default:
-        /// every one).
-        #[arg(long)]
-        tilings: Option<String>,
-        /// Only these rule families (default: every one).
-        #[arg(long)]
-        families: Option<String>,
+        #[command(flatten)]
+        choice: search_cmd::ChoiceFlags,
         /// Run on the CPU only.
         #[arg(long)]
         no_gpu: bool,
@@ -600,8 +595,7 @@ fn run() -> Result<()> {
             sub:
                 Some(QuickstartSub::Build {
                     minutes,
-                    tilings,
-                    families,
+                    choice,
                     no_gpu,
                     threads,
                     detach,
@@ -613,11 +607,7 @@ fn run() -> Result<()> {
             let cx = platform::ctx().with_library(library.map(jetcarp_store::Library::file_for));
             let a = quickstart::BuildIn {
                 minutes: Some(minutes),
-                search: jetcarp_api::ops::search::ExploreIn {
-                    tilings: tilings.map(serde_json::Value::String),
-                    families: families.map(serde_json::Value::String),
-                    ..Default::default()
-                },
+                search: choice.explore_in(),
                 gpu: no_gpu.then_some(false),
                 threads,
                 detach,

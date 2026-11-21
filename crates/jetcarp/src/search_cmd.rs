@@ -539,6 +539,52 @@ pub struct EvolveArgs {
     track_gens: u64,
 }
 
+/// What an explore search draws from (#239): the tilings and rule families it searches, or
+/// leaves out. `jetcarp search explore` and `jetcarp quickstart build` take them.
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct ChoiceFlags {
+    /// Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default:
+    /// every tiling the search knows, 1,359 today; the progress line counts them).
+    #[arg(long)]
+    pub tilings: Option<String>,
+    /// Only the tilings of these groups, comma separated: square, hexagon, triangle, pentagon,
+    /// archimedean, k-uniform, isohedral, aperiodic (default: every group).
+    #[arg(long, value_name = "GROUPS")]
+    pub tiling_groups: Option<String>,
+    /// Leave out these tilings (ids, comma separated).
+    #[arg(long, value_name = "TILINGS")]
+    pub skip_tilings: Option<String>,
+    /// Leave out the tilings of these groups (comma separated).
+    #[arg(long, value_name = "GROUPS")]
+    pub skip_tiling_groups: Option<String>,
+    /// Only these rule families, comma separated: life_like, generations, jaca, cyclic, rps,
+    /// greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered,
+    /// wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl,
+    /// isotropic (default: every family but isotropic, which is searched only when named).
+    /// Tilings none of them can run on are left out.
+    #[arg(long)]
+    pub families: Option<String>,
+    /// Leave out these rule families (comma separated).
+    #[arg(long, value_name = "FAMILIES")]
+    pub skip_families: Option<String>,
+}
+
+impl ChoiceFlags {
+    /// The explore settings these flags give (the rest at their defaults).
+    pub fn explore_in(&self) -> ExploreIn {
+        let text = |s: &Option<String>| s.clone().map(Value::String);
+        ExploreIn {
+            tilings: text(&self.tilings),
+            tiling_groups: text(&self.tiling_groups),
+            skip_tilings: text(&self.skip_tilings),
+            skip_tiling_groups: text(&self.skip_tiling_groups),
+            families: text(&self.families),
+            skip_families: text(&self.skip_families),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(clap::Args)]
 pub struct ExploreArgs {
     #[command(flatten)]
@@ -546,16 +592,8 @@ pub struct ExploreArgs {
     /// Hours to run (the same as --minutes 60 x HOURS).
     #[arg(long)]
     hours: Option<f64>,
-    /// Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default:
-    /// every tiling the search knows, 1,359 today; the progress line counts them).
-    #[arg(long)]
-    tilings: Option<String>,
-    /// Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps,
-    /// greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram,
-    /// hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann,
-    /// spectre_glider; default: all).
-    #[arg(long)]
-    families: Option<String>,
+    #[command(flatten)]
+    choice: ChoiceFlags,
     /// About this many cells in a screening run's grid (an aperiodic patch is the level nearest
     /// it: 4,000 tiles for 16,000).
     #[arg(long, default_value_t = 16000)]
@@ -797,8 +835,6 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         a.job.minutes = Some(h * 60.0);
     }
     let s = ExploreIn {
-        tilings: a.tilings.map(Value::String),
-        families: a.families.map(Value::String),
         screen_cells: Some(a.screen_cells),
         screen_gens: Some(a.screen_gens),
         confirm_cells: Some(a.confirm_cells),
@@ -811,6 +847,7 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
         score: a.score.map(|p| Value::String(p.display().to_string())),
         parents_from: a.parents_from,
         parents_reviewed: a.reviewed,
+        ..a.choice.explore_in()
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
     i.gpu = a.gpu.asked();
@@ -1154,5 +1191,31 @@ mod tests {
             help.contains(&format!("knows, {count} today")),
             "{count}: {help}"
         );
+    }
+
+    /// The --families help names every family the explore search samples (and not von
+    /// Neumann's rule, which it never does), and --tiling-groups every group (#239).
+    #[test]
+    fn the_families_help_names_the_families_there_are() {
+        use clap::CommandFactory;
+        #[derive(clap::Parser)]
+        struct Wrap {
+            #[command(flatten)]
+            a: super::ChoiceFlags,
+        }
+        let cmd = Wrap::command();
+        let help = |id: &str| {
+            let a = cmd.get_arguments().find(|a| a.get_id() == id).unwrap();
+            a.get_long_help().or(a.get_help()).unwrap().to_string()
+        };
+        let families = help("families").replace('\n', " ");
+        for f in jetcarp_search::explore::job::sampled_families() {
+            assert!(families.contains(f.name()), "{}: {families}", f.name());
+        }
+        assert!(!families.contains("von_neumann"), "{families}");
+        let groups = help("tiling_groups");
+        for g in jetcarp_core::explore::space::TILING_GROUPS {
+            assert!(groups.contains(g), "{g}: {groups}");
+        }
     }
 }
