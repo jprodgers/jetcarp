@@ -177,17 +177,17 @@ pub struct Guard {
     worst: u32,
 }
 
-/// "4 or more times a second", "3 times a second": flashes, from transitions.
-fn flashes(transitions: u32) -> String {
+/// "4 or more times a second", "3 times a second", "once a second": flashes, from transitions.
+pub(crate) fn flashes(transitions: u32) -> String {
     if transitions >= COUNT_CAP {
-        format!("{} or more times a second", COUNT_CAP / 2)
-    } else {
-        let f = transitions as f32 / 2.0;
-        if f.fract() == 0.0 {
-            format!("{f:.0} times a second")
-        } else {
-            format!("{f:.1} times a second")
-        }
+        return format!("{} or more times a second", COUNT_CAP / 2);
+    }
+    let f = transitions as f32 / 2.0;
+    match transitions {
+        2 => "once a second".into(),
+        4 => "twice a second".into(),
+        _ if f.fract() == 0.0 => format!("{f:.0} times a second"),
+        _ => format!("{f:.1} times a second"),
     }
 }
 
@@ -903,6 +903,9 @@ mod tests {
         assert_eq!(flashes(8), "4 or more times a second");
         assert_eq!(flashes(6), "3 times a second");
         assert_eq!(flashes(5), "2.5 times a second");
+        assert_eq!(flashes(4), "twice a second");
+        assert_eq!(flashes(3), "1.5 times a second");
+        assert_eq!(flashes(2), "once a second", "not \"1 times\"");
         assert_eq!(pace_words(0.5), "0.5 generations a second");
         assert_eq!(pace_words(2.0), "2 generations a second");
         assert_eq!(pace_words(15.3), "15 generations a second");

@@ -371,7 +371,7 @@ fn shots_tour() {
     h.shot_part("tour-card-menu", Harness::around(&all, 12.0));
     h.escape();
     // A world: an entry of the starter pack, its panes docked as at first.
-    let handle = handle_titled(&h.app.menu, "Oscillating Greenberg-Hastings");
+    let handle = handle_titled(&h.app.menu, "Oscillating GH 6/2");
     h.open_entry(&handle);
     h.run(4.0, 0.05, |_| false);
     h.steady();
