@@ -814,3 +814,66 @@ fn paste_from_the_catalog() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// *Copy as RLE* then pasting the RLE back gives the same cells: on the square grid, and on the
+/// hexagon grid, where the RLE is in Golly's layout (`…H`) and is placed on rows of either parity
+/// (#145). The pasted world then runs as the original does.
+#[test]
+fn copied_rle_pastes_back_as_the_same_pattern() {
+    use jetcarp_api::rle;
+    let cx = Ctx::interactive();
+    for (tiling, rule) in [("square", "B3/S23"), ("hex", "B2/S34")] {
+        let mut h = Session::new();
+        new_world(
+            &cx,
+            &mut h,
+            json!({"tiling": tiling, "width": 30, "height": 30,
+                   "cas": [{"rule": rule, "seed": "empty"}]}),
+        );
+        // An asymmetric shape, so a mirror or a shear would show.
+        draw(
+            &cx,
+            &mut h,
+            json!({"pattern": "OO.\n.O.O\nO..O\n...OO", "x": 6, "y": 7}),
+        )
+        .unwrap();
+        let text = rle::of_world(h.world(), &[]).unwrap();
+        let live = |w: &World| -> Vec<usize> {
+            (0..w.topo.len())
+                .filter(|&i| w.fields[0].state[i] != 0)
+                .collect()
+        };
+        let before = live(h.world());
+        // A copy pasted at the same place gives the same cells.
+        new_world(
+            &cx,
+            &mut h,
+            json!({"tiling": tiling, "width": 30, "height": 30,
+                   "cas": [{"rule": rule, "seed": "empty"}]}),
+        );
+        draw(&cx, &mut h, json!({"rle": text, "x": 6, "y": 7})).unwrap();
+        assert_eq!(live(h.world()), before, "{tiling}:\n{text}");
+        // On a row of the other parity it runs as the original: same populations over 20 steps.
+        let mut a = Session::new();
+        new_world(
+            &cx,
+            &mut a,
+            json!({"tiling": tiling, "width": 30, "height": 30,
+            "cas": [{"rule": rule, "seed": "empty"}]}),
+        );
+        draw(&cx, &mut a, json!({"rle": text, "x": 6, "y": 7})).unwrap();
+        let mut b = Session::new();
+        new_world(
+            &cx,
+            &mut b,
+            json!({"tiling": tiling, "width": 30, "height": 30,
+            "cas": [{"rule": rule, "seed": "empty"}]}),
+        );
+        draw(&cx, &mut b, json!({"rle": text, "x": 9, "y": 8})).unwrap();
+        for _ in 0..20 {
+            assert_eq!(live(a.world()).len(), live(b.world()).len(), "{tiling}");
+            a.exec(Command::Step { gens: 1 }).unwrap();
+            b.exec(Command::Step { gens: 1 }).unwrap();
+        }
+    }
+}
