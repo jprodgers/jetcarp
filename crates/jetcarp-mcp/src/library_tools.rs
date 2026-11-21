@@ -143,7 +143,8 @@ pub(crate) fn tools() -> Vec<Tool> {
 fn summary(r: &PatternRecord) -> Value {
     json!({
         "id": r.id, "label": r.label(), "name": r.name, "rule": r.rule, "rules": r.rules,
-        "range": r.range.as_ref().map(|x| x.describe()), "tiling": r.tiling_name,
+        "range": r.range.as_ref().map(|x| x.describe()),
+        "iso_range": r.iso_range.as_ref().map(|x| x.describe()), "tiling": r.tiling_name,
         "class": r.class, "period": r.period, "speed": r.speed, "displacement": r.displacement,
         "cells": r.cells, "seen": r.seen, "score": r.score, "rating": r.rating, "state": r.state,
         "tags": r.tags,
@@ -398,8 +399,8 @@ fn get(id: &str, kind: Option<&str>, a: &Value) -> Res {
             r.rules.join(", ")
         }
     ));
-    if let Some(x) = &r.range {
-        text.push_str(&format!("works in: {}\n", x.describe()));
+    if let Some(x) = r.works_in_text() {
+        text.push_str(&format!("works in: {x}\n"));
     }
     if !v.sightings.is_empty() {
         text.push_str(&format!(

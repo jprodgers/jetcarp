@@ -612,8 +612,8 @@ impl LibraryWindow {
                 if r.rules.len() > 1 {
                     row("verified in", r.rules.join(", "));
                 }
-                if let Some(x) = &r.range {
-                    row("works in", x.describe());
+                if let Some(x) = r.works_in_text() {
+                    row("works in", x);
                 }
                 row("tiling", r.tiling_name.clone());
                 row("seen", r.seen.to_string());

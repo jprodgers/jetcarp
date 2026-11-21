@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 276 works cited across the JETCARP documentation. Each was checked
+These are the 279 works cited across the JETCARP documentation. Each was checked
 against a primary record where one could be read (a DOI landing page or Crossref, arXiv, the
 publisher, archive.org, the author's or project's own page, or LifeWiki) when the history
 research was compiled in November 2026. The 10 marked † could not be read, and rest on a
@@ -126,6 +126,8 @@ directly.
 <span id="edmond2026gliders"></span>Edmond, James (2026). “Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre”. [arXiv:2609.22579](https://arxiv.org/abs/2609.22579). <small>`edmond2026gliders`</small>
 
 <span id="eppstein2010growth"></span>Eppstein, David (2010). “Growth and decay in life-like cellular automata”. In Adamatzky, Andrew (ed.), *Game of Life Cellular Automata*, pp. 71–97. Springer. doi:[10.1007/978-1-84996-217-9_6](https://doi.org/10.1007/978-1-84996-217-9_6); [arXiv:0911.2890](https://arxiv.org/abs/0911.2890). <small>`eppstein2010growth`</small>
+
+<span id="ericg2012nontotalistic"></span>EricG and Paul Tooke (2012). “Non-totalistic Rules: notations, projects, and discussion”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?p=6822>; accessed 2026-11-21. <small>`ericg2012nontotalistic`</small>
 
 <span id="ericg2013tiling1"></span>EricG (2013). “Tiling in Golly 1: Pentagonal (and HexStar & PentHex) Tiling”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?t=1123>; accessed 2026-11-10. <small>`ericg2013tiling1`</small>
 
@@ -272,6 +274,10 @@ directly.
 <span id="heesch1963flachenschluss"></span>Heesch, Heinrich and Otto Kienzle (1963). *Flächenschluß: System der Formen lückenlos aneinanderschließender Flachteile*. Wissenschaftliche Normung. Berlin: Springer. doi:[10.1007/978-3-642-94883-1](https://doi.org/10.1007/978-3-642-94883-1). <small>`heesch1963flachenschluss`</small>
 
 <span id="henley1993statics"></span>Henley, Christopher L. (1993). “Statics of a ``self-organized'' percolation model”. *Physical Review Letters* 71(17): 2741–2744. doi:[10.1103/PhysRevLett.71.2741](https://doi.org/10.1103/PhysRevLett.71.2741). <small>`henley1993statics`</small>
+
+<span id="hensel2001notation"></span>Hensel, Alan (2001). “Rule Notation”. Web page for his Life applet. <http://www.ibiblio.org/lifepatterns/neighbors.html>; accessed 2026-11-21. <small>`hensel2001notation`</small>
+
+<span id="hensel2001table"></span>Hensel, Alan (2001). “Rule Notation: table of non-totalistic neighborhoods”. Web page. <http://www.ibiblio.org/lifepatterns/neighbors2.html>; accessed 2026-11-21. <small>`hensel2001table`</small>
 
 <span id="heudin1996new"></span>Heudin, Jean-Claude (1996). “A New Candidate Rule for the Game of Two-Dimensional Life”. *Complex Systems* 10(5): 367–381. <https://www.complex-systems.com/abstracts/v10_i05_a03>. <small>`heudin1996new`</small>
 

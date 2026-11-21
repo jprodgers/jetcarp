@@ -269,6 +269,7 @@ fn soup_density(rule: &Rule) -> f64 {
     match rule {
         Rule::Ltl(_) => 0.45,
         Rule::Generations { .. } => 0.3,
+        Rule::Isotropic(r) if r.states > 2 => 0.3,
         _ => 0.35,
     }
 }
@@ -288,7 +289,7 @@ pub fn scene_for(e: &CatalogEntry) -> Result<Scene, String> {
         return Ok(sc);
     }
     let tiling = match &rule {
-        Rule::LifeLike { .. } | Rule::Generations { .. } => {
+        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_) => {
             ca.seed = Some(hint.unwrap_or(SeedSpec::Random {
                 density: soup_density(&rule),
             }));
@@ -465,6 +466,7 @@ fn family_of(rule: &Rule) -> &'static str {
     match rule {
         Rule::LifeLike { .. } => "Life-like",
         Rule::Generations { .. } => "Generations",
+        Rule::Isotropic(_) => "Isotropic",
         Rule::Wolfram(_) => "Elementary",
         Rule::HexWolfram { .. } | Rule::HexTri { .. } => "Hexagonal elementary",
         Rule::Turmite(_) => "Agents",

@@ -1,0 +1,7 @@
+{
+  "name": "tlife from a soup",
+  "description": "tlife (B3/S2-i34q) on a wrapped square grid from a random soup: Life's birth, and survival on two live neighbours unless they face each other across the cell, on three, and on four in the q arrangement.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 11,
+  "cas": [{"rule": "B3/S2-i34q", "seed": {"random": {"density": 0.35}}, "palette": "Ember"}]
+}

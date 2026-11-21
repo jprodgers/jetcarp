@@ -55,7 +55,7 @@ favours larger periods, faster ships, more cells and rarity. The filters:
 | `--class still_life\|oscillator\|spaceship` | are of that class |
 | `--tiling ID` | are on a tiling: a family id (`hex`), a catalog id (`k2-001`) or part of its name |
 | `--rule TEXT` | were verified in a rule whose notation contains the text |
-| `--works-in RULE` | run in this rule: inside their rule range, or verified there |
+| `--works-in RULE` | run in this rule: inside their rule range or isotropic rule range, or verified there |
 | `--min-period N`, `--max-period N`, `--min-score X` | pass those bounds |
 | `--state new\|reviewed\|promoted\|rejected`, `--tag TAG`, `--text TEXT` | carry that state, tag or text |
 | `--by search\|script\|llm\|user` | were found that way |
@@ -66,7 +66,9 @@ records.
 
 The `--works-in` filter is where the rule ranges pay off: a pattern found in Life also runs in every
 rule in its range, so the example above found oscillators from Life that run unchanged in HighLife
-(`B36/S23`).
+(`B36/S23`). On the square grid's touching neighbours a pattern also has an isotropic rule range, so
+`--works-in` takes [isotropic rules](../automata/isotropic.md) too: `--works-in B3/S2-i34q` finds
+Life's glider, which runs unchanged in tlife.
 
 **One record.** `jetcarp library show ID` (any unique start of the id, or the pattern's name) prints
 everything: the rule range, the displacement and speed, the cells over its period, every sighting,
@@ -226,12 +228,18 @@ bo$2bo$3o!
 
 For now this covers what Golly and LifeViewer read the same way JETCARP does: two-state B/S rules
 on the square grid (Moore, or von Neumann written with a `V`) and on the hexagon grid, written
-with Golly's `H`. JETCARP's hexagons have offset rows, while Golly and LifeViewer lay hexagons out
+with Golly's `H`; two-state [isotropic rules](../automata/isotropic.md#copy-as-rle) on the square
+grid; and two-state [Larger than Life](../automata/larger-than-life.md#copy-as-rle-and-golly) rules
+on the square grid, in the HROT form (`R2,C2,S3-6,B3-4,NN`) that Golly's Larger than Life reads.
+Rules with birth on 0 are written where Golly reads them the same: always when the background is
+live for good, at even generations when it flashes ([B0 rules](../automata/life-like.md#b0-rules)).
+JETCARP's hexagons have offset rows, while Golly and LifeViewer lay hexagons out
 as a sheared square grid, so a hexagon pattern is written in their layout. Pasting it back into a
 hexagon world, for example with the `rle` of a world edit (MCP, scripts, the command line), turns it
 back, so a copy pastes back as the same pattern. JETCARP's tests check this against Golly itself
 on every change: Golly reads a copy as the same cells and runs it to the same generations
-([How JETCARP is tested](../about/testing.md#automated-tests)). Other tilings, other rule families, rules with B0
-and worlds with several automata are refused, with the reason. The rest of the exchange with Golly
+([How JETCARP is tested](../about/testing.md#automated-tests)). Other tilings, other rule families, rules with
+more states, a rule with birth on 0 at an odd generation of a flashing background, and worlds with
+several automata are refused, with the reason. The rest of the exchange with Golly
 and LifeViewer, reading and writing more of their formats, is planned for 0.4.4
 ([Roadmap](../about/roadmap.md)).

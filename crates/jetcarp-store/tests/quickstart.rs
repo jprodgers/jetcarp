@@ -1083,7 +1083,7 @@ fn a_schema_2_library_keeps_its_quick_start_entries() {
         }
     }
     let lib = Library::open(&path);
-    assert_eq!(lib.info().unwrap().schema_version, 3);
+    assert_eq!(lib.info().unwrap().schema_version, 4);
     let got = |id: &str| lib.get_quickstart(id).unwrap();
     let a = got("abcd");
     assert_eq!(
@@ -1132,7 +1132,7 @@ fn a_schema_2_library_keeps_its_quick_start_entries() {
         lib.quickstart(&[QsSource::Builtin]).unwrap().len(),
         qs::builtin_rows().len()
     );
-    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("4"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

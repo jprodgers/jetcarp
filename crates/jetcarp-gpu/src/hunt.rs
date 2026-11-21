@@ -533,6 +533,30 @@ fn terms(mask: u32, max_degree: usize, cb: usize) -> String {
     if invert { format!("(~({or}))") } else { or }
 }
 
+/// An isotropic rule's decision diagram (`jetcarp_core::isotropic::Diagram`) as WGSL statements
+/// over the neighbour slots `n0`, `n1`, ...: the nodes as `let {name}K`, then `let {name} = ...`.
+fn diagram(d: &jetcarp_core::isotropic::Diagram, slots: &[usize; 8], name: &str) -> String {
+    let val = |k: u32| -> String {
+        match k {
+            0 => "0u".into(),
+            1 => "0xffffffffu".into(),
+            k => format!("{name}{k}"),
+        }
+    };
+    let mut out = String::new();
+    for (i, &(bit, lo, hi)) in d.nodes.iter().enumerate() {
+        let x = format!("n{}", slots[bit as usize]);
+        out += &format!(
+            "      let {name}{} = ({} & ~{x}) | ({} & {x});\n",
+            i + 2,
+            val(lo),
+            val(hi)
+        );
+    }
+    out += &format!("      let {name} = {};\n", val(d.root));
+    out
+}
+
 fn shader(census: &Census, geo: &Geo, ring: u32) -> String {
     let p = &census.plan;
     let nt = p.ntypes;
@@ -550,7 +574,7 @@ fn shader(census: &Census, geo: &Geo, ring: u32) -> String {
             body += &format!("      var c{b} = 0u;\n");
         }
         body += "      var cy = 0u; var tt = 0u;\n";
-        for &(di, dj, k2) in &p.offs[k] {
+        for (o, &(di, dj, k2)) in p.offs[k].iter().enumerate() {
             let base = format!("cur + {}u + {} * {w}u", (k2 as usize * np) * h * w, row(dj));
             let x = if di == 0 {
                 format!("m[{base} + x]")
@@ -566,13 +590,23 @@ fn shader(census: &Census, geo: &Geo, ring: u32) -> String {
                     32 + di
                 )
             };
+            if p.iso.is_some() {
+                // An isotropic rule reads each slot, not their count.
+                body += &format!("      let n{o} = {x};\n");
+                continue;
+            }
             body += &format!("      cy = {x};\n");
             for b in 0..cb {
                 body += &format!("      tt = c{b} & cy; c{b} = c{b} ^ cy; cy = tt;\n");
             }
         }
-        body += &format!("      let bm = {};\n", terms(p.birth, p.max_degree, cb));
-        body += &format!("      let sm = {};\n", terms(p.survive, p.max_degree, cb));
+        if let Some(iso) = &p.iso {
+            body += &diagram(&iso.birth, &iso.slots, "bm");
+            body += &diagram(&iso.survive, &iso.slots, "sm");
+        } else {
+            body += &format!("      let bm = {};\n", terms(p.birth, p.max_degree, cb));
+            body += &format!("      let sm = {};\n", terms(p.survive, p.max_degree, cb));
+        }
         let ia = |pl: usize| format!("{}u + r * {w}u + x", (k * np + pl) * h * w);
         body += &format!("      let a = m[cur + {}];\n", ia(0));
         if db == 0 {

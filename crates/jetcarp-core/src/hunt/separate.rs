@@ -514,6 +514,7 @@ impl Census {
         }
         if rec.range.is_none() && self.ranges {
             rec.range = crate::pattern::range::rule_range(&rec).ok().flatten();
+            rec.iso_range = crate::pattern::range::iso_range(&rec).ok().flatten();
         }
         let f = Arc::new(Found {
             id: rec.id.clone(),

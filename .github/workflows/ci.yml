@@ -128,10 +128,23 @@ jobs:
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
       - name: Golly reads JETCARP's RLE as the same cells and runs it to the same generations (#145)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           command -v bgolly || { echo "::error::the golly package has no bgolly"; exit 1; }
+          # `bgolly -h` exits with status 10, which pipefail would take for a failure.
+          version=$( (bgolly -h 2>&1 || true) | sed -n 's/^This is bgolly \([0-9.]*\).*/\1/p')
+          echo "bgolly ${version:-of an unknown version}"
           # Every Golly test but the library one, which needs a library of finds (JETCARP_GOLLY_LIBRARY).
-          cargo test --workspace --release ${{ matrix.features }} --test golly -- --ignored --skip golly_agrees_on_a_library_s_finds
+          skip=(--skip golly_agrees_on_a_library_s_finds)
+          # Ubuntu packages Golly 3.3, which predates Larger than Life's R2,C2,S3-6,B3-4 notation
+          # (Golly 4.0), so that test runs only with a newer Golly (it passes with Golly 5.0).
+          case "$version" in
+            [0-3].*)
+              echo "::notice::Golly $version can't read Larger than Life's notation (Golly 4.0 can): its test is skipped here"
+              skip+=(--skip golly_agrees_on_larger_than_life)
+              ;;
+          esac
+          cargo test --workspace --release ${{ matrix.features }} --test golly -- --ignored "${skip[@]}"
       - name: The tests left no folders or files of theirs in the temp folder (#121)
         shell: bash
         run: |
@@ -152,6 +165,29 @@ jobs:
           python3 docs/tools/gen-palettes.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-shortcuts.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/check-rule-notation.py --jetcarp target/release/jetcarp
+
+  debug:
+    # Release builds check neither arithmetic for overflow nor debug assertions, so the tests run
+    # again in the dev profile (optimised a little, its dependencies fully). A WebP bug hid from
+    # the release run that way until 0.4.3 (#243).
+    name: Test in a debug build (Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      JETCARP_GPU: software
+      JETCARP_REQUIRE_GPU: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: Test (debug build)
+        run: cargo test --workspace --no-fail-fast
 
   fmt:
     name: Formatting

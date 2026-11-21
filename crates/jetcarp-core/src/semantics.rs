@@ -22,7 +22,9 @@
 //! identity calls both `lifelike`; B/S rules with birth on 0 (`lifelike_b0`, stored relative to
 //! their background, see [`crate::b0`]) are apart from the others; and turmites are `ant` (a turn
 //! string: one state, each colour repainted the next, such as `Ant RL` and `Turmite LLRR`) or
-//! `turmite` (a state table, such as `Turmite 1R1,1L0/1R1,0N0`). The names of the families that a pattern identity's `model` line
+//! `turmite` (a state table, such as `Turmite 1R1,1L0/1R1,0N0`). Isotropic rules in Hensel's
+//! notation (`isotropic`, new in 0.4.3) are one family, Generations and B0 included. The names of
+//! the families that a pattern identity's `model` line
 //! also names (`lifelike`, `wireworld`, `table`, `priority`, `spectre_glider`, `ltl`,
 //! `margolus`, `lenia`) are the same; the identity's `other` is split here into its families.
 
@@ -34,18 +36,22 @@ pub const FIRST: &str = "1";
 
 /// Every rule family and its semantics version: the one table. Raise a family's version by one
 /// when the meaning of any of its rules changes (see the module notes).
-pub const RULE_SEMANTICS: [(&str, &str); 24] = [
+pub const RULE_SEMANTICS: [(&str, &str); 25] = [
     // B/S rules without birth on 0: `B3/S23`, `B3/S23V`.
     ("lifelike", "1"),
-    // B/S rules with birth on 0: `B0/S8`, `B014/S2`. 2 since 0.4.3: exact where the tiles have
+    // B/S rules with birth on 0: `B0/S8`, `B014/S2`. 2 in 0.4.3: exact where the tiles have
     // different numbers of neighbours, and live past a live edge (#171); a family of their own
-    // since then, as the other B/S rules' meaning did not change.
-    ("lifelike_b0", "2"),
+    // since then, as the other B/S rules' meaning did not change. 3, also in 0.4.3: a rule whose
+    // background turns live for good at the first step starts on the live background, as Golly
+    // reads it (#238).
+    ("lifelike_b0", "3"),
     // Generations: `B2/S/C3`.
     ("generations", "1"),
     // Larger than Life: `R5,C2,S33-57,B34-45`. 2 since 0.4.3: counts above the square grid's
-    // neighbourhood size are kept, not dropped (#172).
-    ("ltl", "2"),
+    // neighbourhood size are kept, not dropped (#172). 3, also in 0.4.3: two-state rules with
+    // birth on 0 are kept relative to their background, as B0 Life-like rules are, and match
+    // Golly's from generation 0 (#238).
+    ("ltl", "3"),
     // Elementary rules on square rows: `W30`.
     ("elementary", "1"),
     // Two-parent hexagon rows: `HexW 6`, `HexW3 1234`.
@@ -85,6 +91,10 @@ pub const RULE_SEMANTICS: [(&str, &str); 24] = [
     ("spectre_glider", "1"),
     // Rule tables by name: `Table parity`.
     ("table", "1"),
+    // Isotropic non-totalistic rules in Hensel's notation, on the square grid: `B2-a/S12`,
+    // `B2a/S/C3`, `B01e/S8`. New in 0.4.3 (#70), at 1. Its B0 rules with survival on 8 started
+    // on the live background (#238) before any release, so the family stays at 1.
+    ("isotropic", "1"),
 ];
 
 /// The family of a rule (a name in [`RULE_SEMANTICS`]).
@@ -115,6 +125,7 @@ pub fn family(rule: &Rule) -> &'static str {
         Rule::Priority(_) => "priority",
         Rule::SpectreGlider => "spectre_glider",
         Rule::Table(_) => "table",
+        Rule::Isotropic(_) => "isotropic",
     }
 }
 
@@ -144,7 +155,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     /// One rule of every kind, the two kinds of turmite and of B/S rule apart.
-    const EXAMPLES: [&str; 24] = [
+    const EXAMPLES: [&str; 25] = [
         "B3/S23",
         "B014/S2",
         "B2/S/C3",
@@ -169,6 +180,7 @@ mod tests {
         "Priority 4: 0|n0>=3&n1>=1->3; 3|n3>=3->0; 3|n1>=1->1",
         "SpectreGlider",
         "Table parity",
+        "B2-a/S12",
     ];
 
     /// Which kind of [`Rule`] this is. No catch-all arm, so a new kind fails to compile here
@@ -197,9 +209,10 @@ mod tests {
             Rule::Priority(_) => 19,
             Rule::SpectreGlider => 20,
             Rule::Table(_) => 21,
+            Rule::Isotropic(_) => 22,
         }
     }
-    const KINDS: usize = 22;
+    const KINDS: usize = 23;
 
     #[test]
     fn the_table_covers_every_family_once() {
@@ -244,17 +257,23 @@ mod tests {
         assert_eq!(FIRST, "1");
     }
 
-    // B/S rules with birth on 0 are a family of their own: their meaning changed in 0.4.3 (#171),
-    // the other B/S rules' did not, so only B0 records are flagged for re-verification.
+    // B/S rules with birth on 0 are a family of their own: their meaning changed in 0.4.3 (#171,
+    // #238), the other B/S rules' did not, so only B0 records are flagged for re-verification.
     #[test]
     fn b0_rules_are_a_family_of_their_own() {
         for (rule, fam, v) in [
             ("B3/S23", "lifelike", "1"),
             ("B36/S23V", "lifelike", "1"),
-            ("B0/S8", "lifelike_b0", "2"),
-            ("B014/S2V", "lifelike_b0", "2"),
+            ("B0/S8", "lifelike_b0", "3"),
+            ("B014/S2V", "lifelike_b0", "3"),
             // Generations rules with B0 run unemulated, as they always have.
             ("B02/S/C3", "generations", "1"),
+            // Isotropic rules are one family, whatever their states and B0; written with every
+            // letter or none, they are B/S rules.
+            ("B2-a/S12", "isotropic", "1"),
+            ("B01e/S8", "isotropic", "1"),
+            ("B2a/S/C3", "isotropic", "1"),
+            ("B3aceijknqry/S2aceikn3aceijknqry", "lifelike", "1"),
         ] {
             assert_eq!(of_notation(rule), Some((fam, v)), "{rule}");
         }
