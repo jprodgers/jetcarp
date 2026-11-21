@@ -16,9 +16,16 @@ tell, are new, says how we looked, and lists the things we have decided *not* to
 In November 2026 we audited each candidate contribution against the literature and the hobbyist
 record: web and arXiv searches, Crossref records for every paper cited, the authors' own pages and
 repositories, and LifeWiki. Every search query and fetched page is logged with its date in our research
-notes, and each source was checked against its primary record before being listed in the bibliography.
-The verdicts used three levels: *prior art found*, *related work only*, and *nothing found after
-search*. Only the last two can support a claim, and we word such claims "to our knowledge".
+notes, which are published with the source code in the repository's
+[`research/`](https://github.com/jprodgers/jetcarp/tree/main/research) folder: one file per
+contribution (`novelty-*.md`), their summary, and the history of each family and tiling
+(`history/*.md`), each with the items we could not verify. The downloaded copies of other people's
+papers, pages and forum threads that the searches read are left out, since they are not ours to
+publish; the folder's README lists them. Each source was checked against its primary record where one
+could be read before being listed in the bibliography; the few that rest on a secondary listing are
+marked there. The verdicts used three levels: *prior art found*, *related work only*, and *nothing
+found after search*. Only the last two can support a claim, and we word such claims "to our
+knowledge".
 
 The search has known weaknesses:
 
@@ -75,8 +82,19 @@ including aperiodic ones, are a construction we have not seen published. They ar
 ([Margenstern 2010](bibliography.md#margenstern2010embedding)) or draws elementary rules on the fixed rows
 of hexagon and pentagon lattices ([Kerekrety 2020](bibliography.md#kerekrety2020elementary)). Dalai's
 "Layered Cellular Automata" is unrelated despite the name ([Dalai 2023](bibliography.md#dalai2023layered)).
-The idea is simple, so it may exist in unpublished code or in work on rules over graphs that our search
-did not reach; Wolfram's work on network systems was not checked in detail.
+Rules on arbitrary graphs are the nearest neighbours. *A New Kind of Science* sets up cellular
+automata whose cells are the nodes of any network ([Wolfram 2002](bibliography.md#wolfram2002new),
+note on p. 936). Jesse Nochella's 2006 poster ran rules on networks that look at the fraction of black
+neighbours, so they work for any number of neighbours, and found one network that behaves like a
+one-dimensional automaton, with patterns like rules 110 and 30; among its ideas for variations is
+summing each "level" of nodes around a cell separately ([Nochella 2006](bibliography.md#nochella2006cellular)).
+Carsten Marr and Marc-Thorsten Hütt carried the 64 outer-totalistic elementary rules onto arbitrary
+graphs by the same device, the density of a node's active neighbours, and compared regular, random,
+scale-free and metabolic networks ([Marr and Hütt 2009](bibliography.md#marr2009outer)). In all of
+these every node updates at every step from its own neighbours; none uses the distance layers around a
+seed as the successive rows of a one-dimensional evolution, which is the whole of the layered
+construction. The idea is simple, so it may exist in unpublished code or in work on rules over graphs
+that our search did not reach.
 
 ### 3. Presenting and cataloguing the three-parent hexagon rules
 
@@ -315,8 +333,10 @@ the snub square tiling 3.3.4.3.4. Both are credited to
   simpler tiling (5 on 3.3.3.4.4), and 19 objects run on several tilings.
 - **Compound and same-object checks.** Every phase of every ship was split into groups and each
   group run alone: 10 candidates were two ships flying together, and 13 carry a smaller ship inside
-  unchanged. Every candidate was compared with all 137 ship records: no two have the same neighbour
-  counts everywhere (but see the congruence check above).
+  unchanged. Every candidate was compared with all 137 ship records, the 103 of CART's catalogue and
+  the 34 of the fresh searches of November 2026 (see
+  [How the list was cut](findings.md#how-the-list-was-cut)): no two have the same neighbour counts
+  everywhere (but see the congruence check above).
 - **Robustness.** Each ship ran 40 periods on a wrapped patch of about 30,000 cells, on a smaller
   patch and with dead edges, with identical results.
 - **The Life census.** Every spaceship record of the census of Life on the 92 Archimedean, 2-uniform
@@ -403,6 +423,13 @@ rules on meshes ([Ready](bibliography.md#huttonnd_ready)); HatLife ran Life-like
 and WireWorld rules on the hat ([Trevorrow 2023](bibliography.md#trevorrow2023hatlife)); Edmond ran
 Generations and priority-table rules on the hat and spectre ([Edmond 2026](bibliography.md#edmond2026gliders));
 Life has long been studied on Penrose tilings ([Owens and Stepney 2010](bibliography.md#owens2010game)).
+Running one rule on any graph is not new either: Marr and Hütt's formalism puts outer-totalistic rules
+on arbitrary graphs, with rules that read the density of a node's active neighbours so that nodes of
+any degree are handled alike ([Marr and Hütt 2009](bibliography.md#marr2009outer)), as Nochella's
+network rules had done ([Nochella 2006](bibliography.md#nochella2006cellular)). JETCARP's rules count
+neighbours instead of taking a fraction (`B3` means three live neighbours, whatever the tile's
+degree), so a tile with more neighbours sees more counts; and its claim is the breadth of families
+and tilings in one engine, not the step from a lattice to a graph.
 Our search found no aperiodic-tiling version of the cyclic, Greenberg–Hastings, rock-paper-scissors,
 Hodgepodge or forest-fire rules, and no turmites on the hat or spectre, but these are direct applications
 of known rules to known graphs, and we do not count them as discoveries. See
@@ -410,6 +437,18 @@ of known rules to known graphs, and we do not count them as discoveries. See
 
 ## What we do not claim
 
+- **The soup hunt as a method.** Dropping small random soups (16 × 16 cells at density 0.5) on an
+  unbounded plane, running each until it settles and classing every object left is the method of
+  Adam P. Goucher's apgsearch, whose results have gone into his Catagolue census since February
+  2015: about 7.4 × 10¹⁵ objects from asymmetric soups of Life alone
+  ([LifeWiki: Apgsearch](bibliography.md#lifewikind_apgsearch);
+  [LifeWiki: Catagolue](bibliography.md#lifewikind_catagolue);
+  [Goucher 2015](bibliography.md#goucher2015catagolue);
+  [Goucher 2016](bibliography.md#goucher2016apgsearch)). Catagolue censuses many other rules and
+  soup symmetries too. JETCARP's hunt applies the method to
+  Life-like and Generations rules on any periodic tiling; on the square grid its counts of Life agree
+  with Catagolue's. It differs in which soups it censuses, how it cuts out escaping ships and how it
+  separates objects; see [Soup hunt](search-methods.md#soup-hunt).
 - **Age colouring**, including colouring cells by how long they have been alive and fading destroyed
   cells: Chris Rowett's LifeViewer and other programs did this first
   ([LifeWiki: LifeViewer](bibliography.md#lifewikind_lifeviewer);

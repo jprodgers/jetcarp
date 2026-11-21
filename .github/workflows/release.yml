@@ -191,6 +191,11 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      # As CI's Linux tests: the GPU tests on Mesa's lavapipe (a software adapter, used only when
+      # asked for), and failing rather than skipping when it cannot be used.
+      JETCARP_GPU: software
+      JETCARP_REQUIRE_GPU: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15

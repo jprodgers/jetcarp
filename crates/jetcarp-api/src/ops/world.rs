@@ -844,16 +844,16 @@ impl WorldOp for WorldOpen {
     ) -> Result<OpenOut, ApiError> {
         let scene = scene_to_open(cx, &a)?;
         check_tiling_size(&scene.tiling, &cx.limits)?;
-        let recorded = scene.record.as_ref().map(|r| Recorded {
+        let record = scene.record.clone();
+        let recorded = record.as_ref().map(|r| Recorded {
             generation: r.generation,
             hash: r.hash.clone(),
+            hash_version: r.hash_version,
         });
         host.replace(scene)
             .map_err(|e| crate::ops::scene::in_file(a.path.as_deref(), e))?;
         let w = host.world();
-        let replayed = recorded
-            .as_ref()
-            .map(|r| r.generation == w.generation && r.hash == w.hash_hex());
+        let replayed = record.as_ref().map(|r| r.matches(w).unwrap_or(false));
         let warnings = w.warnings().to_vec();
         Ok(OpenOut {
             status: world_status(host),
@@ -2532,6 +2532,7 @@ impl WorldOp for WorldRender {
                 ("jetcarp:version", r.jetcarp_version.clone()),
                 ("jetcarp:generation", r.generation.to_string()),
                 ("jetcarp:hash", r.hash.clone()),
+                ("jetcarp:hash_version", r.hash_version.to_string()),
             ],
         )?;
         let saved = match &a.save_path {

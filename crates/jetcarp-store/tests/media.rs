@@ -276,7 +276,7 @@ fn the_strobe_guard_records_what_it_found_in_catalog_media() {
         3,
         "a period of frames, whatever the treatment"
     );
-    assert!(!check(&frames.iter().collect::<Vec<_>>(), delay).harmful);
+    assert!(!check(&frames.iter().collect::<Vec<_>>(), delay, false).harmful);
     assert_eq!(g["after"]["harmful"], false);
     let blinker = one("B3/S23", "ooo");
     lib.add(blinker.clone()).unwrap();

@@ -212,6 +212,7 @@ impl JetcarpApp {
         let (_, back) = jetcarp_core::render::backdrop(&self.world);
         GuardFeed {
             on: self.guard_on_here(),
+            at_risk: self.strobe.answer == Some(ps::Answer::AtRisk),
             now: self.started.elapsed().as_secs_f64(),
             viewing: Viewing::screen(ppp),
             screen_px,
@@ -271,9 +272,11 @@ impl JetcarpApp {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(what).strong());
                 ui.label(if on {
-                    RichText::new("on").color(Color32::from_rgb(0x8c, 0xd8, 0x8c))
+                    RichText::new("on")
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0x8c, 0xd8, 0x8c)))
                 } else {
-                    RichText::new("off").color(Color32::from_rgb(0xff, 0xb0, 0x60))
+                    RichText::new("off")
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)))
                 });
             });
             ui.horizontal(|ui| {
@@ -308,7 +311,7 @@ impl JetcarpApp {
             ui.add_space(4.0);
         }
         if let Some(e) = &self.strobe.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         ui.separator();
         ui.label(RichText::new("Now").strong());

@@ -11,6 +11,34 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
+  Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
+  and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,
+  deuteranopia, tritanopia and their milder forms (simulated with Machado, Oliveira and Fernandes'
+  model), with lightness falling steadily along each ramp. The same check is run on every built-in
+  palette: `jetcarp palettes` and `reference.palettes` give each one's result (Tide, Phosphor, Koi
+  and Verdigris pass too), and the palettes reference marks them. The three join the pack
+  format's frozen palette registry, so packs may name them. In the app, *Settings →
+  Accessibility* makes them, or any palettes, the defaults for scenes that name none.
+  ([Palettes](../reference/palettes.md#colour-vision-deficiency),
+  [#217](https://github.com/jprodgers/jetcarp/issues/217))
+- **The app follows the system's request for reduced motion.** It reads Windows' *Show animations
+  in Windows*, macOS's *Reduce motion* and GNOME's *Reduce Animation* at start and every couple of
+  seconds. When it is on, the Quick Start's cards and the small animations in the Hunts and Ants
+  windows show stills until one is chosen, a scene opens paused with a note saying why, and the
+  interface's own animations, spinners and progress bars stand still. *Settings → Accessibility*
+  overrides the system either way; the strobe guard is unchanged.
+  ([Accessibility settings](../guides/accessibility-settings.md#reduced-motion),
+  [#218](https://github.com/jprodgers/jetcarp/issues/218))
+- **A high-contrast theme for the app,** dark and light: text at 7:1 or more against its
+  background, thicker outlines at 3:1 or more, and a thick ring round whatever has the keyboard.
+  It follows Windows' contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and
+  *Settings → Accessibility* overrides them, and chooses light or dark (on Linux, the way to a
+  light app until [#137](https://github.com/jprodgers/jetcarp/issues/137) is fixed). A test
+  computes every contrast the theme uses. The docked panes now take the theme's panel colour in
+  the light and high-contrast themes, where they kept the grid's dark backdrop.
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
+  [#220](https://github.com/jprodgers/jetcarp/issues/220))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
   pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
   ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon
@@ -58,9 +86,57 @@ day later (0.4.2: 17 November here, 18 November there).
   key; a known key, your own publisher key and the packs that came with JETCARP are each said as
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
+- **For someone who answered the seizure warning *at risk*, the strobe guard is stricter about
+  patterns.** Their guard, which can never be turned off, also veils any pattern of similar parts,
+  regular or not, as EA's IRIS counts one (at least six parts alike in shape over a quarter of the
+  screen, light parts at least 0.25 and 0.1 brighter than the dark ones, for half a second): soups,
+  waves and mazes are often shown dimmed for them. Everyone else keeps the regular-stripes rule. It
+  applies in the app, full screen, the desktop background and the screen savers, and their exported
+  animations; with it on, IRIS passes every recording of the test corpus, for flashes and for
+  patterns. ([Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk))
+- **Cell outlines over a large, even, bright field are drawn faint, so they make no strong
+  stripes.** Zoomed in on a field of bright live cells (or a light background) on a square or
+  hexagonal grid, the outlines were a strong grid, which the strobe guard measured as stripes and
+  dimmed. Where such a field covers more than a quarter of the picture or view, and the tiling's
+  outlines make stripes at that size, outlines are now drawn no more than 0.06 darker than the
+  cells: in the app's view, pictures, desktop pictures, exported animations, sandpile exports and
+  the HashLife view. Everywhere else they are as before; no picture in this book changed.
+  ([The strobe guard](../guides/strobe-guard.md#what-it-measures))
+
+### Changed
+
+- **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
+  64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
+  (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
+  noise seed, a script's streak, the automata's rules and settings), so two different worlds could
+  share it. Version 2 hashes every piece of state that decides what a world does next, and a digest
+  of its tiling: changing any one of them changes the hash, and a world reopened from its saved scene
+  at any generation hashes as the one that ran straight through. `jetcarp run` and `verify`, scene
+  records, PNG metadata, `--json`, the MCP tools and *Copy state hash* carry all 64 digits; the app's
+  menu bar shows the first 16. Records now say `"hash_version": 2`; those written before carry no
+  version, and JETCARP checks them with version 1, kept unchanged, so old scenes, figures and packs
+  still verify. `--expect` takes either version, by length (16 or 64 digits), and refuses anything
+  else. The pinned hashes of every Quick Start entry, the rule-semantics scenes and the portable
+  Lenia runs are now version 2; their version 1 hashes are the old pins, so no state changed.
+  ([The state hash](../research/reproducibility.md#the-state-hash),
+  [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
 ### Fixed
 
+- **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
+  with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
+  with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
+  lavapipe) and macOS (the runner's own GPU), and the release workflow's tests, which had left
+  lavapipe unused, now run the GPU tests on it.
+  ([Contributing](contributing.md), [Testing](testing.md))
+- **A settled reseed policy fires at the same generation whatever else counts changes.** Its
+  check for a steady cycle of changing cells read every generation whose changes had been counted,
+  and which those were depended on whether the app's activity graph or the desktop host was
+  counting them, or a script trigger, or the GPU: with them it could fire sooner, so a scene saved
+  from the app could replay to another state. It now reads only the generations it measured itself,
+  from the end of its cooldown. A scene in which something else measured activity before a policy's
+  cooldown ended can reseed at another generation than before.
+  ([Reseeding](../guides/reseeding.md))
 - **A world with a B0 rule is said to repeat only when it does.** The period check compared the
   cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
   background's phase, so a world whose kept cells came back with the background in another phase
@@ -197,6 +273,43 @@ day later (0.4.2: 17 November here, 18 November there).
 - **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
   your settings, data and pictures" when only the pictures were left.
   ([#142](https://github.com/jprodgers/jetcarp/issues/142))
+- **The soup hunt cuts out gliders that fly away together.** A hunt erased an escaping ship only
+  once it lay beyond everything else by a few cells, so two gliders flying the same way on lanes a
+  few cells apart, or several staggered so that each stayed level with another, were never cut. They
+  flew on until the soup passed the hunt's span limit and was dropped as exploded, with no census of
+  what it had left, while the ships cut from it before were still counted. In Life that was about one
+  soup in 370, nearly every "explosion"; on some tilings it was far more, and every one of the 703
+  explosions and 152 unsettled soups of the k2-017 hunt in the
+  [spaceship tutorial](../tutorials/hunting-spaceships.md) was such a soup. Far from the soup, groups
+  that no gap separates are now taken together and cut as the ships they are, and a ship is also cut
+  when every other group it is not clear of is a ship that cannot catch it: one with the same
+  velocity, or one slower along the way it is leaving. A hunt's counts change: in 150,000 soups of
+  Life the exploded soups fall from 405 to 21, most of them past the population cap, and the glider's share,
+  0.7% above Catagolue's census before, is within chance of it. A hunt of Life runs about a tenth
+  slower. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The book credits apgsearch and Catagolue, and says how a hunt compares with them.** The soup
+  hunt's defaults are those of Adam P. Goucher's apgsearch and of his Catagolue census, which the
+  book did not mention; *Search methods*, *Searching for patterns* and *What is new in JETCARP* now
+  credit them and set out how JETCARP's hunt differs, what its counts are and are not, and how they
+  compare with Catagolue's. `docs/tools/check-catagolue.py`, run for each release candidate, compares
+  the shares of the twelve commonest objects of a fixed hunt of Life with a pinned copy of the top of
+  Catagolue's census. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The research pages add up, and their search log is published.** The count of spaceship records
+  in *Findings* is now a table that can be checked by subtraction (the 72 candidates came from 137
+  records, 103 of CART's and 34 of fresh searches; seven records of two candidate ships flying
+  together had not been said); the k-uniform chapter no longer says that no work had run cellular
+  automata on 2- and 3-uniform tilings; and the research notes that the claims and the
+  bibliography rest on, with every query and page their searches read, are in the repository's
+  `research/` folder. The bibliography marks the 10 entries that rest on a secondary listing (it
+  said every entry had been checked against a primary record), cites every entry it holds, and
+  corrects four: the year of the Smith et al. monotile papers, the pages of Eppstein (2010) and
+  Heudin (1996), and the translators of Kepler's *Harmony of the World*. *What is new in JETCARP*
+  now weighs Marr and Hütt's outer-totalistic rules on graphs and Nochella's network rules against
+  the layered rules and the one engine for every tiling.
+  ([Findings](../research/findings.md#how-the-list-was-cut),
+  [Bibliography](../research/bibliography.md), [#179](https://github.com/jprodgers/jetcarp/issues/179))
 
 ## [0.4.2] – 2026-11-17
 

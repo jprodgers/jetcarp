@@ -68,8 +68,9 @@ matter to you.
   oscillators and 39,744 turmite highways were run again on the release engine, with no change.
 - **Prior-art audits.** Every candidate contribution was searched for in the literature and the
   hobbyist record, with each query and page logged, and judged *prior art found*, *related work only*
-  or *nothing found*. Only the last two support a claim, worded "to our knowledge". The method and its
-  weak spots, chiefly the ConwayLife.com forums, are set out in
+  or *nothing found*. Only the last two support a claim, worded "to our knowledge". The logs are in the
+  repository's [`research/`](https://github.com/jprodgers/jetcarp/tree/main/research) folder. The
+  method and its weak spots, chiefly the ConwayLife.com forums, are set out in
   [What is new in JETCARP](../research/contributions.md#how-we-searched).
 - **Skeptic passes.** The candidate spaceships were reviewed by a pass whose job was to find reasons
   not to claim them: ships that are two ships together, ships that carry a smaller one, ships that
@@ -81,7 +82,8 @@ matter to you.
   [contributions](../research/contributions.md#how-we-checked) page.
 - **Sources.** For the history sections and the [bibliography](../research/bibliography.md), each
   source was checked against its primary record (Crossref, the authors' own pages and repositories)
-  before it was cited.
+  where one could be read before it was cited; the few that rest on a secondary listing, such as a
+  reference list or a library catalogue, are marked in the bibliography.
 
 These checks were themselves largely run by Claude agents under Jimmie's direction, set up to argue
 against the claims rather than for them, with Jimmie reading the results and deciding. The check by

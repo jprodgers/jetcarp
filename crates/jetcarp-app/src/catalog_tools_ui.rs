@@ -429,7 +429,7 @@ impl CatalogTools {
                         }
                         ui.label(format!("{label} ({})", &id[..id.len().min(8)]));
                         if *new {
-                            ui.colored_label(Color32::LIGHT_GREEN, "new");
+                            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_GREEN), "new");
                         }
                     });
                 }
@@ -448,7 +448,7 @@ impl CatalogTools {
                 }
             }
             Some(Err(e)) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             None => {}
         }
@@ -483,14 +483,16 @@ impl CatalogTools {
             }
             Err(_) if self.remove_id.trim().is_empty() => {}
             Err(e) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
         }
         ui.checkbox(&mut self.confirm, "Yes, delete it");
         if ui
             .add_enabled(
                 self.confirm && label.is_ok(),
-                egui::Button::new(RichText::new("Remove").color(Color32::LIGHT_RED)),
+                egui::Button::new(
+                    RichText::new("Remove").color(crate::theme::ink(ui, Color32::LIGHT_RED)),
+                ),
             )
             .clicked()
         {
@@ -608,7 +610,7 @@ impl CatalogTools {
                 }
             }
             Some(Err(e)) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             None => {}
         }

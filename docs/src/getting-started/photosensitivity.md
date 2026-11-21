@@ -110,7 +110,10 @@ with the date and the version that did it:
   "guard_off": { "date": "2026-11-20T15:04:00Z", "jetcarp": "0.4.3" }
 ```
 
-For `at_risk` the guard is on whatever the file says. A new answer starts with both switches on.
+For `at_risk` the guard is on whatever the file says, and stricter: it also veils patterns of
+similar parts, regular or not, as EA's IRIS counts them, so soups, waves and mazes are often shown
+dimmed ([Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk)).
+A new answer starts with both switches on.
 
 ## Lowering the risk
 
@@ -122,7 +125,10 @@ settles: run at 60 generations a second, it flashes about four times a second.
 
 JETCARP's [strobe guard](../guides/strobe-guard.md) watches every frame it draws, and softens, slows
 or pauses a scene before it flashes more than three times a second over a large part of the
-screen, or shows strong regular stripes. It is on for everyone unless turned off in the app.
+screen, or shows strong regular stripes. It is on for everyone unless turned off in the app. If you
+answered that you have, or may have, a seizure disorder, it can't be turned off, and it is stricter:
+it also dims patterns of similar parts, regular or not, such as a soup of cells or a field of waves
+([Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk)).
 
 Slower speeds, smaller windows, low-power pacing (`jetcarp host pacing low-power`) and calmer
 rules all flash less. None of this, the guard included, makes JETCARP safe for someone with a

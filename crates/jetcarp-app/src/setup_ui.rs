@@ -668,7 +668,7 @@ impl Wizard {
                 }
                 if let Some(e) = &self.error {
                     ui.add_space(6.0);
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
             });
         ui.separator();
@@ -910,11 +910,14 @@ impl Wizard {
         }
         if let Some((n, err)) = &self.data_note {
             ui.colored_label(
-                if *err {
-                    Color32::LIGHT_RED
-                } else {
-                    ui.visuals().text_color()
-                },
+                crate::theme::ink(
+                    ui,
+                    if *err {
+                        Color32::LIGHT_RED
+                    } else {
+                        ui.visuals().text_color()
+                    },
+                ),
                 n,
             );
         }
@@ -957,7 +960,7 @@ impl Wizard {
                         .on_hover_text(format!("The publisher's key: {}", e.publisher));
                     if !e.signed {
                         ui.colored_label(
-                            Color32::LIGHT_RED,
+                            crate::theme::ink(ui, Color32::LIGHT_RED),
                             RichText::new("Setup imports only packs their publisher signed.")
                                 .small(),
                         );
@@ -1051,7 +1054,10 @@ impl Wizard {
                 for e in found {
                     ui.indent(("extra-pack", i, e.id()), |ui| match &e.error {
                         Some(err) => {
-                            ui.colored_label(Color32::LIGHT_RED, format!("{}: {err}", e.id()));
+                            ui.colored_label(
+                                crate::theme::ink(ui, Color32::LIGHT_RED),
+                                format!("{}: {err}", e.id()),
+                            );
                         }
                         None => Self::pack_row(ui, e, None),
                     });
@@ -1253,14 +1259,17 @@ impl Wizard {
         ui.add_space(6.0);
         if self.applying.is_some() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::a11y::spinner(ui);
                 ui.label("Starting…");
             });
         }
         for (o, r) in &self.desktop_done {
             match r {
                 Ok(m) => ui.label(format!("{}: {}.", o.title(), m)),
-                Err(e) => ui.colored_label(Color32::LIGHT_RED, format!("{}: {e}", o.title())),
+                Err(e) => ui.colored_label(
+                    crate::theme::ink(ui, Color32::LIGHT_RED),
+                    format!("{}: {e}", o.title()),
+                ),
             };
         }
         if self.log_out_once {
@@ -1296,13 +1305,13 @@ impl Wizard {
                         {
                             resume = Some((j.job, j.kind.clone()));
                         }
-                        ui.label(RichText::new(word).color(colour));
+                        ui.label(RichText::new(word).color(crate::theme::ink(ui, colour)));
                     });
                 });
                 let frac = j.fraction.unwrap_or(0.0) as f32;
                 let mut bar = egui::ProgressBar::new(frac);
                 if !j.settled() {
-                    bar = bar.animate(true);
+                    bar = bar.animate(crate::a11y::animate_bars(ui.ctx()));
                 }
                 ui.add(bar.desired_height(8.0));
                 if j.kind == "explore" && j.done == 0 && !j.settled() {
@@ -1367,7 +1376,7 @@ fn key_label(ui: &mut egui::Ui, words: &str, new: bool) {
             RichText::new(words)
                 .small()
                 .strong()
-                .color(Color32::from_rgb(255, 170, 90)),
+                .color(crate::theme::ink(ui, Color32::from_rgb(255, 170, 90))),
         )
         .on_hover_text(
             "No pack signed by this key has been imported into this library before. If you \
@@ -1452,7 +1461,6 @@ mod tests {
             assert!(std::env::var_os(v).is_some(), "set {v}");
         }
         let Some(o) = Offscreen::new(690, 640) else {
-            eprintln!("no GPU adapter");
             return None;
         };
         app_fonts(&o.ctx);

@@ -3,7 +3,8 @@
 //! 60 generations a second and drawn offscreen at 60 frames a second of simulated time; every frame
 //! read back and measured on the processor. Both ways the painter can draw: into a target it reads
 //! in place, and into its own texture, copied to the target. Each test skips itself when the
-//! machine has no GPU adapter. `JETCARP_STROBE_RECORD=DIR` also writes each frame as a PNG there,
+//! machine has no usable GPU adapter, and fails instead under `JETCARP_REQUIRE_GPU=1`
+//! ([`jetcarp_gpu::no_gpu`]). `JETCARP_STROBE_RECORD=DIR` also writes each frame as a PNG there,
 //! for IRIS.
 
 use jetcarp_core::strobe::flash::FlashMeter;
@@ -22,21 +23,36 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const W: u32 = 320;
 const H: u32 = 240;
 
+/// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
+/// `JETCARP_REQUIRE_GPU=1`).
 fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
+    const WHAT: &str = "the strobe guard's painter tests";
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let choice =
-        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
+            Ok(c) => c,
+            Err(e) => {
+                jetcarp_gpu::no_gpu(WHAT, &e);
+                return None;
+            }
+        };
     if let Err(e) = &choice.usable {
-        eprintln!("skipped: {e}");
+        jetcarp_gpu::no_gpu(WHAT, e);
         return None;
     }
-    pollster::block_on(
+    match pollster::block_on(
         choice
             .adapter
             .request_device(&wgpu::DeviceDescriptor::default()),
-    )
-    .ok()
+    ) {
+        Ok(d) => Some(d),
+        Err(e) => {
+            let name = &choice.info.name;
+            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
+            None
+        }
+    }
 }
 
 /// A stage showing a Margolus Tron field on an empty background (it flips every generation) at
@@ -238,22 +254,27 @@ struct AppView {
 }
 
 impl AppView {
-    fn new(device: &wgpu::Device, sc: &Scene, speed: f32, cell_px: f32, on: bool) -> AppView {
+    fn new(
+        device: &wgpu::Device,
+        sc: &Scene,
+        speed: f32,
+        cell_px: f32,
+        on: bool,
+        at_risk: bool,
+    ) -> AppView {
         let world = jetcarp_core::World::from_scene(sc).unwrap();
         let geometry = std::sync::Arc::new(jetcarp_display::gpu::Geometry::build(&world.topo, 1));
         let (center, zoom) =
             jetcarp_display::view::place(&world, [W as f64, H as f64], cell_px as f64);
+        let mut guard =
+            jetcarp_display::strobe_gpu::GuardedGpu::new(device, Viewing::screen(1.0), None, on);
+        guard.guard.set_at_risk(at_risk);
         AppView {
             world,
             geometry,
             views: jetcarp_display::view::Views::new(jetcarp_display::gpu::slot_capacity(device)),
             renderer: jetcarp_display::gpu::TileRenderer::new(device, FORMAT),
-            guard: jetcarp_display::strobe_gpu::GuardedGpu::new(
-                device,
-                Viewing::screen(1.0),
-                None,
-                on,
-            ),
+            guard,
             center,
             zoom,
             speed,
@@ -322,12 +343,13 @@ impl AppView {
 }
 
 /// Recordings for the IRIS comparison (#150; ignored, and needs `JETCARP_STROBE_RECORD=DIR`):
-/// every recording of the corpus, with the guard off (what the scene draws) and on (what the
-/// guard shows), 6 seconds at 60 frames a second, 320 by 240, on the GPU. Each recording is a
-/// folder of PNGs, `DIR/desktop-off/<name>/00000.png` and `DIR/desktop-on/<name>/...` for the
-/// shared painter (the desktop background and the screen savers) and `DIR/view-off/<name>/...`
-/// and `DIR/view-on/<name>/...` for the app's view with outlines; `DIR/verdicts.json` holds
-/// JETCARP's verdict on each, from the processor's meters on the frames recorded.
+/// every recording of the corpus, with the guard off (what the scene draws), on (what the guard
+/// shows), and on for someone at risk (its stricter stripe rule), 6 seconds at 60 frames a
+/// second, 320 by 240, on the GPU. Each recording is a folder of PNGs, `DIR/desktop-off/<name>/
+/// 00000.png`, `DIR/desktop-on/<name>/...` and `DIR/desktop-risk/<name>/...` for the shared
+/// painter (the desktop background and the screen savers), and `DIR/view-off/...`, `view-on` and
+/// `view-risk` for the app's view with outlines; `DIR/verdicts.json` holds JETCARP's verdict on
+/// each, by both stripe rules, from the processor's meters on the frames recorded.
 #[test]
 #[ignore]
 fn record_the_corpus_for_iris() {
@@ -349,14 +371,19 @@ fn record_the_corpus_for_iris() {
     for r in CORPUS {
         let text = std::fs::read_to_string(corpus.join(format!("{}.json", r.scene))).unwrap();
         let sc: Scene = serde_json::from_str(&text).unwrap();
-        for on in [false, true] {
+        for (on, at_risk, mode) in [
+            (false, false, "off"),
+            (true, false, "on"),
+            (true, true, "risk"),
+        ] {
             let path = if r.outlines { "view" } else { "desktop" };
-            let key = format!("{path}-{}/{}", if on { "on" } else { "off" }, r.name);
+            let key = format!("{path}-{mode}/{}", r.name);
             // The painter, with its stage, or the app's view.
             let mut painted = if r.outlines {
-                Err(AppView::new(&device, &sc, r.speed, r.cell_px, on))
+                Err(AppView::new(&device, &sc, r.speed, r.cell_px, on, at_risk))
             } else {
                 let mut painter = Painter::guarded(&device, FORMAT, on);
+                painter.set_guard_at_risk(at_risk);
                 painter.set_readable(true);
                 Ok((stage_at(sc.clone(), r.speed, r.cell_px), painter))
             };
@@ -364,6 +391,9 @@ fn record_the_corpus_for_iris() {
             let mut sim = SimBackend::unavailable("a test".into());
             let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
             let mut stripes = PatternMeter::new(None);
+            let mut strict = PatternMeter::new(None);
+            strict.set_at_risk(true);
+            let mut worst_strict = jetcarp_core::strobe::pattern::PatternReading::default();
             let sub = dir.join(&key);
             std::fs::create_dir_all(&sub).unwrap();
             let (mut worst, mut worst_red, mut worst_stripes) = (
@@ -397,6 +427,10 @@ fn record_the_corpus_for_iris() {
                     {
                         worst_stripes = p;
                     }
+                    let p = strict.update(&half, t);
+                    if p.level > worst_strict.level {
+                        worst_strict = p;
+                    }
                 }
                 jetcarp_core::render::write_png(&sub.join(format!("{k:05}.png")), &img, &[])
                     .unwrap();
@@ -418,6 +452,8 @@ fn record_the_corpus_for_iris() {
                     "stripe_share": worst_stripes.share,
                     "stripe_contrast": worst_stripes.contrast,
                     "stripe_period_px": worst_stripes.period_px,
+                    "at_risk_stripes": worst_strict.level.name(),
+                    "at_risk_parts": worst_strict.parts,
                 }),
             );
         }
@@ -467,10 +503,10 @@ fn a_live_field_at_a_fractional_size_draws_no_seams() {
     }
 }
 
-/// The app's view with cell outlines, pinned: over a field of white live cells the outlines are a
-/// strong grid, rows of repeated squares, which the stripe check counts from 8 pixels a cell (IRIS
-/// passes them; see testing.md); over a light ground with scattered cells (the Paper field) they
-/// do not count. With the guard on, nothing shown fails.
+/// The app's view with cell outlines, pinned: over a field of white live cells, and over a light
+/// ground with scattered cells (the Paper field), the outlines are drawn faint enough over bright
+/// cells to make no strong stripes, at 8 and at 16 pixels a cell, where they are drawn fully over
+/// dark cells. With the guard on, nothing shown fails.
 #[test]
 fn outlines_in_the_app_s_view_are_pinned() {
     use jetcarp_core::strobe::frame::reduce_both;
@@ -480,15 +516,15 @@ fn outlines_in_the_app_s_view_are_pinned() {
     };
     let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/scenes/strobe");
     for (scene, cell_px, want) in [
-        ("live-field", 8.0, PatternLevel::Fail),
-        ("live-field", 16.0, PatternLevel::Fail),
+        ("live-field", 8.0, PatternLevel::Pass),
+        ("live-field", 16.0, PatternLevel::Pass),
         ("paper-field", 8.0, PatternLevel::Pass),
         ("paper-field", 16.0, PatternLevel::Pass),
     ] {
         let text = std::fs::read_to_string(corpus.join(format!("{scene}.json"))).unwrap();
         let sc: Scene = serde_json::from_str(&text).unwrap();
         for on in [false, true] {
-            let mut view = AppView::new(&device, &sc, 30.0, cell_px, on);
+            let mut view = AppView::new(&device, &sc, 30.0, cell_px, on, false);
             let tex = target(&device, true);
             let mut stripes = PatternMeter::new(None);
             let mut worst = PatternLevel::Pass;

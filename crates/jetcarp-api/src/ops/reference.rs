@@ -429,21 +429,56 @@ pub struct PaletteInfo {
     pub stage: String,
     /// The colour ramp for live cells, youngest first.
     pub stops: Vec<String>,
+    /// How the palette fares for colour-vision deficiency.
+    pub cvd: PaletteCvd,
+}
+
+/// A palette's check for colour-vision deficiency (`jetcarp_core::cvd`): its stops are seen with
+/// normal vision and as simulated for protanopia, deuteranopia, tritanopia and their milder forms
+/// (Machado, Oliveira and Fernandes 2009), and compared with the CIEDE2000 colour difference.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct PaletteCvd {
+    /// Every pair of neighbouring stops, and every stop against the background, stays at least
+    /// `cvd_min_difference` apart, however it is seen.
+    pub passes: bool,
+    /// The smallest of those differences, to one decimal.
+    pub least: f64,
+    /// What holds it back, when it does not pass ("stops 2 and 3 under deuteranopia: 5.8").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<String>,
 }
 
 /// The built-in palettes.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct PalettesOut {
     pub palettes: Vec<PaletteInfo>,
+    /// The CIEDE2000 difference the colour-vision check asks for.
+    pub cvd_min_difference: f64,
+    /// The palettes chosen for colour-vision deficiency: for any rule, and for JACA's +1 and -1
+    /// cells.
+    pub cvd_chosen: PalettesChosen,
+}
+
+/// The palettes chosen for colour-vision deficiency.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct PalettesChosen {
+    pub palette: String,
+    pub jaca_pos: String,
+    pub jaca_neg: String,
 }
 
 impl Report for PalettesOut {
     fn text(&self) -> String {
         let mut s = String::new();
         for p in &self.palettes {
+            let cvd = if p.cvd.passes {
+                "colour-vision check: passes".to_string()
+            } else {
+                format!("colour-vision check: {:.1}", p.cvd.least)
+            };
             let _ = writeln!(
                 s,
-                "{:10} background {} stage {} stops {}",
+                "{:13} background {} stage {} stops {}  {cvd}",
                 p.name,
                 p.background,
                 p.stage,
@@ -458,16 +493,19 @@ impl Report for PalettesOut {
 pub struct ReferencePalettes;
 impl Op for ReferencePalettes {
     const NAME: &'static str = "reference.palettes";
-    const SUMMARY: &'static str = "The built-in palettes with their background, stage, and ramp colours (Candy, Glacier, Desert, and Paper are light).";
+    const SUMMARY: &'static str = "The built-in palettes with their background, stage, and ramp colours (Candy, Glacier, Desert, Paper, and Riso are light), and how each fares in the check for colour-vision deficiency (Lantern, and Cobalt and Saffron for JACA, are chosen for it).";
     const READ_ONLY: bool = true;
     type In = NoInput;
     type Out = PalettesOut;
     fn run(_: &Ctx, _: NoInput, _: &dyn Progress) -> Result<PalettesOut, ApiError> {
+        use jetcarp_core::cvd;
         use jetcarp_core::render::{Palette, palette_names};
         let hex = |c: [u8; 4]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
         let palettes = palette_names()
             .filter_map(|name| {
                 let p = Palette::builtin(name)?;
+                let bg = p.background_rgba();
+                let check = cvd::check(&p.stops, [bg[0], bg[1], bg[2]]);
                 Some(PaletteInfo {
                     name: name.to_string(),
                     background: hex(p.background_rgba()),
@@ -477,10 +515,23 @@ impl Op for ReferencePalettes {
                         .iter()
                         .map(|c| hex([c[0], c[1], c[2], 255]))
                         .collect(),
+                    cvd: PaletteCvd {
+                        passes: check.passes(),
+                        least: (check.least() * 10.0).round() / 10.0,
+                        failure: check.failure(),
+                    },
                 })
             })
             .collect();
-        Ok(PalettesOut { palettes })
+        Ok(PalettesOut {
+            palettes,
+            cvd_min_difference: cvd::MIN_DIFFERENCE,
+            cvd_chosen: PalettesChosen {
+                palette: cvd::CHOSEN.palette.into(),
+                jaca_pos: cvd::CHOSEN.jaca_pos.into(),
+                jaca_neg: cvd::CHOSEN.jaca_neg.into(),
+            },
+        })
     }
 }
 

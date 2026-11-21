@@ -30,13 +30,13 @@ It prints:
 
 ```text
 hunt job 1 in /home/ada/.local/share/jetcarp/library.sqlite
-  status done, 2 s run, 3357 settled, 788 died, 703 exploded, 152 unsettled
-  B3/S23 on [3^3.4^2; 3^2.4.3.4] #2 (k2-017): 5000 soups, 13674 objects (oscillator 5824, spaceship 6900, still life 950), 20 distinct, 20 new
+  status done, 2 s run, 4049 settled, 950 died, 1 exploded, 0 unsettled
+  B3/S23 on [3^3.4^2; 3^2.4.3.4] #2 (k2-017): 5000 soups, 16816 objects (oscillator 6961, spaceship 8720, still life 1135), 21 distinct, 21 new
 ```
 
 The hunt dropped 5,000 small random soups on an unbounded plane of this tiling and ran each until
-it settled, died, exploded or ran out of time. It classed the 13,674 objects left behind, and
-6,900 of them were spaceships. Every new pattern was verified exactly before it was stored in
+it settled, died, exploded or ran out of time. It classed the 16,816 objects left behind, and
+8,720 of them were spaceships. Every new pattern was verified exactly before it was stored in
 your [pattern library](../guides/pattern-library.md). The library is in JETCARP's data folder,
 which differs by system (see [Folders](../reference/folders.md#the-three-folders)).
 
@@ -49,11 +49,14 @@ jetcarp library list --class spaceship
 It prints:
 
 ```text
-16bc37c99a1397bc3ab3656a351b6008  c/4 orthogonal spaceship 6c #16bc37  B3/S23  [3^3.4^2; 3^2.4.3.4] #2 (k2-017)  p4  6c  seen 6900  …
+bf00c293b8943ccca650e11a1076b598  c/4 orthogonal spaceship 11c #bf00c2  B3/S23  [3^3.4^2; 3^2.4.3.4] #2 (k2-017)  p4  11c  seen 4     …
+16bc37c99a1397bc3ab3656a351b6008  c/4 orthogonal spaceship 6c #16bc37   B3/S23  [3^3.4^2; 3^2.4.3.4] #2 (k2-017)  p4   6c  seen 8716  …
 ```
 
-All 6,900 spaceships were one ship. `jetcarp library show` gives its record; any unique start of
-the id will do:
+Nearly all the spaceships, 8,716 of the 8,720, were one ship, `16bc37c9`. The other four were
+`bf00c293`, two copies of it flying together close enough to act on each other: a bound pair,
+which a catalogue keeps as an object of its own, though not as a new ship. `jetcarp library
+show` gives a record; any unique start of the id will do:
 
 ```sh
 jetcarp library show 16bc37
@@ -70,7 +73,7 @@ class:       spaceship, period 4
 works in:    B3/S23 to B3,5,6,8,9,10,11,12/S1,2,3,7,9,10,11,12 (8,192 B/S rules)
 moves:       c/4 orthogonal : lattice vector (-1, 0) per period = (-1.932, 0.000) world units
 cells:       6 (phases 6..9), bounding box 2x1
-seen:        6900
+seen:        8716
 …
 verified:    16 periods (64 generations) on dead-edged frame 32x16 unit cells, …
 ```
@@ -132,7 +135,7 @@ jetcarp library paste 16bc37@480,20,o1 16bc37@960,20 --size 120x40 --boundary de
 It prints:
 
 ```text
-scene: meet.json (2 patterns, 1 CA(s), hash 65c7546103b51c38)
+scene: meet.json (2 patterns, 1 CA(s), hash 93f516545252c276885a9c9b8b3f6edde8d969428d3b1a9ff208916fdd4b03bc)
 grid:  1440 x 40 tiles: x 0 to 1439 (tile columns, 12 to a unit cell), y 0 to 39 (rows)
 ```
 

@@ -332,7 +332,7 @@ impl LibraryWindow {
             }
         });
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let before = (self.filters.clone(), self.sort, self.descending);
         let f = &mut self.filters;
@@ -552,11 +552,11 @@ impl LibraryWindow {
             if let Some(f) = t.get_mut(..1) {
                 f.make_ascii_uppercase();
             }
-            ui.colored_label(Color32::from_rgb(230, 110, 90), t);
+            ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(230, 110, 90)), t);
         }
         if r.needs_reverify {
             ui.colored_label(
-                Color32::from_rgb(230, 160, 60),
+                crate::theme::ink(ui, Color32::from_rgb(230, 160, 60)),
                 "Needs re-verification: the engine's geometry for this tiling changed since it \
                  was verified (jetcarp library reverify)",
             );
@@ -580,7 +580,7 @@ impl LibraryWindow {
                     ui.image((t.id(), sz * k));
                 }
                 Err(e) => {
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
             }
         }

@@ -44,6 +44,8 @@ struct Selected {
     frames: Vec<TextureHandle>,
     delay_ms: u32,
     started: Instant,
+    /// With reduced motion, whether its animation was chosen to play (#218).
+    stills: crate::a11y::Stills,
     note: String,
 }
 
@@ -221,6 +223,7 @@ impl AntsWindow {
                     // Another palette: in memory only, the catalog keeps the house style.
                     let o = MediaOptions {
                         style: MediaStyle::with_palette(Some(p))?,
+                        strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
                         ..Default::default()
                     };
                     let a = jetcarp_store::media::target_animation(
@@ -246,7 +249,10 @@ impl AntsWindow {
                         crate::strobe_cpu::guard_frames(frames, a.delay_ms.max(20));
                     return Ok((frames, delay, note));
                 }
-                let o = MediaOptions::default();
+                let o = MediaOptions {
+                    strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
+                    ..Default::default()
+                };
                 let done = jetcarp_store::media::render(&lib, &MediaTarget::Ant(id.clone()), &o)?;
                 let a = done.animation().ok_or("no animation was rendered")?.clone();
                 let bytes = std::fs::read(&a.abs_path)
@@ -283,6 +289,7 @@ impl AntsWindow {
             frames: vec![],
             delay_ms: 80,
             started: Instant::now(),
+            stills: Default::default(),
             note: "Rendering media…".into(),
         });
     }
@@ -402,13 +409,25 @@ impl AntsWindow {
         ui.label(RichText::new(&sel.note).small());
         if !sel.frames.is_empty() {
             let n = sel.frames.len();
-            let k = (sel.started.elapsed().as_millis() / sel.delay_ms as u128) as usize % n;
-            let t = &sel.frames[k];
-            let sz = t.size_vec2();
+            let sz = sel.frames[0].size_vec2();
             let s = (300.0 / sz.x.max(sz.y)).min(4.0);
-            ui.image((t.id(), sz * s));
-            ui.ctx()
-                .request_repaint_after(std::time::Duration::from_millis(sel.delay_ms as u64));
+            let (rect, resp) = ui.allocate_exact_size(sz * s, egui::Sense::click());
+            // With reduced motion, a still until it is clicked (#218).
+            let secs = sel
+                .stills
+                .time(&resp, &id, sel.started.elapsed().as_secs_f64());
+            let k = ((secs * 1000.0) as u128 / sel.delay_ms as u128) as usize % n;
+            ui.painter().image(
+                sel.frames[k].id(),
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+            sel.stills.mark(ui, &resp, &id);
+            if sel.stills.moving(ui.ctx(), &id) {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(sel.delay_ms as u64));
+            }
         }
         if let Some(u) = upd {
             self.update(&id, u);
@@ -523,7 +542,7 @@ impl AntsWindow {
                     ui.add(egui::ProgressBar::new(frac).text(p.line()));
                 }
                 if let Some(e) = &self.error {
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
                 ui.separator();
                 ui.label(RichText::new("Outcomes per tiling (every stored run)").strong());

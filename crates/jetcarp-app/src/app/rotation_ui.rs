@@ -159,7 +159,7 @@ impl JetcarpApp {
                 });
         });
         for e in &errors {
-            ui.colored_label(Color32::from_rgb(255, 170, 90), e);
+            ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 170, 90)), e);
         }
         let can_delete = chosen.as_ref().is_some_and(|l| l.file.is_some());
         let delete_label = if chosen.as_ref().is_some_and(|l| l.builtin) {
@@ -173,7 +173,7 @@ impl JetcarpApp {
             }
             None => {
                 ui.colored_label(
-                    Color32::from_rgb(255, 170, 90),
+                    crate::theme::ink(ui, Color32::from_rgb(255, 170, 90)),
                     format!("No rotation named {:?}: Life shows instead.", c.rotation),
                 );
             }
@@ -475,7 +475,7 @@ fn note_ui(ui: &mut egui::Ui, note: &Option<(String, bool)>) {
         } else {
             ui.visuals().weak_text_color()
         };
-        ui.label(RichText::new(t).small().color(color));
+        ui.label(RichText::new(t).small().color(crate::theme::ink(ui, color)));
     }
 }
 
@@ -545,7 +545,7 @@ fn editor(
                     if !profile_names.contains(name));
                 let text = RichText::new(it.source.describe());
                 let text = if missing {
-                    text.color(Color32::from_rgb(255, 170, 90))
+                    text.color(crate::theme::ink(ui, Color32::from_rgb(255, 170, 90)))
                 } else {
                     text
                 };
@@ -676,7 +676,7 @@ fn editor(
                 *script_error = check.validate().err();
             }
             if let Some(e) = script_error.as_deref() {
-                ui.colored_label(Color32::from_rgb(255, 110, 110), e);
+                ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)), e);
             }
             ui.label(
                 RichText::new(

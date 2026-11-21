@@ -525,7 +525,7 @@ impl PileWindow {
                     self.resume(job);
                 }
                 if let Some(e) = &self.error {
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
                 self.progress_ui(ui);
             },
@@ -561,7 +561,7 @@ impl PileWindow {
             (_, true) => {
                 if p.steps == 0 {
                     ui.horizontal(|ui| {
-                        ui.spinner();
+                        crate::a11y::spinner(ui);
                         ui.label("Starting the pile…");
                     });
                 } else {
@@ -586,7 +586,7 @@ impl PileWindow {
                 }
             }
             (Some(End::Done(s)), false) => {
-                ui.label(RichText::new(s).color(Color32::LIGHT_GREEN));
+                ui.label(RichText::new(s).color(crate::theme::ink(ui, Color32::LIGHT_GREEN)));
                 // Offer an export in the current colours when they differ from pile.png's.
                 let now = Look::named(&self.palette, self.reverse);
                 if sh.pile.is_some() && sh.exported.as_ref().is_some_and(|e| *e != now) {
@@ -608,14 +608,17 @@ impl PileWindow {
                 }
             }
             (Some(End::Paused(s)), false) => {
-                ui.label(RichText::new(s).color(Color32::from_rgb(0xff, 0xc8, 0x3c)));
+                ui.label(
+                    RichText::new(s)
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc8, 0x3c))),
+                );
             }
             (Some(End::Failed(e)), false) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             (None, false) => {
                 if let Some(e) = &start_error {
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
             }
         }
@@ -650,16 +653,16 @@ impl PileWindow {
         drop(sh);
         if self.reexport.is_some() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::a11y::spinner(ui);
                 ui.label("Exporting…");
             });
         }
         match &self.reexport_note {
             Some(Ok(m)) => {
-                ui.label(RichText::new(m).color(Color32::LIGHT_GREEN));
+                ui.label(RichText::new(m).color(crate::theme::ink(ui, Color32::LIGHT_GREEN)));
             }
             Some(Err(e)) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             None => {}
         }

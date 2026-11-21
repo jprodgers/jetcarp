@@ -6,11 +6,16 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 266 works cited across the JETCARP documentation. Every entry was
-checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,
-the author's or project's own page, or LifeWiki) when the history research was compiled in
-November 2026. Web pages are given with the date they were read. Each entry's anchor is its
-BibTeX key, so you can link to it directly.
+These are the 276 works cited across the JETCARP documentation. Each was checked
+against a primary record where one could be read (a DOI landing page or Crossref, arXiv, the
+publisher, archive.org, the author's or project's own page, or LifeWiki) when the history
+research was compiled in November 2026. The 10 marked † could not be read, and rest on a
+secondary listing instead: a reference list, a library or thesis catalogue, or an encyclopaedia.
+The BibTeX file says, entry by entry, what was read and when; the research notes behind it, with
+their search logs and the items that could not be verified, are in the repository's
+[`research/`](https://github.com/jprodgers/jetcarp/tree/main/research) folder. Web pages are given
+with the date they were read. Each entry's anchor is its BibTeX key, so you can link to it
+directly.
 
 ## A
 
@@ -36,13 +41,15 @@ BibTeX key, so you can link to it directly.
 
 <span id="berger1966undecidability"></span>Berger, Robert (1966). “The undecidability of the domino problem”. *Memoirs of the American Mathematical Society*, no. 66. doi:[10.1090/memo/0066](https://doi.org/10.1090/memo/0066). <small>`berger1966undecidability`</small>
 
-<span id="berlekamp1982winning"></span>Berlekamp, Elwyn R., John H. Conway and Richard K. Guy (1982). *Winning Ways for your Mathematical Plays*. New York: Academic Press. ISBN 0-12-091152-3. <small>`berlekamp1982winning`</small>
+<span id="berlekamp1982winning"></span>Berlekamp, Elwyn R., John H. Conway and Richard K. Guy (1982). *Winning Ways for your Mathematical Plays*. New York: Academic Press. ISBN 0-12-091152-3. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`berlekamp1982winning`</small>
 
 <span id="bjorner1991chipfiring"></span>Björner, Anders, László Lovász and Peter W. Shor (1991). “Chip-firing games on graphs”. *European Journal of Combinatorics* 12(4): 283–291. doi:[10.1016/S0195-6698(13)80111-4](https://doi.org/10.1016/S0195-6698(13)80111-4). <small>`bjorner1991chipfiring`</small>
 
 <span id="bramson1989flux"></span>Bramson, Maury and David Griffeath (1989). “Flux and Fixation in Cyclic Particle Systems”. *The Annals of Probability* 17(1): 26–45. doi:[10.1214/aop/1176991492](https://doi.org/10.1214/aop/1176991492). <small>`bramson1989flux`</small>
 
 <span id="bunimovich1992recurrence"></span>Bunimovich, L. A. and S. E. Troubetzkoy (1992). “Recurrence properties of Lorentz lattice gas cellular automata”. *Journal of Statistical Physics* 67(1–2): 289–302. doi:[10.1007/BF01049035](https://doi.org/10.1007/BF01049035). <small>`bunimovich1992recurrence`</small>
+
+<span id="bushaw2019note"></span>Bushaw, Neal and Daniel W. Cranston (2019). “A Note on Bootstrap Percolation Thresholds in Plane Tilings using Regular Polygons”. *Australasian Journal of Combinatorics* 74(3): 486–497. [arXiv:1803.09056](https://arxiv.org/abs/1803.09056). <small>`bushaw2019note`</small>
 
 ## C
 
@@ -56,7 +63,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="chan2020expanded"></span>Chan, Bert Wang-Chak (2020). “Lenia and Expanded Universe”. In *ALIFE 2020: The 2020 Conference on Artificial Life*, pp. 221–229. MIT Press. doi:[10.1162/isal_a_00297](https://doi.org/10.1162/isal_a_00297); [arXiv:2005.03742](https://arxiv.org/abs/2005.03742). <small>`chan2020expanded`</small>
 
-<span id="chavey1984periodic"></span>Chavey, Darrah P. (1984). *Periodic Tilings and Tilings by Regular Polygons*. Thesis, University of Wisconsin–Madison. <small>`chavey1984periodic`</small>
+<span id="chavey1984periodic"></span>Chavey, Darrah P. (1984). *Periodic Tilings and Tilings by Regular Polygons*. Thesis, University of Wisconsin–Madison. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`chavey1984periodic`</small>
 
 <span id="chavey1989tilings"></span>Chavey, D. (1989). “Tilings by regular polygons—II: A catalog of tilings”. *Computers & Mathematics with Applications* 17(1–3): 147–165. doi:[10.1016/0898-1221(89)90156-9](https://doi.org/10.1016/0898-1221(89)90156-9). <small>`chavey1989tilings`</small>
 
@@ -68,7 +75,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="clar1996forest"></span>Clar, Siegfried, Barbara Drossel and Franz Schwabl (1996). “Forest fires and other examples of self-organized criticality”. *Journal of Physics: Condensed Matter* 8: 6803. doi:[10.1088/0953-8984/8/37/004](https://doi.org/10.1088/0953-8984/8/37/004); [arXiv:cond-mat/9610201](https://arxiv.org/abs/cond-mat/9610201). <small>`clar1996forest`</small>
 
-<span id="codd1965propagation"></span>Codd, Edgar F. (1965). *Propagation, Computation, and Construction in Two-Dimensional Cellular Spaces*. Thesis, University of Michigan. <small>`codd1965propagation`</small>
+<span id="codd1965propagation"></span>Codd, Edgar F. (1965). *Propagation, Computation, and Construction in Two-Dimensional Cellular Spaces*. Thesis, University of Michigan. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`codd1965propagation`</small>
 
 <span id="codd1968cellular"></span>Codd, Edgar F. (1968). *Cellular Automata*. ACM Monograph Series. New York: Academic Press. ISBN 978-1-4832-0014-9. <small>`codd1968cellular`</small>
 
@@ -118,7 +125,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="edmond2026gliders"></span>Edmond, James (2026). “Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre”. [arXiv:2609.22579](https://arxiv.org/abs/2609.22579). <small>`edmond2026gliders`</small>
 
-<span id="eppstein2010growth"></span>Eppstein, David (2010). “Growth and decay in life-like cellular automata”. In Adamatzky, Andrew (ed.), *Game of Life Cellular Automata*, pp. 71–98. Springer. doi:[10.1007/978-1-84996-217-9_6](https://doi.org/10.1007/978-1-84996-217-9_6); [arXiv:0911.2890](https://arxiv.org/abs/0911.2890). <small>`eppstein2010growth`</small>
+<span id="eppstein2010growth"></span>Eppstein, David (2010). “Growth and decay in life-like cellular automata”. In Adamatzky, Andrew (ed.), *Game of Life Cellular Automata*, pp. 71–97. Springer. doi:[10.1007/978-1-84996-217-9_6](https://doi.org/10.1007/978-1-84996-217-9_6); [arXiv:0911.2890](https://arxiv.org/abs/0911.2890). <small>`eppstein2010growth`</small>
 
 <span id="ericg2013tiling1"></span>EricG (2013). “Tiling in Golly 1: Pentagonal (and HexStar & PentHex) Tiling”. ConwayLife.com forums. <https://conwaylife.com/forums/viewtopic.php?t=1123>; accessed 2026-11-10. <small>`ericg2013tiling1`</small>
 
@@ -216,6 +223,12 @@ BibTeX key, so you can link to it directly.
 
 <span id="goucher2012gliders"></span>Goucher, Adam P. (2012). “Gliders in Cellular Automata on Penrose Tilings”. *Journal of Cellular Automata* 7(5–6): 385–392. <small>`goucher2012gliders`</small>
 
+<span id="goucher2015catagolue"></span>Goucher, Adam P. (2015). “Catagolue”. Online census of objects from random soups. <https://catagolue.hatsya.com/>; accessed 2026-11-20. <small>`goucher2015catagolue`</small>
+
+<span id="goucher2016apgsearch"></span>Goucher, Adam P. (2016). “apgsearch 5 (apgluxe), the soup searcher for Catagolue”. Source code, GitLab repository apgoucher/apgmera. <https://gitlab.com/apgoucher/apgmera>; accessed 2026-11-20. <small>`goucher2016apgsearch`</small>
+
+<span id="goucher2026census"></span>Goucher, Adam P. and Catagolue contributors (2026). “Catagolue census of Conway's Life from asymmetric 16 by 16 soups (b3s23/C1)”. Catagolue. <https://catagolue.hatsya.com/census/b3s23/C1>; accessed 2026-11-20. <small>`goucher2026census`</small>
+
 <span id="grassberger2002critical"></span>Grassberger, Peter (2002). “Critical behaviour of the Drossel-Schwabl forest fire model”. *New Journal of Physics* 4: 17. doi:[10.1088/1367-2630/4/1/317](https://doi.org/10.1088/1367-2630/4/1/317). <small>`grassberger2002critical`</small>
 
 <span id="gravner1998cellular"></span>Gravner, Janko and David Griffeath (1998). “Cellular Automaton Growth on ℤ²: Theorems, Examples, and Problems”. *Advances in Applied Mathematics* 21(2): 241–304. doi:[10.1006/aama.1998.0599](https://doi.org/10.1006/aama.1998.0599). <small>`gravner1998cellular`</small>
@@ -224,7 +237,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="greenberg1978spatial"></span>Greenberg, J. M. and S. P. Hastings (1978). “Spatial Patterns for Discrete Models of Diffusion in Excitable Media”. *SIAM Journal on Applied Mathematics* 34(3): 515–523. doi:[10.1137/0134040](https://doi.org/10.1137/0134040). <small>`greenberg1978spatial`</small>
 
-<span id="griffeath1988cyclic"></span>Griffeath, David (1988). “Cyclic Random Competition”. *Notices of the American Mathematical Society*, 1474. <small>`griffeath1988cyclic`</small>
+<span id="griffeath1988cyclic"></span>Griffeath, David (1988). “Cyclic Random Competition”. *Notices of the American Mathematical Society*, 1474. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`griffeath1988cyclic`</small>
 
 <span id="griffeath1994self"></span>Griffeath, David (1994). “Self-Organization of Random Cellular Automata: Four Snapshots”. In Grimmett, Geoffrey (ed.), *Probability and Phase Transition*, pp. 49–67. Springer Netherlands (Kluwer). doi:[10.1007/978-94-015-8326-8_4](https://doi.org/10.1007/978-94-015-8326-8_4). <small>`griffeath1994self`</small>
 
@@ -260,7 +273,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="henley1993statics"></span>Henley, Christopher L. (1993). “Statics of a ``self-organized'' percolation model”. *Physical Review Letters* 71(17): 2741–2744. doi:[10.1103/PhysRevLett.71.2741](https://doi.org/10.1103/PhysRevLett.71.2741). <small>`henley1993statics`</small>
 
-<span id="heudin1996new"></span>Heudin, Jean-Claude (1996). “A New Candidate Rule for the Game of Two-Dimensional Life”. *Complex Systems* 10(5): 367–373. <https://www.complex-systems.com/abstracts/v10_i05_a03>. <small>`heudin1996new`</small>
+<span id="heudin1996new"></span>Heudin, Jean-Claude (1996). “A New Candidate Rule for the Game of Two-Dimensional Life”. *Complex Systems* 10(5): 367–381. <https://www.complex-systems.com/abstracts/v10_i05_a03>. <small>`heudin1996new`</small>
 
 <span id="hill2005penrose"></span>Hill, Margaret, Susan Stepney and Francis Wan (2005). “Penrose Life: Ash and Oscillators”. In *Advances in Artificial Life (ECAL 2005)*, pp. 471–480. Springer. doi:[10.1007/11553090_48](https://doi.org/10.1007/11553090_48). <small>`hill2005penrose`</small>
 
@@ -298,7 +311,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="kepler1619harmonices"></span>Kepler, Johannes (1619). *Harmonices mundi libri V*. Linz: Gottfried Tampach (printed by Johann Planck). <https://archive.org/details/ioanniskepplerih00kepl>; accessed 2026-11-10. <small>`kepler1619harmonices`</small>
 
-<span id="kepler1997harmony"></span>Kepler, Johannes (1997). *The Harmony of the World*. Philadelphia: American Philosophical Society. doi:[10.70249/9798893982398](https://doi.org/10.70249/9798893982398). <small>`kepler1997harmony`</small>
+<span id="kepler1997harmony"></span>Kepler, Johannes (1997). *The Harmony of the World*. Translated by E. J. Aiton, A. M. Duncan and J. V. Field. Memoirs of the American Philosophical Society 209. Philadelphia: American Philosophical Society. doi:[10.70249/9798893982398](https://doi.org/10.70249/9798893982398). <small>`kepler1997harmony`</small>
 
 <span id="kerekrety2020elementary"></span>Kerekrety, Matej (2020). “Elementary cellular automaton in Hexagonal, Pentagonal and Other Tessellations”. Web tool. <https://matejker.github.io/elementary-cellular-automaton/>; accessed 2026-11-10. <small>`kerekrety2020elementary`</small>
 
@@ -312,11 +325,11 @@ BibTeX key, so you can link to it directly.
 
 <span id="kong1991diffusion"></span>Kong, X. P. and E. G. D. Cohen (1991). “Diffusion and propagation in triangular Lorentz lattice gas cellular automata”. *Journal of Statistical Physics* 62(3–4): 737–757. doi:[10.1007/BF01017981](https://doi.org/10.1007/BF01017981). <small>`kong1991diffusion`</small>
 
-<span id="krotenheerdt1969homogenen"></span>Krötenheerdt, Otto (1969). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene I”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 18: 273–290. <small>`krotenheerdt1969homogenen`</small>
+<span id="krotenheerdt1969homogenen"></span>Krötenheerdt, Otto (1969). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene I”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 18: 273–290. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`krotenheerdt1969homogenen`</small>
 
-<span id="krotenheerdt1970homogenenii"></span>Krötenheerdt, Otto (1970). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene II”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 19: 19–38. <small>`krotenheerdt1970homogenenii`</small>
+<span id="krotenheerdt1970homogenenii"></span>Krötenheerdt, Otto (1970). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene II”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 19: 19–38. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`krotenheerdt1970homogenenii`</small>
 
-<span id="krotenheerdt1970homogeneniii"></span>Krötenheerdt, Otto (1970). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene III”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 19: 97–122. <small>`krotenheerdt1970homogeneniii`</small>
+<span id="krotenheerdt1970homogeneniii"></span>Krötenheerdt, Otto (1970). “Die homogenen Mosaike n-ter Ordnung in der euklidischen Ebene III”. *Wissenschaftliche Zeitschrift der Martin-Luther-Universität Halle-Wittenberg, Mathematisch-naturwissenschaftliche Reihe* 19: 97–122. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`krotenheerdt1970homogeneniii`</small>
 
 <span id="krug1988universality"></span>Krug, J. and H. Spohn (1988). “Universality Classes for Deterministic Surface Growth”. *Physical Review A* 38(8): 4271–4283. doi:[10.1103/PhysRevA.38.4271](https://doi.org/10.1103/PhysRevA.38.4271). <small>`krug1988universality`</small>
 
@@ -336,11 +349,15 @@ BibTeX key, so you can link to it directly.
 
 <span id="lifewikind_34life"></span>LifeWiki contributors (2026). “OCA:3-4 Life”. LifeWiki. <https://conwaylife.com/wiki/OCA:3-4_Life>; accessed 2026-11-10. <small>`lifewikind_34life`</small>
 
+<span id="lifewikind_apgsearch"></span>LifeWiki contributors (2026). “Apgsearch”. LifeWiki. <https://conwaylife.com/wiki/Apgsearch>; accessed 2026-11-20. <small>`lifewikind_apgsearch`</small>
+
 <span id="lifewikind_b3678s23"></span>LifeWiki contributors (2026). “OCA:B3678/S23”. LifeWiki. <https://conwaylife.com/wiki/OCA:B3678/S23>; accessed 2026-11-10. <small>`lifewikind_b3678s23`</small>
 
 <span id="lifewikind_briansbrain"></span>LifeWiki contributors (2026). “Brian's Brain”. LifeWiki. <https://conwaylife.com/wiki/Brian%27s_Brain>; accessed 2026-11-10. <small>`lifewikind_briansbrain`</small>
 
 <span id="lifewikind_castles"></span>LifeWiki contributors (2026). “OCA:Castles”. LifeWiki. <https://conwaylife.com/wiki/OCA:Castles>; accessed 2026-11-10. <small>`lifewikind_castles`</small>
+
+<span id="lifewikind_catagolue"></span>LifeWiki contributors (2026). “Catagolue”. LifeWiki. <https://conwaylife.com/wiki/Catagolue>; accessed 2026-11-20. <small>`lifewikind_catagolue`</small>
 
 <span id="lifewikind_conwayslife"></span>LifeWiki contributors (2025). “Conway's Game of Life”. LifeWiki. <https://conwaylife.com/wiki/Conway%27s_Game_of_Life>; accessed 2026-11-10. <small>`lifewikind_conwayslife`</small>
 
@@ -388,11 +405,11 @@ BibTeX key, so you can link to it directly.
 
 <span id="lifewikind_vote"></span>LifeWiki contributors (2026). “OCA:Vote”. LifeWiki. <https://conwaylife.com/wiki/OCA:Vote>; accessed 2026-11-10. <small>`lifewikind_vote`</small>
 
-<span id="lifewikind_winningways"></span>LifeWiki contributors (n.d.). “Winning Ways for Your Mathematical Plays”. LifeWiki. <https://conwaylife.com/wiki/Winning_Ways>; accessed 2026-11-10. <small>`lifewikind_winningways`</small>
-
 <span id="lifewikind_wireworld"></span>LifeWiki contributors (n.d.). “WireWorld”. LifeWiki. <https://conwaylife.com/wiki/WireWorld>; accessed 2026-11-10. <small>`lifewikind_wireworld`</small>
 
 ## M
+
+<span id="machado2009physiologically"></span>Machado, Gustavo M., Manuel M. Oliveira and Leandro A. F. Fernandes (2009). “A physiologically-based model for simulation of color vision deficiency”. *IEEE Transactions on Visualization and Computer Graphics* 15(6): 1291–1298. doi:[10.1109/TVCG.2009.113](https://doi.org/10.1109/TVCG.2009.113). <small>`machado2009physiologically`</small>
 
 <span id="macmahon1921new"></span>MacMahon, Percy Alexander (1921). *New Mathematical Pastimes*. Cambridge: Cambridge University Press. <https://archive.org/details/newmathematicalp00macmuoft>. <small>`macmahon1921new`</small>
 
@@ -408,6 +425,8 @@ BibTeX key, so you can link to it directly.
 
 <span id="margolus1999crystalline"></span>Margolus, Norman (1999). “Crystalline Computation”. In Hey, Anthony J. G. (ed.), *Feynman and Computation*, pp. 267–305. Perseus Books. doi:[10.1201/9780429500459-18](https://doi.org/10.1201/9780429500459-18); [arXiv:comp-gas/9811002](https://arxiv.org/abs/comp-gas/9811002). <small>`margolus1999crystalline`</small>
 
+<span id="marr2009outer"></span>Marr, Carsten and Marc-Thorsten Hütt (2009). “Outer-totalistic cellular automata on graphs”. *Physics Letters A* 373(5): 546–549. doi:[10.1016/j.physleta.2008.12.013](https://doi.org/10.1016/j.physleta.2008.12.013); [arXiv:0812.2408](https://arxiv.org/abs/0812.2408). <small>`marr2009outer`</small>
+
 <span id="martin1984algebraic"></span>Martin, Olivier, Andrew M. Odlyzko and Stephen Wolfram (1984). “Algebraic properties of cellular automata”. *Communications in Mathematical Physics* 93(2): 219–258. doi:[10.1007/BF01223745](https://doi.org/10.1007/BF01223745). <small>`martin1984algebraic`</small>
 
 <span id="mcellnd_families"></span>Wójtowicz, Mirek (n.d.). “MCell – Mirek's Cellebration: Families”. <https://mcell.ca/pages/families.html>; accessed 2026-11-10. <small>`mcellnd_families`</small>
@@ -418,7 +437,7 @@ BibTeX key, so you can link to it directly.
 
 <span id="moore1909tile"></span>Moore, Herbert C. (1909). “Tile”. US Patent 928,320. <https://patents.google.com/patent/US928320A/en>; accessed 2026-11-10. <small>`moore1909tile`</small>
 
-<span id="moore1962machine"></span>Moore, Edward F. (1962). “Machine models of self-reproduction”. In *Mathematical Problems in the Biological Sciences*, pp. 17–33. American Mathematical Society. <small>`moore1962machine`</small>
+<span id="moore1962machine"></span>Moore, Edward F. (1962). “Machine models of self-reproduction”. In *Mathematical Problems in the Biological Sciences*, pp. 17–33. American Mathematical Society. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`moore1962machine`</small>
 
 <span id="morgan2019undercover"></span>Morgan, Frank (2019). “My Undercover Mission to Find Cairo Tilings”. *The Mathematical Intelligencer* 41(3): 19–22. doi:[10.1007/s00283-019-09906-7](https://doi.org/10.1007/s00283-019-09906-7). <small>`morgan2019undercover`</small>
 
@@ -432,7 +451,11 @@ BibTeX key, so you can link to it directly.
 
 <span id="nisbet1906grammar"></span>Nisbet, Harry (1906). *Grammar of Textile Design*. London: Scott, Greenwood & Son. <https://archive.org/details/grammaroftextile00nisb>. <small>`nisbet1906grammar`</small>
 
-<span id="nobili1996generalised"></span>Nobili, Renato and Umberto Pesavento (1996). “Generalised von Neumann's automata I: A revisitation”. In Besussi, Elena and Arnaldo Cecchini (ed.), *Artificial Worlds and Urban Studies*. IUAV, DAEST. <small>`nobili1996generalised`</small>
+<span id="nobili1996generalised"></span>Nobili, Renato and Umberto Pesavento (1996). “Generalised von Neumann's automata I: A revisitation”. In Besussi, Elena and Arnaldo Cecchini (ed.), *Artificial Worlds and Urban Studies*. IUAV, DAEST. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`nobili1996generalised`</small>
+
+<span id="nochella2006cellular"></span>Nochella, Jesse (2006). “Cellular Automata on Networks”. Poster, NKS 2006 Wolfram Science Conference. <https://wolframscience.com/conference/2006/presentations/nochella.html>; accessed 2026-11-20. <small>`nochella2006cellular`</small>
+
+<span id="nunez2018optimizing"></span>Nuñez, Jamie R., Christopher R. Anderton and Ryan S. Renslow (2018). “Optimizing colormaps with consideration for color vision deficiency to enable accurate interpretation of scientific data”. *PLOS ONE* 13(7): e0199239. doi:[10.1371/journal.pone.0199239](https://doi.org/10.1371/journal.pone.0199239). <small>`nunez2018optimizing`</small>
 
 ## O
 
@@ -498,7 +521,9 @@ BibTeX key, so you can link to it directly.
 
 <span id="secretan2011picbreeder"></span>Secretan, Jimmy, Nicholas Beato, David B. D'Ambrosio, Adelein Rodriguez, Adam Campbell, Jeremiah T. Folsom-Kovarik and Kenneth O. Stanley (2011). “Picbreeder: A Case Study in Collaborative Evolutionary Exploration of Design Space”. *Evolutionary Computation* 19(3): 373–403. doi:[10.1162/EVCO_a_00030](https://doi.org/10.1162/EVCO_a_00030). <small>`secretan2011picbreeder`</small>
 
-<span id="silverman1987phantom"></span>Silverman, Brian (1987). “The Phantom Fishtank”. Software, Logo Computer Systems, Montreal. <small>`silverman1987phantom`</small>
+<span id="sharma2005ciede2000"></span>Sharma, Gaurav, Wencheng Wu and Edul N. Dalal (2005). “The CIEDE2000 color-difference formula: implementation notes, supplementary test data, and mathematical observations”. *Color Research and Application* 30(1): 21–30. doi:[10.1002/col.20070](https://doi.org/10.1002/col.20070). <small>`sharma2005ciede2000`</small>
+
+<span id="silverman1987phantom"></span>Silverman, Brian (1987). “The Phantom Fishtank”. Software, Logo Computer Systems, Montreal. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`silverman1987phantom`</small>
 
 <span id="smith2023aperiodic"></span>Smith, David, Joseph Samuel Myers, Craig S. Kaplan and Chaim Goodman-Strauss (2024). “An aperiodic monotile”. *Combinatorial Theory* 4(1). doi:[10.5070/C64163843](https://doi.org/10.5070/C64163843); [arXiv:2303.10798](https://arxiv.org/abs/2303.10798). <small>`smith2023aperiodic`</small>
 
@@ -513,6 +538,8 @@ BibTeX key, so you can link to it directly.
 <span id="sotosancheznd_tiling"></span>Soto Sánchez, José Ezequiel (n.d.). “On Periodic Tilings with Regular Polygons (interactive viewer and data)”. <https://chequesoto.info/tiling/>; accessed 2026-11-10. <small>`sotosancheznd_tiling`</small>
 
 <span id="stewart1994ultimate"></span>Stewart, Ian (1994). “The Ultimate in Anty-Particles”. *Scientific American* 271(1): 104–107. doi:[10.1038/scientificamerican0794-104](https://doi.org/10.1038/scientificamerican0794-104). <small>`stewart1994ultimate`</small>
+
+<span id="szafir2018modeling"></span>Szafir, Danielle Albers (2018). “Modeling color difference for visualization design”. *IEEE Transactions on Visualization and Computer Graphics* 24(1): 392–401. doi:[10.1109/TVCG.2017.2744359](https://doi.org/10.1109/TVCG.2017.2744359). <small>`szafir2018modeling`</small>
 
 ## T
 
@@ -543,8 +570,6 @@ BibTeX key, so you can link to it directly.
 <span id="uwaterloo2023trick"></span>Cheriton School of Computer Science, University of Waterloo (2023). “Trick of the hat: finding the elusive einstein tile”. <https://uwaterloo.ca/computer-science/news/trick-of-the-hat-finding-the-elusive-einstein-tile>; accessed 2026-11-10. <small>`uwaterloo2023trick`</small>
 
 ## V
-
-<span id="vichniac1984simulating"></span>Vichniac, Gérard Y. (1984). “Simulating Physics with Cellular Automata”. *Physica D: Nonlinear Phenomena* 10(1–2): 96–116. doi:[10.1016/0167-2789(84)90253-7](https://doi.org/10.1016/0167-2789(84)90253-7). <small>`vichniac1984simulating`</small>
 
 <span id="vichniac1986cellular"></span>Vichniac, Gérard Y. (1986). “Cellular Automata Models of Disorder and Organization”. In Bienenstock, E., F. Fogelman Soulié and G. Weisbuch (ed.), *Disordered Systems and Biological Organization*, pp. 3–20. Springer. doi:[10.1007/978-3-642-82657-3_1](https://doi.org/10.1007/978-3-642-82657-3_1). <small>`vichniac1986cellular`</small>
 

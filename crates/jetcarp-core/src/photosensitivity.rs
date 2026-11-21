@@ -270,6 +270,14 @@ pub fn guard_on(place: GuardPlace) -> bool {
     crate::paths::config_dir().is_none_or(|d| guard_on_in(&d, place))
 }
 
+/// Whether the answer saved in this settings folder is *at risk*: the strobe guard, always on,
+/// then also uses its stricter stripe rule, similar parts regular or not
+/// ([`crate::strobe::similar`]), in the app, the desktop background, the screen savers and
+/// exports.
+pub fn at_risk_in(settings: &Path) -> bool {
+    read_in(settings).is_some_and(|r| r.answer == Answer::AtRisk)
+}
+
 /// Turns the strobe guard for `place` on or off in this settings folder, with the date and this
 /// version. Turning it off is refused unless the answer saved is *no disorder*. This is for the
 /// app's confirmation alone: the command line and the tools never call it to turn a guard off.
@@ -318,7 +326,7 @@ pub fn accepted() -> bool {
 }
 
 /// Whether the answer saved says they have, or may have, a seizure disorder: the strobe guard
-/// (#97) is always on for them.
+/// (#97) is always on for them, with its stricter stripe rule ([`at_risk_in`]).
 pub fn at_risk() -> bool {
     read().is_some_and(|r| r.answer == Answer::AtRisk)
 }

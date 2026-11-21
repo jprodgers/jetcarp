@@ -71,7 +71,9 @@ struct LatUniforms {
     per_type: u32,
     tex_w: u32,
     line_alpha: f32,
-    _pad: [u32; 2],
+    /// 1 when the target is sRGB (the colour texture decodes, so colours are linear light).
+    srgb: u32,
+    _pad: u32,
 }
 
 /// Lattice data the shader needs to place any cell.
@@ -689,10 +691,40 @@ fn decode(x: f32) -> f32 {
   return o;
 }
 @fragment fn fs_fill(i: VOut) -> @location(0) vec4<f32> {
-  return i.c;
+  // Opaque: a colour's alpha marks a faint outline (0), not transparency.
+  return vec4<f32>(i.c.rgb, 1.0);
 }
 @fragment fn fs_line(i: VOut) -> @location(0) vec4<f32> {
-  return vec4<f32>(0.20, 0.22, 0.27, 1.0) * u.line_alpha;
+  return vec4<f32>(LINE, 1.0) * outline_alpha(i.c, u.line_alpha, u.srgb != 0u);
+}
+// Outlines: faint where they would form strong stripes, over an even bright field (the app marks
+// those cells with alpha 0, `jetcarp_core::render::outline_faint`): no darker there than lowers
+// the cell's luminance by `jetcarp_core::render::OUTLINE_MAX_DROP` once both cells beside an edge
+// have drawn it. Elsewhere, the alpha asked for.
+const LINE: vec3<f32> = vec3<f32>(0.20, 0.22, 0.27);
+const OUTLINE_DROP: f32 = 0.06;
+fn dec1(x: f32) -> f32 {
+  if (x <= 0.04045) { return x / 12.92; }
+  return pow((x + 0.055) / 1.055, 2.4);
+}
+fn lum_in(c: vec3<f32>, linear: bool) -> f32 {
+  var l = c;
+  if (!linear) { l = vec3<f32>(dec1(c.r), dec1(c.g), dec1(c.b)); }
+  return dot(l, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+fn outline_alpha(cell: vec4<f32>, a: f32, linear: bool) -> f32 {
+  if (cell.a > 0.5) { return a; }
+  let c = cell.rgb;
+  let base = lum_in(c, linear);
+  let twice = 1.0 - (1.0 - a) * (1.0 - a);
+  if (base - lum_in(mix(c, LINE, twice), linear) <= OUTLINE_DROP) { return a; }
+  var lo = 0.0;
+  var hi = twice;
+  for (var k = 0; k < 12; k++) {
+    let m = 0.5 * (lo + hi);
+    if (base - lum_in(mix(c, LINE, m), linear) <= OUTLINE_DROP) { lo = m; } else { hi = m; }
+  }
+  return 1.0 - sqrt(1.0 - lo);
 }
 "#;
 
@@ -701,7 +733,7 @@ struct LU {
   scale: vec2<f32>, a1: vec2<f32>, a2: vec2<f32>, off: vec2<f32>,
   u0: i32, j0: i32, nu: u32, nj: u32,
   stride: i32, ic: i32, jc: i32, per_type: u32,
-  tex_w: u32, line_alpha: f32, p0: u32, p1: u32,
+  tex_w: u32, line_alpha: f32, srgb: u32, p1: u32,
 };
 @group(0) @binding(0) var<uniform> u: LU;
 @group(0) @binding(1) var colors: texture_2d<f32>;
@@ -727,10 +759,42 @@ struct VOut { @builtin(position) p: vec4<f32>, @location(0) @interpolate(flat) s
   return o;
 }
 @fragment fn fs_fill(i: VOut) -> @location(0) vec4<f32> {
-  return textureLoad(colors, vec2<i32>(i32(i.slot % u.tex_w), i32(i.slot / u.tex_w)), 0);
+  // Opaque: a colour's alpha marks a faint outline (0), not transparency.
+  let c = textureLoad(colors, vec2<i32>(i32(i.slot % u.tex_w), i32(i.slot / u.tex_w)), 0);
+  return vec4<f32>(c.rgb, 1.0);
 }
 @fragment fn fs_line(i: VOut) -> @location(0) vec4<f32> {
-  return vec4<f32>(0.20, 0.22, 0.27, 1.0) * u.line_alpha;
+  let c = textureLoad(colors, vec2<i32>(i32(i.slot % u.tex_w), i32(i.slot / u.tex_w)), 0);
+  return vec4<f32>(LINE, 1.0) * outline_alpha(c, u.line_alpha, u.srgb != 0u);
+}
+// Outlines: faint where they would form strong stripes, over an even bright field (the app marks
+// those cells with alpha 0, `jetcarp_core::render::outline_faint`): no darker there than lowers
+// the cell's luminance by `jetcarp_core::render::OUTLINE_MAX_DROP` once both cells beside an edge
+// have drawn it. Elsewhere, the alpha asked for.
+const LINE: vec3<f32> = vec3<f32>(0.20, 0.22, 0.27);
+const OUTLINE_DROP: f32 = 0.06;
+fn dec1(x: f32) -> f32 {
+  if (x <= 0.04045) { return x / 12.92; }
+  return pow((x + 0.055) / 1.055, 2.4);
+}
+fn lum_in(c: vec3<f32>, linear: bool) -> f32 {
+  var l = c;
+  if (!linear) { l = vec3<f32>(dec1(c.r), dec1(c.g), dec1(c.b)); }
+  return dot(l, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+fn outline_alpha(cell: vec4<f32>, a: f32, linear: bool) -> f32 {
+  if (cell.a > 0.5) { return a; }
+  let c = cell.rgb;
+  let base = lum_in(c, linear);
+  let twice = 1.0 - (1.0 - a) * (1.0 - a);
+  if (base - lum_in(mix(c, LINE, twice), linear) <= OUTLINE_DROP) { return a; }
+  var lo = 0.0;
+  var hi = twice;
+  for (var k = 0; k < 12; k++) {
+    let m = 0.5 * (lo + hi);
+    if (base - lum_in(mix(c, LINE, m), linear) <= OUTLINE_DROP) { lo = m; } else { hi = m; }
+  }
+  return 1.0 - sqrt(1.0 - lo);
 }
 "#;
 
@@ -1147,7 +1211,8 @@ impl TileRenderer {
                     per_type: w.nu * w.nj,
                     tex_w: TEX_W,
                     line_alpha: d.line_alpha,
-                    _pad: [0; 2],
+                    srgb: srgb as u32,
+                    _pad: 0,
                 };
                 queue.write_buffer(&v.lat_uniforms, 0, bytemuck::bytes_of(&u));
             }
@@ -1282,6 +1347,19 @@ impl TileRenderer {
 mod tests {
     use super::*;
     use jetcarp_core::{SizeSpec, TilingSpec};
+
+    /// Both tile shaders cap outlines at the processor's limit.
+    #[test]
+    fn the_shaders_cap_outlines_as_the_processor_does() {
+        let line = format!(
+            "const OUTLINE_DROP: f32 = {};",
+            jetcarp_core::render::OUTLINE_MAX_DROP
+        );
+        for (name, src) in [("patches", SHADER), ("lattices", LAT_SHADER)] {
+            assert!(src.contains(&line), "{name}: {line}");
+            assert!(src.contains("outline_alpha("), "{name}");
+        }
+    }
 
     // Explicit patches: the binned instances hold every cell once, each in the bin of its
     // position, with its transform; every corner lies within `reach` of that position (so the bin

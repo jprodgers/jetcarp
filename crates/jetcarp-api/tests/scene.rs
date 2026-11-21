@@ -6,7 +6,7 @@ use common::{fails, keys, scratch};
 use jetcarp_api::op::{Op, Quiet, Report, to_value};
 use jetcarp_api::ops::scene::*;
 use jetcarp_api::{Ctx, ErrorKind, call, call_json};
-use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, TilingSpec};
+use jetcarp_core::{Boundary, CaSpec, Command, Scene, SeedSpec, TilingSpec, World};
 use serde_json::json;
 
 fn life_scene() -> Scene {
@@ -200,18 +200,51 @@ fn run_checks_expectations_reseeds_and_falls_back_to_the_cpu() {
     let cx = Ctx::new();
     let input = dir.join("soup.json");
     std::fs::write(&input, life_scene().to_json()).unwrap();
-    // A wrong --expect: the summary is still made, and its check fails.
+    // A wrong --expect: the summary is still made, and its check fails. A version 2 hash (64
+    // digits) is compared with the version 2 hash, a version 1 hash (16) with the version 1 one.
     let mut a = run_in(&input);
     a.gens = 5;
-    a.expect = Some("deadbeef".into());
+    a.expect = Some("0000000000000000000000000000000000000000000000000000000000000000".into());
     let r = SceneRun::run(&cx, a, &Quiet).unwrap();
+    assert_eq!(r.hash.len(), 64);
     let e = fails(r.check(), ErrorKind::Conflict);
     assert_eq!(
         e.message,
-        format!("hash mismatch: expected deadbeef, got {}", r.hash)
+        format!(
+            "hash mismatch: expected 0000000000000000000000000000000000000000000000000000000000000000, got {}",
+            r.hash
+        )
+    );
+    let mut a = run_in(&input);
+    a.gens = 5;
+    a.expect = Some("0000000000000000".into());
+    let e = fails(
+        SceneRun::run(&cx, a, &Quiet).unwrap().check(),
+        ErrorKind::Conflict,
+    );
+    assert!(
+        e.message
+            .starts_with("hash mismatch: expected 0000000000000000, got ")
+    );
+    assert_eq!(
+        e.message.len(),
+        "hash mismatch: expected 0000000000000000, got ".len() + 16
+    );
+    // Any other length is refused, saying why.
+    let mut a = run_in(&input);
+    a.gens = 5;
+    a.expect = Some("deadbeef".into());
+    let e = fails(
+        SceneRun::run(&cx, a, &Quiet).unwrap().check(),
+        ErrorKind::Invalid,
+    );
+    assert!(
+        e.message.contains("16") && e.message.contains("64"),
+        "{}",
+        e.message
     );
     // By name, the failed check is the call's error, and the output still comes with it.
-    let input_json = json!({"scene": input.display().to_string(), "gens": 5, "expect": "deadbeef"});
+    let input_json = json!({"scene": input.display().to_string(), "gens": 5, "expect": "0000000000000000000000000000000000000000000000000000000000000000"});
     fails(
         call_json(&cx, "scene.run", input_json.clone()),
         ErrorKind::Conflict,
@@ -222,6 +255,15 @@ fn run_checks_expectations_reseeds_and_falls_back_to_the_cpu() {
     let mut ok = run_in(&input);
     ok.gens = 5;
     ok.expect = Some(r.hash.clone());
+    assert!(SceneRun::run(&cx, ok, &Quiet).unwrap().check().is_ok());
+    // The same state's version 1 hash passes too.
+    let mut w =
+        World::from_scene(&Scene::from_json(&std::fs::read_to_string(&input).unwrap()).unwrap())
+            .unwrap();
+    w.apply(Command::Step { gens: 5 }).unwrap();
+    let mut ok = run_in(&input);
+    ok.gens = 5;
+    ok.expect = Some(w.hash_hex_v1());
     assert!(SceneRun::run(&cx, ok, &Quiet).unwrap().check().is_ok());
     // Reseed policies and a reseed now.
     let mut a = run_in(&input);

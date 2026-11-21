@@ -21,7 +21,7 @@ release does, and [How JETCARP was made](about/how-made.md) tells where it came 
 ## Who it is for
 
 - **Desktop art.** JETCARP can run a scene as a live wallpaper behind your windows, as a screensaver,
-  or as still wallpapers cut to your monitors, in thirty built-in palettes or your own. Start with
+  or as still wallpapers cut to your monitors, in thirty-three built-in palettes or your own. Start with
   [Your first live wallpaper](tutorials/first-wallpaper.md).
 - **Hobby exploration.** Pick an entry from Quick Start, move it to another tiling, change the rule,
   draw your own tile, and see what happens. Searching for your own spaceships takes one command.
