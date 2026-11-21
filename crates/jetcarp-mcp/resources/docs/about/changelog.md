@@ -126,6 +126,21 @@ day later (0.4.2: 17 November here, 18 November there).
   has no tray icon). The notices are now gathered for each release system on its own and put
   together, and CI checks that they name exactly the libraries in each system's build.
   ([#123](https://github.com/jprodgers/jetcarp/issues/123))
+- **The soup hunt cuts out gliders that fly away together.** A hunt erased an escaping ship only
+  once it lay beyond everything else by a few cells, so two gliders flying the same way on lanes a
+  few cells apart, or several staggered so that each stayed level with another, were never cut. They
+  flew on until the soup passed the hunt's span limit and was dropped as exploded, with no census of
+  what it had left, while the ships cut from it before were still counted. In Life that was about one
+  soup in 370, nearly every "explosion"; on some tilings it was far more, and every one of the 703
+  explosions and 152 unsettled soups of the k2-017 hunt in the
+  [spaceship tutorial](../tutorials/hunting-spaceships.md) was such a soup. Far from the soup, groups
+  that no gap separates are now taken together and cut as the ships they are, and a ship is also cut
+  when every other group it is not clear of is a ship that cannot catch it: one with the same
+  velocity, or one slower along the way it is leaving. A hunt's counts change: in 150,000 soups of
+  Life the exploded soups fall from 405 to 21, most of them past the population cap, and the glider's share,
+  0.7% above Catagolue's census before, is within chance of it. A hunt of Life runs about a tenth
+  slower. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
 
 ## [0.4.2] – 2026-11-17
 

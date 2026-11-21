@@ -137,14 +137,30 @@ tiling or set of tilings (all Archimedean, k-uniform with a given k, isohedral, 
 tiling). The engine is bit-parallel: many cells are updated in one machine word. Spaceships that fly
 clear of the soup are counted and cut out, so they cannot crash back into it.
 
-**How it classifies.** A soup ends when it dies, when it explodes (too many live cells, or spread too
-wide), when it settles (its state repeats with some period up to 64), or at 20,000 generations. What
-is left is split into groups of cells within two neighbour steps of each other, and every group never
-seen before is run alone and classed: still life, oscillator, spaceship, puffer, gun, or other. A
-periodic group is then split into the objects it is made of, and groups that interact are run as one
-(see [Compounds](#compounds)). Big still lifes and oscillators (by default more than 64 cells, or
-period times cells above 4,000) are kept only as counts until a hunt has seen one twice, to keep rare
-debris from filling the catalogue.
+**How it classifies.** A soup ends when it dies, when it explodes (more live cells than the
+population cap, by default 8 per cell of the soup and at least 2,000; or spread wider than 16 times
+the soup's longer side, and at least 512 unit cells), when it settles (its state repeats with some
+period up to 64), or at 20,000 generations. What is left is split into groups of cells within two
+neighbour steps of each other, and every group never seen before is run alone and classed: still
+life, oscillator, spaceship, puffer, gun, or other. A periodic group is then split into the objects
+it is made of, and groups that interact are run as one (see [Compounds](#compounds)). Big still lifes
+and oscillators (by default more than 64 cells, or period times cells above 4,000) are kept only as
+counts until a hunt has seen one twice, to keep rare debris from filling the catalogue.
+
+**How ships are cut out.** Every 16 generations, once something lies outside a region round the soup
+(its box with a margin of twice its longer side), the cells out there are split into groups, and a
+group that is a ship on its own is counted and erased when nothing else can reach it: when it lies
+beyond the region by a gap of a few cells on a side it is moving out along, and beyond every other
+group in the same way. Far from the soup (more than half the region's longer side again), two more
+cases are cut. Groups that no gap separates are taken together, so two gliders on parallel lanes a
+few cells apart are cut as one group of two ships and counted as two; and a ship is cut when every
+other group it is not clear of is a ship that cannot catch it, one with the same velocity (gliders
+flying the same way, however far apart) or one slower along the way it is leaving. A ship that runs
+otherwise next to a neighbour, half of a bound pair, waits until the pair is one group. While more
+than 128 groups lie out beyond the region, a soup spreading wide rather than ships flying off, only
+the first rule is used. Until 0.4.3 the first rule was the only one, and gliders flying the same way
+close together were never cut: such a soup ran until it passed the span limit and was dropped as
+exploded, about one Life soup in 370.
 
 **How results are checked.** Every new periodic object is [verified](#how-finds-are-verified) and
 stored with its rule range; objects already in the catalogue only gain a sighting. A GPU option

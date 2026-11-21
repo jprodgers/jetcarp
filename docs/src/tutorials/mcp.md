@@ -142,9 +142,9 @@ so the assistant needs no polling:
 
 ```text
 Hunt job 1 started (background).
-hunt 1: 20,000/20,000 soups, 2816 soups/s, 430,384 objects (ships 38,188, osc 124,582,
-still 267,614), 50 distinct, 50 new | newest: still life 12c #bf73c4 (B3/S23)
-  status done, 7 s run, 19892 settled, 52 died, 56 exploded, 0 unsettled
+hunt 1: 20,000/20,000 soups, 2816 soups/s, 433,183 objects (ships 38,381, osc 125,411,
+still 269,391), 50 distinct, 50 new | newest: still life 12c #bf73c4 (B3/S23)
+  status done, 7 s run, 19946 settled, 52 died, 2 exploded, 0 unsettled
   newest finds:
     bf73c46c186561ca3b75a3884d0b5ab5  still life 12c #bf73c4   B3/S23   Square soup 17973  (new to the catalog)
     ...
@@ -161,9 +161,9 @@ library. The assistant reads the spaceships back:
 ```text
 {"matching": 4, "patterns": [
   {"id": "1376072ec0c084fc67a9b92d361379f3", "label": "HWSS", "speed": "c/2 orthogonal", "cells": 13, "seen": 4, ...},
-  {"id": "5a080db389c0cab3caf884d2596a1e70", "label": "glider", "speed": "c/4 diagonal", "cells": 5, "seen": 38120, ...},
+  {"id": "5a080db389c0cab3caf884d2596a1e70", "label": "glider", "speed": "c/4 diagonal", "cells": 5, "seen": 38312, ...},
   {"id": "77364004b6d2c23cba74126b8aeb6ca3", "label": "MWSS", "speed": "c/2 orthogonal", "cells": 11, "seen": 13, ...},
-  {"id": "6dd55e69689ba784aff448b7dbbc9328", "label": "LWSS", "speed": "c/2 orthogonal", "cells": 9, "seen": 51, ...}]}
+  {"id": "6dd55e69689ba784aff448b7dbbc9328", "label": "LWSS", "speed": "c/2 orthogonal", "cells": 9, "seen": 52, ...}]}
 ```
 
 All four of Life's common spaceships, best first. `library_query` with an `id` gives one record in
@@ -177,7 +177,7 @@ full; ids may be shortened to a unique prefix, or given as a name:
 LWSS (6dd55e69689ba784aff448b7dbbc9328)
 verified in: B3/S23
 works in: B3/S23 to B3468/S2378 (32 B/S rules)
-sightings: B3/S23 x51 (job 1)
+sightings: B3/S23 x52 (job 1)
 moves per period by paste orientation: 0: (-2, 0), 1: (2, 0), 2: (2, 0), 3: (0, 2), ...
 phase 0:
 OOOO.
