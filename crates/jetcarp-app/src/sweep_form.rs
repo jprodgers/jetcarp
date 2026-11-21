@@ -772,7 +772,7 @@ pub fn ui(ui: &mut egui::Ui, f: &mut SweepForm, info: &ScreenInfo) -> bool {
             ui.label("");
             match f.runs() {
                 Ok(n) => ui.label(RichText::new(format!("{} runs", thousands(n as u64))).strong()),
-                Err(e) => ui.colored_label(egui::Color32::LIGHT_RED, e),
+                Err(e) => ui.colored_label(crate::theme::ink(ui, egui::Color32::LIGHT_RED), e),
             };
             ui.end_row();
         });

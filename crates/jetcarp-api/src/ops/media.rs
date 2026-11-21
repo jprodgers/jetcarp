@@ -175,6 +175,7 @@ impl MediaRenderIn {
             force: self.force,
             style: MediaStyle::with_palette(self.palette.as_deref()).map_err(ApiError::invalid)?,
             strobe_guard: true,
+            strobe_at_risk: false,
         })
     }
 }
@@ -402,6 +403,7 @@ impl Op for MediaRender {
 fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
     let mut o = a.media_options()?;
     o.strobe_guard = cx.strobe_guard();
+    o.strobe_at_risk = cx.strobe_at_risk();
     let lib = cx.library();
     if a.missing {
         let cls = classes(&a.class)?;

@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 272 works cited across the JETCARP documentation. Each was checked
+These are the 276 works cited across the JETCARP documentation. Each was checked
 against a primary record where one could be read (a DOI landing page or Crossref, arXiv, the
 publisher, archive.org, the author's or project's own page, or LifeWiki) when the history
 research was compiled in November 2026. The 10 marked † could not be read, and rest on a
@@ -409,6 +409,8 @@ directly.
 
 ## M
 
+<span id="machado2009physiologically"></span>Machado, Gustavo M., Manuel M. Oliveira and Leandro A. F. Fernandes (2009). “A physiologically-based model for simulation of color vision deficiency”. *IEEE Transactions on Visualization and Computer Graphics* 15(6): 1291–1298. doi:[10.1109/TVCG.2009.113](https://doi.org/10.1109/TVCG.2009.113). <small>`machado2009physiologically`</small>
+
 <span id="macmahon1921new"></span>MacMahon, Percy Alexander (1921). *New Mathematical Pastimes*. Cambridge: Cambridge University Press. <https://archive.org/details/newmathematicalp00macmuoft>. <small>`macmahon1921new`</small>
 
 <span id="macmillan1979pyramids"></span>Macmillan, R. H. (1979). “Pyramids and pavements: some thoughts from Cairo”. *The Mathematical Gazette* 63(426): 251–255. doi:[10.2307/3618038](https://doi.org/10.2307/3618038). <small>`macmillan1979pyramids`</small>
@@ -452,6 +454,8 @@ directly.
 <span id="nobili1996generalised"></span>Nobili, Renato and Umberto Pesavento (1996). “Generalised von Neumann's automata I: A revisitation”. In Besussi, Elena and Arnaldo Cecchini (ed.), *Artificial Worlds and Urban Studies*. IUAV, DAEST. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`nobili1996generalised`</small>
 
 <span id="nochella2006cellular"></span>Nochella, Jesse (2006). “Cellular Automata on Networks”. Poster, NKS 2006 Wolfram Science Conference. <https://wolframscience.com/conference/2006/presentations/nochella.html>; accessed 2026-11-20. <small>`nochella2006cellular`</small>
+
+<span id="nunez2018optimizing"></span>Nuñez, Jamie R., Christopher R. Anderton and Ryan S. Renslow (2018). “Optimizing colormaps with consideration for color vision deficiency to enable accurate interpretation of scientific data”. *PLOS ONE* 13(7): e0199239. doi:[10.1371/journal.pone.0199239](https://doi.org/10.1371/journal.pone.0199239). <small>`nunez2018optimizing`</small>
 
 ## O
 
@@ -517,6 +521,8 @@ directly.
 
 <span id="secretan2011picbreeder"></span>Secretan, Jimmy, Nicholas Beato, David B. D'Ambrosio, Adelein Rodriguez, Adam Campbell, Jeremiah T. Folsom-Kovarik and Kenneth O. Stanley (2011). “Picbreeder: A Case Study in Collaborative Evolutionary Exploration of Design Space”. *Evolutionary Computation* 19(3): 373–403. doi:[10.1162/EVCO_a_00030](https://doi.org/10.1162/EVCO_a_00030). <small>`secretan2011picbreeder`</small>
 
+<span id="sharma2005ciede2000"></span>Sharma, Gaurav, Wencheng Wu and Edul N. Dalal (2005). “The CIEDE2000 color-difference formula: implementation notes, supplementary test data, and mathematical observations”. *Color Research and Application* 30(1): 21–30. doi:[10.1002/col.20070](https://doi.org/10.1002/col.20070). <small>`sharma2005ciede2000`</small>
+
 <span id="silverman1987phantom"></span>Silverman, Brian (1987). “The Phantom Fishtank”. Software, Logo Computer Systems, Montreal. <span title="Rests on a secondary listing: the work itself was not read">†</span> <small>`silverman1987phantom`</small>
 
 <span id="smith2023aperiodic"></span>Smith, David, Joseph Samuel Myers, Craig S. Kaplan and Chaim Goodman-Strauss (2024). “An aperiodic monotile”. *Combinatorial Theory* 4(1). doi:[10.5070/C64163843](https://doi.org/10.5070/C64163843); [arXiv:2303.10798](https://arxiv.org/abs/2303.10798). <small>`smith2023aperiodic`</small>
@@ -532,6 +538,8 @@ directly.
 <span id="sotosancheznd_tiling"></span>Soto Sánchez, José Ezequiel (n.d.). “On Periodic Tilings with Regular Polygons (interactive viewer and data)”. <https://chequesoto.info/tiling/>; accessed 2026-11-10. <small>`sotosancheznd_tiling`</small>
 
 <span id="stewart1994ultimate"></span>Stewart, Ian (1994). “The Ultimate in Anty-Particles”. *Scientific American* 271(1): 104–107. doi:[10.1038/scientificamerican0794-104](https://doi.org/10.1038/scientificamerican0794-104). <small>`stewart1994ultimate`</small>
+
+<span id="szafir2018modeling"></span>Szafir, Danielle Albers (2018). “Modeling color difference for visualization design”. *IEEE Transactions on Visualization and Computer Graphics* 24(1): 392–401. doi:[10.1109/TVCG.2017.2744359](https://doi.org/10.1109/TVCG.2017.2744359). <small>`szafir2018modeling`</small>
 
 ## T
 

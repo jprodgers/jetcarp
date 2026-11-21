@@ -50,6 +50,8 @@ impl AppGpu {
 pub struct GuardFeed {
     /// The setting for this view: the app's, or the desktop's in screensaver mode.
     pub on: bool,
+    /// The saved answer is *at risk*: the guard's stricter stripe rule.
+    pub at_risk: bool,
     /// The app's clock, in seconds.
     pub now: f64,
     pub viewing: Viewing,
@@ -119,6 +121,7 @@ impl egui_wgpu::CallbackTrait for TileCallback {
         view.g.gpu.after_submit();
         view.g.guard.set_on(feed.on);
         view.g.guard.set_viewing(feed.viewing, feed.screen_px);
+        view.g.guard.set_at_risk(feed.at_risk);
         if view.scene != feed.scene {
             view.scene = feed.scene;
             view.g.guard.new_scene();

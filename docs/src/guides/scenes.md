@@ -46,7 +46,7 @@ scene:      crates/jetcarp-core/data/scenes/rule30-life-ants.json
 tiling:     Square (parallelogram) (square): 38400 cells, 240x160 unit cells, 1 tile type(s), storage dense, edges dead
 backend:    cpu (32 threads)
 generation: 100
-hash:       1adf6e3234b7f199
+hash:       bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 status:     Running
 done:       no
 field 0:    shared binary, 2124 live: Rule 30 [W30], Life [B3/S23], Langton's ant [Ant RL]

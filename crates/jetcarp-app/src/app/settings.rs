@@ -47,6 +47,10 @@ pub(super) struct AppSettings {
     /// The app's own GPU choice: follow JETCARP's shared setting (the default), on or off.
     #[serde(deserialize_with = "lenient_gpu")]
     pub gpu: jetcarp_gpu::select::Own,
+    /// Settings → Accessibility: reduced motion, the theme, the palettes for scenes that name
+    /// none. A section that cannot be read gives its defaults only.
+    #[serde(deserialize_with = "lenient")]
+    pub accessibility: super::accessibility::AccessibilitySettings,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Debug)]
@@ -93,6 +97,7 @@ impl Default for AppSettings {
             tool_palettes: Default::default(),
             window: None,
             gpu: Default::default(),
+            accessibility: Default::default(),
         }
     }
 }
@@ -237,6 +242,7 @@ impl JetcarpApp {
             tool_palettes: self.tool_palettes(),
             window: self.shell.window,
             gpu: self.shell.gpu,
+            accessibility: self.a11y.settings.clone(),
         }
     }
 
@@ -254,6 +260,7 @@ impl JetcarpApp {
         self.set_tool_palettes(s.tool_palettes);
         self.shell.window = s.window;
         self.shell.gpu = s.gpu;
+        self.a11y.settings = s.accessibility.sanitize();
         self.sim.mode = crate::simgpu::app_policy(s.gpu).mode;
         let mut reg = crate::popout::Registry::default();
         for (k, t) in s.tool_windows {

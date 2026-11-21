@@ -714,7 +714,7 @@ means its palette for good; a later JETCARP may add names to the list, never cha
 `Ember`, `Tide`, `Prism`, `Mono`, `Ink`, `Aurora`, `Synthwave`, `Moss`, `Candy`, `Lava`, `Glacier`,
 `Phosphor`, `Koi`, `Desert`, `Thermal`, `Deep Sea`, `Paper`, `Blueprint`, `Neon`, `Autumn`,
 `Verdigris`, `Marigold`, `Coral`, `Orchid`, `Citrus`, `Riso`, `Bone`, `Ultramarine`,
-`Stained Glass`, `Opal`.
+`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`.
 <!-- /palette-registry -->
 
 ### Media

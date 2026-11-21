@@ -95,12 +95,18 @@ pub fn status_ui(sim: &SimBackend, ui: &mut egui::Ui) {
             ui.label("simulation: CPU");
         }
         SimStatus::Gpu(name) => {
-            ui.colored_label(Color32::LIGHT_GREEN, "simulation: GPU")
-                .on_hover_text(name);
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::LIGHT_GREEN),
+                "simulation: GPU",
+            )
+            .on_hover_text(name);
         }
         SimStatus::Fallback(why) => {
-            ui.colored_label(Color32::YELLOW, "simulation: CPU (fallback)")
-                .on_hover_text(why);
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::YELLOW),
+                "simulation: CPU (fallback)",
+            )
+            .on_hover_text(why);
             ui.label(egui::RichText::new(why).small());
         }
         SimStatus::Small => {
