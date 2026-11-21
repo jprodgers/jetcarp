@@ -525,6 +525,110 @@ impl Kb {
 }
 
 #[test]
+fn tab_reaches_every_control_of_each_tool_window_and_the_quick_start() {
+    in_scratch(
+        "app::keyboard_tests::child_tab_reaches_every_control_of_each_tool_window_and_the_quick_start",
+    );
+}
+
+/// Each tool window opened alone over a world, the setup window and Export animation: from the
+/// window's first control, Tab goes through every control it draws (its title bar's buttons
+/// included, the title bar itself passed over) before it leaves the window. And on the Quick
+/// Start, Tab reaches every control drawn: the buttons, the sidebar's filters, the search box and
+/// the cards.
+#[test]
+#[ignore]
+fn child_tab_reaches_every_control_of_each_tool_window_and_the_quick_start() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    let mut failures = vec![];
+    let mut walk = |k: &mut Kb, what: &str| {
+        k.frames(3);
+        // The window is the layer drawn on top that is not the background.
+        let ws = k.focusable();
+        let Some(layer) = ws
+            .iter()
+            .map(|w| w.1)
+            .rfind(|l| *l != egui::LayerId::background())
+        else {
+            failures.push(format!("{what}: no window drawn"));
+            return;
+        };
+        let chrome = k.app.kb_chrome(&k.ctx);
+        let want: Vec<egui::Id> = ws
+            .iter()
+            .filter(|w| w.1 == layer && !chrome.contains(&w.0))
+            .map(|w| w.0)
+            .collect();
+        k.ctx.memory_mut(|m| m.request_focus(want[0]));
+        k.frames(2);
+        let mut got = vec![want[0]];
+        for _ in 0..want.len() + 5 {
+            k.key(Key::Tab);
+            k.frames(1);
+            let mut f = k.focused();
+            if f.is_some() && f == got.last().copied() && k.ctx.text_edit_focused() {
+                // A box that keeps Tab for typing (a code editor): Esc leaves it, and Tab goes on
+                // from it.
+                k.key(Key::Escape);
+                k.key(Key::Tab);
+                k.frames(1);
+                f = k.focused();
+            }
+            match f {
+                Some(f) if want.contains(&f) && !got.contains(&f) => got.push(f),
+                _ => break,
+            }
+        }
+        let missed: Vec<String> = want
+            .iter()
+            .filter(|w| !got.contains(w))
+            .map(|id| {
+                k.nodes
+                    .get(&id.accesskit_id())
+                    .map(|n| k.name(n))
+                    .unwrap_or_default()
+            })
+            .collect();
+        eprintln!("{what}: {} of {} controls reached", got.len(), want.len());
+        if !missed.is_empty() {
+            failures.push(format!("{what}: Tab never reached {missed:?}"));
+        }
+    };
+    for t in menu::ToolWin::ALL {
+        k.app.set_tool_open(t, true);
+        walk(&mut k, t.label());
+        k.app.set_tool_open(t, false);
+        k.frames(1);
+    }
+    k.app.anim.open = true;
+    walk(&mut k, "Export animation");
+    k.app.anim.open = false;
+    k.app.setup.show_again();
+    walk(&mut k, "Setup");
+    k.app.setup.open = false;
+    k.frames(1);
+    // The Quick Start: every control drawn at first, the cards in view among them.
+    k.app.run_action(&k.ctx.clone(), menu::Action::QuickStart);
+    k.app.menu.view.live = false;
+    k.frames(10);
+    let want: Vec<egui::Id> = k.focusable().into_iter().map(|w| w.0).collect();
+    let got = tab_cycle(&mut k, 900, false);
+    let missed = want.iter().filter(|w| !got.contains(w)).count();
+    eprintln!(
+        "Quick Start: {} controls at first, {} reached",
+        want.len(),
+        got.len()
+    );
+    if missed > 0 {
+        failures.push(format!("Quick Start: Tab never reached {missed} controls"));
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+#[test]
 fn escape_closes_and_enter_confirms_in_dialogs_and_tool_windows() {
     in_scratch(
         "app::keyboard_tests::child_escape_closes_and_enter_confirms_in_dialogs_and_tool_windows",

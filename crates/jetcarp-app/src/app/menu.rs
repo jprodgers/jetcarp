@@ -215,7 +215,6 @@ const fn ctrl_shift(k: Key) -> KeyboardShortcut {
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), k)
 }
 /// ⌃⌘ and a key: macOS's own full-screen shortcut is ⌃⌘F. It never matches elsewhere.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const fn ctrl_cmd(k: Key) -> KeyboardShortcut {
     KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::MAC_CMD), k)
 }
@@ -387,9 +386,14 @@ impl Action {
         }
     }
 
-    /// Shortcuts; the first is shown in the menu. Bare keys only act when no text field has
+    /// Shortcuts here; the first is shown in the menu. Bare keys only act when no text field has
     /// keyboard focus.
     pub fn keys(self) -> &'static [KeyboardShortcut] {
+        self.keys_for(cfg!(target_os = "macos"))
+    }
+
+    /// Shortcuts on macOS (`mac`) or on Windows and Linux, for the book's table of both.
+    pub fn keys_for(self, mac: bool) -> &'static [KeyboardShortcut] {
         use Action::*;
         match self {
             // ⌘H hides the app on macOS, so Quick Start is Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H
@@ -412,7 +416,7 @@ impl Action {
             AutoHideMenu => ks!(ctrl(Key::F10)),
             // F11 shows the desktop on macOS; its own full-screen key is ⌃⌘F (#91).
             FullScreen => {
-                if cfg!(target_os = "macos") {
+                if mac {
                     ks!(ctrl_cmd(Key::F), key(Key::F11))
                 } else {
                     ks!(key(Key::F11))
@@ -613,8 +617,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
     ),
 ];
 
-/// Actions a custom entry holds (for the coverage test).
-#[cfg(test)]
+/// Actions a custom entry holds (the coverage test; where the keyboard page says an action is).
 fn custom_actions(c: Custom) -> Vec<Action> {
     match c {
         Custom::PaneList => panes::PANES.iter().map(|p| Action::Pane(p.id)).collect(),
@@ -623,6 +626,24 @@ fn custom_actions(c: Custom) -> Vec<Action> {
         Custom::Gpu => vec![Action::GpuSim],
         _ => vec![],
     }
+}
+
+/// The menu an action is in: the first that has it as an item of its own, else the first that
+/// lists it (the Window menu lists every tool window).
+pub(super) fn menu_of(a: Action) -> Option<&'static str> {
+    let has = |own: bool| {
+        MENUS.iter().find_map(|(title, items)| {
+            items
+                .iter()
+                .any(|it| match it {
+                    A(x) => *x == a,
+                    C(c) => !own && custom_actions(*c).contains(&a),
+                    Sep => false,
+                })
+                .then_some(*title)
+        })
+    };
+    has(true).or_else(|| has(false))
 }
 
 /// Every action reachable from the menu bar.
@@ -1420,45 +1441,28 @@ impl JetcarpApp {
                         .weak(),
                     );
                     let mac = cfg!(target_os = "macos");
-                    let lines =
-                        |ui: &mut egui::Ui, id: &str, lines: &[super::keyboard::KeyLine]| {
-                            egui::Grid::new(id).striped(true).show(ui, |ui| {
-                                for l in lines {
-                                    ui.label(
-                                        RichText::new(if mac { l.mac } else { l.keys }).monospace(),
-                                    );
-                                    ui.add(egui::Label::new(l.what).wrap());
+                    // The same table as `jetcarp shortcuts` and the book's keyboard page.
+                    for (n, g) in super::keyboard::table().iter().enumerate() {
+                        ui.add_space(6.0);
+                        ui.label(RichText::new(&g.name).strong());
+                        egui::Grid::new(("shortcut-grid", n))
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for s in &g.keys {
+                                    let keys = if mac { &s.mac } else { &s.keys };
+                                    if keys.is_empty() {
+                                        continue;
+                                    }
+                                    ui.label(RichText::new(keys).monospace());
+                                    ui.add(egui::Label::new(&s.what).wrap());
                                     ui.end_row();
                                 }
                             });
-                        };
-                    ui.label(RichText::new("Moving about").strong());
-                    lines(ui, "shortcut-moving", super::keyboard::MOVING);
+                    }
                     ui.add_space(6.0);
-                    ui.label(RichText::new("On the grid, while it has the keyboard").strong());
-                    lines(ui, "shortcut-grid-cursor", super::keyboard::GRID);
-                    ui.add_space(6.0);
-                    ui.label(RichText::new("The menus' shortcuts").strong());
-                    egui::Grid::new("shortcut-grid")
+                    egui::Grid::new("shortcut-mouse")
                         .striped(true)
                         .show(ui, |ui| {
-                            for a in Action::all() {
-                                if a.keys().is_empty() {
-                                    continue;
-                                }
-                                let keys: Vec<String> =
-                                    a.keys().iter().map(|k| ctx.format_shortcut(k)).collect();
-                                ui.label(RichText::new(keys.join(" or ")).monospace());
-                                ui.label(a.label());
-                                ui.end_row();
-                            }
-                            // macOS's Minimise, handled outside the action table (#98).
-                            if cfg!(target_os = "macos") {
-                                let k = KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M);
-                                ui.label(RichText::new(ctx.format_shortcut(&k)).monospace());
-                                ui.label("Minimise the window");
-                                ui.end_row();
-                            }
                             ui.label(RichText::new("Right drag").monospace());
                             ui.label("Pan (any tool); scroll zooms");
                             ui.end_row();

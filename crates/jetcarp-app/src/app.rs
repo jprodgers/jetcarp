@@ -31,6 +31,7 @@ mod display_ui;
 mod draw_ui;
 mod host_ui;
 mod keyboard;
+pub use keyboard::{Shortcut, ShortcutGroup, table as shortcut_table};
 #[cfg(test)]
 mod keyboard_tests;
 mod menu;

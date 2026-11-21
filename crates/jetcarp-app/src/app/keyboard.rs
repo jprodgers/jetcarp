@@ -60,7 +60,7 @@ pub(crate) const MOVING: &[KeyLine] = &[
     KeyLine {
         keys: "Esc",
         mac: "Esc",
-        what: "Leave a text field; close a menu, a list, a dialog, or the tool window that has \
+        what: "Leave a text box; close a menu, a list, a dialog, or the tool window that has \
                the keyboard",
     },
     KeyLine {
@@ -127,6 +127,8 @@ pub(super) struct KeyboardRt {
     skip: Option<egui::FocusDirection>,
     /// When the pointer last pressed a button (focus it gives is not scrolled to).
     pointer_at: f64,
+    /// The text box Esc just left: Tab carries on from it rather than from the window's start.
+    escaped_from: Option<egui::Id>,
     /// F10 asked for the menu bar.
     pub menu_request: bool,
     /// The menu bar's buttons and their menus, as drawn last frame.
@@ -150,7 +152,7 @@ impl JetcarpApp {
         if let Some(d) = self.kb.skip.take() {
             ctx.memory_mut(|m| m.move_focus(d));
         }
-        if let Some(back) = ctx.input(|i| {
+        let tab = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
                 egui::Event::Key {
                     key: Key::Tab,
@@ -160,8 +162,22 @@ impl JetcarpApp {
                 } => Some(modifiers.shift),
                 _ => None,
             })
-        }) {
+        });
+        // Esc leaves a text box with nothing holding the keyboard; the next Tab goes on from the
+        // box, not from the menu bar, so a box that keeps Tab for itself (the script editor's) is
+        // no trap.
+        let left = a11y::last_focus(ctx);
+        if left.text && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.kb.escaped_from = left.id;
+        } else if let Some(back) = tab {
             self.kb.tab_back = back;
+            if let Some(from) = self.kb.escaped_from.take()
+                && ctx.memory(|m| m.focused().is_none())
+            {
+                ctx.memory_mut(|m| m.request_focus(from));
+            }
+        } else if self.kb.pointer_at == now || ctx.memory(|m| m.focused().is_some()) {
+            self.kb.escaped_from = None;
         }
         // F6: the next part of the window; Shift+F6 the one before.
         for (m, back) in [(Modifiers::NONE, false), (Modifiers::SHIFT, true)] {
@@ -637,6 +653,125 @@ impl JetcarpApp {
     }
 }
 
+/// One line of the table of keys: the keys on Windows and Linux, on macOS (either empty where
+/// that system has none), and what they do.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Shortcut {
+    pub keys: String,
+    pub mac: String,
+    pub what: String,
+}
+
+/// A group of the table's lines, under its heading.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct ShortcutGroup {
+    pub name: String,
+    pub keys: Vec<Shortcut>,
+}
+
+/// Every key the app answers to: moving about, the menus' shortcuts (each with the menu it is
+/// in), and the grid's cell cursor. *Help → Keyboard shortcuts*, `jetcarp shortcuts` and the book's
+/// keyboard page (`docs/tools/gen-shortcuts.py`) all show this table.
+pub fn table() -> Vec<ShortcutGroup> {
+    let lines = |l: &[KeyLine]| {
+        l.iter()
+            .map(|l| Shortcut {
+                keys: l.keys.into(),
+                mac: l.mac.into(),
+                what: l.what.into(),
+            })
+            .collect()
+    };
+    let words = |ks: &[egui::KeyboardShortcut], mac: bool| {
+        ks.iter()
+            .map(|k| key_words(k, mac))
+            .collect::<Vec<_>>()
+            .join(" or ")
+    };
+    let mut menus = vec![];
+    for a in menu::Action::all() {
+        let (pc, mac) = (a.keys_for(false), a.keys_for(true));
+        if pc.is_empty() && mac.is_empty() {
+            continue;
+        }
+        let label = a.label();
+        let what = match menu::menu_of(a) {
+            Some(m) => format!("{m} → {}", label.trim_end_matches('…')),
+            None => label,
+        };
+        menus.push(Shortcut {
+            keys: words(pc, false),
+            mac: words(mac, true),
+            what,
+        });
+    }
+    // macOS's Minimise, handled outside the action table (#98).
+    menus.push(Shortcut {
+        keys: String::new(),
+        mac: "⌘M".into(),
+        what: "Minimise the window".into(),
+    });
+    vec![
+        ShortcutGroup {
+            name: "Moving about".into(),
+            keys: lines(MOVING),
+        },
+        ShortcutGroup {
+            name: "The menus' shortcuts".into(),
+            keys: menus,
+        },
+        ShortcutGroup {
+            name: "On the grid, while it has the keyboard".into(),
+            keys: lines(GRID),
+        },
+    ]
+}
+
+/// A shortcut in words: `Ctrl+Shift+H` on Windows and Linux, `⇧⌘H` on macOS (`mac`), the
+/// modifiers in Apple's order there.
+pub(crate) fn key_words(k: &egui::KeyboardShortcut, mac: bool) -> String {
+    let key = match k.logical_key {
+        Key::ArrowLeft => "←",
+        Key::ArrowRight => "→",
+        Key::ArrowUp => "↑",
+        Key::ArrowDown => "↓",
+        Key::Escape => "Esc",
+        Key::Plus => "+",
+        Key::Minus => "−",
+        Key::Equals => "=",
+        Key::Enter if mac => "Return",
+        other => other.name(),
+    };
+    let m = k.modifiers;
+    if mac {
+        let mut s = String::new();
+        for (on, c) in [
+            (m.ctrl, '⌃'),
+            (m.alt, '⌥'),
+            (m.shift, '⇧'),
+            (m.mac_cmd || m.command, '⌘'),
+        ] {
+            if on {
+                s.push(c);
+            }
+        }
+        s + key
+    } else {
+        let mut parts = vec![];
+        for (on, w) in [
+            (m.ctrl || m.command, "Ctrl"),
+            (m.alt, "Alt"),
+            (m.shift, "Shift"),
+        ] {
+            if on {
+                parts.push(w);
+            }
+        }
+        parts.push(key);
+        parts.join("+")
+    }
+}
+
 /// Take a press of `key` with exactly the modifiers `m` (egui's own matching lets an extra Shift
 /// through, so F6 would take Shift+F6 too).
 fn take_key(ctx: &egui::Context, key: Key, m: Modifiers) -> bool {
@@ -703,6 +838,42 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The table names each key as each system writes it, and has every menu shortcut, each with
+    /// its menu.
+    #[test]
+    fn the_table_has_every_shortcut_in_each_system_s_words() {
+        use egui::KeyboardShortcut as K;
+        let ctrl_shift_h = K::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::H);
+        assert_eq!(key_words(&ctrl_shift_h, false), "Ctrl+Shift+H");
+        assert_eq!(key_words(&ctrl_shift_h, true), "⇧⌘H");
+        let full = K::new(Modifiers::CTRL.plus(Modifiers::MAC_CMD), Key::F);
+        assert_eq!(key_words(&full, true), "⌃⌘F");
+        assert_eq!(
+            key_words(&K::new(Modifiers::NONE, Key::ArrowRight), false),
+            "→"
+        );
+        assert_eq!(key_words(&K::new(Modifiers::NONE, Key::Minus), false), "−");
+        let t = table();
+        let menus = &t[1].keys;
+        for a in menu::Action::all() {
+            let Some(k) = a.keys_for(false).first() else {
+                continue;
+            };
+            let w = key_words(k, false);
+            assert!(
+                menus.iter().any(|s| s.keys.split(" or ").any(|x| x == w)
+                    && s.what.ends_with(a.label().trim_end_matches('…'))),
+                "{a:?} ({w}) is not in the table"
+            );
+        }
+        let find = |what: &str| menus.iter().find(|s| s.what == what).unwrap();
+        assert_eq!(find("View → Hide all panes").keys, "F9");
+        assert_eq!(find("View → Auto-hide menu bar").keys, "Ctrl+F10");
+        assert_eq!(find("View → Full screen").keys, "F11");
+        assert_eq!(find("View → Full screen").mac, "⌃⌘F or F11");
+        assert_eq!(find("Minimise the window").keys, "");
     }
 
     #[test]

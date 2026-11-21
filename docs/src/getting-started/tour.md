@@ -75,9 +75,14 @@ system asks for reduced motion it opens paused, with a note saying so, and Space
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
   live cells and its tiles.
-- **More room:** Tab hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
+- **More room:** F9 hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
   F12 starts screensaver mode (Esc leaves it). On macOS, ⌘M minimises the window, and the world
   and [AI control](../tutorials/mcp.md) keep running while it is minimised or covered.
+- **From the keyboard:** Tab moves from control to control, F6 from the menu bar to each group
+  of panes, the grid, the status line and each floating window, and F10 opens the menus. On the
+  grid, the arrow keys move a cell cursor that draws (Space), erases (Delete), selects
+  (Shift+arrows) and moves what is selected (Ctrl+arrows). See
+  [Using the app from the keyboard](../guides/keyboard.md).
 
 *File → Quick Start* (Ctrl+Shift+H, ⇧⌘H on macOS) goes back to the Quick Start screen, and
 *File → New empty world* (Ctrl+N) starts a square grid with no automata on it, ready for your own
@@ -125,14 +130,16 @@ and *Window → Reset layout* puts everything back:
 | *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches; *Accessibility…*: reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
 
-*Help → Keyboard shortcuts…* lists the menus' shortcuts. Single-key shortcuts such as Space and R
-work while no text box has the keyboard.
+*Help → Keyboard shortcuts…* lists every key: the menus' shortcuts, the keys that move about the
+app, and the grid's cell cursor ([Using the app from the keyboard](../guides/keyboard.md) has the
+same list). Single-key shortcuts such as R and F work except while you are typing in a text box;
+Space, Enter and the arrows belong to whatever control has the keyboard.
 
 ## The tool windows
 
 Most tools open in windows of their own. Each floats over the world, and its ↗ button (or
 *In its own window* under its name in the *Window* menu) moves it to a separate window that can go
-on another monitor.
+on another monitor. Esc closes the tool window whose control has the keyboard.
 
 <img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects and AI control" width="244">
 
