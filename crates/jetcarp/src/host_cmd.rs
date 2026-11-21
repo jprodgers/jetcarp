@@ -283,12 +283,17 @@ fn show(v: &Value, json: bool) {
 /// the caption, why it is paused, and the host's notes.
 fn status_lines(v: &Value) -> Vec<String> {
     let held_now = v["held"].as_array().is_some_and(|h| !h.is_empty());
+    // A host started at login opens its GPU with the first window it shows, so none open yet
+    // is not the same as none found (#141).
+    let gpu = match (v["gpu"].as_str(), v["gpu_state"].as_str()) {
+        (Some(name), _) => name.to_string(),
+        (None, Some("not_opened")) => "not opened yet (nothing shown yet)".to_string(),
+        (None, Some("lost")) => "lost (on the processor until it is back)".to_string(),
+        (None, _) => "none".to_string(),
+    };
     let mut out = vec![format!(
-        "running, pid {}, up {}s, {} MB, GPU {}",
-        v["pid"],
-        v["uptime_s"],
-        v["memory_mb"],
-        v["gpu"].as_str().unwrap_or("none")
+        "running, pid {}, up {}s, {} MB, GPU {gpu}",
+        v["pid"], v["uptime_s"], v["memory_mb"],
     )];
     let monitors: Vec<&str> = v["monitors"]
         .as_array()
@@ -328,6 +333,9 @@ fn status_lines(v: &Value) -> Vec<String> {
                 Some(name) => format!("{shown} on monitor {m} ({name})"),
                 // A host just started may not have read its monitors yet.
                 None if monitors.is_empty() => format!("{shown} on monitor {m}"),
+                None if s["waiting_for_monitor"] == true => format!(
+                    "{shown} on monitor {m} (not connected: waiting for it, neither stepping nor drawing)"
+                ),
                 None => format!("{shown} on monitor {m} (not connected)"),
             },
             None if shown == "wallpaper" && monitors.len() > 1 => {
@@ -1220,6 +1228,54 @@ mod tests {
             lines[2].ends_with(
                 "· window · simulation: CPU: GPU simulation off, from the desktop background's \
                  own setting"
+            ),
+            "{lines:?}"
+        );
+    }
+
+    /// A host that hasn't opened its GPU yet (started at login, nothing shown) does not say it has
+    /// none, and a host that lost its GPU says so (#141).
+    #[test]
+    fn status_tells_a_gpu_not_opened_yet_from_none() {
+        let first = |gpu: serde_json::Value, state: &str| {
+            status_lines(
+                &json!({"pid": 7, "uptime_s": 4.0, "memory_mb": 19, "gpu": gpu,
+                "gpu_state": state, "screens": [], "log": []}),
+            )[0]
+            .clone()
+        };
+        assert_eq!(
+            first(serde_json::Value::Null, "not_opened"),
+            "running, pid 7, up 4.0s, 19 MB, GPU not opened yet (nothing shown yet)"
+        );
+        assert_eq!(
+            first(serde_json::Value::Null, "none_found"),
+            "running, pid 7, up 4.0s, 19 MB, GPU none"
+        );
+        assert_eq!(
+            first(serde_json::Value::Null, "lost"),
+            "running, pid 7, up 4.0s, 19 MB, GPU lost (on the processor until it is back)"
+        );
+        assert_eq!(
+            first(json!("M2 Max"), "found"),
+            "running, pid 7, up 4.0s, 19 MB, GPU M2 Max"
+        );
+    }
+
+    /// A screen whose monitor isn't connected, held until it comes back, says so (#130).
+    #[test]
+    fn a_screen_waiting_for_its_monitor_says_so() {
+        let stage = json!({"rotation": "Desktop art", "label": "Life", "number": 1,
+            "count": 3, "generation": 5, "cells": 230400, "cell_px": 3.0});
+        let v = json!({"pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "M2 Max",
+            "monitors": ["Built-in Retina Display"], "screens": [
+                {"place": "wallpaper", "monitor": 1, "waiting_for_monitor": true, "stage": stage,
+                 "simulation": {"on": "gpu", "adapter": "Apple M2 Max", "why": null}}],
+            "log": []});
+        let lines = status_lines(&v);
+        assert!(
+            lines[1].contains(
+                "wallpaper on monitor 1 (not connected: waiting for it, neither stepping nor drawing)"
             ),
             "{lines:?}"
         );

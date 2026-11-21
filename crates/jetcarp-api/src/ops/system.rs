@@ -713,6 +713,9 @@ pub struct UninstallReport {
     pub kept_settings: Option<PathBuf>,
     /// The publisher's files `--settings` keeps (without `--publisher-key`), when there are any.
     pub kept_publisher: Option<KeptPublisher>,
+    /// Folders `--settings` or `--data` asked to delete that were not there to delete, as
+    /// sentences (#144): "the settings folder … is already gone".
+    pub already_gone: Vec<String>,
     /// The output folder (never deleted).
     pub output: PathBuf,
     /// How this program was installed, and what removes it; none when that can't be told.
@@ -852,13 +855,15 @@ fn installer_commands(folder: &Path, windows: bool) -> Vec<String> {
     });
     if windows {
         let mut run =
-            "powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1 -Uninstall"
+            "powershell -ExecutionPolicy Bypass -File \"$env:TEMP\\jetcarp-installer.ps1\" -Uninstall"
                 .to_string();
         if !same {
             let _ = write!(run, " -InstallDir {}", quoted(folder, true));
         }
         vec![
-            format!("Invoke-WebRequest {INSTALLER_URL}.ps1 -OutFile jetcarp-installer.ps1"),
+            format!(
+                "Invoke-WebRequest {INSTALLER_URL}.ps1 -OutFile \"$env:TEMP\\jetcarp-installer.ps1\""
+            ),
             run,
         ]
     } else {
@@ -892,8 +897,17 @@ impl Report for UninstallReport {
             "This undoes what JETCARP set up outside its folders. It never removes the program \
              itself, and deletes its settings and data only when asked (--settings, --data).\n\n",
         );
+        // A folder asked for that was already gone is said, so a repeated `--settings --data` does
+        // not read as if the options were ignored (#144).
+        for g in &self.already_gone {
+            let _ = writeln!(s, "Already gone: {g}.");
+        }
         if self.steps.is_empty() {
-            s.push_str("Nothing to undo: JETCARP has not set anything up outside its folders.\n");
+            s.push_str(if self.already_gone.is_empty() {
+                "Nothing to undo: JETCARP has not set anything up outside its folders.\n"
+            } else {
+                "Nothing else to undo: JETCARP has not set anything up outside its folders.\n"
+            });
         } else {
             s.push_str(if self.done {
                 "Undoing:\n"
@@ -1650,6 +1664,17 @@ impl Op for SystemUninstall {
         } else {
             steps.extend(settings_step.into_iter().chain(data_step));
         }
+        // Before any step runs, so the folders this run deletes are not counted.
+        let gone = |p: &Path| std::fs::symlink_metadata(p).is_err();
+        let mut already_gone = Vec::new();
+        if a.settings
+            && let Some(c) = paths.settings.as_deref().filter(|c| gone(c))
+        {
+            already_gone.push(format!("the settings folder {} (--settings)", c.display()));
+        }
+        if a.data && gone(&data) {
+            already_gone.push(format!("the data folder {} (--data)", data.display()));
+        }
         let steps = steps
             .into_iter()
             .map(|(what, run)| {
@@ -1688,6 +1713,7 @@ impl Op for SystemUninstall {
             kept_data,
             kept_settings,
             kept_publisher,
+            already_gone,
             output: paths.output,
             installed_with: jetcarp_core::paths::program_path()
                 .and_then(|exe| installed_with(&exe, cfg!(windows))),
