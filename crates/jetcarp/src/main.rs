@@ -241,6 +241,19 @@ enum Cmd {
         /// With --json, prints the URL and token as JSON. Ctrl-C stops it.
         #[arg(long, value_name = "PORT", num_args = 0..=1)]
         http: Option<Option<u16>>,
+        /// With --http: keep the token for the next start, and take the one kept (it is kept in
+        /// the same file, readable only by you). Without it, the kept token is forgotten.
+        #[arg(long, requires = "http")]
+        keep_token: bool,
+        /// With --http: make a new token even when one is kept, and keep it; the old one stops
+        /// working.
+        #[arg(long, requires = "http")]
+        new_token: bool,
+        /// With --http: let web pages from this exact origin connect, such as
+        /// https://client.example or http://localhost:6274 (repeatable; no wildcards). They still
+        /// need the token.
+        #[arg(long, value_name = "URL", requires = "http")]
+        allow_origin: Vec<String>,
     },
     /// JETCARP's operations by name, for automation and tests: `list`, `schema OP`,
     /// `call OP [JSON]` (the result as JSON).
@@ -687,6 +700,9 @@ fn run() -> Result<()> {
             port,
             token,
             http,
+            keep_token,
+            new_token,
+            allow_origin,
         } => {
             // The tools get this machine: the GPU, and jobs in processes of their own.
             jetcarp_mcp::tools::set_platform(std::sync::Arc::new(platform::Machine));
@@ -700,6 +716,9 @@ fn run() -> Result<()> {
                         app_port: port,
                         app_token: token,
                         json,
+                        keep_token,
+                        new_token,
+                        allow_origins: allow_origin,
                     },
                     jetcarp_mcp::http::stop_on_ctrl_c(),
                 ),

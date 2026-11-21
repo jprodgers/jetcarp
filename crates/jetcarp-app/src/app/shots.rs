@@ -451,7 +451,7 @@ fn ai_control_window_on_the_quick_start() {
 #[test]
 #[ignore]
 fn shots_ai_control() {
-    let Some(mut h) = Harness::new(1200, 900) else {
+    let Some(mut h) = Harness::new(1200, 1000) else {
         return;
     };
     h.action(menu::Action::Tool(menu::ToolWin::AiControl));
@@ -460,12 +460,18 @@ fn shots_ai_control() {
     assert!(h.app.ai_port().is_some(), "the endpoint opened");
     h.click("Also serve MCP over HTTP (127.0.0.1 only)");
     assert!(h.app.ai_http_port().is_some(), "and the HTTP endpoint");
+    // One page allowed, as a browser-based client the user trusts would be (#236).
+    h.app
+        .ai
+        .allow_http_origin("http://localhost:6274")
+        .expect("an exact origin");
+    h.run(0.5, 0.05, |_| false);
     // Down from the menu bar by its title bar ("AI control" is the whole window), so the picture
     // shows the window alone, and the pointer out of it, so nothing in it is highlighted.
     let win = h.find("AI control");
     let bar = egui::pos2(win.center().x, win.min.y + 10.0);
     h.drag(bar, bar + egui::vec2(0.0, 140.0));
-    h.hover(egui::pos2(2.0, 898.0));
+    h.hover(egui::pos2(2.0, 998.0));
     let win = h.find("AI control");
     assert!(win.min.y > 100.0, "the window was dragged down: {win:?}");
     h.shot_part("mcp-ai-control", Harness::around(&[win], 2.0));

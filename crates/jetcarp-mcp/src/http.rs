@@ -67,6 +67,131 @@ const SINGLE: &[&str] = &[
     "mcp-protocol-version",
 ];
 
+/// How the endpoint is set up, beyond its port and file.
+#[derive(Clone, Debug, Default)]
+pub struct Options {
+    pub limits: Limits,
+    /// Keep the token in the endpoint's file for the next start, and take the one kept there.
+    pub keep_token: bool,
+    /// Make a new token even when one is kept (and keep it).
+    pub new_token: bool,
+    /// Origins, as [`parse_origin`] gives them, whose pages may connect.
+    pub allow_origins: Vec<String>,
+}
+
+/// An origin a user allows (`--allow-origin`, the app's list), checked, in the form browsers
+/// send it: `http://` or `https://`, a host, and a port only when it is not the scheme's own, the
+/// scheme and host in lower case. Only an exact origin: a wildcard, `null` (which pages with no
+/// origin of their own send: files, sandboxed frames), a path, query, fragment or user name is
+/// refused. Requests' `Origin` headers are put in the same form before they are compared.
+pub fn parse_origin(s: &str) -> Result<String, String> {
+    let bad = |why: &str| {
+        Err(format!(
+            "{s:?} is not an origin that can be allowed: {why}. Give one exactly, such as \
+             https://client.example or http://localhost:6274"
+        ))
+    };
+    let t = s.trim();
+    if t.is_empty() {
+        return bad("it is empty");
+    }
+    if t.eq_ignore_ascii_case("null") {
+        return bad("\"null\" is sent by pages that have no origin of their own, from anywhere");
+    }
+    if t.contains('*') {
+        return bad("wildcards are not allowed");
+    }
+    let Some((scheme, rest)) = t.split_once("://") else {
+        return bad("it has no scheme (http:// or https://)");
+    };
+    let scheme = scheme.to_ascii_lowercase();
+    let default = match scheme.as_str() {
+        "http" => 80,
+        "https" => 443,
+        _ => return bad("the scheme must be http or https"),
+    };
+    if rest.contains(['/', '?', '#']) {
+        return bad("an origin has no path, query or fragment");
+    }
+    if rest.contains('@') {
+        return bad("an origin has no user name");
+    }
+    let (host, port) = match rest.strip_prefix('[') {
+        // An IPv6 address.
+        Some(r) => {
+            let Some((h, after)) = r.split_once(']') else {
+                return bad("an IPv6 address needs its closing ]");
+            };
+            if h.is_empty()
+                || !h
+                    .bytes()
+                    .all(|b| b.is_ascii_hexdigit() || b == b':' || b == b'.')
+            {
+                return bad("the IPv6 address is not one");
+            }
+            let port = match after {
+                "" => None,
+                a => match a.strip_prefix(':') {
+                    Some(p) => Some(p),
+                    None => return bad("only a port may follow the host"),
+                },
+            };
+            (format!("[{}]", h.to_ascii_lowercase()), port)
+        }
+        None => {
+            let (h, port) = match rest.rsplit_once(':') {
+                Some((h, p)) => (h, Some(p)),
+                None => (rest, None),
+            };
+            let ok = !h.is_empty()
+                && h.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
+                && !h.starts_with(['.', '-'])
+                && !h.ends_with('-')
+                && !h.contains("..");
+            if !ok {
+                return bad("the host is not a name or an address");
+            }
+            (h.trim_end_matches('.').to_ascii_lowercase(), port)
+        }
+    };
+    let port = match port {
+        None => None,
+        Some(p) => match p.parse::<u16>() {
+            Ok(n) if n > 0 && p.bytes().all(|b| b.is_ascii_digit()) => Some(n),
+            _ => return bad("a port is a number from 1 to 65535"),
+        },
+    };
+    Ok(match port {
+        Some(p) if p != default => format!("{scheme}://{host}:{p}"),
+        _ => format!("{scheme}://{host}"),
+    })
+}
+
+/// The token kept in the endpoint's file at `p`, if it was kept, the file is still readable by
+/// this user only, and the token looks like one this endpoint makes.
+fn kept_token(p: &Path) -> Option<String> {
+    #[cfg(unix)]
+    if link::private_mode(p).ok()? != 0o600 || link::private_mode(p.parent()?).ok()? != 0o700 {
+        return None;
+    }
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
+    if v["kept"] != true {
+        return None;
+    }
+    let t = v["token"].as_str()?;
+    (t.len() == 32
+        && t.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+    .then(|| t.to_string())
+}
+
+/// The token recorded in the endpoint's file at `p`, kept or not.
+fn recorded_token(p: &Path) -> Option<String> {
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
+    v["token"].as_str().map(String::from)
+}
+
 /// The endpoint's URL on `port`.
 pub fn url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{PATH}")
@@ -167,7 +292,10 @@ struct Session {
 
 struct Shared {
     port: u16,
-    token: String,
+    /// Made afresh, or taken from the file it was kept in; replaced by a new one on request.
+    token: Mutex<String>,
+    /// The other origins whose pages may connect, as [`parse_origin`] gives them.
+    origins: Mutex<Vec<String>>,
     limits: Limits,
     stop: AtomicBool,
     connections: AtomicUsize,
@@ -193,6 +321,8 @@ pub struct Listener {
     shared: Arc<Shared>,
     file: Option<PathBuf>,
     wrote_file: bool,
+    /// The token stays in the file when the endpoint stops, for the next start to take.
+    keep: bool,
 }
 
 impl Listener {
@@ -203,25 +333,33 @@ impl Listener {
         file: Option<PathBuf>,
         wake: Arc<dyn Fn() + Send + Sync>,
     ) -> std::io::Result<Listener> {
-        Listener::start_with(port, file, Limits::default(), wake, None)
+        Listener::start_with(port, file, Options::default(), wake, None)
     }
 
-    /// [`start`](Self::start) with these limits, and `on_cancel` called for each cancellation.
+    /// [`start`](Self::start) with these options, and `on_cancel` called for each cancellation.
     pub fn start_with(
         port: u16,
         file: Option<PathBuf>,
-        limits: Limits,
+        opts: Options,
         wake: Arc<dyn Fn() + Send + Sync>,
         on_cancel: Option<CancelHook>,
     ) -> std::io::Result<Listener> {
+        let limits = opts.limits;
         let sock = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))?;
         sock.set_nonblocking(true)?;
         let port = sock.local_addr()?.port();
-        let token = link::new_token()?;
+        let kept = (opts.keep_token && !opts.new_token)
+            .then(|| file.as_deref().and_then(kept_token))
+            .flatten();
+        let token = match kept {
+            Some(t) => t,
+            None => link::new_token()?,
+        };
         let (tx, rx) = channel();
         let shared = Arc::new(Shared {
             port,
-            token: token.clone(),
+            token: Mutex::new(token.clone()),
+            origins: Mutex::new(opts.allow_origins.clone()),
             limits,
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
@@ -246,6 +384,7 @@ impl Listener {
             shared,
             file,
             wrote_file: false,
+            keep: opts.keep_token || opts.new_token,
         };
         l.wrote_file = l.write_file().is_ok();
         Ok(l)
@@ -255,7 +394,7 @@ impl Listener {
         let p =
             (self.file.as_ref()).ok_or_else(|| std::io::Error::other("no runtime directory"))?;
         let text = json!({"url": self.url(), "port": self.port, "token": self.token,
-                          "pid": std::process::id()})
+                          "pid": std::process::id(), "kept": self.keep})
         .to_string();
         link::write_private(p, &text)
     }
@@ -290,6 +429,38 @@ impl Listener {
         self.shared.connections.load(Ordering::SeqCst)
     }
 
+    /// Whether the token is kept for the next start: asked for, and recorded in the file.
+    pub fn kept(&self) -> bool {
+        self.keep && self.wrote_file
+    }
+
+    /// Keep the token for the next start, or not (then the file goes when the endpoint stops).
+    pub fn set_keep(&mut self, keep: bool) {
+        self.keep = keep;
+        self.wrote_file = self.write_file().is_ok();
+    }
+
+    /// A new token: the old one is refused from now on, the sessions started with it end, and
+    /// the file records the new one (kept, if the old one was).
+    pub fn renew_token(&mut self) -> std::io::Result<()> {
+        let t = link::new_token()?;
+        *self.shared.token.lock().unwrap() = t.clone();
+        self.shared.sessions.lock().unwrap().clear();
+        self.token = t;
+        self.wrote_file = self.write_file().is_ok();
+        Ok(())
+    }
+
+    /// The other origins whose pages may connect.
+    pub fn origins(&self) -> Vec<String> {
+        self.shared.origins.lock().unwrap().clone()
+    }
+
+    /// Set the other origins whose pages may connect, as [`parse_origin`] gives them.
+    pub fn set_origins(&self, origins: Vec<String>) {
+        *self.shared.origins.lock().unwrap() = origins;
+    }
+
     /// The sessions open now.
     pub fn session_ids(&self) -> Vec<String> {
         self.shared
@@ -308,13 +479,20 @@ impl Drop for Listener {
         for s in self.shared.open.lock().unwrap().values() {
             let _ = s.shutdown(Shutdown::Both);
         }
+        // Only if the file is still this listener's: kept, it keeps the token alone (no port,
+        // since nothing listens), for the next start; else it goes.
         if self.wrote_file
             && let Some(p) = &self.file
-            && let Ok(info) = link::EndpointInfo::read_at(p, "")
-            && info.token == self.token
+            && recorded_token(p).as_deref() == Some(self.token.as_str())
         {
-            // Only if it is still this listener's.
-            let _ = std::fs::remove_file(p);
+            if self.keep {
+                let text = json!({"token": self.token, "kept": true}).to_string();
+                if link::write_private(p, &text).is_err() {
+                    let _ = std::fs::remove_file(p);
+                }
+            } else {
+                let _ = std::fs::remove_file(p);
+            }
         }
     }
 }
@@ -501,6 +679,9 @@ impl Head {
 struct Conn {
     s: TcpStream,
     buf: Vec<u8>,
+    /// The request's `Origin`, when it is one the user allows: every answer to it carries the
+    /// CORS headers that let its page read it.
+    cors: Option<String>,
 }
 
 impl Conn {
@@ -688,8 +869,29 @@ impl Conn {
         body: Option<(&str, &[u8])>,
         keep: bool,
     ) -> Result<(), End> {
-        respond(&mut self.s, status, headers, body, keep, false)?;
+        let mut all = headers.to_vec();
+        all.extend(
+            self.cors_headers()
+                .into_iter()
+                .filter(|(k, _)| !headers.iter().any(|(h, _)| h.eq_ignore_ascii_case(k))),
+        );
+        respond(&mut self.s, status, &all, body, keep, false)?;
         Ok(())
+    }
+
+    /// The CORS headers an answer to an allowed origin's page carries: none for anyone else.
+    fn cors_headers(&self) -> Vec<(&'static str, String)> {
+        match &self.cors {
+            Some(o) => vec![
+                ("Access-Control-Allow-Origin", o.clone()),
+                (
+                    "Access-Control-Expose-Headers",
+                    "Mcp-Session-Id, WWW-Authenticate".into(),
+                ),
+                ("Vary", "Origin".into()),
+            ],
+            None => vec![],
+        }
     }
 
     /// One event of an event stream.
@@ -786,13 +988,18 @@ fn serve_connection(s: TcpStream, sh: &Shared) {
         return;
     }
     let _ = s.set_nodelay(true);
-    let mut c = Conn { s, buf: Vec::new() };
+    let mut c = Conn {
+        s,
+        buf: Vec::new(),
+        cors: None,
+    };
     loop {
         // Stopped: what is open is closed (a connection accepted as the listener stopped was
         // not among those it shut down).
         if sh.stop.load(Ordering::SeqCst) {
             return c.close();
         }
+        c.cors = None;
         let (head_only, r) = match c.read_head(sh) {
             Ok(None) | Err(End::Quiet) => return c.close(),
             Err(End::Refused(r)) => (false, Err(End::Refused(r))),
@@ -803,10 +1010,12 @@ fn serve_connection(s: TcpStream, sh: &Shared) {
             Ok(Flow::Close) | Err(End::Quiet) => return c.close(),
             Err(End::Refused(r)) => {
                 let body = r.body();
+                let mut headers = r.headers.clone();
+                headers.extend(c.cors_headers());
                 let _ = respond(
                     &mut c.s,
                     r.status,
-                    &r.headers,
+                    &headers,
                     Some((body.0, &body.1)),
                     false,
                     head_only,
@@ -946,14 +1155,22 @@ fn handle(c: &mut Conn, sh: &Shared, h: &Head) -> Result<Flow, End> {
         )
         .into());
     }
+    // A page's request: from this server's own origin, or from one the user allows exactly
+    // (its answers then carry CORS headers); any other is refused.
     if let Some(o) = h.get("origin")
         && !origin_ok(o, sh.port)
     {
-        return Err(Refusal::new(
-            403,
-            format!("requests from web pages at other origins are refused (Origin: {o})"),
-        )
-        .into());
+        let allowed = parse_origin(o)
+            .ok()
+            .is_some_and(|k| sh.origins.lock().unwrap().contains(&k));
+        if !allowed {
+            return Err(Refusal::new(
+                403,
+                format!("requests from web pages at other origins are refused (Origin: {o})"),
+            )
+            .into());
+        }
+        c.cors = Some(o.to_string());
     }
     let path = h.target.split(['?', '#']).next().unwrap_or("");
     if path != PATH {
@@ -963,8 +1180,14 @@ fn handle(c: &mut Conn, sh: &Shared, h: &Head) -> Result<Flow, End> {
         )
         .into());
     }
+    // An allowed page's preflight: browsers send it without the token, and its answer says what
+    // the page may send.
+    if h.method == "OPTIONS" && c.cors.is_some() {
+        return preflight(c, h);
+    }
+    let token = sh.token.lock().unwrap().clone();
     match bearer(h.get("authorization")) {
-        Some(t) if same_token(t.as_bytes(), sh.token.as_bytes()) => {}
+        Some(t) if same_token(t.as_bytes(), token.as_bytes()) => {}
         given => {
             let (err, msg) = if given.is_some() {
                 (
@@ -1006,6 +1229,37 @@ fn handle(c: &mut Conn, sh: &Shared, h: &Head) -> Result<Flow, End> {
         .with("Allow", "POST, DELETE")
         .into()),
     }
+}
+
+/// The answer to an allowed page's CORS preflight: the methods and headers MCP's transport uses,
+/// for ten minutes. Chrome asks a public page's leave to reach this computer
+/// (`Access-Control-Request-Private-Network`); the answer gives it.
+fn preflight(c: &mut Conn, h: &Head) -> Result<Flow, End> {
+    let mut headers: Vec<(&str, String)> = vec![
+        ("Access-Control-Allow-Methods", "POST, DELETE".into()),
+        (
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID"
+                .into(),
+        ),
+        ("Access-Control-Max-Age", "600".into()),
+        (
+            "Vary",
+            "Origin, Access-Control-Request-Method, Access-Control-Request-Headers".into(),
+        ),
+    ];
+    if h.get("access-control-request-private-network")
+        .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+    {
+        headers.push(("Access-Control-Allow-Private-Network", "true".into()));
+    }
+    let keep = h.keep_alive()
+        && matches!(
+            framing(h, usize::MAX),
+            Ok(Framing::None | Framing::Length(0))
+        );
+    c.respond(204, &headers, None, keep)?;
+    Ok(if keep { Flow::KeepAlive } else { Flow::Close })
 }
 
 /// End a session.
@@ -1236,7 +1490,7 @@ fn post(c: &mut Conn, sh: &Shared, h: &Head) -> Result<Flow, End> {
              Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n",
             http_date(SystemTime::now())
         );
-        for (k, v) in &extra {
+        for (k, v) in extra.iter().cloned().chain(c.cors_headers()) {
             head.push_str(&format!("{k}: {v}\r\n"));
         }
         head.push_str("\r\n");
@@ -1348,6 +1602,12 @@ pub struct Serve {
     pub app_token: Option<String>,
     /// Print the endpoint as one line of JSON instead of text.
     pub json: bool,
+    /// Keep the token for the next start (`--keep-token`), or make a new one and keep it
+    /// (`--new-token`).
+    pub keep_token: bool,
+    pub new_token: bool,
+    /// Origins whose pages may connect (`--allow-origin`).
+    pub allow_origins: Vec<String>,
 }
 
 /// Set (by the first Ctrl-C) when `jetcarp mcp --http` should stop; a second Ctrl-C quits at
@@ -1385,11 +1645,22 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
         })
     };
     let file = link::runtime_file(CLI_ENDPOINT);
+    let allow_origins = opts
+        .allow_origins
+        .iter()
+        .map(|o| parse_origin(o))
+        .collect::<Result<Vec<_>, _>>()?;
+    let options = Options {
+        keep_token: opts.keep_token || opts.new_token,
+        new_token: opts.new_token,
+        allow_origins,
+        ..Options::default()
+    };
     let start = |port: u16| {
         Listener::start_with(
             port,
             file.clone(),
-            Limits::default(),
+            options.clone(),
             Arc::new(|| {}),
             Some(hook.clone()),
         )
@@ -1446,6 +1717,8 @@ fn announce(l: &Listener, opts: &Serve) {
                 "token": l.token,
                 "header": l.header(),
                 "endpoint_file": file,
+                "kept": l.kept(),
+                "allow_origins": l.origins(),
                 "app": opts.app,
             })
         );
@@ -1455,18 +1728,34 @@ fn announce(l: &Listener, opts: &Serve) {
         } else {
             "Each session has a private world of its own."
         };
+        let token = match (&file, l.kept()) {
+            (Some(f), true) => format!(
+                "The token is kept for the next start (--keep-token; --new-token replaces it), in \
+                 {f}, which only you can read."
+            ),
+            (Some(f), false) => format!(
+                "The token is new each time it starts, and is recorded in {f}, which only you can \
+                 read."
+            ),
+            (None, _) => "The token is new each time it starts.".to_string(),
+        };
+        let origins = l.origins();
+        let pages = if origins.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "Web pages from {} may connect too, with the token.\n",
+                origins.join(", ")
+            )
+        };
         println!(
             "JETCARP's MCP server is answering HTTP clients (MCP Streamable HTTP) on this computer only.\n  \
              URL:    {}\n  \
              Header: {}\n\
-             It listens on 127.0.0.1, which other computers cannot reach. The token is new each time it starts{}.\n\
-             {world} Ctrl-C stops the server.",
+             It listens on 127.0.0.1, which other computers cannot reach. {token}\n\
+             {pages}{world} Ctrl-C stops the server.",
             l.url(),
             l.header(),
-            match &file {
-                Some(f) => format!(", and is kept in {f}, which only you can read"),
-                None => String::new(),
-            }
         );
     }
     if opts.port.is_none() && l.port != DEFAULT_PORT {
@@ -1528,6 +1817,49 @@ mod tests {
             "",
         ] {
             assert!(!origin_ok(o, 5000), "{o}");
+        }
+    }
+
+    #[test]
+    fn only_exact_origins_can_be_allowed() {
+        for (given, want) in [
+            ("https://client.example", "https://client.example"),
+            ("HTTPS://Client.Example:443", "https://client.example"),
+            (" http://localhost:6274 ", "http://localhost:6274"),
+            ("http://localhost:80", "http://localhost"),
+            ("https://client.example:8443", "https://client.example:8443"),
+            ("http://[::1]:3000", "http://[::1]:3000"),
+            ("http://192.168.1.5:8080", "http://192.168.1.5:8080"),
+        ] {
+            assert_eq!(parse_origin(given).as_deref(), Ok(want), "{given}");
+        }
+        for bad in [
+            "*",
+            "null",
+            "NULL",
+            "https://*.example.com",
+            "*.example.com",
+            "https://client.*",
+            "https://client.example/",
+            "https://client.example/mcp",
+            "client.example",
+            "ftp://client.example",
+            "file://",
+            "https://user@client.example",
+            "https://client.example:0",
+            "https://client.example:99999",
+            "https://client.example:+80",
+            "https://client..example",
+            "https://-client.example",
+            "https://client.example?x=1",
+            "https://client.example#x",
+            "",
+            "https://",
+            "http://[::1",
+            "https://cli\u{e9}nt.example",
+        ] {
+            let e = parse_origin(bad).unwrap_err();
+            assert!(e.contains("not an origin"), "{bad}: {e}");
         }
     }
 

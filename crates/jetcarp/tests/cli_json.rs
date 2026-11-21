@@ -1008,3 +1008,66 @@ fn mcp_over_http_says_where_it_listens() {
         "{text}"
     );
 }
+
+/// `jetcarp mcp --http --keep-token --allow-origin URL` keeps its token across a restart and
+/// says which origins may connect; `--new-token` replaces the token; a wildcard origin is
+/// refused before anything listens; and the three go with `--http` only.
+#[test]
+fn mcp_over_http_keeps_its_token_and_allows_exact_origins() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    let runtime = test_dir("JETCARP_RUNTIME_DIR", "runtime").join("http-kept");
+    let start = |extra: &[&str]| -> (Option<Value>, std::process::Output) {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(["--json", "mcp", "--http", "0"])
+            .args(extra)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env(
+                "JETCARP_CONFIG_DIR",
+                test_dir("JETCARP_CONFIG_DIR", "config"),
+            )
+            .env("JETCARP_RUNTIME_DIR", &runtime)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        BufReader::new(child.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let v = serde_json::from_str(&line).ok();
+        let _ = child.kill();
+        (v, child.wait_with_output().unwrap())
+    };
+    let o = "https://client.example";
+    let (a, _) = start(&["--keep-token", "--allow-origin", o]);
+    let a = a.expect("it starts");
+    assert_eq!(a["kept"], true);
+    assert_eq!(a["allow_origins"], json!([o]));
+    let (b, _) = start(&["--keep-token"]);
+    let b = b.unwrap();
+    assert_eq!(b["token"], a["token"], "kept across a restart");
+    assert_eq!(b["allow_origins"], json!([]));
+    let (c, _) = start(&["--new-token"]);
+    assert_ne!(c.unwrap()["token"], a["token"]);
+    let (d, out) = start(&["--allow-origin", "*"]);
+    assert!(d.is_none(), "a wildcard is refused");
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("wildcards are not allowed"));
+    for flag in [
+        vec!["--keep-token"],
+        vec!["--new-token"],
+        vec!["--allow-origin", o],
+    ] {
+        let mut args = vec!["mcp"];
+        args.extend(&flag);
+        let out = jetcarp(&args);
+        assert_eq!(out.status.code(), Some(2), "{flag:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("--http"),
+            "{flag:?}"
+        );
+    }
+}

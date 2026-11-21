@@ -6,7 +6,7 @@
 mod common;
 
 use common::*;
-use jetcarp_mcp::http::{Limits, Listener};
+use jetcarp_mcp::http::{Limits, Listener, Options};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -38,30 +38,53 @@ fn runtime(root: &Path, tag: &str) -> std::path::PathBuf {
     root.join(format!("runtime-{tag}"))
 }
 
+/// Where a server of test `tag` writes its standard error.
+fn stderr_of(root: &Path, tag: &str) -> std::path::PathBuf {
+    root.join(format!("stderr-{tag}.txt"))
+}
+
 impl Server {
     fn start(root: &Path, tag: &str) -> Server {
+        Server::with(root, tag, &[])
+    }
+
+    /// A server with `extra` arguments.
+    fn with(root: &Path, tag: &str, extra: &[&str]) -> Server {
+        Server::try_with(root, tag, extra)
+            .unwrap_or_else(|(code, err)| panic!("it did not start ({code:?}): {err}"))
+    }
+
+    /// A server with `extra` arguments, or its exit status and standard error when it does not
+    /// start. Its standard error is kept in [`stderr_of`].
+    fn try_with(root: &Path, tag: &str, extra: &[&str]) -> Result<Server, (Option<i32>, String)> {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_jetcarp-mcp"));
-        cmd.args(["--http", "0", "--json"]);
+        cmd.args(["--http", "0", "--json"]).args(extra);
         for (k, v) in env_for(root, tag) {
             cmd.env(k, v);
         }
+        let err = std::fs::File::create(stderr_of(root, tag)).unwrap();
         let mut child = cmd
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(err)
             .spawn()
             .expect("jetcarp-mcp starts");
         let mut stdout = BufReader::new(child.stdout.take().unwrap());
         let mut line = String::new();
         stdout.read_line(&mut line).unwrap();
+        if line.trim().is_empty() {
+            let status = child.wait().unwrap();
+            let err = std::fs::read_to_string(stderr_of(root, tag)).unwrap_or_default();
+            return Err((status.code(), err));
+        }
         let start: Value = serde_json::from_str(&line).expect("the endpoint as JSON");
-        Server {
+        Ok(Server {
             port: start["port"].as_u64().unwrap() as u16,
             token: start["token"].as_str().unwrap().to_string(),
             child,
             _stdout: stdout,
             start,
-        }
+        })
     }
 
     fn req(&self) -> Req {
@@ -891,15 +914,32 @@ fn a_cancelled_call_stops_soon() {
 /// A listener in this process with `limits`, answered by a server of its own on a thread until
 /// the flag is set.
 fn in_process(limits: Limits) -> (u16, String, Arc<AtomicBool>) {
-    setup("http");
-    let l = Listener::start_with(0, None, limits, Arc::new(|| {}), None).unwrap();
+    let l = listen(
+        None,
+        Options {
+            limits,
+            ..Options::default()
+        },
+    );
     let (port, token) = (l.port, l.token.clone());
     let stop = Arc::new(AtomicBool::new(false));
-    let s = stop.clone();
+    answer(l, stop.clone());
+    (port, token, stop)
+}
+
+/// A listener in this process with `opts`, recording itself in `file`.
+fn listen(file: Option<std::path::PathBuf>, opts: Options) -> Listener {
+    setup("http");
+    Listener::start_with(0, file, opts, Arc::new(|| {}), None).unwrap()
+}
+
+/// Answer `l`'s requests with a server of its own, on a thread, until `stop` is set; then drop
+/// it.
+fn answer(l: Listener, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         let mut server = jetcarp_mcp::Server::new();
         let mut host = jetcarp_mcp::Session::new();
-        while !s.load(Ordering::SeqCst) {
+        while !stop.load(Ordering::SeqCst) {
             if let Some(p) = l.recv_timeout(Duration::from_millis(50)) {
                 server.cancels = p.cancels();
                 server.notifier = Some(p.notifier());
@@ -908,7 +948,39 @@ fn in_process(limits: Limits) -> (u16, String, Arc<AtomicBool>) {
             }
         }
     });
-    (port, token, stop)
+}
+
+/// A listener answered on a thread of its own, as [`answer`] does, while the test holds it (to
+/// renew its token, say): requests are polled by the test's own calls to [`Served::serve`].
+struct Served {
+    l: Listener,
+    server: jetcarp_mcp::Server,
+    host: jetcarp_mcp::Session,
+}
+
+impl Served {
+    fn new(l: Listener) -> Served {
+        Served {
+            l,
+            server: jetcarp_mcp::Server::new(),
+            host: jetcarp_mcp::Session::new(),
+        }
+    }
+    /// Send `req` from a thread, answer it here, and give its reply.
+    fn send(&mut self, req: Req, msg: Value) -> Reply {
+        let t = std::thread::spawn(move || req.post(&msg));
+        let until = Instant::now() + Duration::from_secs(20);
+        while !t.is_finished() {
+            assert!(Instant::now() < until, "no answer");
+            for p in self.l.poll() {
+                self.server.cancels = p.cancels();
+                let msg = p.message.clone();
+                p.reply(self.server.handle(&mut self.host, &msg));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        t.join().unwrap()
+    }
 }
 
 /// At most so many connections at once: one more is told to try again, and closed.
@@ -1036,4 +1108,388 @@ fn stopping_closes_the_open_connections() {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// A JSON file's contents.
+fn read_json(p: &Path) -> Value {
+    serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+/// The token is kept for the next start only when asked (`--keep-token`, the app's checkbox), in
+/// the same private file; without it each start makes a new one and the kept one is forgotten. A
+/// new token (`--new-token`) replaces the kept one, and the old one is refused from then on.
+#[test]
+fn a_token_is_kept_only_when_asked() {
+    let root = setup("http");
+    let file = runtime(root, "kept").join("mcp-http-endpoint.json");
+    let keep = Options {
+        keep_token: true,
+        ..Options::default()
+    };
+    // Not asked: a new token each start, and the file goes when the endpoint stops.
+    let a = listen(Some(file.clone()), Options::default());
+    let t0 = a.token.clone();
+    assert!(!a.kept());
+    drop(a);
+    assert!(!file.exists(), "not kept: the file is removed");
+
+    // Asked: the first start makes one and keeps it, in the same private file...
+    let a = listen(Some(file.clone()), keep.clone());
+    let t1 = a.token.clone();
+    assert_ne!(t1, t0);
+    assert!(a.kept());
+    assert_eq!(read_json(&file)["kept"], true);
+    drop(a);
+    let rec = read_json(&file);
+    assert_eq!(rec["token"], t1.as_str(), "{rec}");
+    assert_eq!(rec["kept"], true);
+    assert!(
+        rec.get("port").is_none(),
+        "a stopped endpoint records no port: {rec}"
+    );
+    #[cfg(unix)]
+    assert_eq!(jetcarp_mcp::link::private_mode(&file).unwrap(), 0o600);
+
+    // ...and the next start takes it, and it works.
+    let mut b = Served::new(listen(Some(file.clone()), keep.clone()));
+    assert_eq!(b.l.token, t1, "kept across a restart");
+    let port = b.l.port;
+    assert_eq!(b.send(Req::new(port).token(&t1), init(1)).status, 200);
+    drop(b);
+
+    // A new token replaces the kept one, and the old one is refused.
+    let mut c = Served::new(listen(
+        Some(file.clone()),
+        Options {
+            new_token: true,
+            ..keep.clone()
+        },
+    ));
+    let (t2, port) = (c.l.token.clone(), c.l.port);
+    assert_ne!(t2, t1);
+    assert!(c.l.kept());
+    assert_eq!(c.send(Req::new(port).token(&t1), init(1)).status, 401);
+    assert_eq!(c.send(Req::new(port).token(&t2), init(2)).status, 200);
+    drop(c);
+    let d = listen(Some(file.clone()), keep.clone());
+    assert_eq!(d.token, t2, "the new one is kept");
+    drop(d);
+
+    // Started without keeping, the kept token is forgotten, and not taken back later.
+    let e = listen(Some(file.clone()), Options::default());
+    assert_ne!(e.token, t2);
+    drop(e);
+    assert!(!file.exists());
+    let f = listen(Some(file.clone()), keep);
+    assert_ne!(f.token, t2, "a forgotten token is not taken back");
+    drop(f);
+}
+
+/// A new token while the endpoint runs (the app's button): the old one is refused at once, the
+/// sessions started with it end, and a kept token is replaced in the file. Keeping can be
+/// switched on and off while it runs.
+#[test]
+fn a_new_token_while_running_refuses_the_old_one() {
+    let root = setup("http");
+    let file = runtime(root, "renew").join("app-http-endpoint.json");
+    let mut s = Served::new(listen(
+        Some(file.clone()),
+        Options {
+            keep_token: true,
+            ..Options::default()
+        },
+    ));
+    let (old, port) = (s.l.token.clone(), s.l.port);
+    let r = s.send(Req::new(port).token(&old), init(1));
+    assert_eq!(r.status, 200);
+    let sid = r.header("mcp-session-id").unwrap().to_string();
+    s.l.renew_token().unwrap();
+    let new = s.l.token.clone();
+    assert_ne!(new, old);
+    assert_eq!(s.l.header(), format!("Authorization: Bearer {new}"));
+    let ping = req(2, "ping", json!({}));
+    let r = s.send(Req::new(port).token(&old).session(&sid), ping.clone());
+    assert_eq!(r.status, 401, "the old token is refused");
+    let r = s.send(Req::new(port).token(&new).session(&sid), ping);
+    assert_eq!(r.status, 404, "its sessions ended with it");
+    assert_eq!(s.send(Req::new(port).token(&new), init(3)).status, 200);
+    assert_eq!(
+        read_json(&file)["token"],
+        new.as_str(),
+        "the kept one is replaced"
+    );
+
+    // Keeping switched off while running: the file goes when it stops.
+    s.l.set_keep(false);
+    assert!(!s.l.kept());
+    assert_eq!(read_json(&file)["kept"], false);
+    drop(s);
+    assert!(!file.exists());
+}
+
+/// A kept token is taken back only from a file that is still private, and only if it looks like
+/// one of ours: a file others could read gives a new token.
+#[cfg(unix)]
+#[test]
+fn a_kept_token_in_a_loose_file_is_not_taken() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = setup("http");
+    let file = runtime(root, "loose").join("mcp-http-endpoint.json");
+    let keep = Options {
+        keep_token: true,
+        ..Options::default()
+    };
+    let t1 = listen(Some(file.clone()), keep.clone()).token.clone();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let a = listen(Some(file.clone()), keep.clone());
+    assert_ne!(a.token, t1, "not from a file others can read");
+    drop(a);
+    std::fs::write(&file, r#"{"token": "short", "kept": true}"#).unwrap();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let b = listen(Some(file.clone()), keep);
+    assert_ne!(b.token, "short");
+    assert_eq!(b.token.len(), 32);
+}
+
+/// `jetcarp-mcp --http --keep-token` keeps its token across a restart of the program, says so,
+/// and never writes the token to its standard error; `--new-token` replaces it; without either,
+/// each start has a new one. The flags go with `--http` only.
+#[test]
+fn the_kept_token_survives_a_restart_of_the_server() {
+    let root = setup("http");
+    let tag = "keep-cli";
+    let clean = |s: &Server| {
+        let err = std::fs::read_to_string(stderr_of(root, tag)).unwrap_or_default();
+        assert!(
+            !err.contains(&s.token),
+            "the token in standard error: {err}"
+        );
+    };
+    let s = Server::with(root, tag, &["--keep-token"]);
+    assert_eq!(s.start["kept"], true);
+    let t1 = s.token.clone();
+    clean(&s);
+    drop(s);
+    let s = Server::with(root, tag, &["--keep-token"]);
+    assert_eq!(s.token, t1, "kept across a restart");
+    assert_eq!(s.req().post(&init(1)).status, 200);
+    clean(&s);
+    drop(s);
+    let s = Server::with(root, tag, &["--new-token"]);
+    let t2 = s.token.clone();
+    assert_ne!(t2, t1);
+    assert_eq!(s.start["kept"], true, "a new token is kept");
+    assert_eq!(Req::new(s.port).token(&t1).post(&init(1)).status, 401);
+    assert_eq!(s.req().post(&init(1)).status, 200);
+    drop(s);
+    let s = Server::start(root, tag);
+    assert_ne!(s.token, t2);
+    assert_eq!(s.start["kept"], false);
+    drop(s);
+    // Without --http, the flags are refused.
+    for flag in ["--keep-token", "--new-token"] {
+        let o = Command::new(env!("CARGO_BIN_EXE_jetcarp-mcp"))
+            .arg(flag)
+            .envs(env_for(root, tag))
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(2), "{flag}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains("--http"));
+    }
+}
+
+/// The answers' CORS headers, by name in lower case.
+fn cors(r: &Reply) -> Vec<(String, String)> {
+    r.headers
+        .iter()
+        .filter(|(n, _)| n.to_ascii_lowercase().starts_with("access-control-"))
+        .map(|(n, v)| (n.to_ascii_lowercase(), v.clone()))
+        .collect()
+}
+
+/// A browser's preflight from `origin`.
+fn preflight(port: u16, origin: &str) -> Req {
+    Req::new(port)
+        .method("OPTIONS")
+        .without("Content-Type")
+        .without("Accept")
+        .set("Origin", origin)
+        .set("Access-Control-Request-Method", "POST")
+        .set(
+            "Access-Control-Request-Headers",
+            "authorization, content-type, mcp-session-id, mcp-protocol-version",
+        )
+}
+
+/// A page from an origin the user allows (`--allow-origin`) connects: its preflight is answered
+/// without the token (browsers send none), allowing what MCP sends; its requests still need the
+/// token, and their answers, refusals too, let the page read them and the session id.
+#[test]
+fn an_allowed_origin_connects_preflight_included() {
+    let root = setup("http");
+    let o = "https://client.example";
+    let s = Server::with(
+        root,
+        "cors",
+        &[
+            "--allow-origin",
+            o,
+            "--allow-origin",
+            "http://localhost:6274",
+        ],
+    );
+    assert_eq!(
+        s.start["allow_origins"],
+        json!(["https://client.example", "http://localhost:6274"])
+    );
+    let r = preflight(s.port, o)
+        .set("Access-Control-Request-Private-Network", "true")
+        .send();
+    assert_eq!(r.status, 204, "{r:?}");
+    assert_eq!(r.header("access-control-allow-origin"), Some(o));
+    let methods = r.header("access-control-allow-methods").unwrap();
+    assert!(
+        methods.contains("POST") && methods.contains("DELETE"),
+        "{methods}"
+    );
+    let headers = r
+        .header("access-control-allow-headers")
+        .unwrap()
+        .to_ascii_lowercase();
+    for h in [
+        "authorization",
+        "content-type",
+        "mcp-session-id",
+        "mcp-protocol-version",
+    ] {
+        assert!(headers.contains(h), "{h} in {headers}");
+    }
+    assert!(r.header("vary").unwrap().contains("Origin"));
+    assert_eq!(
+        r.header("access-control-allow-private-network"),
+        Some("true")
+    );
+    assert!(r.header("access-control-allow-credentials").is_none());
+
+    let r = s.req().set("Origin", o).post(&init(1));
+    assert_eq!(r.status, 200, "{r:?}");
+    assert_eq!(r.header("access-control-allow-origin"), Some(o));
+    assert!(r.header("vary").unwrap().contains("Origin"));
+    let exposed = r
+        .header("access-control-expose-headers")
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(exposed.contains("mcp-session-id"), "{exposed}");
+    let id = r.header("mcp-session-id").unwrap().to_string();
+    // Without the token it is still refused, and the page can read why.
+    let r = Req::new(s.port).set("Origin", o).post(&init(1));
+    assert_eq!(r.status, 401);
+    assert_eq!(r.header("access-control-allow-origin"), Some(o));
+    // As browsers send it: the scheme and host in any case, a default port left out.
+    let r = s
+        .req()
+        .set("Origin", "HTTPS://Client.Example:443")
+        .post(&init(2));
+    assert_eq!(r.status, 200, "{r:?}");
+    let r = s
+        .req()
+        .set("Origin", "http://localhost:6274")
+        .post(&init(3));
+    assert_eq!(r.status, 200);
+    assert_eq!(
+        r.header("access-control-allow-origin"),
+        Some("http://localhost:6274")
+    );
+    // The page ends its session.
+    let r = s
+        .req()
+        .set("Origin", o)
+        .session(&id)
+        .method("DELETE")
+        .send();
+    assert_eq!(r.status, 204);
+    assert_eq!(r.header("access-control-allow-origin"), Some(o));
+}
+
+/// With origins allowed, every other origin is refused as before, preflights included, with no
+/// CORS headers: other schemes, ports and hosts, look-alike names, and `null`.
+#[test]
+fn unlisted_origins_are_still_refused() {
+    let root = setup("http");
+    let s = Server::with(
+        root,
+        "cors-other",
+        &["--allow-origin", "https://client.example"],
+    );
+    for o in [
+        "https://other.example",
+        "http://client.example",
+        "https://client.example:8443",
+        "https://client.example.evil.example",
+        "https://evil-client.example",
+        "null",
+    ] {
+        let r = s.req().set("Origin", o).post(&init(1));
+        assert_eq!(r.status, 403, "{o}: {r:?}");
+        assert!(cors(&r).is_empty(), "{o}: {:?}", cors(&r));
+        let r = preflight(s.port, o).send();
+        assert_eq!(r.status, 403, "{o} preflight: {r:?}");
+        assert!(cors(&r).is_empty(), "{o} preflight: {:?}", cors(&r));
+    }
+}
+
+/// Only exact origins may be allowed: a wildcard, `null`, a path, no scheme, another scheme, a
+/// user name or a bad port is refused, and the server does not start.
+#[test]
+fn wildcards_and_other_patterns_are_refused() {
+    let root = setup("http");
+    for bad in [
+        "*",
+        "null",
+        "https://*.example.com",
+        "https://client.*",
+        "https://client.example/",
+        "https://client.example/mcp",
+        "client.example",
+        "ftp://client.example",
+        "https://user@client.example",
+        "https://client.example:99999",
+        "https://client.example?x=1",
+        "",
+    ] {
+        match Server::try_with(root, "cors-bad", &["--allow-origin", bad]) {
+            Ok(s) => panic!("{bad:?} was allowed: {}", s.start),
+            Err((code, err)) => {
+                assert_eq!(code, Some(1), "{bad:?}: {err}");
+                assert!(err.contains("origin"), "{bad:?}: {err}");
+            }
+        }
+    }
+}
+
+/// With no origins allowed (the default), no answer carries a CORS header: not to this server's
+/// own origin, not to a request with none, not to a refusal, not to a preflight.
+#[test]
+fn no_cors_headers_when_the_list_is_empty() {
+    let root = setup("http");
+    let s = Server::start(root, "cors-none");
+    assert_eq!(s.start["allow_origins"], json!([]));
+    let own = format!("http://127.0.0.1:{}", s.port);
+    let replies = [
+        s.req().set("Origin", &own).post(&init(1)),
+        s.req().post(&init(1)),
+        Req::new(s.port).set("Origin", &own).post(&init(1)),
+        s.req()
+            .set("Origin", "https://client.example")
+            .post(&init(1)),
+        preflight(s.port, &own).send(),
+        preflight(s.port, "https://client.example").send(),
+        s.req().set("Origin", &own).method("DELETE").send(),
+    ];
+    for r in &replies {
+        assert!(cors(r).is_empty(), "{r:?}");
+    }
+    assert_eq!(replies[0].status, 200);
+    assert_eq!(replies[3].status, 403);
 }

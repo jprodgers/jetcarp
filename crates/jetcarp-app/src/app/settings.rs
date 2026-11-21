@@ -30,6 +30,11 @@ pub(super) struct AppSettings {
     pub tool_windows: BTreeMap<String, ToolWindowSettings>,
     /// Switch AI control on at launch (as `JETCARP_AI_CONTROL=1` does).
     pub ai_control_at_launch: bool,
+    /// MCP over HTTP in the AI control window: whether its token is kept for the next time, and
+    /// the exact origins whose web pages may connect. A section that cannot be read gives its
+    /// defaults (neither), and origins that are not exact ones are dropped.
+    #[serde(deserialize_with = "lenient")]
+    pub ai_http: super::ai_control::AiHttpSettings,
     /// Outputs (window, full screen, span, mirror), cell size, keep-awake, screensaver. A
     /// display section that cannot be read gives the default display only.
     #[serde(deserialize_with = "lenient")]
@@ -91,6 +96,7 @@ impl Default for AppSettings {
             layout: panes::Layout::default(),
             tool_windows: BTreeMap::new(),
             ai_control_at_launch: false,
+            ai_http: Default::default(),
             display: DisplaySettings::default(),
             reseed: Default::default(),
             wallpaper: Default::default(),
@@ -236,6 +242,7 @@ impl JetcarpApp {
             layout: self.shell.layout.clone(),
             tool_windows,
             ai_control_at_launch: self.shell.ai_at_launch,
+            ai_http: self.ai.http_settings.clone(),
             display: self.shell.display.clone(),
             reseed: self.reseed.snapshot(),
             wallpaper: self.wallpaper.settings.clone(),
@@ -254,6 +261,7 @@ impl JetcarpApp {
         self.shell.panes_hidden = s.panes_hidden;
         self.shell.layout = s.layout;
         self.shell.ai_at_launch = s.ai_control_at_launch;
+        self.ai.http_settings = s.ai_http.sanitize();
         self.shell.display = s.display;
         self.reseed.restore(s.reseed);
         self.wallpaper.settings = s.wallpaper;
@@ -507,6 +515,30 @@ mod tests {
         let bad =
             AppSettings::from_json(r#"{"version": 1, "gpu": "sometimes", "status_bar": false}"#);
         assert_eq!(bad.gpu, Own::Follow);
+        assert!(!bad.status_bar);
+    }
+
+    /// MCP over HTTP's choices: off in files from before; saved and read back; a section that
+    /// cannot be read gives neither, and the rest of the file is kept.
+    #[test]
+    fn the_http_choices_round_trip_and_default_to_off() {
+        use super::super::ai_control::AiHttpSettings;
+        let s = AppSettings::from_json(r#"{"version": 1}"#);
+        assert_eq!(s.ai_http, AiHttpSettings::default());
+        assert!(!s.ai_http.keep_token && s.ai_http.allow_origins.is_empty());
+        let s = AppSettings {
+            ai_http: AiHttpSettings {
+                keep_token: true,
+                allow_origins: vec!["https://client.example".into()],
+            },
+            ..AppSettings::default()
+        };
+        let text = serde_json::to_string(&s).unwrap();
+        assert_eq!(AppSettings::from_json(&text).ai_http, s.ai_http);
+        let bad = AppSettings::from_json(
+            r#"{"version": 1, "ai_http": {"keep_token": "yes"}, "status_bar": false}"#,
+        );
+        assert_eq!(bad.ai_http, AiHttpSettings::default());
         assert!(!bad.status_bar);
     }
 
