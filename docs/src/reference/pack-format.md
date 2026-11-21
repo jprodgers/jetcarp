@@ -983,11 +983,14 @@ packs; none is ever deleted or rewritten.
 | `ants` | two ant runs on the square grid: Langton's ant (a highway, named) and LLRR (symmetric growth) | `sha256:c5f2ab90b2bb2f269a62db194cc951eb77f0753b18e4658d93b0749ad53b317d` |
 | `export` | `minimal` as an export | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
 | `numbers` | random states beyond 2^53, as decimal strings: a Quick Start scene's `rng_state`, a block's find in `provenance.run`, and Langton's ant from a soup's `state` | `sha256:74f36181bc2ec72a7a9d1c45164d98cfec1e964f224ad704abe9f635cc243e38` |
+| `searches3` | an explore search sealed in run schema 3 (0.4.3): its runs' lineage in `parent` and `parent_job`, and a run on the 4,000-tile Penrose rhomb patch with those tiles as its `cells` | `sha256:946af892426755ccca9c58d0528e7b107df3361988c6a4c98f8c8baa304449f4` |
 
 Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
 fixed, including the times a search stamps on what it finds (a find's date and its verification's),
-so making them again gives the same bytes; a test makes and publishes the aperiodic one twice, in
-different seconds, and compares every file.
+so the JETCARP that made a pack makes it again in the same bytes; a test makes and publishes the
+aperiodic one twice, in different seconds, and compares every file. A later JETCARP may write an
+older pack differently, so the test that writes them writes only the ones not there yet: each is
+kept as its JETCARP made it, and `searches` keeps run schema 2 as `searches3` holds schema 3.
 
 ### Conformance levels
 

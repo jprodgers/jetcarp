@@ -345,8 +345,9 @@ fn run_schema() -> TypePtr {
 
 /// Columns of a run segment of schema 1 (the first of [`COLUMNS`]).
 const SCHEMA1_COLUMNS: usize = col::TS + 1;
-/// Columns of a run segment of schema 2.
+/// Columns of a run segment of schema 2, and of schema 3.
 const SCHEMA2_COLUMNS: usize = col::SIGN_LOST + 1;
+const SCHEMA3_COLUMNS: usize = col::PARENT_JOB + 1;
 
 /// The run schema of the first `n` columns.
 fn run_schema_of(n: usize) -> TypePtr {
@@ -507,14 +508,33 @@ impl SegmentWriter {
     /// they still read.
     #[doc(hidden)]
     pub fn create_schema2(path: &Path, kv: &[(String, String)]) -> Result<SegmentWriter, String> {
+        Self::create_of_schema(path, kv, 2, &Tuning::default())
+    }
+
+    /// A run segment of run schema `version` (1 to the newest, [`RUN_SCHEMAS`]) with these
+    /// settings: what the golden packs' searches are written with, each of the schema it was made
+    /// for, whatever the newest schema is.
+    #[doc(hidden)]
+    pub fn create_of_schema(
+        path: &Path,
+        kv: &[(String, String)],
+        version: usize,
+        t: &Tuning,
+    ) -> Result<SegmentWriter, String> {
+        let columns = match version {
+            1 => SCHEMA1_COLUMNS,
+            2 => SCHEMA2_COLUMNS,
+            3 => SCHEMA3_COLUMNS,
+            _ => return Err(format!("no run schema {version}")),
+        };
         Self::make(
             path,
             kv,
-            run_schema_of(SCHEMA2_COLUMNS),
-            RUN_SCHEMAS[1],
+            run_schema_of(columns),
+            RUN_SCHEMAS[version - 1],
             None,
             false,
-            &Tuning::default(),
+            t,
         )
     }
 
