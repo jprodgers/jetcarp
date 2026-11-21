@@ -241,8 +241,9 @@ enum Cmd {
         /// With --json, prints the URL and token as JSON. Ctrl-C stops it.
         #[arg(long, value_name = "PORT", num_args = 0..=1)]
         http: Option<Option<u16>>,
-        /// With --http: keep the token for the next start, and take the one kept (it is kept in
-        /// the same file, readable only by you). Without it, the kept token is forgotten.
+        /// With --http: keep the token for the next start, and take the one kept. It is kept in
+        /// a private file in the settings folder, survives restarts and reboots, and stays valid
+        /// until --new-token. Without it, the kept token is deleted.
         #[arg(long, requires = "http")]
         keep_token: bool,
         /// With --http: make a new token even when one is kept, and keep it; the old one stops

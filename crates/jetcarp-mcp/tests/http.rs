@@ -29,9 +29,15 @@ struct Server {
 /// folder of the test's own, so that the tests running at once do not share an endpoint file.
 fn env_for(root: &Path, tag: &str) -> Vec<(&'static str, std::path::PathBuf)> {
     let mut env = env_of(root);
-    env.retain(|(k, _)| *k != "JETCARP_RUNTIME_DIR");
+    env.retain(|(k, _)| !matches!(*k, "JETCARP_RUNTIME_DIR" | "JETCARP_CONFIG_DIR"));
     env.push(("JETCARP_RUNTIME_DIR", runtime(root, tag)));
+    env.push(("JETCARP_CONFIG_DIR", settings(root, tag)));
     env
+}
+
+/// The settings folder of test `tag`'s servers, where a kept token goes.
+fn settings(root: &Path, tag: &str) -> std::path::PathBuf {
+    root.join(format!("settings-{tag}"))
 }
 
 fn runtime(root: &Path, tag: &str) -> std::path::PathBuf {
@@ -1115,165 +1121,212 @@ fn read_json(p: &Path) -> Value {
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
 }
 
-/// The token is kept for the next start only when asked (`--keep-token`, the app's checkbox), in
-/// the same private file; without it each start makes a new one and the kept one is forgotten. A
-/// new token (`--new-token`) replaces the kept one, and the old one is refused from then on.
-#[test]
-fn a_token_is_kept_only_when_asked() {
-    let root = setup("http");
-    let file = runtime(root, "kept").join("mcp-http-endpoint.json");
-    let keep = Options {
+/// The kept token's file for test `tag`, in a settings folder of the test's own.
+fn kept_at(root: &Path, tag: &str) -> std::path::PathBuf {
+    settings(root, tag)
+        .join(jetcarp_mcp::http::KEPT_DIR)
+        .join(jetcarp_mcp::http::CLI_KEPT)
+}
+
+/// Options that keep the token in `kept`.
+fn keeping(kept: &Path) -> Options {
+    Options {
         keep_token: true,
+        kept_file: Some(kept.to_path_buf()),
         ..Options::default()
-    };
-    // Not asked: a new token each start, and the file goes when the endpoint stops.
-    let a = listen(Some(file.clone()), Options::default());
+    }
+}
+
+/// Options that do not keep the token (the kept file named, so that it is forgotten).
+fn not_keeping(kept: &Path) -> Options {
+    Options {
+        kept_file: Some(kept.to_path_buf()),
+        ..Options::default()
+    }
+}
+
+/// The token is kept only when asked (`--keep-token`, the app's checkbox), in a private file in
+/// the settings folder, so it survives a fresh runtime folder (a logout or a reboot): the next
+/// start that keeps it takes it back. The runtime file still goes when the endpoint stops.
+#[test]
+fn a_kept_token_survives_a_fresh_runtime_folder() {
+    let root = setup("http");
+    let kept = kept_at(root, "kept");
+    let run_a = runtime(root, "kept-a").join("mcp-http-endpoint.json");
+    let run_b = runtime(root, "kept-b").join("mcp-http-endpoint.json");
+    // Not asked: a new token each start, and nothing is kept.
+    let a = listen(Some(run_a.clone()), not_keeping(&kept));
     let t0 = a.token.clone();
     assert!(!a.kept());
     drop(a);
-    assert!(!file.exists(), "not kept: the file is removed");
+    assert!(!kept.exists(), "nothing kept unless asked");
 
-    // Asked: the first start makes one and keeps it, in the same private file...
-    let a = listen(Some(file.clone()), keep.clone());
+    let a = listen(Some(run_a.clone()), keeping(&kept));
     let t1 = a.token.clone();
     assert_ne!(t1, t0);
     assert!(a.kept());
-    assert_eq!(read_json(&file)["kept"], true);
-    drop(a);
-    let rec = read_json(&file);
+    let rec = read_json(&kept);
     assert_eq!(rec["token"], t1.as_str(), "{rec}");
     assert_eq!(rec["kept"], true);
-    assert!(
-        rec.get("port").is_none(),
-        "a stopped endpoint records no port: {rec}"
-    );
     #[cfg(unix)]
-    assert_eq!(jetcarp_mcp::link::private_mode(&file).unwrap(), 0o600);
-
-    // ...and the next start takes it, and it works.
-    let mut b = Served::new(listen(Some(file.clone()), keep.clone()));
-    assert_eq!(b.l.token, t1, "kept across a restart");
+    {
+        use jetcarp_mcp::link::private_mode;
+        assert_eq!(private_mode(&kept).unwrap(), 0o600);
+        assert_eq!(private_mode(kept.parent().unwrap()).unwrap(), 0o700);
+    }
+    drop(a);
+    assert!(!run_a.exists(), "the runtime file goes when it stops");
+    assert!(kept.exists(), "the kept file stays");
+    // A logout or a reboot empties the runtime folder; the kept token is still there.
+    std::fs::remove_dir_all(run_a.parent().unwrap()).unwrap();
+    let mut b = Served::new(listen(Some(run_b.clone()), keeping(&kept)));
+    assert_eq!(b.l.token, t1, "kept across a fresh runtime folder");
     let port = b.l.port;
     assert_eq!(b.send(Req::new(port).token(&t1), init(1)).status, 200);
+    assert_eq!(read_json(&run_b)["kept"], true);
     drop(b);
-
-    // A new token replaces the kept one, and the old one is refused.
-    let mut c = Served::new(listen(
-        Some(file.clone()),
-        Options {
-            new_token: true,
-            ..keep.clone()
-        },
-    ));
-    let (t2, port) = (c.l.token.clone(), c.l.port);
-    assert_ne!(t2, t1);
-    assert!(c.l.kept());
-    assert_eq!(c.send(Req::new(port).token(&t1), init(1)).status, 401);
-    assert_eq!(c.send(Req::new(port).token(&t2), init(2)).status, 200);
-    drop(c);
-    let d = listen(Some(file.clone()), keep.clone());
-    assert_eq!(d.token, t2, "the new one is kept");
-    drop(d);
-
-    // Started without keeping, the kept token is forgotten, and not taken back later.
-    let e = listen(Some(file.clone()), Options::default());
-    assert_ne!(e.token, t2);
-    drop(e);
-    assert!(!file.exists());
-    let f = listen(Some(file.clone()), keep);
-    assert_ne!(f.token, t2, "a forgotten token is not taken back");
-    drop(f);
 }
 
-/// A new token while the endpoint runs (the app's button): the old one is refused at once, the
-/// sessions started with it end, and a kept token is replaced in the file. Keeping can be
-/// switched on and off while it runs.
+/// Keeping switched off, or a new token made, deletes the kept file: the old token never comes
+/// back. A new token while keeping is kept in its place; the old one is refused at once.
 #[test]
-fn a_new_token_while_running_refuses_the_old_one() {
+fn keeping_off_or_a_new_token_deletes_the_kept_token() {
     let root = setup("http");
-    let file = runtime(root, "renew").join("app-http-endpoint.json");
-    let mut s = Served::new(listen(
-        Some(file.clone()),
-        Options {
-            keep_token: true,
-            ..Options::default()
-        },
-    ));
-    let (old, port) = (s.l.token.clone(), s.l.port);
-    let r = s.send(Req::new(port).token(&old), init(1));
+    let kept = kept_at(root, "forget");
+    let run = runtime(root, "forget").join("mcp-http-endpoint.json");
+    // Off while running.
+    let mut a = listen(Some(run.clone()), keeping(&kept));
+    let t1 = a.token.clone();
+    assert!(kept.exists());
+    a.set_keep(false);
+    assert!(!a.kept());
+    assert!(!kept.exists(), "keeping off deletes the kept file");
+    a.set_keep(true);
+    assert_eq!(read_json(&kept)["token"], t1.as_str(), "on again: kept");
+    // A new token while running: the old one is gone from the file, and refused.
+    let mut s = Served::new(a);
+    let port = s.l.port;
+    let r = s.send(Req::new(port).token(&t1), init(1));
     assert_eq!(r.status, 200);
     let sid = r.header("mcp-session-id").unwrap().to_string();
     s.l.renew_token().unwrap();
-    let new = s.l.token.clone();
-    assert_ne!(new, old);
-    assert_eq!(s.l.header(), format!("Authorization: Bearer {new}"));
-    let ping = req(2, "ping", json!({}));
-    let r = s.send(Req::new(port).token(&old).session(&sid), ping.clone());
-    assert_eq!(r.status, 401, "the old token is refused");
-    let r = s.send(Req::new(port).token(&new).session(&sid), ping);
-    assert_eq!(r.status, 404, "its sessions ended with it");
-    assert_eq!(s.send(Req::new(port).token(&new), init(3)).status, 200);
+    let t2 = s.l.token.clone();
+    assert_ne!(t2, t1);
+    assert_eq!(s.l.header(), format!("Authorization: Bearer {t2}"));
     assert_eq!(
-        read_json(&file)["token"],
-        new.as_str(),
-        "the kept one is replaced"
+        read_json(&kept)["token"],
+        t2.as_str(),
+        "the new one is kept instead"
     );
-
-    // Keeping switched off while running: the file goes when it stops.
+    let ping = req(2, "ping", json!({}));
+    let r = s.send(Req::new(port).token(&t1).session(&sid), ping.clone());
+    assert_eq!(r.status, 401, "the old token is refused");
+    let r = s.send(Req::new(port).token(&t2).session(&sid), ping);
+    assert_eq!(r.status, 404, "its sessions ended with it");
+    assert_eq!(s.send(Req::new(port).token(&t2), init(3)).status, 200);
+    // A new token while not keeping: nothing is kept.
     s.l.set_keep(false);
-    assert!(!s.l.kept());
-    assert_eq!(read_json(&file)["kept"], false);
+    s.l.renew_token().unwrap();
+    assert!(!kept.exists());
     drop(s);
-    assert!(!file.exists());
+
+    // At a start: a new token replaces the kept one; a start without keeping forgets it.
+    let t3 = listen(Some(run.clone()), keeping(&kept)).token.clone();
+    let c = listen(
+        Some(run.clone()),
+        Options {
+            new_token: true,
+            ..keeping(&kept)
+        },
+    );
+    let t4 = c.token.clone();
+    assert_ne!(t4, t3);
+    assert_eq!(read_json(&kept)["token"], t4.as_str());
+    drop(c);
+    let d = listen(Some(run.clone()), not_keeping(&kept));
+    assert_ne!(d.token, t4);
+    assert!(
+        !kept.exists(),
+        "a start without keeping deletes the kept file"
+    );
+    drop(d);
+    let e = listen(Some(run), keeping(&kept));
+    assert_ne!(e.token, t4, "a forgotten token is not taken back");
 }
 
-/// A kept token is taken back only from a file that is still private, and only if it looks like
-/// one of ours: a file others could read gives a new token.
+/// A kept token is taken back only from a file still readable by this user alone, in a folder
+/// only they can enter, written as kept, holding a token like ours: anything else gives a new one.
 #[cfg(unix)]
 #[test]
 fn a_kept_token_in_a_loose_file_is_not_taken() {
     use std::os::unix::fs::PermissionsExt;
     let root = setup("http");
-    let file = runtime(root, "loose").join("mcp-http-endpoint.json");
-    let keep = Options {
-        keep_token: true,
-        ..Options::default()
+    let kept = kept_at(root, "loose");
+    let dir = kept.parent().unwrap().to_path_buf();
+    let set = |p: &Path, mode: u32| {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode)).unwrap()
     };
-    let t1 = listen(Some(file.clone()), keep.clone()).token.clone();
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
-    let a = listen(Some(file.clone()), keep.clone());
-    assert_ne!(a.token, t1, "not from a file others can read");
-    drop(a);
-    std::fs::write(&file, r#"{"token": "short", "kept": true}"#).unwrap();
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
-    let b = listen(Some(file.clone()), keep);
-    assert_ne!(b.token, "short");
-    assert_eq!(b.token.len(), 32);
+    let t1 = listen(None, keeping(&kept)).token.clone();
+    let again = || listen(None, keeping(&kept)).token.clone();
+    assert_eq!(again(), t1, "a private file's token is taken");
+    // Written by the keeping above each time: each case spoils it again.
+    set(&kept, 0o644);
+    assert_ne!(again(), t1, "not from a file others can read");
+    let t2 = read_json(&kept)["token"].as_str().unwrap().to_string();
+    set(&dir, 0o755);
+    assert_ne!(again(), t2, "not from a folder others can enter");
+    let t3 = read_json(&kept)["token"].as_str().unwrap().to_string();
+    std::fs::write(&kept, format!(r#"{{"token": "{t3}", "kept": false}}"#)).unwrap();
+    assert_ne!(again(), t3, "not from a file not written as kept");
+    std::fs::write(&kept, r#"{"token": "short", "kept": true}"#).unwrap();
+    let t = again();
+    assert_ne!(t, "short");
+    assert_eq!(t.len(), 32);
+    // A link to a private file elsewhere is not the file.
+    let elsewhere = root.join("loose-elsewhere.json");
+    std::fs::write(&elsewhere, format!(r#"{{"token": "{t}", "kept": true}}"#)).unwrap();
+    set(&elsewhere, 0o600);
+    std::fs::remove_file(&kept).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &kept).unwrap();
+    assert_ne!(again(), t, "not through a link");
 }
 
-/// `jetcarp-mcp --http --keep-token` keeps its token across a restart of the program, says so,
-/// and never writes the token to its standard error; `--new-token` replaces it; without either,
-/// each start has a new one. The flags go with `--http` only.
+/// `jetcarp-mcp --http --keep-token` keeps its token across a restart of the program and a fresh
+/// runtime folder, and warns, on one line of its standard error, that the token is in the settings
+/// folder, survives restarts and reboots, and stays valid until `--new-token`; the token itself is
+/// never written there. `--new-token` replaces it (and warns too); without either, nothing is
+/// kept, and nothing is said. The flags go with `--http` only.
 #[test]
 fn the_kept_token_survives_a_restart_of_the_server() {
     let root = setup("http");
     let tag = "keep-cli";
-    let clean = |s: &Server| {
-        let err = std::fs::read_to_string(stderr_of(root, tag)).unwrap_or_default();
-        assert!(
-            !err.contains(&s.token),
-            "the token in standard error: {err}"
-        );
+    let kept = kept_at(root, tag);
+    let err = || std::fs::read_to_string(stderr_of(root, tag)).unwrap_or_default();
+    let warned = |s: &Server| {
+        let e = err();
+        assert!(!e.contains(&s.token), "the token in standard error: {e}");
+        let lines: Vec<&str> = e.lines().filter(|l| l.contains("reboots")).collect();
+        assert_eq!(lines.len(), 1, "one warning: {e}");
+        let w = lines[0];
+        for want in ["settings folder", "restarts and reboots", "--new-token"] {
+            assert!(w.contains(want), "{want} in {w}");
+        }
+        assert!(w.contains(&kept.display().to_string()), "{w}");
     };
     let s = Server::with(root, tag, &["--keep-token"]);
     assert_eq!(s.start["kept"], true);
+    assert_eq!(s.start["kept_file"], kept.display().to_string());
     let t1 = s.token.clone();
-    clean(&s);
+    warned(&s);
     drop(s);
+    std::fs::remove_dir_all(runtime(root, tag)).unwrap();
     let s = Server::with(root, tag, &["--keep-token"]);
-    assert_eq!(s.token, t1, "kept across a restart");
+    assert_eq!(
+        s.token, t1,
+        "kept across a restart and a fresh runtime folder"
+    );
     assert_eq!(s.req().post(&init(1)).status, 200);
-    clean(&s);
+    warned(&s);
     drop(s);
     let s = Server::with(root, tag, &["--new-token"]);
     let t2 = s.token.clone();
@@ -1281,10 +1334,13 @@ fn the_kept_token_survives_a_restart_of_the_server() {
     assert_eq!(s.start["kept"], true, "a new token is kept");
     assert_eq!(Req::new(s.port).token(&t1).post(&init(1)).status, 401);
     assert_eq!(s.req().post(&init(1)).status, 200);
+    warned(&s);
     drop(s);
     let s = Server::start(root, tag);
     assert_ne!(s.token, t2);
     assert_eq!(s.start["kept"], false);
+    assert!(!kept.exists(), "not kept: the kept file is deleted");
+    assert!(!err().contains("reboots"), "no warning: {}", err());
     drop(s);
     // Without --http, the flags are refused.
     for flag in ["--keep-token", "--new-token"] {

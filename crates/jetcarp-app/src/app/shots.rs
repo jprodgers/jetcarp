@@ -437,6 +437,15 @@ fn ai_control_window_on_the_quick_start() {
     h.click("Also serve MCP over HTTP (127.0.0.1 only)");
     let port = h.app.ai_http_port().expect("HTTP opened");
     h.find(&format!("http://127.0.0.1:{port}/mcp"));
+    // Keeping the token says what it means while it is ticked (#236).
+    let warning = "The token is stored in JETCARP's settings folder, survives restarts and reboots";
+    assert!(h.o.find(warning).is_none(), "no warning until ticked");
+    h.click("Keep this token for next time");
+    h.run(0.3, 0.05, |_| false);
+    h.find(warning);
+    h.click("Keep this token for next time");
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.o.find(warning).is_none(), "and none once unticked");
     h.click("Allow AI control (127.0.0.1 only)");
     assert!(h.app.ai_port().is_none(), "and closed again");
     assert!(h.app.ai_http_port().is_none(), "HTTP with it");

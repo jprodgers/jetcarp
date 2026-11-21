@@ -60,6 +60,8 @@ pub struct AiControl {
     http_error: Option<String>,
     /// Saved with the app's settings.
     pub(super) http_settings: AiHttpSettings,
+    /// Where the token is kept, when it is (the settings folder's `http-tokens/app-http.json`).
+    http_kept: Option<PathBuf>,
     /// The origin being typed into the window, and why the last one was refused.
     origin_text: String,
     origin_error: Option<String>,
@@ -101,14 +103,22 @@ impl AiControl {
     }
 
     /// Serve MCP over HTTP: on 127.0.0.1, on `port` or else any free port, recording the URL and
-    /// token in `endpoint`, with the saved choices (the kept token, the allowed origins). Only
-    /// while AI control is on.
-    fn http_on(&mut self, port: u16, endpoint: Option<PathBuf>, wake: Arc<dyn Fn() + Send + Sync>) {
+    /// token in `endpoint`, with the saved choices: the token kept in `kept` (the settings
+    /// folder's), the allowed origins. Only while AI control is on.
+    fn http_on(
+        &mut self,
+        port: u16,
+        endpoint: Option<PathBuf>,
+        kept: Option<PathBuf>,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) {
         if self.listener.is_none() {
             return;
         }
+        self.http_kept = kept.clone();
         let opts = jetcarp_mcp::http::Options {
             keep_token: self.http_settings.keep_token,
+            kept_file: kept,
             allow_origins: self.http_settings.allow_origins.clone(),
             ..Default::default()
         };
@@ -138,12 +148,22 @@ impl AiControl {
         self.http_server = jetcarp_mcp::Server::default();
     }
 
-    /// Keep the token for the next time, or not (saved).
+    /// Keep the token for the next time, or not (saved). Not keeping deletes the kept token.
     fn set_http_keep(&mut self, keep: bool) {
         self.http_settings.keep_token = keep;
         if let Some(h) = &mut self.http {
             h.set_keep(keep);
+        } else if !keep && let Some(p) = &self.http_kept {
+            let _ = std::fs::remove_file(p);
         }
+    }
+
+    /// What the window says under *Keep this token for next time* while it is ticked.
+    pub(super) fn http_keep_warning(&self) -> Option<&'static str> {
+        self.http_settings.keep_token.then_some(
+            "The token is stored in JETCARP's settings folder, survives restarts and reboots, and \
+             stays valid until you press New token.",
+        )
     }
 
     /// A new token: the old one stops working at once, and its sessions end.
@@ -239,6 +259,7 @@ impl JetcarpApp {
         self.ai.http_on(
             jetcarp_mcp::http::DEFAULT_PORT,
             jetcarp_mcp::link::runtime_file(jetcarp_mcp::http::APP_ENDPOINT),
+            jetcarp_mcp::http::kept_file(jetcarp_mcp::http::APP_KEPT),
             wake,
         );
     }
@@ -323,6 +344,9 @@ impl JetcarpApp {
             .changed()
         {
             self.ai.set_http_keep(keep);
+        }
+        if let Some(w) = self.ai.http_keep_warning() {
+            ui.label(RichText::new(w).small());
         }
         if ui
             .button("New token")
@@ -621,19 +645,34 @@ mod tests {
     fn http_keeps_its_token_when_asked_and_lets_listed_pages_in() {
         let dir = std::env::temp_dir().join(format!("jetcarp-ai-keep-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
+        let run = dir.join("runtime");
         let (link, file) = (
-            dir.join("app-endpoint.json"),
-            dir.join("app-http-endpoint.json"),
+            run.join("app-endpoint.json"),
+            run.join("app-http-endpoint.json"),
         );
+        let kept = dir
+            .join("settings")
+            .join("http-tokens")
+            .join("app-http.json");
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
         let mut ai = AiControl::default();
-        ai.switch_on(0, Some(link), wake.clone());
+        ai.switch_on(0, Some(link.clone()), wake.clone());
+        assert!(ai.http_keep_warning().is_none());
         ai.set_http_keep(true);
-        ai.http_on(0, Some(file.clone()), wake.clone());
+        let w = ai.http_keep_warning().expect("a warning while kept");
+        for want in ["settings folder", "restarts and reboots", "New token"] {
+            assert!(w.contains(want), "{want} in {w}");
+        }
+        ai.http_on(0, Some(file.clone()), Some(kept.clone()), wake.clone());
         let t1 = ai.http.as_ref().unwrap().token.clone();
         ai.http_off();
-        assert!(file.exists(), "kept: the file keeps the token");
-        ai.http_on(0, Some(file.clone()), wake.clone());
+        ai.switch_off();
+        assert!(!file.exists(), "the runtime file goes");
+        assert!(kept.exists(), "kept: the settings folder keeps the token");
+        // A logout or reboot: the runtime folder is emptied.
+        let _ = std::fs::remove_dir_all(&run);
+        ai.switch_on(0, Some(link), wake.clone());
+        ai.http_on(0, Some(file.clone()), Some(kept.clone()), wake.clone());
         let (t, port) = {
             let h = ai.http.as_ref().unwrap();
             (h.token.clone(), h.port)
@@ -642,6 +681,10 @@ mod tests {
         ai.renew_http_token();
         let t2 = ai.http.as_ref().unwrap().token.clone();
         assert_ne!(t2, t1);
+        assert!(
+            !std::fs::read_to_string(&kept).unwrap().contains(&t1),
+            "the old one is gone from the file"
+        );
         assert_eq!(
             http_status(port, Some(&t1)),
             Some(401),
@@ -677,8 +720,10 @@ mod tests {
         };
         assert_eq!(saved.sanitize().allow_origins, vec![o.to_string()]);
 
-        // Unkept: the file goes when HTTP stops.
+        // Unkept: the kept token is deleted at once, and the warning goes.
         ai.set_http_keep(false);
+        assert!(!kept.exists(), "keeping off deletes the kept token");
+        assert!(ai.http_keep_warning().is_none());
         ai.http_off();
         assert!(!file.exists());
         ai.switch_off();
@@ -698,7 +743,7 @@ mod tests {
         );
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
         let mut ai = AiControl::default();
-        ai.http_on(0, Some(file.clone()), wake.clone());
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
         assert!(ai.http.is_none(), "not while AI control is off");
         assert!(!file.exists());
 
@@ -706,7 +751,7 @@ mod tests {
         assert!(ai.http.is_none(), "AI control alone does not serve HTTP");
         assert!(!file.exists());
 
-        ai.http_on(0, Some(file.clone()), wake.clone());
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
         let (port, token) = {
             let h = ai.http.as_ref().expect("ticked");
             assert_eq!(h.url(), format!("http://127.0.0.1:{}/mcp", h.port));
@@ -724,7 +769,7 @@ mod tests {
         );
         assert!(ai.listener.is_some(), "AI control stays on");
 
-        ai.http_on(0, Some(file.clone()), wake.clone());
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
         let port = {
             let h = ai.http.as_ref().expect("ticked again");
             assert_ne!(h.token, token, "a new token each time it is ticked");

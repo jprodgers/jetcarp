@@ -1009,24 +1009,24 @@ fn mcp_over_http_says_where_it_listens() {
     );
 }
 
-/// `jetcarp mcp --http --keep-token --allow-origin URL` keeps its token across a restart and
-/// says which origins may connect; `--new-token` replaces the token; a wildcard origin is
-/// refused before anything listens; and the three go with `--http` only.
+/// `jetcarp mcp --http --keep-token --allow-origin URL` keeps its token in the settings folder,
+/// across a restart and a fresh runtime folder, warns that it does, and says which origins may
+/// connect; `--new-token` replaces the token; a wildcard origin is refused before anything
+/// listens; and the three go with `--http` only.
 #[test]
 fn mcp_over_http_keeps_its_token_and_allows_exact_origins() {
     use std::io::{BufRead, BufReader};
     use std::process::Stdio;
     let runtime = test_dir("JETCARP_RUNTIME_DIR", "runtime").join("http-kept");
+    // A settings folder of its own: the kept token goes there.
+    let settings = test_dir("JETCARP_CONFIG_DIR", "config").join("http-kept");
     let start = |extra: &[&str]| -> (Option<Value>, std::process::Output) {
         let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
             .args(["--json", "mcp", "--http", "0"])
             .args(extra)
             .env("JETCARP_OUT", out_root())
             .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
-            .env(
-                "JETCARP_CONFIG_DIR",
-                test_dir("JETCARP_CONFIG_DIR", "config"),
-            )
+            .env("JETCARP_CONFIG_DIR", &settings)
             .env("JETCARP_RUNTIME_DIR", &runtime)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -1042,10 +1042,17 @@ fn mcp_over_http_keeps_its_token_and_allows_exact_origins() {
         (v, child.wait_with_output().unwrap())
     };
     let o = "https://client.example";
-    let (a, _) = start(&["--keep-token", "--allow-origin", o]);
+    let (a, out) = start(&["--keep-token", "--allow-origin", o]);
     let a = a.expect("it starts");
     assert_eq!(a["kept"], true);
+    let kept = settings.join("http-tokens").join("mcp-http.json");
+    assert_eq!(a["kept_file"], kept.display().to_string());
+    assert!(kept.exists());
+    let err = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(err.contains("survives restarts and reboots"), "{err}");
+    assert!(!err.contains(a["token"].as_str().unwrap()), "{err}");
     assert_eq!(a["allow_origins"], json!([o]));
+    let _ = std::fs::remove_dir_all(&runtime);
     let (b, _) = start(&["--keep-token"]);
     let b = b.unwrap();
     assert_eq!(b["token"], a["token"], "kept across a restart");

@@ -52,6 +52,20 @@ pub const PATH: &str = "/mcp";
 pub const CLI_ENDPOINT: &str = "mcp-http-endpoint.json";
 /// The runtime file the app's HTTP endpoint records its URL and token in.
 pub const APP_ENDPOINT: &str = "app-http-endpoint.json";
+/// The settings folder's private subfolder (0700 on Linux and macOS) that holds kept tokens.
+/// `jetcarp uninstall --settings` counts it and its two files as JETCARP's (`HTTP_TOKEN_FILES`
+/// in `jetcarp-api`'s `ops/system.rs`, which cannot see these): the names must stay in step.
+pub const KEPT_DIR: &str = "http-tokens";
+/// The file in [`KEPT_DIR`] holding `jetcarp mcp --http`'s kept token.
+pub const CLI_KEPT: &str = "mcp-http.json";
+/// The file in [`KEPT_DIR`] holding the app's kept token.
+pub const APP_KEPT: &str = "app-http.json";
+
+/// Where a kept token is kept: the file `name` ([`CLI_KEPT`], [`APP_KEPT`]) in the settings
+/// folder's [`KEPT_DIR`]. `None` when there is no settings folder.
+pub fn kept_file(name: &str) -> Option<PathBuf> {
+    Some(jetcarp_core::paths::config_dir()?.join(KEPT_DIR).join(name))
+}
 
 const SESSION_HEADER: &str = "mcp-session-id";
 const META_VERSION: &str = "io.modelcontextprotocol/protocolVersion";
@@ -71,8 +85,11 @@ const SINGLE: &[&str] = &[
 #[derive(Clone, Debug, Default)]
 pub struct Options {
     pub limits: Limits,
-    /// Keep the token in the endpoint's file for the next start, and take the one kept there.
+    /// Keep the token for the next start, in [`kept_file`](Options::kept_file), and take the one
+    /// kept there.
     pub keep_token: bool,
+    /// Where the token is kept ([`kept_file`]).
+    pub kept_file: Option<PathBuf>,
     /// Make a new token even when one is kept (and keep it).
     pub new_token: bool,
     /// Origins, as [`parse_origin`] gives them, whose pages may connect.
@@ -168,8 +185,9 @@ pub fn parse_origin(s: &str) -> Result<String, String> {
     })
 }
 
-/// The token kept in the endpoint's file at `p`, if it was kept, the file is still readable by
-/// this user only, and the token looks like one this endpoint makes.
+/// The token kept in the file at `p` ([`kept_file`]), if it was written as kept, the file is
+/// still readable by this user only (on Linux and macOS a file of mode 0600, not a link, in a
+/// folder of mode 0700), and the token looks like one this endpoint makes.
 fn kept_token(p: &Path) -> Option<String> {
     #[cfg(unix)]
     if link::private_mode(p).ok()? != 0o600 || link::private_mode(p.parent()?).ok()? != 0o700 {
@@ -186,7 +204,16 @@ fn kept_token(p: &Path) -> Option<String> {
     .then(|| t.to_string())
 }
 
-/// The token recorded in the endpoint's file at `p`, kept or not.
+/// Keep `token` in the file at `p`: made readable by this user only, in a folder of its own
+/// inside the settings folder (made, if need be, as any settings folder is).
+fn write_kept(p: &Path, token: &str) -> std::io::Result<()> {
+    if let Some(settings) = p.parent().and_then(Path::parent) {
+        std::fs::create_dir_all(settings)?;
+    }
+    link::write_private(p, &json!({"token": token, "kept": true}).to_string())
+}
+
+/// The token recorded in the endpoint's runtime file at `p`.
 fn recorded_token(p: &Path) -> Option<String> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
     v["token"].as_str().map(String::from)
@@ -321,8 +348,12 @@ pub struct Listener {
     shared: Arc<Shared>,
     file: Option<PathBuf>,
     wrote_file: bool,
-    /// The token stays in the file when the endpoint stops, for the next start to take.
+    /// The token is kept, in `kept_file`, for the next start to take.
     keep: bool,
+    kept_file: Option<PathBuf>,
+    /// Whether the token is in `kept_file` now, and why not when keeping failed.
+    kept_ok: bool,
+    kept_error: Option<String>,
 }
 
 impl Listener {
@@ -349,7 +380,7 @@ impl Listener {
         sock.set_nonblocking(true)?;
         let port = sock.local_addr()?.port();
         let kept = (opts.keep_token && !opts.new_token)
-            .then(|| file.as_deref().and_then(kept_token))
+            .then(|| opts.kept_file.as_deref().and_then(kept_token))
             .flatten();
         let token = match kept {
             Some(t) => t,
@@ -385,9 +416,35 @@ impl Listener {
             file,
             wrote_file: false,
             keep: opts.keep_token || opts.new_token,
+            kept_file: opts.kept_file,
+            kept_ok: false,
+            kept_error: None,
         };
+        // Kept: the token goes into the kept file now, so that it is kept even if this process
+        // ends without stopping. Not kept: a token kept before is deleted.
+        l.sync_kept();
         l.wrote_file = l.write_file().is_ok();
         Ok(l)
+    }
+
+    /// Put the kept file in step with `keep`: the token written in it, or the file deleted.
+    fn sync_kept(&mut self) {
+        self.kept_ok = false;
+        self.kept_error = None;
+        let Some(p) = &self.kept_file else {
+            if self.keep {
+                self.kept_error = Some("there is no settings folder".into());
+            }
+            return;
+        };
+        if self.keep {
+            match write_kept(p, &self.token) {
+                Ok(()) => self.kept_ok = true,
+                Err(e) => self.kept_error = Some(e.to_string()),
+            }
+        } else {
+            let _ = std::fs::remove_file(p);
+        }
     }
 
     fn write_file(&self) -> std::io::Result<()> {
@@ -429,24 +486,40 @@ impl Listener {
         self.shared.connections.load(Ordering::SeqCst)
     }
 
-    /// Whether the token is kept for the next start: asked for, and recorded in the file.
+    /// Whether the token is kept for the next start: asked for, and written in the kept file.
     pub fn kept(&self) -> bool {
-        self.keep && self.wrote_file
+        self.keep && self.kept_ok
     }
 
-    /// Keep the token for the next start, or not (then the file goes when the endpoint stops).
+    /// The file the token is kept in, while it is.
+    pub fn kept_file(&self) -> Option<&Path> {
+        self.kept_file.as_deref().filter(|_| self.kept())
+    }
+
+    /// Why the token could not be kept, when it was to be.
+    pub fn kept_error(&self) -> Option<&str> {
+        self.kept_error.as_deref()
+    }
+
+    /// Keep the token for the next start, or not: not keeping deletes the kept file at once.
     pub fn set_keep(&mut self, keep: bool) {
         self.keep = keep;
+        self.sync_kept();
         self.wrote_file = self.write_file().is_ok();
     }
 
-    /// A new token: the old one is refused from now on, the sessions started with it end, and
-    /// the file records the new one (kept, if the old one was).
+    /// A new token: the old one is refused from now on, the sessions started with it end, the
+    /// kept file is deleted (and holds the new one instead, while keeping), and the runtime file
+    /// records the new one.
     pub fn renew_token(&mut self) -> std::io::Result<()> {
         let t = link::new_token()?;
         *self.shared.token.lock().unwrap() = t.clone();
         self.shared.sessions.lock().unwrap().clear();
         self.token = t;
+        if let Some(p) = &self.kept_file {
+            let _ = std::fs::remove_file(p);
+        }
+        self.sync_kept();
         self.wrote_file = self.write_file().is_ok();
         Ok(())
     }
@@ -479,20 +552,13 @@ impl Drop for Listener {
         for s in self.shared.open.lock().unwrap().values() {
             let _ = s.shutdown(Shutdown::Both);
         }
-        // Only if the file is still this listener's: kept, it keeps the token alone (no port,
-        // since nothing listens), for the next start; else it goes.
+        // The runtime file goes, if it is still this listener's. A kept token stays in its own
+        // file, in the settings folder.
         if self.wrote_file
             && let Some(p) = &self.file
             && recorded_token(p).as_deref() == Some(self.token.as_str())
         {
-            if self.keep {
-                let text = json!({"token": self.token, "kept": true}).to_string();
-                if link::write_private(p, &text).is_err() {
-                    let _ = std::fs::remove_file(p);
-                }
-            } else {
-                let _ = std::fs::remove_file(p);
-            }
+            let _ = std::fs::remove_file(p);
         }
     }
 }
@@ -1652,6 +1718,7 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
         .collect::<Result<Vec<_>, _>>()?;
     let options = Options {
         keep_token: opts.keep_token || opts.new_token,
+        kept_file: kept_file(CLI_KEPT),
         new_token: opts.new_token,
         allow_origins,
         ..Options::default()
@@ -1718,6 +1785,7 @@ fn announce(l: &Listener, opts: &Serve) {
                 "header": l.header(),
                 "endpoint_file": file,
                 "kept": l.kept(),
+                "kept_file": l.kept_file().map(|p| p.display().to_string()),
                 "allow_origins": l.origins(),
                 "app": opts.app,
             })
@@ -1729,15 +1797,14 @@ fn announce(l: &Listener, opts: &Serve) {
             "Each session has a private world of its own."
         };
         let token = match (&file, l.kept()) {
-            (Some(f), true) => format!(
-                "The token is kept for the next start (--keep-token; --new-token replaces it), in \
-                 {f}, which only you can read."
-            ),
+            (_, true) => "The token is kept for the next start (--keep-token; --new-token \
+                          replaces it)."
+                .to_string(),
             (Some(f), false) => format!(
                 "The token is new each time it starts, and is recorded in {f}, which only you can \
                  read."
             ),
-            (None, _) => "The token is new each time it starts.".to_string(),
+            (None, false) => "The token is new each time it starts.".to_string(),
         };
         let origins = l.origins();
         let pages = if origins.is_empty() {
@@ -1757,6 +1824,16 @@ fn announce(l: &Listener, opts: &Serve) {
             l.url(),
             l.header(),
         );
+    }
+    // Keeping the token is the user's choice; what it means is said each time it is kept.
+    if let Some(p) = l.kept_file() {
+        eprintln!(
+            "jetcarp mcp: the token is kept in {}, in JETCARP's settings folder: it survives \
+             restarts and reboots, and stays valid until a new one is made (--new-token)",
+            p.display()
+        );
+    } else if let Some(e) = l.kept_error() {
+        eprintln!("jetcarp mcp: the token could not be kept ({e}), so it is new each time");
     }
     if opts.port.is_none() && l.port != DEFAULT_PORT {
         eprintln!(

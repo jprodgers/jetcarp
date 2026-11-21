@@ -57,7 +57,8 @@ fn main() {
                      Its tools read and write files only in JETCARP's output and library folders, and in each --allow DIR.\n\
                      --http [PORT]: serve MCP over HTTP instead, at http://127.0.0.1:PORT/mcp (default port {}), on this computer only;\n\
                      clients send the token it prints as an Authorization: Bearer header. --json prints the endpoint as JSON.\n\
-                     --keep-token keeps the token for the next start; --new-token makes a new one and keeps it.\n\
+                     --keep-token keeps the token in the settings folder, across restarts and reboots, until --new-token\n\
+                     makes a new one (and keeps it).\n\
                      --allow-origin URL lets web pages from that exact origin connect (with the token), repeatable.\n\
                      --port and --token are the app's, for --app.",
                     jetcarp_mcp::http::DEFAULT_PORT

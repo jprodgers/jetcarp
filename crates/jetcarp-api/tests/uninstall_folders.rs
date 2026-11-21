@@ -116,6 +116,8 @@ fn settings_of_jetcarps(d: &Path) {
         "pack/publisher.json",
         "pack/raters.json",
         "pack/raters.tmp4242",
+        "http-tokens/mcp-http.json",
+        "http-tokens/app-http.json",
         ".DS_Store",
         "desktop.ini",
     ] {
