@@ -883,3 +883,114 @@ fn pack_commands_publish_check_and_import() {
     assert_eq!(imp["report"]["sample"]["passed"], 1);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `jetcarp mcp --http 0` says where it listens, on 127.0.0.1 only, with the whole URL and the
+/// header to send (#114, #115): as one line of JSON with `--json`, else as text. Over HTTP it
+/// offers the tools it offers over standard input and output.
+#[test]
+fn mcp_over_http_says_where_it_listens() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::process::Stdio;
+    let start = |json: bool| {
+        let mut args = vec!["mcp", "--http", "0"];
+        if json {
+            args.insert(0, "--json");
+        }
+        let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(&args)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env(
+                "JETCARP_CONFIG_DIR",
+                test_dir("JETCARP_CONFIG_DIR", "config"),
+            )
+            .env(
+                "JETCARP_RUNTIME_DIR",
+                test_dir("JETCARP_RUNTIME_DIR", "runtime").join(format!("http-{json}")),
+            )
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("jetcarp mcp --http starts");
+        let out = BufReader::new(child.stdout.take().unwrap());
+        (child, out)
+    };
+    let (mut child, mut out) = start(true);
+    let mut line = String::new();
+    out.read_line(&mut line).unwrap();
+    let v: Value = serde_json::from_str(&line).expect("one line of JSON");
+    let port = v["port"].as_u64().unwrap() as u16;
+    let token = v["token"].as_str().unwrap().to_string();
+    assert_eq!(v["url"], format!("http://127.0.0.1:{port}/mcp"));
+    assert_eq!(v["bound"], "127.0.0.1");
+    assert_eq!(v["header"], format!("Authorization: Bearer {token}"));
+    let post = |body: Value, session: Option<&str>| -> (String, Value) {
+        let body = body.to_string();
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let sid = session
+            .map(|s| format!("Mcp-Session-Id: {s}\r\n"))
+            .unwrap_or_default();
+        write!(
+            s,
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\
+             {sid}Content-Type: application/json\r\nContent-Length: {}\r\n\
+             Connection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+        let mut answer = String::new();
+        s.read_to_string(&mut answer).unwrap();
+        let (head, body) = answer.split_once("\r\n\r\n").unwrap();
+        (head.to_string(), serde_json::from_str(body).unwrap())
+    };
+    let (head, init) = post(
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                          "clientInfo": {"name": "cli-test", "version": "1"}}}),
+        None,
+    );
+    assert_eq!(init["result"]["serverInfo"]["name"], "jetcarp");
+    let sid = head
+        .lines()
+        .find_map(|l| l.strip_prefix("Mcp-Session-Id: "))
+        .expect("a session")
+        .to_string();
+    let (_, tools) = post(
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        Some(&sid),
+    );
+    let names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    for t in [
+        "world_new",
+        "run_script",
+        "use_app",
+        "host_control",
+        "app_display",
+    ] {
+        assert!(names.contains(&t), "{t} in {names:?}");
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+
+    // As text, the startup lines say the same.
+    let (mut child, mut out) = start(false);
+    let mut text = String::new();
+    for _ in 0..4 {
+        out.read_line(&mut text).unwrap();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(text.contains("  URL:    http://127.0.0.1:"), "{text}");
+    assert!(text.contains("/mcp\n"), "{text}");
+    assert!(text.contains("  Header: Authorization: Bearer "), "{text}");
+    assert!(
+        text.contains("It listens on 127.0.0.1, which other computers cannot reach."),
+        "{text}"
+    );
+}

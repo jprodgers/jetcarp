@@ -6,6 +6,11 @@
 //! dropped: nothing accepts on its port and its endpoint file is gone ([`AiControl::switch_off`]). Requests are answered here, on
 //! the UI thread, by the same `jetcarp_mcp::Server` the CLI uses; every world change goes through
 //! `JetcarpApp::try_exec`, the path behind all of the app's buttons.
+//!
+//! While AI control is on, the window also offers MCP over HTTP (`jetcarp_mcp::http`), for clients
+//! that connect to a URL: off until ticked, on 127.0.0.1 only, with a token of its own. Its
+//! requests are answered here too, on the same world, with the same tools as the link's; switching
+//! AI control off closes it as well.
 
 use super::JetcarpApp;
 use eframe::egui::{self, Color32, RichText};
@@ -20,6 +25,10 @@ use std::sync::Arc;
 pub struct AiControl {
     listener: Option<Listener>,
     server: jetcarp_mcp::Server,
+    /// MCP over HTTP, while ticked (only while AI control is on).
+    http: Option<jetcarp_mcp::http::Listener>,
+    http_server: jetcarp_mcp::Server,
+    http_error: Option<String>,
     pub window_open: bool,
     /// `jetcarp --control`: switch on at launch (not saved).
     pub start_at_launch: bool,
@@ -51,9 +60,33 @@ impl AiControl {
 
     /// Switch AI control off. Dropping the listener stops it accepting connections and removes
     /// its endpoint file, so the app takes no commands until it is switched on again
-    /// (SECURITY.md).
+    /// (SECURITY.md). The HTTP endpoint closes with it.
     fn switch_off(&mut self) {
         self.listener = None;
+        self.http_off();
+    }
+
+    /// Serve MCP over HTTP: on 127.0.0.1, on `port` or else any free port, recording the URL and
+    /// token in `endpoint`. Only while AI control is on.
+    fn http_on(&mut self, port: u16, endpoint: Option<PathBuf>, wake: Arc<dyn Fn() + Send + Sync>) {
+        if self.listener.is_none() {
+            return;
+        }
+        let r = jetcarp_mcp::http::Listener::start(port, endpoint.clone(), wake.clone())
+            .or_else(|_| jetcarp_mcp::http::Listener::start(0, endpoint, wake));
+        match r {
+            Ok(l) => {
+                self.http = Some(l);
+                self.http_error = None;
+            }
+            Err(e) => self.http_error = Some(format!("Could not listen on 127.0.0.1: {e}")),
+        }
+    }
+
+    /// Stop serving MCP over HTTP: nothing accepts on its port, and its endpoint file is gone.
+    fn http_off(&mut self) {
+        self.http = None;
+        self.http_server = jetcarp_mcp::Server::default();
     }
 }
 
@@ -108,6 +141,16 @@ impl JetcarpApp {
             .switch_on(DEFAULT_PORT, jetcarp_mcp::link::endpoint_file(), wake);
     }
 
+    fn ai_http_start(&mut self, ctx: &egui::Context) {
+        let c = ctx.clone();
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || c.request_repaint());
+        self.ai.http_on(
+            jetcarp_mcp::http::DEFAULT_PORT,
+            jetcarp_mcp::link::runtime_file(jetcarp_mcp::http::APP_ENDPOINT),
+            wake,
+        );
+    }
+
     /// Answer queued requests. Called once per frame on the UI thread.
     /// `JETCARP_AI_CONTROL=1` (or the settings' `ai_control_at_launch`) switches AI control on at
     /// startup.
@@ -123,7 +166,8 @@ impl JetcarpApp {
         }
         let Some(l) = &self.ai.listener else { return };
         let pending = l.poll();
-        if pending.is_empty() {
+        let over_http = self.ai.http.as_ref().map(|h| h.poll()).unwrap_or_default();
+        if pending.is_empty() && over_http.is_empty() {
             return;
         }
         let mut server = std::mem::take(&mut self.ai.server);
@@ -133,16 +177,34 @@ impl JetcarpApp {
         for p in pending {
             let msg = p.message.clone();
             server.notifier = Some(p.notifier());
-            if msg["method"] == "tools/call" {
-                self.ai.served += 1;
-                self.ai.last = msg["params"]["name"].as_str().unwrap_or("?").to_string();
-            }
+            self.ai_count(&msg);
             let reply = server.handle(self, &msg);
             server.notifier = None;
             p.reply(reply);
         }
         self.ai.server = server;
+        // MCP over HTTP: the same tools on the same world. Each session's cancellations reach its
+        // own flags; progress goes back on the request's event stream.
+        let mut server = std::mem::take(&mut self.ai.http_server);
+        for p in over_http {
+            let msg = p.message.clone();
+            server.cancels = p.cancels();
+            server.notifier = Some(p.notifier());
+            self.ai_count(&msg);
+            let reply = server.handle(self, &msg);
+            server.notifier = None;
+            p.reply(reply);
+        }
+        self.ai.http_server = server;
         self.colors_dirty = true;
+    }
+
+    /// Counts a tool call for the window.
+    fn ai_count(&mut self, msg: &Value) {
+        if msg["method"] == "tools/call" {
+            self.ai.served += 1;
+            self.ai.last = msg["params"]["name"].as_str().unwrap_or("?").to_string();
+        }
     }
 
     /// The port AI control listens on, when on.
@@ -156,7 +218,7 @@ impl JetcarpApp {
         }
         let mut open = true;
         let spec = crate::popout::Spec::new(super::menu::ToolWin::AiControl.key(), "AI control")
-            .size(400.0, 260.0)
+            .size(420.0, 420.0)
             .configure(|w| w.resizable(false));
         crate::popout::tool_window(ctx, spec, &mut open, |ui| {
             ui.label(
@@ -217,8 +279,67 @@ impl JetcarpApp {
                         "The address is the private link that command uses to reach this window, \
                          not an MCP endpoint for HTTP clients: it speaks JETCARP's own protocol. The \
                          server finds the port and token by itself (they are stored in a file only you \
-                         can read). Switching off closes it.",
+                         can read). Switching off closes it. For a client that connects to a URL, \
+                         serve MCP over HTTP below.",
                     ).small());
+            }
+            if self.ai.listener.is_some() {
+                ui.add_space(4.0);
+                ui.separator();
+                let mut http_on = self.ai.http.is_some();
+                if ui
+                    .checkbox(&mut http_on, "Also serve MCP over HTTP (127.0.0.1 only)")
+                    .on_hover_text(
+                        "For MCP clients that connect to a URL (Postman, web tools) instead of \
+                         starting jetcarp mcp",
+                    )
+                    .changed()
+                {
+                    if http_on {
+                        self.ai_http_start(ctx);
+                    } else {
+                        self.ai.http_off();
+                    }
+                }
+                if let Some(e) = &self.ai.http_error {
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
+                }
+                if let Some(h) = &self.ai.http {
+                    let (url, token, header) = (h.url(), h.token.clone(), h.header());
+                    egui::Grid::new("ai_http_grid")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            for (name, shown, copied) in [
+                                ("URL", url.clone(), url),
+                                ("Token", token.clone(), token),
+                                ("Header", "Authorization: Bearer …".to_string(), header),
+                            ] {
+                                ui.label(name);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(shown).monospace());
+                                    if ui.small_button("Copy").clicked() {
+                                        ui.ctx().copy_text(copied);
+                                    }
+                                });
+                                ui.end_row();
+                            }
+                            ui.label("Open connections");
+                            ui.label(h.connection_count().to_string());
+                            ui.end_row();
+                            ui.label("Sessions");
+                            ui.label(h.session_ids().len().to_string());
+                            ui.end_row();
+                        });
+                    ui.label(
+                        RichText::new(
+                            "Give the client the URL and the header (or the token, where it asks \
+                             for a bearer token). It reaches this window's world with the same \
+                             tools as above. Only programs on this computer can connect, and the \
+                             token is new each time this is ticked.",
+                        )
+                        .small(),
+                    );
+                }
             }
         });
         if !open {
@@ -302,6 +423,79 @@ mod tests {
         assert!(lets_in(l.port, &l.token), "on again: let in");
         ai.switch_off();
         assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The status of a `GET /mcp` to the HTTP endpoint on `port`, with `token` if given: it
+    /// needs no answer from the UI thread (401 without the token, 405 with it).
+    fn http_status(port: u16, token: Option<&str>) -> Option<u16> {
+        use std::io::Read;
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).ok()?;
+        s.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
+        let auth = token
+            .map(|t| format!("Authorization: Bearer {t}\r\n"))
+            .unwrap_or_default();
+        write!(
+            s,
+            "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{auth}Connection: close\r\n\r\n"
+        )
+        .ok()?;
+        let mut answer = String::new();
+        let _ = s.read_to_string(&mut answer);
+        answer.split(' ').nth(1)?.parse().ok()
+    }
+
+    /// SECURITY.md: MCP over HTTP is off until it is ticked, only while AI control is on, and
+    /// closes when it is unticked or AI control is switched off; switched on again, AI control
+    /// does not bring it back.
+    #[test]
+    fn http_listens_only_when_asked_and_closes_with_ai_control() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-ai-http-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (link, file) = (
+            dir.join("app-endpoint.json"),
+            dir.join("app-http-endpoint.json"),
+        );
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
+        let mut ai = AiControl::default();
+        ai.http_on(0, Some(file.clone()), wake.clone());
+        assert!(ai.http.is_none(), "not while AI control is off");
+        assert!(!file.exists());
+
+        ai.switch_on(0, Some(link.clone()), wake.clone());
+        assert!(ai.http.is_none(), "AI control alone does not serve HTTP");
+        assert!(!file.exists());
+
+        ai.http_on(0, Some(file.clone()), wake.clone());
+        let (port, token) = {
+            let h = ai.http.as_ref().expect("ticked");
+            assert_eq!(h.url(), format!("http://127.0.0.1:{}/mcp", h.port));
+            (h.port, h.token.clone())
+        };
+        assert!(file.exists(), "the URL and token are recorded");
+        assert_eq!(http_status(port, None), Some(401), "the token is needed");
+        assert_eq!(http_status(port, Some(&token)), Some(405), "and enough");
+
+        ai.http_off();
+        assert!(!file.exists(), "unticked: the file is removed");
+        assert!(
+            closed_soon(port),
+            "unticked: nothing accepts on port {port}"
+        );
+        assert!(ai.listener.is_some(), "AI control stays on");
+
+        ai.http_on(0, Some(file.clone()), wake.clone());
+        let port = ai.http.as_ref().expect("ticked again").port;
+        ai.switch_off();
+        assert!(
+            ai.http.is_none() && !file.exists(),
+            "closed with AI control"
+        );
+        assert!(closed_soon(port), "off: nothing accepts on port {port}");
+        ai.switch_on(0, Some(link), wake);
+        assert!(ai.http.is_none(), "AI control on again: HTTP stays off");
+        ai.switch_off();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

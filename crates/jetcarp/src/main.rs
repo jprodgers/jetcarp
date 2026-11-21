@@ -235,6 +235,12 @@ enum Cmd {
         /// App token (default: the recorded one).
         #[arg(long)]
         token: Option<String>,
+        /// Serve MCP over HTTP (Streamable HTTP) instead of standard input and output, at
+        /// http://127.0.0.1:PORT/mcp on this computer only (default port 47812, or a free one when
+        /// that is taken). Clients send the token it prints as an `Authorization: Bearer` header.
+        /// With --json, prints the URL and token as JSON. Ctrl-C stops it.
+        #[arg(long, value_name = "PORT", num_args = 0..=1)]
+        http: Option<Option<u16>>,
     },
     /// JETCARP's operations by name, for automation and tests: `list`, `schema OP`,
     /// `call OP [JSON]` (the result as JSON).
@@ -378,7 +384,7 @@ enum QuickstartSub {
 fn without_json(cmd: &Cmd) -> Option<&'static str> {
     Some(match cmd {
         Cmd::Demo(_) => "demo",
-        Cmd::Mcp { .. } => "mcp",
+        Cmd::Mcp { http: None, .. } => "mcp",
         _ => return None,
     })
 }
@@ -411,7 +417,7 @@ fn run() -> Result<()> {
     let json = cli.json;
     if json && let Some(name) = without_json(&cmd) {
         bail!(
-            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, search, jobs, pile, and the library, media, host, and app commands that print records)"
+            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, search, jobs, pile, mcp --http, and the library, media, host, and app commands that print records)"
         );
     }
     // Scripts may ask for GPU toppling of large sandpiles.
@@ -680,11 +686,25 @@ fn run() -> Result<()> {
             allow,
             port,
             token,
+            http,
         } => {
             // The tools get this machine: the GPU, and jobs in processes of their own.
             jetcarp_mcp::tools::set_platform(std::sync::Arc::new(platform::Machine));
             jetcarp_mcp::tools::allow_dirs(allow);
-            jetcarp_mcp::stdio::run(app, port, token).map_err(anyhow::Error::msg)?
+            match http {
+                None => jetcarp_mcp::stdio::run(app, port, token),
+                Some(http_port) => jetcarp_mcp::http::serve(
+                    jetcarp_mcp::http::Serve {
+                        port: http_port,
+                        app,
+                        app_port: port,
+                        app_token: token,
+                        json,
+                    },
+                    jetcarp_mcp::http::stop_on_ctrl_c(),
+                ),
+            }
+            .map_err(anyhow::Error::msg)?
         }
         Cmd::Rules => show(
             &reference::ReferenceRules::run(&cx, Default::default(), &Quiet)?,
