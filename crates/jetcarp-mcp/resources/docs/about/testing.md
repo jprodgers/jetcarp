@@ -50,7 +50,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the first step), two soups each, every generation up to 40 (20 for Bosco's Rule), after Golly has
   read each two-state soup copied with *Copy as RLE* as the same rule and cells
   (`golly_agrees_on_larger_than_life`). With rules with birth on 0 run as written, as JETCARP ran
-  them before 0.4.3, all ten of their soups differ from Golly at the first generation.
+  them before 0.4.3, all ten of their soups differ from Golly at the first generation. It needs
+  Golly 4.0 or later, the first to read Larger than Life's `R2,C2,S3-6,B3-4` notation and to
+  emulate birth on 0. CI's Linux job installs Ubuntu's Golly 3.3, so there it runs the other three
+  tests and skips this one, saying so; it was run with Golly 5.0 on the development desktop.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI

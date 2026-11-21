@@ -57,8 +57,9 @@ fn golly(dir: &Path, name: &str, text: &str, gens: u64) -> String {
         });
     assert!(
         out.status.success(),
-        "bgolly failed on {name}: {}",
-        String::from_utf8_lossy(&out.stderr)
+        "bgolly failed on {name}: {}{}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
     );
     std::fs::read_to_string(&output)
         .unwrap_or_else(|e| panic!("bgolly wrote no {}: {e}", output.display()))
@@ -387,8 +388,9 @@ fn golly_states(
     }
     assert!(
         out.status.success(),
-        "bgolly failed on {name}: {}",
-        String::from_utf8_lossy(&out.stderr)
+        "bgolly failed on {name}: {}{}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
     );
     let back = std::fs::read_to_string(&output)
         .unwrap_or_else(|e| panic!("bgolly wrote no {}: {e}", output.display()));
