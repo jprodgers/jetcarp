@@ -546,7 +546,7 @@ fn missing_function_hint(msg: &str) -> Option<&'static str> {
             "check the argument types: list methods are called as list.push(x), list.filter(|x| ...), list.contains(x)"
         }
         _ => {
-            "call script_help (MCP) or `jetcarp script --functions` for JETCARP's functions; Rhai's own are listed at rhai.rs/book"
+            "call help {\"topic\": \"scripts\"} (MCP) or `jetcarp script --functions` for JETCARP's functions; Rhai's own are listed at rhai.rs/book"
         }
     })
 }

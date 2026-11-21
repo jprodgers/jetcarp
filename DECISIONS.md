@@ -448,8 +448,8 @@ is dated more closely than that.
 - **How the order was set:** "That order came from what Claude said it could build, and how heavy
   of a task each one was."
 - **Claude's part:** the estimates of how large each task is.
-- **Stands.** The roadmap is the tracking issues; a page for it in the book is
-  [#151](https://github.com/jprodgers/jetcarp/issues/151).
+- **Stands.** The roadmap is the tracking issues, which the book's
+  [Roadmap](https://jprodgers.github.io/jetcarp/about/roadmap.html) page lists (#151).
 
 ### D-31. Publish the work, and submit it to JOSS
 

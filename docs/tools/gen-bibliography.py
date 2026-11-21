@@ -4,7 +4,7 @@
 Standard library only. Each entry gets an HTML anchor equal to its BibTeX key, so pages cite
 it as [Gardner 1970](../research/bibliography.md#gardner1970life).
 
-Usage: python3 docs/tools/gen-bibliography.py   (from the repository root or anywhere)
+Usage: python3 docs/tools/gen-bibliography.py [--check]   (from the repository root or anywhere)
 """
 import re
 import sys
@@ -208,7 +208,22 @@ def fmt(etype, key, f):
     return " ".join(parts)
 
 
+
+def emit(path, text, check, tool):
+    """Writes the page, or with --check only says whether the committed page is current."""
+    old = path.read_text(encoding="utf-8") if path.exists() else None
+    if check:
+        if old != text:
+            print(f"{path.name} is out of date: run python3 docs/tools/{tool}", file=sys.stderr)
+            return False
+        print(f"ok: {path.name} is up to date")
+        return True
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
 def main():
+    check = sys.argv[1:] == ["--check"]
     text = BIB.read_text(encoding="utf-8")
     entries = parse(text)
     lines = [
@@ -235,8 +250,10 @@ def main():
             lines += [f"## {letter}", ""]
         lines.append(f'<span id="{key}"></span>{fmt(etype, key, f)} <small>`{key}`</small>')
         lines.append("")
-    OUT.write_text("\n".join(lines), encoding="utf-8")
-    print(f"wrote {OUT} ({len(entries)} entries)", file=sys.stderr)
+    if not emit(OUT, "\n".join(lines), check, "gen-bibliography.py"):
+        sys.exit(1)
+    if not check:
+        print(f"wrote {OUT} ({len(entries)} entries)", file=sys.stderr)
 
 
 if __name__ == "__main__":

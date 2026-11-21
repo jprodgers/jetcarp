@@ -114,8 +114,8 @@ distances between tile centres; for every other rule family the eleven rows abov
 
 The classification is Grünbaum and Shephard's and the tables are Kaplan's. Cellular automata on a few
 isohedral tilings are not new either: Matej Kerekrety ran Life-like rules on the rhombille and Cairo
-tilings ([Kerekrety 2020](../research/bibliography.md#kerekrety2020game)). JETCARP runs every rule on all
-81 types and lets their tiles be reshaped while a rule runs.
+tilings ([Kerekrety 2020](../research/bibliography.md#kerekrety2020game)). JETCARP runs every rule not tied
+to one grid ([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)) on all 81 types and lets their tiles be reshaped while a rule runs.
 
 For the rules, though, 81 types are not 81 worlds. As the section above explains, they have only the
 eleven neighbour graphs of the Laves tilings, so we present every result on an isohedral type as a
