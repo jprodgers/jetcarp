@@ -101,7 +101,14 @@ can switch off (Explorer) or lengthen and shorten, from 1 minute to 600. It also
 build runs on the GPU, and roughly what it all takes. **Start** begins; for a profile with nothing to
 import or build the button says **Finish**.
 
-<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, about 83 MB and 11 minutes" width="600">
+Under the build, *What it searches* reads **All**: every group of tilings and every rule family,
+isotropic rules too. Open it for an *All* box, which ticks or clears every one, and a box for each
+group of tilings (square, hexagon, triangle, pentagon, Archimedean, k-uniform, isohedral,
+aperiodic) and each rule family. Untick any and it reads **Custom**, and the build searches only
+what's ticked. `jetcarp setup` builds the same *All* search. A search of your own choosing later is
+in [Searching](../guides/searching.md#choosing-what-to-search).
+
+<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, with What it searches: All closed under it; about 83 MB and 11 minutes" width="600">
 
 **Setting up.** Each job with its progress; each import says who signed the pack and what your
 library knew of their key, with a new key marked again below it. They run in the background, so **Continue in the

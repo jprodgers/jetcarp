@@ -244,7 +244,7 @@ pub fn group_label(g: &str) -> &'static str {
 }
 
 /// What a tiling group holds, for its tooltip.
-fn group_note(g: &str) -> &'static str {
+pub fn group_note(g: &str) -> &'static str {
     match g {
         "square" => "The square grid and the tilings with its neighbours (quad, glide, fourfold)",
         "hexagon" => {

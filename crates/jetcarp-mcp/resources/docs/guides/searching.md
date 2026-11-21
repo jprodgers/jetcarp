@@ -254,9 +254,10 @@ jetcarp search explore --minutes 60 --skip-tiling-groups aperiodic --skip-famili
   tilings, and a family named that none of the tilings chosen can run is refused with the reason.
 
 The job keeps the choice in its spec (`jetcarp jobs status JOB --json` shows it), says it in its
-title, and keeps to it when it carries on. `jetcarp quickstart build` takes the same flags, and
-scripts and MCP's `search_start` take the same keys in an explore search's settings
-(`tiling_groups`, `skip_families`, ...). A search that chooses nothing, and one made before 0.4.3,
+title, and keeps to it when it carries on. `jetcarp quickstart build` takes the same flags, the setup
+window's Quick Start build has the same boxes under *What it searches*
+([First run](../getting-started/first-run.md)), and scripts and MCP's `search_start` take the same
+keys in an explore search's settings (`tiling_groups`, `skip_families`, ...). A search that chooses nothing, and one made before 0.4.3,
 draw exactly as before.
 
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
