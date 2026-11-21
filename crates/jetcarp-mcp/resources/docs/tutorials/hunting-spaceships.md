@@ -135,7 +135,7 @@ jetcarp library paste 16bc37@480,20,o1 16bc37@960,20 --size 120x40 --boundary de
 It prints:
 
 ```text
-scene: meet.json (2 patterns, 1 CA(s), hash 65c7546103b51c38)
+scene: meet.json (2 patterns, 1 CA(s), hash 93f516545252c276885a9c9b8b3f6edde8d969428d3b1a9ff208916fdd4b03bc)
 grid:  1440 x 40 tiles: x 0 to 1439 (tile columns, 12 to a unit cell), y 0 to 39 (rows)
 ```
 
