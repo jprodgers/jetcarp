@@ -8,7 +8,7 @@
 //! | Tool | Operations |
 //! | --- | --- |
 //! | `help` | (the guides, and the book's pages) |
-//! | `reference` | `reference.rules`, `.tilings`, `.isohedral`, `.palettes`, `.seeds` |
+//! | `reference` | `reference.rules`, `.tilings`, `.isohedral`, `.palettes`, `.seeds`, `machine.info` |
 //! | `world_new` | `world.new`, `world.open` |
 //! | `world_status` | `world.status`, `world.save` |
 //! | `world_read` | `world.read`, `world.inspect`, `world.objects` |

@@ -86,6 +86,16 @@ impl Score {
         formula(&best)
     }
 
+    /// The part `id` from the fastest device that gave the right answer (or had none to give):
+    /// what the defaults that depend on time read (`gpu-crossover` for the GPU thresholds, the
+    /// one-core and soup rates for Fast Fit's starting sizes).
+    pub fn best(&self, id: &str) -> Option<&Part> {
+        self.parts
+            .iter()
+            .filter(|p| p.id == id && p.correct != Some(false))
+            .max_by(|a, b| a.value.total_cmp(&b.value))
+    }
+
     /// The parts with a wrong answer.
     pub fn wrong(&self) -> impl Iterator<Item = &Part> {
         self.parts.iter().filter(|p| p.correct == Some(false))
@@ -264,6 +274,15 @@ mod tests {
             },
         ];
         assert!((Score::from_parts(&parts) - formula(&[100.0, 200.0])).abs() < 1e-9);
+        // What the time-based defaults read: the fastest right device's part.
+        let s = Score {
+            parts: parts.clone(),
+            ..Default::default()
+        };
+        assert_eq!(s.best("soups-hat").unwrap().value, 100.0);
+        assert_eq!(s.best("soups-spectre").unwrap().value, 200.0);
+        assert_eq!(s.best("disk").unwrap().value, 1e6);
+        assert!(s.best("gpu-crossover").is_none());
         // Nothing right on a workload: no score.
         let none = vec![
             part("soups-hat", 100.0, false),

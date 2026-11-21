@@ -793,25 +793,45 @@ fn entry(id: Id) -> Entry {
     }
 }
 
-/// The GPU's suggestion: half of the largest GPU memory the system reports, at
-/// [`GPU_CELL_BYTES`] a cell; with none reported (or one sharing the system's memory), JETCARP's
-/// largest world, said as an estimate. The GPU's own buffer limits come on top, where it opens.
+/// A GPU with less memory of its own than this works in the system memory it borrows (an
+/// integrated GPU whose firmware sets aside only a little).
+const GPU_OWN_ENOUGH: u64 = 2 * GIB;
+
+/// The GPU's suggestion: half of the GPU memory the system reports (the largest of its GPUs), at
+/// [`GPU_CELL_BYTES`] a cell. A GPU with memory enough of its own is judged by that; one with
+/// little (an integrated GPU) by that and the system memory it may borrow, within JETCARP's part.
+/// With none reported (or one sharing the system's memory, as on Apple silicon), JETCARP's part,
+/// said as an estimate. The GPU's own buffer limits come on top, where it opens.
 fn gpu_suggestion(hw: &Hardware, jetcarp: f64) -> (f64, String) {
-    let dedicated = hw
+    let usable = |g: &super::hardware::GpuMemory| -> Option<(u64, String)> {
+        let own = g.dedicated?;
+        if own >= GPU_OWN_ENOUGH {
+            return Some((own, format!("the GPU's {}", bytes_text(own))));
+        }
+        let borrow = g.shared.unwrap_or(0);
+        let total = own.saturating_add(borrow).min(jetcarp as u64).max(own);
+        Some((
+            total,
+            format!(
+                "the GPU's {} and what it may borrow, within the {} reserved for JETCARP",
+                bytes_text(own),
+                bytes_text(jetcarp as u64)
+            ),
+        ))
+    };
+    let best = hw
         .gpus
         .iter()
         .filter(|g| !g.unified)
-        .filter_map(|g| g.dedicated)
-        .max();
-    match dedicated {
-        Some(v) if v > 0 => (
+        .filter_map(usable)
+        .filter(|(v, _)| *v > 0)
+        .max_by_key(|(v, _)| *v);
+    match best {
+        Some((v, what)) => (
             ((v / 2) / GPU_CELL_BYTES) as f64,
-            format!(
-                "half of the GPU's {} at {GPU_CELL_BYTES} bytes a cell, within its buffer limits",
-                bytes_text(v)
-            ),
+            format!("half of {what} at {GPU_CELL_BYTES} bytes a cell, within its buffer limits"),
         ),
-        _ => (
+        None => (
             ((jetcarp / 2.0) as u64 / GPU_CELL_BYTES) as f64,
             format!(
                 "an estimate: half of the {} reserved for JETCARP at {GPU_CELL_BYTES} bytes a cell, \
@@ -1003,6 +1023,35 @@ mod tests {
                 .why
                 .starts_with("half of the GPU's 32 GB")
         );
+    }
+
+    /// An integrated GPU whose firmware sets aside only a little memory (128 MB) works in the
+    /// system memory it borrows: its suggestion comes from that, within JETCARP's part, not from
+    /// the little it has of its own (which gave 4 million cells).
+    #[test]
+    fn an_integrated_gpu_borrows_system_memory() {
+        let mut hw = machine(16);
+        hw.gpus.push(super::super::hardware::GpuMemory {
+            vendor: 0x8086,
+            device: 1,
+            dedicated: Some(128 << 20),
+            shared: Some(8 * GIB),
+            unified: false,
+            source: "DXGI".into(),
+            name: "An integrated GPU".into(),
+        });
+        let l = Limits::compute(&hw, &Own::default());
+        // Its 128 MB and the 8 GB it may borrow, held to JETCARP's 8 GB: half of that.
+        assert_eq!(l.gpu_world_cells(), 4 * GIB / GPU_CELL_BYTES);
+        assert!(
+            l.get(Id::GpuWorld).why.contains("may borrow"),
+            "{}",
+            l.get(Id::GpuWorld).why
+        );
+        // A discrete GPU with memory of its own is judged by that, whatever it may borrow.
+        hw.gpus[0].dedicated = Some(12 * GIB);
+        let l = Limits::compute(&hw, &Own::default());
+        assert_eq!(l.gpu_world_cells(), 6 * GIB / GPU_CELL_BYTES);
     }
 
     #[test]

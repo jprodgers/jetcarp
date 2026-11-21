@@ -71,7 +71,7 @@ before 0.4.3 on a 16 GB computer, so a 16 GB computer keeps the limits it had:
 | Limit (`jetcarp limits` name) | What it limits | On 16 GB | On 64 GB | Ceiling |
 | --- | --- | --- | --- | --- |
 | Largest world (`world`) | The memory one world may take | 4 GB (half of JETCARP's part) | 24 GB | all of JETCARP's part, and 4,294,967,295 cells |
-| Largest world on the GPU (`gpu-world`) | Cells a world may have to step on the GPU; a larger one steps on the processor, with the same result | half the GPU's memory at 16 bytes a cell, within its buffer limits | the same | 2,147,483,647 cells |
+| Largest world on the GPU (`gpu-world`) | Cells a world may have to step on the GPU; a larger one steps on the processor, with the same result | half the GPU's memory at 16 bytes a cell (for an integrated GPU with little of its own, with what it may borrow, within JETCARP's part), within its buffer limits | the same | 2,147,483,647 cells |
 | Desktop background: memory (`host-memory`) | What the background host may use before it gives up its largest world | 6 GB | 36 GB | all of JETCARP's part |
 | Desktop background: cells (`host-cells`) | Cells one of its worlds may have | 64 million | 384 million | 4,294,967,295 |
 | HashLife: nodes (`hashlife-nodes`) | Blocks HashLife keeps before it clears out unused ones (about 45 bytes each) | 48 million | 288 million | 2,147,483,648 |
