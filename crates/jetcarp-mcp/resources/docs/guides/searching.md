@@ -274,7 +274,12 @@ It prints:
   family and tiling, into your Quick Start menu as its *atlas*.
 
 Unlike the other strategies, `explore` is not deterministic: a stopped one carries on from its
-saved archive rather than replaying run for run.
+saved archive rather than replaying run for run. Its results also depend on the computer's number
+of threads: a round of runs on the processor has eight runs for each thread, so the search scales
+with the machine, and the same seed and settings make other runs on a computer with another number
+of threads, or with another `--threads`. With a GPU, the GPU's batches and the processor's rounds
+share the archive as they end, so even the same computer makes other runs each time. Every run it
+stores replays exactly, wherever it is replayed.
 
 ## In the app
 

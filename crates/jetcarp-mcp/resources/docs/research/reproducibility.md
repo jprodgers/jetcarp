@@ -207,7 +207,10 @@ described with the method.
 - **The exploratory search as a whole.** `jetcarp search explore` runs a CPU loop and a GPU loop side
   by side and shares its archive between them, so two searches with the same settings do not try the
   same candidates in the same order, and a stopped search continues from its saved archive rather than
-  resuming exactly as the other jobs do. A run on the processor past its time cap is kept with the
+  resuming exactly as the other jobs do. Its results depend on the computer's number of threads:
+  its rounds of runs on the processor are sized to them, so that it scales with the machine, and
+  a computer with another number of threads (or another `--threads`) makes other runs from the
+  same seed and settings. A run on the processor past its time cap is kept with the
   generations it reached, which depend on the machine. On the processor alone (`--cpu`), a search
   that is not stopped makes the same runs, ids and confirmations whatever the length of its steps
   and however its threads take up its runs, for the same seed, settings and number of threads (its

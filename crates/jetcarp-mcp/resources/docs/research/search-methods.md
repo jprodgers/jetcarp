@@ -27,7 +27,9 @@ transaction. It can therefore be stopped and carried on at any time, in the same
 and it ends exactly as it would have without the interruption (see
 [Reproducibility](reproducibility.md#interrupted-searches-end-where-uninterrupted-ones-would)).
 Results never depend on the number of threads. The [exploratory search](#explore) is the one
-exception: it is not deterministic, so a stopped one continues from its saved archive instead.
+exception: its rounds of runs on the processor are sized to the computer's threads, so that it
+scales with the machine, and its results depend on the thread count; and it is not deterministic,
+so a stopped one continues from its saved archive instead.
 
 The options shared by every strategy: `--minutes N`, `--until TIME` (a Unix time, the same end however
 often the job is resumed) and `--limit N` stop the job, still resumable, after a time or a number of
