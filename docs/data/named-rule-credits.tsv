@@ -3,6 +3,8 @@
 # Mirek Wójtowicz's MCell rules lexicon, Toffoli & Margolus (1987) and Wikipedia. Columns: name, notation,
 # credit (empty when no source names a person), sources checked (LW:<page> = LifeWiki page, MC = MCell lexicon,
 # CAM = Toffoli & Margolus 1987, WP:<page> = Wikipedia), status. Used by docs/tools/gen-named-rules.py.
+# The isotropic rules were added 2026-11-21 from LifeWiki's List of isotropic non-totalistic rules (read through its
+# mirror), Alan Hensel's notation page and Golly's help (QuickLife).
 name	notation	credit	sources	status
 AntiLife	B0123478/S01234678		LW:List_of_Life-like_rules	no author named
 InverseLife	B0123478/S34678	Jason Rampe (named it; MCell: “a rule by”)	LW:List_of_Life-like_rules; LW:OCA:B3678/S23; MC	author named by source
@@ -170,3 +172,10 @@ Rule 150	W150		WP:Elementary_cellular_automaton	no author named
 Rule 184	W184	Earliest studies: Wentian Li (1987) and Krug & Spohn ([1988](../research/bibliography.md#krug1988universality)); later used for traffic flow (e.g. Biham, Middleton & Levine 1992)	WP:Elementary_cellular_automaton; WP:Rule_184	author named by source
 Layered parity	Layer 2/01	Jimmie Rodgers (JETCARP, 2026)	JETCARP	author named by source
 Layered sum mod 3	Layer 3/012	Jimmie Rodgers (JETCARP, 2026)	JETCARP	author named by source
+Just Friends	B2-a/S12	David Bell (Golly's help calls it “David Bell's Just Friends rule”; Hensel's notation page names it)	[Hensel 2001](../research/bibliography.md#hensel2001notation); [Golly: QuickLife](../research/bibliography.md#gollynd_quicklife); LW:List_of_isotropic_non-totalistic_rules	author named by source
+tlife	B3/S2-i34q		LW:List_of_isotropic_non-totalistic_rules	no author named
+qlife	B3-q/S23		LW:List_of_isotropic_non-totalistic_rules	no author named
+LeapLife	B2n3/S23-q		LW:List_of_isotropic_non-totalistic_rules	no author named
+Salad	B2i34c/S2-i3		LW:List_of_isotropic_non-totalistic_rules	no author named
+Goat Flock	B2in3/S123a		LW:List_of_isotropic_non-totalistic_rules	no author named
+Logic Rule	B2ae/S		LW:List_of_isotropic_non-totalistic_rules	no author named

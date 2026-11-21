@@ -227,8 +227,9 @@ fn letter_error(n: usize, l: char) -> String {
         ),
         ls => {
             let list: Vec<String> = ls.chars().map(String::from).collect();
+            let s = if n == 1 { "" } else { "s" };
             format!(
-                "'{l}' is not one of Hensel's letters for {n} live neighbours; {n} takes {}",
+                "'{l}' is not one of Hensel's letters for {n} live neighbour{s}; {n} takes {}",
                 list.join(", ")
             )
         }

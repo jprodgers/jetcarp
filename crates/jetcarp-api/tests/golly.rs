@@ -422,8 +422,9 @@ struct IsoCase {
 const ISO_GENS: u64 = 100;
 
 /// The cases: the rules of Hensel's and Golly's documentation and the issue, Life with every
-/// letter written out, then random rules (two states, B0, Generations), each letter of each count
-/// in about as many as not, written with letters, `-` forms and bare digits in shuffled orders.
+/// letter written out, two B/S rules with B0, then random rules (two states, B0, Generations),
+/// each letter of each count in about as many as not, written with letters, `-` forms and bare
+/// digits in shuffled orders.
 fn iso_cases() -> Vec<IsoCase> {
     let mut cases: Vec<IsoCase> = [
         // Hensel's example and Golly's (David Bell's Just Friends), and Golly's equivalent form.
@@ -434,6 +435,10 @@ fn iso_cases() -> Vec<IsoCase> {
         // Life written with every letter: exactly Life.
         "B3aceijknqry/S2aceikn3aceijknqry",
         "B3/S2-3",
+        // B/S rules with B0, without and with survival on 8, kept against their background as
+        // the isotropic ones are.
+        "B014/S2",
+        "B0123478/S01234678",
     ]
     .iter()
     .map(|w| IsoCase {
@@ -502,8 +507,13 @@ fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> [[bool;
     // A rule with B0 and S8 has a live background from its first step. JETCARP stores its cells
     // against that background from then on; Golly reads a pattern against it from the start (it
     // runs the rule's inverse instead). So Golly starts from JETCARP's generation 1.
-    let late =
-        matches!(&rule, jetcarp_core::rules::Rule::Isotropic(r) if r.b0() && r.survive[8] == 1);
+    let late = match &rule {
+        jetcarp_core::rules::Rule::Isotropic(r) => r.b0() && r.survive[8] == 1,
+        jetcarp_core::rules::Rule::LifeLike { birth, survive } => {
+            birth & 1 == 1 && survive >> 8 & 1 == 1
+        }
+        _ => false,
+    };
     let mut seen = [[false; 256]; 2];
     if late {
         h.exec(Command::Step { gens: 1 }).unwrap();
@@ -621,7 +631,8 @@ fn golly_agrees_on_isotropic_rules() {
         missing.join(", ")
     );
     eprintln!(
-        "golly: {} isotropic rules, {} soups, {ISO_GENS} generations each, agree",
+        "golly: {} rules (isotropic, and B/S with B0), {} soups, {ISO_GENS} generations each, \
+         agree",
         cases.len(),
         runs.len()
     );
