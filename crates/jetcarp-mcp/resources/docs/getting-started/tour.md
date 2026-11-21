@@ -57,7 +57,7 @@ Click a card to open its entry. (Shift-click opens the small version its card ru
 one.) The world opens running, with the grid on the right and the panes on the left; when your
 system asks for reduced motion it opens paused, with a note saying so, and Space runs it:
 
-<img src="../images/getting-started/tour-world.webp" alt="A world open in the app: a hexagonal Greenberg-Hastings spiral on an isohedral tiling fills the grid; the menu bar shows the scene's name, running, the generation, the hash and the frame rate; the Scene and CAs panes are on the left; the status bar is at the bottom" width="700">
+<img src="../images/getting-started/tour-world.webp" alt="A world open in the app: a hexagonal Greenberg-Hastings spiral on an isohedral tiling fills the grid; the menu bar shows the scene's name, running, the generation, the hash and the frame rate; the Scene and CAs panes are on the left; the status bar at the bottom carries the strobe guard's note that it slowed the scene because it flashed" width="700">
 
 - **Look around.** The scroll wheel zooms and dragging pans. (When the *Draw* pane's tool is *Draw*
   or *Erase*, the left button paints cells, and dragging with the right or middle button still
