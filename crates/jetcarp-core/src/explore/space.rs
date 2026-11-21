@@ -42,12 +42,13 @@ pub enum Fam {
     Table,
     VonNeumann,
     SpectreGlider,
-    /// Isotropic rules in Hensel's notation. Not in [`ALL_FAMS`]: the explore search does not
-    /// sample them (yet), and leaves the named ones out.
+    /// Isotropic rules in Hensel's notation, on the square grid. The explore search samples them
+    /// only when a search names them (#239), and leaves the named ones out otherwise.
     Isotropic,
 }
 
-pub const ALL_FAMS: [Fam; 22] = [
+/// Every family, in the order the search lists them.
+pub const ALL_FAMS: [Fam; 23] = [
     Fam::LifeLike,
     Fam::Generations,
     Fam::Cyclic,
@@ -70,6 +71,7 @@ pub const ALL_FAMS: [Fam; 22] = [
     Fam::Table,
     Fam::VonNeumann,
     Fam::SpectreGlider,
+    Fam::Isotropic,
 ];
 
 impl Fam {
@@ -137,6 +139,27 @@ impl Fam {
         )
     }
 
+    /// The one tiling a grid-specific family runs on (its key): the square grid for rules that
+    /// read its rows or its eight neighbours by place (elementary, Margolus blocks, rule tables,
+    /// von Neumann's rule, isotropic rules), the hexagon grids for the hexagonal elementary
+    /// rules. `None` for the families that run on any tiling. [`fits`](Self::fits) says the same
+    /// of a built grid.
+    pub fn only_on(self) -> Option<&'static str> {
+        match self {
+            Fam::Wolfram | Fam::Margolus | Fam::Table | Fam::VonNeumann | Fam::Isotropic => {
+                Some("square")
+            }
+            Fam::HexWolfram => Some("hex"),
+            Fam::HexTri => Some("hex_flat"),
+            _ => None,
+        }
+    }
+
+    /// Can this family run on the tiling of this search key ([`only_on`](Self::only_on))?
+    pub fn runs_on(self, key: &str) -> bool {
+        self.only_on().is_none_or(|k| k == key)
+    }
+
     /// Can this family run on the grid at all?
     pub fn fits(self, g: &Grid) -> bool {
         let t = &g.topo;
@@ -171,12 +194,27 @@ impl Fam {
     }
 }
 
+/// The groups of the search's tilings, in the order of the archive's niches: the tilings of
+/// the square, hexagon and triangle families, the Cairo pentagons, the other Archimedean tilings,
+/// the k-uniform tilings of the catalog, the 93 isohedral types, and the aperiodic patches. An
+/// explore search can be limited to some of them, or leave some out (#239).
+pub const TILING_GROUPS: [&str; 8] = [
+    "square",
+    "hexagon",
+    "triangle",
+    "pentagon",
+    "archimedean",
+    "k-uniform",
+    "isohedral",
+    "aperiodic",
+];
+
 /// One entry in the tiling list.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TilingChoice {
     /// `square`, `ih28`, `catalog:k2-001`.
     pub key: String,
-    /// Where it sits in the Quick Start tiling menu.
+    /// Its group ([`TILING_GROUPS`]).
     pub group: String,
     pub aperiodic: bool,
     /// The share of search effort this tiling gets, before coverage rules.
@@ -788,9 +826,60 @@ pub fn sample_rule(fam: Fam, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Rule>
         Fam::Table => Rule::Table("parity".into()),
         Fam::VonNeumann => Rule::VonNeumann,
         Fam::SpectreGlider => Rule::SpectreGlider,
-        // Not sampled by the explore search (see [`Fam::Isotropic`]).
-        Fam::Isotropic => return None,
+        Fam::Isotropic => return sample_isotropic(grid, rng),
     })
+}
+
+/// A random isotropic rule (#239): a Life-like rule of the eight touching neighbours, as the
+/// Life-like family draws them, with one to six of its 102 places (Hensel's 51 arrangements, for
+/// birth and for survival) turned on or off, so most draws stay near a B/S rule, as the known
+/// isotropic rules do; a Generations rule of 3 to 8 states one time in four. Never born on 0
+/// (as the Life-like draws), and never every-or-none of each count (that is the B/S rule itself).
+/// `None` off the square grid.
+fn sample_isotropic(grid: &Grid, rng: &mut Rng) -> Option<Rule> {
+    use crate::isotropic::{CLASSES, IsoRule};
+    grid.topo.rows()?;
+    let (b, s) = bs_rule(rng, 8);
+    let states = if rng.below(4) == 0 {
+        uniform(rng, 3, 8) as u8
+    } else {
+        2
+    };
+    let (mut birth, mut survive) = IsoRule::from_masks(b, s, states).class_masks();
+    for _ in 0..uniform(rng, 1, 6) {
+        flip_class(rng, &mut birth, &mut survive, CLASSES);
+    }
+    isotropic_rule(birth, survive, states, rng, None)
+}
+
+/// Turn one letter of an isotropic rule on or off: a class (0 to `classes` - 1) of birth or of
+/// survival, never birth on 0.
+fn flip_class(rng: &mut Rng, birth: &mut u64, survive: &mut u64, classes: u32) {
+    if rng.below(2) == 0 {
+        *birth ^= 1 << (1 + rng.below(classes as u64 - 1));
+    } else {
+        *survive ^= 1 << rng.below(classes as u64);
+    }
+}
+
+/// The isotropic rule of these class masks, with letters flipped until it is not a B/S rule
+/// (whose notation reads back as one) nor `avoid` (the rule a variation is made from).
+fn isotropic_rule(
+    mut birth: u64,
+    mut survive: u64,
+    states: u8,
+    rng: &mut Rng,
+    avoid: Option<&crate::isotropic::IsoRule>,
+) -> Option<Rule> {
+    use crate::isotropic::{CLASSES, IsoRule};
+    for _ in 0..64 {
+        let r = IsoRule::from_class_masks(birth, survive, states);
+        if r.totalistic().is_none() && avoid != Some(&r) {
+            return Some(Rule::Isotropic(Box::new(r)));
+        }
+        flip_class(rng, &mut birth, &mut survive, CLASSES);
+    }
+    None
 }
 
 /// A rule one small step from `rule`.
@@ -991,6 +1080,18 @@ pub fn mutate_rule(rule: &Rule, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Ru
                 _ => l.r = (l.r + uniform(rng, 0, 4) as f64 - 2.0).clamp(6.0, 24.0),
             }
             Rule::Lenia(l)
+        }
+        // One letter turned on or off, or (a Generations rule) one state more or fewer.
+        Rule::Isotropic(r) => {
+            let (mut birth, mut survive) = r.class_masks();
+            let mut states = r.states;
+            if states > 2 && rng.below(4) == 0 {
+                let up = states < 8 && (states == 3 || rng.below(2) == 0);
+                states = if up { states + 1 } else { states - 1 };
+            } else {
+                flip_class(rng, &mut birth, &mut survive, crate::isotropic::CLASSES);
+            }
+            return isotropic_rule(birth, survive, states, rng, Some(r.as_ref()));
         }
         _ => return None,
     })

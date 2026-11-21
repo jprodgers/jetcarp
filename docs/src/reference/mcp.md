@@ -561,7 +561,7 @@ Example:
 | `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000; an aperiodic patch is the level nearest it, and bigger than the screening patch). |
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
 | `explore.confirm_seeds` | integer | Seeds an elite is confirmed with (default 3). |
-| `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
+| `explore.families` | array or string | Only these rule families: life_like, generations, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl, isotropic; a list or text (default: every family but isotropic, which is searched only when named). Tilings none of them can run on are left out (isotropic, wolfram, margolus and table rules run on the square tiling only). |
 | `explore.gpu` | boolean | Run the rules a GPU can run on the GPU (true) or everything on the CPU (false), in this and later runs. Default: as JETCARP's GPU setting says at each run (automatic: on the GPU when there is a usable one). |
 | `explore.max_rss_gb` | number | Stop (paused, resumable) when the process uses more memory than this many GB. |
 | `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
@@ -570,6 +570,10 @@ Example:
 | `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000; an aperiodic patch is the level nearest it, 4,000 tiles for 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
+| `explore.skip_families` | array or string | Leave out these rule families (as `families`). |
+| `explore.skip_tiling_groups` | array or string | Leave out the tilings of these groups (as `tiling_groups`). |
+| `explore.skip_tilings` | array or string | Leave out these tilings (ids, as `tilings`). |
+| `explore.tiling_groups` | array or string | Only the tilings of these groups: square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic; a list or text (default: every group). |
 | `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |
 | `gpu` | boolean | Use the GPU (true) or only the CPU (false); results are identical. Default: the job's own choice, else JETCARP's GPU setting (automatic). |
 | `hunt` | object | Small random soups on an unbounded plane, each run until it settles. Every object is classed, and new patterns are verified and stored; B/S and Generations rules without B0, on any periodic tiling; ships that fly away are cut out. Thousands of soups a second for Life. Settings: `jetcarp://schema/search_start/hunt`. |

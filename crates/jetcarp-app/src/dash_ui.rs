@@ -22,8 +22,9 @@ use crate::window_job::{self, AppPlatform};
 use eframe::egui::{self, Color32, ColorImage, Rect, RichText, Sense, TextureHandle};
 use jetcarp_api::op::{Op, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsResume, JobsStop, ResumeIn};
-use jetcarp_api::ops::search::{HuntIn, SearchStart, SearchStartIn};
+use jetcarp_api::ops::search::{BudgetIn, ExploreIn, HuntIn, SearchStart, SearchStartIn};
 use jetcarp_api::{Ctx, Platform};
+use jetcarp_core::explore::space::Fam;
 use jetcarp_core::hunt::soup::SoupSpec;
 use jetcarp_core::media::{self, MediaOptions, MediaStyle};
 use jetcarp_core::rules::Rule;
@@ -155,6 +156,188 @@ impl HuntForm {
     }
 }
 
+/// The start-an-explore-search form (#239): a checkbox for each group of tilings and each rule
+/// family the explore search samples, how long it runs, its seed, and where it runs. As it
+/// opens, every group and every family of the default schedule is ticked, isotropic rules
+/// not: started so, the search runs as one started anywhere else with no choice, and fills out
+/// the Quick Start's variety; unticked boxes narrow it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExploreForm {
+    /// The tiling groups (`jetcarp_core::explore::space::TILING_GROUPS`), ticked or not.
+    pub groups: Vec<(&'static str, bool)>,
+    /// The rule families (`jetcarp_search::explore::job::sampled_families`), ticked or not.
+    pub families: Vec<(Fam, bool)>,
+    /// Minutes to run (0: until stopped).
+    pub minutes: f64,
+    pub seed: u64,
+    pub gpu: bool,
+    /// 0 = all cores but two.
+    pub threads: usize,
+}
+
+impl Default for ExploreForm {
+    fn default() -> Self {
+        use jetcarp_search::explore::job::{OPT_IN, sampled_families};
+        ExploreForm {
+            groups: jetcarp_core::explore::space::TILING_GROUPS
+                .iter()
+                .map(|g| (*g, true))
+                .collect(),
+            families: sampled_families()
+                .into_iter()
+                .map(|f| (f, !OPT_IN.contains(&f)))
+                .collect(),
+            minutes: 30.0,
+            seed: 0,
+            gpu: true,
+            threads: 0,
+        }
+    }
+}
+
+/// *All* and *None* (and, with `default`, *Default*: the ones it says) for a list of checkboxes,
+/// each named for screen readers by what it does to which list (`what`: "tiling group").
+fn list_buttons<T>(
+    ui: &mut egui::Ui,
+    list: &mut [(T, bool)],
+    what: &str,
+    default: Option<&dyn Fn(&T) -> bool>,
+) {
+    if ui
+        .small_button("All")
+        .accessible_name(format!("Tick every {what}"))
+        .clicked()
+    {
+        list.iter_mut().for_each(|x| x.1 = true);
+    }
+    if ui
+        .small_button("None")
+        .accessible_name(format!("Clear every {what}"))
+        .clicked()
+    {
+        list.iter_mut().for_each(|x| x.1 = false);
+    }
+    if let Some(d) = default
+        && ui
+            .small_button("Default")
+            .accessible_name(format!("Tick the default {what} choice"))
+            .on_hover_text("Every family but isotropic rules, as a search with no choice")
+            .clicked()
+    {
+        list.iter_mut().for_each(|x| x.1 = d(&x.0));
+    }
+}
+
+/// A tiling group's name in the form.
+pub fn group_label(g: &str) -> &'static str {
+    match g {
+        "square" => "Square",
+        "hexagon" => "Hexagon",
+        "triangle" => "Triangle",
+        "pentagon" => "Pentagon (Cairo)",
+        "archimedean" => "Archimedean",
+        "k-uniform" => "k-uniform",
+        "isohedral" => "Isohedral",
+        "aperiodic" => "Aperiodic",
+        _ => "Other",
+    }
+}
+
+/// What a tiling group holds, for its tooltip.
+fn group_note(g: &str) -> &'static str {
+    match g {
+        "square" => "The square grid and the tilings with its neighbours (quad, glide, fourfold)",
+        "hexagon" => {
+            "The hexagon grids and the tilings with their neighbours (brick, herringbone, lizard)"
+        }
+        "triangle" => "The triangle grid",
+        "pentagon" => "The Cairo pentagonal tiling",
+        "archimedean" => {
+            "The other Archimedean tilings (trihexagonal, snub square, truncated hexagonal, ...) \
+             and the Pythagorean tiling"
+        }
+        "k-uniform" => "The catalogue's k-uniform tilings",
+        "isohedral" => "The 93 isohedral tiling types",
+        "aperiodic" => "Aperiodic patches: Penrose, spectre, hat",
+        _ => "",
+    }
+}
+
+/// A rule family's name in the form (each its own, for screen readers).
+pub fn family_label(f: Fam) -> &'static str {
+    match f {
+        Fam::LifeLike => "Life-like",
+        Fam::Generations => "Generations",
+        Fam::Jaca => "JACA",
+        Fam::Cyclic => "Cyclic",
+        Fam::Rps => "Rock-paper-scissors",
+        Fam::GreenbergHastings => "Greenberg-Hastings",
+        Fam::Hodgepodge => "Hodgepodge",
+        Fam::Priority => "Priority",
+        Fam::WireWorld => "WireWorld",
+        Fam::SpectreGlider => "Spectre glider",
+        Fam::Turmite => "Turmites",
+        Fam::Layered => "Layered",
+        Fam::Wolfram => "Elementary",
+        Fam::HexWolfram => "Hexagonal elementary",
+        Fam::HexTri => "Three-parent hexagonal",
+        Fam::Margolus => "Margolus blocks",
+        Fam::Lenia => "Lenia",
+        Fam::ForestFire => "Forest fire",
+        Fam::Sandpile => "Sandpile",
+        Fam::Table => "Rule tables",
+        Fam::Ltl => "Larger than Life",
+        Fam::Isotropic => "Isotropic",
+        Fam::VonNeumann => "Von Neumann",
+    }
+}
+
+impl ExploreForm {
+    /// The explore settings it gives (checked for an empty choice): no tiling groups when every
+    /// one is ticked, no families when the default schedule's are ticked, so such a search runs
+    /// as one with no choice; else the ones ticked.
+    pub fn input(&self) -> Result<ExploreIn, String> {
+        use jetcarp_search::explore::job::OPT_IN;
+        let groups: Vec<&str> = self.groups.iter().filter(|g| g.1).map(|g| g.0).collect();
+        if groups.is_empty() {
+            return Err("Tick at least one group of tilings.".into());
+        }
+        let fams: Vec<Fam> = self.families.iter().filter(|f| f.1).map(|f| f.0).collect();
+        if fams.is_empty() {
+            return Err("Tick at least one rule family.".into());
+        }
+        let default = self
+            .families
+            .iter()
+            .all(|(f, on)| *on != OPT_IN.contains(f));
+        Ok(ExploreIn {
+            tiling_groups: (groups.len() < self.groups.len()).then(|| serde_json::json!(groups)),
+            families: (!default)
+                .then(|| serde_json::json!(fams.iter().map(|f| f.name()).collect::<Vec<_>>())),
+            seed: Some(self.seed),
+            ..Default::default()
+        })
+    }
+
+    /// What `search.start` is asked: the explore search, in the background here, with its
+    /// minutes as its budget.
+    pub fn start_in(&self) -> Result<SearchStartIn, String> {
+        let spec = serde_json::to_value(self.input()?).map_err(|e| e.to_string())?;
+        Ok(SearchStartIn {
+            strategy: Some("explore".into()),
+            spec,
+            budget: (self.minutes > 0.0).then(|| BudgetIn {
+                minutes: Some(self.minutes),
+                ..Default::default()
+            }),
+            threads: Some(self.threads),
+            gpu: (!self.gpu).then_some(false),
+            background: true,
+            ..Default::default()
+        })
+    }
+}
+
 /// The selected job's heat map and finds.
 pub struct Detail {
     pub job: i64,
@@ -182,6 +365,8 @@ struct Selection {
 enum Cmd {
     Select(Selection),
     Start(Box<HuntIn>, bool, usize),
+    /// Start a search as asked (the explore form's).
+    StartSearch(Box<SearchStartIn>),
     Pause(i64),
     Resume(i64, bool, usize),
     Stop(i64),
@@ -329,6 +514,17 @@ impl Worker {
         }
     }
 
+    /// Start a job through `search.start`, in the background here, and select it.
+    fn start(&mut self, a: SearchStartIn) {
+        match SearchStart::run(&self.cx, a, &Quiet) {
+            Ok(out) => {
+                self.msg(format!("Job {} is running here.", out.job), false);
+                self.shared.lock().unwrap().started = Some(out.job);
+            }
+            Err(e) => self.msg(e.to_string(), true),
+        }
+    }
+
     /// *Pause*: `jobs.stop`, here or in whatever process runs it.
     fn pause(&mut self, job: i64) {
         if let Err(e) = JobsStop::run(&self.cx, JobIn { job }, &Quiet) {
@@ -353,14 +549,9 @@ impl Worker {
                     background: true,
                     ..Default::default()
                 };
-                match SearchStart::run(&self.cx, a, &Quiet) {
-                    Ok(out) => {
-                        self.msg(format!("Job {} is running here.", out.job), false);
-                        self.shared.lock().unwrap().started = Some(out.job);
-                    }
-                    Err(e) => self.msg(e.to_string(), true),
-                }
+                self.start(a);
             }
+            Cmd::StartSearch(a) => self.start(*a),
             Cmd::Pause(job) => self.pause(job),
             Cmd::Resume(job, gpu, threads) => self.resume(job, gpu, threads),
             Cmd::Stop(job) => {
@@ -835,6 +1026,10 @@ pub struct DashWindow {
     pub form: HuntForm,
     form_open: bool,
     form_error: Option<String>,
+    /// The start-an-explore-search form (#239).
+    pub explore: ExploreForm,
+    explore_open: bool,
+    explore_error: Option<String>,
     heat_tex: Option<(u64, bool, TextureHandle)>,
     anims: Option<AnimCache>,
     messages: Vec<(String, bool, Instant)>,
@@ -866,6 +1061,9 @@ impl Default for DashWindow {
             form: HuntForm::default(),
             form_open: false,
             form_error: None,
+            explore: ExploreForm::default(),
+            explore_open: false,
+            explore_error: None,
             heat_tex: None,
             anims: None,
             messages: vec![],
@@ -998,6 +1196,18 @@ impl DashWindow {
         }
     }
 
+    /// *Start explore search*: the explore form's search, through `search.start` on the worker.
+    fn start_explore(&mut self) {
+        match self.explore.start_in() {
+            Ok(a) => {
+                self.explore_error = None;
+                self.send(Cmd::StartSearch(Box::new(a)));
+                self.explore_open = false;
+            }
+            Err(e) => self.explore_error = Some(e),
+        }
+    }
+
     /// Select a job: its first rule space, no rule filter, and finds as the colouring unless one
     /// was chosen.
     fn pick(&mut self, j: &JobSummary) {
@@ -1107,6 +1317,17 @@ impl DashWindow {
             {
                 self.form_open = !self.form_open;
             }
+            if ui
+                .button(if self.explore_open {
+                    "Hide the explore form"
+                } else {
+                    "Start an explore search…"
+                })
+                .on_hover_text("Choose the tilings and rule families an explore search draws from")
+                .clicked()
+            {
+                self.explore_open = !self.explore_open;
+            }
             if ui.button("Refresh").clicked() {
                 self.send(Cmd::Refresh);
             }
@@ -1126,6 +1347,9 @@ impl DashWindow {
         }
         if self.form_open {
             self.form_ui(ui);
+        }
+        if self.explore_open && self.explore_form_ui(ui) {
+            self.start_explore();
         }
         ui.separator();
         if !loaded {
@@ -1215,6 +1439,76 @@ impl DashWindow {
         if let Some(e) = &self.form_error {
             ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
+    }
+
+    /// The explore form (#239): a checkbox for each group of tilings and each rule family, with
+    /// buttons to tick or clear each list, then how long and where it runs. Every control is a
+    /// standard one, reached with Tab and named for screen readers by its own words (the number
+    /// boxes by the label before them). True when *Start explore search* was pressed.
+    pub fn explore_form_ui(&mut self, ui: &mut egui::Ui) -> bool {
+        let f = &mut self.explore;
+        ui.label(RichText::new("Explore search: what to search").strong());
+        ui.label("Tilings");
+        ui.horizontal_wrapped(|ui| {
+            for (g, on) in f.groups.iter_mut() {
+                ui.checkbox(on, group_label(g)).on_hover_text(group_note(g));
+            }
+            list_buttons(ui, &mut f.groups, "tiling group", None);
+        });
+        ui.label("Rule families");
+        ui.horizontal_wrapped(|ui| {
+            for (fam, on) in f.families.iter_mut() {
+                let mut tip = format!("`{}`", fam.name());
+                if let Some(k) = fam.only_on() {
+                    tip.push_str(&format!(", on the {k} tiling only"));
+                }
+                if *fam == Fam::Isotropic {
+                    tip.push_str(": searched only when ticked");
+                }
+                ui.checkbox(on, family_label(*fam)).on_hover_text(tip);
+            }
+            let default = |f: &Fam| !jetcarp_search::explore::job::OPT_IN.contains(f);
+            list_buttons(ui, &mut f.families, "rule family", Some(&default));
+        });
+        ui.horizontal_wrapped(|ui| {
+            let l = ui.label("Minutes");
+            ui.add(
+                egui::DragValue::new(&mut f.minutes)
+                    .range(0.0..=100_000.0)
+                    .speed(1.0),
+            )
+            .on_hover_text("0 = until stopped")
+            .labelled_by(l.id);
+            let l = ui.label("Seed");
+            ui.add(egui::DragValue::new(&mut f.seed)).labelled_by(l.id);
+            ui.checkbox(&mut f.gpu, "GPU batches").on_hover_text(
+                "On the GPU as JETCARP's GPU setting says (automatic: when there is a usable \
+                 one); unticked, on the CPU only.",
+            );
+            let l = ui.label("Threads");
+            ui.add(egui::DragValue::new(&mut f.threads).range(0..=512))
+                .on_hover_text("0 = every core but two")
+                .labelled_by(l.id);
+        });
+        let mut start = false;
+        ui.horizontal(|ui| {
+            start = ui
+                .button(RichText::new("Start explore search").strong())
+                .clicked();
+            ui.label(
+                RichText::new(
+                    "Everything ticked but isotropic rules is the default search, which fills out \
+                     the Quick Start; untick to search narrowly. Runs here on a background \
+                     thread; pause it and carry it on here or with `jetcarp jobs resume JOB`.",
+                )
+                .small()
+                .weak(),
+            );
+        });
+        if let Some(e) = &self.explore_error {
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
+        }
+        start
     }
 
     fn job_list(&mut self, ui: &mut egui::Ui, jobs: &[JobSummary]) {
@@ -2012,6 +2306,159 @@ mod tests {
         f.tilings = "square".into();
         f.density = 1.5;
         assert!(f.spec().is_err());
+    }
+
+    /// A node of the screen-reader tree: its role, name, ticked or not, and id.
+    type A11yNode = (egui::Role, String, Option<bool>, u64);
+
+    /// One frame of the explore form, headless with AccessKit on: the tree it gives, the node
+    /// with the keyboard, and whether *Start explore search* was pressed.
+    fn explore_frame(
+        ctx: &egui::Context,
+        w: &mut DashWindow,
+        events: Vec<egui::Event>,
+    ) -> (Vec<A11yNode>, u64, bool) {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1400.0, 900.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let mut started = false;
+        let out = ctx.run_ui(input, |ui| started |= w.explore_form_ui(ui));
+        let u = out
+            .platform_output
+            .accesskit_update
+            .expect("an AccessKit tree");
+        let nodes = u
+            .nodes
+            .iter()
+            .map(|(id, n)| {
+                let ticked = n.toggled().map(|t| t == egui::accesskit::Toggled::True);
+                (n.role(), n.label().unwrap_or("").to_string(), ticked, id.0)
+            })
+            .collect();
+        (nodes, u.focus.0, started)
+    }
+
+    fn key(k: egui::Key) -> Vec<egui::Event> {
+        [true, false]
+            .into_iter()
+            .map(|pressed| egui::Event::Key {
+                key: k,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            })
+            .collect()
+    }
+
+    /// The explore form (#239), drawn headless: a checkbox for every group of tilings and every
+    /// family the explore search samples, each a checkbox to a screen reader named by its own
+    /// words, and the list buttons named by what they do. As it opens it asks for no choice (the
+    /// default search); Tab reaches every checkbox, and Space on one changes the search it
+    /// starts: here isotropic rules ticked and the aperiodic patches unticked, which the spec
+    /// then names, and the minutes its budget.
+    #[test]
+    fn the_explore_form_is_reached_by_keyboard_and_sets_the_spec() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut w = DashWindow::default();
+        // As it opens: every group and the default schedule's families, so no choice.
+        let i = serde_json::to_value(w.explore.input().unwrap()).unwrap();
+        assert!(
+            i["tiling_groups"].is_null() && i["families"].is_null(),
+            "{i}"
+        );
+        explore_frame(&ctx, &mut w, vec![]);
+        let (nodes, _, _) = explore_frame(&ctx, &mut w, vec![]);
+        let boxes: Vec<&A11yNode> = nodes
+            .iter()
+            .filter(|n| n.0 == egui::Role::CheckBox)
+            .collect();
+        let named = |name: &str| boxes.iter().find(|n| n.1 == name).copied();
+        for g in jetcarp_core::explore::space::TILING_GROUPS {
+            assert_eq!(named(group_label(g)).map(|n| n.2), Some(Some(true)), "{g}");
+        }
+        for f in jetcarp_search::explore::job::sampled_families() {
+            let want = Some(Some(f != Fam::Isotropic));
+            assert_eq!(named(family_label(f)).map(|n| n.2), want, "{f:?}");
+        }
+        for b in [
+            "Tick every tiling group",
+            "Clear every tiling group",
+            "Tick every rule family",
+            "Clear every rule family",
+            "Tick the default rule family choice",
+        ] {
+            assert!(
+                nodes.iter().any(|n| n.0 == egui::Role::Button && n.1 == b),
+                "{b}"
+            );
+        }
+        // Tab from the start to every checkbox in turn; Space on two of them.
+        let target = |n: &str| named(n).unwrap().3;
+        let (iso, aperiodic) = (target("Isotropic"), target("Aperiodic"));
+        let mut reached = HashSet::new();
+        let mut toggled = 0;
+        for _ in 0..80 {
+            let (_, focus, _) = explore_frame(&ctx, &mut w, key(egui::Key::Tab));
+            reached.insert(focus);
+            if focus == iso || focus == aperiodic {
+                explore_frame(&ctx, &mut w, key(egui::Key::Space));
+                toggled += 1;
+            }
+            if toggled == 2 {
+                break;
+            }
+        }
+        assert_eq!(toggled, 2, "Tab never reached both boxes");
+        for b in &boxes {
+            if b.1 == "Square" || b.1 == "Life-like" {
+                assert!(reached.contains(&b.3), "Tab skipped {}", b.1);
+            }
+        }
+        let (nodes, _, _) = explore_frame(&ctx, &mut w, vec![]);
+        let ticked = |name: &str| {
+            nodes
+                .iter()
+                .find(|n| n.0 == egui::Role::CheckBox && n.1 == name)
+                .and_then(|n| n.2)
+        };
+        assert_eq!(ticked("Isotropic"), Some(true));
+        assert_eq!(ticked("Aperiodic"), Some(false));
+        // The search it starts.
+        w.explore.minutes = 5.0;
+        let a = w.explore.start_in().unwrap();
+        assert_eq!(a.strategy.as_deref(), Some("explore"));
+        assert!(a.background);
+        assert_eq!(a.budget.as_ref().and_then(|b| b.minutes), Some(5.0));
+        let groups: Vec<&str> = jetcarp_core::explore::space::TILING_GROUPS
+            .iter()
+            .copied()
+            .filter(|g| *g != "aperiodic")
+            .collect();
+        assert_eq!(a.spec["tiling_groups"], serde_json::json!(groups));
+        let fams = a.spec["families"].as_array().unwrap();
+        assert!(fams.contains(&serde_json::json!("isotropic")), "{fams:?}");
+        assert_eq!(
+            fams.len(),
+            jetcarp_search::explore::job::sampled_families().len()
+        );
+        // The spec the job keeps: what search.start makes of it.
+        let spec: ExploreIn = serde_json::from_value(a.spec.clone()).unwrap();
+        assert_eq!(spec.seed, Some(0));
+        // Nothing ticked is refused before anything starts.
+        w.explore.groups.iter_mut().for_each(|g| g.1 = false);
+        assert!(
+            w.explore
+                .start_in()
+                .unwrap_err()
+                .contains("at least one group")
+        );
     }
 
     #[test]

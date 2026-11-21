@@ -559,23 +559,46 @@ fn minutes(s: f64) -> String {
     }
 }
 
-/// What a job searches, in a few words.
+/// What a job searches, in a few words: the tilings named (less those left out), or the groups
+/// or every tiling but those left out; the families named (less those left out), or every
+/// family but those left out.
 pub fn title(sp: &ExploreSpec) -> String {
-    let t = if sp.search.tilings.is_empty() {
-        "every tiling".to_string()
-    } else {
-        short_list(&sp.search.tilings, 3)
+    let s = &sp.search;
+    let but = |what: String, left: Vec<String>| {
+        if left.is_empty() {
+            what
+        } else {
+            format!("{what} but {}", short_list(&left, 2))
+        }
     };
-    let f = if sp.search.families.is_empty() {
-        "every family".to_string()
-    } else {
-        let names: Vec<String> = sp
-            .search
-            .families
+    let t = if !s.tilings.is_empty() {
+        let named: Vec<String> = s
+            .tilings
             .iter()
-            .map(|f| f.name().to_string())
+            .filter(|t| !s.skip_tilings.contains(t))
+            .cloned()
             .collect();
-        short_list(&names, 3)
+        short_list(&named, 3)
+    } else {
+        let what = if s.tiling_groups.is_empty() {
+            "every tiling".to_string()
+        } else {
+            format!("{} tilings", short_list(&s.tiling_groups, 3))
+        };
+        let left = s.skip_tilings.iter().chain(&s.skip_tiling_groups).cloned();
+        but(what, left.collect())
+    };
+    let names = |v: &mut dyn Iterator<Item = &jetcarp_core::explore::space::Fam>| -> Vec<String> {
+        v.map(|f| f.name().to_string()).collect()
+    };
+    let f = if s.families.is_empty() {
+        but(
+            "every family".to_string(),
+            names(&mut s.skip_families.iter()),
+        )
+    } else {
+        let named = names(&mut s.families.iter().filter(|f| !s.skip_families.contains(f)));
+        short_list(&named, 3)
     };
     format!("{t}, {f}")
 }
