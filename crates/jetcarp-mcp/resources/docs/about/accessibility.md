@@ -81,8 +81,8 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
   contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and *Settings →
   Accessibility* turns it on or off whatever the system says
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast)).
-- **Light and dark.** The app follows your system's light or dark setting on Windows and macOS,
-  and *Settings → Accessibility* chooses either on any system.
+- **Light and dark.** The app follows your system's light or dark setting, and *Settings →
+  Accessibility* chooses either whatever it says.
 
 ## Using the keyboard
 
@@ -104,9 +104,6 @@ These are known, and each is tracked:
   colour-vision deficiency are checked by simulation, not yet by people with those deficiencies,
   and most of the other built-in palettes don't pass the check
   ([#217](https://github.com/jprodgers/jetcarp/issues/217)).
-- **Light and dark on Linux.** On Linux the app doesn't follow the system's light or dark setting;
-  choose it in *Settings → Accessibility* instead
-  ([#137](https://github.com/jprodgers/jetcarp/issues/137)).
 - **The keyboard alone.** Drawing cells, selecting and moving patterns, and arranging the docked
   panes need a mouse or a touchpad, and the menus and windows have not been checked for use without
   one. Scripts and the command line can draw and edit worlds instead
