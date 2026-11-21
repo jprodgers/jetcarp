@@ -421,13 +421,15 @@ struct Group {
 /// most `.2` bytes (estimated).
 struct CachePool(Mutex<Vec<Vec<Cache>>>, usize, usize);
 
-/// Bytes all of a hunt's caches may hold together (`JETCARP_HUNT_CACHE_MB`, default 1,536 MB).
+/// Bytes all of a hunt's caches may hold together: `JETCARP_HUNT_CACHE_MB` (megabytes), else
+/// this machine's `hunt-cache` limit (1,536 MB on a 16 GB machine, `jetcarp limits`). The caches
+/// only save work: what a hunt finds never depends on them.
 fn cache_budget() -> usize {
     std::env::var("JETCARP_HUNT_CACHE_MB")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(1536)
-        << 20
+        .map(|mb| mb << 20)
+        .unwrap_or_else(|| jetcarp_core::machine::current().hunt_cache_bytes())
 }
 
 impl CachePool {

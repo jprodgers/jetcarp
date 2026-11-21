@@ -168,8 +168,13 @@ allowed.
   limit, 1,024 bytes, comes first), and so is a name that cannot be copied to every system: one
   with a `:`, a Windows device name such as `CON` or `nul.json`, or one ending in a dot or a space
   ([Names](folders.md#names)). See [Folders and environment variables](folders.md).
-- **Limits per call.** Worlds of at most 4 million cells, counting every cell, several to a unit
-  cell on trihex and the k-uniform tilings (a refusal names sides that fit); at most 1,000,000
+- **Limits per call.** Worlds of an AI's share of the computer: at most 4 million cells unless the
+  person raised the share (Tools → This computer…, or `jetcarp limits set ai-share`; see
+  [This computer](../guides/this-computer.md#an-ais-share)), counting every cell, several to a unit
+  cell on trihex and the k-uniform tilings (a refusal names sides that fit), and the memory the
+  share allows (a refusal names what the world needs and the limit). The tools' descriptions give
+  the limits in use, and `reference {"what": "machine"}` shows the computer, its score and limits,
+  and an AI's own; at most 1,000,000
   generations and 2 billion cell updates (cells times generations) per `world_step`; scripts of at
   most 600 seconds (60 by default); waits for a job of at most 600 seconds. Long searches run as
   background jobs instead, with no such limits. When the client goes, the server stops the searches
@@ -177,7 +182,8 @@ allowed.
   paused and resumable; a search started with `detach` runs in a process of its own and carries on.
 - **What is not offered.** Making the publisher's signing key (`jetcarp pack key`) and recording a
   rater's consent to publish their ratings (`jetcarp pack rater`) are for people only, at a command
-  line.
+  line, and so are measuring the computer (`jetcarp score`) and changing its limits (`jetcarp
+  limits`): the tools read the score and the limits, and never run the benchmark.
 - **Cancelling.** A call the client cancels (`notifications/cancelled`) stops soon: scripts, steps,
   waits and compounds passes. With a progress token, scripts' sweeps and waits report progress.
 
@@ -200,7 +206,7 @@ settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 122 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 123 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}. What JETCARP shows on screen passes through its strobe guard, which softens, slows or pauses scenes that flash; no tool can turn it off.
 
@@ -209,7 +215,7 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 | Tool | What it does |
 | --- | --- |
 | [`help`](#help) | JETCARP help and worked examples |
-| [`reference`](#reference) | Rules, tilings, palettes, seeds, commands |
+| [`reference`](#reference) | Rules, tilings, palettes, seeds, commands, this machine |
 | [`world_new`](#world_new) | Make or open a world |
 | [`world_status`](#world_status) | World status |
 | [`world_read`](#world_read) | Read cells, a cell, or the objects |
@@ -255,7 +261,7 @@ Example:
 
 ### `reference`
 
-**Rules, tilings, palettes, seeds, commands.** Lists what there is to choose from. `what`: "rules" (default: the named rules with notation, family and a line each, and how rule notation works; any name or notation works as a CA's `rule`, e.g. "Life", "B36/S23", "Brian's Brain", "W30", "Ant RL"), "tilings" (tiling ids for world_new and their neighbour counts; with `search`, catalog tilings such as "k2-005" or "3.4.6.4"), "isohedral" (Kaplan's 81 isohedral tile types), "palettes" (built-in palettes and their colours), "seeds" (the forms a CA's `seed` takes), or "commands" (the command objects world_edit's `commands` applies). Examples: {"what": "rules", "family": "Generations"}, {"what": "tilings", "search": "k2-"}.
+**Rules, tilings, palettes, seeds, commands, this machine.** Lists what there is to choose from. `what`: "rules" (default: the named rules with notation, family and a line each, and how rule notation works; any name or notation works as a CA's `rule`, e.g. "Life", "B36/S23", "Brian's Brain", "W30", "Ant RL"), "tilings" (tiling ids for world_new and their neighbour counts; with `search`, catalog tilings such as "k2-005" or "3.4.6.4"), "isohedral" (Kaplan's 81 isohedral tile types), "palettes" (built-in palettes and their colours), "seeds" (the forms a CA's `seed` takes), "commands" (the command objects world_edit's `commands` applies), or "machine" (this computer: its hardware, its JETCARP Hardware Score, the limits set from them, and your own limits as an AI). Examples: {"what": "rules", "family": "Generations"}, {"what": "tilings", "search": "k2-"}.
 
 *reads only*
 
@@ -264,7 +270,7 @@ Example:
 | `family` | string | rules: only this family (part of its name, any case), e.g. "Life-like", "Generations", "Agents". |
 | `limit` | integer | tilings: With `search`: most matches listed (default 60). |
 | `search` | string | tilings: List the tilings (families, catalog tilings, isohedral types) whose id or name contains this text, any case, e.g. "k2-", "3.4.6.4", "ih4". Default: the tiling families. |
-| `what` | `"rules"`, `"tilings"`, `"isohedral"`, `"palettes"`, `"seeds"`, `"commands"` | What to list (default rules). |
+| `what` | `"rules"`, `"tilings"`, `"isohedral"`, `"palettes"`, `"seeds"`, `"commands"`, `"machine"` | What to list (default rules). |
 
 Example:
 
@@ -1158,7 +1164,7 @@ The settings of 32 tool arguments, which `tools/list` only summarises (each argu
 - `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
 - `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
-And the 84 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
+And the 85 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
 
 <details><summary>The book's pages</summary>
 
@@ -1193,6 +1199,7 @@ And the 84 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/guides/aperiodic-patches`: Aperiodic patches and following movers
 - `jetcarp://docs/guides/website-export`: Website export
 - `jetcarp://docs/guides/gpu`: The GPU
+- `jetcarp://docs/guides/this-computer`: This computer: the score and the limits
 - `jetcarp://docs/guides/uninstalling`: Uninstalling
 - `jetcarp://docs/automata/generalising`: How JETCARP generalises automata to any tiling
 - `jetcarp://docs/automata/life-like`: Life-like rules

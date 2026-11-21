@@ -106,6 +106,57 @@ pub fn check_grid_cells(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     )))
 }
 
+/// A world of `cas` on `spec` against the memory limit (`Limits::world_memory`), worked out
+/// before any of it is built: refused naming what it needs, the limit and where the limit came
+/// from (`this world needs 31 GB; this machine's limit is 24 GB (half of the 48 GB reserved for
+/// JETCARP, from its hardware: ...)`). Never made smaller to fit.
+///
+/// Then against JETCARP's one pool ([`jetcarp_core::machine::pool`]): what the other JETCARP
+/// programs (the app, the desktop background, other commands, MCP servers, search jobs) and this
+/// one hold leaves so much of *Reserved for JETCARP*, and the world must fit that too (`this world
+/// needs 1.9 GB, and 824 MB of the 8 GB reserved for JETCARP is left (...)`). The pool is checked
+/// only in a program that records its memory (the `jetcarp` program), never in tests.
+pub fn check_world_memory(spec: &TilingSpec, cas: &[CaSpec], l: &Limits) -> Result<(), ApiError> {
+    check_world_memory_replacing(spec, cas, l, None)
+}
+
+/// [`check_world_memory`] for a world that replaces `current` (a new world or scene in its
+/// place): the memory `current` holds is counted as free in the pool.
+pub fn check_world_memory_replacing(
+    spec: &TilingSpec,
+    cas: &[CaSpec],
+    l: &Limits,
+    current: Option<&World>,
+) -> Result<(), ApiError> {
+    use crate::ctx::WorldMemory;
+    use jetcarp_core::machine::{self, cost, pool::Pool};
+    if l.world_memory == WorldMemory::Unlimited {
+        return Ok(());
+    }
+    let Some(cells) = cost::cells_of(spec) else {
+        return Ok(());
+    };
+    let needs = cost::world_bytes(spec, cells, cas);
+    let m = machine::current();
+    let r = match l.world_memory {
+        WorldMemory::Machine => m.check_world(needs),
+        WorldMemory::Ai => m.check_ai_world(needs),
+        WorldMemory::Unlimited => Ok(()),
+    };
+    r.map_err(|e| ApiError::limit(e.to_string()))?;
+    let Some(pool) = Pool::now(&m) else {
+        return Ok(());
+    };
+    m.check_world_in_pool(needs, &pool, current.map_or(0, world_cost))
+        .map_err(|e| ApiError::limit(e.to_string()))
+}
+
+/// What a built world holds, by the same table a new one is checked with.
+pub fn world_cost(w: &World) -> u64 {
+    let cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+    jetcarp_core::machine::cost::world_bytes(&w.topo.spec, w.topo.len() as u64, &cas)
+}
+
 /// A tiling's size against the limits (an opened scene, `set_tiling`).
 pub fn check_tiling_size(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     match spec.size {
@@ -725,6 +776,7 @@ impl WorldOp for WorldNew {
         if scene.cas.len() > 32 {
             return Err(ApiError::limit("at most 32 CAs"));
         }
+        check_world_memory_replacing(&scene.tiling, &scene.cas, l, Some(host.world()))?;
         // Palettes named here are typed, so an unknown one is refused (a scene file's would load,
         // drawn in the default, with a warning). A new world has no palettes of its own.
         for c in &scene.cas {
@@ -844,6 +896,7 @@ impl WorldOp for WorldOpen {
     ) -> Result<OpenOut, ApiError> {
         let scene = scene_to_open(cx, &a)?;
         check_tiling_size(&scene.tiling, &cx.limits)?;
+        check_world_memory_replacing(&scene.tiling, &scene.cas, &cx.limits, Some(host.world()))?;
         let record = scene.record.clone();
         let recorded = record.as_ref().map(|r| Recorded {
             generation: r.generation,
@@ -1265,13 +1318,25 @@ impl WorldOp for WorldPaste {
         let w = host.world();
         let ci = ca_index(w, a.ca.as_ref())?;
         let ca_id = w.cas[ci].id;
+        // Coordinates and indices past what the grid numbers them with are refused, never
+        // wrapped round onto a cell of this world.
+        let coord = |v: Int, what: &str| {
+            i32::try_from(v).map_err(|_| {
+                ApiError::invalid(format!("{what} is {v}, outside the grid's coordinates"))
+            })
+        };
         let at = match (a.x, a.y, a.index, a.at.as_deref()) {
             (Some(x), Some(y), None, None) => PasteAt::Cell {
-                x: x as i32,
-                y: y as i32,
+                x: coord(x, "x")?,
+                y: coord(y, "y")?,
             },
             (None, None, Some(i), None) => PasteAt::Index {
-                cell: i.max(0) as u32,
+                cell: u32::try_from(i).map_err(|_| {
+                    ApiError::invalid(format!(
+                        "index {i} is not a cell: indices are 0 to {} here",
+                        w.topo.len().saturating_sub(1)
+                    ))
+                })?,
             },
             (None, None, None, Some("original")) => PasteAt::Original,
             (None, None, None, Some("center")) => PasteAt::Center,
@@ -2186,7 +2251,16 @@ pub fn prepare_command(v: &Value, w: &World, l: &Limits) -> Result<Command, ApiE
     })?;
     match &cmd {
         Command::Step { gens } => check_work(w, *gens, l)?,
-        Command::SetTiling { tiling } => check_tiling_size(tiling, l)?,
+        Command::SetTiling { tiling } => {
+            check_tiling_size(tiling, l)?;
+            let cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+            check_world_memory_replacing(tiling, &cas, l, Some(w))?;
+        }
+        Command::AddCa { ca } => {
+            let mut cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+            cas.push(ca.clone());
+            check_world_memory(&w.topo.spec, &cas, l)?;
+        }
         Command::SetCells { cells, .. } if cells.len() > l.max_set => {
             return Err(ApiError::limit(format!(
                 "at most {} cells per set_cells",

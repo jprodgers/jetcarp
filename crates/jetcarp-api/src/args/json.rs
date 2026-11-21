@@ -4,6 +4,12 @@
 use super::Screen;
 use serde_json::Value;
 
+/// `n` as a 32-bit integer (a grid's side, a cell's index, an image's width), refused past what
+/// one holds: never wrapped round to a small number, which would quietly make something else.
+pub fn to_u32(n: u64, what: &str) -> Result<u32, String> {
+    u32::try_from(n).map_err(|_| format!("{what} is {n}, more than JETCARP takes ({})", u32::MAX))
+}
+
 /// The value under `key`, unless it is missing or `null`.
 pub fn get<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
     v.get(key).filter(|x| !x.is_null())
@@ -118,13 +124,20 @@ pub fn get_pair(
         Some(Value::Number(n)) => {
             let n = n
                 .as_u64()
-                .ok_or(format!("`{key}` must be a whole number"))? as u32;
+                .ok_or(format!("`{key}` must be a whole number"))?;
+            let n = to_u32(n, &format!("`{key}`"))?;
             (n, n)
         }
         Some(Value::String(s)) => Screen::parse_size(s)?,
         Some(Value::Array(x)) if x.len() == 2 => (
-            x[0].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))? as u32,
-            x[1].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))? as u32,
+            to_u32(
+                x[0].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))?,
+                &format!("`{key}`'s {a}"),
+            )?,
+            to_u32(
+                x[1].as_u64().ok_or(format!("`{key}` must be [{a}, {b}]"))?,
+                &format!("`{key}`'s {b}"),
+            )?,
         ),
         Some(x) => {
             return Err(format!(
@@ -162,6 +175,25 @@ mod tests {
         assert_eq!(e, "unknown world option `sise`; options are: tiling, size");
         assert!(check_keys(&Value::Null, &[], "world").is_ok());
         assert!(check_keys(&json!(3), &[], "world").is_err());
+    }
+
+    /// A pair past what 32 bits hold is refused, never wrapped round (an image 2^32 + 640
+    /// pixels wide was read as 640).
+    #[test]
+    fn pairs_past_32_bits_are_refused_not_wrapped() {
+        let big = (1u64 << 32) + 640;
+        for v in [
+            json!({"size": big}),
+            json!({"size": [big, 400]}),
+            json!({"size": [640, big]}),
+        ] {
+            let e = get_pair(&v, "size", (1, 1), ("w", "h")).unwrap_err();
+            assert!(e.contains("more than"), "{v}: {e}");
+        }
+        assert_eq!(
+            get_pair(&json!({"size": [u32::MAX, 1]}), "size", (1, 1), ("w", "h")).unwrap(),
+            (u32::MAX, 1)
+        );
     }
 
     #[test]

@@ -31,6 +31,7 @@ mod display_ui;
 mod draw_ui;
 mod host_ui;
 mod keyboard;
+mod machine_ui;
 pub use keyboard::{Shortcut, ShortcutGroup, table as shortcut_table};
 #[cfg(test)]
 mod keyboard_tests;
@@ -206,6 +207,8 @@ pub struct JetcarpApp {
     ctx: Option<egui::Context>,
     /// The strobe guard: its settings, what the views' guards ask, Settings → Safety (#97).
     strobe: strobe::AppStrobe,
+    /// Tools → This computer… and the question a world over the machine's limit gets (#213).
+    machine: machine_ui::MachineWin,
     /// The Reseed pane (`reseed_ui.rs`).
     reseed: reseed_ui::ReseedUi,
     /// The palette window's browser and editor state (`palette_ui.rs`).
@@ -342,6 +345,7 @@ impl JetcarpApp {
             display: Default::default(),
             ctx: Some(cc.egui_ctx.clone()),
             strobe: Default::default(),
+            machine: Default::default(),
             reseed: Default::default(),
             pal_ui: Default::default(),
             wallpaper: Default::default(),
@@ -353,6 +357,8 @@ impl JetcarpApp {
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
+        // A changed machine suggests measuring it again, once (#213).
+        app.machine_suggestion();
         // Reduced motion and the theme, before the first scene opens or the first frame draws.
         app.a11y_frame(&cc.egui_ctx);
         let mut app = app.with_autoshot(&cc.egui_ctx);

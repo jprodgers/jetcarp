@@ -38,6 +38,18 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   `JETCARP_GOLLY_LIBRARY`). On 21 November 2026, a library of fresh hunts on squares, hexagons and
   the von Neumann neighbourhood held 3,314 finds: 2,024 oscillators, 1,282 still lifes and 8
   spaceships. Every one pasted back as the same cells and ran to the same generation in Golly 5.0.
+- **The benchmark's answers.** A short run of the benchmark behind the
+  [JETCARP Hardware Score](../guides/this-computer.md) (each workload once) must give its stored
+  answers on the processor, and on the GPU where there is one (Mesa's software renderer in CI), and
+  a device with a wrong answer must be left out of the score. CI checks the answers, never the
+  speed: no test depends on how fast the machine is.
+- **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
+  person's own values, the two linked memory values and the ceilings; a world over the limit is
+  refused before anything is built, naming the limit and where it came from. The memory each kind
+  of world takes is measured by counting every allocation while one is built and stepped, and the
+  table the limits use must never be below it. A grid of exactly the largest number of cells the
+  code can number (4,294,967,295) is built and its last cells' neighbours checked, without making
+  any field.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI
@@ -296,6 +308,22 @@ own check of what was shown. The stripe check's windows were laid from the top l
 coarser scales a band along the right and bottom edges (up to a window wide) was never looked at,
 and never veiled; on a large pattern the band alone could be over a quarter of the screen.
 Windows now also sit against the far edges (`stripes_against_the_far_edges_are_found_too`).
+
+## The test machines' scores
+
+Each release's sittings measure the three test machines with `jetcarp score --report`, and the
+reports go to the public test records. The scores are of score v1 (see
+[This computer](../guides/this-computer.md#the-benchmark-and-the-score)): the geometric mean of five
+Life soup rates, in soups a second.
+
+| Machine | Score | Measured |
+| --- | --- | --- |
+| A desktop with 128 GB of memory (96 GB for the system, 32 GB set aside for its integrated GPU), 16 cores | 24,997 (its GPU about 10 times its processor on the soups) | during development, 21 November 2026 |
+| A Windows laptop | at the 0.4.3 sittings | |
+| An Apple silicon laptop | at the 0.4.3 sittings | |
+
+The desktop is measured at two or three firmware splits of its memory between the system and the
+GPU, since its limits follow the split.
 
 ## Continuous integration
 

@@ -712,13 +712,16 @@ pub fn decode_rle_within(st: &str, max_values: u64) -> Result<LeniaPattern, RleE
     })
 }
 
+/// The most values [`decode_rle`] decodes a pattern to: 256 million, the most cells a grid could
+/// have before 0.4.3 (patterns are small; this holds a hostile text to a gigabyte).
+pub const DECODE_CEILING: u64 = 256_000_000;
+
 /// Decode Chan's 2D run-length format into rows of values in [0, 1] (short rows padded with 0),
-/// within the most cells a grid may have ([`crate::topology::MAX_CELLS`], the code's hard
-/// ceiling). Each row is counted with its own cost ([`ROW_OVERHEAD_VALUES`]), since rows are
+/// within [`DECODE_CEILING`] values. Each row is counted with its own cost ([`ROW_OVERHEAD_VALUES`]), since rows are
 /// separate allocations. A caller with a limit of its own uses [`decode_rle_within`], whose flat
 /// result has no cost per row.
 pub fn decode_rle(st: &str) -> Result<Vec<Vec<f32>>, String> {
-    decode_rows_within(st, crate::topology::MAX_CELLS).map_err(|e| e.to_string())
+    decode_rows_within(st, DECODE_CEILING).map_err(|e| e.to_string())
 }
 
 /// [`decode_rle`] with the caller's limit, rows counted with their own cost.
@@ -745,7 +748,7 @@ pub fn pattern(name: &str) -> Option<Vec<Vec<f32>>> {
 mod rle_tests {
     use super::*;
 
-    const CEILING: u64 = crate::topology::MAX_CELLS;
+    const CEILING: u64 = DECODE_CEILING;
 
     /// Orbium decodes as it always did: 20 by 20, every value in [0, 1], the same through the
     /// rows and the flat pattern.

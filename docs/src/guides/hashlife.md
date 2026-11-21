@@ -128,7 +128,9 @@ compare:    cpu (32 threads) 3.539s, states equal
 ```
 
 Saved with `--save`, a torus jump keeps the `jump` command in the scene's log, so `jetcarp verify`
-replays it. `--node-cap` changes the number of stored blocks before a clear-out, and `--leaf-level`
+replays it. `--node-cap` changes the number of stored blocks before a clear-out (by default this
+computer's `hashlife-nodes` limit: 48 million on a 16 GB computer, more on a bigger one, see
+[This computer](this-computer.md)), and `--leaf-level`
 (at most 6) how large a block is stepped directly by a fast bit-parallel stepper for Life-like and
 Generations rules without B0; neither changes the result.
 
