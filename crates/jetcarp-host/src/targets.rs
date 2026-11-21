@@ -80,6 +80,14 @@ pub fn per_monitor(
     out
 }
 
+/// For each of `screens` screens, whether no target shows it: its monitor has gone and the scene
+/// could not move (#130). The host neither steps nor draws such a screen.
+pub fn unseen(targets: &[Target], screens: usize) -> Vec<bool> {
+    (0..screens)
+        .map(|i| !targets.iter().any(|t| t.screen == i))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +134,20 @@ mod tests {
         let t = per_monitor(&[(None, true), (Some(2), true)], 1, 0);
         assert_eq!(monitors_of(&t, 0), [Some(0)]);
         assert_eq!(monitors_of(&t, 1), []);
+    }
+
+    #[test]
+    fn a_screen_whose_monitor_has_gone_and_cannot_move_is_unseen() {
+        // Screen 0 on the primary; screen 1's monitor (1) isn't connected, and the primary is
+        // taken: screen 1 has no surface, so it is held.
+        let t = per_monitor(&[(Some(0), true), (Some(1), true)], 1, 0);
+        assert_eq!(unseen(&t, 2), [false, true]);
+        // With its monitor back, it shows again.
+        let t = per_monitor(&[(Some(0), true), (Some(1), true)], 2, 0);
+        assert_eq!(unseen(&t, 2), [false, false]);
+        // Alone, it moves to the primary instead.
+        let t = per_monitor(&[(Some(1), true)], 1, 0);
+        assert_eq!(unseen(&t, 1), [false]);
     }
 
     #[test]

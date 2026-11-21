@@ -7,8 +7,8 @@ Downloads JETCARP's release archive and the release's SHA256SUMS, checks the arc
 unpacks it into one folder (by default %LOCALAPPDATA%\Programs\jetcarp), and adds that folder to
 your user PATH. It changes nothing else, and needs no administrator rights.
 
-  Invoke-WebRequest https://github.com/@REPO@/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
-  powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1
+  Invoke-WebRequest https://github.com/@REPO@/releases/latest/download/jetcarp-installer.ps1 -OutFile "$env:TEMP\jetcarp-installer.ps1"
+  powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1"
 
 Save it and run it as a file, as above: Microsoft Defender can flag the one-line form that pipes a
 downloaded script into iex. It takes the options below, or the environment variables named with
@@ -148,11 +148,17 @@ if ($Uninstall) {
         }
     }
     # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
-    # there, so nothing is said of what `jetcarp uninstall --settings --data` already took (#134).
+    # there, each with what it holds, so nothing is said of what `jetcarp uninstall --settings --data`
+    # already took (#134, #142).
     $Pictures = Join-Path ([Environment]::GetFolderPath("MyPictures")) "JETCARP"
-    $Kept = @((Join-Path $env:APPDATA 'jetcarp'), (Join-Path $env:LOCALAPPDATA 'jetcarp'), $Pictures) | Where-Object { Test-Path -LiteralPath $_ }
+    $Kept = @(
+        [pscustomobject]@{ Folder = (Join-Path $env:APPDATA 'jetcarp'); Holds = 'your settings' },
+        [pscustomobject]@{ Folder = (Join-Path $env:LOCALAPPDATA 'jetcarp'); Holds = 'your library and data' },
+        [pscustomobject]@{ Folder = $Pictures; Holds = 'your pictures and exports' }
+    ) | Where-Object { Test-Path -LiteralPath $_.Folder }
     if (@($Kept).Count -gt 0) {
-        Say "kept your settings, data and pictures in $(@($Kept) -join ', '); delete them by hand if you want them gone"
+        Say "kept these folders; delete them by hand if you want them gone:"
+        foreach ($k in @($Kept)) { Say "  $($k.Folder) ($($k.Holds))" }
     }
     return
 }
@@ -244,10 +250,14 @@ if (-not $NoModifyPath) {
         $Trimmed = $UserPath.TrimEnd(";")
         $New = if ($Trimmed) { "$Trimmed;$InstallDir" } else { $InstallDir }
         Set-UserPath $New
-        Say "added $InstallDir to your user PATH; open a new terminal to use ``jetcarp``"
+        Say "added $InstallDir to your user PATH"
     }
     if (-not (($env:Path -split ";") -contains $InstallDir)) { $env:Path = "$env:Path;$InstallDir" }
+    Say "``jetcarp doctor`` shows what JETCARP sees; jetcarpw.exe starts it with no console window"
+    # Last, on its own: this window can't see the new PATH, since the installer runs in a PowerShell
+    # of its own, so `jetcarp` typed here next is not found (#144).
+    Say "Open a new PowerShell window, then run ``jetcarp``"
 } else {
+    Say "``jetcarp doctor`` shows what JETCARP sees; jetcarpw.exe starts it with no console window"
     Say "left your PATH alone: run JETCARP as $Exe"
 }
-Say "start JETCARP with ``jetcarp`` (or jetcarpw.exe for no console window); ``jetcarp doctor`` shows what it sees"

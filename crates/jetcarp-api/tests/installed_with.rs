@@ -109,13 +109,13 @@ fn the_installer_by_its_marker() {
     assert_eq!(w.remove.len(), 2, "{w:?}");
     assert_eq!(
         w.remove[0],
-        "Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1"
+        "Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile \"$env:TEMP\\jetcarp-installer.ps1\""
     );
     let ps_quoted = format!("'{}'", lib.display().to_string().replace('\'', "''"));
     assert_eq!(
         w.remove[1],
         format!(
-            "powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1 -Uninstall -InstallDir {ps_quoted}"
+            "powershell -ExecutionPolicy Bypass -File \"$env:TEMP\\jetcarp-installer.ps1\" -Uninstall -InstallDir {ps_quoted}"
         )
     );
     let _ = std::fs::remove_dir_all(&d);
@@ -163,6 +163,7 @@ fn the_report_ends_with_the_command_that_applies() {
         kept_data: None,
         kept_settings: None,
         kept_publisher: None,
+        already_gone: vec![],
         output: PathBuf::from("/home/ada/Pictures/JETCARP"),
         installed_with,
     };

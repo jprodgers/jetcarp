@@ -72,6 +72,21 @@ day later (0.4.2: 17 November here, 18 November there).
   under version 1 are flagged for `jetcarp library reverify`.
   ([Larger than Life](../automata/larger-than-life.md#on-any-tiling),
   [#172](https://github.com/jprodgers/jetcarp/issues/172))
+- **`jetcarp host status` no longer says "GPU none" for a host that hasn't opened its GPU yet.** A
+  host started at login with nothing to show opens the GPU with its first window; until then the
+  status says "GPU not opened yet (nothing shown yet)", and its screens that the GPU "is opened when
+  the scene is first shown", where both said there was no GPU. A host that lost its GPU says that.
+  ([#141](https://github.com/jprodgers/jetcarp/issues/141))
+- **On GNOME, setup says plainly to log out once after turning the live wallpaper on.** GNOME loads
+  JETCARP's extension only at login, and until then the scene shows in a window, which said nothing
+  about it; the only word was small print in setup. Setup now ends with "Log out and back in once to
+  see the live wallpaper on your desktop", the window's title says the same, and the host's note no
+  longer says to install an extension that setup already installed.
+  ([#139](https://github.com/jprodgers/jetcarp/issues/139))
+- **The background host no longer steps and draws a screen nobody can see.** A screen kept for a
+  monitor that wasn't connected when the host started, with the main monitor taken by another
+  screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
+  comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits
@@ -126,6 +141,20 @@ day later (0.4.2: 17 November here, 18 November there).
   has no tray icon). The notices are now gathered for each release system on its own and put
   together, and CI checks that they name exactly the libraries in each system's build.
   ([#123](https://github.com/jprodgers/jetcarp/issues/123))
+- **The Windows install and uninstall lines save the installer to the temp folder.** Every copy
+  (the README, the book, the release notes, the installer's own help and `jetcarp uninstall`) saved
+  `jetcarp-installer.ps1` into the current folder, which fails in a PowerShell window that opens in
+  `C:\Windows\system32`; they now save it to and run it from `$env:TEMP`, and a check in CI keeps
+  every copy so. ([Installing](../getting-started/installing.md), [#143](https://github.com/jprodgers/jetcarp/issues/143))
+- **The Windows installer's last line says to open a new PowerShell window.** The window it runs from
+  can't see the new `PATH`, so `jetcarp` typed there next wasn't found, and the only word of it was
+  in the middle of the output. ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **A repeated `jetcarp uninstall --settings --data` says the folders are already gone,** instead of
+  only "Nothing to undo", which read as if the options had been ignored.
+  ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
+  your settings, data and pictures" when only the pictures were left.
+  ([#142](https://github.com/jprodgers/jetcarp/issues/142))
 - **The soup hunt cuts out gliders that fly away together.** A hunt erased an escaping ship only
   once it lay beyond everything else by a few cells, so two gliders flying the same way on lanes a
   few cells apart, or several staggered so that each stayed level with another, were never cut. They

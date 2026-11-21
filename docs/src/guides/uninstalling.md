@@ -206,13 +206,13 @@ program's folder, removes the program, and stops before it would download anythi
 On Windows, in PowerShell, save the installer:
 
 ```powershell
-Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
+Invoke-WebRequest https://github.com/jprodgers/jetcarp/releases/latest/download/jetcarp-installer.ps1 -OutFile "$env:TEMP\jetcarp-installer.ps1"
 ```
 
 and run it with `-Uninstall`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\jetcarp-installer.ps1 -Uninstall
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1" -Uninstall
 ```
 
 It deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off your user `PATH` if it was there (an
