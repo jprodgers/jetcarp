@@ -383,13 +383,17 @@ fn shots_tour() {
     all.extend(places);
     h.shot_part("tour-card-menu", Harness::around(&all, 12.0));
     h.escape();
-    // A world: an entry of the build's atlas (another build may name it plainly), its panes
-    // docked as at first.
-    let handle = ["Oscillating Greenberg-Hastings", "Greenberg-Hastings"]
-        .iter()
-        .find(|t| h.app.menu.items.iter().any(|it| it.title.starts_with(**t)))
-        .map(|t| handle_titled(&h.app.menu, t))
-        .expect("a Greenberg-Hastings entry");
+    // A world: the starter pack's Greenberg-Hastings spiral on IH30 (the atlas names it by its
+    // rule), or failing that any Greenberg-Hastings entry; its panes docked as at first.
+    let handle = [
+        "Oscillating GH 6/2",
+        "Oscillating Greenberg-Hastings",
+        "Greenberg-Hastings",
+    ]
+    .iter()
+    .find(|t| h.app.menu.items.iter().any(|it| it.title.starts_with(**t)))
+    .map(|t| handle_titled(&h.app.menu, t))
+    .expect("a Greenberg-Hastings entry");
     h.open_entry(&handle);
     h.run(4.0, 0.05, |_| false);
     h.steady();
