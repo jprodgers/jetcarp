@@ -88,7 +88,7 @@ pub const FREE_CORES: usize = 2;
 pub const RELEASE_S: f64 = 30.0;
 
 /// Seconds between readings of the job's memory while a step runs: reading it costs microseconds
-/// (`/proc/self/statm`, `proc_pid_rusage`, `GetProcessMemoryInfo`), and a step can last minutes,
+/// (`/proc/self/status`, `proc_pid_rusage`, `GetProcessMemoryInfo`), and a step can last minutes,
 /// so `jobs.status` and the memory cap see what it is now, not at the step's start (#129).
 pub const MEMORY_S: f64 = 0.5;
 
@@ -589,7 +589,29 @@ pub fn memory_bytes() -> Option<u64> {
     if let Some(b) = mac_footprint() {
         return Some(b);
     }
+    #[cfg(target_os = "linux")]
+    if let Some(b) = linux_resident() {
+        return Some(b);
+    }
     memory_stats::memory_stats().map(|m| m.physical_mem as u64)
+}
+
+/// This process's resident size on Linux, as `/proc/self/status` gives it (`VmRSS`): a read
+/// costs microseconds. `memory_stats` sums the `Rss` of every mapping in `/proc/self/smaps`
+/// instead, which walks all of them (with the GPU's buffers, thousands): far dearer, read every
+/// half second while a step runs (#129). A search read that way once noted a peak of 27.7 GB
+/// that its resident size, sampled from outside every half second, never came near (1.5 GB).
+#[cfg(target_os = "linux")]
+fn linux_resident() -> Option<u64> {
+    let s = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb: u64 = s
+        .lines()
+        .find_map(|l| l.strip_prefix("VmRSS:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    Some(kb << 10)
 }
 
 /// This process's physical footprint on macOS: what Activity Monitor shows as its memory, without
