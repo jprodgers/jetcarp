@@ -388,6 +388,9 @@ pub struct Desktop {
     pub gnome_extension: Option<String>,
     /// The screen saver, in words (Windows and macOS only).
     pub screen_saver: Option<String>,
+    /// JETCARP among the system's apps (`jetcarp launcher`), in words: whether it is there, and
+    /// where.
+    pub launcher: Option<String>,
 }
 
 /// One thing `system.uninstall` undoes outside JETCARP's own folders.

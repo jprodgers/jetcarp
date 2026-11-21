@@ -94,6 +94,7 @@ impl Platform for Machine {
             starts_at_login: autostart::enabled(),
             gnome_extension: cfg!(target_os = "linux").then(|| gnome::state().describe()),
             screen_saver: cfg!(any(windows, target_os = "macos")).then(saver::describe),
+            launcher: Some(launcher::describe()),
         }
     }
 

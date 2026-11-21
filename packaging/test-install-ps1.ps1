@@ -44,6 +44,11 @@ foreach ($v in "JETCARP_VERSION", "JETCARP_INSTALL_DIR", "JETCARP_NO_MODIFY_PATH
 
 $Version = "0.0.0"
 $AppDataBefore = $env:APPDATA
+$LocalBefore = $env:LOCALAPPDATA
+# The windowless launcher, beside the program when it was built (--features windows-launcher):
+# with it, the Start menu entry starts a copy of it in a folder of JETCARP's own.
+$Launcher = Join-Path (Split-Path -Parent $Program) "jetcarpw.exe"
+$WithLauncher = Test-Path -LiteralPath $Launcher
 $Target = "x86_64-pc-windows-msvc"
 $Name = "jetcarp-$Version-$Target"
 $Work = Join-Path ([System.IO.Path]::GetTempPath()) ("jetcarp-installer-test-" + [System.Guid]::NewGuid().ToString("N"))
@@ -68,6 +73,7 @@ function New-Release([string]$Case) {
     $Build = Join-Path $Work "build-$Case\$Name"
     New-Item -ItemType Directory -Force -Path $Rel, $Build | Out-Null
     Copy-Item -Path $Program -Destination (Join-Path $Build "jetcarp.exe")
+    if ($WithLauncher) { Copy-Item -Path $Launcher -Destination (Join-Path $Build "jetcarpw.exe") }
     $Zip = Join-Path $Rel "$Name.zip"
     Compress-Archive -Path $Build -DestinationPath $Zip
     $Hash = (Get-FileHash -Algorithm SHA256 -Path $Zip).Hash.ToLowerInvariant()
@@ -76,17 +82,19 @@ function New-Release([string]$Case) {
 }
 
 # Run the installer from release folder $Rel into a fresh scratch folder, $Work\home-$Case, with
-# APPDATA (where the Start menu is) inside it, and any further options. Its output is shown and
-# kept in $script:Out; its exit code is returned.
+# APPDATA (where the Start menu is) and LOCALAPPDATA (where the launcher's copy goes) inside it,
+# and any further options. Its output is shown and kept in $script:Out; its exit code is returned.
 function Invoke-Installer([string]$Rel, [string]$Case, [string[]]$More = @()) {
     $Home_ = Join-Path $Work "home-$Case"
     New-Item -ItemType Directory -Force -Path $Home_ | Out-Null
     $ErrorActionPreference = "Continue"
     $env:APPDATA = Join-Path $Home_ "AppData\Roaming"
+    $env:LOCALAPPDATA = Join-Path $Home_ "AppData\Local"
     $script:Out = powershell -NoProfile -ExecutionPolicy Bypass -File $Installer -Version $Version `
         -InstallDir (Join-Path $Home_ "lib\jetcarp") -DownloadUrl $Rel -NoModifyPath -NoPacks @More 2>&1 | Out-String
     $Code = $LASTEXITCODE
     $env:APPDATA = $AppDataBefore
+    $env:LOCALAPPDATA = $LocalBefore
     $ErrorActionPreference = "Stop"
     $script:Out -split "`r?`n" | Where-Object { $_ } | ForEach-Object { Write-Host "    | $_" }
     return $Code
@@ -95,6 +103,11 @@ function Invoke-Installer([string]$Rel, [string]$Case, [string[]]$More = @()) {
 # Where case $Case's Start menu entry goes.
 function Get-Shortcut([string]$Case) {
     return Join-Path $Work "home-$Case\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\JETCARP.lnk"
+}
+
+# Where case $Case's copy of the launcher, which the entry starts, goes.
+function Get-StableCopy([string]$Case) {
+    return Join-Path $Work "home-$Case\AppData\Local\jetcarp\launcher"
 }
 
 # Case $Case must have been refused with a message holding $Want, its folder left empty.
@@ -134,6 +147,16 @@ try {
     } else {
         Bad "intact: no Start menu entry at $(Get-Shortcut 'intact')"
     }
+    if ($WithLauncher) {
+        $Record = Join-Path (Get-StableCopy "intact") "jetcarp-program"
+        if (-not (Test-Path -LiteralPath (Join-Path (Get-StableCopy "intact") "jetcarpw.exe"))) {
+            Bad "intact: no copy of the launcher in $(Get-StableCopy 'intact')"
+        } elseif (-not (Test-Path -LiteralPath $Record) -or (Get-Content -LiteralPath $Record -TotalCount 1).Trim() -notlike "*\lib\jetcarp\jetcarp.exe") {
+            Bad "intact: the launcher's record does not name the installed program"
+        } else {
+            Ok "intact: the entry starts a copy of the launcher that names the installed program"
+        }
+    }
 
     Write-Host "2. one byte of the archive changed"
     $Rel = New-Release "tampered"
@@ -159,8 +182,10 @@ try {
         Bad "uninstall: the program's folder is still there"
     } elseif (Test-Path -LiteralPath (Get-Shortcut "intact")) {
         Bad "uninstall: the Start menu entry is still there"
+    } elseif (Test-Path -LiteralPath (Get-StableCopy "intact")) {
+        Bad "uninstall: the launcher's copy is still there"
     } else {
-        Ok "uninstall: the Start menu entry and the program's folder removed"
+        Ok "uninstall: the Start menu entry, the launcher's copy and the program's folder removed"
     }
 
     if ((Get-UserPath) -ne $PathBefore) { Bad "the user PATH changed, with -NoModifyPath" }

@@ -445,6 +445,9 @@ fn main() -> Result<()> {
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
+    // Windows: the Start menu entry's launcher starts this program from now on, if it starts
+    // another (after an upgrade, which moves the program for winget and Scoop) (#105).
+    jetcarp_display::launcher::heal();
     // This machine's limits (its memory, and the person's own values in limits.json), never the
     // reference machine's that the crates' tests use.
     let (_, note) = jetcarp_core::machine::use_this_machine();

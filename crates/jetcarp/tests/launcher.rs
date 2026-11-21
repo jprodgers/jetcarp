@@ -1,11 +1,13 @@
 //! `jetcarp launcher` puts JETCARP among the system's apps, with its icon, and takes it out again
-//! (#105); `jetcarp uninstall` lists it and removes it too. Each test has a scratch home: on Linux
-//! the menu entry and the icons go in its `share` folder (`XDG_DATA_HOME`), on macOS `JETCARP.app`
-//! in its `Applications`, on Windows the shortcut in its Start menu (`APPDATA`).
+//! (#105); `jetcarp uninstall` lists it and removes it too, and `jetcarp doctor` says where it is.
+//! Each test has a scratch home: on Linux the menu entry and the icons go in its `share` folder
+//! (`XDG_DATA_HOME`), on macOS `JETCARP.app` in its `Applications`, on Windows the shortcut in its
+//! Start menu (`APPDATA`) and the launcher's copy in its `LOCALAPPDATA`.
 //!
 //! The menu entry is checked by the Desktop Entry spec's rules here, and by
 //! `desktop-file-validate` as well wherever it is installed.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -22,7 +24,15 @@ fn home(name: &str) -> PathBuf {
 /// `jetcarp` with every folder in `home`, and no way to reach the desktop session (its bus, its
 /// display), so `jetcarp uninstall` sees no GNOME extension and changes nothing of the session's.
 fn jetcarp(home: &Path, args: &[&str]) -> (bool, String, String) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    run_in(Path::new(env!("CARGO_BIN_EXE_jetcarp")), home, args, None)
+}
+
+/// [`jetcarp`] with another program (a copy of it, or the launcher), and the `PATH` given.
+fn run_in(exe: &Path, home: &Path, args: &[&str], path: Option<&OsStr>) -> (bool, String, String) {
+    let mut c = Command::new(exe);
+    if let Some(p) = path {
+        c.env("PATH", p);
+    }
     c.args(args)
         .stdin(Stdio::null())
         .env("HOME", home)
@@ -31,6 +41,7 @@ fn jetcarp(home: &Path, args: &[&str]) -> (bool, String, String) {
         .env("XDG_CONFIG_HOME", home.join("config"))
         .env("XDG_RUNTIME_DIR", home.join("run"))
         .env("APPDATA", home.join("AppData/Roaming"))
+        .env("LOCALAPPDATA", home.join("AppData/Local"))
         .env("JETCARP_CONFIG_DIR", home.join("config/jetcarp"))
         .env("JETCARP_DATA_DIR", home.join("data"))
         .env("JETCARP_RUNTIME_DIR", home.join("run/jetcarp"))
@@ -49,14 +60,13 @@ fn jetcarp(home: &Path, args: &[&str]) -> (bool, String, String) {
     )
 }
 
-/// The program the launcher should start: this test's, its links followed; on Windows the
-/// windowless launcher beside it when it was built (`--features windows-launcher`).
+/// The program the launcher should start: this test's, its links followed.
 fn program() -> PathBuf {
-    let p = jetcarp_core::paths::plain_path(
-        std::fs::canonicalize(env!("CARGO_BIN_EXE_jetcarp")).unwrap(),
-    );
-    let w = p.with_file_name("jetcarpw.exe");
-    if cfg!(windows) && w.exists() { w } else { p }
+    real(Path::new(env!("CARGO_BIN_EXE_jetcarp")))
+}
+
+fn real(p: &Path) -> PathBuf {
+    jetcarp_core::paths::plain_path(std::fs::canonicalize(p).unwrap())
 }
 
 /// The Desktop Entry spec's rules (1.5) that apply to JETCARP's entry: a comment or the group
@@ -114,6 +124,12 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
     let (ok, said, err) = jetcarp(&h, &["launcher", "status"]);
     assert!(ok, "{err}");
     assert!(said.contains("is not in"), "{said}");
+    let (ok, doctor, err) = jetcarp(&h, &["doctor"]);
+    assert!(ok, "{err}");
+    assert!(
+        doctor.contains("\n  launcher: JETCARP is not in"),
+        "the doctor says it is not there: {doctor}"
+    );
 
     let (ok, said, err) = jetcarp(&h, &["launcher", "install"]);
     assert!(ok, "{said}{err}");
@@ -121,6 +137,12 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
     assert!(
         said.contains(&program.display().to_string()),
         "names the program it starts: {said}"
+    );
+    let (ok, doctor, err) = jetcarp(&h, &["doctor"]);
+    assert!(ok, "{err}");
+    assert!(
+        doctor.contains("\n  launcher: JETCARP is in"),
+        "the doctor says where it is: {doctor}"
     );
     let icons = Path::new(env!("CARGO_MANIFEST_DIR")).join("../jetcarp-display/icons");
     let made: Vec<PathBuf> = if cfg!(target_os = "macos") {
@@ -146,7 +168,17 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
         let bytes = std::fs::read(&lnk).unwrap();
         // A shell link: its header's size, then the class of shell links.
         assert_eq!(&bytes[..4], &[0x4C, 0, 0, 0]);
-        vec![lnk]
+        let mut made = vec![lnk];
+        // With the windowless launcher built, the entry starts a copy of it in a folder of
+        // JETCARP's own, beside a record of this program.
+        if program.with_file_name("jetcarpw.exe").exists() {
+            let stable = h.join("AppData/Local/jetcarp/launcher");
+            let record = std::fs::read_to_string(stable.join("jetcarp-program")).unwrap();
+            assert_eq!(record.trim(), program.display().to_string());
+            made.push(stable.join("jetcarpw.exe"));
+            made.push(stable.join("jetcarp-program"));
+        }
+        made
     } else {
         let entry = h.join("share/applications/jetcarp.desktop");
         let text = std::fs::read_to_string(&entry).unwrap();
@@ -210,21 +242,20 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
     let _ = std::fs::remove_dir_all(&h);
 }
 
-/// An app of the same name that JETCARP did not make is neither replaced nor removed (macOS), and
-/// on Linux a menu entry JETCARP did not write is left alone.
-#[cfg(not(windows))]
+/// An app of the same name that JETCARP did not make is neither replaced nor removed (macOS); on
+/// Linux a menu entry JETCARP did not write is left alone, and on Windows a `JETCARP.lnk` that
+/// does not start a JETCARP program (this one can't be read as a shortcut at all).
 #[test]
 fn someone_else_s_launcher_is_left_alone() {
     let h = home("theirs");
     let theirs = if cfg!(target_os = "macos") {
-        let p = h.join("Applications/JETCARP.app/Contents/Info.plist");
-        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-        p
+        h.join("Applications/JETCARP.app/Contents/Info.plist")
+    } else if cfg!(windows) {
+        h.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/JETCARP.lnk")
     } else {
-        let p = h.join("share/applications/jetcarp.desktop");
-        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-        p
+        h.join("share/applications/jetcarp.desktop")
     };
+    std::fs::create_dir_all(theirs.parent().unwrap()).unwrap();
     std::fs::write(&theirs, "not JETCARP's\n").unwrap();
     let (ok, said, err) = jetcarp(&h, &["launcher", "install"]);
     assert!(!ok, "{said}");
@@ -233,5 +264,56 @@ fn someone_else_s_launcher_is_left_alone() {
     assert!(!ok);
     assert!(err.contains("not made by JETCARP"), "{err}");
     assert_eq!(std::fs::read_to_string(&theirs).unwrap(), "not JETCARP's\n");
+    let _ = std::fs::remove_dir_all(&h);
+}
+
+/// Windows, with the windowless launcher built: a winget upgrade, for real. JETCARP installed in a
+/// versioned folder makes the Start menu entry; the upgrade replaces the folder with the next
+/// version's, which is on the PATH; the copy of the launcher the entry starts still starts
+/// JETCARP, and the new program's first run puts itself in the record.
+#[cfg(windows)]
+#[test]
+fn the_start_menu_entry_survives_a_winget_upgrade() {
+    let built = program();
+    let launcher = built.with_file_name("jetcarpw.exe");
+    if !launcher.exists() {
+        eprintln!("skipped: jetcarpw.exe was not built (--features windows-launcher)");
+        return;
+    }
+    let h = home("winget");
+    let pkg = h.join("WinGet/Packages/JimmieRodgers.JETCARP_x");
+    let version = |v: &str| {
+        let d = pkg.join(format!("jetcarp-{v}-x86_64-pc-windows-msvc"));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::copy(&built, d.join("jetcarp.exe")).unwrap();
+        std::fs::copy(&launcher, d.join("jetcarpw.exe")).unwrap();
+        real(&d.join("jetcarp.exe"))
+    };
+    let old = version("0.4.3");
+    let (ok, said, err) = run_in(&old, &h, &["launcher", "install"], None);
+    assert!(ok, "{said}{err}");
+    let stable = h.join("AppData/Local/jetcarp/launcher");
+    let copy = stable.join("jetcarpw.exe");
+    let record = || std::fs::read_to_string(stable.join("jetcarp-program")).unwrap();
+    assert_eq!(record().trim(), old.display().to_string());
+
+    // The upgrade: the old folder goes, the new one comes, and the PATH leads to it.
+    std::fs::remove_dir_all(old.parent().unwrap()).unwrap();
+    let new = version("0.4.4");
+    let path = std::env::join_paths([new.parent().unwrap()]).unwrap();
+    let (ok, said, err) = run_in(&copy, &h, &["--version"], Some(&path));
+    assert!(
+        ok,
+        "the entry's launcher starts the new program: {said}{err}"
+    );
+    assert!(said.contains("jetcarp"), "{said}");
+    // That run was the new program's first, and it mended the record.
+    assert_eq!(record().trim(), new.display().to_string());
+    // From now on it is found without the PATH.
+    let (ok, said, err) = run_in(&copy, &h, &["--version"], Some(OsStr::new("")));
+    assert!(ok, "{said}{err}");
+    let (ok, said, err) = run_in(&new, &h, &["launcher", "remove"], None);
+    assert!(ok, "{said}{err}");
+    assert!(!copy.exists() && !stable.join("jetcarp-program").exists());
     let _ = std::fs::remove_dir_all(&h);
 }

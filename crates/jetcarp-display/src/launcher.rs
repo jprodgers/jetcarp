@@ -13,8 +13,12 @@
 //!   bundle, and the program finds what it keeps beside itself (the starter pack, the screen
 //!   saver's code). No Developer ID or notarisation is needed for a bundle made on the Mac itself.
 //! - **Windows**: a Start menu entry, `JETCARP.lnk` in the user's Start menu folder
-//!   (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), starting `jetcarpw.exe` (no console
-//!   window), whose icon it shows.
+//!   (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), whose icon it shows. It starts a copy of
+//!   `jetcarpw.exe` (no console window) in a folder of JETCARP's own ([`stable_dir`]), which no
+//!   upgrade touches, beside a record of the `jetcarp.exe` it starts. winget's and Scoop's folders
+//!   name the version, so an entry pointing into them would break at the next upgrade; the copy
+//!   finds the program by the record, else on the `PATH`, which their links and shims keep
+//!   current, and every run of `jetcarp` puts its own path in the record ([`heal`]).
 //!
 //! Each starts this program by a path an upgrade keeps ([`program`]).
 
@@ -36,6 +40,108 @@ const EXECUTABLE: &str = "JETCARP";
 const VERSION_KEY: &str = "X-JETCARP-Version";
 /// What the menu entry, the app and the shortcut say JETCARP is.
 const COMMENT: &str = "Cellular automata on almost any tiling of the plane";
+/// The windowless launcher, which the Start menu entry starts from a copy in [`stable_dir`].
+pub const LAUNCHER_EXE: &str = "jetcarpw.exe";
+/// The file beside that copy naming the `jetcarp.exe` it starts (`launcher_find.rs` reads it).
+pub const RECORD: &str = "jetcarp-program";
+
+/// Windows: the folder of JETCARP's own that the Start menu entry starts from, which no upgrade
+/// touches: `%LOCALAPPDATA%\jetcarp\launcher`, beside the runtime files and the screen saver.
+/// winget's and Scoop's folders name the version, so an entry pointing into them would break at
+/// the next upgrade.
+pub fn stable_dir() -> Result<PathBuf, String> {
+    let local = std::env::var_os("LOCALAPPDATA")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(dirs::data_local_dir)
+        .ok_or("no LOCALAPPDATA folder")?;
+    Ok(local.join("jetcarp").join("launcher"))
+}
+
+/// Copies the launcher `launcher` into `dir` (unless the copy there is the same already) and
+/// records `program` beside it, as the `jetcarp.exe` it starts. Returns the copy.
+pub fn write_stable(dir: &Path, launcher: &Path, program: &Path) -> Result<PathBuf, String> {
+    let err = |p: &Path, e: std::io::Error| format!("{}: {e}", p.display());
+    std::fs::create_dir_all(dir).map_err(|e| err(dir, e))?;
+    let copy = dir.join(LAUNCHER_EXE);
+    let same = std::fs::read(&copy)
+        .ok()
+        .is_some_and(|a| std::fs::read(launcher).is_ok_and(|b| a == b));
+    if !same {
+        std::fs::copy(launcher, &copy).map_err(|e| {
+            format!(
+                "{} (if JETCARP is running from the Start menu, close it and try again)",
+                err(&copy, e)
+            )
+        })?;
+    }
+    let record = dir.join(RECORD);
+    std::fs::write(&record, format!("{}\n", program.display())).map_err(|e| err(&record, e))?;
+    Ok(copy)
+}
+
+/// Puts `me` in the record beside the launcher's copy in `dir`, when there is a copy and the
+/// record names another program (after an upgrade, or after another install of JETCARP ran last).
+/// Returns whether it wrote. Cheap enough for every run: a file's existence, a small read.
+pub fn heal_record_in(dir: &Path, me: &Path) -> Result<bool, String> {
+    if !dir.join(LAUNCHER_EXE).is_file() {
+        return Ok(false);
+    }
+    let record = dir.join(RECORD);
+    let now = std::fs::read_to_string(&record).unwrap_or_default();
+    if now.lines().next().map(str::trim) == Some(&*me.display().to_string()) {
+        return Ok(false);
+    }
+    std::fs::write(&record, format!("{}\n", me.display()))
+        .map_err(|e| format!("{}: {e}", record.display()))?;
+    Ok(true)
+}
+
+/// Windows: [`heal_record_in`] for this program, at its start (`jetcarp`'s `main`). Quiet: a
+/// record that can't be written is mended by the PATH meanwhile.
+pub fn heal() {
+    if !cfg!(windows) {
+        return;
+    }
+    if let Ok(dir) = stable_dir()
+        && dir.join(LAUNCHER_EXE).is_file()
+        && let Ok(me) = program()
+    {
+        let _ = heal_record_in(&dir, &me);
+    }
+}
+
+/// Removes the launcher's copy and its record from `dir`, and no other file, then the folder if
+/// that left it empty. Returns what was removed.
+pub fn remove_stable(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut removed = vec![];
+    for f in [LAUNCHER_EXE, RECORD].map(|n| dir.join(n)) {
+        match std::fs::remove_file(&f) {
+            Ok(()) => removed.push(f),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("{}: {e}", f.display())),
+        }
+    }
+    let _ = std::fs::remove_dir(dir);
+    Ok(removed)
+}
+
+/// Whether a shortcut that starts `target` is JETCARP's: it starts the launcher's copy in `dir`,
+/// or a program named `jetcarpw.exe` or `jetcarp.exe` (as Windows compares names, whatever the
+/// case). `None`: the shortcut could not be read, so it is not counted as JETCARP's.
+pub fn shortcut_is_ours(target: Option<&Path>, dir: &Path) -> bool {
+    let Some(target) = target else {
+        return false;
+    };
+    let lower = |p: &Path| p.to_string_lossy().replace('\\', "/").to_lowercase();
+    if lower(target) == lower(&dir.join(LAUNCHER_EXE)) {
+        return true;
+    }
+    target
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .is_some_and(|n| n == LAUNCHER_EXE || n == "jetcarp.exe")
+}
 
 /// Where this system keeps it, for people: "the applications menu", "Applications", "the Start
 /// menu".
@@ -73,14 +179,11 @@ fn folder_text() -> String {
 
 /// The program a launcher starts: this one, by a path an upgrade keeps. Homebrew keeps each
 /// version in a folder of its own (`<prefix>/Cellar/jetcarp/<version>/bin/jetcarp`) and links the
-/// current one into `<prefix>/bin`, so a launcher starts the link. On Windows it is
-/// `jetcarpw.exe`, beside `jetcarp.exe`, which opens no console window (`jetcarp.exe` when it is
-/// missing, as after a plain `cargo install`).
+/// current one into `<prefix>/bin`, so a launcher starts the link. (On Windows the Start menu
+/// entry starts a copy of `jetcarpw.exe`, which starts this program as the record beside it says;
+/// see [`stable_dir`].)
 pub fn program() -> Result<PathBuf, String> {
-    let exe = match crate::autostart::windows_launcher() {
-        Some(w) => w,
-        None => crate::autostart::jetcarp_exe()?,
-    };
+    let exe = crate::autostart::jetcarp_exe()?;
     let real = std::fs::canonicalize(&exe)
         .map(jetcarp_core::paths::plain_path)
         .unwrap_or(exe);
@@ -118,7 +221,12 @@ pub fn files() -> Result<Vec<PathBuf>, String> {
                 .join(BUNDLE),
         ])
     } else if cfg!(windows) {
-        Ok(vec![start_menu()?.join(SHORTCUT)])
+        let stable = stable_dir()?;
+        Ok(vec![
+            start_menu()?.join(SHORTCUT),
+            stable.join(LAUNCHER_EXE),
+            stable.join(RECORD),
+        ])
     } else {
         let data = dirs::data_dir().ok_or("no data folder (XDG_DATA_HOME or HOME)")?;
         let mut v = vec![data.join("applications").join(DESKTOP_FILE)];
@@ -147,9 +255,24 @@ pub fn installed() -> bool {
     if cfg!(target_os = "macos") {
         bundle_is_ours(first)
     } else if cfg!(windows) {
-        first.exists()
+        // The entry, or the launcher's copy it would start (an entry deleted by hand leaves it).
+        (first.exists() && shortcut_here_is_ours(first)) || files[1].is_file()
     } else {
         entry_is_ours(first)
+    }
+}
+
+/// Windows: whether the shortcut `lnk` is JETCARP's, read through the shell ([`shortcut_is_ours`]).
+fn shortcut_here_is_ours(lnk: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let dir = stable_dir().unwrap_or_default();
+        shortcut_is_ours(shortcut::target(lnk).as_deref(), &dir)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = lnk;
+        false
     }
 }
 
@@ -383,10 +506,33 @@ pub fn install() -> Result<Installed, String> {
     };
     #[cfg(windows)]
     let said = {
+        if path.exists() && !shortcut_here_is_ours(&path) {
+            return Err(format!(
+                "{} is there already and JETCARP did not make it; move it away first",
+                path.display()
+            ));
+        }
         let dir = path.parent().ok_or("no Start menu folder")?;
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        shortcut::make(&path, &program)?;
-        format!("added JETCARP to the Start menu ({})", path.display())
+        // The entry starts a copy of the windowless launcher in a folder no upgrade touches, which
+        // finds this program by the record beside it (and the PATH after an upgrade); without the
+        // launcher (a plain `cargo install`), the program itself, with its console window.
+        let (target, through) = match crate::autostart::windows_launcher() {
+            Some(w) => {
+                let stable = stable_dir()?;
+                let copy = write_stable(&stable, &w, &program)?;
+                (
+                    copy,
+                    format!(", through a copy of {LAUNCHER_EXE} in {}", stable.display()),
+                )
+            }
+            None => (program.clone(), String::new()),
+        };
+        shortcut::make(&path, &target)?;
+        format!(
+            "added JETCARP to the Start menu ({}){through}",
+            path.display()
+        )
     };
     #[cfg(not(any(windows, target_os = "macos")))]
     let said = {
@@ -424,7 +570,22 @@ pub fn remove() -> Result<Vec<PathBuf>, String> {
         }
         return Ok(removed);
     }
-    if !cfg!(windows) && files[0].exists() && !entry_is_ours(&files[0]) {
+    if cfg!(windows) {
+        let lnk = &files[0];
+        if lnk.exists() {
+            if !shortcut_here_is_ours(lnk) {
+                return Err(format!(
+                    "{} was not made by JETCARP, so it is left as it is",
+                    lnk.display()
+                ));
+            }
+            std::fs::remove_file(lnk).map_err(|e| format!("{}: {e}", lnk.display()))?;
+            removed.push(lnk.clone());
+        }
+        removed.extend(remove_stable(&stable_dir()?)?);
+        return Ok(removed);
+    }
+    if files[0].exists() && !entry_is_ours(&files[0]) {
         return Err(format!(
             "{} was not made by JETCARP, so it is left as it is, with the icons named after it",
             files[0].display()
@@ -467,13 +628,33 @@ pub fn describe() -> String {
 /// crate already in the tree provides.
 #[cfg(windows)]
 mod shortcut {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-        CoUninitialize, IPersistFile,
+        CoUninitialize, IPersistFile, STGM_READ,
     };
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
     use windows::core::{HSTRING, Interface};
+
+    /// The program the shortcut `lnk` starts, as the shell reads it; `None` when it can't be read
+    /// as a shortcut.
+    pub fn target(lnk: &Path) -> Option<PathBuf> {
+        let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+        let r = (|| -> windows::core::Result<PathBuf> {
+            let link: IShellLinkW =
+                unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }?;
+            let file: IPersistFile = link.cast()?;
+            unsafe { file.Load(&HSTRING::from(lnk), STGM_READ) }?;
+            let mut buf = vec![0u16; 32768];
+            unsafe { link.GetPath(&mut buf, std::ptr::null_mut(), 0) }?;
+            let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            Ok(PathBuf::from(String::from_utf16_lossy(&buf[..n])))
+        })();
+        if com {
+            unsafe { CoUninitialize() };
+        }
+        r.ok().filter(|p| !p.as_os_str().is_empty())
+    }
 
     /// Writes the shortcut `lnk` to `target`, which shows the target's own icon and starts in its
     /// folder.
