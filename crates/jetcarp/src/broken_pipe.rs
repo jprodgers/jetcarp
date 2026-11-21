@@ -9,7 +9,6 @@
 //! server, whose pipes and sockets must not end the process.
 
 use std::io::ErrorKind;
-use std::process;
 
 /// What a shell reports for a program ended by SIGPIPE (128 + 13), the usual way a command-line
 /// tool ends when its output is closed. Windows has no such convention; the same number is used.
@@ -43,7 +42,7 @@ pub fn install() {
             .or_else(|| p.downcast_ref::<&str>().copied())
             .unwrap_or("");
         if is_print_failure(msg) {
-            process::exit(STATUS);
+            jetcarp_core::machine::pool::exit(STATUS);
         }
         default(info);
     }));
@@ -62,7 +61,7 @@ pub fn is_broken(e: &anyhow::Error) -> bool {
 
 /// Ends the program as a closed pipe ends it.
 pub fn exit() -> ! {
-    process::exit(STATUS)
+    jetcarp_core::machine::pool::exit(STATUS)
 }
 
 #[cfg(test)]

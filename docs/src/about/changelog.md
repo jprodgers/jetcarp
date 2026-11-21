@@ -192,6 +192,28 @@ day later (0.4.2: 17 November here, 18 November there).
   key; a known key, your own publisher key and the packs that came with JETCARP are each said as
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
+- **The JETCARP Hardware Score, and limits set per machine.** JETCARP reads what the computer holds
+  (memory, the processor, each GPU's memory) each time it starts, and sets its limits from that:
+  the largest world, the GPU's, the desktop background's cells and memory, HashLife's node cap, the
+  hunt caches, media's pixels, the app's wallpaper grid and animation frames, and an AI's share. The
+  memory is split in two linked values, *Reserved for the System* (half the memory on a smaller
+  computer, at most 16 GB on a bigger one) and *Reserved for JETCARP* (the rest). JETCARP's part is
+  one pool for all of JETCARP: each program records the memory it holds in the runtime folder, a
+  new world must fit what the others leave, and the desktop background, whose limit is the pool,
+  gives up its largest world when the rest of JETCARP needs the memory. Every other memory limit is
+  a share of the pool, scaled so a 16 GB computer keeps the limits it had and a 64 GB one gets six
+  times as much. Your own values win, up to each limit's ceiling, and are kept
+  in `limits.json`. A world over the limit is refused before anything is built, naming what it
+  needs, the limit and where the limit came from; the app asks first, with *Build anyway*. Nothing
+  is ever made smaller to fit, so results never depend on the computer. The benchmark, about a
+  minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU,
+  memory, the disk), checks every answer against stored digests and gives the JETCARP Hardware
+  Score, its own unit, with its parts; it runs at setup (ticked by default) and by hand, never by
+  itself, and a changed computer is noticed once. New: *Tools → This computer…*, setup's *Measure
+  this computer* page, `jetcarp score` (`--report FILE` writes Markdown and JSON), `jetcarp limits`
+  (show, `set`, `reset`), the hardware in `jetcarp doctor`, and the MCP tools'
+  `reference {"what": "machine"}`, which reads the score; no tool runs the benchmark.
+  ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **For someone who answered the seizure warning *at risk*, the strobe guard is stricter about
   patterns.** Their guard, which can never be turned off, also veils any pattern of similar parts,
   regular or not, as EA's IRIS counts one (at least six parts alike in shape over a quarter of the
@@ -218,6 +240,15 @@ day later (0.4.2: 17 November here, 18 November there).
   a text box; before, any control with the keyboard turned them off. *Help → Keyboard shortcuts*
   lists every key, the cell cursor's and those that move about the app too.
   ([Every key](../guides/keyboard.md#every-key), [#219](https://github.com/jprodgers/jetcarp/issues/219))
+- **A grid may have up to 4,294,967,295 cells, the most the code can number,** where it had 256
+  million on every computer; how much of that a computer may use is now its limit. Every place
+  that numbers cells with 32-bit integers was checked first. The MCP tools' worlds stay at 4 million
+  cells unless an AI's share of the computer is raised, and their descriptions give the limits in
+  use. `host.json`'s `max_cells` and `max_memory_mb` give way to the computer's `host-cells` and
+  `host-memory`, unless edited by hand. `jetcarp hashlife --node-cap` and `JETCARP_HUNT_CACHE_MB`
+  default to the computer's limits.
+  ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
+
 - **B0 rules whose background is live for good start on it, as Golly reads them.** A rule with birth
   on 0 that survives on every neighbour count the tiles have (`S8` on the square grid, such as
   AntiLife, `B0123478/S01234678`) turns its background live for good at the first step. JETCARP now
@@ -268,6 +299,13 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **Animated WebP exports keep white.** The WebP encoder's colour cache started at the value that
+  is opaque white, so a frame, or the part of a frame that changed, beginning with white pixels
+  stored them under another colour's index: white came out as the frame's first other colour (in a
+  test, black), and a frame all white made a file that decoders refuse. Every version before 0.4.3
+  had this. A test now encodes and decodes frames that start with white, all white, and white among
+  other colours.
+
 - **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
   is busier than* goes to the next line in a narrow pane,** where it ran past the pane's edge, out
   of sight and out of reach.
@@ -297,6 +335,11 @@ day later (0.4.2: 17 November here, 18 November there).
   on white, and is now drawn in the theme's colours.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#137](https://github.com/jprodgers/jetcarp/issues/137))
+- **A number past 32 bits is refused, not wrapped round to a small one.** A size of
+  `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
+  list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'
+  `track_mover`, and an image 4,294,967,936 pixels wide came out 640 wide. Each is now refused with
+  the reason. ([#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **An explore search's screening goes on while it confirms elites.** Every fourth CPU round
   confirmed twice the threads' number of elites after its screening, each elite's seeds one after
   another, and nothing was screened meanwhile; on the GPU a batch of confirmation runs took every

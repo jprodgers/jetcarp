@@ -106,7 +106,12 @@ integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) i
 no decent adapter, everything runs on the processor, and windows still draw on whatever adapter
 can.
 
-Worlds too large for an adapter's buffers step on the processor; `jetcarp doctor` shows the limits.
+Worlds too large for an adapter's buffers, or over this computer's `gpu-world` limit (half the
+GPU's memory at 16 bytes a cell, where the system reports it), step on the processor, with the
+same result; `jetcarp doctor` shows the buffer limits, and `jetcarp limits` the rest (see
+[This computer](this-computer.md)). The benchmark behind the JETCARP Hardware Score runs its soups
+on the GPU too, checks every answer against the stored ones, and measures the smallest world the GPU
+steps faster than every core.
 
 ## The self-test
 

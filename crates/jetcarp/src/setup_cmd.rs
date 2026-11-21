@@ -61,6 +61,13 @@ pub struct SetupArgs {
     /// No progress on standard error.
     #[arg(long)]
     quiet: bool,
+    /// Do not measure this computer (the JETCARP Hardware Score, about a minute, which setup
+    /// does first unless told not to: asked in a terminal, done with --yes).
+    #[arg(long)]
+    no_measure: bool,
+    /// Measure with the short run, each workload once (tests).
+    #[arg(long, hide = true)]
+    measure_quick: bool,
     /// The Quick Start build searches only these tilings (tests; default: every one).
     #[arg(long, hide = true)]
     build_tilings: Option<String>,
@@ -313,7 +320,17 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
             }
         }
     }
+    let mut measure = !a.no_measure;
+    if interactive && measure {
+        eprintln!(
+            "\nMeasure this computer? About a minute of JETCARP's own work, with nothing drawn: its\n\
+             limits then fit it, and it gets a JETCARP Hardware Score (`jetcarp score` measures again)."
+        );
+        measure = yes_no("Measure it?", true);
+    }
     let input = ApplyIn {
+        measure: Some(measure),
+        measure_quick: a.measure_quick,
         profile: profile.name().into(),
         data_dir,
         quickstart_minutes: minutes,
