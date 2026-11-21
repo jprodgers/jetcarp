@@ -7,8 +7,11 @@
 //!
 //! A search starts from a saved state ([`store::Saved`]: its archive, confirmed set, coverage,
 //! family totals, seen set, counters, and random states), so a stopped one carries on where it
-//! was. It is not deterministic: the GPU and CPU rounds share the archive as they run, so two
-//! searches with the same settings try different candidates.
+//! was. With a GPU it is not deterministic: the GPU and CPU rounds share the archive as they run,
+//! so two searches with the same settings try different candidates. On the processor alone, the
+//! same seed, settings and number of threads give the same runs, ids and confirmations whatever
+//! the steps' length and however the threads take up the runs (see [`Search::step`]'s CPU
+//! rounds), as long as no run meets its time cap, which is wall time.
 
 use crate::explore::archive::{self, Archive, Eval, ScoreModel};
 use crate::explore::breed::{self, Parent};

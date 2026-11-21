@@ -849,7 +849,7 @@ pub fn sightings(
     let look = |u: &Universe, streak: &mut Vec<Option<u64>>| {
         let t = u.generation;
         for (x, s) in out.iter().enumerate() {
-            if s.cells.is_empty() || t > s.at || (s.at - t) % s.period != 0 {
+            if s.cells.is_empty() || t > s.at || !(s.at - t).is_multiple_of(s.period) {
                 continue;
             }
             let k = ((s.at - t) / s.period) as i32;
